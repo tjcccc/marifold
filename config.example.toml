@@ -1,0 +1,22 @@
+[default]
+provider = "ollama"
+model = "llama3.2"
+profile = "default"
+timeout_seconds = 120
+
+[paths]
+profiles_dir = "~/.marifold/profiles"
+sessions_db = "~/.marifold/sessions.db"
+
+[providers.ollama]
+type = "ollama"
+base_url = "http://localhost:11434"
+
+[providers.openai]
+type = "openai-compatible"
+base_url = "https://api.openai.com"
+api_key_env = "OPENAI_API_KEY"
+
+[providers.anthropic]
+type = "anthropic"
+api_key_env = "ANTHROPIC_API_KEY"

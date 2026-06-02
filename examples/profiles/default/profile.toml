@@ -1,0 +1,5 @@
+# Optional per-profile model override.
+# Set both provider and model to override [default].
+
+# provider = "ollama"
+# model = "llama3.2"
