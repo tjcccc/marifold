@@ -50,3 +50,13 @@ export interface SessionSummary {
   updatedAt: string;
   turnCount: number;
 }
+
+export interface SessionTurnSummary {
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: string;
+}
+
+export interface SessionDetail extends SessionSummary {
+  turns: SessionTurnSummary[];
+}

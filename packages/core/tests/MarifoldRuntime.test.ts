@@ -26,7 +26,7 @@ describe('MarifoldRuntime', () => {
     const config: MarifoldConfig = {
       default: {
         provider: 'ollama',
-        model: 'llama3.2',
+        model: 'gemma4:e4b',
         profile: 'default',
       },
       paths: {

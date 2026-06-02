@@ -25,7 +25,7 @@ describe('ConfigLoader', () => {
     fs.writeFileSync(configPath, `
 [default]
 provider = "ollama"
-model = "llama3.2"
+model = "gemma4:e4b"
 profile = "default"
 timeout_seconds = 30
 
@@ -42,7 +42,7 @@ base_url = "http://localhost:11434"
 
     expect(loaded.foundConfig).toBe(true);
     expect(loaded.config.default.provider).toBe('ollama');
-    expect(loaded.config.default.model).toBe('llama3.2');
+    expect(loaded.config.default.model).toBe('gemma4:e4b');
     expect(loaded.config.default.timeoutSeconds).toBe(30);
     expect(loaded.config.paths.profilesDir).toBe(path.join(dir, 'profiles'));
     expect(loaded.config.providers.ollama.baseUrl).toBe('http://localhost:11434');

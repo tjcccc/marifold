@@ -1,0 +1,131 @@
+import * as fs from 'fs';
+import * as path from 'path';
+import { MarifoldError } from '../errors/MarifoldError';
+
+const SAFE_PROFILE_NAME = /^[A-Za-z0-9_-]+$/;
+
+const PROFILE_MD_STUB = `# {name}
+
+You are a helpful assistant.
+`;
+
+const RULES_MD_STUB = `# RULES.md
+
+Be honest. Do not make things up.
+Be concise unless the user asks for depth.
+
+Replace this content with specific guidance for this profile's role.
+`;
+
+const PROFILE_TOML_STUB = `# Optional per-profile model override.
+# Set both provider and model to override [default].
+
+# provider = "ollama"
+# model = "gemma4:e4b"
+`;
+
+export interface ProfileInitResult {
+  name: string;
+  path: string;
+  files: string[];
+}
+
+export interface ProfileModelOverrideResult {
+  name: string;
+  path: string;
+  provider?: string;
+  model?: string;
+  cleared: boolean;
+}
+
+export class ProfileManager {
+  constructor(private readonly profilesDir: string) {}
+
+  init(name: string): ProfileInitResult {
+    assertSafeName(name);
+    const profileDir = path.join(this.profilesDir, name);
+    if (fs.existsSync(profileDir)) {
+      throw MarifoldError.profileInvalid(`Profile '${name}' already exists at ${profileDir}.`, name);
+    }
+
+    fs.mkdirSync(profileDir, { recursive: true });
+    const files = [
+      writeFile(path.join(profileDir, 'PROFILE.md'), PROFILE_MD_STUB.replace('{name}', name)),
+      writeFile(path.join(profileDir, 'RULES.md'), RULES_MD_STUB),
+      writeFile(path.join(profileDir, 'CUSTOM.md'), ''),
+      writeFile(path.join(profileDir, 'profile.toml'), PROFILE_TOML_STUB),
+    ];
+
+    return { name, path: profileDir, files };
+  }
+
+  setModelOverride(name: string, provider: string, model: string): ProfileModelOverrideResult {
+    assertSafeName(name);
+    if (!provider || !model) {
+      throw MarifoldError.profileInvalid('Profile model overrides require both provider and model.', name);
+    }
+    const profileDir = this.requireProfileDir(name);
+    const profileToml = path.join(profileDir, 'profile.toml');
+    const next = upsertProfileToml(fs.existsSync(profileToml) ? fs.readFileSync(profileToml, 'utf-8') : '', provider, model);
+    fs.writeFileSync(profileToml, next);
+    return { name, path: profileToml, provider, model, cleared: false };
+  }
+
+  clearModelOverride(name: string): ProfileModelOverrideResult {
+    assertSafeName(name);
+    const profileDir = this.requireProfileDir(name);
+    const profileToml = path.join(profileDir, 'profile.toml');
+    if (!fs.existsSync(profileToml)) {
+      fs.writeFileSync(profileToml, PROFILE_TOML_STUB);
+    } else {
+      fs.writeFileSync(profileToml, removeModelOverride(fs.readFileSync(profileToml, 'utf-8')));
+    }
+    return { name, path: profileToml, cleared: true };
+  }
+
+  exists(name: string): boolean {
+    assertSafeName(name);
+    return name === 'default' || fs.existsSync(path.join(this.profilesDir, name));
+  }
+
+  private requireProfileDir(name: string): string {
+    const profileDir = path.join(this.profilesDir, name);
+    if (!fs.existsSync(profileDir) || !fs.statSync(profileDir).isDirectory()) {
+      throw MarifoldError.profileInvalid(`Profile '${name}' was not found in ${this.profilesDir}.`, name);
+    }
+    return profileDir;
+  }
+}
+
+function writeFile(filePath: string, content: string): string {
+  fs.writeFileSync(filePath, content);
+  return filePath;
+}
+
+function upsertProfileToml(text: string, provider: string, model: string): string {
+  const cleaned = removeModelOverride(text).trimEnd();
+  const prefix = cleaned ? `${cleaned}\n\n` : '';
+  return `${prefix}provider = ${tomlString(provider)}\nmodel = ${tomlString(model)}\n`;
+}
+
+function removeModelOverride(text: string): string {
+  const lines = text.split(/\r?\n/).filter(line => {
+    const trimmed = line.trimStart();
+    return !trimmed.startsWith('provider =') && !trimmed.startsWith('model =');
+  });
+  const next = lines.join('\n').trimEnd();
+  return next ? `${next}\n` : PROFILE_TOML_STUB;
+}
+
+function assertSafeName(name: string): void {
+  if (!SAFE_PROFILE_NAME.test(name)) {
+    throw MarifoldError.profileInvalid(
+      `Invalid profile name '${name}'. Use letters, numbers, underscores, or hyphens.`,
+      name,
+    );
+  }
+}
+
+function tomlString(value: string): string {
+  return JSON.stringify(value);
+}

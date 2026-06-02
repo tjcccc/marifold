@@ -1,12 +1,15 @@
 import { Command } from 'commander';
-import { ConfigLoader, MarifoldRuntime } from '@marifold/core';
+import { ConfigLoader, LoadedMarifoldConfig, MarifoldRuntime } from '@marifold/core';
 
 export interface RootCommandOptions {
   config?: string;
 }
 
 export function createRuntime(program: Command): MarifoldRuntime {
+  return new MarifoldRuntime({ loadedConfig: loadConfig(program) });
+}
+
+export function loadConfig(program: Command): LoadedMarifoldConfig {
   const rootOptions = program.opts<RootCommandOptions>();
-  const loadedConfig = new ConfigLoader().load({ configPath: rootOptions.config });
-  return new MarifoldRuntime({ loadedConfig });
+  return new ConfigLoader().load({ configPath: rootOptions.config });
 }

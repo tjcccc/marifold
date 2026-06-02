@@ -5,7 +5,8 @@ export type MarifoldErrorCode =
   | 'PROFILE_INVALID'
   | 'PROVIDER_NOT_CONFIGURED'
   | 'API_KEY_MISSING'
-  | 'SESSION_STORE_ERROR';
+  | 'SESSION_STORE_ERROR'
+  | 'WORKSPACE_ALREADY_INITIALIZED';
 
 export class MarifoldError extends Error {
   readonly code: MarifoldErrorCode;
@@ -55,6 +56,14 @@ export class MarifoldError extends Error {
       'API_KEY_MISSING',
       `Provider '${provider}' requires ${envVar}. Set the environment variable before running Marifold.`,
       { provider, envVar },
+    );
+  }
+
+  static workspaceAlreadyInitialized(configPath: string): MarifoldError {
+    return new MarifoldError(
+      'WORKSPACE_ALREADY_INITIALIZED',
+      `Marifold is already initialized at ${configPath}. Use --force to rewrite config.toml.`,
+      { configPath },
     );
   }
 }

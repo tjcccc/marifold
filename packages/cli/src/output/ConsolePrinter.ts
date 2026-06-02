@@ -3,6 +3,7 @@ import {
   MarifoldError,
   ProfileSummary,
   SessionSummary,
+  WorkspaceInitResult,
 } from '@marifold/core';
 
 export class ConsolePrinter {
@@ -43,6 +44,23 @@ export class ConsolePrinter {
         `${session.id}\t${session.profileName}\t${session.turnCount} turns\t${session.updatedAt}\n`,
       );
     }
+  }
+
+  printInitResult(result: WorkspaceInitResult): void {
+    process.stdout.write(`Initialized Marifold at ${result.configPath}\n`);
+    process.stdout.write(`Provider: ${result.provider}/${result.model} (${result.providerType})\n`);
+    process.stdout.write(`Profile:  ${result.profile}\n`);
+    process.stdout.write(`Profiles: ${result.profilesDir}\n`);
+    process.stdout.write(`Sessions: ${result.sessionsDb}\n\n`);
+
+    for (const file of result.files) {
+      process.stdout.write(`${file.status.padEnd(7)} ${file.path}\n`);
+    }
+
+    process.stdout.write('\nNext steps:\n');
+    process.stdout.write('  pnpm marifold chat\n');
+    process.stdout.write('  pnpm marifold ask "Hello"\n');
+    process.stdout.write('  pnpm marifold profile list\n');
   }
 
   printError(error: unknown): void {

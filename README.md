@@ -2,21 +2,24 @@
 
 Marifold is a local-first personal AI workspace for profiles, chats, skills, mini apps, workflows, and external agents.
 
-v0.0.1 is the foundation release. It only provides priests-style profile chat and one-shot requests through a TypeScript CLI.
+v0.1.0 is the CLI foundation release. It provides priests-style profile chat, one-shot requests, workspace initialization, and basic local management commands through a TypeScript CLI.
 
-## What v0.0.1 Supports
+## What v0.1.0 Supports
 
 - Marifold-branded CLI.
 - One-shot request-response.
 - Interactive chat.
+- Workspace initialization.
 - Basic priests-style profile loading.
+- Basic profile creation and default-profile selection.
 - Basic provider/model configuration.
+- Basic config, model, provider, and session inspection commands.
 - SQLite session continuity through `@priest-ai/core`.
 - A thin Marifold runtime wrapper around `@priest-ai/core`.
 
 ## Non-goals
 
-v0.0.1 does not include SkillApp, Workflow, Web UI, Apple apps, external-agent aliases, scheduled tasks, permission systems, visual mini-app rendering, or an agentic tool loop.
+v0.1.0 does not include memory, web search, image upload, service/Web UI, SkillApp, Workflow, Apple apps, external-agent aliases, scheduled tasks, permission systems, visual mini-app rendering, or an agentic tool loop.
 
 ## Setup
 
@@ -30,18 +33,17 @@ pnpm build
 Create local configuration:
 
 ```bash
-mkdir -p ~/.marifold
-cp config.example.toml ~/.marifold/config.toml
-mkdir -p ~/.marifold/profiles
-cp -R examples/profiles/default ~/.marifold/profiles/default
+pnpm marifold init
 ```
 
-Edit `~/.marifold/config.toml` for your provider and model.
+This writes `~/.marifold/config.toml`, creates `~/.marifold/profiles/default`, and keeps existing profile files if you re-run with `--force`.
+
+Edit `~/.marifold/config.toml` if you want a provider other than the default Ollama setup.
 
 For Ollama, make sure the configured model is available locally:
 
 ```bash
-ollama pull llama3.2
+ollama pull gemma4:e4b
 ```
 
 For OpenAI-compatible providers, set the configured environment variable:
@@ -70,11 +72,34 @@ pnpm marifold chat
 pnpm marifold chat --profile default
 pnpm marifold chat --profile default --session test-session
 
+pnpm marifold init
+pnpm marifold init --provider openai --model gpt-4o-mini
+
+pnpm marifold config show
+pnpm marifold config set default.model gemma4:e4b
+
+pnpm marifold model
+pnpm marifold model default gemma4:e4b
+pnpm marifold model default qwen3:8b --provider ollama --profile coder
+pnpm marifold model default --profile coder --clear
+
+pnpm marifold provider
+pnpm marifold provider list
+pnpm marifold provider status
+
 pnpm marifold profile list
+pnpm marifold profile init coder
+pnpm marifold profile default coder
+
 pnpm marifold session list
+pnpm marifold session show test-session
+pnpm marifold session rename test-session renamed-session
+pnpm marifold session delete renamed-session
 ```
 
 The packaged binary name is `marifold`.
+
+Inside `marifold chat`, use `/help` for chat commands. End a line with `\` to continue a multiline message.
 
 ## Config
 
@@ -95,7 +120,7 @@ Config shape:
 ```toml
 [default]
 provider = "ollama"
-model = "llama3.2"
+model = "gemma4:e4b"
 profile = "default"
 timeout_seconds = 120
 
@@ -116,9 +141,11 @@ Supported provider types:
 
 For `openai-compatible`, set `base_url` without the trailing `/v1`; `@priest-ai/core` appends `/v1/chat/completions`.
 
+`marifold init` accepts `--provider`, `--provider-type`, `--model`, `--base-url`, `--api-key-env`, `--profiles-dir`, `--sessions-db`, and `--force`. Non-Ollama providers require `--model`; custom OpenAI-compatible providers also require `--base-url`.
+
 ## Profiles
 
-Marifold v0.0.1 loads priests-style profile directories:
+Marifold v0.1.0 loads priests-style profile directories:
 
 ```text
 profiles/default/
