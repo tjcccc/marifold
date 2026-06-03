@@ -35,6 +35,8 @@ export class ConfigManager {
       this.setDefaultValue(parts[1], value);
     } else if (parts[0] === 'paths' && parts.length === 2) {
       this.setPathValue(parts[1], value);
+    } else if (parts[0] === 'memory' && parts.length === 2) {
+      this.setMemoryValue(parts[1], value);
     } else if (parts[0] === 'providers' && parts.length === 3) {
       this.setProviderValue(parts[1], parts[2], value);
     } else {
@@ -125,6 +127,19 @@ export class ConfigManager {
     }
   }
 
+  private setMemoryValue(key: string, value: string): void {
+    switch (key) {
+      case 'size_limit':
+        this.config.memory.sizeLimit = parseNonNegativeNumber(value, 'memory.size_limit');
+        return;
+      case 'context_limit':
+        this.config.memory.contextLimit = parseNonNegativeNumber(value, 'memory.context_limit');
+        return;
+      default:
+        throw MarifoldError.configInvalid(`Unknown config key: memory.${key}`);
+    }
+  }
+
   private setProviderValue(providerName: string, key: string, value: string): void {
     const provider = this.config.providers[providerName] ?? this.createProvider(providerName);
     switch (key) {
@@ -173,11 +188,17 @@ export function renderMarifoldConfig(config: MarifoldConfig): string {
     `options = ${tomlStringArray(config.models.options)}`,
   ];
 
+  const memoryLines = [
+    '[memory]',
+    `size_limit = ${config.memory.sizeLimit}`,
+    `context_limit = ${config.memory.contextLimit}`,
+  ];
+
   const providerTables = Object.entries(config.providers)
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([name, provider]) => renderProvider(name, provider));
 
-  return `${defaultLines.join('\n')}\n\n${modelLines.join('\n')}\n\n${pathLines.join('\n')}\n\n${providerTables.join('\n\n')}\n`;
+  return `${defaultLines.join('\n')}\n\n${modelLines.join('\n')}\n\n${memoryLines.join('\n')}\n\n${pathLines.join('\n')}\n\n${providerTables.join('\n\n')}\n`;
 }
 
 function renderProvider(name: string, provider: MarifoldProviderConfig): string {
@@ -201,6 +222,12 @@ function optionalNumberLine(key: string, value?: number): string | undefined {
 function parseNumber(value: string, label: string): number {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) throw MarifoldError.configInvalid(`Expected ${label} to be a number.`);
+  return parsed;
+}
+
+function parseNonNegativeNumber(value: string, label: string): number {
+  const parsed = parseNumber(value, label);
+  if (parsed < 0) throw MarifoldError.configInvalid(`Expected ${label} to be a non-negative number.`);
   return parsed;
 }
 

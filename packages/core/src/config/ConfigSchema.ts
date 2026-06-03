@@ -18,6 +18,11 @@ export interface MarifoldModelsConfig {
   options: string[];
 }
 
+export interface MarifoldMemoryConfig {
+  sizeLimit: number;
+  contextLimit: number;
+}
+
 export interface MarifoldProviderConfig {
   type: ProviderType;
   baseUrl?: string;
@@ -27,6 +32,7 @@ export interface MarifoldProviderConfig {
 export interface MarifoldConfig {
   default: MarifoldDefaultConfig;
   models: MarifoldModelsConfig;
+  memory: MarifoldMemoryConfig;
   paths: MarifoldPathsConfig;
   providers: Record<string, MarifoldProviderConfig>;
 }
@@ -40,6 +46,7 @@ export interface LoadedMarifoldConfig {
 export interface ProfileSettings {
   provider?: string;
   model?: string;
+  memories: boolean;
 }
 
 export interface ProfileSummary {

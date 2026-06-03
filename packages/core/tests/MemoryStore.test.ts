@@ -87,4 +87,14 @@ describe('MemoryStore', () => {
       'Preference: - Keep replies practical.',
     ]);
   });
+
+  it('applies prompt context limits', () => {
+    const store = new MemoryStore(path.join(tempDir(), 'profiles'));
+    store.remember('default', 'user', 'First memory line.');
+    store.remember('default', 'preferences', 'Second memory line.');
+
+    expect(store.listPromptMemory('default', { contextLimit: 24 })).toEqual([
+      'User: First memory line.',
+    ]);
+  });
 });

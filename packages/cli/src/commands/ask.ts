@@ -7,6 +7,7 @@ interface AskOptions {
   provider?: string;
   model?: string;
   session?: string;
+  memories?: boolean;
 }
 
 export function registerAskCommand(program: Command, printer: ConsolePrinter): void {
@@ -18,6 +19,7 @@ export function registerAskCommand(program: Command, printer: ConsolePrinter): v
     .option('--provider <name>', 'Provider key from config.toml.')
     .option('--model <model>', 'Model name.')
     .option('--session <id>', 'Optional session id for continuity.')
+    .option('--no-memories', 'Disable profile memory for this run.')
     .action(async (promptParts: string[], options: AskOptions) => {
       const runtime = createRuntime(program);
       try {
@@ -27,6 +29,7 @@ export function registerAskCommand(program: Command, printer: ConsolePrinter): v
           provider: options.provider,
           model: options.model,
           sessionId: options.session,
+          memories: options.memories,
         });
         printer.printAskResponse(response);
         if (!response.ok) process.exitCode = 1;

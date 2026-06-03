@@ -4,6 +4,7 @@ export interface MarifoldRunRequest {
   provider?: string;
   model?: string;
   sessionId?: string;
+  memories?: boolean;
 }
 
 export interface MarifoldResolvedSettings {

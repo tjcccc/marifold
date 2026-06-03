@@ -1,6 +1,6 @@
 # Architecture
 
-Marifold v0.3.0 is intentionally small. It provides a TypeScript CLI for priests-style profile chat, one-shot requests, workspace initialization, chat resume behavior, saved model options, explicit profile memory commands, and basic local management commands powered by `@priest-ai/core`.
+Marifold v0.4.0 is intentionally small. It provides a TypeScript CLI for priests-style profile chat, one-shot requests, workspace initialization, chat resume behavior, saved model options, explicit and configurable profile memory, and basic local management commands powered by `@priest-ai/core`.
 
 ## Current Scope
 
@@ -16,7 +16,7 @@ packages/cli -> packages/core -> @priest-ai/core -> provider
 
 `@priest-ai/core` remains Marifold-agnostic. Marifold depends on it; it does not know about Marifold.
 
-## v0.3.0 Boundaries
+## v0.4.0 Boundaries
 
 The runtime layer is thin. `MarifoldRuntime` resolves config/profile/session settings, selects profile memory, and delegates ask/stream execution to `PriestEngine`.
 
@@ -36,13 +36,13 @@ profiles/default/
     auto_short.jsonl
 ```
 
-Marifold owns the profile memory file meaning and passes selected memory to `@priest-ai/core` through `PriestRequest.memory`. `@priest-ai/core` remains generic and only assembles memory into provider messages.
+Marifold owns the profile memory file meaning and passes selected memory to `@priest-ai/core` through `PriestRequest.memory`. The memory path can be disabled per profile through `profile.toml` or per run through `--no-memories`. `@priest-ai/core` remains generic and only assembles memory into provider messages.
 
 SQLite session continuity is reused from `@priest-ai/core`.
 
 ## Future Areas
 
-These are planned areas, but they are not implemented in v0.3.0:
+These are planned areas, but they are not implemented in v0.4.0:
 
 ```text
 apps/web

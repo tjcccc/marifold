@@ -2,6 +2,7 @@ export type {
   LoadedMarifoldConfig,
   MarifoldConfig,
   MarifoldDefaultConfig,
+  MarifoldMemoryConfig,
   MarifoldPathsConfig,
   MarifoldProviderConfig,
   ProfileDetail,

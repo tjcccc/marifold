@@ -39,7 +39,7 @@ export class MarifoldRuntime {
   async ask(request: MarifoldRunRequest): Promise<MarifoldAskResponse> {
     const settings = this.resolveSettings(request);
     const engine = this.createEngine(settings.provider, Boolean(request.sessionId));
-    const memory = this.memoryStore.listPromptMemory(settings.profile);
+    const memory = this.memoryForRequest(settings.profile, request.memories);
     const response = await engine.run({
       config: this.toPriestConfig(settings),
       profile: settings.profile,
@@ -62,7 +62,7 @@ export class MarifoldRuntime {
   async *stream(request: MarifoldRunRequest): AsyncGenerator<string, void, unknown> {
     const settings = this.resolveSettings(request);
     const engine = this.createEngine(settings.provider, Boolean(request.sessionId));
-    const memory = this.memoryStore.listPromptMemory(settings.profile);
+    const memory = this.memoryForRequest(settings.profile, request.memories);
     yield* engine.stream({
       config: this.toPriestConfig(settings),
       profile: settings.profile,
@@ -88,6 +88,10 @@ export class MarifoldRuntime {
 
   deleteMemories(profile: string, query: string): MemoryMutationResult {
     return this.memoryStore.delete(profile, query);
+  }
+
+  memoryEnabled(profile: string, requestMemories = true): boolean {
+    return requestMemories && this.profileResolver.loadSettings(profile).memories;
   }
 
   listProfiles(): ProfileSummary[] {
@@ -140,6 +144,12 @@ export class MarifoldRuntime {
       maxOutputTokens: config.default.maxOutputTokens,
       maxSystemChars: config.default.maxSystemChars,
     };
+  }
+
+  private memoryForRequest(profile: string, requestMemories = true): string[] {
+    const { config } = this.options.loadedConfig;
+    if (!this.memoryEnabled(profile, requestMemories)) return [];
+    return this.memoryStore.listPromptMemory(profile, { contextLimit: config.memory.contextLimit });
   }
 
   private runtimeContext(memory: string[]): string[] {

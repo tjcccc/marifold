@@ -28,6 +28,8 @@ const DEFAULT_CUSTOM = '';
 const DEFAULT_PROFILE_TOML = `# Optional per-profile model override.
 # Set both provider and model to override [default].
 
+memories = true
+
 # provider = "ollama"
 # model = "gemma4:e4b"
 `;
@@ -149,6 +151,10 @@ timeout_seconds = 120
 options = [
   ${tomlString(`${options.provider}/${options.model}`)},
 ]
+
+[memory]
+size_limit = 50000
+context_limit = 2400
 
 [paths]
 profiles_dir = ${tomlString(options.profilesDir)}

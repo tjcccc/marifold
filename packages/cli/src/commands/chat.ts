@@ -11,6 +11,7 @@ interface ChatOptions {
   model?: string;
   session?: string;
   resume?: boolean | string;
+  memories?: boolean;
 }
 
 const EXIT_COMMANDS = new Set(['/exit', '/quit']);
@@ -36,6 +37,7 @@ export function registerChatCommand(program: Command, printer: ConsolePrinter): 
     .option('--model <model>', 'Model name.')
     .option('--session <id>', 'Session id to continue or create.')
     .option('--resume [mode]', 'Resume a profile session. Use "last" for the most recent session.')
+    .option('--no-memories', 'Disable profile memory for this chat run.')
     .action(async (options: ChatOptions) => {
       const runtime = createRuntime(program);
       const prompt = new InteractivePrompt();
@@ -58,6 +60,7 @@ export function registerChatCommand(program: Command, printer: ConsolePrinter): 
         process.stdout.write(`Model:    ${settings.provider}/${settings.model}\n`);
         process.stdout.write(`Profile:  ${settings.profile}\n`);
         process.stdout.write(`Session:  ${sessionId}\n`);
+        process.stdout.write(`Memory:   ${runtime.memoryEnabled(settings.profile, options.memories) ? 'on' : 'off'}\n`);
         process.stdout.write('Type /help for commands, Ctrl-C to quit.\n\n');
 
         while (true) {
@@ -118,6 +121,7 @@ export function registerChatCommand(program: Command, printer: ConsolePrinter): 
             provider: settings.provider,
             model: settings.model,
             sessionId,
+            memories: options.memories,
           })) {
             process.stdout.write(chunk);
           }

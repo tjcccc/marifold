@@ -32,6 +32,10 @@ describe('MarifoldRuntime', () => {
       models: {
         options: ['ollama/gemma4:e4b'],
       },
+      memory: {
+        sizeLimit: 50000,
+        contextLimit: 2400,
+      },
       paths: {
         profilesDir: path.join(dir, 'profiles'),
         sessionsDb: path.join(dir, 'sessions.db'),
@@ -76,6 +80,62 @@ describe('MarifoldRuntime', () => {
           turnCount: 2,
         },
       ]);
+    } finally {
+      runtime.close();
+    }
+  });
+
+  it('skips profile memory when disabled for a run', async () => {
+    const dir = tempDir();
+    const config: MarifoldConfig = {
+      default: {
+        provider: 'ollama',
+        model: 'gemma4:e4b',
+        profile: 'default',
+      },
+      models: {
+        options: ['ollama/gemma4:e4b'],
+      },
+      memory: {
+        sizeLimit: 50000,
+        contextLimit: 2400,
+      },
+      paths: {
+        profilesDir: path.join(dir, 'profiles'),
+        sessionsDb: path.join(dir, 'sessions.db'),
+      },
+      providers: {
+        ollama: {
+          type: 'ollama',
+          baseUrl: 'http://localhost:11434',
+        },
+      },
+    };
+
+    let requestBody: { messages?: Array<{ role: string; content: string }> } | undefined;
+    vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      requestBody = JSON.parse(String(init?.body));
+      return ollamaStreamResponse(['ok']);
+    }));
+
+    const runtime = new MarifoldRuntime({
+      loadedConfig: {
+        config,
+        configPath: path.join(dir, 'config.toml'),
+        foundConfig: true,
+      },
+    });
+
+    try {
+      runtime.rememberMemory('default', 'user', "The user's editor is Neovim.");
+      const response = await runtime.ask({
+        prompt: 'Hello',
+        memories: false,
+      });
+
+      expect(response.ok).toBe(true);
+      expect(requestBody?.messages?.[0]?.content).not.toContain('## Memory');
+      expect(requestBody?.messages?.[0]?.content).not.toContain('Neovim');
     } finally {
       runtime.close();
     }

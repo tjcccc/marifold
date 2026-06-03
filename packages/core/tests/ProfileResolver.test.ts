@@ -43,7 +43,19 @@ describe('ProfileResolver', () => {
 
     const settings = new ProfileResolver(root).loadSettings('coder');
 
-    expect(settings).toEqual({ provider: 'ollama', model: 'codellama' });
+    expect(settings).toEqual({ provider: 'ollama', model: 'codellama', memories: true });
+  });
+
+  it('loads profile memory enablement from profile.toml', () => {
+    const root = tempDir();
+    const profileDir = path.join(root, 'tool');
+    fs.mkdirSync(profileDir, { recursive: true });
+    fs.writeFileSync(path.join(profileDir, 'PROFILE.md'), 'Formatter');
+    fs.writeFileSync(path.join(profileDir, 'profile.toml'), 'memories = false\n');
+
+    const settings = new ProfileResolver(root).loadSettings('tool');
+
+    expect(settings).toEqual({ memories: false });
   });
 
   it('shows profile file details and settings', () => {
@@ -58,7 +70,7 @@ describe('ProfileResolver', () => {
     const detail = new ProfileResolver(root).detail('writer');
 
     expect(detail.name).toBe('writer');
-    expect(detail.settings).toEqual({ provider: 'ollama', model: 'gemma4:e4b' });
+    expect(detail.settings).toEqual({ provider: 'ollama', model: 'gemma4:e4b', memories: true });
     expect(detail.files.profile.content).toBe('Writer identity');
     expect(detail.files.rules.content).toBe('Writer rules');
     expect(detail.files.custom.content).toBe('Writer custom');

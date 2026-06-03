@@ -34,6 +34,10 @@ options = [
   "ollama/gemma4:e4b",
 ]
 
+[memory]
+size_limit = 50000
+context_limit = 2400
+
 [paths]
 profiles_dir = "${dir}/profiles"
 sessions_db = "${dir}/sessions.db"
@@ -52,9 +56,11 @@ base_url = "http://localhost:11434"
       baseUrl: 'https://api.openai.com',
       apiKeyEnv: 'OPENAI_API_KEY',
     });
+    new ConfigManager(new ConfigLoader().load({ configPath })).setValue('memory.context_limit', '1200');
 
     const updated = new ConfigLoader().load({ configPath });
     expect(updated.config.default.model).toBe('qwen3:8b');
+    expect(updated.config.memory.contextLimit).toBe(1200);
     expect(updated.config.providers.openai).toMatchObject({
       type: 'openai-compatible',
       baseUrl: 'https://api.openai.com',

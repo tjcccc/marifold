@@ -2,9 +2,9 @@
 
 Marifold is a local-first personal AI workspace for profiles, chats, skills, mini apps, workflows, and external agents.
 
-v0.3.0 is the CLI foundation release. It provides priests-style profile chat, one-shot requests, workspace initialization, resume support, saved model options, explicit profile memory commands, and basic local management commands through a TypeScript CLI.
+v0.4.0 is the CLI foundation release. It provides priests-style profile chat, one-shot requests, workspace initialization, resume support, saved model options, explicit profile memory commands, configurable memory recall, and basic local management commands through a TypeScript CLI.
 
-## What v0.3.0 Supports
+## What v0.4.0 Supports
 
 - Marifold-branded CLI.
 - One-shot request-response.
@@ -21,6 +21,7 @@ v0.3.0 is the CLI foundation release. It provides priests-style profile chat, on
 - Profile-scoped memory files in `memories/user.jsonl`, `memories/preferences.jsonl`, and `memories/auto_short.jsonl`.
 - Explicit chat memory commands for remember, soft-forget, and permanent delete.
 - Memory injection through the `@priest-ai/core` request `memory` lane.
+- Memory recall controls through `[memory].context_limit`, `profile.toml` `memories = false`, and `--no-memories`.
 - Basic config, model, provider, and session inspection commands.
 - Profile-filtered session listing.
 - SQLite session continuity through `@priest-ai/core`.
@@ -28,7 +29,7 @@ v0.3.0 is the CLI foundation release. It provides priests-style profile chat, on
 
 ## Non-goals
 
-v0.3.0 does not include automatic model-driven memory extraction/consolidation, web search, image upload, service/Web UI, SkillApp, Workflow, Apple apps, external-agent aliases, scheduled tasks, permission systems, visual mini-app rendering, or an agentic tool loop.
+v0.4.0 does not include automatic model-driven memory extraction/consolidation, web search, image upload, service/Web UI, SkillApp, Workflow, Apple apps, external-agent aliases, scheduled tasks, permission systems, visual mini-app rendering, or an agentic tool loop.
 
 ## Setup
 
@@ -76,9 +77,11 @@ Run the local CLI from the workspace:
 ```bash
 pnpm marifold ask "Hello"
 pnpm marifold ask --profile default "Explain Marifold in one sentence."
+pnpm marifold ask --no-memories "Format this JSON"
 
 pnpm marifold chat
 pnpm marifold chat --profile default
+pnpm marifold chat --profile default --no-memories
 pnpm marifold chat --profile default --session test-session
 pnpm marifold chat --profile default --resume
 pnpm marifold chat --profile default --resume last
@@ -155,6 +158,10 @@ options = [
   "ollama/gemma4:e4b",
 ]
 
+[memory]
+size_limit = 50000
+context_limit = 2400
+
 [paths]
 profiles_dir = "~/.marifold/profiles"
 sessions_db = "~/.marifold/sessions.db"
@@ -176,9 +183,11 @@ For `openai-compatible`, set `base_url` without the trailing `/v1`; `@priest-ai/
 
 `marifold model add` stores provider/model choices in `[models].options`. `marifold provider <name> list` asks the provider for live model names when Marifold knows how to query that provider type.
 
+`[memory].context_limit` caps the combined memory text injected into one provider request. Set it to `0` for unlimited memory injection. `[memory].size_limit` is reserved for future automatic short-term memory trimming.
+
 ## Profiles
 
-Marifold v0.3.0 loads priests-style profile directories:
+Marifold v0.4.0 loads priests-style profile directories:
 
 ```text
 profiles/default/
@@ -195,6 +204,8 @@ profiles/default/
 `PROFILE.md` defines identity, `RULES.md` defines behavior rules, and `CUSTOM.md` is optional extra system guidance.
 
 `profile.toml` may set both `provider` and `model` to override the global default for that profile.
+
+`profile.toml` may also set `memories = false` for tool profiles that should not receive profile memory. Per-run `--no-memories` disables memory for one `ask` or `chat` invocation.
 
 `memories/user.jsonl` stores durable user facts, `memories/preferences.jsonl` stores durable preferences, and `memories/auto_short.jsonl` stores short-term notes. Marifold also reads legacy Markdown memory files in `memories/user.md`, `memories/preferences.md`, `memories/notes.md`, and `memories/auto_short.md` as read-only fallback prompt context.
 

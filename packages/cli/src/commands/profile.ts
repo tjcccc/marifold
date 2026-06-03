@@ -49,6 +49,7 @@ export function registerProfileCommand(program: Command, printer: ConsolePrinter
         process.stdout.write(`Source:  ${detail.source}\n`);
         if (detail.path) process.stdout.write(`Path:    ${detail.path}\n`);
         process.stdout.write(`Model:   ${detail.settings.provider && detail.settings.model ? `${detail.settings.provider}/${detail.settings.model}` : 'default'}\n`);
+        process.stdout.write(`Memory:  ${detail.settings.memories ? 'on' : 'off'}\n`);
         printProfileSection('PROFILE.md', detail.files.profile);
         printProfileSection('RULES.md', detail.files.rules);
         printProfileSection('CUSTOM.md', detail.files.custom);

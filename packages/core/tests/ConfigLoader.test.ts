@@ -35,6 +35,10 @@ options = [
   "openai/gpt-4o-mini",
 ]
 
+[memory]
+size_limit = 1000
+context_limit = 120
+
 [paths]
 profiles_dir = "${dir}/profiles"
 sessions_db = "${dir}/sessions.db"
@@ -51,6 +55,7 @@ base_url = "http://localhost:11434"
     expect(loaded.config.default.model).toBe('gemma4:e4b');
     expect(loaded.config.default.timeoutSeconds).toBe(30);
     expect(loaded.config.models.options).toEqual(['ollama/gemma4:e4b', 'openai/gpt-4o-mini']);
+    expect(loaded.config.memory).toEqual({ sizeLimit: 1000, contextLimit: 120 });
     expect(loaded.config.paths.profilesDir).toBe(path.join(dir, 'profiles'));
     expect(loaded.config.providers.ollama.baseUrl).toBe('http://localhost:11434');
   });
@@ -59,5 +64,24 @@ base_url = "http://localhost:11434"
     const missing = path.join(tempDir(), 'missing.toml');
 
     expect(() => new ConfigLoader().load({ configPath: missing })).toThrow(MarifoldError);
+  });
+
+  it('uses memory defaults when the memory table is absent', () => {
+    const dir = tempDir();
+    const configPath = path.join(dir, 'config.toml');
+    fs.writeFileSync(configPath, `
+[default]
+provider = "ollama"
+model = "gemma4:e4b"
+profile = "default"
+
+[paths]
+profiles_dir = "${dir}/profiles"
+sessions_db = "${dir}/sessions.db"
+`);
+
+    const loaded = new ConfigLoader().load({ configPath });
+
+    expect(loaded.config.memory).toEqual({ sizeLimit: 50000, contextLimit: 2400 });
   });
 });

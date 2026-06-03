@@ -50,6 +50,7 @@ describe('WorkspaceInitializer', () => {
       profile: 'default',
     });
     expect(loaded.config.models.options).toEqual(['ollama/gemma4:e4b']);
+    expect(loaded.config.memory).toEqual({ sizeLimit: 50000, contextLimit: 2400 });
     expect(loaded.config.paths.profilesDir).toBe(profilesDir);
     expect(new ProfileResolver(profilesDir).list()).toMatchObject([
       { name: 'default', source: 'directory' },

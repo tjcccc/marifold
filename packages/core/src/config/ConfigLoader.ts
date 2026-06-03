@@ -5,6 +5,7 @@ import {
   LoadedMarifoldConfig,
   MarifoldConfig,
   MarifoldDefaultConfig,
+  MarifoldMemoryConfig,
   MarifoldModelsConfig,
   MarifoldPathsConfig,
   MarifoldProviderConfig,
@@ -64,12 +65,14 @@ export class ConfigLoader {
   private normalize(raw: TomlObject): MarifoldConfig {
     const defaultRaw = optionalObject(raw.default, 'default');
     const modelsRaw = optionalObject(raw.models, 'models');
+    const memoryRaw = optionalObject(raw.memory, 'memory');
     const pathsRaw = optionalObject(raw.paths, 'paths');
     const providersRaw = optionalObject(raw.providers, 'providers');
 
     return {
       default: this.normalizeDefault(defaultRaw),
       models: this.normalizeModels(modelsRaw),
+      memory: this.normalizeMemory(memoryRaw),
       paths: this.normalizePaths(pathsRaw),
       providers: this.normalizeProviders(providersRaw),
     };
@@ -96,6 +99,13 @@ export class ConfigLoader {
   private normalizeModels(raw: TomlObject): MarifoldModelsConfig {
     return {
       options: optionalStringArray(raw.options, 'models.options'),
+    };
+  }
+
+  private normalizeMemory(raw: TomlObject): MarifoldMemoryConfig {
+    return {
+      sizeLimit: optionalNonNegativeNumber(raw.size_limit, 'memory.size_limit') ?? 50000,
+      contextLimit: optionalNonNegativeNumber(raw.context_limit, 'memory.context_limit') ?? 2400,
     };
   }
 
@@ -150,6 +160,13 @@ function optionalNumber(value: unknown, label: string): number | undefined {
   if (value === undefined) return undefined;
   if (typeof value === 'number' && Number.isFinite(value)) return value;
   throw MarifoldError.configInvalid(`Expected ${label} to be a number.`);
+}
+
+function optionalNonNegativeNumber(value: unknown, label: string): number | undefined {
+  const number = optionalNumber(value, label);
+  if (number === undefined) return undefined;
+  if (number >= 0) return number;
+  throw MarifoldError.configInvalid(`Expected ${label} to be a non-negative number.`);
 }
 
 function optionalStringArray(value: unknown, label: string): string[] {

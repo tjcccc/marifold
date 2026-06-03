@@ -9,6 +9,10 @@ options = [
   "ollama/gemma4:e4b",
 ]
 
+[memory]
+size_limit = 50000
+context_limit = 2400
+
 [paths]
 profiles_dir = "~/.marifold/profiles"
 sessions_db = "~/.marifold/sessions.db"

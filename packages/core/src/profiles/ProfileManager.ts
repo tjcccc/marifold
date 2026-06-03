@@ -21,6 +21,8 @@ Replace this content with specific guidance for this profile's role.
 const PROFILE_TOML_STUB = `# Optional per-profile model override.
 # Set both provider and model to override [default].
 
+memories = true
+
 # provider = "ollama"
 # model = "gemma4:e4b"
 `;

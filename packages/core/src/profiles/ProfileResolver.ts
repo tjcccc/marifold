@@ -35,18 +35,19 @@ export class ProfileResolver implements ProfileLoader {
   loadSettings(name: string): ProfileSettings {
     this.assertSafeName(name);
     const profileToml = path.join(this.profilesDir, name, 'profile.toml');
-    if (!fs.existsSync(profileToml)) return {};
+    if (!fs.existsSync(profileToml)) return { memories: true };
 
     const raw = this.readToml(profileToml);
     const provider = optionalString(raw.provider, `${name}.profile.toml provider`);
     const model = optionalString(raw.model, `${name}.profile.toml model`);
+    const memories = optionalBoolean(raw.memories, `${name}.profile.toml memories`) ?? true;
     if ((provider && !model) || (!provider && model)) {
       throw MarifoldError.profileInvalid(
         `Profile '${name}' must set both provider and model in profile.toml, or neither.`,
         name,
       );
     }
-    return { provider, model };
+    return { provider, model, memories };
   }
 
   list(): ProfileSummary[] {
@@ -102,7 +103,7 @@ export class ProfileResolver implements ProfileLoader {
       const profile = this.loadJsonProfile(name);
       return {
         ...summary,
-        settings: {},
+        settings: { memories: true },
         files: {
           profile: { path: summary.path, content: profile?.identity ?? '' },
           rules: { path: summary.path, content: profile?.rules ?? '' },
@@ -114,7 +115,7 @@ export class ProfileResolver implements ProfileLoader {
 
     return {
       ...summary,
-      settings: {},
+      settings: { memories: true },
       files: {
         profile: { content: BUILT_IN_DEFAULT_PROFILE.identity },
         rules: { content: BUILT_IN_DEFAULT_PROFILE.rules },
@@ -200,4 +201,10 @@ function optionalString(value: unknown, label: string): string | undefined {
   if (value === undefined) return undefined;
   if (typeof value === 'string') return value;
   throw MarifoldError.configInvalid(`Expected ${label} to be a string.`);
+}
+
+function optionalBoolean(value: unknown, label: string): boolean | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value === 'boolean') return value;
+  throw MarifoldError.configInvalid(`Expected ${label} to be a boolean.`);
 }
