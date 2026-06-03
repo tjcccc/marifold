@@ -46,6 +46,7 @@ describe('WorkspaceInitializer', () => {
       model: 'gemma4:e4b',
       profile: 'default',
     });
+    expect(loaded.config.models.options).toEqual(['ollama/gemma4:e4b']);
     expect(loaded.config.paths.profilesDir).toBe(profilesDir);
     expect(new ProfileResolver(profilesDir).list()).toMatchObject([
       { name: 'default', source: 'directory' },
@@ -92,6 +93,7 @@ describe('WorkspaceInitializer', () => {
       baseUrl: 'https://api.openai.com',
       apiKeyEnv: 'OPENAI_API_KEY',
     });
+    expect(loaded.config.models.options).toEqual(['openai/gpt-test']);
     expect(fs.readFileSync(profilePath, 'utf-8')).toBe('Custom profile content');
     expect(result.files.find(file => file.path === profilePath)?.status).toBe('kept');
   });

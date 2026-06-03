@@ -1,6 +1,6 @@
 # Architecture
 
-Marifold v0.1.1 is intentionally small. It provides a TypeScript CLI for priests-style profile chat, one-shot requests, workspace initialization, chat resume behavior, and basic local management commands powered by `@priest-ai/core`.
+Marifold v0.2.0 is intentionally small. It provides a TypeScript CLI for priests-style profile chat, one-shot requests, workspace initialization, chat resume behavior, saved model options, and basic local management commands powered by `@priest-ai/core`.
 
 ## Current Scope
 
@@ -16,7 +16,7 @@ packages/cli -> packages/core -> @priest-ai/core -> provider
 
 `@priest-ai/core` remains Marifold-agnostic. Marifold depends on it; it does not know about Marifold.
 
-## v0.1.1 Boundaries
+## v0.2.0 Boundaries
 
 The runtime layer is thin. `MarifoldRuntime` resolves config/profile/session settings and delegates ask/stream execution to `PriestEngine`.
 
@@ -36,7 +36,7 @@ SQLite session continuity is reused from `@priest-ai/core`.
 
 ## Future Areas
 
-These are planned areas, but they are not implemented in v0.1.1:
+These are planned areas, but they are not implemented in v0.2.0:
 
 ```text
 apps/web

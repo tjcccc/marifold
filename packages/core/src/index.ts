@@ -17,7 +17,7 @@ export { ConfigManager, renderMarifoldConfig } from './config/ConfigManager';
 export type { ConfigSetResult } from './config/ConfigManager';
 export { ConfigLoader } from './config/ConfigLoader';
 export { ProviderInspector } from './config/ProviderInspector';
-export type { ProviderStatus, ProviderSummary } from './config/ProviderInspector';
+export type { ProviderModelList, ProviderStatus, ProviderSummary } from './config/ProviderInspector';
 export { ProviderFactory } from './config/ProviderFactory';
 export { MarifoldError } from './errors/MarifoldError';
 export type { MarifoldErrorCode } from './errors/MarifoldError';

@@ -14,6 +14,10 @@ export interface MarifoldPathsConfig {
   sessionsDb: string;
 }
 
+export interface MarifoldModelsConfig {
+  options: string[];
+}
+
 export interface MarifoldProviderConfig {
   type: ProviderType;
   baseUrl?: string;
@@ -22,6 +26,7 @@ export interface MarifoldProviderConfig {
 
 export interface MarifoldConfig {
   default: MarifoldDefaultConfig;
+  models: MarifoldModelsConfig;
   paths: MarifoldPathsConfig;
   providers: Record<string, MarifoldProviderConfig>;
 }

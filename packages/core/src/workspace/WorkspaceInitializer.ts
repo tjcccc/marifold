@@ -143,6 +143,11 @@ model = ${tomlString(options.model)}
 profile = ${tomlString(options.profile)}
 timeout_seconds = 120
 
+[models]
+options = [
+  ${tomlString(`${options.provider}/${options.model}`)},
+]
+
 [paths]
 profiles_dir = ${tomlString(options.profilesDir)}
 sessions_db = ${tomlString(options.sessionsDb)}

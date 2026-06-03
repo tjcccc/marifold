@@ -29,6 +29,12 @@ model = "gemma4:e4b"
 profile = "default"
 timeout_seconds = 30
 
+[models]
+options = [
+  "ollama/gemma4:e4b",
+  "openai/gpt-4o-mini",
+]
+
 [paths]
 profiles_dir = "${dir}/profiles"
 sessions_db = "${dir}/sessions.db"
@@ -44,6 +50,7 @@ base_url = "http://localhost:11434"
     expect(loaded.config.default.provider).toBe('ollama');
     expect(loaded.config.default.model).toBe('gemma4:e4b');
     expect(loaded.config.default.timeoutSeconds).toBe(30);
+    expect(loaded.config.models.options).toEqual(['ollama/gemma4:e4b', 'openai/gpt-4o-mini']);
     expect(loaded.config.paths.profilesDir).toBe(path.join(dir, 'profiles'));
     expect(loaded.config.providers.ollama.baseUrl).toBe('http://localhost:11434');
   });

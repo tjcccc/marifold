@@ -29,6 +29,9 @@ describe('MarifoldRuntime', () => {
         model: 'gemma4:e4b',
         profile: 'default',
       },
+      models: {
+        options: ['ollama/gemma4:e4b'],
+      },
       paths: {
         profilesDir: path.join(dir, 'profiles'),
         sessionsDb: path.join(dir, 'sessions.db'),

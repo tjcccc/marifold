@@ -4,6 +4,11 @@ model = "gemma4:e4b"
 profile = "default"
 timeout_seconds = 120
 
+[models]
+options = [
+  "ollama/gemma4:e4b",
+]
+
 [paths]
 profiles_dir = "~/.marifold/profiles"
 sessions_db = "~/.marifold/sessions.db"

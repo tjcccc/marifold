@@ -7,9 +7,27 @@ export function registerProviderCommand(program: Command, printer: ConsolePrinte
   const provider = program
     .command('provider')
     .description('Inspect configured providers.')
-    .action(() => {
+    .argument('[name]', 'Provider key for provider-specific actions.')
+    .argument('[action]', 'Provider action. Use "list" to list live models.')
+    .action(async (name: string | undefined, action: string | undefined) => {
       try {
-        const current = new ProviderInspector(loadConfig(program)).current();
+        const inspector = new ProviderInspector(loadConfig(program));
+        if (name && action === 'list') {
+          const result = await inspector.listModels(name);
+          if (result.models.length === 0) {
+            process.stdout.write(`${result.message}\n`);
+            return;
+          }
+          for (const model of result.models) process.stdout.write(`${model}\n`);
+          return;
+        }
+        if (name) {
+          process.stderr.write(`Unknown provider action: ${name} ${action ?? ''}`.trim() + '\n');
+          process.exitCode = 1;
+          return;
+        }
+
+        const current = inspector.current();
         if (!current) {
           process.stdout.write('Current provider: unset\n');
           return;

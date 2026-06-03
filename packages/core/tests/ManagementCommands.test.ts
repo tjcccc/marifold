@@ -29,6 +29,11 @@ provider = "ollama"
 model = "gemma4:e4b"
 profile = "default"
 
+[models]
+options = [
+  "ollama/gemma4:e4b",
+]
+
 [paths]
 profiles_dir = "${dir}/profiles"
 sessions_db = "${dir}/sessions.db"
@@ -42,13 +47,20 @@ base_url = "http://localhost:11434"
     new ConfigManager(loaded).setValue('default.model', 'qwen3:8b');
     new ConfigManager(new ConfigLoader().load({ configPath })).setValue('providers.openai.type', 'openai-compatible');
     new ConfigManager(new ConfigLoader().load({ configPath })).setValue('providers.openai.base_url', 'https://api.openai.com');
+    new ConfigManager(new ConfigLoader().load({ configPath })).addModel('openai', 'gpt-4o-mini', {
+      type: 'openai-compatible',
+      baseUrl: 'https://api.openai.com',
+      apiKeyEnv: 'OPENAI_API_KEY',
+    });
 
     const updated = new ConfigLoader().load({ configPath });
     expect(updated.config.default.model).toBe('qwen3:8b');
     expect(updated.config.providers.openai).toMatchObject({
       type: 'openai-compatible',
       baseUrl: 'https://api.openai.com',
+      apiKeyEnv: 'OPENAI_API_KEY',
     });
+    expect(updated.config.models.options).toContain('openai/gpt-4o-mini');
   });
 });
 

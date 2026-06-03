@@ -5,6 +5,7 @@ import {
   LoadedMarifoldConfig,
   MarifoldConfig,
   MarifoldDefaultConfig,
+  MarifoldModelsConfig,
   MarifoldPathsConfig,
   MarifoldProviderConfig,
   ProviderType,
@@ -62,11 +63,13 @@ export class ConfigLoader {
 
   private normalize(raw: TomlObject): MarifoldConfig {
     const defaultRaw = optionalObject(raw.default, 'default');
+    const modelsRaw = optionalObject(raw.models, 'models');
     const pathsRaw = optionalObject(raw.paths, 'paths');
     const providersRaw = optionalObject(raw.providers, 'providers');
 
     return {
       default: this.normalizeDefault(defaultRaw),
+      models: this.normalizeModels(modelsRaw),
       paths: this.normalizePaths(pathsRaw),
       providers: this.normalizeProviders(providersRaw),
     };
@@ -87,6 +90,12 @@ export class ConfigLoader {
     return {
       profilesDir: resolveUserPath(optionalString(raw.profiles_dir, 'paths.profiles_dir') ?? defaultProfilesDir()),
       sessionsDb: resolveUserPath(optionalString(raw.sessions_db, 'paths.sessions_db') ?? defaultSessionsDb()),
+    };
+  }
+
+  private normalizeModels(raw: TomlObject): MarifoldModelsConfig {
+    return {
+      options: optionalStringArray(raw.options, 'models.options'),
     };
   }
 
@@ -141,6 +150,12 @@ function optionalNumber(value: unknown, label: string): number | undefined {
   if (value === undefined) return undefined;
   if (typeof value === 'number' && Number.isFinite(value)) return value;
   throw MarifoldError.configInvalid(`Expected ${label} to be a number.`);
+}
+
+function optionalStringArray(value: unknown, label: string): string[] {
+  if (value === undefined) return [];
+  if (Array.isArray(value) && value.every(item => typeof item === 'string')) return [...value];
+  throw MarifoldError.configInvalid(`Expected ${label} to be an array of strings.`);
 }
 
 function optionalProviderType(value: unknown, label: string): ProviderType | undefined {

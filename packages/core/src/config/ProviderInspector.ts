@@ -16,6 +16,13 @@ export interface ProviderStatus extends ProviderSummary {
   message: string;
 }
 
+export interface ProviderModelList {
+  provider: string;
+  reachable: boolean | null;
+  models: string[];
+  message: string;
+}
+
 export class ProviderInspector {
   constructor(private readonly loadedConfig: LoadedMarifoldConfig) {}
 
@@ -39,6 +46,44 @@ export class ProviderInspector {
       statuses.push(await this.providerStatus(name, provider));
     }
     return statuses;
+  }
+
+  async listModels(providerName: string): Promise<ProviderModelList> {
+    const provider = this.loadedConfig.config.providers[providerName];
+    if (!provider) {
+      return {
+        provider: providerName,
+        reachable: null,
+        models: [],
+        message: `Provider '${providerName}' is not configured.`,
+      };
+    }
+
+    if (provider.type === 'ollama') {
+      const result = await this.fetchOllamaModels(provider.baseUrl ?? 'http://localhost:11434');
+      return { provider: providerName, ...result };
+    }
+
+    if (provider.type === 'openai-compatible') {
+      if (!provider.baseUrl) {
+        return {
+          provider: providerName,
+          reachable: null,
+          models: [],
+          message: `Provider '${providerName}' has no base_url.`,
+        };
+      }
+      const apiKey = provider.apiKeyEnv ? process.env[provider.apiKeyEnv] : undefined;
+      const result = await this.fetchOpenAICompatibleModels(provider.baseUrl, apiKey);
+      return { provider: providerName, ...result };
+    }
+
+    return {
+      provider: providerName,
+      reachable: null,
+      models: [],
+      message: `Provider '${providerName}' does not expose model listing in Marifold yet.`,
+    };
   }
 
   private async providerStatus(name: string, provider: MarifoldProviderConfig): Promise<ProviderStatus> {
@@ -74,6 +119,18 @@ export class ProviderInspector {
 
   private async ollamaStatus(summary: ProviderSummary): Promise<ProviderStatus> {
     const baseUrl = summary.baseUrl ?? 'http://localhost:11434';
+    const result = await this.fetchOllamaModels(baseUrl);
+    return {
+      ...summary,
+      configured: true,
+      reachable: result.reachable,
+      modelCount: result.models.length,
+      models: result.models,
+      message: result.message,
+    };
+  }
+
+  private async fetchOllamaModels(baseUrl: string): Promise<Omit<ProviderModelList, 'provider'>> {
     try {
       const response = await fetch(`${baseUrl.replace(/\/+$/, '')}/api/tags`, {
         signal: AbortSignal.timeout(2000),
@@ -85,20 +142,44 @@ export class ProviderInspector {
         .filter((name): name is string => typeof name === 'string')
         .sort();
       return {
-        ...summary,
-        configured: true,
         reachable: true,
-        modelCount: models.length,
         models,
         message: `${models.length} model(s) available.`,
       };
     } catch (error) {
       return {
-        ...summary,
-        configured: true,
         reachable: false,
         models: [],
         message: `Could not connect to ${baseUrl}: ${error instanceof Error ? error.message : String(error)}`,
+      };
+    }
+  }
+
+  private async fetchOpenAICompatibleModels(baseUrl: string, apiKey?: string): Promise<Omit<ProviderModelList, 'provider'>> {
+    const headers: Record<string, string> = {};
+    if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
+    const url = openAIModelsUrl(baseUrl);
+    try {
+      const response = await fetch(url, {
+        headers,
+        signal: AbortSignal.timeout(5000),
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const body = await response.json() as { data?: Array<{ id?: unknown }> };
+      const models = (body.data ?? [])
+        .map(model => model.id)
+        .filter((id): id is string => typeof id === 'string')
+        .sort();
+      return {
+        reachable: true,
+        models,
+        message: `${models.length} model(s) available.`,
+      };
+    } catch (error) {
+      return {
+        reachable: false,
+        models: [],
+        message: `Could not connect to ${url}: ${error instanceof Error ? error.message : String(error)}`,
       };
     }
   }
@@ -112,4 +193,9 @@ export class ProviderInspector {
       isDefault: name === this.loadedConfig.config.default.provider,
     };
   }
+}
+
+function openAIModelsUrl(baseUrl: string): string {
+  const normalized = baseUrl.replace(/\/+$/, '');
+  return normalized.endsWith('/v1') ? `${normalized}/models` : `${normalized}/v1/models`;
 }

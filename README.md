@@ -2,9 +2,9 @@
 
 Marifold is a local-first personal AI workspace for profiles, chats, skills, mini apps, workflows, and external agents.
 
-v0.1.1 is the CLI foundation release. It provides priests-style profile chat, one-shot requests, workspace initialization, resume support, and basic local management commands through a TypeScript CLI.
+v0.2.0 is the CLI foundation release. It provides priests-style profile chat, one-shot requests, workspace initialization, resume support, saved model options, and basic local management commands through a TypeScript CLI.
 
-## What v0.1.1 Supports
+## What v0.2.0 Supports
 
 - Marifold-branded CLI.
 - One-shot request-response.
@@ -15,6 +15,9 @@ v0.1.1 is the CLI foundation release. It provides priests-style profile chat, on
 - Basic profile creation and default-profile selection.
 - Profile inspection.
 - Basic provider/model configuration.
+- Saved provider/model options through `[models].options`.
+- Adding provider/model options from the CLI.
+- Live model listing for Ollama and OpenAI-compatible providers where the endpoint is reachable.
 - Basic config, model, provider, and session inspection commands.
 - Profile-filtered session listing.
 - SQLite session continuity through `@priest-ai/core`.
@@ -22,7 +25,7 @@ v0.1.1 is the CLI foundation release. It provides priests-style profile chat, on
 
 ## Non-goals
 
-v0.1.1 does not include memory, web search, image upload, service/Web UI, SkillApp, Workflow, Apple apps, external-agent aliases, scheduled tasks, permission systems, visual mini-app rendering, or an agentic tool loop.
+v0.2.0 does not include memory, web search, image upload, service/Web UI, SkillApp, Workflow, Apple apps, external-agent aliases, scheduled tasks, permission systems, visual mini-app rendering, or an agentic tool loop.
 
 ## Setup
 
@@ -84,12 +87,16 @@ pnpm marifold config show
 pnpm marifold config set default.model gemma4:e4b
 
 pnpm marifold model
+pnpm marifold model list
+pnpm marifold model add ollama qwen3:8b
+pnpm marifold model add openai gpt-4o-mini --base-url https://api.openai.com --api-key-env OPENAI_API_KEY --default
 pnpm marifold model default gemma4:e4b
 pnpm marifold model default qwen3:8b --provider ollama --profile coder
 pnpm marifold model default --profile coder --clear
 
 pnpm marifold provider
 pnpm marifold provider list
+pnpm marifold provider ollama list
 pnpm marifold provider status
 
 pnpm marifold profile list
@@ -130,6 +137,11 @@ model = "gemma4:e4b"
 profile = "default"
 timeout_seconds = 120
 
+[models]
+options = [
+  "ollama/gemma4:e4b",
+]
+
 [paths]
 profiles_dir = "~/.marifold/profiles"
 sessions_db = "~/.marifold/sessions.db"
@@ -149,9 +161,11 @@ For `openai-compatible`, set `base_url` without the trailing `/v1`; `@priest-ai/
 
 `marifold init` accepts `--provider`, `--provider-type`, `--model`, `--base-url`, `--api-key-env`, `--profiles-dir`, `--sessions-db`, and `--force`. Non-Ollama providers require `--model`; custom OpenAI-compatible providers also require `--base-url`.
 
+`marifold model add` stores provider/model choices in `[models].options`. `marifold provider <name> list` asks the provider for live model names when Marifold knows how to query that provider type.
+
 ## Profiles
 
-Marifold v0.1.1 loads priests-style profile directories:
+Marifold v0.2.0 loads priests-style profile directories:
 
 ```text
 profiles/default/

@@ -49,12 +49,35 @@ export class ConfigManager {
     if (!model) throw MarifoldError.configInvalid('Model cannot be empty.');
     if (provider) this.config.default.provider = provider;
     this.config.default.model = model;
+    this.registerModelOption(this.config.default.provider, model);
     this.save();
     return {
       configPath: this.configPath,
       key: provider ? 'default.provider/default.model' : 'default.model',
       value: provider ? `${provider}/${model}` : model,
     };
+  }
+
+  addModel(provider: string, model: string, options: Partial<MarifoldProviderConfig> = {}): ConfigSetResult {
+    if (!provider) throw MarifoldError.configInvalid('Provider cannot be empty.');
+    if (!model) throw MarifoldError.configInvalid('Model cannot be empty.');
+
+    const providerConfig = this.config.providers[provider] ?? this.createProvider(provider);
+    if (options.type) providerConfig.type = options.type;
+    if (options.baseUrl) providerConfig.baseUrl = options.baseUrl.replace(/\/+$/, '');
+    if (options.apiKeyEnv) providerConfig.apiKeyEnv = options.apiKeyEnv;
+    this.registerModelOption(provider, model);
+    this.save();
+    return { configPath: this.configPath, key: 'models.options', value: `${provider}/${model}` };
+  }
+
+  registerModelOption(provider: string | undefined, model: string | undefined): void {
+    if (!provider || !model) return;
+    const option = `${provider}/${model}`;
+    if (!this.config.models.options.includes(option)) {
+      this.config.models.options.push(option);
+      this.config.models.options.sort();
+    }
   }
 
   setDefaultProfile(profile: string): ConfigSetResult {
@@ -145,11 +168,16 @@ export function renderMarifoldConfig(config: MarifoldConfig): string {
     `sessions_db = ${tomlString(config.paths.sessionsDb)}`,
   ];
 
+  const modelLines = [
+    '[models]',
+    `options = ${tomlStringArray(config.models.options)}`,
+  ];
+
   const providerTables = Object.entries(config.providers)
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([name, provider]) => renderProvider(name, provider));
 
-  return `${defaultLines.join('\n')}\n\n${pathLines.join('\n')}\n\n${providerTables.join('\n\n')}\n`;
+  return `${defaultLines.join('\n')}\n\n${modelLines.join('\n')}\n\n${pathLines.join('\n')}\n\n${providerTables.join('\n\n')}\n`;
 }
 
 function renderProvider(name: string, provider: MarifoldProviderConfig): string {
@@ -183,4 +211,9 @@ function parseProviderType(value: string): ProviderType {
 
 function tomlString(value: string): string {
   return JSON.stringify(value);
+}
+
+function tomlStringArray(values: string[]): string {
+  if (values.length === 0) return '[]';
+  return `[\n${values.map(value => `  ${tomlString(value)},`).join('\n')}\n]`;
 }
