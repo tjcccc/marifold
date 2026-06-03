@@ -123,6 +123,30 @@ export class SessionResolver {
     }
   }
 
+  replaceLastAssistantTurn(sessionId: string, content: string): boolean {
+    if (!fs.existsSync(this.sessionsDb)) return false;
+
+    const db = new Database(this.sessionsDb, { fileMustExist: true });
+    try {
+      const result = db.prepare(`
+        UPDATE turns
+        SET content = ?
+        WHERE id = (
+          SELECT id
+          FROM turns
+          WHERE session_id = ? AND role = 'assistant'
+          ORDER BY id DESC
+          LIMIT 1
+        )
+      `).run(content, sessionId);
+      return result.changes > 0;
+    } catch (error) {
+      throw this.storeError(`Could not clean session '${sessionId}' in ${this.sessionsDb}: ${String(error)}`);
+    } finally {
+      db.close();
+    }
+  }
+
   rename(fromSessionId: string, toSessionId: string): boolean {
     if (!fs.existsSync(this.sessionsDb)) return false;
     if (!toSessionId.trim()) throw MarifoldError.configInvalid('New session id cannot be empty.');

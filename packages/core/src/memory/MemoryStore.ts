@@ -28,6 +28,14 @@ export interface MemoryScaffoldFile {
 export interface MemoryRememberOptions {
   sessionId?: string;
   source?: string;
+  conflictKey?: string;
+  priority?: number;
+  confidence?: number;
+  stability?: string;
+  evidence?: string;
+  reason?: string;
+  expiresAt?: string;
+  status?: MemoryStatus;
 }
 
 export interface MemoryRememberResult {
@@ -45,12 +53,35 @@ export interface MemoryMutationResult {
   paths: string[];
 }
 
+export interface MemorySaveInput {
+  kind: MemoryKind;
+  text: string;
+  source?: string;
+  conflictKey?: string;
+  priority?: number;
+  confidence?: number;
+  stability?: string;
+  evidence?: string;
+  reason?: string;
+  expiresAt?: string;
+  status?: MemoryStatus;
+}
+
+export interface MemorySaveResult {
+  profile: string;
+  created: number;
+  skipped: number;
+  entries: MemoryEntry[];
+  paths: string[];
+}
+
 export interface MemoryListOptions {
   limit?: number;
   contextLimit?: number;
 }
 
 const SAFE_PROFILE_NAME = /^[A-Za-z0-9_-]+$/;
+const CONFLICT_KEY_RE = /^(?:user|preferences|auto_short)(?:\.[a-z0-9][a-z0-9_]{0,39}){1,5}$/;
 const DEFAULT_CONTEXT_LIMIT = 2400;
 
 const JSONL_FILES: Record<MemoryKind, string> = {
@@ -87,6 +118,11 @@ export function ensureProfileMemoryFiles(profileDir: string): MemoryScaffoldFile
 export class MemoryStore {
   constructor(private readonly profilesDir: string) {}
 
+  ensureProfile(profile: string): MemoryScaffoldFile[] {
+    this.assertSafeProfileName(profile);
+    return ensureProfileMemoryFiles(path.join(this.profilesDir, profile));
+  }
+
   remember(
     profile: string,
     kind: MemoryKind,
@@ -97,31 +133,104 @@ export class MemoryStore {
     const trimmed = text.trim();
     if (!trimmed) throw MarifoldError.memoryInvalid('Memory text cannot be empty.', profile);
 
-    const profileDir = path.join(this.profilesDir, profile);
-    ensureProfileMemoryFiles(profileDir);
+    this.ensureProfile(profile);
     const filePath = this.jsonlPath(profile, kind);
-    const duplicate = this
-      .readEntriesFromFile(filePath, kind)
-      .find(entry => entry.status === 'active' && normalize(entry.text) === normalize(trimmed));
+    const lines = readJsonlLines(filePath, kind);
+    const duplicate = lines
+      .map(line => line.entry)
+      .find(entry => entry?.status === 'active' && normalize(entry.text) === normalize(trimmed));
 
     if (duplicate) {
       return { profile, kind, path: filePath, entry: duplicate, created: false };
     }
 
     const now = utcNow();
+    const conflictKey = normalizeConflictKey(options.conflictKey);
     const entry: MemoryEntry = {
       id: randomUUID(),
       kind,
       text: trimmed,
-      status: 'active',
+      status: options.status ?? 'active',
       source: options.source ?? 'manual',
       created_at: now,
       updated_at: now,
       ...(options.sessionId ? { session_id: options.sessionId } : {}),
+      ...(conflictKey ? { conflict_key: conflictKey } : {}),
+      ...(optionalNumber(options.priority) !== undefined ? { priority: optionalNumber(options.priority) } : {}),
+      ...(optionalNumber(options.confidence) !== undefined ? { confidence: optionalNumber(options.confidence) } : {}),
+      ...(options.stability ? { stability: options.stability } : {}),
+      ...(options.evidence ? { evidence: options.evidence } : {}),
+      ...(options.reason ? { reason: options.reason } : {}),
+      ...(options.expiresAt ? { expires_at: options.expiresAt } : {}),
     };
+
+    if (conflictKey) {
+      const superseded: string[] = [];
+      let changed = false;
+      for (const line of lines) {
+        if (line.entry?.status === 'active' && conflictKeyForEntry(line.entry) === conflictKey) {
+          superseded.push(line.entry.id);
+          line.entry = { ...line.entry, status: 'superseded', updated_at: now };
+          changed = true;
+        }
+      }
+      if (superseded.length > 0) entry.supersedes = superseded;
+      if (changed) writeJsonlLines(filePath, lines);
+    }
 
     appendJsonLine(filePath, entry);
     return { profile, kind, path: filePath, entry, created: true };
+  }
+
+  save(profile: string, inputs: MemorySaveInput[], options: Pick<MemoryRememberOptions, 'sessionId'> = {}): MemorySaveResult {
+    this.assertSafeProfileName(profile);
+    let created = 0;
+    let skipped = 0;
+    const entries: MemoryEntry[] = [];
+    const paths = new Set<string>();
+
+    for (const input of inputs) {
+      const text = typeof input.text === 'string' ? input.text.trim() : '';
+      if (!text) continue;
+      const result = this.remember(profile, input.kind, text, {
+        sessionId: options.sessionId,
+        source: input.source,
+        conflictKey: input.conflictKey,
+        priority: input.priority,
+        confidence: input.confidence,
+        stability: input.stability,
+        evidence: input.evidence,
+        reason: input.reason,
+        expiresAt: input.expiresAt,
+        status: input.status,
+      });
+      if (result.created) created += 1;
+      else skipped += 1;
+      entries.push(result.entry);
+      paths.add(result.path);
+    }
+
+    return { profile, created, skipped, entries, paths: [...paths] };
+  }
+
+  applySavePayloads(profile: string, payloads: string[], options: Pick<MemoryRememberOptions, 'sessionId'> = {}): MemorySaveResult {
+    return this.save(profile, payloads.flatMap(parseSavePayload), options);
+  }
+
+  applyForgetPayloads(profile: string, payloads: string[]): MemoryMutationResult {
+    this.assertSafeProfileName(profile);
+    let count = 0;
+    const paths = new Set<string>();
+    const queries: string[] = [];
+
+    for (const query of payloads.flatMap(parseForgetPayload)) {
+      const result = this.forget(profile, query);
+      queries.push(result.query);
+      count += result.count;
+      for (const filePath of result.paths) paths.add(filePath);
+    }
+
+    return { profile, query: queries.join(', '), count, paths: [...paths] };
   }
 
   forget(profile: string, query: string): MemoryMutationResult {
@@ -135,6 +244,7 @@ export class MemoryStore {
   delete(profile: string, query: string): MemoryMutationResult {
     this.assertSafeProfileName(profile);
     const needle = this.normalizeQuery(profile, query);
+    this.ensureProfile(profile);
     let count = 0;
     const paths: string[] = [];
 
@@ -162,6 +272,7 @@ export class MemoryStore {
 
   listEntries(profile: string): MemoryEntry[] {
     this.assertSafeProfileName(profile);
+    this.ensureProfile(profile);
     const entries: MemoryEntry[] = [];
     for (const kind of KIND_ORDER) {
       entries.push(...this.readEntriesFromFile(this.jsonlPath(profile, kind), kind));
@@ -185,6 +296,7 @@ export class MemoryStore {
   private updateMatching(profile: string, query: string, update: (entry: MemoryEntry) => MemoryEntry): MemoryMutationResult {
     this.assertSafeProfileName(profile);
     const needle = this.normalizeQuery(profile, query);
+    this.ensureProfile(profile);
     let count = 0;
     const paths: string[] = [];
 
@@ -250,7 +362,7 @@ export class MemoryStore {
   }
 
   private matches(entry: MemoryEntry, needle: string): boolean {
-    return [entry.id, entry.text, entry.conflict_key]
+    return [entry.id, entry.text, entry.conflict_key, conflictKeyForEntry(entry)]
       .filter((value): value is string => typeof value === 'string')
       .some(value => normalize(value).includes(needle));
   }
@@ -305,8 +417,138 @@ function toMemoryEntry(value: Record<string, unknown>, fallbackKind: MemoryKind)
 }
 
 function normalizeKind(value: unknown): MemoryKind | undefined {
-  if (value === 'user' || value === 'preferences' || value === 'auto_short') return value;
+  if (typeof value !== 'string') return undefined;
+  const normalized = value.trim().toLowerCase().replace(/-/g, '_');
+  if (normalized === 'user' || normalized === 'preferences' || normalized === 'auto_short') return normalized;
+  if (normalized === 'pref' || normalized === 'prefs' || normalized === 'preference') return 'preferences';
+  if (normalized === 'short' || normalized === 'short_term' || normalized === 'session' || normalized === 'auto') return 'auto_short';
   return undefined;
+}
+
+function parseSavePayload(payload: string): MemorySaveInput[] {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(payload);
+  } catch {
+    return [];
+  }
+  return memoryInputsFromValue(parsed);
+}
+
+function memoryInputsFromValue(value: unknown): MemorySaveInput[] {
+  if (!isRecord(value)) return [];
+  const memories = value.memories;
+  if (Array.isArray(memories)) {
+    return memories
+      .map(item => memoryInputFromRecord(item))
+      .filter((input): input is MemorySaveInput => input !== undefined);
+  }
+
+  const direct = memoryInputFromRecord(value);
+  if (direct) return [direct];
+
+  const legacy: MemorySaveInput[] = [];
+  for (const [key, kind] of [
+    ['user', 'user'],
+    ['preferences', 'preferences'],
+    ['pref', 'preferences'],
+    ['notes', 'preferences'],
+    ['auto_short', 'auto_short'],
+    ['short', 'auto_short'],
+  ] as Array<[string, MemoryKind]>) {
+    const text = typeof value[key] === 'string' ? value[key].trim() : '';
+    if (text) legacy.push({ kind, text, source: 'model_inferred' });
+  }
+  return legacy;
+}
+
+function memoryInputFromRecord(value: unknown): MemorySaveInput | undefined {
+  if (!isRecord(value)) return undefined;
+  const kind = normalizeKind(value.kind ?? value.target);
+  const text = stringValue(value.text ?? value.content);
+  if (!kind || !text) return undefined;
+  return {
+    kind,
+    text,
+    source: stringValue(value.source) || 'model_inferred',
+    conflictKey: stringValue(value.conflict_key ?? value.conflicts_with),
+    priority: optionalNumber(value.priority),
+    confidence: optionalNumber(value.confidence),
+    stability: stringValue(value.stability),
+    evidence: stringValue(value.evidence),
+    reason: stringValue(value.reason),
+    expiresAt: stringValue(value.expires_at),
+    status: value.status === 'superseded' ? 'superseded' : 'active',
+  };
+}
+
+function parseForgetPayload(payload: string): string[] {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(payload);
+  } catch {
+    return [];
+  }
+  return forgetQueriesFromValue(parsed);
+}
+
+function forgetQueriesFromValue(value: unknown): string[] {
+  if (typeof value === 'string') return value.trim() ? [value.trim()] : [];
+  if (!isRecord(value)) return [];
+
+  const rawItems = value.forget ?? value.queries ?? value.items;
+  if (Array.isArray(rawItems)) return rawItems.flatMap(forgetQueriesFromValue);
+
+  const query = stringValue(value.query ?? value.conflict_key ?? value.text);
+  return query ? [query] : [];
+}
+
+function normalizeConflictKey(value: unknown): string | undefined {
+  const raw = stringValue(value);
+  if (!raw) return undefined;
+  const key = raw
+    .toLowerCase()
+    .replace(/[-:]/g, '.')
+    .replace(/\s+/g, '_')
+    .replace(/\.+/g, '.')
+    .replace(/^user\.preferred_name$/, 'user.name')
+    .replace(/^user\.preferred\.name$/, 'user.name')
+    .replace(/^user\.fav_/, 'user.favorite_')
+    .replace(/favourite/g, 'favorite')
+    .replace(/colour/g, 'color')
+    .replace(/\.+/g, '.')
+    .replace(/^\.|\.$/g, '');
+  return CONFLICT_KEY_RE.test(key) ? key : undefined;
+}
+
+function conflictKeyForEntry(entry: MemoryEntry): string | undefined {
+  return normalizeConflictKey(entry.conflict_key) ?? inferConflictKey(entry.kind, entry.text);
+}
+
+function inferConflictKey(kind: MemoryKind, text: string): string | undefined {
+  if (kind !== 'user') return undefined;
+  const normalized = normalize(text);
+  if (
+    /\b(?:the\s+)?user(?:'s)?\s+name\s+is\b/.test(normalized)
+    || /\buser\s+is\s+named\b/.test(normalized)
+    || /^name\s*:/.test(normalized)
+  ) {
+    return 'user.name';
+  }
+  return undefined;
+}
+
+function optionalNumber(value: unknown): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return undefined;
+  return value;
+}
+
+function stringValue(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function appendJsonLine(filePath: string, entry: MemoryEntry): void {

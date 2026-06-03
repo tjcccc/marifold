@@ -71,6 +71,75 @@ base_url = "http://localhost:11434"
     });
     expect(updated.config.models.options).toContain('openai/gpt-4o-mini');
   });
+
+  it('adds priests-registry provider defaults when adding known models', () => {
+    const dir = tempDir();
+    const configPath = path.join(dir, 'config.toml');
+    fs.writeFileSync(configPath, `
+[default]
+profile = "default"
+think = false
+
+[models]
+options = []
+
+[memory]
+size_limit = 50000
+context_limit = 2400
+
+[paths]
+profiles_dir = "${dir}/profiles"
+sessions_db = "${dir}/sessions.db"
+`);
+
+    new ConfigManager(new ConfigLoader().load({ configPath })).addModel('openai', 'gpt-4o-mini');
+
+    const updated = new ConfigLoader().load({ configPath });
+    expect(updated.config.providers.openai).toEqual({
+      type: 'openai-compatible',
+      baseUrl: 'https://api.openai.com',
+      apiKeyEnv: 'OPENAI_API_KEY',
+    });
+    expect(updated.config.models.options).toContain('openai/gpt-4o-mini');
+  });
+
+  it('persists local provider credentials when adding an OAuth model', () => {
+    const dir = tempDir();
+    const configPath = path.join(dir, 'config.toml');
+    fs.writeFileSync(configPath, `
+[default]
+profile = "default"
+think = false
+
+[models]
+options = []
+
+[memory]
+size_limit = 50000
+context_limit = 2400
+
+[paths]
+profiles_dir = "${dir}/profiles"
+sessions_db = "${dir}/sessions.db"
+`);
+
+    new ConfigManager(new ConfigLoader().load({ configPath })).addModel('github_copilot', 'gpt-5.4', {
+      apiKey: 'tid=test',
+      oauthToken: 'gho-test',
+      apiKeyExpiresAt: 1893456000,
+    });
+
+    const updated = new ConfigLoader().load({ configPath });
+    expect(updated.config.providers.github_copilot).toMatchObject({
+      type: 'openai-compatible',
+      baseUrl: 'https://api.githubcopilot.com',
+      apiKeyEnv: 'GITHUB_COPILOT_API_KEY',
+      apiKey: 'tid=test',
+      oauthToken: 'gho-test',
+      apiKeyExpiresAt: 1893456000,
+    });
+    expect(updated.config.models.options).toContain('github_copilot/gpt-5.4');
+  });
 });
 
 describe('ProfileManager', () => {

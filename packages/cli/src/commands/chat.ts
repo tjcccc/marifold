@@ -3,6 +3,7 @@ import { Command } from 'commander';
 import type { MemoryKind } from '@marifold/core';
 import { InteractivePrompt } from '../input/InteractivePrompt';
 import { ConsolePrinter } from '../output/ConsolePrinter';
+import { TerminalStyle } from '../output/TerminalStyle';
 import { createRuntime } from './RuntimeFactory';
 
 interface ChatOptions {
@@ -45,6 +46,7 @@ export function registerChatCommand(program: Command, printer: ConsolePrinter): 
     .action(async (options: ChatOptions) => {
       const runtime = createRuntime(program);
       const prompt = new InteractivePrompt();
+      const style = new TerminalStyle();
       let sessionId = options.session ?? randomUUID();
       let think = false;
 
@@ -64,15 +66,18 @@ export function registerChatCommand(program: Command, printer: ConsolePrinter): 
           sessionId = await resolveResumeSession(runtime, prompt, settings.profile, options.resume);
         }
 
-        process.stdout.write(`Model:    ${settings.provider}/${settings.model}\n`);
-        process.stdout.write(`Profile:  ${settings.profile}\n`);
-        process.stdout.write(`Session:  ${sessionId}\n`);
-        process.stdout.write(`Memory:   ${runtime.memoryEnabled(settings.profile, options.memories) ? 'on' : 'off'}\n`);
-        process.stdout.write(`Think:    ${think ? 'on' : 'off'}\n`);
-        process.stdout.write('Type /help for commands, Ctrl-C to quit.\n\n');
+        const memoryOn = runtime.memoryEnabled(settings.profile, options.memories);
+        if (memoryOn) runtime.ensureProfileMemoryFiles(settings.profile);
+
+        process.stdout.write(style.dim(`Model:    ${settings.provider}/${settings.model}\n`));
+        process.stdout.write(style.dim(`Profile:  ${settings.profile}\n`));
+        process.stdout.write(style.dim(`Session:  ${sessionId}\n`));
+        process.stdout.write(style.dim(`Memory:   ${memoryOn ? 'on' : 'off'}\n`));
+        process.stdout.write(style.dim(`Think:    ${think ? 'on' : 'off'}\n`));
+        process.stdout.write(style.dim('Type /help for commands, Ctrl-C to quit.\n\n'));
 
         while (true) {
-          const raw = await prompt.readMultilineMessage('user > ');
+          const raw = await prompt.readMultilineMessage(style.bold('user > '), style.dim('... > '));
           if (raw === undefined) break;
 
           const message = raw.trim();
@@ -84,7 +89,7 @@ export function registerChatCommand(program: Command, printer: ConsolePrinter): 
           }
           if (message === '/new') {
             sessionId = randomUUID();
-            process.stdout.write(`New session: ${sessionId}\n\n`);
+            process.stdout.write(style.dim(`New session: ${sessionId}\n\n`));
             continue;
           }
           if (isCommand(message, '/think')) {
@@ -94,7 +99,7 @@ export function registerChatCommand(program: Command, printer: ConsolePrinter): 
               continue;
             }
             think = next;
-            process.stdout.write(`Thinking mode ${think ? 'on' : 'off'}.\n\n`);
+            process.stdout.write(style.dim(`Thinking mode ${think ? 'on' : 'off'}.\n\n`));
             continue;
           }
           if (isCommand(message, '/remember')) {
@@ -105,7 +110,7 @@ export function registerChatCommand(program: Command, printer: ConsolePrinter): 
             }
             const result = runtime.rememberMemory(settings.profile, parsed.kind, parsed.text, sessionId);
             const verb = result.created ? 'Remembered' : 'Already remembered';
-            process.stdout.write(`${verb} ${memoryKindLabel(result.kind)} memory: ${result.entry.id}\n\n`);
+            process.stdout.write(style.dim(`${verb} ${memoryKindLabel(result.kind)} memory: ${result.entry.id}\n\n`));
             continue;
           }
           if (isCommand(message, '/forget')) {
@@ -115,7 +120,7 @@ export function registerChatCommand(program: Command, printer: ConsolePrinter): 
               continue;
             }
             const result = runtime.forgetMemories(settings.profile, query);
-            process.stdout.write(formatMutationResult('Forgot', result.count));
+            process.stdout.write(style.dim(formatMutationResult('Forgot', result.count)));
             continue;
           }
           if (isCommand(message, '/delete-memory')) {
@@ -125,7 +130,7 @@ export function registerChatCommand(program: Command, printer: ConsolePrinter): 
               continue;
             }
             const result = runtime.deleteMemories(settings.profile, query);
-            process.stdout.write(formatMutationResult('Deleted', result.count));
+            process.stdout.write(style.dim(formatMutationResult('Deleted', result.count)));
             continue;
           }
           if (message.startsWith('/')) {
@@ -133,6 +138,7 @@ export function registerChatCommand(program: Command, printer: ConsolePrinter): 
             continue;
           }
 
+          let responseStarted = false;
           for await (const chunk of runtime.stream({
             prompt: message,
             profile: settings.profile,
@@ -142,8 +148,13 @@ export function registerChatCommand(program: Command, printer: ConsolePrinter): 
             memories: options.memories,
             think,
           })) {
+            if (!responseStarted) {
+              process.stdout.write(`\n${style.bold(`${settings.profile} >`)}\n`);
+              responseStarted = true;
+            }
             process.stdout.write(chunk);
           }
+          if (!responseStarted) process.stdout.write(`\n${style.bold(`${settings.profile} >`)}\n`);
           process.stdout.write('\n\n');
         }
       } catch (error) {

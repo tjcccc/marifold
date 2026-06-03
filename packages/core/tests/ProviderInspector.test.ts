@@ -2,6 +2,7 @@ import * as path from 'path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ProviderInspector } from '../src';
 import { LoadedMarifoldConfig } from '../src/config/ConfigSchema';
+import { openAIChatCompletionsUrl, openAIModelsUrl, openAIResponsesUrl } from '../src/config/OpenAICompatUrls';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -61,6 +62,151 @@ describe('ProviderInspector', () => {
       valid: true,
       status: 'warning',
     });
+  });
+
+  it('lists curated registry models for providers before they are configured', async () => {
+    const loadedConfig = testConfig();
+
+    const result = await new ProviderInspector(loadedConfig).listModels('gemini');
+
+    expect(result.reachable).toBeNull();
+    expect(result.models).toContain('gemini-2.5-flash');
+    expect(result.message).toContain('registry models');
+  });
+
+  it('lists only supported registry models for GitHub Copilot fallback', async () => {
+    const loadedConfig = testConfig();
+
+    const result = await new ProviderInspector(loadedConfig).listModels('github_copilot');
+
+    expect(result.reachable).toBeNull();
+    expect(result.models).toContain('gpt-5.4');
+    expect(result.models).toContain('gpt-5.4-mini');
+    expect(result.models).toContain('gemini-3.1-pro-preview');
+    expect(result.models).toContain('gemini-3.5-flash');
+    expect(result.models).not.toContain('gpt-5.4-nano');
+    expect(result.models).not.toContain('grok-code-fast-1');
+    expect(result.models).not.toContain('goldeneye');
+  });
+
+  it('filters GitHub Copilot live models to supported picker models', async () => {
+    const loadedConfig = testConfig();
+    loadedConfig.config.providers.github_copilot = {
+      type: 'openai-compatible',
+      baseUrl: 'https://api.githubcopilot.com',
+      apiKey: 'tid=test',
+    };
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
+      data: [
+        {
+          id: 'gpt-5.4-mini',
+          capabilities: { type: 'chat' },
+          model_picker_enabled: true,
+          supported_endpoints: ['/responses'],
+        },
+        {
+          id: 'gpt-5-mini',
+          capabilities: { type: 'chat' },
+          model_picker_enabled: true,
+          supported_endpoints: ['/chat/completions', '/responses'],
+        },
+        {
+          id: 'text-embedding-3-small',
+          capabilities: { type: 'embeddings' },
+          model_picker_enabled: false,
+          supported_endpoints: ['/embeddings'],
+        },
+        {
+          id: 'oswe-vscode-prime',
+          capabilities: { type: 'chat' },
+          model_picker_enabled: true,
+          supported_endpoints: ['/chat/completions'],
+        },
+      ],
+    }), { status: 200 })));
+
+    const result = await new ProviderInspector(loadedConfig).listModels('github_copilot');
+
+    expect(result.models).toEqual(['gpt-5-mini', 'gpt-5.4-mini']);
+  });
+
+  it('does not fall back to registry models when live GitHub Copilot listing has only incompatible models', async () => {
+    const loadedConfig = testConfig();
+    loadedConfig.config.providers.github_copilot = {
+      type: 'openai-compatible',
+      baseUrl: 'https://api.githubcopilot.com',
+      apiKey: 'tid=test',
+    };
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
+      data: [
+        {
+          id: 'gpt-5.4-nano',
+          capabilities: { type: 'chat' },
+          model_picker_enabled: true,
+          supported_endpoints: ['/responses'],
+        },
+        {
+          id: 'text-embedding-3-small',
+          capabilities: { type: 'embeddings' },
+          model_picker_enabled: false,
+          supported_endpoints: ['/embeddings'],
+        },
+      ],
+    }), { status: 200 })));
+
+    const result = await new ProviderInspector(loadedConfig).listModels('github_copilot');
+
+    expect(result.reachable).toBe(true);
+    expect(result.models).toEqual([]);
+    expect(result.message).toBe('0 model(s) available.');
+  });
+
+  it('validates GitHub Copilot responses-only models as supported chat models', async () => {
+    const loadedConfig = testConfig();
+    loadedConfig.config.providers.github_copilot = {
+      type: 'openai-compatible',
+      baseUrl: 'https://api.githubcopilot.com',
+      apiKey: 'tid=test',
+    };
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
+      data: [
+        {
+          id: 'gpt-5.4-mini',
+          capabilities: { type: 'chat' },
+          model_picker_enabled: true,
+          supported_endpoints: ['/responses'],
+        },
+      ],
+    }), { status: 200 })));
+
+    const result = await new ProviderInspector(loadedConfig).validateModel('github_copilot', 'gpt-5.4-mini');
+
+    expect(result).toMatchObject({
+      valid: true,
+      status: 'ok',
+    });
+  });
+
+  it('builds OpenAI-compatible URLs for root and versioned provider bases', () => {
+    expect(openAIChatCompletionsUrl('https://api.openai.com')).toBe('https://api.openai.com/v1/chat/completions');
+    expect(openAIChatCompletionsUrl('https://generativelanguage.googleapis.com/v1beta/openai')).toBe(
+      'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
+    );
+    expect(openAIModelsUrl('https://generativelanguage.googleapis.com/v1beta/openai')).toBe(
+      'https://generativelanguage.googleapis.com/v1beta/openai/models',
+    );
+    expect(openAIResponsesUrl('https://generativelanguage.googleapis.com/v1beta/openai')).toBe(
+      'https://generativelanguage.googleapis.com/v1beta/openai/responses',
+    );
+    expect(openAIChatCompletionsUrl('https://api.githubcopilot.com', { providerName: 'github_copilot' })).toBe(
+      'https://api.githubcopilot.com/chat/completions',
+    );
+    expect(openAIResponsesUrl('https://api.githubcopilot.com', { providerName: 'github_copilot' })).toBe(
+      'https://api.githubcopilot.com/responses',
+    );
+    expect(openAIModelsUrl('https://api.githubcopilot.com', { providerName: 'github_copilot' })).toBe(
+      'https://api.githubcopilot.com/models',
+    );
   });
 });
 

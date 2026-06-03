@@ -87,6 +87,130 @@ describe('MarifoldRuntime', () => {
     }
   });
 
+  it('applies model-driven memory saves and cleans hidden blocks from ask output and sessions', async () => {
+    const dir = tempDir();
+    const config: MarifoldConfig = {
+      default: {
+        provider: 'ollama',
+        model: 'gemma4:e4b',
+        profile: 'default',
+        think: false,
+      },
+      models: {
+        options: ['ollama/gemma4:e4b'],
+      },
+      memory: {
+        sizeLimit: 50000,
+        contextLimit: 2400,
+      },
+      paths: {
+        profilesDir: path.join(dir, 'profiles'),
+        sessionsDb: path.join(dir, 'sessions.db'),
+      },
+      providers: {
+        ollama: {
+          type: 'ollama',
+          baseUrl: 'http://localhost:11434',
+        },
+      },
+    };
+
+    let requestBody: { messages?: Array<{ role: string; content: string }> } | undefined;
+    vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      requestBody = JSON.parse(String(init?.body));
+      return ollamaStreamResponse([
+        '<memory_save>{"memories":[{"kind":"user","text":"The user\'s name is Jack.","priority":0,"confidence":1,"stability":"stable","source":"user_direct","conflict_key":"user.name"}]}</memory_save>',
+        'Hello, Jack.',
+      ]);
+    }));
+
+    const runtime = new MarifoldRuntime({
+      loadedConfig: {
+        config,
+        configPath: path.join(dir, 'config.toml'),
+        foundConfig: true,
+      },
+    });
+
+    try {
+      const response = await runtime.ask({
+        prompt: 'my name is jack',
+        sessionId: 'memory-session',
+      });
+
+      expect(response.ok).toBe(true);
+      expect(response.text).toBe('Hello, Jack.');
+      expect(requestBody?.messages?.[0]?.content).toContain('Memory policy for Marifold');
+      expect(runtime.getSession('memory-session')?.turns.at(-1)?.content).toBe('Hello, Jack.');
+      expect(runtime.getSession('memory-session')?.turns.at(-1)?.content).not.toContain('memory_save');
+      expect(readMemoryRows(config.paths.profilesDir, 'default', 'user.jsonl')).toMatchObject([
+        {
+          text: "The user's name is Jack.",
+          status: 'active',
+          conflict_key: 'user.name',
+        },
+      ]);
+    } finally {
+      runtime.close();
+    }
+  });
+
+  it('applies prompt memory fallback when the model does not emit a save block', async () => {
+    const dir = tempDir();
+    const config: MarifoldConfig = {
+      default: {
+        provider: 'ollama',
+        model: 'gemma4:e4b',
+        profile: 'default',
+        think: false,
+      },
+      models: {
+        options: ['ollama/gemma4:e4b'],
+      },
+      memory: {
+        sizeLimit: 50000,
+        contextLimit: 2400,
+      },
+      paths: {
+        profilesDir: path.join(dir, 'profiles'),
+        sessionsDb: path.join(dir, 'sessions.db'),
+      },
+      providers: {
+        ollama: {
+          type: 'ollama',
+          baseUrl: 'http://localhost:11434',
+        },
+      },
+    };
+
+    vi.stubGlobal('fetch', vi.fn(async () => ollamaStreamResponse(['Nice to meet you.'])));
+
+    const runtime = new MarifoldRuntime({
+      loadedConfig: {
+        config,
+        configPath: path.join(dir, 'config.toml'),
+        foundConfig: true,
+      },
+    });
+
+    try {
+      await runtime.ask({
+        prompt: 'my name is jack',
+        sessionId: 'fallback-session',
+      });
+
+      expect(readMemoryRows(config.paths.profilesDir, 'default', 'user.jsonl')).toMatchObject([
+        {
+          text: "The user's name is Jack.",
+          source: 'user_direct',
+          conflict_key: 'user.name',
+        },
+      ]);
+    } finally {
+      runtime.close();
+    }
+  });
+
   it('skips profile memory when disabled for a run', async () => {
     const dir = tempDir();
     const config: MarifoldConfig = {
@@ -198,6 +322,147 @@ describe('MarifoldRuntime', () => {
       runtime.close();
     }
   });
+
+  it('refreshes expired GitHub Copilot credentials from the saved OAuth token before a run', async () => {
+    const dir = tempDir();
+    const configPath = path.join(dir, 'config.toml');
+    const config: MarifoldConfig = {
+      default: {
+        provider: 'github_copilot',
+        model: 'gpt-5.4',
+        profile: 'default',
+        think: false,
+      },
+      models: {
+        options: ['github_copilot/gpt-5.4'],
+      },
+      memory: {
+        sizeLimit: 50000,
+        contextLimit: 2400,
+      },
+      paths: {
+        profilesDir: path.join(dir, 'profiles'),
+        sessionsDb: path.join(dir, 'sessions.db'),
+      },
+      providers: {
+        github_copilot: {
+          type: 'openai-compatible',
+          baseUrl: 'https://api.githubcopilot.com',
+          apiKey: 'tid=expired',
+          oauthToken: 'gho-refresh',
+          apiKeyExpiresAt: 1,
+        },
+      },
+    };
+
+    let chatAuthorization: string | undefined;
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === 'https://api.github.com/copilot_internal/v2/token') {
+        return new Response(JSON.stringify({
+          token: 'tid=fresh',
+          endpoints: { api: 'https://api.githubcopilot.com' },
+          expires_at: 1893456000,
+        }), { status: 200 });
+      }
+      if (url === 'https://api.githubcopilot.com/chat/completions') {
+        chatAuthorization = (init?.headers as Record<string, string> | undefined)?.Authorization;
+        return new Response(JSON.stringify({
+          choices: [{ message: { content: 'hello' }, finish_reason: 'stop' }],
+        }), { status: 200 });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    }));
+
+    const runtime = new MarifoldRuntime({
+      loadedConfig: {
+        config,
+        configPath,
+        foundConfig: true,
+      },
+    });
+
+    try {
+      const response = await runtime.ask({ prompt: 'Hello' });
+
+      expect(response.ok).toBe(true);
+      expect(response.text).toBe('hello');
+      expect(chatAuthorization).toBe('Bearer tid=fresh');
+      const saved = fs.readFileSync(configPath, 'utf-8');
+      expect(saved).toContain('api_key = "tid=fresh"');
+      expect(saved).toContain('api_key_expires_at = 1893456000');
+    } finally {
+      runtime.close();
+    }
+  });
+
+  it('uses the Responses API for GitHub Copilot responses-only models', async () => {
+    const dir = tempDir();
+    const config: MarifoldConfig = {
+      default: {
+        provider: 'github_copilot',
+        model: 'gpt-5.4-mini',
+        profile: 'default',
+        think: false,
+      },
+      models: {
+        options: ['github_copilot/gpt-5.4-mini'],
+      },
+      memory: {
+        sizeLimit: 50000,
+        contextLimit: 2400,
+      },
+      paths: {
+        profilesDir: path.join(dir, 'profiles'),
+        sessionsDb: path.join(dir, 'sessions.db'),
+      },
+      providers: {
+        github_copilot: {
+          type: 'openai-compatible',
+          baseUrl: 'https://api.githubcopilot.com',
+          apiKey: 'tid=fresh',
+        },
+      },
+    };
+    let requestUrl: string | undefined;
+    let requestBody: Record<string, unknown> | undefined;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      requestUrl = String(input);
+      requestBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      return new Response(JSON.stringify({
+        status: 'completed',
+        output_text: 'hello from responses',
+        usage: {
+          input_tokens: 10,
+          output_tokens: 3,
+        },
+      }), { status: 200 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const runtime = new MarifoldRuntime({
+      loadedConfig: {
+        config,
+        configPath: path.join(dir, 'config.toml'),
+        foundConfig: true,
+      },
+    });
+
+    try {
+      const response = await runtime.ask({ prompt: 'Hello' });
+
+      expect(response.ok).toBe(true);
+      expect(response.text).toBe('hello from responses');
+      expect(requestUrl).toBe('https://api.githubcopilot.com/responses');
+      expect(requestBody?.model).toBe('gpt-5.4-mini');
+      expect(requestBody?.stream).toBe(false);
+      expect(requestBody?.input).toEqual(expect.arrayContaining([
+        expect.objectContaining({ role: 'user', content: 'Hello' }),
+      ]));
+    } finally {
+      runtime.close();
+    }
+  });
 });
 
 function ollamaStreamResponse(chunks: string[]): Response {
@@ -211,4 +476,12 @@ function ollamaStreamResponse(chunks: string[]): Response {
     },
   });
   return new Response(body, { status: 200 });
+}
+
+function readMemoryRows(profilesDir: string, profile: string, fileName: string): Array<Record<string, unknown>> {
+  const filePath = path.join(profilesDir, profile, 'memories', fileName);
+  return fs.readFileSync(filePath, 'utf-8')
+    .split(/\r?\n/)
+    .filter(line => line.trim())
+    .map(line => JSON.parse(line) as Record<string, unknown>);
 }

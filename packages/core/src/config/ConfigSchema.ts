@@ -28,6 +28,9 @@ export interface MarifoldProviderConfig {
   type: ProviderType;
   baseUrl?: string;
   apiKeyEnv?: string;
+  apiKey?: string;
+  oauthToken?: string;
+  apiKeyExpiresAt?: number;
 }
 
 export interface MarifoldConfig {

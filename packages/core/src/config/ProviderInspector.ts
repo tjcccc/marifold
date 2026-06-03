@@ -1,10 +1,18 @@
 import { LoadedMarifoldConfig, MarifoldProviderConfig, ProviderType } from './ConfigSchema';
+import { openAIModelsUrl } from './OpenAICompatUrls';
+import {
+  getProviderRegistryEntry,
+  isKnownGitHubCopilotUnsupportedModelId,
+  providerConfigFromRegistry,
+} from './ProviderRegistry';
 
 export interface ProviderSummary {
   name: string;
   type: ProviderType;
   baseUrl?: string;
   apiKeyEnv?: string;
+  hasApiKey: boolean;
+  hasOauthToken: boolean;
   isDefault: boolean;
 }
 
@@ -57,7 +65,9 @@ export class ProviderInspector {
   }
 
   async listModels(providerName: string): Promise<ProviderModelList> {
-    const provider = this.loadedConfig.config.providers[providerName];
+    const registry = getProviderRegistryEntry(providerName);
+    const provider = this.loadedConfig.config.providers[providerName]
+      ?? (registry ? providerConfigFromRegistry(registry) as MarifoldProviderConfig : undefined);
     if (!provider) {
       return {
         provider: providerName,
@@ -66,14 +76,31 @@ export class ProviderInspector {
         message: `Provider '${providerName}' is not configured.`,
       };
     }
+    const registryModels = registry?.knownModels ?? undefined;
 
     if (provider.type === 'ollama') {
       const result = await this.fetchOllamaModels(provider.baseUrl ?? 'http://localhost:11434');
+      if (shouldShowRegistryModelFallback(providerName, result) && Array.isArray(registryModels) && registryModels.length > 0) {
+        return {
+          provider: providerName,
+          reachable: result.reachable,
+          models: registryModels,
+          message: `${result.message} Showing registry models.`,
+        };
+      }
       return { provider: providerName, ...result };
     }
 
     if (provider.type === 'openai-compatible') {
       if (!provider.baseUrl) {
+        if (Array.isArray(registryModels)) {
+          return {
+            provider: providerName,
+            reachable: null,
+            models: registryModels,
+            message: `Provider '${providerName}' has no base_url. Showing registry models.`,
+          };
+        }
         return {
           provider: providerName,
           reachable: null,
@@ -81,9 +108,34 @@ export class ProviderInspector {
           message: `Provider '${providerName}' has no base_url.`,
         };
       }
-      const apiKey = provider.apiKeyEnv ? process.env[provider.apiKeyEnv] : undefined;
-      const result = await this.fetchOpenAICompatibleModels(provider.baseUrl, apiKey);
+      if (provider.apiKeyEnv && !this.readApiKey(provider) && Array.isArray(registryModels) && registryModels.length > 0) {
+        return {
+          provider: providerName,
+          reachable: null,
+          models: registryModels,
+          message: `Set ${provider.apiKeyEnv} for live model listing. Showing registry models.`,
+        };
+      }
+      const apiKey = this.readApiKey(provider);
+      const result = await this.fetchOpenAICompatibleModels(providerName, provider.baseUrl, apiKey);
+      if (shouldShowRegistryModelFallback(providerName, result) && Array.isArray(registryModels) && registryModels.length > 0) {
+        return {
+          provider: providerName,
+          reachable: result.reachable,
+          models: registryModels,
+          message: `${result.message} Showing registry models.`,
+        };
+      }
       return { provider: providerName, ...result };
+    }
+
+    if (Array.isArray(registryModels)) {
+      return {
+        provider: providerName,
+        reachable: null,
+        models: registryModels,
+        message: `Showing registry models for provider '${providerName}'.`,
+      };
     }
 
     return {
@@ -115,7 +167,7 @@ export class ProviderInspector {
       };
     }
 
-    if (provider.apiKeyEnv && !process.env[provider.apiKeyEnv]) {
+    if (provider.apiKeyEnv && !this.readApiKey(provider)) {
       return {
         provider: providerName,
         model: modelName,
@@ -170,15 +222,17 @@ export class ProviderInspector {
       return this.ollamaStatus(summary);
     }
 
-    if (provider.apiKeyEnv) {
-      const configured = Boolean(process.env[provider.apiKeyEnv]);
+    if (provider.apiKeyEnv || provider.apiKey || provider.oauthToken) {
+      const configured = Boolean(this.readApiKey(provider) || provider.oauthToken);
       return {
         ...summary,
         configured,
         reachable: null,
         models: [],
         message: configured
-          ? `Configured through ${provider.apiKeyEnv}; remote health not checked.`
+          ? provider.apiKeyEnv && process.env[provider.apiKeyEnv]
+            ? `Configured through ${provider.apiKeyEnv}; remote health not checked.`
+            : 'Configured through saved local credentials; remote health not checked.'
           : `Missing environment variable ${provider.apiKeyEnv}.`,
       };
     }
@@ -232,18 +286,24 @@ export class ProviderInspector {
     }
   }
 
-  private async fetchOpenAICompatibleModels(baseUrl: string, apiKey?: string): Promise<Omit<ProviderModelList, 'provider'>> {
+  private async fetchOpenAICompatibleModels(providerName: string, baseUrl: string, apiKey?: string): Promise<Omit<ProviderModelList, 'provider'>> {
     const headers: Record<string, string> = {};
     if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
-    const url = openAIModelsUrl(baseUrl);
+    if (providerName === 'github_copilot') {
+      headers['Editor-Version'] = 'marifold/0';
+      headers['Editor-Plugin-Version'] = 'marifold/0';
+      headers['Copilot-Integration-Id'] = 'vscode-chat';
+      headers['User-Agent'] = 'marifold';
+    }
+    const url = openAIModelsUrl(baseUrl, { providerName });
     try {
       const response = await fetch(url, {
         headers,
         signal: AbortSignal.timeout(5000),
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const body = await response.json() as { data?: Array<{ id?: unknown }> };
-      const models = (body.data ?? [])
+      const body = await response.json() as { data?: OpenAICompatibleModelRecord[] };
+      const models = filterOpenAICompatibleModels(providerName, body.data ?? [])
         .map(model => model.id)
         .filter((id): id is string => typeof id === 'string')
         .sort();
@@ -267,12 +327,45 @@ export class ProviderInspector {
       type: provider.type,
       baseUrl: provider.baseUrl,
       apiKeyEnv: provider.apiKeyEnv,
+      hasApiKey: Boolean(provider.apiKey),
+      hasOauthToken: Boolean(provider.oauthToken),
       isDefault: name === this.loadedConfig.config.default.provider,
     };
   }
+
+  private readApiKey(provider: MarifoldProviderConfig): string | undefined {
+    if (provider.apiKeyEnv && process.env[provider.apiKeyEnv]) return process.env[provider.apiKeyEnv];
+    return provider.apiKey;
+  }
 }
 
-function openAIModelsUrl(baseUrl: string): string {
-  const normalized = baseUrl.replace(/\/+$/, '');
-  return normalized.endsWith('/v1') ? `${normalized}/models` : `${normalized}/v1/models`;
+interface OpenAICompatibleModelRecord {
+  id?: unknown;
+  capabilities?: {
+    type?: unknown;
+  };
+  model_picker_enabled?: unknown;
+  supported_endpoints?: unknown;
+}
+
+function filterOpenAICompatibleModels(providerName: string, models: OpenAICompatibleModelRecord[]): OpenAICompatibleModelRecord[] {
+  if (providerName !== 'github_copilot') return models;
+
+  return models.filter(model => {
+    if (typeof model.id === 'string' && isKnownGitHubCopilotUnsupportedModelId(model.id)) return false;
+    if (model.capabilities?.type !== 'chat') return false;
+    if (model.model_picker_enabled === false) return false;
+    if (!Array.isArray(model.supported_endpoints)) return true;
+    return model.supported_endpoints.includes('/chat/completions')
+      || model.supported_endpoints.includes('/responses');
+  });
+}
+
+function shouldShowRegistryModelFallback(
+  providerName: string,
+  result: Omit<ProviderModelList, 'provider'>,
+): boolean {
+  if (result.models.length > 0) return false;
+  if (providerName === 'github_copilot' && result.reachable === true) return false;
+  return true;
 }

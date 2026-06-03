@@ -52,6 +52,20 @@ describe('MemoryStore', () => {
     ]);
   });
 
+  it('creates memory files when reading an existing profile without a memories directory', () => {
+    const profilesDir = path.join(tempDir(), 'profiles');
+    const profileDir = path.join(profilesDir, 'default');
+    fs.mkdirSync(profileDir, { recursive: true });
+    fs.writeFileSync(path.join(profileDir, 'PROFILE.md'), 'Identity');
+
+    const memory = new MemoryStore(profilesDir).listPromptMemory('default');
+
+    expect(memory).toEqual([]);
+    expect(fs.existsSync(path.join(profileDir, 'memories', 'user.jsonl'))).toBe(true);
+    expect(fs.existsSync(path.join(profileDir, 'memories', 'preferences.jsonl'))).toBe(true);
+    expect(fs.existsSync(path.join(profileDir, 'memories', 'auto_short.jsonl'))).toBe(true);
+  });
+
   it('deduplicates exact active memories', () => {
     const store = new MemoryStore(path.join(tempDir(), 'profiles'));
 
@@ -61,6 +75,31 @@ describe('MemoryStore', () => {
     expect(second.created).toBe(false);
     expect(second.entry.id).toBe(first.entry.id);
     expect(store.listEntries('default')).toHaveLength(1);
+  });
+
+  it('applies model memory saves and supersedes matching conflict keys', () => {
+    const store = new MemoryStore(path.join(tempDir(), 'profiles'));
+
+    store.remember('default', 'user', 'Name: Jack', { sessionId: 'session-1' });
+    store.applySavePayloads('default', [
+      '{"memories":[{"kind":"user","text":"The user\'s name is Jane.","priority":0,"confidence":1,"stability":"stable","source":"user_direct","conflict_key":"user.name"}]}',
+    ], { sessionId: 'session-2' });
+
+    const entries = store.listEntries('default');
+    expect(entries).toHaveLength(2);
+    expect(entries[0]).toMatchObject({
+      text: 'Name: Jack',
+      status: 'superseded',
+      session_id: 'session-1',
+    });
+    expect(entries[1]).toMatchObject({
+      text: "The user's name is Jane.",
+      status: 'active',
+      conflict_key: 'user.name',
+      session_id: 'session-2',
+      supersedes: [entries[0].id],
+    });
+    expect(store.listPromptMemory('default')).toEqual(["User: The user's name is Jane."]);
   });
 
   it('soft-forgets and permanently deletes matching JSONL records', () => {

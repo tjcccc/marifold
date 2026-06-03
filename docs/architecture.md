@@ -1,6 +1,6 @@
 # Architecture
 
-Marifold v0.6.0 is intentionally small. It provides a TypeScript CLI for priests-style profile chat, one-shot requests, workspace initialization, chat resume behavior, saved model options, model validation, explicit and configurable profile memory, thinking mode controls, and basic local management commands powered by `@priest-ai/core`.
+Marifold v0.7.0 is intentionally small. It provides a TypeScript CLI for priests-style profile chat, one-shot requests, workspace initialization, chat resume behavior, saved model options, model validation, model-driven and explicit configurable profile memory, thinking mode controls, OAuth provider setup, GitHub Copilot Responses API routing, and basic local management commands powered by `@priest-ai/core`.
 
 ## Current Scope
 
@@ -12,11 +12,11 @@ packages/cli -> packages/core -> @priest-ai/core -> provider
 
 `packages/cli` owns command parsing, terminal input/output, and the interactive chat loop.
 
-`packages/core` owns Marifold runtime abstractions, workspace paths, TOML config loading, profile resolution, profile memory storage/selection, session resolution, provider adapter creation, and the bridge to `@priest-ai/core`.
+`packages/core` owns Marifold runtime abstractions, workspace paths, TOML config loading, profile resolution, profile memory storage/selection/control-block application, session resolution, provider adapter creation, and the bridge to `@priest-ai/core`.
 
 `@priest-ai/core` remains Marifold-agnostic. Marifold depends on it; it does not know about Marifold.
 
-## v0.6.0 Boundaries
+## v0.7.0 Boundaries
 
 The runtime layer is thin. `MarifoldRuntime` resolves config/profile/session settings, selects profile memory, and delegates ask/stream execution to `PriestEngine`.
 
@@ -38,7 +38,7 @@ profiles/default/
     auto_short.jsonl
 ```
 
-Marifold owns the profile memory file meaning and passes selected memory to `@priest-ai/core` through `PriestRequest.memory`. The memory path can be disabled per profile through `profile.toml` or per run through `--no-memories`. `@priest-ai/core` remains generic and only assembles memory into provider messages.
+Marifold owns the profile memory file meaning and passes selected memory to `@priest-ai/core` through `PriestRequest.memory`. The memory path can be disabled per profile through `profile.toml` or per run through `--no-memories`. When enabled, Marifold injects memory policy instructions, strips hidden `<memory_save>` and `<memory_forget>` blocks from visible output and saved session history, then applies those JSONL mutations after the turn. A conservative prompt fallback saves direct self-identification such as the user's name. `@priest-ai/core` remains generic and only assembles memory into provider messages.
 
 Thinking mode is a provider option selected by Marifold and only forwarded to known compatible providers. It does not change context assembly or introduce agent behavior.
 
@@ -46,7 +46,7 @@ SQLite session continuity is reused from `@priest-ai/core`.
 
 ## Future Areas
 
-These are planned areas, but they are not implemented in v0.6.0:
+These are planned areas, but they are not implemented in v0.7.0:
 
 ```text
 apps/web

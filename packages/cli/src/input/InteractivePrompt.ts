@@ -13,6 +13,7 @@ export class InteractivePrompt {
       return await this.interface.question(label);
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') return undefined;
+      if (error instanceof Error && error.message === 'readline was closed') return undefined;
       throw error;
     }
   }

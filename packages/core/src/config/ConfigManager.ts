@@ -3,6 +3,7 @@ import * as path from 'path';
 import { LoadedMarifoldConfig, MarifoldConfig, MarifoldProviderConfig, ProviderType } from './ConfigSchema';
 import { MarifoldError } from '../errors/MarifoldError';
 import { resolveUserPath } from '../workspace/WorkspacePaths';
+import { getProviderRegistryEntry, providerConfigFromRegistry } from './ProviderRegistry';
 
 export interface ConfigSetResult {
   configPath: string;
@@ -65,9 +66,19 @@ export class ConfigManager {
     if (!model) throw MarifoldError.configInvalid('Model cannot be empty.');
 
     const providerConfig = this.config.providers[provider] ?? this.createProvider(provider);
+    const registry = getProviderRegistryEntry(provider);
+    if (registry) {
+      const defaults = providerConfigFromRegistry(registry);
+      if (defaults.type) providerConfig.type = defaults.type;
+      if (defaults.baseUrl && !providerConfig.baseUrl) providerConfig.baseUrl = defaults.baseUrl;
+      if (defaults.apiKeyEnv && !providerConfig.apiKeyEnv) providerConfig.apiKeyEnv = defaults.apiKeyEnv;
+    }
     if (options.type) providerConfig.type = options.type;
     if (options.baseUrl) providerConfig.baseUrl = options.baseUrl.replace(/\/+$/, '');
     if (options.apiKeyEnv) providerConfig.apiKeyEnv = options.apiKeyEnv;
+    if (options.apiKey) providerConfig.apiKey = options.apiKey;
+    if (options.oauthToken) providerConfig.oauthToken = options.oauthToken;
+    if (options.apiKeyExpiresAt !== undefined) providerConfig.apiKeyExpiresAt = options.apiKeyExpiresAt;
     this.registerModelOption(provider, model);
     this.save();
     return { configPath: this.configPath, key: 'models.options', value: `${provider}/${model}` };
@@ -155,15 +166,25 @@ export class ConfigManager {
       case 'api_key_env':
         provider.apiKeyEnv = value;
         return;
+      case 'api_key':
+        provider.apiKey = value;
+        return;
+      case 'oauth_token':
+        provider.oauthToken = value;
+        return;
+      case 'api_key_expires_at':
+        provider.apiKeyExpiresAt = parseNumber(value, `providers.${providerName}.api_key_expires_at`);
+        return;
       default:
         throw MarifoldError.configInvalid(`Unknown config key: providers.${providerName}.${key}`);
     }
   }
 
   private createProvider(providerName: string): MarifoldProviderConfig {
-    const provider: MarifoldProviderConfig = {
-      type: providerName === 'ollama' ? 'ollama' : 'openai-compatible',
-    };
+    const registry = getProviderRegistryEntry(providerName);
+    const provider: MarifoldProviderConfig = registry
+      ? { type: registry.type, ...providerConfigFromRegistry(registry) }
+      : { type: providerName === 'ollama' ? 'ollama' : 'openai-compatible' };
     this.config.providers[providerName] = provider;
     return provider;
   }
@@ -211,6 +232,9 @@ function renderProvider(name: string, provider: MarifoldProviderConfig): string 
     `type = ${tomlString(provider.type)}`,
     optionalStringLine('base_url', provider.baseUrl),
     optionalStringLine('api_key_env', provider.apiKeyEnv),
+    optionalStringLine('api_key', provider.apiKey),
+    optionalStringLine('oauth_token', provider.oauthToken),
+    optionalNumberLine('api_key_expires_at', provider.apiKeyExpiresAt),
   ].filter(Boolean);
   return lines.join('\n');
 }

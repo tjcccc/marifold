@@ -1,11 +1,11 @@
 import {
   AnthropicProvider,
   OllamaProvider,
-  OpenAICompatProvider,
   ProviderAdapter,
 } from '@priest-ai/core';
 import { MarifoldError } from '../errors/MarifoldError';
 import { MarifoldConfig, MarifoldProviderConfig } from './ConfigSchema';
+import { MarifoldOpenAICompatProvider } from './MarifoldOpenAICompatProvider';
 
 export class ProviderFactory {
   constructor(
@@ -21,7 +21,9 @@ export class ProviderFactory {
       case 'ollama':
         return new OllamaProvider(provider.baseUrl ?? 'http://localhost:11434');
       case 'openai-compatible':
-        return new OpenAICompatProvider(this.requireBaseUrl(providerName, provider), this.readOptionalApiKey(providerName, provider));
+        return new MarifoldOpenAICompatProvider(this.requireBaseUrl(providerName, provider), this.readOptionalApiKey(providerName, provider), {
+          providerName,
+        });
       case 'anthropic':
         return new AnthropicProvider(this.readRequiredApiKey(providerName, provider));
     }
@@ -33,18 +35,21 @@ export class ProviderFactory {
   }
 
   private readOptionalApiKey(providerName: string, provider: MarifoldProviderConfig): string | undefined {
-    if (!provider.apiKeyEnv) return undefined;
+    if (!provider.apiKeyEnv) return provider.apiKey;
     const value = process.env[provider.apiKeyEnv];
-    if (!value) throw MarifoldError.apiKeyMissing(providerName, provider.apiKeyEnv);
-    return value;
+    if (value) return value;
+    if (provider.apiKey) return provider.apiKey;
+    throw MarifoldError.apiKeyMissing(providerName, provider.apiKeyEnv);
   }
 
   private readRequiredApiKey(providerName: string, provider: MarifoldProviderConfig): string {
     if (!provider.apiKeyEnv) {
+      if (provider.apiKey) return provider.apiKey;
       throw MarifoldError.configInvalid(`Provider '${providerName}' requires api_key_env.`, { provider: providerName });
     }
     const value = process.env[provider.apiKeyEnv];
-    if (!value) throw MarifoldError.apiKeyMissing(providerName, provider.apiKeyEnv);
-    return value;
+    if (value) return value;
+    if (provider.apiKey) return provider.apiKey;
+    throw MarifoldError.apiKeyMissing(providerName, provider.apiKeyEnv);
   }
 }

@@ -4,6 +4,23 @@ These checks exercise the migrated priests-style CLI surface without requiring a
 
 Run them after `pnpm build` from the repo root.
 
+Automated command matrix:
+
+```bash
+pnpm command-test
+```
+
+The script discovers every current command and subcommand from `--help`, then runs isolated command flows in a temp Marifold workspace with a mock Ollama/OpenAI-compatible HTTP server. It covers the noninteractive forms of the current commands and their options, including `init`, `config`, `profile`, `model`, `provider`, `ask`, `chat`, and `session`. New future commands are automatically included in the help discovery pass; add a targeted flow to `scripts/test-commands.mjs` when a future command has stateful behavior that should be smoke-tested.
+
+Useful script options:
+
+```bash
+pnpm command-test -- --verbose
+pnpm command-test -- --keep-temp
+```
+
+Manual spot checks:
+
 ```bash
 tmp="$(mktemp -d)"
 

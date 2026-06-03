@@ -2,9 +2,9 @@
 
 Marifold is a local-first personal AI workspace for profiles, chats, skills, mini apps, workflows, and external agents.
 
-v0.6.0 is the CLI foundation release. It provides priests-style profile chat, one-shot requests, workspace initialization, resume support, saved model options, model validation, explicit profile memory commands, configurable memory recall, thinking mode controls, and basic local management commands through a TypeScript CLI.
+v0.7.0 is the CLI foundation release. It provides priests-style profile chat, one-shot requests, workspace initialization, resume support, saved model options, model validation, model-driven and explicit profile memory commands, configurable memory recall, thinking mode controls, OAuth provider setup, GitHub Copilot Responses API support, and command smoke coverage through a TypeScript CLI.
 
-## What v0.6.0 Supports
+## What v0.7.0 Supports
 
 - Marifold-branded CLI.
 - One-shot request-response.
@@ -17,21 +17,26 @@ v0.6.0 is the CLI foundation release. It provides priests-style profile chat, on
 - Basic provider/model configuration.
 - Saved provider/model options through `[models].options`.
 - Adding provider/model options from the CLI.
+- Interactive provider/model selection with OAuth setup for GitHub Copilot and ChatGPT-style providers.
+- GitHub Copilot chat through `/chat/completions` and Responses API routing for models such as `gpt-5.4-mini`.
 - Live model listing for Ollama and OpenAI-compatible providers where the endpoint is reachable.
 - Model validation against configured providers and live model lists where available.
 - Profile-scoped memory files in `memories/user.jsonl`, `memories/preferences.jsonl`, and `memories/auto_short.jsonl`.
+- Model-driven memory saves and forgets through hidden `<memory_save>` and `<memory_forget>` blocks.
+- Conservative prompt fallback for direct self-identification such as `my name is Jack`.
 - Explicit chat memory commands for remember, soft-forget, and permanent delete.
 - Memory injection through the `@priest-ai/core` request `memory` lane.
 - Memory recall controls through `[memory].context_limit`, `profile.toml` `memories = false`, and `--no-memories`.
 - Thinking mode controls through `[default].think`, `ask/chat --think [true|false]`, and chat `/think on|off`.
 - Basic config, model, provider, and session inspection commands.
 - Profile-filtered session listing.
+- Automated CLI command smoke checks through `pnpm command-test`.
 - SQLite session continuity through `@priest-ai/core`.
 - A thin Marifold runtime wrapper around `@priest-ai/core`.
 
 ## Non-goals
 
-v0.6.0 does not include automatic model-driven memory extraction/consolidation, web search, image upload, service/Web UI, SkillApp, Workflow, Apple apps, external-agent aliases, scheduled tasks, destructive local model deletion, permission systems, visual mini-app rendering, or an agentic tool loop.
+v0.7.0 does not include full memory consolidation, broad automatic memory extraction, web search, image upload, service/Web UI, SkillApp, Workflow, Apple apps, external-agent aliases, scheduled tasks, provider-owned model deletion, permission systems, visual mini-app rendering, or an agentic tool loop.
 
 ## Setup
 
@@ -108,11 +113,14 @@ pnpm marifold config set default.model gemma4:e4b
 
 pnpm marifold model
 pnpm marifold model list
+pnpm marifold model add
 pnpm marifold model add ollama qwen3:8b
 pnpm marifold model add openai gpt-4o-mini --base-url https://api.openai.com --api-key-env OPENAI_API_KEY --default
 pnpm marifold model validate
 pnpm marifold model validate ollama/gemma4:e4b
 pnpm marifold model validate gemma4:e4b --provider ollama
+pnpm marifold model default
+pnpm marifold model default --profile coder
 pnpm marifold model default gemma4:e4b
 pnpm marifold model default qwen3:8b --provider ollama --profile coder
 pnpm marifold model default --profile coder --clear
@@ -191,19 +199,27 @@ type = "ollama"
 base_url = "http://localhost:11434"
 ```
 
-Supported provider types:
+Supported provider adapter types:
 
 - `ollama`
 - `openai-compatible`
 - `anthropic`
 
-For `openai-compatible`, set `base_url` without the trailing `/v1`; `@priest-ai/core` appends `/v1/chat/completions`.
+The `model add` picker is seeded from the priests provider registry: Ollama, llama.cpp, LM Studio, Rapid-MLX, OpenAI, Anthropic, Gemini, DeepSeek, Mistral, Groq, Perplexity, Cohere, Together AI, Alibaba Bailian, Alibaba Cloud, MiniMax, Kimi, OpenRouter, GitHub Copilot OAuth, ChatGPT OpenAI OAuth, and custom OpenAI-compatible endpoints.
+
+For `openai-compatible`, `base_url` may be the API root such as `https://api.openai.com`, or a versioned compatibility root such as `https://generativelanguage.googleapis.com/v1beta/openai`. Marifold builds the final `/chat/completions`, `/responses`, and `/models` URLs from it.
 
 `marifold init` accepts `--provider`, `--provider-type`, `--model`, `--base-url`, `--api-key-env`, `--profiles-dir`, `--sessions-db`, and `--force`. Non-Ollama providers require `--model`; custom OpenAI-compatible providers also require `--base-url`.
 
-`marifold model add` stores provider/model choices in `[models].options`. `marifold provider <name> list` asks the provider for live model names when Marifold knows how to query that provider type.
+`marifold model add` stores provider/model choices in `[models].options`. With no arguments it starts an interactive provider picker, prompts for OAuth/manual credentials for OAuth providers such as GitHub Copilot and ChatGPT when no usable credential exists, then shows live provider models when Marifold can list them. Saved credentials use local `[providers.<name>]` fields such as `api_key`, `oauth_token`, and `api_key_expires_at`; existing `api_key_env` configs still work and environment variables take precedence at runtime. The positional `marifold model add <provider> <model>` form remains available for scripts. `marifold provider <name> list` asks the provider for live model names when Marifold knows how to query that provider type.
+
+For GitHub Copilot, Marifold offers models compatible with the current chat adapters. Models such as `gpt-5.4` use `/chat/completions`; responses-only models such as `gpt-5.4-mini` use `/responses`.
+
+For GitHub Copilot OAuth, Marifold refreshes the short-lived Copilot IDE token from the saved `oauth_token` before provider requests when the saved token is expired or close to expiry. Pasted Copilot IDE tokens without an `oauth_token` cannot be refreshed automatically.
 
 `marifold model validate` validates the default or profile-resolved provider/model. It checks configured provider access and uses live model lists for Ollama and OpenAI-compatible providers when reachable.
+
+`marifold model default` starts an interactive selector over added models and includes `Add new model...`, which runs the same provider/model setup flow as `marifold model add` before setting the global default. `marifold model default --profile <name>` starts a profile selector with `Use default (<global provider/model>)`, saved models, and `Add new model...`; choosing `Use default` clears the profile override so new sessions for that profile use the global default.
 
 `[memory].context_limit` caps the combined memory text injected into one provider request. Set it to `0` for unlimited memory injection. `[memory].size_limit` is reserved for future automatic short-term memory trimming.
 
@@ -211,7 +227,7 @@ For `openai-compatible`, set `base_url` without the trailing `/v1`; `@priest-ai/
 
 ## Profiles
 
-Marifold v0.6.0 loads priests-style profile directories:
+Marifold v0.7.0 loads priests-style profile directories:
 
 ```text
 profiles/default/
@@ -231,7 +247,7 @@ profiles/default/
 
 `profile.toml` may also set `memories = false` for tool profiles that should not receive profile memory. Per-run `--no-memories` disables memory for one `ask` or `chat` invocation.
 
-`memories/user.jsonl` stores durable user facts, `memories/preferences.jsonl` stores durable preferences, and `memories/auto_short.jsonl` stores short-term notes. Marifold also reads legacy Markdown memory files in `memories/user.md`, `memories/preferences.md`, `memories/notes.md`, and `memories/auto_short.md` as read-only fallback prompt context.
+`memories/user.jsonl` stores durable user facts, `memories/preferences.jsonl` stores durable preferences, and `memories/auto_short.jsonl` stores short-term notes. Marifold creates these files for existing profiles when memory is first prepared, read, or written. When memory is on, Marifold asks the model to emit hidden memory control blocks for useful saves or forgets, strips those blocks from visible replies and session history, and applies the JSONL updates after the turn. A conservative fallback also saves direct self-identification such as `my name is Jack` even when the model does not emit a block. Marifold also reads legacy Markdown memory files in `memories/user.md`, `memories/preferences.md`, `memories/notes.md`, and `memories/auto_short.md` as read-only fallback prompt context.
 
 ## Relationship to priest-typescript
 
