@@ -72,6 +72,16 @@ export ANTHROPIC_API_KEY="..."
 
 Do not put real API keys in tracked files.
 
+## Development Checks
+
+```bash
+pnpm build
+pnpm typecheck
+pnpm test
+```
+
+For CLI smoke checks that avoid live model calls, see [docs/smoke.md](docs/smoke.md).
+
 ## Commands
 
 Run the local CLI from the workspace:

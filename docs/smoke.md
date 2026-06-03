@@ -1,0 +1,44 @@
+# Smoke Checks
+
+These checks exercise the migrated priests-style CLI surface without requiring a live model response.
+
+Run them after `pnpm build` from the repo root.
+
+```bash
+tmp="$(mktemp -d)"
+
+node packages/cli/dist/index.js --version
+
+node packages/cli/dist/index.js \
+  --config "$tmp/config.toml" \
+  init \
+  --profiles-dir "$tmp/profiles" \
+  --sessions-db "$tmp/sessions.db"
+
+node packages/cli/dist/index.js --config "$tmp/config.toml" config show
+node packages/cli/dist/index.js --config "$tmp/config.toml" profile show default
+node packages/cli/dist/index.js --config "$tmp/config.toml" model list
+node packages/cli/dist/index.js --config "$tmp/config.toml" provider status
+
+printf '/remember pref concise answers\n' \
+  | node packages/cli/dist/index.js --config "$tmp/config.toml" chat --profile default
+
+printf '/think off\n' \
+  | node packages/cli/dist/index.js --config "$tmp/config.toml" chat --profile default --think true --no-memories
+
+ANTHROPIC_API_KEY=test \
+  node packages/cli/dist/index.js --config config.example.toml model validate claude-test --provider anthropic
+
+rm -rf "$tmp"
+```
+
+Expected signals:
+
+- `--version` prints the package version.
+- `init` creates config, profile files, session DB path parent, and memory JSONL files.
+- `profile show default` prints model and memory state plus profile file sections.
+- `model list` shows the saved default provider/model option.
+- `provider status` prints configured provider status rows.
+- `/remember pref ...` writes an active record to `memories/preferences.jsonl`.
+- `chat --think true --no-memories` starts with `Think:    on` and `Memory:   off`, and `/think off` toggles the command path.
+- Anthropic validation returns a warning without network access when `ANTHROPIC_API_KEY` is set.
