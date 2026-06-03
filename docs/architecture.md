@@ -56,13 +56,15 @@ apps/apple
   Future SwiftUI macOS and iOS clients.
 
 SkillApp runtime
-  Future system for turning reusable skills into structured mini apps.
+  Future system for turning reusable skills into schema-defined GUI mini apps.
 
 Workflow runtime
-  Future system for manual/scheduled multi-step runs.
+  Future system for composing native profiles, skills, models, and external agents into multi-step runs.
 
 External-agent aliases
-  Future runners for Codex, Claude Code, and similar tools.
+  Future alias profiles that launch, wrap, delegate to, or compose with Codex, Claude Code, and similar tools.
 ```
 
 Do not create empty future app directories until implementation begins.
+
+For the product direction behind these future areas, see [vision.md](vision.md).

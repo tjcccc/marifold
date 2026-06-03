@@ -16,7 +16,17 @@
 - OAuth refresh: refresh expired ChatGPT credentials before provider requests, matching priests.
 - Service API: future `service` CLI plus local HTTP service for chat, profiles, sessions, config, providers, and assets.
 - Web UI: browser chat app backed by the service API.
+- SkillApp runtime: schema-defined GUI mini apps for focused skills such as translators, UI design helpers, research helpers, and prompt generators.
+- Alias profiles: profile entries that launch, wrap, delegate to, or compose with external agents such as Codex and Claude Code.
+- Workflow composition: route subtasks across native profiles, skill apps, models, and external-agent aliases.
 - Agent runtime: tool-call policy, permission boundaries, and external tool execution after the chat foundation is stable.
+
+## Product Outlook
+
+- Marifold should be a lightweight local-first personal AI workspace, not a direct competitor to heavyweight all-round agents.
+- Heavy coding and complex autonomous work can be delegated to external-agent aliases when tools such as Codex or Claude Code are a better fit.
+- The core user value is profile-based continuity, memory, focused skill apps, and choosing the right model or agent for each task.
+- See [docs/vision.md](docs/vision.md) for the fuller product direction.
 
 ## Notes
 

@@ -4,6 +4,8 @@ Marifold is a local-first personal AI workspace for profiles, chats, skills, min
 
 v0.7.0 is the CLI foundation release. It provides priests-style profile chat, one-shot requests, workspace initialization, resume support, saved model options, model validation, model-driven and explicit profile memory commands, configurable memory recall, thinking mode controls, OAuth provider setup, GitHub Copilot Responses API support, and command smoke coverage through a TypeScript CLI.
 
+For product direction and future scope, see [docs/vision.md](docs/vision.md).
+
 ## What v0.7.0 Supports
 
 - Marifold-branded CLI.
