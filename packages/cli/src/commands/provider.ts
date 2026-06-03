@@ -50,10 +50,13 @@ export function registerProviderCommand(program: Command, printer: ConsolePrinte
     .action(async () => {
       try {
         const statuses = await new ProviderInspector(loadConfig(program)).status();
+        process.stdout.write('Provider\tConfigured\tReachable\tBase URL\tAPI Key Env\tMessage\n');
         for (const status of statuses) {
           const reachable = status.reachable === null ? 'not checked' : status.reachable ? 'reachable' : 'unreachable';
           const configured = status.configured ? 'configured' : 'not configured';
-          process.stdout.write(`${status.name}\t${configured}\t${reachable}\t${status.message}\n`);
+          process.stdout.write(
+            `${status.name}\t${configured}\t${reachable}\t${status.baseUrl ?? ''}\t${status.apiKeyEnv ?? ''}\t${status.message}\n`,
+          );
         }
       } catch (error) {
         printer.printError(error);

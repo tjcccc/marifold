@@ -39,9 +39,10 @@ export class ConsolePrinter {
       return;
     }
 
+    process.stdout.write('ID\tProfile\tTurns\tUpdated\n');
     for (const session of sessions) {
       process.stdout.write(
-        `${session.id}\t${session.profileName}\t${session.turnCount} turns\t${session.updatedAt}\n`,
+        `${session.id}\t${session.profileName}\t${session.turnCount}\t${session.updatedAt}\n`,
       );
     }
   }

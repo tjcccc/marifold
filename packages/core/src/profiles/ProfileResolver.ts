@@ -3,7 +3,7 @@ import * as path from 'path';
 import { parse } from 'smol-toml';
 import { Profile, ProfileLoader } from '@priest-ai/core';
 import { MarifoldError } from '../errors/MarifoldError';
-import { ProfileSettings, ProfileSummary } from '../config/ConfigSchema';
+import { ProfileDetail, ProfileFileSummary, ProfileSettings, ProfileSummary } from '../config/ConfigSchema';
 
 const SAFE_PROFILE_NAME = /^[A-Za-z0-9_-]+$/;
 
@@ -78,6 +78,52 @@ export class ProfileResolver implements ProfileLoader {
     return [...profiles.values()].sort((a, b) => a.name.localeCompare(b.name));
   }
 
+  detail(name: string): ProfileDetail {
+    this.assertSafeName(name);
+    const summary = this.list().find(profile => profile.name === name);
+    if (!summary) {
+      throw MarifoldError.profileInvalid(`Profile '${name}' was not found in ${this.profilesDir}.`, name);
+    }
+
+    if (summary.source === 'directory' && summary.path) {
+      return {
+        ...summary,
+        settings: this.loadSettings(name),
+        files: {
+          profile: readProfileFile(path.join(summary.path, 'PROFILE.md')),
+          rules: readProfileFile(path.join(summary.path, 'RULES.md')),
+          custom: readProfileFile(path.join(summary.path, 'CUSTOM.md')),
+          profileToml: readProfileFile(path.join(summary.path, 'profile.toml')),
+        },
+      };
+    }
+
+    if (summary.source === 'json' && summary.path) {
+      const profile = this.loadJsonProfile(name);
+      return {
+        ...summary,
+        settings: {},
+        files: {
+          profile: { path: summary.path, content: profile?.identity ?? '' },
+          rules: { path: summary.path, content: profile?.rules ?? '' },
+          custom: { path: summary.path, content: profile?.custom ?? '' },
+          profileToml: { content: '' },
+        },
+      };
+    }
+
+    return {
+      ...summary,
+      settings: {},
+      files: {
+        profile: { content: BUILT_IN_DEFAULT_PROFILE.identity },
+        rules: { content: BUILT_IN_DEFAULT_PROFILE.rules },
+        custom: { content: BUILT_IN_DEFAULT_PROFILE.custom ?? '' },
+        profileToml: { content: '' },
+      },
+    };
+  }
+
   private loadDirectoryProfile(name: string): Profile | undefined {
     const profileDir = path.join(this.profilesDir, name);
     if (!isProfileDirectory(profileDir)) return undefined;
@@ -141,6 +187,13 @@ function isProfileDirectory(profileDir: string): boolean {
 
 function readOptional(filePath: string): string {
   return fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf-8') : '';
+}
+
+function readProfileFile(filePath: string): ProfileFileSummary {
+  return {
+    path: filePath,
+    content: readOptional(filePath),
+  };
 }
 
 function optionalString(value: unknown, label: string): string | undefined {

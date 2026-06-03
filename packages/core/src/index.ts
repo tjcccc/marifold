@@ -4,6 +4,8 @@ export type {
   MarifoldDefaultConfig,
   MarifoldPathsConfig,
   MarifoldProviderConfig,
+  ProfileDetail,
+  ProfileFileSummary,
   ProfileSettings,
   ProfileSummary,
   SessionDetail,

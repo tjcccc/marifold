@@ -1,5 +1,5 @@
 import { PriestConfig, PriestEngine } from '@priest-ai/core';
-import { LoadedMarifoldConfig, ProfileSummary, SessionDetail, SessionSummary } from '../config/ConfigSchema';
+import { LoadedMarifoldConfig, ProfileDetail, ProfileSummary, SessionDetail, SessionSummary } from '../config/ConfigSchema';
 import { ProviderFactory } from '../config/ProviderFactory';
 import { MarifoldError } from '../errors/MarifoldError';
 import { ProfileResolver } from '../profiles/ProfileResolver';
@@ -69,8 +69,16 @@ export class MarifoldRuntime {
     return this.profileResolver.list();
   }
 
-  listSessions(limit?: number): SessionSummary[] {
-    return this.sessionResolver.list(limit);
+  getProfile(name: string): ProfileDetail {
+    return this.profileResolver.detail(name);
+  }
+
+  listSessions(limit?: number, profileName?: string): SessionSummary[] {
+    return this.sessionResolver.list(limit, profileName);
+  }
+
+  latestSession(profileName?: string): SessionSummary | undefined {
+    return this.sessionResolver.latest(profileName);
   }
 
   getSession(sessionId: string): SessionDetail | undefined {

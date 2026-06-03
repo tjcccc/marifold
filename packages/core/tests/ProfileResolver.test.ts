@@ -46,6 +46,24 @@ describe('ProfileResolver', () => {
     expect(settings).toEqual({ provider: 'ollama', model: 'codellama' });
   });
 
+  it('shows profile file details and settings', () => {
+    const root = tempDir();
+    const profileDir = path.join(root, 'writer');
+    fs.mkdirSync(profileDir, { recursive: true });
+    fs.writeFileSync(path.join(profileDir, 'PROFILE.md'), 'Writer identity');
+    fs.writeFileSync(path.join(profileDir, 'RULES.md'), 'Writer rules');
+    fs.writeFileSync(path.join(profileDir, 'CUSTOM.md'), 'Writer custom');
+    fs.writeFileSync(path.join(profileDir, 'profile.toml'), 'provider = "ollama"\nmodel = "gemma4:e4b"\n');
+
+    const detail = new ProfileResolver(root).detail('writer');
+
+    expect(detail.name).toBe('writer');
+    expect(detail.settings).toEqual({ provider: 'ollama', model: 'gemma4:e4b' });
+    expect(detail.files.profile.content).toBe('Writer identity');
+    expect(detail.files.rules.content).toBe('Writer rules');
+    expect(detail.files.custom.content).toBe('Writer custom');
+  });
+
   it('returns the built-in default profile when no default profile exists', () => {
     const root = tempDir();
 

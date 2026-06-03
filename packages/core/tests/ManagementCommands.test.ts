@@ -84,6 +84,9 @@ describe('SessionResolver', () => {
 
     const resolver = new SessionResolver(dbPath);
     expect(resolver.get('session-a')?.turns.map(turn => turn.content)).toEqual(['hello', 'hi']);
+    expect(resolver.list(50, 'default')).toHaveLength(1);
+    expect(resolver.list(50, 'missing')).toHaveLength(0);
+    expect(resolver.latest('default')?.id).toBe('session-a');
     expect(resolver.rename('session-a', 'session-b')).toBe(true);
     expect(resolver.get('session-a')).toBeUndefined();
     expect(resolver.get('session-b')?.turnCount).toBe(2);

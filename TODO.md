@@ -11,5 +11,5 @@
 
 ## Notes
 
-- Keep v0.1.0 focused on the TypeScript CLI foundation: ask, chat, init, profile, config, model, provider, and session commands.
+- Keep v0.1.x focused on the TypeScript CLI foundation: ask, chat, init, profile, config, model, provider, and session commands.
 - Defer memory/search/image/service/web UI until the non-agent chat and session surfaces are predictable.

@@ -15,7 +15,7 @@ const printer = new ConsolePrinter();
 const program = new Command()
   .name('marifold')
   .description('Marifold local-first AI workspace CLI.')
-  .version('0.1.0')
+  .version('0.1.1')
   .option('--config <path>', 'Path to Marifold config.toml.');
 
 registerInitCommand(program, printer);

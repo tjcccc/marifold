@@ -9,6 +9,7 @@ interface ChatOptions {
   provider?: string;
   model?: string;
   session?: string;
+  resume?: boolean | string;
 }
 
 const EXIT_COMMANDS = new Set(['/exit', '/quit']);
@@ -28,6 +29,7 @@ export function registerChatCommand(program: Command, printer: ConsolePrinter): 
     .option('--provider <name>', 'Provider key from config.toml.')
     .option('--model <model>', 'Model name.')
     .option('--session <id>', 'Session id to continue or create.')
+    .option('--resume [mode]', 'Resume a profile session. Use "last" for the most recent session.')
     .action(async (options: ChatOptions) => {
       const runtime = createRuntime(program);
       const prompt = new InteractivePrompt();
@@ -39,6 +41,13 @@ export function registerChatCommand(program: Command, printer: ConsolePrinter): 
           provider: options.provider,
           model: options.model,
         });
+        if (options.session && options.resume !== undefined) {
+          throw new Error('--session and --resume are mutually exclusive.');
+        }
+
+        if (options.resume !== undefined) {
+          sessionId = await resolveResumeSession(runtime, prompt, settings.profile, options.resume);
+        }
 
         process.stdout.write(`Model:    ${settings.provider}/${settings.model}\n`);
         process.stdout.write(`Profile:  ${settings.profile}\n`);
@@ -85,4 +94,37 @@ export function registerChatCommand(program: Command, printer: ConsolePrinter): 
         runtime.close();
       }
     });
+}
+
+async function resolveResumeSession(
+  runtime: ReturnType<typeof createRuntime>,
+  prompt: InteractivePrompt,
+  profile: string,
+  resume: boolean | string,
+): Promise<string> {
+  if (resume === 'last') {
+    const latest = runtime.latestSession(profile);
+    if (!latest) {
+      process.stderr.write(`No sessions found for profile '${profile}'. Starting a new session.\n`);
+      return randomUUID();
+    }
+    return latest.id;
+  }
+
+  if (resume !== true) {
+    return String(resume);
+  }
+
+  const sessions = runtime.listSessions(20, profile);
+  if (sessions.length === 0) {
+    process.stderr.write(`No sessions found for profile '${profile}'. Starting a new session.\n`);
+    return randomUUID();
+  }
+
+  process.stdout.write(`Recent sessions for profile '${profile}':\n`);
+  for (const session of sessions) {
+    process.stdout.write(`${session.id}\t${session.turnCount} turns\t${session.updatedAt}\n`);
+  }
+  const selected = (await prompt.readUserMessage('Session id: '))?.trim();
+  return selected || randomUUID();
 }

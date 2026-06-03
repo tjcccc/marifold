@@ -19,7 +19,7 @@ export class SessionResolver {
     return this.store;
   }
 
-  list(limit = 50): SessionSummary[] {
+  list(limit = 50, profileName?: string): SessionSummary[] {
     if (!fs.existsSync(this.sessionsDb)) return [];
 
     const db = new Database(this.sessionsDb, { fileMustExist: true });
@@ -33,10 +33,11 @@ export class SessionResolver {
           COUNT(t.id) AS turnCount
         FROM sessions s
         LEFT JOIN turns t ON t.session_id = s.id
+        ${profileName ? 'WHERE s.profile_name = ?' : ''}
         GROUP BY s.id
         ORDER BY s.updated_at DESC
         LIMIT ?
-      `).all(limit) as Array<{
+      `).all(...(profileName ? [profileName, limit] : [limit])) as Array<{
         id: string;
         profileName: string;
         createdAt: string;
@@ -59,6 +60,10 @@ export class SessionResolver {
     } finally {
       db.close();
     }
+  }
+
+  latest(profileName?: string): SessionSummary | undefined {
+    return this.list(1, profileName)[0];
   }
 
   get(sessionId: string): SessionDetail | undefined {

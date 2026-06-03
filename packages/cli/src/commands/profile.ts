@@ -35,6 +35,33 @@ export function registerProfileCommand(program: Command, printer: ConsolePrinter
     });
 
   profile
+    .command('show')
+    .description('Show profile files and model settings.')
+    .argument('[name]', 'Profile name. Defaults to the configured default profile.')
+    .action((name: string | undefined) => {
+      const runtime = createRuntime(program);
+      try {
+        const loadedConfig = loadConfig(program);
+        const profileName = name ?? loadedConfig.config.default.profile;
+        const detail = runtime.getProfile(profileName);
+
+        process.stdout.write(`Profile: ${detail.name}\n`);
+        process.stdout.write(`Source:  ${detail.source}\n`);
+        if (detail.path) process.stdout.write(`Path:    ${detail.path}\n`);
+        process.stdout.write(`Model:   ${detail.settings.provider && detail.settings.model ? `${detail.settings.provider}/${detail.settings.model}` : 'default'}\n`);
+        printProfileSection('PROFILE.md', detail.files.profile);
+        printProfileSection('RULES.md', detail.files.rules);
+        printProfileSection('CUSTOM.md', detail.files.custom);
+        printProfileSection('profile.toml', detail.files.profileToml);
+      } catch (error) {
+        printer.printError(error);
+        process.exitCode = 1;
+      } finally {
+        runtime.close();
+      }
+    });
+
+  profile
     .command('init')
     .description('Scaffold a new profile directory.')
     .argument('[name]', 'Profile name.')
@@ -80,4 +107,11 @@ export function registerProfileCommand(program: Command, printer: ConsolePrinter
         process.exitCode = 1;
       }
     });
+}
+
+function printProfileSection(label: string, file: { path?: string; content: string }): void {
+  process.stdout.write(`\n[${label}]`);
+  if (file.path) process.stdout.write(` ${file.path}`);
+  process.stdout.write('\n');
+  process.stdout.write(file.content.trim() ? `${file.content.trimEnd()}\n` : '(empty)\n');
 }

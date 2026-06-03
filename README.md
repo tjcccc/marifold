@@ -2,24 +2,27 @@
 
 Marifold is a local-first personal AI workspace for profiles, chats, skills, mini apps, workflows, and external agents.
 
-v0.1.0 is the CLI foundation release. It provides priests-style profile chat, one-shot requests, workspace initialization, and basic local management commands through a TypeScript CLI.
+v0.1.1 is the CLI foundation release. It provides priests-style profile chat, one-shot requests, workspace initialization, resume support, and basic local management commands through a TypeScript CLI.
 
-## What v0.1.0 Supports
+## What v0.1.1 Supports
 
 - Marifold-branded CLI.
 - One-shot request-response.
 - Interactive chat.
+- Chat session resume with `--resume` or `--resume last`.
 - Workspace initialization.
 - Basic priests-style profile loading.
 - Basic profile creation and default-profile selection.
+- Profile inspection.
 - Basic provider/model configuration.
 - Basic config, model, provider, and session inspection commands.
+- Profile-filtered session listing.
 - SQLite session continuity through `@priest-ai/core`.
 - A thin Marifold runtime wrapper around `@priest-ai/core`.
 
 ## Non-goals
 
-v0.1.0 does not include memory, web search, image upload, service/Web UI, SkillApp, Workflow, Apple apps, external-agent aliases, scheduled tasks, permission systems, visual mini-app rendering, or an agentic tool loop.
+v0.1.1 does not include memory, web search, image upload, service/Web UI, SkillApp, Workflow, Apple apps, external-agent aliases, scheduled tasks, permission systems, visual mini-app rendering, or an agentic tool loop.
 
 ## Setup
 
@@ -71,6 +74,8 @@ pnpm marifold ask --profile default "Explain Marifold in one sentence."
 pnpm marifold chat
 pnpm marifold chat --profile default
 pnpm marifold chat --profile default --session test-session
+pnpm marifold chat --profile default --resume
+pnpm marifold chat --profile default --resume last
 
 pnpm marifold init
 pnpm marifold init --provider openai --model gpt-4o-mini
@@ -88,10 +93,11 @@ pnpm marifold provider list
 pnpm marifold provider status
 
 pnpm marifold profile list
+pnpm marifold profile show default
 pnpm marifold profile init coder
 pnpm marifold profile default coder
 
-pnpm marifold session list
+pnpm marifold session list --profile default
 pnpm marifold session show test-session
 pnpm marifold session rename test-session renamed-session
 pnpm marifold session delete renamed-session
@@ -145,7 +151,7 @@ For `openai-compatible`, set `base_url` without the trailing `/v1`; `@priest-ai/
 
 ## Profiles
 
-Marifold v0.1.0 loads priests-style profile directories:
+Marifold v0.1.1 loads priests-style profile directories:
 
 ```text
 profiles/default/

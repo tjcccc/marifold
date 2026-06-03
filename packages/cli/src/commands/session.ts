@@ -4,6 +4,7 @@ import { createRuntime } from './RuntimeFactory';
 
 interface SessionListOptions {
   limit?: string;
+  profile?: string;
 }
 
 export function registerSessionCommand(program: Command, printer: ConsolePrinter): void {
@@ -15,11 +16,12 @@ export function registerSessionCommand(program: Command, printer: ConsolePrinter
     .command('list')
     .description('List recent sessions.')
     .option('--limit <number>', 'Maximum number of sessions to print.', '50')
+    .option('--profile <name>', 'Only list sessions for this profile.')
     .action((options: SessionListOptions) => {
       const runtime = createRuntime(program);
       try {
         const limit = Number.parseInt(options.limit ?? '50', 10);
-        printer.printSessions(runtime.listSessions(Number.isFinite(limit) ? limit : 50));
+        printer.printSessions(runtime.listSessions(Number.isFinite(limit) ? limit : 50, options.profile));
       } catch (error) {
         printer.printError(error);
         process.exitCode = 1;

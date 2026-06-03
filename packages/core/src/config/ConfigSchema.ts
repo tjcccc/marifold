@@ -43,6 +43,21 @@ export interface ProfileSummary {
   path?: string;
 }
 
+export interface ProfileFileSummary {
+  path?: string;
+  content: string;
+}
+
+export interface ProfileDetail extends ProfileSummary {
+  settings: ProfileSettings;
+  files: {
+    profile: ProfileFileSummary;
+    rules: ProfileFileSummary;
+    custom: ProfileFileSummary;
+    profileToml: ProfileFileSummary;
+  };
+}
+
 export interface SessionSummary {
   id: string;
   profileName: string;
