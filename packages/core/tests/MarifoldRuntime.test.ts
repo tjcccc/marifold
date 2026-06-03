@@ -44,7 +44,11 @@ describe('MarifoldRuntime', () => {
       },
     };
 
-    vi.stubGlobal('fetch', vi.fn(async () => ollamaStreamResponse(['hello ', 'world'])));
+    let requestBody: { messages?: Array<{ role: string; content: string }> } | undefined;
+    vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      requestBody = JSON.parse(String(init?.body));
+      return ollamaStreamResponse(['hello ', 'world']);
+    }));
 
     const runtime = new MarifoldRuntime({
       loadedConfig: {
@@ -55,6 +59,7 @@ describe('MarifoldRuntime', () => {
     });
 
     try {
+      runtime.rememberMemory('default', 'user', "The user's editor is Neovim.", 'test-session');
       const response = await runtime.ask({
         prompt: 'Hello',
         sessionId: 'test-session',
@@ -62,6 +67,8 @@ describe('MarifoldRuntime', () => {
 
       expect(response.ok).toBe(true);
       expect(response.text).toBe('hello world');
+      expect(requestBody?.messages?.[0]?.content).toContain('## Memory');
+      expect(requestBody?.messages?.[0]?.content).toContain("User: The user's editor is Neovim.");
       expect(runtime.listSessions()).toMatchObject([
         {
           id: 'test-session',

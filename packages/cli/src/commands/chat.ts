@@ -1,5 +1,6 @@
 import { randomUUID } from 'crypto';
 import { Command } from 'commander';
+import type { MemoryKind } from '@marifold/core';
 import { InteractivePrompt } from '../input/InteractivePrompt';
 import { ConsolePrinter } from '../output/ConsolePrinter';
 import { createRuntime } from './RuntimeFactory';
@@ -14,11 +15,16 @@ interface ChatOptions {
 
 const EXIT_COMMANDS = new Set(['/exit', '/quit']);
 const CHAT_HELP = `Chat commands:
-  /help       Show this help.
-  /new        Start a new session with the same profile and model.
-  /exit       Exit the chat.
-  /quit       Exit the chat.
-  \\           End a line with backslash to continue on the next line.
+  /help                 Show this help.
+  /new                  Start a new session with the same profile and model.
+  /remember <text>      Save short-term memory.
+  /remember user <text> Save durable user memory.
+  /remember pref <text> Save durable preference memory.
+  /forget <query>       Soft-forget matching active memory.
+  /delete-memory <q>    Permanently delete matching memory records.
+  /exit                 Exit the chat.
+  /quit                 Exit the chat.
+  \\                     End a line with backslash to continue on the next line.
 `;
 
 export function registerChatCommand(program: Command, printer: ConsolePrinter): void {
@@ -68,6 +74,37 @@ export function registerChatCommand(program: Command, printer: ConsolePrinter): 
           if (message === '/new') {
             sessionId = randomUUID();
             process.stdout.write(`New session: ${sessionId}\n\n`);
+            continue;
+          }
+          if (isCommand(message, '/remember')) {
+            const parsed = parseRememberCommand(message);
+            if (!parsed) {
+              process.stderr.write('Usage: /remember [user|pref] <text>\n');
+              continue;
+            }
+            const result = runtime.rememberMemory(settings.profile, parsed.kind, parsed.text, sessionId);
+            const verb = result.created ? 'Remembered' : 'Already remembered';
+            process.stdout.write(`${verb} ${memoryKindLabel(result.kind)} memory: ${result.entry.id}\n\n`);
+            continue;
+          }
+          if (isCommand(message, '/forget')) {
+            const query = commandPayload(message, '/forget');
+            if (!query) {
+              process.stderr.write('Usage: /forget <query>\n');
+              continue;
+            }
+            const result = runtime.forgetMemories(settings.profile, query);
+            process.stdout.write(formatMutationResult('Forgot', result.count));
+            continue;
+          }
+          if (isCommand(message, '/delete-memory')) {
+            const query = commandPayload(message, '/delete-memory');
+            if (!query) {
+              process.stderr.write('Usage: /delete-memory <query>\n');
+              continue;
+            }
+            const result = runtime.deleteMemories(settings.profile, query);
+            process.stdout.write(formatMutationResult('Deleted', result.count));
             continue;
           }
           if (message.startsWith('/')) {
@@ -127,4 +164,52 @@ async function resolveResumeSession(
   }
   const selected = (await prompt.readUserMessage('Session id: '))?.trim();
   return selected || randomUUID();
+}
+
+function parseRememberCommand(message: string): { kind: MemoryKind; text: string } | undefined {
+  const payload = commandPayload(message, '/remember');
+  if (!payload) return undefined;
+
+  const firstSpace = payload.search(/\s/);
+  const first = firstSpace === -1 ? payload : payload.slice(0, firstSpace);
+  const rest = firstSpace === -1 ? '' : payload.slice(firstSpace + 1).trim();
+
+  switch (first.toLowerCase()) {
+    case 'user':
+      return rest ? { kind: 'user', text: rest } : undefined;
+    case 'pref':
+    case 'prefs':
+    case 'preference':
+    case 'preferences':
+      return rest ? { kind: 'preferences', text: rest } : undefined;
+    default:
+      return { kind: 'auto_short', text: payload };
+  }
+}
+
+function commandPayload(message: string, command: string): string {
+  if (message === command) return '';
+  return message.startsWith(`${command} `) ? message.slice(command.length + 1).trim() : '';
+}
+
+function isCommand(message: string, command: string): boolean {
+  return message === command || message.startsWith(`${command} `);
+}
+
+function memoryKindLabel(kind: MemoryKind): string {
+  switch (kind) {
+    case 'user':
+      return 'user';
+    case 'preferences':
+      return 'preference';
+    case 'auto_short':
+      return 'short-term';
+    default:
+      return 'profile';
+  }
+}
+
+function formatMutationResult(verb: string, count: number): string {
+  if (count === 0) return 'No matching memory records found.\n\n';
+  return `${verb} ${count} memory record${count === 1 ? '' : 's'}.\n\n`;
 }

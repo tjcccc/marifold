@@ -5,6 +5,7 @@ export type MarifoldErrorCode =
   | 'PROFILE_INVALID'
   | 'PROVIDER_NOT_CONFIGURED'
   | 'API_KEY_MISSING'
+  | 'MEMORY_INVALID'
   | 'SESSION_STORE_ERROR'
   | 'WORKSPACE_ALREADY_INITIALIZED';
 
@@ -57,6 +58,10 @@ export class MarifoldError extends Error {
       `Provider '${provider}' requires ${envVar}. Set the environment variable before running Marifold.`,
       { provider, envVar },
     );
+  }
+
+  static memoryInvalid(message: string, profile: string): MarifoldError {
+    return new MarifoldError('MEMORY_INVALID', message, { profile });
   }
 
   static workspaceAlreadyInitialized(configPath: string): MarifoldError {

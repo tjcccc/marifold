@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { MarifoldError } from '../errors/MarifoldError';
+import { ensureProfileMemoryFiles } from '../memory/MemoryStore';
 
 const SAFE_PROFILE_NAME = /^[A-Za-z0-9_-]+$/;
 
@@ -54,6 +55,7 @@ export class ProfileManager {
       writeFile(path.join(profileDir, 'RULES.md'), RULES_MD_STUB),
       writeFile(path.join(profileDir, 'CUSTOM.md'), ''),
       writeFile(path.join(profileDir, 'profile.toml'), PROFILE_TOML_STUB),
+      ...ensureProfileMemoryFiles(profileDir).map(file => file.path),
     ];
 
     return { name, path: profileDir, files };

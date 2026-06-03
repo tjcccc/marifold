@@ -2,9 +2,9 @@
 
 Marifold is a local-first personal AI workspace for profiles, chats, skills, mini apps, workflows, and external agents.
 
-v0.2.0 is the CLI foundation release. It provides priests-style profile chat, one-shot requests, workspace initialization, resume support, saved model options, and basic local management commands through a TypeScript CLI.
+v0.3.0 is the CLI foundation release. It provides priests-style profile chat, one-shot requests, workspace initialization, resume support, saved model options, explicit profile memory commands, and basic local management commands through a TypeScript CLI.
 
-## What v0.2.0 Supports
+## What v0.3.0 Supports
 
 - Marifold-branded CLI.
 - One-shot request-response.
@@ -18,6 +18,9 @@ v0.2.0 is the CLI foundation release. It provides priests-style profile chat, on
 - Saved provider/model options through `[models].options`.
 - Adding provider/model options from the CLI.
 - Live model listing for Ollama and OpenAI-compatible providers where the endpoint is reachable.
+- Profile-scoped memory files in `memories/user.jsonl`, `memories/preferences.jsonl`, and `memories/auto_short.jsonl`.
+- Explicit chat memory commands for remember, soft-forget, and permanent delete.
+- Memory injection through the `@priest-ai/core` request `memory` lane.
 - Basic config, model, provider, and session inspection commands.
 - Profile-filtered session listing.
 - SQLite session continuity through `@priest-ai/core`.
@@ -25,7 +28,7 @@ v0.2.0 is the CLI foundation release. It provides priests-style profile chat, on
 
 ## Non-goals
 
-v0.2.0 does not include memory, web search, image upload, service/Web UI, SkillApp, Workflow, Apple apps, external-agent aliases, scheduled tasks, permission systems, visual mini-app rendering, or an agentic tool loop.
+v0.3.0 does not include automatic model-driven memory extraction/consolidation, web search, image upload, service/Web UI, SkillApp, Workflow, Apple apps, external-agent aliases, scheduled tasks, permission systems, visual mini-app rendering, or an agentic tool loop.
 
 ## Setup
 
@@ -114,6 +117,16 @@ The packaged binary name is `marifold`.
 
 Inside `marifold chat`, use `/help` for chat commands. End a line with `\` to continue a multiline message.
 
+Memory commands available inside chat:
+
+```text
+/remember <text>       Save short-term memory.
+/remember user <text>  Save durable user memory.
+/remember pref <text>  Save durable preference memory.
+/forget <query>        Soft-forget active memory by text, id, or conflict key.
+/delete-memory <query> Permanently delete matching JSONL memory records.
+```
+
 ## Config
 
 Default config path:
@@ -165,7 +178,7 @@ For `openai-compatible`, set `base_url` without the trailing `/v1`; `@priest-ai/
 
 ## Profiles
 
-Marifold v0.2.0 loads priests-style profile directories:
+Marifold v0.3.0 loads priests-style profile directories:
 
 ```text
 profiles/default/
@@ -173,14 +186,20 @@ profiles/default/
   RULES.md
   CUSTOM.md
   profile.toml
+  memories/
+    user.jsonl
+    preferences.jsonl
+    auto_short.jsonl
 ```
 
 `PROFILE.md` defines identity, `RULES.md` defines behavior rules, and `CUSTOM.md` is optional extra system guidance.
 
 `profile.toml` may set both `provider` and `model` to override the global default for that profile.
 
+`memories/user.jsonl` stores durable user facts, `memories/preferences.jsonl` stores durable preferences, and `memories/auto_short.jsonl` stores short-term notes. Marifold also reads legacy Markdown memory files in `memories/user.md`, `memories/preferences.md`, `memories/notes.md`, and `memories/auto_short.md` as read-only fallback prompt context.
+
 ## Relationship to priest-typescript
 
 Marifold depends on `@priest-ai/core` for provider calls, streaming, context assembly, and SQLite-backed session continuity.
 
-Marifold owns only the product-level wrapper: CLI commands, Marifold config, priests-style profile directory loading, and user-facing runtime behavior.
+Marifold owns only the product-level wrapper: CLI commands, Marifold config, priests-style profile directory loading, profile memory selection, and user-facing runtime behavior.

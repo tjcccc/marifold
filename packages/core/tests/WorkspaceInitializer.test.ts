@@ -39,6 +39,9 @@ describe('WorkspaceInitializer', () => {
     expect(fs.existsSync(path.join(profilesDir, 'default', 'RULES.md'))).toBe(true);
     expect(fs.existsSync(path.join(profilesDir, 'default', 'CUSTOM.md'))).toBe(true);
     expect(fs.existsSync(path.join(profilesDir, 'default', 'profile.toml'))).toBe(true);
+    expect(fs.existsSync(path.join(profilesDir, 'default', 'memories', 'user.jsonl'))).toBe(true);
+    expect(fs.existsSync(path.join(profilesDir, 'default', 'memories', 'preferences.jsonl'))).toBe(true);
+    expect(fs.existsSync(path.join(profilesDir, 'default', 'memories', 'auto_short.jsonl'))).toBe(true);
 
     const loaded = new ConfigLoader().load({ configPath });
     expect(loaded.config.default).toMatchObject({

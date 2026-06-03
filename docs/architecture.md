@@ -1,6 +1,6 @@
 # Architecture
 
-Marifold v0.2.0 is intentionally small. It provides a TypeScript CLI for priests-style profile chat, one-shot requests, workspace initialization, chat resume behavior, saved model options, and basic local management commands powered by `@priest-ai/core`.
+Marifold v0.3.0 is intentionally small. It provides a TypeScript CLI for priests-style profile chat, one-shot requests, workspace initialization, chat resume behavior, saved model options, explicit profile memory commands, and basic local management commands powered by `@priest-ai/core`.
 
 ## Current Scope
 
@@ -12,13 +12,13 @@ packages/cli -> packages/core -> @priest-ai/core -> provider
 
 `packages/cli` owns command parsing, terminal input/output, and the interactive chat loop.
 
-`packages/core` owns Marifold runtime abstractions, workspace paths, TOML config loading, profile resolution, session resolution, provider adapter creation, and the bridge to `@priest-ai/core`.
+`packages/core` owns Marifold runtime abstractions, workspace paths, TOML config loading, profile resolution, profile memory storage/selection, session resolution, provider adapter creation, and the bridge to `@priest-ai/core`.
 
 `@priest-ai/core` remains Marifold-agnostic. Marifold depends on it; it does not know about Marifold.
 
-## v0.2.0 Boundaries
+## v0.3.0 Boundaries
 
-The runtime layer is thin. `MarifoldRuntime` resolves config/profile/session settings and delegates ask/stream execution to `PriestEngine`.
+The runtime layer is thin. `MarifoldRuntime` resolves config/profile/session settings, selects profile memory, and delegates ask/stream execution to `PriestEngine`.
 
 Config, profile, model, provider, and session commands are local management surfaces. They do not introduce agent tools, service APIs, or web/app runtimes.
 
@@ -30,13 +30,19 @@ profiles/default/
   RULES.md
   CUSTOM.md
   profile.toml
+  memories/
+    user.jsonl
+    preferences.jsonl
+    auto_short.jsonl
 ```
+
+Marifold owns the profile memory file meaning and passes selected memory to `@priest-ai/core` through `PriestRequest.memory`. `@priest-ai/core` remains generic and only assembles memory into provider messages.
 
 SQLite session continuity is reused from `@priest-ai/core`.
 
 ## Future Areas
 
-These are planned areas, but they are not implemented in v0.2.0:
+These are planned areas, but they are not implemented in v0.3.0:
 
 ```text
 apps/web

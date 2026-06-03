@@ -21,6 +21,16 @@ export type { ProviderModelList, ProviderStatus, ProviderSummary } from './confi
 export { ProviderFactory } from './config/ProviderFactory';
 export { MarifoldError } from './errors/MarifoldError';
 export type { MarifoldErrorCode } from './errors/MarifoldError';
+export { ensureProfileMemoryFiles, MemoryStore } from './memory/MemoryStore';
+export type {
+  MemoryEntry,
+  MemoryKind,
+  MemoryMutationResult,
+  MemoryRememberOptions,
+  MemoryRememberResult,
+  MemoryScaffoldFile,
+  MemoryStatus,
+} from './memory/MemoryStore';
 export { ProfileManager } from './profiles/ProfileManager';
 export type { ProfileInitResult, ProfileModelOverrideResult } from './profiles/ProfileManager';
 export { ProfileResolver } from './profiles/ProfileResolver';

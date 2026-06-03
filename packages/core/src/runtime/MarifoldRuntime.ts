@@ -2,6 +2,8 @@ import { PriestConfig, PriestEngine } from '@priest-ai/core';
 import { LoadedMarifoldConfig, ProfileDetail, ProfileSummary, SessionDetail, SessionSummary } from '../config/ConfigSchema';
 import { ProviderFactory } from '../config/ProviderFactory';
 import { MarifoldError } from '../errors/MarifoldError';
+import { MemoryStore } from '../memory/MemoryStore';
+import type { MemoryKind, MemoryMutationResult, MemoryRememberResult } from '../memory/MemoryStore';
 import { ProfileResolver } from '../profiles/ProfileResolver';
 import { SessionResolver } from '../sessions/SessionResolver';
 import { MarifoldAskResponse, MarifoldResolvedSettings, MarifoldRunRequest } from './MarifoldTypes';
@@ -14,12 +16,14 @@ export class MarifoldRuntime {
   private readonly profileResolver: ProfileResolver;
   private readonly sessionResolver: SessionResolver;
   private readonly providerFactory: ProviderFactory;
+  private readonly memoryStore: MemoryStore;
 
   constructor(private readonly options: MarifoldRuntimeOptions) {
     const { config, configPath } = options.loadedConfig;
     this.profileResolver = new ProfileResolver(config.paths.profilesDir);
     this.sessionResolver = new SessionResolver(config.paths.sessionsDb);
     this.providerFactory = new ProviderFactory(config, configPath);
+    this.memoryStore = new MemoryStore(config.paths.profilesDir);
   }
 
   resolveSettings(request: Pick<MarifoldRunRequest, 'profile' | 'provider' | 'model'>): MarifoldResolvedSettings {
@@ -35,12 +39,14 @@ export class MarifoldRuntime {
   async ask(request: MarifoldRunRequest): Promise<MarifoldAskResponse> {
     const settings = this.resolveSettings(request);
     const engine = this.createEngine(settings.provider, Boolean(request.sessionId));
+    const memory = this.memoryStore.listPromptMemory(settings.profile);
     const response = await engine.run({
       config: this.toPriestConfig(settings),
       profile: settings.profile,
       prompt: request.prompt,
       session: request.sessionId ? { id: request.sessionId, createIfMissing: true } : undefined,
-      context: ['Running inside Marifold CLI.'],
+      context: this.runtimeContext(memory),
+      memory,
     });
 
     return {
@@ -56,13 +62,32 @@ export class MarifoldRuntime {
   async *stream(request: MarifoldRunRequest): AsyncGenerator<string, void, unknown> {
     const settings = this.resolveSettings(request);
     const engine = this.createEngine(settings.provider, Boolean(request.sessionId));
+    const memory = this.memoryStore.listPromptMemory(settings.profile);
     yield* engine.stream({
       config: this.toPriestConfig(settings),
       profile: settings.profile,
       prompt: request.prompt,
       session: request.sessionId ? { id: request.sessionId, createIfMissing: true } : undefined,
-      context: ['Running inside Marifold CLI.'],
+      context: this.runtimeContext(memory),
+      memory,
     });
+  }
+
+  rememberMemory(
+    profile: string,
+    kind: MemoryKind,
+    text: string,
+    sessionId?: string,
+  ): MemoryRememberResult {
+    return this.memoryStore.remember(profile, kind, text, { sessionId });
+  }
+
+  forgetMemories(profile: string, query: string): MemoryMutationResult {
+    return this.memoryStore.forget(profile, query);
+  }
+
+  deleteMemories(profile: string, query: string): MemoryMutationResult {
+    return this.memoryStore.delete(profile, query);
   }
 
   listProfiles(): ProfileSummary[] {
@@ -115,5 +140,13 @@ export class MarifoldRuntime {
       maxOutputTokens: config.default.maxOutputTokens,
       maxSystemChars: config.default.maxSystemChars,
     };
+  }
+
+  private runtimeContext(memory: string[]): string[] {
+    const context = ['Running inside Marifold CLI.'];
+    if (memory.length > 0) {
+      context.push('Profile memory is app-owned context. Current user messages and profile rules outrank memory.');
+    }
+    return context;
   }
 }

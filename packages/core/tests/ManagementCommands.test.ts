@@ -71,6 +71,9 @@ describe('ProfileManager', () => {
 
     const created = manager.init('coder');
     expect(fs.existsSync(path.join(created.path, 'PROFILE.md'))).toBe(true);
+    expect(fs.existsSync(path.join(created.path, 'memories', 'user.jsonl'))).toBe(true);
+    expect(fs.existsSync(path.join(created.path, 'memories', 'preferences.jsonl'))).toBe(true);
+    expect(fs.existsSync(path.join(created.path, 'memories', 'auto_short.jsonl'))).toBe(true);
 
     const override = manager.setModelOverride('coder', 'ollama', 'qwen3:8b');
     expect(fs.readFileSync(override.path, 'utf-8')).toContain('model = "qwen3:8b"');

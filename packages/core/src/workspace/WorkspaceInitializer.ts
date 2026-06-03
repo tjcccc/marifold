@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { MarifoldError } from '../errors/MarifoldError';
 import { ProviderType } from '../config/ConfigSchema';
+import { ensureProfileMemoryFiles } from '../memory/MemoryStore';
 import {
   defaultConfigPath,
   defaultProfilesDir,
@@ -104,6 +105,7 @@ export class WorkspaceInitializer {
     files.push(writeIfMissing(path.join(profileDir, 'RULES.md'), DEFAULT_RULES));
     files.push(writeIfMissing(path.join(profileDir, 'CUSTOM.md'), DEFAULT_CUSTOM));
     files.push(writeIfMissing(path.join(profileDir, 'profile.toml'), DEFAULT_PROFILE_TOML));
+    files.push(...ensureProfileMemoryFiles(profileDir));
 
     return {
       configPath,
