@@ -109,6 +109,9 @@ export class ConfigManager {
       case 'max_system_chars':
         this.config.default.maxSystemChars = parseNumber(value, 'default.max_system_chars');
         return;
+      case 'think':
+        this.config.default.think = parseBoolean(value, 'default.think');
+        return;
       default:
         throw MarifoldError.configInvalid(`Unknown config key: default.${key}`);
     }
@@ -175,6 +178,7 @@ export function renderMarifoldConfig(config: MarifoldConfig): string {
     optionalNumberLine('timeout_seconds', config.default.timeoutSeconds),
     optionalNumberLine('max_output_tokens', config.default.maxOutputTokens),
     optionalNumberLine('max_system_chars', config.default.maxSystemChars),
+    `think = ${config.default.think}`,
   ].filter(Boolean);
 
   const pathLines = [
@@ -234,6 +238,13 @@ function parseNonNegativeNumber(value: string, label: string): number {
 function parseProviderType(value: string): ProviderType {
   if (value === 'ollama' || value === 'openai-compatible' || value === 'anthropic') return value;
   throw MarifoldError.configInvalid(`Expected provider type to be "ollama", "openai-compatible", or "anthropic".`);
+}
+
+function parseBoolean(value: string, label: string): boolean {
+  const normalized = value.trim().toLowerCase();
+  if (normalized === 'true' || normalized === 'on' || normalized === '1') return true;
+  if (normalized === 'false' || normalized === 'off' || normalized === '0') return false;
+  throw MarifoldError.configInvalid(`Expected ${label} to be true or false.`);
 }
 
 function tomlString(value: string): string {

@@ -146,6 +146,7 @@ provider = ${tomlString(options.provider)}
 model = ${tomlString(options.model)}
 profile = ${tomlString(options.profile)}
 timeout_seconds = 120
+think = false
 
 [models]
 options = [

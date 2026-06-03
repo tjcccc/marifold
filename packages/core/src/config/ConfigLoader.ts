@@ -86,6 +86,7 @@ export class ConfigLoader {
       timeoutSeconds: optionalNumber(raw.timeout_seconds, 'default.timeout_seconds'),
       maxOutputTokens: optionalNumber(raw.max_output_tokens, 'default.max_output_tokens'),
       maxSystemChars: optionalNumber(raw.max_system_chars, 'default.max_system_chars'),
+      think: optionalBoolean(raw.think, 'default.think') ?? false,
     };
   }
 
@@ -173,6 +174,12 @@ function optionalStringArray(value: unknown, label: string): string[] {
   if (value === undefined) return [];
   if (Array.isArray(value) && value.every(item => typeof item === 'string')) return [...value];
   throw MarifoldError.configInvalid(`Expected ${label} to be an array of strings.`);
+}
+
+function optionalBoolean(value: unknown, label: string): boolean | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value === 'boolean') return value;
+  throw MarifoldError.configInvalid(`Expected ${label} to be a boolean.`);
 }
 
 function optionalProviderType(value: unknown, label: string): ProviderType | undefined {

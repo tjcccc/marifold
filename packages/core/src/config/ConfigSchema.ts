@@ -7,6 +7,7 @@ export interface MarifoldDefaultConfig {
   timeoutSeconds?: number;
   maxOutputTokens?: number;
   maxSystemChars?: number;
+  think: boolean;
 }
 
 export interface MarifoldPathsConfig {

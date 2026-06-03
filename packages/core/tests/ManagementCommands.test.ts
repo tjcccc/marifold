@@ -28,6 +28,7 @@ describe('ConfigManager', () => {
 provider = "ollama"
 model = "gemma4:e4b"
 profile = "default"
+think = false
 
 [models]
 options = [
@@ -49,6 +50,7 @@ base_url = "http://localhost:11434"
 
     const loaded = new ConfigLoader().load({ configPath });
     new ConfigManager(loaded).setValue('default.model', 'qwen3:8b');
+    new ConfigManager(new ConfigLoader().load({ configPath })).setValue('default.think', 'true');
     new ConfigManager(new ConfigLoader().load({ configPath })).setValue('providers.openai.type', 'openai-compatible');
     new ConfigManager(new ConfigLoader().load({ configPath })).setValue('providers.openai.base_url', 'https://api.openai.com');
     new ConfigManager(new ConfigLoader().load({ configPath })).addModel('openai', 'gpt-4o-mini', {
@@ -60,6 +62,7 @@ base_url = "http://localhost:11434"
 
     const updated = new ConfigLoader().load({ configPath });
     expect(updated.config.default.model).toBe('qwen3:8b');
+    expect(updated.config.default.think).toBe(true);
     expect(updated.config.memory.contextLimit).toBe(1200);
     expect(updated.config.providers.openai).toMatchObject({
       type: 'openai-compatible',

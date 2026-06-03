@@ -28,6 +28,7 @@ describe('MarifoldRuntime', () => {
         provider: 'ollama',
         model: 'gemma4:e4b',
         profile: 'default',
+        think: false,
       },
       models: {
         options: ['ollama/gemma4:e4b'],
@@ -73,6 +74,7 @@ describe('MarifoldRuntime', () => {
       expect(response.text).toBe('hello world');
       expect(requestBody?.messages?.[0]?.content).toContain('## Memory');
       expect(requestBody?.messages?.[0]?.content).toContain("User: The user's editor is Neovim.");
+      expect((requestBody as Record<string, unknown>)?.think).toBe(false);
       expect(runtime.listSessions()).toMatchObject([
         {
           id: 'test-session',
@@ -92,6 +94,7 @@ describe('MarifoldRuntime', () => {
         provider: 'ollama',
         model: 'gemma4:e4b',
         profile: 'default',
+        think: false,
       },
       models: {
         options: ['ollama/gemma4:e4b'],
@@ -136,6 +139,61 @@ describe('MarifoldRuntime', () => {
       expect(response.ok).toBe(true);
       expect(requestBody?.messages?.[0]?.content).not.toContain('## Memory');
       expect(requestBody?.messages?.[0]?.content).not.toContain('Neovim');
+    } finally {
+      runtime.close();
+    }
+  });
+
+  it('passes thinking mode to supported providers', async () => {
+    const dir = tempDir();
+    const config: MarifoldConfig = {
+      default: {
+        provider: 'ollama',
+        model: 'gemma4:e4b',
+        profile: 'default',
+        think: false,
+      },
+      models: {
+        options: ['ollama/gemma4:e4b'],
+      },
+      memory: {
+        sizeLimit: 50000,
+        contextLimit: 2400,
+      },
+      paths: {
+        profilesDir: path.join(dir, 'profiles'),
+        sessionsDb: path.join(dir, 'sessions.db'),
+      },
+      providers: {
+        ollama: {
+          type: 'ollama',
+          baseUrl: 'http://localhost:11434',
+        },
+      },
+    };
+
+    let requestBody: Record<string, unknown> | undefined;
+    vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      requestBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      return ollamaStreamResponse(['ok']);
+    }));
+
+    const runtime = new MarifoldRuntime({
+      loadedConfig: {
+        config,
+        configPath: path.join(dir, 'config.toml'),
+        foundConfig: true,
+      },
+    });
+
+    try {
+      const response = await runtime.ask({
+        prompt: 'Hello',
+        think: true,
+      });
+
+      expect(response.ok).toBe(true);
+      expect(requestBody?.think).toBe(true);
     } finally {
       runtime.close();
     }

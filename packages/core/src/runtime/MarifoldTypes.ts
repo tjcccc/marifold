@@ -5,12 +5,14 @@ export interface MarifoldRunRequest {
   model?: string;
   sessionId?: string;
   memories?: boolean;
+  think?: boolean;
 }
 
 export interface MarifoldResolvedSettings {
   profile: string;
   provider: string;
   model: string;
+  think: boolean;
 }
 
 export interface MarifoldRunError {

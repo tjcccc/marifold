@@ -48,6 +48,7 @@ describe('WorkspaceInitializer', () => {
       provider: 'ollama',
       model: 'gemma4:e4b',
       profile: 'default',
+      think: false,
     });
     expect(loaded.config.models.options).toEqual(['ollama/gemma4:e4b']);
     expect(loaded.config.memory).toEqual({ sizeLimit: 50000, contextLimit: 2400 });

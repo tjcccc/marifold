@@ -2,9 +2,9 @@
 
 Marifold is a local-first personal AI workspace for profiles, chats, skills, mini apps, workflows, and external agents.
 
-v0.4.0 is the CLI foundation release. It provides priests-style profile chat, one-shot requests, workspace initialization, resume support, saved model options, explicit profile memory commands, configurable memory recall, and basic local management commands through a TypeScript CLI.
+v0.5.0 is the CLI foundation release. It provides priests-style profile chat, one-shot requests, workspace initialization, resume support, saved model options, explicit profile memory commands, configurable memory recall, thinking mode controls, and basic local management commands through a TypeScript CLI.
 
-## What v0.4.0 Supports
+## What v0.5.0 Supports
 
 - Marifold-branded CLI.
 - One-shot request-response.
@@ -22,6 +22,7 @@ v0.4.0 is the CLI foundation release. It provides priests-style profile chat, on
 - Explicit chat memory commands for remember, soft-forget, and permanent delete.
 - Memory injection through the `@priest-ai/core` request `memory` lane.
 - Memory recall controls through `[memory].context_limit`, `profile.toml` `memories = false`, and `--no-memories`.
+- Thinking mode controls through `[default].think`, `ask/chat --think [true|false]`, and chat `/think on|off`.
 - Basic config, model, provider, and session inspection commands.
 - Profile-filtered session listing.
 - SQLite session continuity through `@priest-ai/core`.
@@ -29,7 +30,7 @@ v0.4.0 is the CLI foundation release. It provides priests-style profile chat, on
 
 ## Non-goals
 
-v0.4.0 does not include automatic model-driven memory extraction/consolidation, web search, image upload, service/Web UI, SkillApp, Workflow, Apple apps, external-agent aliases, scheduled tasks, permission systems, visual mini-app rendering, or an agentic tool loop.
+v0.5.0 does not include automatic model-driven memory extraction/consolidation, web search, image upload, service/Web UI, SkillApp, Workflow, Apple apps, external-agent aliases, scheduled tasks, permission systems, visual mini-app rendering, or an agentic tool loop.
 
 ## Setup
 
@@ -78,10 +79,12 @@ Run the local CLI from the workspace:
 pnpm marifold ask "Hello"
 pnpm marifold ask --profile default "Explain Marifold in one sentence."
 pnpm marifold ask --no-memories "Format this JSON"
+pnpm marifold ask --think true "Solve step by step."
 
 pnpm marifold chat
 pnpm marifold chat --profile default
 pnpm marifold chat --profile default --no-memories
+pnpm marifold chat --profile default --think true
 pnpm marifold chat --profile default --session test-session
 pnpm marifold chat --profile default --resume
 pnpm marifold chat --profile default --resume last
@@ -123,6 +126,8 @@ Inside `marifold chat`, use `/help` for chat commands. End a line with `\` to co
 Memory commands available inside chat:
 
 ```text
+/think on             Enable thinking mode for supported providers.
+/think off            Disable thinking mode.
 /remember <text>       Save short-term memory.
 /remember user <text>  Save durable user memory.
 /remember pref <text>  Save durable preference memory.
@@ -152,6 +157,7 @@ provider = "ollama"
 model = "gemma4:e4b"
 profile = "default"
 timeout_seconds = 120
+think = false
 
 [models]
 options = [
@@ -185,9 +191,11 @@ For `openai-compatible`, set `base_url` without the trailing `/v1`; `@priest-ai/
 
 `[memory].context_limit` caps the combined memory text injected into one provider request. Set it to `0` for unlimited memory injection. `[memory].size_limit` is reserved for future automatic short-term memory trimming.
 
+`[default].think` controls default thinking mode. Thinking is passed as provider option `think` only to providers known to support it: Ollama-compatible providers plus `bailian` and `alibaba_cloud`.
+
 ## Profiles
 
-Marifold v0.4.0 loads priests-style profile directories:
+Marifold v0.5.0 loads priests-style profile directories:
 
 ```text
 profiles/default/

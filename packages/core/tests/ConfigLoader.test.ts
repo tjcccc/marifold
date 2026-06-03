@@ -28,6 +28,7 @@ provider = "ollama"
 model = "gemma4:e4b"
 profile = "default"
 timeout_seconds = 30
+think = true
 
 [models]
 options = [
@@ -54,6 +55,7 @@ base_url = "http://localhost:11434"
     expect(loaded.config.default.provider).toBe('ollama');
     expect(loaded.config.default.model).toBe('gemma4:e4b');
     expect(loaded.config.default.timeoutSeconds).toBe(30);
+    expect(loaded.config.default.think).toBe(true);
     expect(loaded.config.models.options).toEqual(['ollama/gemma4:e4b', 'openai/gpt-4o-mini']);
     expect(loaded.config.memory).toEqual({ sizeLimit: 1000, contextLimit: 120 });
     expect(loaded.config.paths.profilesDir).toBe(path.join(dir, 'profiles'));

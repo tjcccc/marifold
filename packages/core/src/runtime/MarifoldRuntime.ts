@@ -8,6 +8,8 @@ import { ProfileResolver } from '../profiles/ProfileResolver';
 import { SessionResolver } from '../sessions/SessionResolver';
 import { MarifoldAskResponse, MarifoldResolvedSettings, MarifoldRunRequest } from './MarifoldTypes';
 
+const THINK_PROVIDER_NAMES = new Set(['bailian', 'alibaba_cloud']);
+
 export interface MarifoldRuntimeOptions {
   loadedConfig: LoadedMarifoldConfig;
 }
@@ -26,14 +28,15 @@ export class MarifoldRuntime {
     this.memoryStore = new MemoryStore(config.paths.profilesDir);
   }
 
-  resolveSettings(request: Pick<MarifoldRunRequest, 'profile' | 'provider' | 'model'>): MarifoldResolvedSettings {
+  resolveSettings(request: Pick<MarifoldRunRequest, 'profile' | 'provider' | 'model' | 'think'>): MarifoldResolvedSettings {
     const { config, configPath } = this.options.loadedConfig;
     const profile = request.profile ?? config.default.profile;
     const profileSettings = this.profileResolver.loadSettings(profile);
     const provider = request.provider ?? profileSettings.provider ?? config.default.provider;
     const model = request.model ?? profileSettings.model ?? config.default.model;
+    const think = request.think ?? config.default.think;
     if (!provider || !model) throw MarifoldError.missingProviderModel(configPath);
-    return { profile, provider, model };
+    return { profile, provider, model, think };
   }
 
   async ask(request: MarifoldRunRequest): Promise<MarifoldAskResponse> {
@@ -143,7 +146,13 @@ export class MarifoldRuntime {
       timeoutSeconds: config.default.timeoutSeconds,
       maxOutputTokens: config.default.maxOutputTokens,
       maxSystemChars: config.default.maxSystemChars,
+      providerOptions: this.supportsThink(settings.provider) ? { think: settings.think } : undefined,
     };
+  }
+
+  private supportsThink(providerName: string): boolean {
+    const provider = this.options.loadedConfig.config.providers[providerName];
+    return provider?.type === 'ollama' || THINK_PROVIDER_NAMES.has(providerName);
   }
 
   private memoryForRequest(profile: string, requestMemories = true): string[] {

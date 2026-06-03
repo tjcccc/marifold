@@ -3,6 +3,7 @@ provider = "ollama"
 model = "gemma4:e4b"
 profile = "default"
 timeout_seconds = 120
+think = false
 
 [models]
 options = [

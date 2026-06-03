@@ -12,12 +12,15 @@ interface ChatOptions {
   session?: string;
   resume?: boolean | string;
   memories?: boolean;
+  think?: boolean;
 }
 
 const EXIT_COMMANDS = new Set(['/exit', '/quit']);
 const CHAT_HELP = `Chat commands:
   /help                 Show this help.
   /new                  Start a new session with the same profile and model.
+  /think on             Enable thinking mode for supported providers.
+  /think off            Disable thinking mode.
   /remember <text>      Save short-term memory.
   /remember user <text> Save durable user memory.
   /remember pref <text> Save durable preference memory.
@@ -38,17 +41,21 @@ export function registerChatCommand(program: Command, printer: ConsolePrinter): 
     .option('--session <id>', 'Session id to continue or create.')
     .option('--resume [mode]', 'Resume a profile session. Use "last" for the most recent session.')
     .option('--no-memories', 'Disable profile memory for this chat run.')
+    .option('--think [state]', 'Enable or disable thinking mode for this chat run. Accepts true/false.', parseOptionalBoolean)
     .action(async (options: ChatOptions) => {
       const runtime = createRuntime(program);
       const prompt = new InteractivePrompt();
       let sessionId = options.session ?? randomUUID();
+      let think = false;
 
       try {
         const settings = runtime.resolveSettings({
           profile: options.profile,
           provider: options.provider,
           model: options.model,
+          think: options.think,
         });
+        think = settings.think;
         if (options.session && options.resume !== undefined) {
           throw new Error('--session and --resume are mutually exclusive.');
         }
@@ -61,6 +68,7 @@ export function registerChatCommand(program: Command, printer: ConsolePrinter): 
         process.stdout.write(`Profile:  ${settings.profile}\n`);
         process.stdout.write(`Session:  ${sessionId}\n`);
         process.stdout.write(`Memory:   ${runtime.memoryEnabled(settings.profile, options.memories) ? 'on' : 'off'}\n`);
+        process.stdout.write(`Think:    ${think ? 'on' : 'off'}\n`);
         process.stdout.write('Type /help for commands, Ctrl-C to quit.\n\n');
 
         while (true) {
@@ -77,6 +85,16 @@ export function registerChatCommand(program: Command, printer: ConsolePrinter): 
           if (message === '/new') {
             sessionId = randomUUID();
             process.stdout.write(`New session: ${sessionId}\n\n`);
+            continue;
+          }
+          if (isCommand(message, '/think')) {
+            const next = parseThinkCommand(message);
+            if (next === undefined) {
+              process.stderr.write('Usage: /think on|off\n');
+              continue;
+            }
+            think = next;
+            process.stdout.write(`Thinking mode ${think ? 'on' : 'off'}.\n\n`);
             continue;
           }
           if (isCommand(message, '/remember')) {
@@ -122,6 +140,7 @@ export function registerChatCommand(program: Command, printer: ConsolePrinter): 
             model: settings.model,
             sessionId,
             memories: options.memories,
+            think,
           })) {
             process.stdout.write(chunk);
           }
@@ -135,6 +154,21 @@ export function registerChatCommand(program: Command, printer: ConsolePrinter): 
         runtime.close();
       }
     });
+}
+
+function parseOptionalBoolean(value?: string): boolean {
+  if (value === undefined) return true;
+  const normalized = value.trim().toLowerCase();
+  if (normalized === 'true' || normalized === 'on' || normalized === '1') return true;
+  if (normalized === 'false' || normalized === 'off' || normalized === '0') return false;
+  throw new Error('Expected --think to be true or false.');
+}
+
+function parseThinkCommand(message: string): boolean | undefined {
+  const payload = commandPayload(message, '/think').toLowerCase();
+  if (payload === 'on' || payload === 'true' || payload === '1') return true;
+  if (payload === 'off' || payload === 'false' || payload === '0') return false;
+  return undefined;
 }
 
 async function resolveResumeSession(

@@ -8,6 +8,7 @@ interface AskOptions {
   model?: string;
   session?: string;
   memories?: boolean;
+  think?: boolean;
 }
 
 export function registerAskCommand(program: Command, printer: ConsolePrinter): void {
@@ -20,6 +21,7 @@ export function registerAskCommand(program: Command, printer: ConsolePrinter): v
     .option('--model <model>', 'Model name.')
     .option('--session <id>', 'Optional session id for continuity.')
     .option('--no-memories', 'Disable profile memory for this run.')
+    .option('--think [state]', 'Enable or disable thinking mode for this run. Accepts true/false.', parseOptionalBoolean)
     .action(async (promptParts: string[], options: AskOptions) => {
       const runtime = createRuntime(program);
       try {
@@ -30,6 +32,7 @@ export function registerAskCommand(program: Command, printer: ConsolePrinter): v
           model: options.model,
           sessionId: options.session,
           memories: options.memories,
+          think: options.think,
         });
         printer.printAskResponse(response);
         if (!response.ok) process.exitCode = 1;
@@ -40,4 +43,12 @@ export function registerAskCommand(program: Command, printer: ConsolePrinter): v
         runtime.close();
       }
     });
+}
+
+function parseOptionalBoolean(value?: string): boolean {
+  if (value === undefined) return true;
+  const normalized = value.trim().toLowerCase();
+  if (normalized === 'true' || normalized === 'on' || normalized === '1') return true;
+  if (normalized === 'false' || normalized === 'off' || normalized === '0') return false;
+  throw new Error('Expected --think to be true or false.');
 }
