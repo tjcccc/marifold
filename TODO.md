@@ -11,5 +11,5 @@
 
 ## Notes
 
-- v0.5.x includes the TypeScript CLI foundation plus controlled profile memory and thinking-mode commands.
+- v0.6.x includes the TypeScript CLI foundation plus controlled profile memory, thinking-mode, and model-validation commands.
 - Defer automatic memory extraction, search, image, service, and Web UI until the non-agent chat and session surfaces are predictable.

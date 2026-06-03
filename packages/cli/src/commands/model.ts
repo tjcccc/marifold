@@ -1,6 +1,7 @@
 import { Command } from 'commander';
-import { ConfigManager, MarifoldError, ProfileManager, ProviderType } from '@marifold/core';
+import { ConfigManager, MarifoldError, ProfileManager, ProviderInspector, ProviderType } from '@marifold/core';
 import { ConsolePrinter } from '../output/ConsolePrinter';
+import { createRuntime } from './RuntimeFactory';
 import { loadConfig } from './RuntimeFactory';
 
 interface ModelDefaultOptions {
@@ -14,6 +15,11 @@ interface ModelAddOptions {
   baseUrl?: string;
   apiKeyEnv?: string;
   default?: boolean;
+}
+
+interface ModelValidateOptions {
+  provider?: string;
+  profile?: string;
 }
 
 export function registerModelCommand(program: Command, printer: ConsolePrinter): void {
@@ -48,6 +54,29 @@ export function registerModelCommand(program: Command, printer: ConsolePrinter):
       } catch (error) {
         printer.printError(error);
         process.exitCode = 1;
+      }
+    });
+
+  model
+    .command('validate')
+    .description('Validate a provider/model pair against configured provider access.')
+    .argument('[model]', 'Provider/model pair, or model name when --provider is set. Defaults to the resolved default model.')
+    .option('--provider <name>', 'Provider key from config.toml.')
+    .option('--profile <name>', 'Resolve the model through this profile.')
+    .action(async (modelArg: string | undefined, options: ModelValidateOptions) => {
+      let runtime: ReturnType<typeof createRuntime> | undefined;
+      try {
+        runtime = createRuntime(program);
+        const loadedConfig = loadConfig(program);
+        const resolved = resolveModelValidationTarget(runtime, modelArg, options);
+        const result = await new ProviderInspector(loadedConfig).validateModel(resolved.provider, resolved.model);
+        process.stdout.write(`${result.status.toUpperCase()} ${result.provider}/${result.model}: ${result.message}\n`);
+        if (!result.valid) process.exitCode = 1;
+      } catch (error) {
+        printer.printError(error);
+        process.exitCode = 1;
+      } finally {
+        runtime?.close();
       }
     });
 
@@ -118,6 +147,30 @@ export function registerModelCommand(program: Command, printer: ConsolePrinter):
         process.exitCode = 1;
       }
     });
+}
+
+function resolveModelValidationTarget(
+  runtime: ReturnType<typeof createRuntime>,
+  modelArg: string | undefined,
+  options: ModelValidateOptions,
+): { provider: string; model: string } {
+  if (modelArg?.includes('/')) {
+    const [provider, ...rest] = modelArg.split('/');
+    const model = rest.join('/');
+    if (!provider || !model) throw MarifoldError.configInvalid('Invalid model format. Use provider/model.');
+    return { provider, model };
+  }
+
+  if (modelArg) {
+    if (!options.provider) throw MarifoldError.configInvalid('Use provider/model or pass --provider <name>.');
+    return { provider: options.provider, model: modelArg };
+  }
+
+  const settings = runtime.resolveSettings({
+    profile: options.profile,
+    provider: options.provider,
+  });
+  return { provider: settings.provider, model: settings.model };
 }
 
 function normalizedModelOptions(options: string[], provider?: string, model?: string): string[] {

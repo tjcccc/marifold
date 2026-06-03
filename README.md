@@ -2,9 +2,9 @@
 
 Marifold is a local-first personal AI workspace for profiles, chats, skills, mini apps, workflows, and external agents.
 
-v0.5.0 is the CLI foundation release. It provides priests-style profile chat, one-shot requests, workspace initialization, resume support, saved model options, explicit profile memory commands, configurable memory recall, thinking mode controls, and basic local management commands through a TypeScript CLI.
+v0.6.0 is the CLI foundation release. It provides priests-style profile chat, one-shot requests, workspace initialization, resume support, saved model options, model validation, explicit profile memory commands, configurable memory recall, thinking mode controls, and basic local management commands through a TypeScript CLI.
 
-## What v0.5.0 Supports
+## What v0.6.0 Supports
 
 - Marifold-branded CLI.
 - One-shot request-response.
@@ -18,6 +18,7 @@ v0.5.0 is the CLI foundation release. It provides priests-style profile chat, on
 - Saved provider/model options through `[models].options`.
 - Adding provider/model options from the CLI.
 - Live model listing for Ollama and OpenAI-compatible providers where the endpoint is reachable.
+- Model validation against configured providers and live model lists where available.
 - Profile-scoped memory files in `memories/user.jsonl`, `memories/preferences.jsonl`, and `memories/auto_short.jsonl`.
 - Explicit chat memory commands for remember, soft-forget, and permanent delete.
 - Memory injection through the `@priest-ai/core` request `memory` lane.
@@ -30,7 +31,7 @@ v0.5.0 is the CLI foundation release. It provides priests-style profile chat, on
 
 ## Non-goals
 
-v0.5.0 does not include automatic model-driven memory extraction/consolidation, web search, image upload, service/Web UI, SkillApp, Workflow, Apple apps, external-agent aliases, scheduled tasks, permission systems, visual mini-app rendering, or an agentic tool loop.
+v0.6.0 does not include automatic model-driven memory extraction/consolidation, web search, image upload, service/Web UI, SkillApp, Workflow, Apple apps, external-agent aliases, scheduled tasks, destructive local model deletion, permission systems, visual mini-app rendering, or an agentic tool loop.
 
 ## Setup
 
@@ -99,6 +100,9 @@ pnpm marifold model
 pnpm marifold model list
 pnpm marifold model add ollama qwen3:8b
 pnpm marifold model add openai gpt-4o-mini --base-url https://api.openai.com --api-key-env OPENAI_API_KEY --default
+pnpm marifold model validate
+pnpm marifold model validate ollama/gemma4:e4b
+pnpm marifold model validate gemma4:e4b --provider ollama
 pnpm marifold model default gemma4:e4b
 pnpm marifold model default qwen3:8b --provider ollama --profile coder
 pnpm marifold model default --profile coder --clear
@@ -189,13 +193,15 @@ For `openai-compatible`, set `base_url` without the trailing `/v1`; `@priest-ai/
 
 `marifold model add` stores provider/model choices in `[models].options`. `marifold provider <name> list` asks the provider for live model names when Marifold knows how to query that provider type.
 
+`marifold model validate` validates the default or profile-resolved provider/model. It checks configured provider access and uses live model lists for Ollama and OpenAI-compatible providers when reachable.
+
 `[memory].context_limit` caps the combined memory text injected into one provider request. Set it to `0` for unlimited memory injection. `[memory].size_limit` is reserved for future automatic short-term memory trimming.
 
 `[default].think` controls default thinking mode. Thinking is passed as provider option `think` only to providers known to support it: Ollama-compatible providers plus `bailian` and `alibaba_cloud`.
 
 ## Profiles
 
-Marifold v0.5.0 loads priests-style profile directories:
+Marifold v0.6.0 loads priests-style profile directories:
 
 ```text
 profiles/default/

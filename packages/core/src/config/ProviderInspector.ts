@@ -23,6 +23,14 @@ export interface ProviderModelList {
   message: string;
 }
 
+export interface ModelValidation {
+  provider: string;
+  model: string;
+  valid: boolean;
+  status: 'ok' | 'warning' | 'error';
+  message: string;
+}
+
 export class ProviderInspector {
   constructor(private readonly loadedConfig: LoadedMarifoldConfig) {}
 
@@ -83,6 +91,75 @@ export class ProviderInspector {
       reachable: null,
       models: [],
       message: `Provider '${providerName}' does not expose model listing in Marifold yet.`,
+    };
+  }
+
+  async validateModel(providerName: string, modelName: string): Promise<ModelValidation> {
+    const provider = this.loadedConfig.config.providers[providerName];
+    if (!provider) {
+      return {
+        provider: providerName,
+        model: modelName,
+        valid: false,
+        status: 'error',
+        message: `Provider '${providerName}' is not configured.`,
+      };
+    }
+    if (!modelName.trim()) {
+      return {
+        provider: providerName,
+        model: modelName,
+        valid: false,
+        status: 'error',
+        message: 'Model name cannot be empty.',
+      };
+    }
+
+    if (provider.apiKeyEnv && !process.env[provider.apiKeyEnv]) {
+      return {
+        provider: providerName,
+        model: modelName,
+        valid: false,
+        status: 'error',
+        message: `Missing environment variable ${provider.apiKeyEnv}.`,
+      };
+    }
+
+    if (provider.type === 'ollama' || provider.type === 'openai-compatible') {
+      const result = await this.listModels(providerName);
+      if (result.reachable === false || result.reachable === null) {
+        return {
+          provider: providerName,
+          model: modelName,
+          valid: false,
+          status: 'error',
+          message: result.message,
+        };
+      }
+      if (result.models.includes(modelName)) {
+        return {
+          provider: providerName,
+          model: modelName,
+          valid: true,
+          status: 'ok',
+          message: 'Model is available.',
+        };
+      }
+      return {
+        provider: providerName,
+        model: modelName,
+        valid: false,
+        status: 'error',
+        message: `Model '${modelName}' was not found for provider '${providerName}'.`,
+      };
+    }
+
+    return {
+      provider: providerName,
+      model: modelName,
+      valid: true,
+      status: 'warning',
+      message: `Live model validation is not available for provider type '${provider.type}'.`,
     };
   }
 
