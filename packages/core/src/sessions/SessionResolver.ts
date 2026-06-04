@@ -123,6 +123,54 @@ export class SessionResolver {
     }
   }
 
+  clear(options: { profileName?: string; before?: string; keepLast?: number } = {}): { count: number; ids: string[] } {
+    if (!fs.existsSync(this.sessionsDb)) return { count: 0, ids: [] };
+    const keepLast = options.keepLast ?? 0;
+    if (!Number.isInteger(keepLast) || keepLast < 0) {
+      throw MarifoldError.configInvalid('keepLast must be a non-negative integer.');
+    }
+
+    const db = new Database(this.sessionsDb, { fileMustExist: true });
+    try {
+      const where: string[] = [];
+      const params: string[] = [];
+      if (options.profileName) {
+        where.push('profile_name = ?');
+        params.push(options.profileName);
+      }
+      if (options.before) {
+        where.push('updated_at < ?');
+        params.push(options.before);
+      }
+      const whereSql = where.length > 0 ? `WHERE ${where.join(' AND ')}` : '';
+      const rows = db.prepare(`
+        SELECT id
+        FROM sessions
+        ${whereSql}
+        ORDER BY updated_at DESC
+      `).all(...params) as Array<{ id: string }>;
+
+      const ids = rows.map(row => row.id).slice(keepLast);
+      if (ids.length === 0) return { count: 0, ids: [] };
+
+      const transaction = db.transaction((sessionIds: string[]) => {
+        const deleteTurns = db.prepare('DELETE FROM turns WHERE session_id = ?');
+        const deleteSession = db.prepare('DELETE FROM sessions WHERE id = ?');
+        for (const id of sessionIds) {
+          deleteTurns.run(id);
+          deleteSession.run(id);
+        }
+      });
+      transaction(ids);
+      return { count: ids.length, ids };
+    } catch (error) {
+      if (error instanceof MarifoldError) throw error;
+      throw this.storeError(`Could not clear sessions from ${this.sessionsDb}: ${String(error)}`);
+    } finally {
+      db.close();
+    }
+  }
+
   replaceLastAssistantTurn(sessionId: string, content: string): boolean {
     if (!fs.existsSync(this.sessionsDb)) return false;
 

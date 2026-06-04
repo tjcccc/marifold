@@ -41,6 +41,18 @@ export interface ProfileModelOverrideResult {
   cleared: boolean;
 }
 
+export interface ProfileRenameResult {
+  from: string;
+  to: string;
+  fromPath: string;
+  toPath: string;
+}
+
+export interface ProfileDeleteResult {
+  name: string;
+  path: string;
+}
+
 export class ProfileManager {
   constructor(private readonly profilesDir: string) {}
 
@@ -87,9 +99,46 @@ export class ProfileManager {
     return { name, path: profileToml, cleared: true };
   }
 
+  rename(from: string, to: string): ProfileRenameResult {
+    assertSafeName(from);
+    assertSafeName(to);
+    if (from === to) throw MarifoldError.profileInvalid('New profile name must be different from the current name.', from);
+    if (from === 'default' || to === 'default') {
+      throw MarifoldError.profileInvalid('Profile rename does not support the built-in default profile.', from);
+    }
+
+    const existing = this.requireStoredProfile(from);
+    const targetPath = existing.type === 'directory'
+      ? path.join(this.profilesDir, to)
+      : path.join(this.profilesDir, `${to}.json`);
+    if (fs.existsSync(path.join(this.profilesDir, to)) || fs.existsSync(path.join(this.profilesDir, `${to}.json`))) {
+      throw MarifoldError.profileInvalid(`Profile '${to}' already exists in ${this.profilesDir}.`, to);
+    }
+
+    fs.renameSync(existing.path, targetPath);
+    return { from, to, fromPath: existing.path, toPath: targetPath };
+  }
+
+  delete(name: string): ProfileDeleteResult {
+    assertSafeName(name);
+    if (name === 'default') {
+      throw MarifoldError.profileInvalid('The built-in default profile cannot be deleted.', name);
+    }
+
+    const existing = this.requireStoredProfile(name);
+    if (existing.type === 'directory') {
+      fs.rmSync(existing.path, { recursive: true, force: true });
+    } else {
+      fs.rmSync(existing.path, { force: true });
+    }
+    return { name, path: existing.path };
+  }
+
   exists(name: string): boolean {
     assertSafeName(name);
-    return name === 'default' || fs.existsSync(path.join(this.profilesDir, name));
+    return name === 'default'
+      || fs.existsSync(path.join(this.profilesDir, name))
+      || fs.existsSync(path.join(this.profilesDir, `${name}.json`));
   }
 
   private requireProfileDir(name: string): string {
@@ -98,6 +147,20 @@ export class ProfileManager {
       throw MarifoldError.profileInvalid(`Profile '${name}' was not found in ${this.profilesDir}.`, name);
     }
     return profileDir;
+  }
+
+  private requireStoredProfile(name: string): { type: 'directory' | 'json'; path: string } {
+    const profileDir = path.join(this.profilesDir, name);
+    if (fs.existsSync(profileDir) && fs.statSync(profileDir).isDirectory()) {
+      return { type: 'directory', path: profileDir };
+    }
+
+    const jsonPath = path.join(this.profilesDir, `${name}.json`);
+    if (fs.existsSync(jsonPath) && fs.statSync(jsonPath).isFile()) {
+      return { type: 'json', path: jsonPath };
+    }
+
+    throw MarifoldError.profileInvalid(`Profile '${name}' was not found in ${this.profilesDir}.`, name);
   }
 }
 

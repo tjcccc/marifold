@@ -11,6 +11,11 @@ export interface ConfigSetResult {
   value: string;
 }
 
+export interface ConfigRemoveModelResult extends ConfigSetResult {
+  removed: boolean;
+  wasDefault: boolean;
+}
+
 export class ConfigManager {
   constructor(private readonly loadedConfig: LoadedMarifoldConfig) {}
 
@@ -82,6 +87,34 @@ export class ConfigManager {
     this.registerModelOption(provider, model);
     this.save();
     return { configPath: this.configPath, key: 'models.options', value: `${provider}/${model}` };
+  }
+
+  removeModel(provider: string, model: string): ConfigRemoveModelResult {
+    if (!provider) throw MarifoldError.configInvalid('Provider cannot be empty.');
+    if (!model) throw MarifoldError.configInvalid('Model cannot be empty.');
+
+    const option = `${provider}/${model}`;
+    const index = this.config.models.options.indexOf(option);
+    const wasDefault = this.config.default.provider === provider && this.config.default.model === model;
+    if (index === -1) {
+      return {
+        configPath: this.configPath,
+        key: 'models.options',
+        value: option,
+        removed: false,
+        wasDefault,
+      };
+    }
+
+    this.config.models.options.splice(index, 1);
+    this.save();
+    return {
+      configPath: this.configPath,
+      key: 'models.options',
+      value: option,
+      removed: true,
+      wasDefault,
+    };
   }
 
   registerModelOption(provider: string | undefined, model: string | undefined): void {

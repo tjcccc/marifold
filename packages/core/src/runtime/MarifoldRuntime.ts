@@ -166,6 +166,10 @@ export class MarifoldRuntime {
     return this.sessionResolver.delete(sessionId);
   }
 
+  clearSessions(options: { profileName?: string; before?: string; keepLast?: number } = {}): { count: number; ids: string[] } {
+    return this.sessionResolver.clear(options);
+  }
+
   renameSession(fromSessionId: string, toSessionId: string): boolean {
     return this.sessionResolver.rename(fromSessionId, toSessionId);
   }

@@ -42,6 +42,11 @@ interface ModelAddOptions {
 interface ModelValidateOptions {
   provider?: string;
   profile?: string;
+  all?: boolean;
+}
+
+interface ModelRemoveOptions {
+  provider?: string;
 }
 
 interface ProviderChoice {
@@ -101,13 +106,33 @@ export function registerModelCommand(program: Command, printer: ConsolePrinter):
     .argument('[model]', 'Provider/model pair, or model name when --provider is set. Defaults to the resolved default model.')
     .option('--provider <name>', 'Provider key from config.toml.')
     .option('--profile <name>', 'Resolve the model through this profile.')
+    .option('--all', 'Validate every saved model plus global and profile model defaults.')
     .action(async (modelArg: string | undefined, options: ModelValidateOptions) => {
       let runtime: ReturnType<typeof createRuntime> | undefined;
       try {
         runtime = createRuntime(program);
         const loadedConfig = loadConfig(program);
+        const inspector = new ProviderInspector(loadedConfig);
+        if (options.all) {
+          if (modelArg || options.provider || options.profile) {
+            throw MarifoldError.configInvalid('--all cannot be combined with a model argument, --provider, or --profile.');
+          }
+          const targets = collectModelValidationTargets(loadedConfig, runtime);
+          if (targets.length === 0) {
+            throw MarifoldError.missingProviderModel(loadedConfig.configPath);
+          }
+          let hasError = false;
+          for (const target of targets) {
+            const result = await inspector.validateModel(target.provider, target.model);
+            process.stdout.write(`${result.status.toUpperCase()} ${result.provider}/${result.model} [${target.sources.join(', ')}]: ${result.message}\n`);
+            if (!result.valid) hasError = true;
+          }
+          if (hasError) process.exitCode = 1;
+          return;
+        }
+
         const resolved = resolveModelValidationTarget(runtime, modelArg, options);
-        const result = await new ProviderInspector(loadedConfig).validateModel(resolved.provider, resolved.model);
+        const result = await inspector.validateModel(resolved.provider, resolved.model);
         process.stdout.write(`${result.status.toUpperCase()} ${result.provider}/${result.model}: ${result.message}\n`);
         if (!result.valid) process.exitCode = 1;
       } catch (error) {
@@ -115,6 +140,33 @@ export function registerModelCommand(program: Command, printer: ConsolePrinter):
         process.exitCode = 1;
       } finally {
         runtime?.close();
+      }
+    });
+
+  model
+    .command('rm')
+    .alias('remove')
+    .description('Remove a saved provider/model option from Marifold config.')
+    .argument('<model>', 'Provider/model pair, or model name when --provider is set.')
+    .option('--provider <name>', 'Provider key from config.toml.')
+    .action((modelArg: string, options: ModelRemoveOptions) => {
+      try {
+        const loadedConfig = loadConfig(program);
+        const { provider, model } = resolveModelPair(modelArg, options.provider, loadedConfig);
+        const result = new ConfigManager(loadedConfig).removeModel(provider, model);
+        if (!result.removed) {
+          process.stderr.write(`Saved model option not found: ${result.value}\n`);
+          process.exitCode = 1;
+          return;
+        }
+        process.stdout.write(`Removed ${result.value}\n`);
+        if (result.wasDefault) {
+          process.stdout.write('Current default model is unchanged.\n');
+        }
+        process.stdout.write(`Saved ${result.configPath}\n`);
+      } catch (error) {
+        printer.printError(error);
+        process.exitCode = 1;
       }
     });
 
@@ -265,6 +317,41 @@ function resolveModelValidationTarget(
     provider: options.provider,
   });
   return { provider: settings.provider, model: settings.model };
+}
+
+function collectModelValidationTargets(
+  loadedConfig: LoadedMarifoldConfig,
+  runtime: ReturnType<typeof createRuntime>,
+): Array<{ provider: string; model: string; sources: string[] }> {
+  const targets = new Map<string, { provider: string; model: string; sources: Set<string> }>();
+  const add = (provider: string | undefined, model: string | undefined, source: string): void => {
+    if (!provider || !model) return;
+    const key = `${provider}/${model}`;
+    const existing = targets.get(key);
+    if (existing) {
+      existing.sources.add(source);
+      return;
+    }
+    targets.set(key, { provider, model, sources: new Set([source]) });
+  };
+
+  add(loadedConfig.config.default.provider, loadedConfig.config.default.model, 'default');
+  for (const option of loadedConfig.config.models.options) {
+    const parsed = parseProviderModelOption(option);
+    add(parsed.provider, parsed.model, 'saved');
+  }
+  for (const profile of runtime.listProfiles()) {
+    const detail = runtime.getProfile(profile.name);
+    add(detail.settings.provider, detail.settings.model, `profile:${profile.name}`);
+  }
+
+  return [...targets.values()]
+    .map(target => ({
+      provider: target.provider,
+      model: target.model,
+      sources: [...target.sources].sort(),
+    }))
+    .sort((a, b) => `${a.provider}/${a.model}`.localeCompare(`${b.provider}/${b.model}`));
 }
 
 function normalizedModelOptions(options: string[], provider?: string, model?: string): string[] {

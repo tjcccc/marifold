@@ -1,6 +1,11 @@
 # TODO
 
-## Near-Term CLI Commands
+## Current Plan
+
+- v0.8.0: CLI and profile management polish. See [docs/roadmap.md](docs/roadmap.md).
+- v0.9.0: memory system upgrade discussion and implementation plan.
+
+## Completed in v0.8.0
 
 - `model rm <provider/model>`: remove a saved Marifold model option from `[models].options`; do not delete provider-owned model files.
 - `model validate --all`: validate every saved model option plus global/profile defaults.
@@ -30,6 +35,6 @@
 
 ## Notes
 
-- v0.7.x includes the TypeScript CLI foundation plus controlled profile memory, thinking-mode, model-validation commands, OAuth provider setup, Copilot Responses API routing, and command smoke coverage.
+- v0.8.x includes the TypeScript CLI foundation plus controlled profile memory, thinking-mode, model-validation commands, OAuth provider setup, Copilot Responses API routing, config backup/import, saved-model removal, profile rename/delete, bulk session clearing, and command smoke coverage.
 - Defer broad automatic memory extraction, `/search`, image, `service`, Web UI, provider-owned model deletion, and agentic tool loops until the non-agent chat and session surfaces are predictable.
 - Marifold can remove saved model references from its config, but should not delete actual local provider model files such as Ollama blobs.

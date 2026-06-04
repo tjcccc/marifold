@@ -14,8 +14,15 @@ export type {
   SessionSummary,
   SessionTurnSummary,
 } from './config/ConfigSchema';
+export { exportConfigBackup, importConfigBackup } from './config/ConfigBackup';
+export type {
+  ConfigBackupExportOptions,
+  ConfigBackupExportResult,
+  ConfigBackupImportOptions,
+  ConfigBackupImportResult,
+} from './config/ConfigBackup';
 export { ConfigManager, renderMarifoldConfig } from './config/ConfigManager';
-export type { ConfigSetResult } from './config/ConfigManager';
+export type { ConfigRemoveModelResult, ConfigSetResult } from './config/ConfigManager';
 export { ConfigLoader } from './config/ConfigLoader';
 export { exchangeGitHubTokenForCopilotToken } from './config/GitHubCopilotAuth';
 export type { GitHubCopilotToken } from './config/GitHubCopilotAuth';
@@ -56,7 +63,12 @@ export {
 } from './memory/MemoryControls';
 export type { MemoryControlPayloads, StrippedMemoryControls } from './memory/MemoryControls';
 export { ProfileManager } from './profiles/ProfileManager';
-export type { ProfileInitResult, ProfileModelOverrideResult } from './profiles/ProfileManager';
+export type {
+  ProfileDeleteResult,
+  ProfileInitResult,
+  ProfileModelOverrideResult,
+  ProfileRenameResult,
+} from './profiles/ProfileManager';
 export { ProfileResolver } from './profiles/ProfileResolver';
 export { MarifoldRuntime } from './runtime/MarifoldRuntime';
 export type { MarifoldRuntimeOptions } from './runtime/MarifoldRuntime';

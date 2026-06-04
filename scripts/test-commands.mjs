@@ -31,6 +31,7 @@ try {
   const configPath = path.join(tempRoot, 'config.toml');
   const profilesDir = path.join(tempRoot, 'profiles');
   const sessionsDb = path.join(tempRoot, 'sessions', 'sessions.db');
+  const backupPath = path.join(tempRoot, 'backup.json');
   const tempHome = path.join(tempRoot, 'home');
   fs.mkdirSync(tempHome, { recursive: true });
 
@@ -96,6 +97,18 @@ try {
     env: commandEnv,
     contains: 'Current profile: alt',
   });
+  runCase('profile init delete target', [...configArgs, 'profile', 'init', 'delete-me'], {
+    env: commandEnv,
+    contains: "Created profile 'delete-me'",
+  });
+  runCase('profile rename <from> <to>', [...configArgs, 'profile', 'rename', 'delete-me', 'delete-renamed'], {
+    env: commandEnv,
+    contains: "Renamed profile 'delete-me' to 'delete-renamed'.",
+  });
+  runCase('profile delete <name> --yes', [...configArgs, 'profile', 'delete', 'delete-renamed', '--yes'], {
+    env: commandEnv,
+    contains: "Deleted profile 'delete-renamed'",
+  });
 
   runCase('model root', [...configArgs, 'model'], {
     env: commandEnv,
@@ -159,6 +172,14 @@ try {
     env: commandEnv,
     contains: 'OK ollama/gemma4:e4b: Model is available.',
   });
+  runCase('model validate --all', [...configArgs, 'model', 'validate', '--all'], {
+    env: commandEnv,
+    contains: ['OK ollama/gemma4:e4b', 'OK openai/gpt-test'],
+  });
+  runCase('model rm <provider/model>', [...configArgs, 'model', 'rm', 'openai/gpt-test'], {
+    env: commandEnv,
+    contains: 'Removed openai/gpt-test',
+  });
 
   runCase('provider root', [...configArgs, 'provider'], {
     env: commandEnv,
@@ -192,6 +213,25 @@ try {
   ], {
     env: commandEnv,
     contains: 'mock response',
+  });
+
+  runCase('config export <file> --include-sessions', [
+    ...configArgs,
+    'config', 'export',
+    backupPath,
+    '--include-sessions',
+  ], {
+    env: commandEnv,
+    contains: ['Exported config backup', 'Sessions: included'],
+  });
+  runCase('config import <file> --force', [
+    ...configArgs,
+    'config', 'import',
+    backupPath,
+    '--force',
+  ], {
+    env: commandEnv,
+    contains: ['Imported config backup', 'Sessions: restored'],
   });
 
   runCase('session list --limit --profile', [
@@ -317,6 +357,54 @@ try {
     contains: 'Deleted session chat-session',
   });
 
+  runCase('profile init clear target', [...configArgs, 'profile', 'init', 'clear-target'], {
+    env: commandEnv,
+    contains: "Created profile 'clear-target'",
+  });
+  runCase('ask clear session one', [
+    ...configArgs,
+    'ask',
+    '--profile', 'clear-target',
+    '--session', 'clear-one',
+    'hello',
+    'clear',
+    'one',
+  ], {
+    env: commandEnv,
+    contains: 'mock response',
+  });
+  runCase('ask clear session two', [
+    ...configArgs,
+    'ask',
+    '--profile', 'clear-target',
+    '--session', 'clear-two',
+    'hello',
+    'clear',
+    'two',
+  ], {
+    env: commandEnv,
+    contains: 'mock response',
+  });
+  runCase('session clear --profile --keep-last --yes', [
+    ...configArgs,
+    'session', 'clear',
+    '--profile', 'clear-target',
+    '--keep-last', '1',
+    '--yes',
+  ], {
+    env: commandEnv,
+    contains: 'Cleared 1 session(s).',
+  });
+  runCase('session clear --profile --yes', [
+    ...configArgs,
+    'session', 'clear',
+    '--profile', 'clear-target',
+    '--yes',
+  ], {
+    env: commandEnv,
+    contains: 'Cleared 1 session(s).',
+  });
+
   process.stdout.write(`\nPASS ${checkCount} command checks\n`);
   if (keepTemp) process.stdout.write(`Kept temp workspace: ${tempRoot}\n`);
 } catch (error) {
@@ -393,7 +481,7 @@ function parseSubcommands(helpText) {
     if (!line.trim()) break;
     const match = line.match(/^  (\S+)/);
     if (!match) continue;
-    const command = match[1];
+    const command = match[1].split('|')[0];
     if (command === 'help') continue;
     commands.push(command);
   }

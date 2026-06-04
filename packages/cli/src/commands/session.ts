@@ -1,10 +1,20 @@
 import { Command } from 'commander';
+import { MarifoldError } from '@marifold/core';
+import { InteractivePrompt } from '../input/InteractivePrompt';
+import { PromptAbortError, isPromptAbortError } from '../input/PromptAbort';
 import { ConsolePrinter } from '../output/ConsolePrinter';
 import { createRuntime } from './RuntimeFactory';
 
 interface SessionListOptions {
   limit?: string;
   profile?: string;
+}
+
+interface SessionClearOptions {
+  profile?: string;
+  before?: string;
+  keepLast?: string;
+  yes?: boolean;
 }
 
 export function registerSessionCommand(program: Command, printer: ConsolePrinter): void {
@@ -83,6 +93,54 @@ export function registerSessionCommand(program: Command, printer: ConsolePrinter
     });
 
   session
+    .command('clear')
+    .description('Clear sessions with optional filters.')
+    .option('--profile <name>', 'Only clear sessions for this profile.')
+    .option('--before <date>', 'Only clear sessions updated before this date or ISO timestamp.')
+    .option('--keep-last <number>', 'Keep this many newest matching sessions.', '0')
+    .option('--yes', 'Clear without interactive confirmation.')
+    .action(async (options: SessionClearOptions) => {
+      const runtime = createRuntime(program);
+      const prompt = new InteractivePrompt();
+      try {
+        const keepLast = parseKeepLast(options.keepLast);
+        const before = options.before ? parseBefore(options.before) : undefined;
+        if (!options.yes) {
+          const summary = [
+            options.profile ? `profile '${options.profile}'` : 'all profiles',
+            before ? `updated before ${before}` : undefined,
+            keepLast > 0 ? `keeping ${keepLast} newest matching session(s)` : undefined,
+          ].filter(Boolean).join(', ');
+          const answer = await prompt.readUserMessage(`Clear sessions for ${summary}? Type CLEAR to confirm: `);
+          if (answer === undefined) throw new PromptAbortError();
+          if (answer.trim() !== 'CLEAR') {
+            process.stdout.write('Aborted.\n');
+            process.exitCode = 1;
+            return;
+          }
+        }
+
+        const result = runtime.clearSessions({
+          profileName: options.profile,
+          before,
+          keepLast,
+        });
+        process.stdout.write(`Cleared ${result.count} session(s).\n`);
+      } catch (error) {
+        if (isPromptAbortError(error)) {
+          process.stderr.write('Aborted.\n');
+          process.exitCode = 130;
+          return;
+        }
+        printer.printError(error);
+        process.exitCode = 1;
+      } finally {
+        prompt.close();
+        runtime.close();
+      }
+    });
+
+  session
     .command('rename')
     .description('Rename a session id.')
     .argument('<from>', 'Current session id.')
@@ -103,4 +161,20 @@ export function registerSessionCommand(program: Command, printer: ConsolePrinter
         runtime.close();
       }
     });
+}
+
+function parseKeepLast(value?: string): number {
+  const parsed = Number.parseInt(value ?? '0', 10);
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    throw MarifoldError.configInvalid('--keep-last must be a non-negative integer.');
+  }
+  return parsed;
+}
+
+function parseBefore(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    throw MarifoldError.configInvalid('--before must be a valid date or ISO timestamp.');
+  }
+  return date.toISOString();
 }
