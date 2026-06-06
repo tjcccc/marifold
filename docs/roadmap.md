@@ -17,15 +17,23 @@ Planned scope:
 
 ## v0.9.0 - Memory System Upgrade
 
-Goal: make memory more trustworthy and inspectable.
+Goal: make memory more trustworthy, inspectable, and ready for future agent/task state without implementing the agent loop yet.
 
-Planned discussion topics:
+Implemented scope:
 
-- What memory kinds Marifold should support.
-- How model-driven memory extraction should work.
-- How users inspect, edit, approve, forget, and delete memories.
-- How conflict keys, deduplication, and cleanup should behave.
-- How memory differs between native profiles, skill apps, workflows, and alias profiles.
+- Structured profile memory with rich JSONL metadata.
+- Priority/relevance recall, simple-prompt gating, thinking-mode priority expansion, and context budgeting.
+- Model-driven hidden memory saves/forgets plus conservative prompt fallback extraction.
+- Conflict-key canonicalization, deduplication, supersession, prompt-driven forget, and permanent delete.
+- Short-term memory trimming through `[memory].size_limit`.
+- CLI memory inspection through `profile memory`.
+- Deterministic tests and provider-backed `scripts/memory-eval.mjs`.
+
+Deferred discussion:
+
+- Dedicated ephemeral task memory for future agent loops.
+- Workspace/project memory scopes beyond profile memory.
+- Memory edit UI, semantic retrieval, encryption, and used-memory tracing.
 
 ## Later
 

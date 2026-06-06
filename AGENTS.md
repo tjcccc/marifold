@@ -4,7 +4,7 @@
 
 Marifold is a local-first personal AI workspace for profiles, chats, skills, mini apps, workflows, and external agents.
 
-v0.8.x implements the TypeScript CLI foundation for priests-style ask/chat/init/profile/config/model/provider/session behavior plus controlled profile memory, thinking-mode commands, model validation, OAuth provider setup, Copilot Responses API routing, config backup/import, saved-model removal, profile rename/delete, and bulk session clearing.
+v0.9.x implements the TypeScript CLI foundation plus upgraded priests-style structured profile memory: priority/relevance recall, richer JSONL metadata, conflict-key updates, prompt fallback extraction, short-term trimming, memory inspection, and memory eval coverage.
 
 ## Stack
 
@@ -17,7 +17,7 @@ v0.8.x implements the TypeScript CLI foundation for priests-style ask/chat/init/
 
 - `packages/core` contains runtime, workspace, config, profile, and session logic.
 - `packages/cli` contains terminal commands and interactive CLI behavior.
-- Do not implement SkillApp, Workflow, Web UI, Apple apps, external-agent aliases, web search, image features, provider-owned model deletion, or agentic tool loops in v0.8.x.
+- Do not implement SkillApp, Workflow, Web UI, Apple apps, external-agent aliases, web search, image features, provider-owned model deletion, or agentic tool loops until that area is explicitly in scope.
 
 ## Validation
 

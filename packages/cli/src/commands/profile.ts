@@ -1,5 +1,6 @@
 import { Command } from 'commander';
 import { ConfigManager, MarifoldError, ProfileManager } from '@marifold/core';
+import type { MemoryEntry } from '@marifold/core';
 import { InteractivePrompt } from '../input/InteractivePrompt';
 import { PromptAbortError, isPromptAbortError } from '../input/PromptAbort';
 import { ConsolePrinter } from '../output/ConsolePrinter';
@@ -8,6 +9,11 @@ import { loadConfig } from './RuntimeFactory';
 
 interface ProfileDeleteOptions {
   yes?: boolean;
+}
+
+interface ProfileMemoryOptions {
+  all?: boolean;
+  limit?: number;
 }
 
 export function registerProfileCommand(program: Command, printer: ConsolePrinter): void {
@@ -59,6 +65,28 @@ export function registerProfileCommand(program: Command, printer: ConsolePrinter
         printProfileSection('RULES.md', detail.files.rules);
         printProfileSection('CUSTOM.md', detail.files.custom);
         printProfileSection('profile.toml', detail.files.profileToml);
+      } catch (error) {
+        printer.printError(error);
+        process.exitCode = 1;
+      } finally {
+        runtime.close();
+      }
+    });
+
+  profile
+    .command('memory')
+    .description('List profile memory records.')
+    .argument('[name]', 'Profile name. Defaults to the configured default profile.')
+    .option('--all', 'Include superseded memory records.')
+    .option('--limit <n>', 'Maximum records to print.', parsePositiveInteger)
+    .action((name: string | undefined, options: ProfileMemoryOptions) => {
+      const runtime = createRuntime(program);
+      try {
+        const loadedConfig = loadConfig(program);
+        const profileName = name ?? loadedConfig.config.default.profile;
+        runtime.ensureProfileMemoryFiles(profileName);
+        const memories = runtime.listMemories(profileName, Boolean(options.all));
+        printMemoryRecords(profileName, memories, options.limit ?? 50);
       } catch (error) {
         printer.printError(error);
         process.exitCode = 1;
@@ -179,4 +207,32 @@ function printProfileSection(label: string, file: { path?: string; content: stri
   if (file.path) process.stdout.write(` ${file.path}`);
   process.stdout.write('\n');
   process.stdout.write(file.content.trim() ? `${file.content.trimEnd()}\n` : '(empty)\n');
+}
+
+function printMemoryRecords(profile: string, memories: MemoryEntry[], limit: number): void {
+  process.stdout.write(`Profile: ${profile}\n`);
+  if (memories.length === 0) {
+    process.stdout.write('No memory records found.\n');
+    return;
+  }
+
+  for (const memory of memories.slice(0, limit)) {
+    const conflict = memory.conflict_key ? ` conflict=${memory.conflict_key}` : '';
+    process.stdout.write(
+      `${memory.kind}\t${memory.status}\tpriority=${memory.priority}\tconfidence=${memory.confidence}${conflict}\n`,
+    );
+    process.stdout.write(`  id: ${memory.id}\n`);
+    process.stdout.write(`  text: ${memory.text}\n`);
+    process.stdout.write(`  source: ${memory.source} (${memory.source_type}) scope=${memory.scope}\n`);
+    process.stdout.write(`  updated: ${memory.updated_at}\n`);
+  }
+  if (memories.length > limit) {
+    process.stdout.write(`... ${memories.length - limit} more record(s). Use --limit to show more.\n`);
+  }
+}
+
+function parsePositiveInteger(value: string): number {
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) throw new Error('Expected a positive integer.');
+  return parsed;
 }

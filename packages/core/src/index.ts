@@ -51,11 +51,15 @@ export type {
   MemorySaveInput,
   MemorySaveResult,
   MemoryScaffoldFile,
+  MemoryScope,
+  MemorySourceType,
   MemoryStatus,
+  MemoryStability,
 } from './memory/MemoryStore';
 export {
   MemoryControlStripper,
   buildMemoryInstructions,
+  extractPromptForgetQueries,
   extractPromptMemoryInputs,
   isSimpleMemoryPrompt,
   shouldInjectMemoryInstructions,

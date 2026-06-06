@@ -2,8 +2,8 @@
 
 ## Current Plan
 
-- v0.8.0: CLI and profile management polish. See [docs/roadmap.md](docs/roadmap.md).
-- v0.9.0: memory system upgrade discussion and implementation plan.
+- v0.9.0: structured memory system upgrade. See [docs/roadmap.md](docs/roadmap.md).
+- Next: decide when to introduce ephemeral task memory for future agent loops.
 
 ## Completed in v0.8.0
 
@@ -13,9 +13,20 @@
 - `profile rename <from> <to>` and `profile delete <name>`: local profile management with safe confirmations.
 - `session clear`: bulk session cleanup with filters such as `--profile`, `--before`, `--keep-last`, and `--yes`.
 
+## Completed in v0.9.0
+
+- Structured profile memory now stores priority, confidence, stability, source, source type, scope, timestamps, evidence, reason, conflict keys, and supersession status.
+- Memory recall now uses priority cutoffs, prompt relevance ranking, simple-prompt gating, thinking-mode expansion, expiry checks, and context budgeting.
+- Prompt fallback now captures explicit names, favorite/preferred facts, response-style preferences, meeting times, and prompt-driven forget requests.
+- Conflict-key handling now canonicalizes aliases, rejects generic slots, infers common slots, and supersedes older active records.
+- `[memory].size_limit` now trims low-priority `auto_short.jsonl` entries.
+- `profile memory` lists active or all profile memory records.
+- `scripts/memory-eval.mjs` runs provider-backed chat memory checks after `pnpm build`.
+
 ## Future Agent-App Core Features
 
-- Memory expansion: broad automatic extraction beyond current model blocks/name fallback, richer conflict-key consolidation, stronger policies, and disk-size trimming.
+- Ephemeral task memory: current objective, plan, progress, observations, decisions, blockers, and next action for future agent loops.
+- Memory expansion: workspace/project scopes, used-memory tracing, semantic retrieval, memory edit UI, optional encryption, and richer redaction.
 - Web search: future `/search <query>` chat command plus model-requested search hooks.
 - Image paste/upload: terminal image attachment workflow and provider request plumbing.
 - OAuth refresh: refresh expired ChatGPT credentials before provider requests, matching priests.
@@ -35,6 +46,6 @@
 
 ## Notes
 
-- v0.8.x includes the TypeScript CLI foundation plus controlled profile memory, thinking-mode, model-validation commands, OAuth provider setup, Copilot Responses API routing, config backup/import, saved-model removal, profile rename/delete, bulk session clearing, and command smoke coverage.
-- Defer broad automatic memory extraction, `/search`, image, `service`, Web UI, provider-owned model deletion, and agentic tool loops until the non-agent chat and session surfaces are predictable.
+- v0.9.x includes the TypeScript CLI foundation plus upgraded structured profile memory, thinking-mode, model-validation commands, OAuth provider setup, Copilot Responses API routing, config backup/import, saved-model removal, profile rename/delete, bulk session clearing, and command/memory eval coverage.
+- Defer `/search`, image, `service`, Web UI, provider-owned model deletion, and agentic tool loops until the non-agent chat, session, and memory surfaces are predictable.
 - Marifold can remove saved model references from its config, but should not delete actual local provider model files such as Ollama blobs.

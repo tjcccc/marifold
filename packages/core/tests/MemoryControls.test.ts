@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { MemoryControlStripper, extractPromptMemoryInputs, stripMemoryControls } from '../src';
+import {
+  MemoryControlStripper,
+  extractPromptForgetQueries,
+  extractPromptMemoryInputs,
+  stripMemoryControls,
+} from '../src';
 
 describe('MemoryControls', () => {
   it('strips split memory control blocks from streamed output', () => {
@@ -43,5 +48,30 @@ describe('MemoryControls', () => {
   it('does not extract rejected memory prompts', () => {
     expect(extractPromptMemoryInputs('Do not remember this: my name is Jack.')).toEqual([]);
     expect(extractPromptMemoryInputs('Do you know my name?')).toEqual([]);
+  });
+
+  it('extracts natural favorite facts, response preferences, and meeting times', () => {
+    expect(extractPromptMemoryInputs('My favorite color is green. I prefer short replies. I have a project meeting tomorrow at 3 p.m.')).toMatchObject([
+      {
+        kind: 'user',
+        text: "The user's favorite color is green.",
+        conflictKey: 'user.favorite_color',
+      },
+      {
+        kind: 'preferences',
+        text: 'The user prefers short replies.',
+        conflictKey: 'preferences.reply_style',
+      },
+      {
+        kind: 'auto_short',
+        text: 'The user has a project meeting tomorrow at 3 p.m.',
+        conflictKey: 'auto_short.project_meeting_time',
+      },
+    ]);
+  });
+
+  it('extracts prompt-driven forget queries without saving the forgotten fact again', () => {
+    expect(extractPromptForgetQueries('Please forget my favorite color.')).toEqual(['user.favorite_color']);
+    expect(extractPromptMemoryInputs('Please forget my favorite color is green.')).toEqual([]);
   });
 });

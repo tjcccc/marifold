@@ -300,6 +300,11 @@ try {
     contains: 'Remembered preference memory:',
   });
 
+  runCase('profile memory [name]', [...configArgs, 'profile', 'memory', 'default'], {
+    env: commandEnv,
+    contains: ['Profile: default', 'concise answers', 'priority=2'],
+  });
+
   runCase('chat /forget command', [
     ...configArgs,
     'chat',

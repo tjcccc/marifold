@@ -2,11 +2,11 @@
 
 Marifold is a local-first personal AI workspace for profiles, chats, skills, mini apps, workflows, and external agents.
 
-v0.8.0 is the CLI foundation release. It provides priests-style profile chat, one-shot requests, workspace initialization, resume support, saved model options, model validation, model-driven and explicit profile memory commands, configurable memory recall, thinking mode controls, OAuth provider setup, GitHub Copilot Responses API support, config backup/import, profile and session management polish, and command smoke coverage through a TypeScript CLI.
+v0.9.0 is the memory-system upgrade release. It provides priests-style profile chat, one-shot requests, workspace initialization, resume support, saved model options, model validation, structured profile memory with priority/relevance recall, model-driven and prompt-fallback memory updates, conflict-key supersession, short-term trimming, memory inspection, thinking mode controls, OAuth provider setup, GitHub Copilot Responses API support, config backup/import, profile and session management polish, and command/eval coverage through a TypeScript CLI.
 
 For product direction and future scope, see [docs/vision.md](docs/vision.md) and [docs/roadmap.md](docs/roadmap.md).
 
-## What v0.8.0 Supports
+## What v0.9.0 Supports
 
 - Marifold-branded CLI.
 - One-shot request-response.
@@ -25,10 +25,15 @@ For product direction and future scope, see [docs/vision.md](docs/vision.md) and
 - Live model listing for Ollama and OpenAI-compatible providers where the endpoint is reachable.
 - Model validation against configured providers and live model lists where available.
 - Full model validation over saved models plus global/profile defaults.
-- Profile-scoped memory files in `memories/user.jsonl`, `memories/preferences.jsonl`, and `memories/auto_short.jsonl`.
+- Profile-scoped structured memory files in `memories/user.jsonl`, `memories/preferences.jsonl`, and `memories/auto_short.jsonl`.
+- Rich memory metadata: priority, confidence, stability, source, source type, scope, timestamps, evidence, reason, conflict keys, and supersession status.
 - Model-driven memory saves and forgets through hidden `<memory_save>` and `<memory_forget>` blocks.
-- Conservative prompt fallback for direct self-identification such as `my name is Jack`.
+- Conservative prompt fallback for explicit names, favorite/preferred facts, response-style preferences, meeting times, and prompt-driven forget requests.
+- Priority/relevance recall with simple-prompt gating, thinking-mode priority expansion, expiry handling, and `[memory].context_limit`.
+- Conflict-key canonicalization and open-slot updates such as `user.name`, `user.favorite_color`, `user.favorite_editor`, `preferences.reply_style`, and `auto_short.project_meeting_time`.
+- Automatic low-priority short-term trimming through `[memory].size_limit`.
 - Explicit chat memory commands for remember, soft-forget, and permanent delete.
+- Profile memory inspection through `profile memory`.
 - Memory injection through the `@priest-ai/core` request `memory` lane.
 - Memory recall controls through `[memory].context_limit`, `profile.toml` `memories = false`, and `--no-memories`.
 - Thinking mode controls through `[default].think`, `ask/chat --think [true|false]`, and chat `/think on|off`.
@@ -38,12 +43,13 @@ For product direction and future scope, see [docs/vision.md](docs/vision.md) and
 - Profile-filtered session listing.
 - Bulk session clearing with profile/date/keep-last filters.
 - Automated CLI command smoke checks through `pnpm command-test`.
+- Provider-backed memory eval script through `pnpm memory-eval -- --provider ollama --model gemma4:e4b`.
 - SQLite session continuity through `@priest-ai/core`.
 - A thin Marifold runtime wrapper around `@priest-ai/core`.
 
 ## Non-goals
 
-v0.8.0 does not include full memory consolidation, broad automatic memory extraction, web search, image upload, service/Web UI, SkillApp, Workflow, Apple apps, external-agent aliases, scheduled tasks, provider-owned model deletion, permission systems, visual mini-app rendering, or an agentic tool loop.
+v0.9.0 does not include semantic/vector retrieval, memory encryption, full memory edit UI, service/Web UI, SkillApp, Workflow, Apple apps, external-agent aliases, web search, image upload, scheduled tasks, provider-owned model deletion, permission systems, visual mini-app rendering, or an agentic tool loop.
 
 ## Setup
 
@@ -92,7 +98,11 @@ pnpm typecheck
 pnpm test
 ```
 
-For CLI smoke checks that avoid live model calls, see [docs/smoke.md](docs/smoke.md).
+For CLI smoke checks that avoid live model calls, see [docs/smoke.md](docs/smoke.md). For provider-backed memory checks after `pnpm build`, run:
+
+```bash
+pnpm memory-eval -- --provider ollama --model gemma4:e4b --suite professional
+```
 
 ## Commands
 
@@ -143,6 +153,8 @@ pnpm marifold provider status
 
 pnpm marifold profile list
 pnpm marifold profile show default
+pnpm marifold profile memory default
+pnpm marifold profile memory default --all --limit 100
 pnpm marifold profile init coder
 pnpm marifold profile rename coder writer
 pnpm marifold profile delete writer --yes
@@ -239,13 +251,13 @@ For GitHub Copilot OAuth, Marifold refreshes the short-lived Copilot IDE token f
 
 `marifold model default` starts an interactive selector over added models and includes `Add new model...`, which runs the same provider/model setup flow as `marifold model add` before setting the global default. `marifold model default --profile <name>` starts a profile selector with `Use default (<global provider/model>)`, saved models, and `Add new model...`; choosing `Use default` clears the profile override so new sessions for that profile use the global default.
 
-`[memory].context_limit` caps the combined memory text injected into one provider request. Set it to `0` for unlimited memory injection. `[memory].size_limit` is reserved for future automatic short-term memory trimming.
+`[memory].context_limit` caps the combined memory text injected into one provider request. Set it to `0` for unlimited memory injection. `[memory].size_limit` caps `memories/auto_short.jsonl`; low-priority short-term entries are trimmed first while priority `0` entries are preserved where possible.
 
 `[default].think` controls default thinking mode. Thinking is passed as provider option `think` only to providers known to support it: Ollama-compatible providers plus `bailian` and `alibaba_cloud`.
 
 ## Profiles
 
-Marifold v0.8.0 loads priests-style profile directories:
+Marifold v0.9.0 loads priests-style profile directories:
 
 ```text
 profiles/default/
@@ -265,7 +277,13 @@ profiles/default/
 
 `profile.toml` may also set `memories = false` for tool profiles that should not receive profile memory. Per-run `--no-memories` disables memory for one `ask` or `chat` invocation.
 
-`memories/user.jsonl` stores durable user facts, `memories/preferences.jsonl` stores durable preferences, and `memories/auto_short.jsonl` stores short-term notes. Marifold creates these files for existing profiles when memory is first prepared, read, or written. When memory is on, Marifold asks the model to emit hidden memory control blocks for useful saves or forgets, strips those blocks from visible replies and session history, and applies the JSONL updates after the turn. A conservative fallback also saves direct self-identification such as `my name is Jack` even when the model does not emit a block. Marifold also reads legacy Markdown memory files in `memories/user.md`, `memories/preferences.md`, `memories/notes.md`, and `memories/auto_short.md` as read-only fallback prompt context.
+`memories/user.jsonl` stores durable user facts, `memories/preferences.jsonl` stores durable preferences, and `memories/auto_short.jsonl` stores short-term notes. Each JSONL entry stores rich metadata such as `priority`, `confidence`, `stability`, `source`, `source_type`, `scope`, timestamps, optional `evidence`, optional `reason`, optional `conflict_key`, and supersession status.
+
+Memory is context, not authority. Human-authored profile files and the current user message outrank memory. Prompt injection receives compact grouped memory blocks rather than raw JSON.
+
+Marifold creates memory files for existing profiles when memory is first prepared, read, or written. When memory is on, Marifold asks the model to emit hidden memory control blocks for useful saves or forgets, strips those blocks from visible replies and session history, applies JSONL updates after the turn, applies conservative prompt fallback extraction, applies prompt-driven forgets, and trims low-priority short-term memory. Recall uses priority cutoffs: normal mode recalls priority `0..3`, thinking mode recalls priority `0..10`, and simple greetings recall only priority `0`.
+
+Marifold also reads legacy Markdown memory files in `memories/user.md`, `memories/preferences.md`, `memories/notes.md`, and `memories/auto_short.md` as read-only fallback prompt context.
 
 ## Relationship to priest-typescript
 

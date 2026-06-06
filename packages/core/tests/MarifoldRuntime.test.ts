@@ -66,14 +66,15 @@ describe('MarifoldRuntime', () => {
     try {
       runtime.rememberMemory('default', 'user', "The user's editor is Neovim.", 'test-session');
       const response = await runtime.ask({
-        prompt: 'Hello',
+        prompt: 'Which editor do I like?',
         sessionId: 'test-session',
       });
 
       expect(response.ok).toBe(true);
       expect(response.text).toBe('hello world');
       expect(requestBody?.messages?.[0]?.content).toContain('## Memory');
-      expect(requestBody?.messages?.[0]?.content).toContain("User: The user's editor is Neovim.");
+      expect(requestBody?.messages?.[0]?.content).toContain("## Important User Memory");
+      expect(requestBody?.messages?.[0]?.content).toContain("The user's editor is Neovim.");
       expect((requestBody as Record<string, unknown>)?.think).toBe(false);
       expect(runtime.listSessions()).toMatchObject([
         {

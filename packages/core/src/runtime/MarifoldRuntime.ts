@@ -5,10 +5,11 @@ import { exchangeGitHubTokenForCopilotToken } from '../config/GitHubCopilotAuth'
 import { ProviderFactory } from '../config/ProviderFactory';
 import { MarifoldError } from '../errors/MarifoldError';
 import { MemoryStore } from '../memory/MemoryStore';
-import type { MemoryKind, MemoryMutationResult, MemoryRememberResult, MemoryScaffoldFile } from '../memory/MemoryStore';
+import type { MemoryEntry, MemoryKind, MemoryMutationResult, MemoryRememberResult, MemoryScaffoldFile } from '../memory/MemoryStore';
 import {
   MemoryControlStripper,
   buildMemoryInstructions,
+  extractPromptForgetQueries,
   extractPromptMemoryInputs,
   shouldInjectMemoryInstructions,
   stripMemoryControls,
@@ -54,7 +55,7 @@ export class MarifoldRuntime {
     await this.refreshProviderCredentialsIfNeeded(settings.provider);
     const engine = this.createEngine(settings.provider, Boolean(request.sessionId));
     const memoryOn = this.memoryEnabled(settings.profile, request.memories);
-    const memory = this.memoryForRequest(settings.profile, request.memories);
+    const memory = this.memoryForRequest(settings.profile, request.memories, request.prompt, settings.think);
     const response = await engine.run({
       config: this.toPriestConfig(settings),
       profile: settings.profile,
@@ -86,7 +87,7 @@ export class MarifoldRuntime {
     await this.refreshProviderCredentialsIfNeeded(settings.provider);
     const engine = this.createEngine(settings.provider, Boolean(request.sessionId));
     const memoryOn = this.memoryEnabled(settings.profile, request.memories);
-    const memory = this.memoryForRequest(settings.profile, request.memories);
+    const memory = this.memoryForRequest(settings.profile, request.memories, request.prompt, settings.think);
     const stripper = new MemoryControlStripper();
     const visibleParts: string[] = [];
     for await (const chunk of engine.stream({
@@ -131,6 +132,11 @@ export class MarifoldRuntime {
 
   deleteMemories(profile: string, query: string): MemoryMutationResult {
     return this.memoryStore.delete(profile, query);
+  }
+
+  listMemories(profile: string, includeSuperseded = false): MemoryEntry[] {
+    const entries = this.memoryStore.listEntries(profile);
+    return includeSuperseded ? entries : entries.filter(entry => entry.status === 'active');
   }
 
   ensureProfileMemoryFiles(profile: string): MemoryScaffoldFile[] {
@@ -234,11 +240,15 @@ export class MarifoldRuntime {
     return provider?.type === 'ollama' || THINK_PROVIDER_NAMES.has(providerName);
   }
 
-  private memoryForRequest(profile: string, requestMemories = true): string[] {
+  private memoryForRequest(profile: string, requestMemories = true, prompt = '', thinking = false): string[] {
     const { config } = this.options.loadedConfig;
     if (!this.memoryEnabled(profile, requestMemories)) return [];
     this.ensureProfileMemoryFiles(profile);
-    return this.memoryStore.listPromptMemory(profile, { contextLimit: config.memory.contextLimit });
+    return this.memoryStore.listPromptMemory(profile, {
+      contextLimit: config.memory.contextLimit,
+      prompt,
+      thinking,
+    });
   }
 
   private runtimeContext(memory: string[], prompt: string, memoryOn: boolean): string[] {
@@ -260,6 +270,10 @@ export class MarifoldRuntime {
   ): void {
     this.memoryStore.applySavePayloads(profile, controls.savePayloads, { sessionId });
     this.memoryStore.applyForgetPayloads(profile, controls.forgetPayloads);
+    for (const query of extractPromptForgetQueries(prompt)) {
+      this.memoryStore.forget(profile, query);
+    }
     this.memoryStore.save(profile, extractPromptMemoryInputs(prompt), { sessionId });
+    this.memoryStore.trimShortTerm(profile, this.options.loadedConfig.config.memory.sizeLimit);
   }
 }
