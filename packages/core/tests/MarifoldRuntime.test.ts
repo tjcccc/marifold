@@ -40,6 +40,7 @@ describe('MarifoldRuntime', () => {
       paths: {
         profilesDir: path.join(dir, 'profiles'),
         sessionsDb: path.join(dir, 'sessions.db'),
+        tasksDir: path.join(dir, 'tasks'),
       },
       providers: {
         ollama: {
@@ -107,6 +108,7 @@ describe('MarifoldRuntime', () => {
       paths: {
         profilesDir: path.join(dir, 'profiles'),
         sessionsDb: path.join(dir, 'sessions.db'),
+        tasksDir: path.join(dir, 'tasks'),
       },
       providers: {
         ollama: {
@@ -175,6 +177,7 @@ describe('MarifoldRuntime', () => {
       paths: {
         profilesDir: path.join(dir, 'profiles'),
         sessionsDb: path.join(dir, 'sessions.db'),
+        tasksDir: path.join(dir, 'tasks'),
       },
       providers: {
         ollama: {
@@ -231,6 +234,7 @@ describe('MarifoldRuntime', () => {
       paths: {
         profilesDir: path.join(dir, 'profiles'),
         sessionsDb: path.join(dir, 'sessions.db'),
+        tasksDir: path.join(dir, 'tasks'),
       },
       providers: {
         ollama: {
@@ -288,6 +292,7 @@ describe('MarifoldRuntime', () => {
       paths: {
         profilesDir: path.join(dir, 'profiles'),
         sessionsDb: path.join(dir, 'sessions.db'),
+        tasksDir: path.join(dir, 'tasks'),
       },
       providers: {
         ollama: {
@@ -344,6 +349,7 @@ describe('MarifoldRuntime', () => {
       paths: {
         profilesDir: path.join(dir, 'profiles'),
         sessionsDb: path.join(dir, 'sessions.db'),
+        tasksDir: path.join(dir, 'tasks'),
       },
       providers: {
         github_copilot: {
@@ -416,6 +422,7 @@ describe('MarifoldRuntime', () => {
       paths: {
         profilesDir: path.join(dir, 'profiles'),
         sessionsDb: path.join(dir, 'sessions.db'),
+        tasksDir: path.join(dir, 'tasks'),
       },
       providers: {
         github_copilot: {

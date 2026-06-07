@@ -7,6 +7,7 @@ import { registerInitCommand } from './commands/init';
 import { registerModelCommand } from './commands/model';
 import { registerProfileCommand } from './commands/profile';
 import { registerProviderCommand } from './commands/provider';
+import { registerServiceCommand } from './commands/service';
 import { registerSessionCommand } from './commands/session';
 import { ConsolePrinter } from './output/ConsolePrinter';
 
@@ -15,7 +16,7 @@ const printer = new ConsolePrinter();
 const program = new Command()
   .name('marifold')
   .description('Marifold local-first AI workspace CLI.')
-  .version('0.9.0')
+  .version('0.10.0')
   .option('--config <path>', 'Path to Marifold config.toml.');
 
 registerInitCommand(program, printer);
@@ -25,6 +26,7 @@ registerConfigCommand(program, printer);
 registerModelCommand(program, printer);
 registerProfileCommand(program, printer);
 registerProviderCommand(program, printer);
+registerServiceCommand(program, printer);
 registerSessionCommand(program, printer);
 
 program.parseAsync(process.argv).catch(error => {

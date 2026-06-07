@@ -17,6 +17,7 @@ context_limit = 2400
 [paths]
 profiles_dir = "~/.marifold/profiles"
 sessions_db = "~/.marifold/sessions.db"
+tasks_dir = "~/.marifold/tasks"
 
 [providers.ollama]
 type = "ollama"

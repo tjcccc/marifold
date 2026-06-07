@@ -52,7 +52,8 @@ export class ConsolePrinter {
     process.stdout.write(`Provider: ${result.provider}/${result.model} (${result.providerType})\n`);
     process.stdout.write(`Profile:  ${result.profile}\n`);
     process.stdout.write(`Profiles: ${result.profilesDir}\n`);
-    process.stdout.write(`Sessions: ${result.sessionsDb}\n\n`);
+    process.stdout.write(`Sessions: ${result.sessionsDb}\n`);
+    process.stdout.write(`Tasks:    ${result.tasksDir}\n\n`);
 
     for (const file of result.files) {
       process.stdout.write(`${file.status.padEnd(7)} ${file.path}\n`);

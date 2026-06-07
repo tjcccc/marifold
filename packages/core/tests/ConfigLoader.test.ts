@@ -43,6 +43,7 @@ context_limit = 120
 [paths]
 profiles_dir = "${dir}/profiles"
 sessions_db = "${dir}/sessions.db"
+tasks_dir = "${dir}/tasks"
 
 [providers.ollama]
 type = "ollama"
@@ -59,6 +60,8 @@ base_url = "http://localhost:11434"
     expect(loaded.config.models.options).toEqual(['ollama/gemma4:e4b', 'openai/gpt-4o-mini']);
     expect(loaded.config.memory).toEqual({ sizeLimit: 1000, contextLimit: 120 });
     expect(loaded.config.paths.profilesDir).toBe(path.join(dir, 'profiles'));
+    expect(loaded.config.paths.sessionsDb).toBe(path.join(dir, 'sessions.db'));
+    expect(loaded.config.paths.tasksDir).toBe(path.join(dir, 'tasks'));
     expect(loaded.config.providers.ollama.baseUrl).toBe('http://localhost:11434');
   });
 

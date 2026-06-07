@@ -2,11 +2,11 @@
 
 Marifold is a local-first personal AI workspace for profiles, chats, skills, mini apps, workflows, and external agents.
 
-v0.9.0 is the memory-system upgrade release. It provides priests-style profile chat, one-shot requests, workspace initialization, resume support, saved model options, model validation, structured profile memory with priority/relevance recall, model-driven and prompt-fallback memory updates, conflict-key supersession, short-term trimming, memory inspection, thinking mode controls, OAuth provider setup, GitHub Copilot Responses API support, config backup/import, profile and session management polish, and command/eval coverage through a TypeScript CLI.
+v0.10.0 is the service and task-state foundation release. It provides priests-style profile chat, one-shot requests, workspace initialization, resume support, saved model options, model validation, structured profile memory with priority/relevance recall, model-driven and prompt-fallback memory updates, conflict-key supersession, short-term trimming, memory inspection, thinking mode controls, OAuth provider setup, GitHub Copilot Responses API support, config backup/import, profile and session management polish, a loopback-only Fastify service API, ephemeral task-state storage for future agents, and command/eval coverage through a TypeScript CLI.
 
 For product direction and future scope, see [docs/vision.md](docs/vision.md) and [docs/roadmap.md](docs/roadmap.md).
 
-## What v0.9.0 Supports
+## What v0.10.0 Supports
 
 - Marifold-branded CLI.
 - One-shot request-response.
@@ -42,6 +42,11 @@ For product direction and future scope, see [docs/vision.md](docs/vision.md) and
 - Profile rename and delete commands for stored profiles.
 - Profile-filtered session listing.
 - Bulk session clearing with profile/date/keep-last filters.
+- Loopback-only local HTTP service through `marifold service`.
+- Service routes for health/status, sanitized config, providers, models, profiles, memories, sessions, ask, and streaming chat.
+- Server-sent event streaming for chat chunks through `/v1/chat/stream`.
+- Ephemeral task-state storage under `[paths].tasks_dir`, defaulting to `~/.marifold/tasks`.
+- Task API routes for objective, status, plan, events, summary, next action, and profile/session references.
 - Automated CLI command smoke checks through `pnpm command-test`.
 - Provider-backed memory eval script through `pnpm memory-eval -- --provider ollama --model gemma4:e4b`.
 - SQLite session continuity through `@priest-ai/core`.
@@ -49,7 +54,7 @@ For product direction and future scope, see [docs/vision.md](docs/vision.md) and
 
 ## Non-goals
 
-v0.9.0 does not include semantic/vector retrieval, memory encryption, full memory edit UI, service/Web UI, SkillApp, Workflow, Apple apps, external-agent aliases, web search, image upload, scheduled tasks, provider-owned model deletion, permission systems, visual mini-app rendering, or an agentic tool loop.
+v0.10.0 does not include semantic/vector retrieval, memory encryption, full memory edit UI, Web UI, SkillApp, Workflow, Apple apps, external-agent aliases, web search, image upload, scheduled tasks, provider-owned model deletion, remote service auth, service daemon packaging, permission systems, visual mini-app rendering, or an agentic tool loop.
 
 ## Setup
 
@@ -165,6 +170,9 @@ pnpm marifold session show test-session
 pnpm marifold session rename test-session renamed-session
 pnpm marifold session delete renamed-session
 pnpm marifold session clear --profile default --keep-last 10 --yes
+
+pnpm marifold service
+pnpm marifold service --host 127.0.0.1 --port 32140
 ```
 
 The packaged binary name is `marifold`.
@@ -219,6 +227,7 @@ context_limit = 2400
 [paths]
 profiles_dir = "~/.marifold/profiles"
 sessions_db = "~/.marifold/sessions.db"
+tasks_dir = "~/.marifold/tasks"
 
 [providers.ollama]
 type = "ollama"
@@ -235,7 +244,9 @@ The `model add` picker is seeded from the priests provider registry: Ollama, lla
 
 For `openai-compatible`, `base_url` may be the API root such as `https://api.openai.com`, or a versioned compatibility root such as `https://generativelanguage.googleapis.com/v1beta/openai`. Marifold builds the final `/chat/completions`, `/responses`, and `/models` URLs from it.
 
-`marifold init` accepts `--provider`, `--provider-type`, `--model`, `--base-url`, `--api-key-env`, `--profiles-dir`, `--sessions-db`, and `--force`. Non-Ollama providers require `--model`; custom OpenAI-compatible providers also require `--base-url`.
+`marifold init` accepts `--provider`, `--provider-type`, `--model`, `--base-url`, `--api-key-env`, `--profiles-dir`, `--sessions-db`, `--tasks-dir`, and `--force`. Non-Ollama providers require `--model`; custom OpenAI-compatible providers also require `--base-url`.
+
+`marifold service` starts a Fastify HTTP service bound to `127.0.0.1:32140` by default. v0.10.0 intentionally accepts loopback hosts only. The first API surface is `/health` and `/v1/*` routes for app-client foundations: sanitized config/provider/model views, profiles, memories, sessions, ask/chat, SSE streaming chat, and task state.
 
 `marifold config export <file>` writes config, profile files, memory files, and optional sessions into a local JSON backup. Treat backups as sensitive if your config contains saved `api_key` or `oauth_token` values.
 
@@ -257,7 +268,7 @@ For GitHub Copilot OAuth, Marifold refreshes the short-lived Copilot IDE token f
 
 ## Profiles
 
-Marifold v0.9.0 loads priests-style profile directories:
+Marifold v0.10.0 loads priests-style profile directories:
 
 ```text
 profiles/default/

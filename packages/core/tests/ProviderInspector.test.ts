@@ -232,6 +232,7 @@ function testConfig(): LoadedMarifoldConfig {
       paths: {
         profilesDir: path.join(root, 'profiles'),
         sessionsDb: path.join(root, 'sessions.db'),
+        tasksDir: path.join(root, 'tasks'),
       },
       providers: {
         ollama: {

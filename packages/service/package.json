@@ -1,25 +1,20 @@
 {
-  "name": "marifold",
+  "name": "@marifold/service",
   "version": "0.10.0",
-  "description": "Marifold CLI",
+  "description": "Local HTTP service for Marifold",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "bin": {
-    "marifold": "dist/index.js"
-  },
   "files": [
     "dist"
   ],
   "scripts": {
-    "build": "tsc && chmod +x dist/index.js",
-    "cli": "node dist/index.js",
+    "build": "tsc",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run"
   },
   "dependencies": {
     "@marifold/core": "workspace:*",
-    "@marifold/service": "workspace:*",
-    "commander": "^12.1.0"
+    "fastify": "^4.29.0"
   },
   "devDependencies": {
     "@types/node": "^22.19.19",

@@ -1,6 +1,6 @@
 # Architecture
 
-Marifold v0.9.0 is still intentionally small, but memory is now a first-class local subsystem. It provides a TypeScript CLI for priests-style profile chat, one-shot requests, workspace initialization, chat resume behavior, saved model options, model validation, structured profile memory, thinking mode controls, OAuth provider setup, GitHub Copilot Responses API routing, config backup/import, and local management commands powered by `@priest-ai/core`.
+Marifold v0.10.0 is still intentionally small, but it now has the foundation needed for app clients and later agent work. It provides a TypeScript CLI for priests-style profile chat, one-shot requests, workspace initialization, chat resume behavior, saved model options, model validation, structured profile memory, thinking mode controls, OAuth provider setup, GitHub Copilot Responses API routing, config backup/import, local management commands, a loopback-only Fastify service API, and an ephemeral task-state subsystem.
 
 ## Current Scope
 
@@ -8,19 +8,24 @@ The dependency direction is:
 
 ```text
 packages/cli -> packages/core -> @priest-ai/core -> provider
+packages/cli -> packages/service -> packages/core
 ```
 
 `packages/cli` owns command parsing, terminal input/output, and the interactive chat loop.
 
-`packages/core` owns Marifold runtime abstractions, workspace paths, TOML config loading, profile resolution, profile memory storage/selection/control-block application, session resolution, provider adapter creation, and the bridge to `@priest-ai/core`.
+`packages/service` owns HTTP transport only. It starts a Fastify server, parses JSON requests, returns sanitized responses, streams chat chunks through SSE, and delegates behavior to `packages/core`.
+
+`packages/core` owns Marifold runtime abstractions, workspace paths, TOML config loading, profile resolution, profile memory storage/selection/control-block application, task-state persistence, session resolution, provider adapter creation, and the bridge to `@priest-ai/core`.
 
 `@priest-ai/core` remains Marifold-agnostic. Marifold depends on it; it does not know about Marifold.
 
-## v0.9.0 Boundaries
+## v0.10.0 Boundaries
 
 The runtime layer is thin. `MarifoldRuntime` resolves config/profile/session settings, selects profile memory with the current prompt and thinking mode, and delegates ask/stream execution to `PriestEngine`.
 
-Config, profile, model, provider, and session commands are local management surfaces. Config export/import copies local config, profile files, memories, and optional sessions; it does not introduce service APIs or cloud sync. These commands do not introduce agent tools or web/app runtimes.
+Config, profile, model, provider, and session commands are local management surfaces. Config export/import copies local config, profile files, memories, and optional sessions; it does not introduce cloud sync. These commands do not introduce agent tools or web/app runtimes.
+
+The service API is local-first and loopback-only in v0.10.0. It exposes health/status, sanitized config/provider/model data, profiles, memories, sessions, ask/chat, SSE streaming chat, and task-state CRUD/event routes. It does not provide remote auth, browser UI, WebSocket sync, multi-user access, or long-running agent execution yet.
 
 Model validation checks local configuration and provider model-list endpoints where available. It does not delete, pull, or mutate local provider storage.
 
@@ -48,9 +53,11 @@ Thinking mode is a provider option selected by Marifold and only forwarded to kn
 
 SQLite session continuity is reused from `@priest-ai/core`.
 
+Task state is stored as JSON files under `paths.tasks_dir`, defaulting to `~/.marifold/tasks`. Task state is generated working context: objective, status, plan, events, summary, next action, profile, and session references. It is separate from durable profile memory and is not promoted into profile memory by default.
+
 ## Future Areas
 
-These are planned areas, but they are not implemented in v0.9.0:
+These are planned areas, but they are not implemented in v0.10.0:
 
 ```text
 apps/web
@@ -68,8 +75,8 @@ Workflow runtime
 External-agent aliases
   Future alias profiles that launch, wrap, delegate to, or compose with Codex, Claude Code, and similar tools.
 
-Task memory
-  Future ephemeral task/run state for agent loops: objective, plan, progress, tool observations, decisions, blockers, and next action. This should not automatically persist into durable profile memory.
+Agent loop
+  Future approval-aware CLI agent loop using task state for objective, plan, progress, observations, decisions, blockers, and next action. This should not automatically persist task state into durable profile memory.
 ```
 
 Do not create empty future app directories until implementation begins.

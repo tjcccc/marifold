@@ -17,6 +17,8 @@ import {
 import type { MemoryControlPayloads } from '../memory/MemoryControls';
 import { ProfileResolver } from '../profiles/ProfileResolver';
 import { SessionResolver } from '../sessions/SessionResolver';
+import { TaskStore } from '../tasks/TaskStore';
+import type { TaskCreateInput, TaskEventInput, TaskListOptions, TaskState, TaskSummary, TaskUpdateInput } from '../tasks/TaskStore';
 import { MarifoldAskResponse, MarifoldResolvedSettings, MarifoldRunRequest } from './MarifoldTypes';
 
 const THINK_PROVIDER_NAMES = new Set(['bailian', 'alibaba_cloud']);
@@ -30,6 +32,7 @@ export class MarifoldRuntime {
   private readonly sessionResolver: SessionResolver;
   private readonly providerFactory: ProviderFactory;
   private readonly memoryStore: MemoryStore;
+  private readonly taskStore: TaskStore;
 
   constructor(private readonly options: MarifoldRuntimeOptions) {
     const { config, configPath } = options.loadedConfig;
@@ -37,6 +40,7 @@ export class MarifoldRuntime {
     this.sessionResolver = new SessionResolver(config.paths.sessionsDb);
     this.providerFactory = new ProviderFactory(config, configPath);
     this.memoryStore = new MemoryStore(config.paths.profilesDir);
+    this.taskStore = new TaskStore(config.paths.tasksDir);
   }
 
   resolveSettings(request: Pick<MarifoldRunRequest, 'profile' | 'provider' | 'model' | 'think'>): MarifoldResolvedSettings {
@@ -178,6 +182,30 @@ export class MarifoldRuntime {
 
   renameSession(fromSessionId: string, toSessionId: string): boolean {
     return this.sessionResolver.rename(fromSessionId, toSessionId);
+  }
+
+  createTask(input: TaskCreateInput): TaskState {
+    return this.taskStore.create(input);
+  }
+
+  listTasks(options: TaskListOptions = {}): TaskSummary[] {
+    return this.taskStore.list(options);
+  }
+
+  getTask(taskId: string): TaskState | undefined {
+    return this.taskStore.get(taskId);
+  }
+
+  updateTask(taskId: string, input: TaskUpdateInput): TaskState {
+    return this.taskStore.update(taskId, input);
+  }
+
+  appendTaskEvent(taskId: string, input: TaskEventInput): TaskState {
+    return this.taskStore.appendEvent(taskId, input);
+  }
+
+  deleteTask(taskId: string): boolean {
+    return this.taskStore.delete(taskId);
   }
 
   close(): void {

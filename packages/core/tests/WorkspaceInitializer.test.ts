@@ -24,11 +24,13 @@ describe('WorkspaceInitializer', () => {
     const configPath = path.join(dir, 'config.toml');
     const profilesDir = path.join(dir, 'profiles');
     const sessionsDb = path.join(dir, 'sessions.db');
+    const tasksDir = path.join(dir, 'tasks');
 
     const result = new WorkspaceInitializer().initialize({
       configPath,
       profilesDir,
       sessionsDb,
+      tasksDir,
     });
 
     expect(result.configPath).toBe(configPath);
@@ -42,6 +44,7 @@ describe('WorkspaceInitializer', () => {
     expect(fs.existsSync(path.join(profilesDir, 'default', 'memories', 'user.jsonl'))).toBe(true);
     expect(fs.existsSync(path.join(profilesDir, 'default', 'memories', 'preferences.jsonl'))).toBe(true);
     expect(fs.existsSync(path.join(profilesDir, 'default', 'memories', 'auto_short.jsonl'))).toBe(true);
+    expect(fs.existsSync(tasksDir)).toBe(true);
 
     const loaded = new ConfigLoader().load({ configPath });
     expect(loaded.config.default).toMatchObject({
@@ -53,6 +56,7 @@ describe('WorkspaceInitializer', () => {
     expect(loaded.config.models.options).toEqual(['ollama/gemma4:e4b']);
     expect(loaded.config.memory).toEqual({ sizeLimit: 50000, contextLimit: 2400 });
     expect(loaded.config.paths.profilesDir).toBe(profilesDir);
+    expect(loaded.config.paths.tasksDir).toBe(tasksDir);
     expect(new ProfileResolver(profilesDir).list()).toMatchObject([
       { name: 'default', source: 'directory' },
     ]);

@@ -13,6 +13,7 @@ export interface MarifoldDefaultConfig {
 export interface MarifoldPathsConfig {
   profilesDir: string;
   sessionsDb: string;
+  tasksDir: string;
 }
 
 export interface MarifoldModelsConfig {

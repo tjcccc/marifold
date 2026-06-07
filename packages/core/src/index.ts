@@ -91,10 +91,26 @@ export type {
   WorkspaceInitOptions,
   WorkspaceInitResult,
 } from './workspace/WorkspaceInitializer';
+export { TASK_STATE_SCHEMA, TaskStore } from './tasks/TaskStore';
+export type {
+  TaskCreateInput,
+  TaskEvent,
+  TaskEventInput,
+  TaskEventKind,
+  TaskListOptions,
+  TaskPlanInput,
+  TaskPlanItem,
+  TaskState,
+  TaskStatus,
+  TaskStepStatus,
+  TaskSummary,
+  TaskUpdateInput,
+} from './tasks/TaskStore';
 export {
   defaultConfigPath,
   defaultProfilesDir,
   defaultSessionsDb,
+  defaultTasksDir,
   expandHome,
   marifoldHome,
   resolveUserPath,

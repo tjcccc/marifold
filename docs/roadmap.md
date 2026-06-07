@@ -35,10 +35,29 @@ Deferred discussion:
 - Workspace/project memory scopes beyond profile memory.
 - Memory edit UI, semantic retrieval, encryption, and used-memory tracing.
 
+## v0.10.0 - Service and Task-State Foundation
+
+Goal: create a small local API surface for future Web UI, Apple clients, and agent loops without implementing a full agent yet.
+
+Implemented scope:
+
+- New `@marifold/service` package using Fastify.
+- Loopback-only `marifold service` command.
+- Health/status, sanitized config, provider, model, profile, memory, session, ask, and streaming chat endpoints.
+- Server-sent event streaming for chat chunks.
+- `paths.tasks_dir` config path, defaulting to `~/.marifold/tasks`.
+- Core `TaskStore` with task objective, status, plan, events, summary, next action, profile/session references, and JSON-file persistence.
+- Task CRUD and task-event API routes for future agent loops and app clients.
+
+Deferred discussion:
+
+- Auth, CORS/origin policy, remote binding, API versioning docs, generated clients, reconnect/resume behavior, and service daemon packaging.
+- Approval-aware agent loop and tool execution.
+- Promotion from ephemeral task state into durable profile/workspace memory.
+
 ## Later
 
 - Main `marifold` TUI as the primary entrypoint.
-- Service API and Web UI foundation.
 - Schema-defined SkillApp runtime.
 - Alias profiles for Codex, Claude Code, and other external agents.
 - Workflow composition across native profiles, skill apps, models, and external-agent aliases.

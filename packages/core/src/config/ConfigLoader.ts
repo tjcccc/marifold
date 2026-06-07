@@ -15,6 +15,7 @@ import {
   defaultConfigPath,
   defaultProfilesDir,
   defaultSessionsDb,
+  defaultTasksDir,
   resolveUserPath,
 } from '../workspace/WorkspacePaths';
 
@@ -94,6 +95,7 @@ export class ConfigLoader {
     return {
       profilesDir: resolveUserPath(optionalString(raw.profiles_dir, 'paths.profiles_dir') ?? defaultProfilesDir()),
       sessionsDb: resolveUserPath(optionalString(raw.sessions_db, 'paths.sessions_db') ?? defaultSessionsDb()),
+      tasksDir: resolveUserPath(optionalString(raw.tasks_dir, 'paths.tasks_dir') ?? defaultTasksDir()),
     };
   }
 

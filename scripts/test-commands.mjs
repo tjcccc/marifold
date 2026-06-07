@@ -31,6 +31,7 @@ try {
   const configPath = path.join(tempRoot, 'config.toml');
   const profilesDir = path.join(tempRoot, 'profiles');
   const sessionsDb = path.join(tempRoot, 'sessions', 'sessions.db');
+  const tasksDir = path.join(tempRoot, 'tasks');
   const backupPath = path.join(tempRoot, 'backup.json');
   const tempHome = path.join(tempRoot, 'home');
   fs.mkdirSync(tempHome, { recursive: true });
@@ -60,6 +61,7 @@ try {
     '--profile', 'default',
     '--profiles-dir', profilesDir,
     '--sessions-db', sessionsDb,
+    '--tasks-dir', tasksDir,
     '--base-url', mockBaseUrl,
     '--api-key-env', 'MARIFOLD_COMMAND_TEST_KEY',
   ], {
@@ -71,7 +73,7 @@ try {
     env: commandEnv,
     contains: ['[default]', '[providers.ollama]'],
   });
-  runConfigSetMatrix(configArgs, commandEnv, profilesDir, sessionsDb, mockBaseUrl);
+  runConfigSetMatrix(configArgs, commandEnv, profilesDir, sessionsDb, tasksDir, mockBaseUrl);
 
   runCase('profile root', [...configArgs, 'profile'], {
     env: commandEnv,
@@ -421,7 +423,7 @@ try {
   if (tempRoot && !keepTemp) fs.rmSync(tempRoot, { recursive: true, force: true });
 }
 
-function runConfigSetMatrix(configArgs, env, profilesDir, sessionsDb, mockBaseUrl) {
+function runConfigSetMatrix(configArgs, env, profilesDir, sessionsDb, tasksDir, mockBaseUrl) {
   const cases = [
     ['default.timeout_seconds', '30'],
     ['default.max_output_tokens', '64'],
@@ -431,6 +433,7 @@ function runConfigSetMatrix(configArgs, env, profilesDir, sessionsDb, mockBaseUr
     ['memory.context_limit', '2400'],
     ['paths.profiles_dir', profilesDir],
     ['paths.sessions_db', sessionsDb],
+    ['paths.tasks_dir', tasksDir],
     ['providers.ollama.type', 'ollama'],
     ['providers.ollama.base_url', mockBaseUrl],
     ['providers.ollama.api_key_env', 'MARIFOLD_COMMAND_TEST_KEY'],

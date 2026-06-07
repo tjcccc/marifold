@@ -6,6 +6,8 @@ export type MarifoldErrorCode =
   | 'PROVIDER_NOT_CONFIGURED'
   | 'API_KEY_MISSING'
   | 'MEMORY_INVALID'
+  | 'TASK_INVALID'
+  | 'TASK_NOT_FOUND'
   | 'SESSION_STORE_ERROR'
   | 'WORKSPACE_ALREADY_INITIALIZED';
 
@@ -62,6 +64,14 @@ export class MarifoldError extends Error {
 
   static memoryInvalid(message: string, profile: string): MarifoldError {
     return new MarifoldError('MEMORY_INVALID', message, { profile });
+  }
+
+  static taskInvalid(message: string, taskId?: string): MarifoldError {
+    return new MarifoldError('TASK_INVALID', message, taskId ? { taskId } : {});
+  }
+
+  static taskNotFound(taskId: string): MarifoldError {
+    return new MarifoldError('TASK_NOT_FOUND', `Task not found: ${taskId}`, { taskId });
   }
 
   static workspaceAlreadyInitialized(configPath: string): MarifoldError {
