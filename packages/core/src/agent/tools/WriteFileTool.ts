@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { JSONValue } from '@priest-ai/core';
+import { expandHome } from '../../workspace/WorkspacePaths';
 import { AgentTool, requireStringInput, ToolExecutionContext, ToolExecutionResult, ToolRiskAssessment } from '../ToolRegistry';
 import { formatBytes } from './ReadFileTool';
 
@@ -27,7 +28,7 @@ export class WriteFileTool implements AgentTool {
 
   assessRisk(input: Record<string, JSONValue>, ctx: ToolExecutionContext): ToolRiskAssessment {
     if (typeof input.path !== 'string') return { escalate: false };
-    const target = path.resolve(ctx.cwd, input.path);
+    const target = path.resolve(ctx.cwd, expandHome(input.path));
     if (!isInsideWorkspace(target, ctx.cwd)) {
       return { escalate: true, reason: `target ${target} is outside the working directory ${ctx.cwd}` };
     }
@@ -35,7 +36,7 @@ export class WriteFileTool implements AgentTool {
   }
 
   async execute(input: Record<string, JSONValue>, ctx: ToolExecutionContext): Promise<ToolExecutionResult> {
-    const target = path.resolve(ctx.cwd, requireStringInput(input, 'path', 'write_file'));
+    const target = path.resolve(ctx.cwd, expandHome(requireStringInput(input, 'path', 'write_file')));
     const content = typeof input.content === 'string' ? input.content : '';
     try {
       fs.mkdirSync(path.dirname(target), { recursive: true });

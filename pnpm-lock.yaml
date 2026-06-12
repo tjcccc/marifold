@@ -4,16 +4,9 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
-overrides:
-  '@priest-ai/core': link:../priest-typescript
-
 importers:
 
   .:
-    dependencies:
-      croner:
-        specifier: ^10.0.1
-        version: 10.0.1
     devDependencies:
       '@types/better-sqlite3':
         specifier: ^7.6.13
@@ -53,11 +46,14 @@ importers:
   packages/core:
     dependencies:
       '@priest-ai/core':
-        specifier: link:../../../priest-typescript
-        version: link:../../../priest-typescript
+        specifier: ^2.4.0
+        version: 2.4.0
       better-sqlite3:
         specifier: ^11.10.0
         version: 11.10.0
+      croner:
+        specifier: ^10.0.1
+        version: 10.0.1
       duck-duck-scrape:
         specifier: ^2.2.7
         version: 2.2.7
@@ -254,6 +250,10 @@ packages:
 
   '@pinojs/redact@0.4.0':
     resolution: {integrity: sha512-k2ENnmBugE/rzQfEcdWHcCY+/FM3VLzH9cYEsbdsoqrvzAKRhUZeRNhAZvB8OitQJ1TBed3yqWtdjzS6wJKBwg==}
+
+  '@priest-ai/core@2.4.0':
+    resolution: {integrity: sha512-KU9hPMlmJedbQqHCaOR+uIBFkm2ojoDncGXTcZJESD5+ypu51BBgkP4Ap+Mmk/ua4SDYMLeU5aE4TOBE1zRiYA==}
+    engines: {node: '>=18.0.0'}
 
   '@rollup/rollup-android-arm-eabi@4.61.0':
     resolution: {integrity: sha512-dnxczajOqt0gesZlN5pGQ1s1imQVrsmCw5G2Ci4oM+0WvNz3pyRnlWrT7McoZIb8VlFwCawdmbWRmxRn7HI+VQ==}
@@ -1025,6 +1025,10 @@ snapshots:
   '@jridgewell/sourcemap-codec@1.5.5': {}
 
   '@pinojs/redact@0.4.0': {}
+
+  '@priest-ai/core@2.4.0':
+    dependencies:
+      better-sqlite3: 11.10.0
 
   '@rollup/rollup-android-arm-eabi@4.61.0':
     optional: true

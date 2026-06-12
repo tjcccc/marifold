@@ -1,6 +1,6 @@
 {
   "name": "@marifold/core",
-  "version": "0.13.0",
+  "version": "0.13.1",
   "description": "Core runtime for Marifold",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -15,6 +15,7 @@
   "dependencies": {
     "@priest-ai/core": "^2.4.0",
     "better-sqlite3": "^11.10.0",
+    "croner": "^10.0.1",
     "duck-duck-scrape": "^2.2.7",
     "smol-toml": "^1.6.1"
   },

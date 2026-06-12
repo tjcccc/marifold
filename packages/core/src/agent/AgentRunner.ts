@@ -361,7 +361,7 @@ export class AgentRunner {
       config,
       profile,
       prompt: `Objective: ${options.objective}\n\nWork toward this objective step by step, using tools when needed. When the objective is complete, reply with a short final answer describing the outcome.`,
-      context: this.agentContext(state),
+      context: this.agentContext(state, options.cwd ?? process.cwd()),
     };
     if (state.mode === 'native') {
       return {
@@ -376,9 +376,10 @@ export class AgentRunner {
     };
   }
 
-  private agentContext(state: LoopState): string[] {
+  private agentContext(state: LoopState, cwd: string): string[] {
     const context = [
       'You are running as the Marifold agent. Stay focused on the stated objective and keep replies concise.',
+      `Working directory: ${cwd}. Relative tool paths resolve against it; ~ means the user's home directory.`,
     ];
     if (state.mode === 'control-block') {
       context.push(buildControlBlockInstructions(this.deps.registry.definitions()));
@@ -447,8 +448,11 @@ export class AgentRunner {
     const response = await engine.run({
       config,
       profile,
-      prompt: `Objective: ${options.objective}\n\nWork performed:\n${work}\n\nFinal answer:\n${finalText}\n\nDid the work achieve the objective? Reply with JSON {"passed": boolean, "notes": string}.`,
-      context: ['You are verifying an agent task outcome. Reply with JSON only.'],
+      prompt: `Objective: ${options.objective}\n\nWork performed:\n${work}\n\nFinal answer:\n${finalText}\n\nWas the objective achieved? Reply with JSON {"passed": boolean, "notes": string}.`,
+      context: [
+        'You are verifying an agent task outcome. Reply with JSON only.',
+        'Judge only whether the final outcome satisfies the objective. Do not judge style, efficiency, or whether a different approach would have been better. If the objective was achieved, passed must be true. Set passed to false only when the outcome is missing, wrong, or incomplete.',
+      ],
       output: { jsonSchema: VERIFICATION_SCHEMA, jsonSchemaName: 'agent_verification' },
     }, { signal: options.signal });
     if (!response.ok) {

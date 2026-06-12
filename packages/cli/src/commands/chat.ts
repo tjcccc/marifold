@@ -2,7 +2,7 @@ import { randomUUID } from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import { Command } from 'commander';
-import { formatSearchContext } from '@marifold/core';
+import { expandHome, formatSearchContext } from '@marifold/core';
 import type { ImageInput, MemoryKind } from '@marifold/core';
 import { InteractivePrompt } from '../input/InteractivePrompt';
 import { ConsolePrinter } from '../output/ConsolePrinter';
@@ -177,7 +177,7 @@ export function registerChatCommand(program: Command, printer: ConsolePrinter): 
               process.stdout.write(style.dim('Cleared pending images.\n\n'));
               continue;
             }
-            const imagePath = path.resolve(payload);
+            const imagePath = path.resolve(expandHome(payload));
             if (!fs.existsSync(imagePath)) {
               process.stderr.write(`Image not found: ${imagePath}\n`);
               continue;
@@ -304,7 +304,7 @@ function parseRememberCommand(message: string): { kind: MemoryKind; text: string
 }
 
 function readFileForChat(filePath: string): { path: string; block: string; chars: number } | undefined {
-  const resolved = path.resolve(filePath);
+  const resolved = path.resolve(expandHome(filePath));
   let content: string;
   try {
     content = fs.readFileSync(resolved, 'utf-8');

@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { JSONValue } from '@priest-ai/core';
+import { expandHome } from '../../workspace/WorkspacePaths';
 import { AgentTool, capToolOutput, requireStringInput, ToolExecutionContext, ToolExecutionResult } from '../ToolRegistry';
 
 export class ReadFileTool implements AgentTool {
@@ -22,7 +23,7 @@ export class ReadFileTool implements AgentTool {
   }
 
   async execute(input: Record<string, JSONValue>, ctx: ToolExecutionContext): Promise<ToolExecutionResult> {
-    const target = path.resolve(ctx.cwd, requireStringInput(input, 'path', 'read_file'));
+    const target = path.resolve(ctx.cwd, expandHome(requireStringInput(input, 'path', 'read_file')));
     let content: string;
     try {
       const stat = fs.statSync(target);

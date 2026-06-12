@@ -83,6 +83,20 @@ describe('WriteFileTool', () => {
     expect(inside.escalate).toBe(false);
   });
 
+  it('expands ~ in read and write paths', async () => {
+    const dir = tempDir();
+    const home = os.homedir();
+    // Risk assessment must see the expanded home path, not "$cwd/~/...".
+    const risk = new WriteFileTool().assessRisk({ path: '~/somewhere/x.txt', content: 'x' }, context(dir));
+    expect(risk.escalate).toBe(true);
+    expect(risk.reason).toContain(home);
+
+    const result = await new ReadFileTool().execute({ path: '~/nonexistent-marifold-test-file' }, context(dir));
+    expect(result.isError).toBe(true);
+    expect(result.content).toContain(home);
+    expect(result.content).not.toContain('/~/');
+  });
+
   it('isInsideWorkspace handles traversal and absolute paths', () => {
     expect(isInsideWorkspace('/tmp/ws/a/b.txt', '/tmp/ws')).toBe(true);
     expect(isInsideWorkspace('/tmp/ws', '/tmp/ws')).toBe(true);

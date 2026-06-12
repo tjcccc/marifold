@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+import { expandHome } from '@marifold/core';
 import { ConsolePrinter } from '../output/ConsolePrinter';
 import { createRuntime } from './RuntimeFactory';
 
@@ -35,7 +36,7 @@ export function registerAskCommand(program: Command, printer: ConsolePrinter): v
           sessionId: options.session,
           memories: options.memories,
           think: options.think,
-          images: options.image && options.image.length > 0 ? options.image.map(path => ({ path })) : undefined,
+          images: options.image && options.image.length > 0 ? options.image.map(path => ({ path: expandHome(path) })) : undefined,
         });
         printer.printAskResponse(response);
         if (!response.ok) process.exitCode = 1;
