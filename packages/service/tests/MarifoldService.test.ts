@@ -22,7 +22,7 @@ afterEach(() => {
 
 describe('MarifoldService', () => {
   it('exposes health and sanitized config without secrets', async () => {
-    const server = createMarifoldService({ loadedConfig: fixtureLoadedConfig(tempDir()) });
+    const server = createMarifoldService({ loadedConfig: fixtureLoadedConfig(tempDir()), scheduler: false });
     try {
       const health = await server.inject({ method: 'GET', url: '/health' });
       expect(health.statusCode).toBe(200);
@@ -47,7 +47,7 @@ describe('MarifoldService', () => {
   });
 
   it('creates and updates task state through the API', async () => {
-    const server = createMarifoldService({ loadedConfig: fixtureLoadedConfig(tempDir()) });
+    const server = createMarifoldService({ loadedConfig: fixtureLoadedConfig(tempDir()), scheduler: false });
     try {
       const created = await server.inject({
         method: 'POST',
@@ -109,9 +109,41 @@ describe('MarifoldService', () => {
     }
   });
 
+  it('exposes schedules read-only', async () => {
+    const dir = tempDir();
+    const loadedConfig = fixtureLoadedConfig(dir);
+    fs.mkdirSync(path.join(dir, 'schedules'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'schedules', 'sched_test1.json'), JSON.stringify({
+      schema: 'marifold.schedule.v1',
+      id: 'sched_test1',
+      name: 'Daily digest',
+      objective: 'Summarize the news.',
+      cron: '0 9 * * *',
+      enabled: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }));
+
+    const server = createMarifoldService({ loadedConfig, scheduler: false });
+    try {
+      const listed = await server.inject({ method: 'GET', url: '/v1/schedules' });
+      expect(listed.statusCode).toBe(200);
+      expect(listed.json().schedules).toMatchObject([{ id: 'sched_test1', name: 'Daily digest' }]);
+
+      const single = await server.inject({ method: 'GET', url: '/v1/schedules/sched_test1' });
+      expect(single.statusCode).toBe(200);
+      expect(single.json().schedule.cron).toBe('0 9 * * *');
+
+      const missing = await server.inject({ method: 'GET', url: '/v1/schedules/sched_nope' });
+      expect(missing.statusCode).toBe(404);
+    } finally {
+      await server.close();
+    }
+  });
+
   it('routes ask through the core runtime', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => ollamaStreamResponse(['service ', 'response'])));
-    const server = createMarifoldService({ loadedConfig: fixtureLoadedConfig(tempDir()) });
+    const server = createMarifoldService({ loadedConfig: fixtureLoadedConfig(tempDir()), scheduler: false });
     try {
       const response = await server.inject({
         method: 'POST',
@@ -152,6 +184,7 @@ function fixtureLoadedConfig(dir: string): LoadedMarifoldConfig {
       profilesDir: path.join(dir, 'profiles'),
       sessionsDb: path.join(dir, 'sessions.db'),
       tasksDir: path.join(dir, 'tasks'),
+      schedulesDir: path.join(dir, 'schedules'),
     },
     providers: {
       ollama: {
@@ -168,15 +201,13 @@ function fixtureLoadedConfig(dir: string): LoadedMarifoldConfig {
   };
 }
 
+// /v1/ask uses the SDK's non-streaming complete() since @priest-ai/core 2.4,
+// so the fake returns one Ollama JSON object rather than NDJSON chunks.
 function ollamaStreamResponse(chunks: string[]): Response {
-  const encoder = new TextEncoder();
-  const body = new ReadableStream<Uint8Array>({
-    start(controller) {
-      for (const chunk of chunks) {
-        controller.enqueue(encoder.encode(`${JSON.stringify({ message: { content: chunk } })}\n`));
-      }
-      controller.close();
-    },
+  const body = JSON.stringify({
+    message: { content: chunks.join('') },
+    done: true,
+    done_reason: 'stop',
   });
-  return new Response(body, { status: 200 });
+  return new Response(body, { status: 200, headers: { 'Content-Type': 'application/json' } });
 }

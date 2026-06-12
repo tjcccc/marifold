@@ -14,10 +14,35 @@ options = [
 size_limit = 50000
 context_limit = 2400
 
+# Optional: agent loop policy. Defaults shown.
+[agent]
+max_iterations = 20
+tool_output_limit = 100000
+tool_mode = "auto"
+
+[agent.approval]
+read = "allow"
+write = "ask"
+shell = "ask"
+network = "ask"
+delegate = "allow"
+
+# Optional: approval overrides for unattended scheduled runs.
+# 'ask' degrades to deny when unattended; only explicit allows widen access.
+# [agent.unattended]
+# write = "allow"
+
+# Optional: model-initiated web_search/read_file tools on chat turns.
+# The explicit /search chat command works regardless of this flag.
+[web_search]
+enabled = false
+max_results = 5
+
 [paths]
 profiles_dir = "~/.marifold/profiles"
 sessions_db = "~/.marifold/sessions.db"
 tasks_dir = "~/.marifold/tasks"
+schedules_dir = "~/.marifold/schedules"
 
 [providers.ollama]
 type = "ollama"

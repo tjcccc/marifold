@@ -7,6 +7,7 @@ import {
   defaultConfigPath,
   defaultProfilesDir,
   defaultSessionsDb,
+  defaultSchedulesDir,
   defaultTasksDir,
   resolveUserPath,
 } from './WorkspacePaths';
@@ -51,6 +52,7 @@ export interface WorkspaceInitOptions {
   profilesDir?: string;
   sessionsDb?: string;
   tasksDir?: string;
+  schedulesDir?: string;
   baseUrl?: string;
   apiKeyEnv?: string;
   force?: boolean;
@@ -61,6 +63,7 @@ export interface WorkspaceInitResult {
   profilesDir: string;
   sessionsDb: string;
   tasksDir: string;
+  schedulesDir: string;
   provider: string;
   providerType: ProviderType;
   model: string;
@@ -84,6 +87,7 @@ export class WorkspaceInitializer {
     const profilesDir = resolveUserPath(options.profilesDir ?? defaultProfilesDir());
     const sessionsDb = resolveUserPath(options.sessionsDb ?? defaultSessionsDb());
     const tasksDir = resolveUserPath(options.tasksDir ?? defaultTasksDir());
+    const schedulesDir = resolveUserPath(options.schedulesDir ?? defaultSchedulesDir());
     const baseUrl = resolveBaseUrl(provider, providerType, options.baseUrl);
     const apiKeyEnv = resolveApiKeyEnv(provider, providerType, options.apiKeyEnv);
 
@@ -92,6 +96,7 @@ export class WorkspaceInitializer {
     fs.mkdirSync(profilesDir, { recursive: true });
     fs.mkdirSync(path.dirname(sessionsDb), { recursive: true });
     fs.mkdirSync(tasksDir, { recursive: true });
+    fs.mkdirSync(schedulesDir, { recursive: true });
 
     const configStatus: WorkspaceInitFileStatus = fs.existsSync(configPath) ? 'updated' : 'created';
     fs.writeFileSync(configPath, renderConfig({
@@ -102,6 +107,7 @@ export class WorkspaceInitializer {
       profilesDir,
       sessionsDb,
       tasksDir,
+      schedulesDir,
       baseUrl,
       apiKeyEnv,
     }));
@@ -120,6 +126,7 @@ export class WorkspaceInitializer {
       profilesDir,
       sessionsDb,
       tasksDir,
+      schedulesDir,
       provider,
       providerType,
       model,
@@ -137,6 +144,7 @@ interface RenderConfigOptions {
   profilesDir: string;
   sessionsDb: string;
   tasksDir: string;
+  schedulesDir: string;
   baseUrl?: string;
   apiKeyEnv?: string;
 }
@@ -169,6 +177,7 @@ context_limit = 2400
 profiles_dir = ${tomlString(options.profilesDir)}
 sessions_db = ${tomlString(options.sessionsDb)}
 tasks_dir = ${tomlString(options.tasksDir)}
+schedules_dir = ${tomlString(options.schedulesDir)}
 
 ${providerLines.join('\n')}
 `;

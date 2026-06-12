@@ -9,6 +9,7 @@ interface AskOptions {
   session?: string;
   memories?: boolean;
   think?: boolean;
+  image?: string[];
 }
 
 export function registerAskCommand(program: Command, printer: ConsolePrinter): void {
@@ -22,6 +23,7 @@ export function registerAskCommand(program: Command, printer: ConsolePrinter): v
     .option('--session <id>', 'Optional session id for continuity.')
     .option('--no-memories', 'Disable profile memory for this run.')
     .option('--think [state]', 'Enable or disable thinking mode for this run. Accepts true/false.', parseOptionalBoolean)
+    .option('--image <path>', 'Attach an image file to the prompt. Repeatable.', collectImage, [] as string[])
     .action(async (promptParts: string[], options: AskOptions) => {
       const runtime = createRuntime(program);
       try {
@@ -33,6 +35,7 @@ export function registerAskCommand(program: Command, printer: ConsolePrinter): v
           sessionId: options.session,
           memories: options.memories,
           think: options.think,
+          images: options.image && options.image.length > 0 ? options.image.map(path => ({ path })) : undefined,
         });
         printer.printAskResponse(response);
         if (!response.ok) process.exitCode = 1;
@@ -43,6 +46,10 @@ export function registerAskCommand(program: Command, printer: ConsolePrinter): v
         runtime.close();
       }
     });
+}
+
+function collectImage(value: string, previous: string[]): string[] {
+  return [...previous, value];
 }
 
 function parseOptionalBoolean(value?: string): boolean {

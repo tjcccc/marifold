@@ -1,6 +1,9 @@
 import { randomUUID } from 'crypto';
+import * as fs from 'fs';
+import * as path from 'path';
 import { Command } from 'commander';
-import type { MemoryKind } from '@marifold/core';
+import { formatSearchContext } from '@marifold/core';
+import type { ImageInput, MemoryKind } from '@marifold/core';
 import { InteractivePrompt } from '../input/InteractivePrompt';
 import { ConsolePrinter } from '../output/ConsolePrinter';
 import { TerminalStyle } from '../output/TerminalStyle';
@@ -17,11 +20,16 @@ interface ChatOptions {
 }
 
 const EXIT_COMMANDS = new Set(['/exit', '/quit']);
+const READ_FILE_CHAR_LIMIT = 100000;
 const CHAT_HELP = `Chat commands:
   /help                 Show this help.
   /new                  Start a new session with the same profile and model.
   /think on             Enable thinking mode for supported providers.
   /think off            Disable thinking mode.
+  /search <query>       Search the web and answer using the results.
+  /read <path>          Attach a local file's content to your next message.
+  /image <path>         Attach an image to your next message. Repeatable.
+  /image clear          Drop pending image attachments.
   /remember <text>      Save short-term memory.
   /remember user <text> Save durable user memory.
   /remember pref <text> Save durable preference memory.
@@ -49,6 +57,8 @@ export function registerChatCommand(program: Command, printer: ConsolePrinter): 
       const style = new TerminalStyle();
       let sessionId = options.session ?? randomUUID();
       let think = false;
+      const pendingContext: string[] = [];
+      const pendingImages: ImageInput[] = [];
 
       try {
         const settings = runtime.resolveSettings({
@@ -76,6 +86,31 @@ export function registerChatCommand(program: Command, printer: ConsolePrinter): 
         process.stdout.write(style.dim(`Think:    ${think ? 'on' : 'off'}\n`));
         process.stdout.write(style.dim('Type /help for commands, Ctrl-C to quit.\n\n'));
 
+        const streamTurn = async (turnPrompt: string, extraContext: string[] = []): Promise<void> => {
+          const userContext = [...extraContext, ...pendingContext.splice(0)];
+          const images = pendingImages.splice(0);
+          let responseStarted = false;
+          for await (const chunk of runtime.stream({
+            prompt: turnPrompt,
+            profile: settings.profile,
+            provider: settings.provider,
+            model: settings.model,
+            sessionId,
+            memories: options.memories,
+            think,
+            userContext: userContext.length > 0 ? userContext : undefined,
+            images: images.length > 0 ? images : undefined,
+          })) {
+            if (!responseStarted) {
+              process.stdout.write(`\n${style.bold(`${settings.profile} >`)}\n`);
+              responseStarted = true;
+            }
+            process.stdout.write(chunk);
+          }
+          if (!responseStarted) process.stdout.write(`\n${style.bold(`${settings.profile} >`)}\n`);
+          process.stdout.write('\n\n');
+        };
+
         while (true) {
           const raw = await prompt.readMultilineMessage(style.bold('user > '), style.dim('... > '));
           if (raw === undefined) break;
@@ -100,6 +135,55 @@ export function registerChatCommand(program: Command, printer: ConsolePrinter): 
             }
             think = next;
             process.stdout.write(style.dim(`Thinking mode ${think ? 'on' : 'off'}.\n\n`));
+            continue;
+          }
+          if (isCommand(message, '/search')) {
+            const query = commandPayload(message, '/search');
+            if (!query) {
+              process.stderr.write('Usage: /search <query>\n');
+              continue;
+            }
+            let results: string;
+            try {
+              process.stdout.write(style.dim('Searching the web...\n'));
+              results = await runtime.searchWeb(query);
+            } catch (error) {
+              process.stderr.write(`Web search failed: ${error instanceof Error ? error.message : String(error)}\n`);
+              continue;
+            }
+            await streamTurn(query, [formatSearchContext(results)]);
+            continue;
+          }
+          if (isCommand(message, '/read')) {
+            const filePath = commandPayload(message, '/read');
+            if (!filePath) {
+              process.stderr.write('Usage: /read <path>\n');
+              continue;
+            }
+            const attached = readFileForChat(filePath);
+            if (!attached) continue;
+            pendingContext.push(attached.block);
+            process.stdout.write(style.dim(`Attached ${attached.path} (${attached.chars} chars) to your next message.\n\n`));
+            continue;
+          }
+          if (isCommand(message, '/image')) {
+            const payload = commandPayload(message, '/image');
+            if (!payload) {
+              process.stderr.write('Usage: /image <path> | /image clear\n');
+              continue;
+            }
+            if (payload.toLowerCase() === 'clear') {
+              pendingImages.length = 0;
+              process.stdout.write(style.dim('Cleared pending images.\n\n'));
+              continue;
+            }
+            const imagePath = path.resolve(payload);
+            if (!fs.existsSync(imagePath)) {
+              process.stderr.write(`Image not found: ${imagePath}\n`);
+              continue;
+            }
+            pendingImages.push({ path: imagePath });
+            process.stdout.write(style.dim(`Attached image #${pendingImages.length}: ${imagePath}\n\n`));
             continue;
           }
           if (isCommand(message, '/remember')) {
@@ -138,24 +222,7 @@ export function registerChatCommand(program: Command, printer: ConsolePrinter): 
             continue;
           }
 
-          let responseStarted = false;
-          for await (const chunk of runtime.stream({
-            prompt: message,
-            profile: settings.profile,
-            provider: settings.provider,
-            model: settings.model,
-            sessionId,
-            memories: options.memories,
-            think,
-          })) {
-            if (!responseStarted) {
-              process.stdout.write(`\n${style.bold(`${settings.profile} >`)}\n`);
-              responseStarted = true;
-            }
-            process.stdout.write(chunk);
-          }
-          if (!responseStarted) process.stdout.write(`\n${style.bold(`${settings.profile} >`)}\n`);
-          process.stdout.write('\n\n');
+          await streamTurn(message);
         }
       } catch (error) {
         printer.printError(error);
@@ -234,6 +301,24 @@ function parseRememberCommand(message: string): { kind: MemoryKind; text: string
     default:
       return { kind: 'auto_short', text: payload };
   }
+}
+
+function readFileForChat(filePath: string): { path: string; block: string; chars: number } | undefined {
+  const resolved = path.resolve(filePath);
+  let content: string;
+  try {
+    content = fs.readFileSync(resolved, 'utf-8');
+  } catch (error) {
+    process.stderr.write(`Could not read ${resolved}: ${error instanceof Error ? error.message : String(error)}\n`);
+    return undefined;
+  }
+  const truncated = content.length > READ_FILE_CHAR_LIMIT;
+  const body = truncated ? `${content.slice(0, READ_FILE_CHAR_LIMIT)}\n[truncated at ${READ_FILE_CHAR_LIMIT} characters]` : content;
+  return {
+    path: resolved,
+    chars: content.length,
+    block: `## File: ${resolved}\n\n${body}`,
+  };
 }
 
 function commandPayload(message: string, command: string): string {

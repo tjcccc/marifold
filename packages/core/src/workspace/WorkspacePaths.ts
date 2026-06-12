@@ -21,6 +21,10 @@ export function defaultTasksDir(): string {
   return path.join(marifoldHome(), 'tasks');
 }
 
+export function defaultSchedulesDir(): string {
+  return path.join(marifoldHome(), 'schedules');
+}
+
 export function expandHome(input: string): string {
   if (input === '~') return os.homedir();
   if (input.startsWith('~/')) return path.join(os.homedir(), input.slice(2));

@@ -55,9 +55,49 @@ Deferred discussion:
 - Approval-aware agent loop and tool execution.
 - Promotion from ephemeral task state into durable profile/workspace memory.
 
+## v0.11.0 - Basic Agent Loop
+
+Goal: a narrow, approval-aware agent loop that shapes the task-state and event model before any client UI is built.
+
+Implemented scope:
+
+- `@priest-ai/core` 2.4: native tool calling, `runWithTools` loop helper, `streamEvents`, cancellation, and image input — spec synced to the priest repository.
+- `packages/core/src/agent`: AgentRunner (plan, tool loop, verification, summary), renderer-agnostic AgentEvent stream, ToolRegistry, approval policy.
+- Built-in tools: file read/write (workspace jail), shell exec, and `ask_profile` profile delegation (minimal multi-model orchestration).
+- Control-block tool fallback for models without native tool support.
+- `[agent]` config section, `marifold agent` command, and `scripts/agent-eval.mjs`.
+
+Deferred discussion:
+
+- Agent-run service routes (need a bidirectional approval channel).
+- Live streaming deltas inside agent runs (event model already supports it).
+- Subagent/delegation beyond depth-1 `ask_profile`.
+
+## v0.12.0 - Selective Chat Parity
+
+Implemented scope:
+
+- Pluggable `SearchBackend` (DuckDuckGo default) reused by the agent `web_search` tool, chat `/search`, and model-initiated chat tools behind `[web_search].enabled`.
+- Chat `/read <path>` file attachment; bounded chat tool loop with memory-payload deferral to the final response.
+- ChatGPT OAuth token refresh in core with refresh-token rotation, generalizing the Copilot refresh dispatch.
+- Image plumbing: `ask --image`, chat `/image <path>` / `/image clear`, service base64/URL images. Terminal image paste stays deferred to the TUI.
+
+## SkillApp Spec
+
+- `docs/skillapp.md` defines `marifold.skillapp.v0` (layout/variables/actions/permissions, aligned with the agent approval vocabulary) with a core TOML parser/validator. No runtime or rendering until a client UI exists.
+
+## v0.13.0 - Scheduled Task Execution
+
+Implemented scope:
+
+- File-backed `ScheduleStore` with validated cron expressions and a minute-resolution `Scheduler` hosted inside `marifold service`.
+- Unattended approval policy: `ask` degrades to deny; `[agent.unattended]` overrides can pre-approve specific tool kinds.
+- `marifold schedule` management commands, read-only `/v1/schedules` routes, `scheduled` task tags, and the `lastResultSeen` unread flag.
+- Schedules fire only while the service runs; daemon packaging stays deferred.
+
 ## Later
 
-- Main `marifold` TUI as the primary entrypoint.
+- Main `marifold` TUI as the primary entrypoint (Codex/Claude-like terminal app), then Web UI, then Apple clients.
 - Schema-defined SkillApp runtime.
 - Alias profiles for Codex, Claude Code, and other external agents.
 - Workflow composition across native profiles, skill apps, models, and external-agent aliases.

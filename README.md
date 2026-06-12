@@ -2,12 +2,31 @@
 
 Marifold is a local-first personal AI workspace for profiles, chats, skills, mini apps, workflows, and external agents.
 
-v0.10.0 is the service and task-state foundation release. It provides priests-style profile chat, one-shot requests, workspace initialization, resume support, saved model options, model validation, structured profile memory with priority/relevance recall, model-driven and prompt-fallback memory updates, conflict-key supersession, short-term trimming, memory inspection, thinking mode controls, OAuth provider setup, GitHub Copilot Responses API support, config backup/import, profile and session management polish, a loopback-only Fastify service API, ephemeral task-state storage for future agents, and command/eval coverage through a TypeScript CLI.
+v0.13.0 is the pre-TUI foundation release: the basic agent loop, chat parity, the SkillApp schema spec, and scheduled task execution. On top of the v0.10.0 service and task-state foundation, it adds an approval-aware agent loop with native provider tool calling (through `@priest-ai/core` 2.4), a control-block fallback for models without native tool support, narrow built-in tools (file read/write, shell, web search, profile delegation), a workspace write boundary, config-driven approval policy, a `marifold agent` command, a provider-backed agent eval script, chat `/search` and `/read` and `/image` commands, model-initiated chat tools, ChatGPT OAuth token refresh, image attachment plumbing, the `marifold.skillapp.v0` schema spec with a validator, and cron-scheduled unattended agent runs hosted inside `marifold service` — alongside the existing priests-style profile chat, structured memory, model management, OAuth provider setup, config backup/import, loopback-only Fastify service API, and ephemeral task-state storage.
 
 For product direction and future scope, see [docs/vision.md](docs/vision.md) and [docs/roadmap.md](docs/roadmap.md).
 
-## What v0.10.0 Supports
+## What v0.13.0 Supports
 
+- Scheduled agent runs: `marifold schedule add --cron "0 9 * * 1-5" "<objective>"` plus `list`/`show`/`enable`/`disable`/`rm`/`run`.
+- A scheduler hosted inside `marifold service` (minute resolution); schedules fire only while the service runs, and a firing missed during downtime fires once on the next tick.
+- Unattended approval policy for scheduled runs: `ask` degrades to deny, with explicit `[agent.unattended]` overrides (e.g. `write = "allow"`).
+- Read-only `/v1/schedules` service routes, `scheduled` task tags, and a `lastResultSeen` flag for future unread-result surfacing.
+- The `marifold.skillapp.v0` SkillApp schema spec ([docs/skillapp.md](docs/skillapp.md)) with a TOML parser/validator in core (spec only — no runtime yet).
+- Web search through the chat `/search <query>` command (DuckDuckGo by default, pluggable backend) with results injected as turn-local context.
+- Model-initiated `web_search` and `read_file` tools on chat turns when `[web_search].enabled = true`, using a bounded tool loop.
+- File attachment through chat `/read <path>` (100k-char truncation) and image attachment through `/image <path>` / `/image clear` and `ask --image <path>`.
+- Base64/URL image payloads on the service `/v1/ask` route.
+- ChatGPT OAuth token refresh before provider requests, mirroring the GitHub Copilot refresh flow.
+- Approval-aware basic agent loop through `marifold agent "<objective>"`.
+- Agent phases: model-generated plan, tool loop, verification, and task summary, all persisted as ephemeral task state.
+- Native provider tool calling via `@priest-ai/core` 2.4 for Ollama, OpenAI-compatible (including the GitHub Copilot Responses API path), and Anthropic providers.
+- Automatic control-block tool fallback (`<tool_call>` prompt blocks) for models without native tool support, plus `--tool-mode auto|native|control-block`.
+- Built-in agent tools: `read_file`, `write_file`, `shell_exec`, and `ask_profile` (one-shot delegation to another profile/model).
+- Config-driven approval policy per tool kind (`allow`/`ask`/`deny`) with interactive y/N prompts, `--yes`, and unattended ask-degrades-to-deny behavior.
+- Workspace write boundary: writes outside the run's working directory always require interactive approval.
+- Agent runs bypass profile memory: hidden memory control blocks are stripped and discarded, and task state is never promoted into profile memory.
+- Provider-backed agent eval through `pnpm agent-eval -- --provider ollama --model qwen3.5:9b`.
 - Marifold-branded CLI.
 - One-shot request-response.
 - Interactive chat.
@@ -54,7 +73,9 @@ For product direction and future scope, see [docs/vision.md](docs/vision.md) and
 
 ## Non-goals
 
-v0.10.0 does not include semantic/vector retrieval, memory encryption, full memory edit UI, Web UI, SkillApp, Workflow, Apple apps, external-agent aliases, web search, image upload, scheduled tasks, provider-owned model deletion, remote service auth, service daemon packaging, permission systems, visual mini-app rendering, or an agentic tool loop.
+v0.13.0 does not include semantic/vector retrieval, memory encryption, full memory edit UI, Web UI, SkillApp runtime/rendering, Workflow, Apple apps, external-agent aliases, terminal image paste (deferred to the TUI), provider-owned model deletion, remote service auth, service daemon packaging (schedules fire only while `marifold service` runs), or agent-run service routes.
+
+Web search uses DuckDuckGo scraping by default, which requires no API key but can be blocked by DuckDuckGo's anomaly detection on some networks. Errors surface clearly in `/search` output and tool results, and the `SearchBackend` interface is pluggable for alternative engines.
 
 ## Setup
 
@@ -103,21 +124,29 @@ pnpm typecheck
 pnpm test
 ```
 
-For CLI smoke checks that avoid live model calls, see [docs/smoke.md](docs/smoke.md). For provider-backed memory checks after `pnpm build`, run:
+For CLI smoke checks that avoid live model calls, see [docs/smoke.md](docs/smoke.md). For provider-backed checks after `pnpm build`, run:
 
 ```bash
 pnpm memory-eval -- --provider ollama --model gemma4:e4b --suite professional
+pnpm agent-eval -- --provider ollama --model qwen3.5:9b
 ```
+
+The agent eval runs scripted objectives in sandboxed temp directories and reports which provider/model/tool-mode combinations converge — useful for deciding which saved models are agent-capable.
 
 ## Commands
 
 Run the local CLI from the workspace:
 
 ```bash
+pnpm marifold agent "Read package.json and summarize the scripts."
+pnpm marifold agent --profile coder --max-iterations 10 "Count the .md files in this directory."
+pnpm marifold agent --tool-mode control-block --yes "Write a haiku into haiku.txt"
+
 pnpm marifold ask "Hello"
 pnpm marifold ask --profile default "Explain Marifold in one sentence."
 pnpm marifold ask --no-memories "Format this JSON"
 pnpm marifold ask --think true "Solve step by step."
+pnpm marifold ask --image ./photo.jpg "What is in this image?"
 
 pnpm marifold chat
 pnpm marifold chat --profile default
@@ -171,6 +200,13 @@ pnpm marifold session rename test-session renamed-session
 pnpm marifold session delete renamed-session
 pnpm marifold session clear --profile default --keep-last 10 --yes
 
+pnpm marifold schedule add --cron "0 9 * * 1-5" --name digest "Summarize my notes folder."
+pnpm marifold schedule list
+pnpm marifold schedule show sched_xxxx
+pnpm marifold schedule disable sched_xxxx
+pnpm marifold schedule run sched_xxxx
+pnpm marifold schedule rm sched_xxxx
+
 pnpm marifold service
 pnpm marifold service --host 127.0.0.1 --port 32140
 ```
@@ -184,6 +220,10 @@ Memory commands available inside chat:
 ```text
 /think on             Enable thinking mode for supported providers.
 /think off            Disable thinking mode.
+/search <query>        Search the web and answer using the results.
+/read <path>           Attach a local file's content to your next message.
+/image <path>          Attach an image to your next message. Repeatable.
+/image clear           Drop pending image attachments.
 /remember <text>       Save short-term memory.
 /remember user <text>  Save durable user memory.
 /remember pref <text>  Save durable preference memory.
@@ -224,10 +264,27 @@ options = [
 size_limit = 50000
 context_limit = 2400
 
+[agent]
+max_iterations = 20
+tool_output_limit = 100000
+tool_mode = "auto"
+
+[agent.approval]
+read = "allow"
+write = "ask"
+shell = "ask"
+network = "ask"
+delegate = "allow"
+
+[web_search]
+enabled = false
+max_results = 5
+
 [paths]
 profiles_dir = "~/.marifold/profiles"
 sessions_db = "~/.marifold/sessions.db"
 tasks_dir = "~/.marifold/tasks"
+schedules_dir = "~/.marifold/schedules"
 
 [providers.ollama]
 type = "ollama"
@@ -266,6 +323,31 @@ For GitHub Copilot OAuth, Marifold refreshes the short-lived Copilot IDE token f
 
 `[default].think` controls default thinking mode. Thinking is passed as provider option `think` only to providers known to support it: Ollama-compatible providers plus `bailian` and `alibaba_cloud`.
 
+The `[web_search]` section is optional. `enabled = true` lets the model call `web_search` (and `read_file`, when read policy is `allow`) during chat turns through a bounded tool loop; the explicit `/search` command works regardless of this flag. Intermediate tool turns are turn-local — sessions store only your prompt and the final answer, and memory updates apply only from the final response.
+
+For ChatGPT OAuth (`marifold model add chatgpt`), Marifold refreshes the expired API credential from the saved refresh token before provider requests, persisting the rotated refresh token — matching the GitHub Copilot refresh behavior.
+
+The `[agent]` section is optional; defaults apply when it is absent. `[agent.approval]` sets per-tool-kind policy (`allow`, `ask`, or `deny`) for `read`, `write`, `shell`, `network`, and `delegate` tools. In interactive runs, `ask` prompts y/N; in unattended runs (no approval handler), `ask` degrades to deny. Writes outside the run's working directory always escalate to an interactive prompt even when `write = "allow"`. `tool_mode = "auto"` uses native provider tool calling and falls back to prompt control blocks when the provider rejects tools.
+
+## Agent
+
+`marifold agent "<objective>"` runs a basic agent loop: the model produces a short plan, iterates with tools (file read/write, shell, profile delegation), verifies the outcome against the objective, and writes a summary. Progress persists as ephemeral task state under `[paths].tasks_dir` — inspectable via the task service routes — and is never promoted into profile memory.
+
+The `ask_profile` tool lets the agent delegate a one-shot subtask to another profile (and that profile's provider/model), which is Marifold's minimal form of multi-model orchestration. Delegated requests are plain asks without tools, so delegation depth is structurally one.
+
+Cancel a run with Ctrl+C; the task is marked `cancelled`. Runs stopped at the iteration cap are marked `failed`, and runs whose verification does not confirm the objective are marked `blocked` with a suggested next action.
+
+## Schedules
+
+`marifold schedule add --cron "<expression>" "<objective>"` stores a schedule under `[paths].schedules_dir`. Schedules fire **only while `marifold service` is running** (minute resolution); a firing missed during downtime fires once on the next tick. Each firing runs the agent unattended: `ask`-mode tools are denied unless `[agent.unattended]` explicitly allows that tool kind:
+
+```toml
+[agent.unattended]
+write = "allow"
+```
+
+Each run creates a task tagged `scheduled` and records `lastTaskId`/`lastResultSeen` on the schedule for later inspection (`marifold schedule show`, `/v1/schedules`, `/v1/tasks`). `marifold schedule run <id>` executes one firing immediately, also unattended.
+
 ## Profiles
 
 Marifold v0.10.0 loads priests-style profile directories:
@@ -298,6 +380,6 @@ Marifold also reads legacy Markdown memory files in `memories/user.md`, `memorie
 
 ## Relationship to priest-typescript
 
-Marifold depends on `@priest-ai/core` for provider calls, streaming, context assembly, and SQLite-backed session continuity.
+Marifold depends on `@priest-ai/core` for provider calls, streaming, native tool-call transport, context assembly, and SQLite-backed session continuity. Priest owns everything about talking to models; Marifold owns everything about acting on the world.
 
-Marifold owns only the product-level wrapper: CLI commands, Marifold config, priests-style profile directory loading, profile memory selection, and user-facing runtime behavior.
+Marifold owns the product-level layer: CLI commands, Marifold config, priests-style profile directory loading, profile memory selection, concrete agent tools, approval policy, task state, and user-facing runtime behavior.

@@ -1,3 +1,46 @@
+export type { ImageInput, JSONValue as PriestJSONValue, ToolCall, ToolDefinition } from '@priest-ai/core';
+export { AgentRunner } from './agent/AgentRunner';
+export type { AgentEngineContext, AgentRunnerDeps, AgentRunOptions } from './agent/AgentRunner';
+export type { AgentEvent } from './agent/AgentEvents';
+export {
+  DEFAULT_AGENT_CONFIG,
+  resolveAgentConfig,
+} from './agent/ApprovalPolicy';
+export type {
+  AgentApprovalConfig,
+  AgentToolMode,
+  ApprovalDecision,
+  ApprovalHandler,
+  ApprovalMode,
+  ApprovalRequest,
+  MarifoldAgentConfig,
+  PartialAgentConfig,
+  ToolKind,
+} from './agent/ApprovalPolicy';
+export {
+  buildControlBlockInstructions,
+  formatControlBlockResult,
+  parseControlBlockCalls,
+} from './agent/ControlBlockTools';
+export { capToolOutput, ToolRegistry } from './agent/ToolRegistry';
+export type {
+  AgentTool,
+  ToolExecutionContext,
+  ToolExecutionResult,
+  ToolRiskAssessment,
+} from './agent/ToolRegistry';
+export { DelegateTool } from './agent/tools/DelegateTool';
+export type { DelegateAskRequest, DelegateAskResult, DelegateToolDeps } from './agent/tools/DelegateTool';
+export { ReadFileTool } from './agent/tools/ReadFileTool';
+export { ShellExecTool } from './agent/tools/ShellExecTool';
+export { WebSearchTool } from './agent/tools/WebSearchTool';
+export { isInsideWorkspace, WriteFileTool } from './agent/tools/WriteFileTool';
+export { DuckDuckGoBackend } from './search/DuckDuckGoBackend';
+export { formatSearchContext, formatSearchResults } from './search/SearchBackend';
+export type { SearchBackend, SearchResultItem } from './search/SearchBackend';
+export { refreshChatGptAccessToken } from './config/ChatGptTokenRefresh';
+export type { ChatGptRefreshedTokens } from './config/ChatGptTokenRefresh';
+export { DEFAULT_WEB_SEARCH_CONFIG, resolveWebSearchConfig } from './config/ConfigSchema';
 export type {
   LoadedMarifoldConfig,
   MarifoldConfig,
@@ -5,6 +48,7 @@ export type {
   MarifoldMemoryConfig,
   MarifoldPathsConfig,
   MarifoldProviderConfig,
+  MarifoldWebSearchConfig,
   ProfileDetail,
   ProfileFileSummary,
   ProfileSettings,
@@ -82,7 +126,31 @@ export type {
   MarifoldRunError,
   MarifoldRunRequest,
 } from './runtime/MarifoldTypes';
+export { SCHEDULE_SCHEMA, ScheduleStore } from './schedule/ScheduleStore';
+export type { ScheduleCreateInput, ScheduleState, ScheduleUpdateInput } from './schedule/ScheduleStore';
+export { Scheduler } from './schedule/Scheduler';
+export type { ScheduleRunResult, SchedulerDeps } from './schedule/Scheduler';
 export { SessionResolver } from './sessions/SessionResolver';
+export {
+  DEFAULT_SKILLAPP_PERMISSIONS,
+  SKILLAPP_KNOWN_TOOLS,
+  SKILLAPP_SCHEMA,
+} from './skillapp/SkillAppSchema';
+export type {
+  SkillAppAction,
+  SkillAppActionKind,
+  SkillAppComponent,
+  SkillAppDefinition,
+  SkillAppFilesPermission,
+  SkillAppInfo,
+  SkillAppLayoutItem,
+  SkillAppPermissions,
+  SkillAppVariable,
+  SkillAppVariableRole,
+  SkillAppVariableType,
+} from './skillapp/SkillAppSchema';
+export { validateSkillApp, validateSkillAppToml } from './skillapp/SkillAppValidator';
+export type { SkillAppValidationResult } from './skillapp/SkillAppValidator';
 export { Workspace } from './workspace/Workspace';
 export { WorkspaceInitializer } from './workspace/WorkspaceInitializer';
 export type {
@@ -110,6 +178,7 @@ export {
   defaultConfigPath,
   defaultProfilesDir,
   defaultSessionsDb,
+  defaultSchedulesDir,
   defaultTasksDir,
   expandHome,
   marifoldHome,

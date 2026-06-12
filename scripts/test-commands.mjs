@@ -32,6 +32,7 @@ try {
   const profilesDir = path.join(tempRoot, 'profiles');
   const sessionsDb = path.join(tempRoot, 'sessions', 'sessions.db');
   const tasksDir = path.join(tempRoot, 'tasks');
+  const schedulesDir = path.join(tempRoot, 'schedules');
   const backupPath = path.join(tempRoot, 'backup.json');
   const tempHome = path.join(tempRoot, 'home');
   fs.mkdirSync(tempHome, { recursive: true });
@@ -62,6 +63,7 @@ try {
     '--profiles-dir', profilesDir,
     '--sessions-db', sessionsDb,
     '--tasks-dir', tasksDir,
+    '--schedules-dir', schedulesDir,
     '--base-url', mockBaseUrl,
     '--api-key-env', 'MARIFOLD_COMMAND_TEST_KEY',
   ], {
@@ -215,6 +217,45 @@ try {
   ], {
     env: commandEnv,
     contains: 'mock response',
+  });
+
+  runCase('agent --help', [...configArgs, 'agent', '--help'], {
+    env: commandEnv,
+    contains: ['approval-aware', '--tool-mode', '--max-iterations', '--yes'],
+  });
+
+  const scheduleCreate = runCase('schedule add', [
+    ...configArgs,
+    'schedule', 'add',
+    '--cron', '0 9 * * 1-5',
+    '--name', 'weekday-digest',
+    'Summarize my notes.',
+  ], {
+    env: commandEnv,
+    contains: 'Created schedule sched_',
+    capture: true,
+  });
+  const scheduleId = /Created schedule (sched_[a-f0-9]+)/.exec(scheduleCreate.stdout)?.[1];
+  if (!scheduleId) throw new Error('schedule add did not print a schedule id');
+  runCase('schedule list', [...configArgs, 'schedule', 'list'], {
+    env: commandEnv,
+    contains: ['weekday-digest', scheduleId],
+  });
+  runCase('schedule show <id>', [...configArgs, 'schedule', 'show', scheduleId], {
+    env: commandEnv,
+    contains: ['Summarize my notes.', '0 9 * * 1-5'],
+  });
+  runCase('schedule disable <id>', [...configArgs, 'schedule', 'disable', scheduleId], {
+    env: commandEnv,
+    contains: `Disabled schedule ${scheduleId}`,
+  });
+  runCase('schedule enable <id>', [...configArgs, 'schedule', 'enable', scheduleId], {
+    env: commandEnv,
+    contains: `Enabled schedule ${scheduleId}`,
+  });
+  runCase('schedule rm <id>', [...configArgs, 'schedule', 'rm', scheduleId], {
+    env: commandEnv,
+    contains: `Deleted schedule ${scheduleId}`,
   });
 
   runCase('config export <file> --include-sessions', [
@@ -434,6 +475,7 @@ function runConfigSetMatrix(configArgs, env, profilesDir, sessionsDb, tasksDir, 
     ['paths.profiles_dir', profilesDir],
     ['paths.sessions_db', sessionsDb],
     ['paths.tasks_dir', tasksDir],
+    ['paths.schedules_dir', path.join(path.dirname(tasksDir), 'schedules')],
     ['providers.ollama.type', 'ollama'],
     ['providers.ollama.base_url', mockBaseUrl],
     ['providers.ollama.api_key_env', 'MARIFOLD_COMMAND_TEST_KEY'],
@@ -618,7 +660,13 @@ const http = require('node:http');
 
 const server = http.createServer(async (request, response) => {
   const url = new URL(request.url || '/', 'http://127.0.0.1');
-  await readRequestBody(request);
+  const rawBody = await readRequestBody(request);
+  let requestBody = {};
+  try {
+    requestBody = rawBody ? JSON.parse(rawBody) : {};
+  } catch {
+    requestBody = {};
+  }
 
   if (request.method === 'GET' && url.pathname === '/api/tags') {
     writeJson(response, {
@@ -631,6 +679,10 @@ const server = http.createServer(async (request, response) => {
   }
 
   if (request.method === 'POST' && url.pathname === '/api/chat') {
+    if (requestBody.stream === false) {
+      writeJson(response, { message: { content: 'mock response' }, done: true, done_reason: 'stop' });
+      return;
+    }
     response.writeHead(200, { 'Content-Type': 'application/x-ndjson' });
     response.write(JSON.stringify({ message: { content: 'mock ' }, done: false }) + '\n');
     response.write(JSON.stringify({ message: { content: 'response' }, done: true }) + '\n');
@@ -678,8 +730,9 @@ process.on('SIGTERM', () => {
 
 function readRequestBody(request) {
   return new Promise(resolve => {
-    request.resume();
-    request.on('end', resolve);
+    const chunks = [];
+    request.on('data', chunk => chunks.push(chunk));
+    request.on('end', () => resolve(Buffer.concat(chunks).toString('utf-8')));
   });
 }
 

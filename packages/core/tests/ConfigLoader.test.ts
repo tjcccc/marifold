@@ -89,4 +89,51 @@ sessions_db = "${dir}/sessions.db"
 
     expect(loaded.config.memory).toEqual({ sizeLimit: 50000, contextLimit: 2400 });
   });
+
+  it('omits agent config when [agent] is absent and normalizes it when present', () => {
+    const dir = tempDir();
+    const bare = path.join(dir, 'bare.toml');
+    fs.writeFileSync(bare, `
+[default]
+provider = "ollama"
+model = "gemma4:e4b"
+profile = "default"
+`);
+    expect(new ConfigLoader().load({ configPath: bare }).config.agent).toBeUndefined();
+
+    const withAgent = path.join(dir, 'agent.toml');
+    fs.writeFileSync(withAgent, `
+[default]
+provider = "ollama"
+model = "gemma4:e4b"
+profile = "default"
+
+[agent]
+max_iterations = 8
+tool_mode = "control-block"
+
+[agent.approval]
+shell = "deny"
+`);
+    const loaded = new ConfigLoader().load({ configPath: withAgent });
+    expect(loaded.config.agent).toEqual({
+      approval: { read: 'allow', write: 'ask', shell: 'deny', network: 'ask', delegate: 'allow' },
+      maxIterations: 8,
+      toolOutputLimit: 100000,
+      toolMode: 'control-block',
+    });
+  });
+
+  it('rejects invalid agent approval modes', () => {
+    const dir = tempDir();
+    const configPath = path.join(dir, 'config.toml');
+    fs.writeFileSync(configPath, `
+[default]
+profile = "default"
+
+[agent.approval]
+write = "maybe"
+`);
+    expect(() => new ConfigLoader().load({ configPath })).toThrow(/allow.*ask.*deny/);
+  });
 });

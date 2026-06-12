@@ -1,7 +1,18 @@
-import { PriestConfig, PriestEngine } from '@priest-ai/core';
+import { JSONValue, PriestConfig, PriestEngine, PriestRequest, PriestResponse, ToolDefinition, ToolExchangeTurn } from '@priest-ai/core';
+import { AgentRunner } from '../agent/AgentRunner';
+import { resolveAgentConfig } from '../agent/ApprovalPolicy';
+import { DelegateTool } from '../agent/tools/DelegateTool';
+import { ReadFileTool } from '../agent/tools/ReadFileTool';
+import { ShellExecTool } from '../agent/tools/ShellExecTool';
+import { WebSearchTool } from '../agent/tools/WebSearchTool';
+import { WriteFileTool } from '../agent/tools/WriteFileTool';
+import { AgentTool, ToolRegistry } from '../agent/ToolRegistry';
+import { ChatGptRefreshedTokens, refreshChatGptAccessToken } from '../config/ChatGptTokenRefresh';
 import { ConfigManager } from '../config/ConfigManager';
-import { LoadedMarifoldConfig, ProfileDetail, ProfileSummary, SessionDetail, SessionSummary } from '../config/ConfigSchema';
+import { LoadedMarifoldConfig, ProfileDetail, ProfileSummary, resolveWebSearchConfig, SessionDetail, SessionSummary } from '../config/ConfigSchema';
 import { exchangeGitHubTokenForCopilotToken } from '../config/GitHubCopilotAuth';
+import { DuckDuckGoBackend } from '../search/DuckDuckGoBackend';
+import { formatSearchResults, SearchBackend } from '../search/SearchBackend';
 import { ProviderFactory } from '../config/ProviderFactory';
 import { MarifoldError } from '../errors/MarifoldError';
 import { MemoryStore } from '../memory/MemoryStore';
@@ -16,15 +27,21 @@ import {
 } from '../memory/MemoryControls';
 import type { MemoryControlPayloads } from '../memory/MemoryControls';
 import { ProfileResolver } from '../profiles/ProfileResolver';
+import { Scheduler } from '../schedule/Scheduler';
+import { ScheduleCreateInput, ScheduleState, ScheduleStore, ScheduleUpdateInput } from '../schedule/ScheduleStore';
 import { SessionResolver } from '../sessions/SessionResolver';
 import { TaskStore } from '../tasks/TaskStore';
+import { defaultSchedulesDir } from '../workspace/WorkspacePaths';
 import type { TaskCreateInput, TaskEventInput, TaskListOptions, TaskState, TaskSummary, TaskUpdateInput } from '../tasks/TaskStore';
 import { MarifoldAskResponse, MarifoldResolvedSettings, MarifoldRunRequest } from './MarifoldTypes';
 
 const THINK_PROVIDER_NAMES = new Set(['bailian', 'alibaba_cloud']);
+const CHAT_TOOL_MAX_ITERATIONS = 3;
 
 export interface MarifoldRuntimeOptions {
   loadedConfig: LoadedMarifoldConfig;
+  /** Override the web search backend (tests, alternative engines). */
+  searchBackend?: SearchBackend;
 }
 
 export class MarifoldRuntime {
@@ -33,6 +50,8 @@ export class MarifoldRuntime {
   private readonly providerFactory: ProviderFactory;
   private readonly memoryStore: MemoryStore;
   private readonly taskStore: TaskStore;
+  private readonly searchBackend: SearchBackend;
+  private readonly scheduleStore: ScheduleStore;
 
   constructor(private readonly options: MarifoldRuntimeOptions) {
     const { config, configPath } = options.loadedConfig;
@@ -41,6 +60,9 @@ export class MarifoldRuntime {
     this.providerFactory = new ProviderFactory(config, configPath);
     this.memoryStore = new MemoryStore(config.paths.profilesDir);
     this.taskStore = new TaskStore(config.paths.tasksDir);
+    this.searchBackend = options.searchBackend
+      ?? new DuckDuckGoBackend({ proxy: resolveWebSearchConfig(config.webSearch).proxy });
+    this.scheduleStore = new ScheduleStore(config.paths.schedulesDir ?? defaultSchedulesDir());
   }
 
   resolveSettings(request: Pick<MarifoldRunRequest, 'profile' | 'provider' | 'model' | 'think'>): MarifoldResolvedSettings {
@@ -67,6 +89,8 @@ export class MarifoldRuntime {
       session: request.sessionId ? { id: request.sessionId, createIfMissing: true } : undefined,
       context: this.runtimeContext(memory, request.prompt, memoryOn),
       memory,
+      images: request.images,
+      userContext: request.userContext,
     });
     const stripped = stripMemoryControls(response.text ?? '');
     if (response.ok && request.sessionId) {
@@ -92,33 +116,83 @@ export class MarifoldRuntime {
     const engine = this.createEngine(settings.provider, Boolean(request.sessionId));
     const memoryOn = this.memoryEnabled(settings.profile, request.memories);
     const memory = this.memoryForRequest(settings.profile, request.memories, request.prompt, settings.think);
-    const stripper = new MemoryControlStripper();
-    const visibleParts: string[] = [];
-    for await (const chunk of engine.stream({
+    const chatTools = this.chatTools(request);
+
+    const baseRequest: PriestRequest = {
       config: this.toPriestConfig(settings),
       profile: settings.profile,
       prompt: request.prompt,
       session: request.sessionId ? { id: request.sessionId, createIfMissing: true } : undefined,
       context: this.runtimeContext(memory, request.prompt, memoryOn),
       memory,
-    })) {
-      const visible = stripper.feed(chunk);
-      if (visible) {
-        visibleParts.push(visible);
-        yield visible;
+      images: request.images,
+      userContext: request.userContext,
+    };
+
+    // Model-initiated tool loop (web_search/read_file) when [web_search].enabled.
+    // Intermediate tool-call turns are turn-local; the engine persists the
+    // session only on the loop's final response, and memory payloads are
+    // applied only from that final response.
+    const exchange: ToolExchangeTurn[] = [];
+    const maxIterations = chatTools ? CHAT_TOOL_MAX_ITERATIONS : 1;
+
+    for (let iteration = 0; iteration < maxIterations; iteration += 1) {
+      const stripper = new MemoryControlStripper();
+      const visibleParts: string[] = [];
+      let done: PriestResponse | undefined;
+      const lastIteration = iteration === maxIterations - 1;
+
+      for await (const event of engine.streamEvents({
+        ...baseRequest,
+        ...(chatTools && !lastIteration ? { tools: chatTools.definitions } : {}),
+        ...(exchange.length > 0 ? { toolExchange: exchange } : {}),
+      })) {
+        if (event.type === 'text_delta') {
+          const visible = stripper.feed(event.text);
+          if (visible) {
+            visibleParts.push(visible);
+            yield visible;
+          }
+        } else if (event.type === 'done') {
+          done = event.response;
+        }
+      }
+      const tail = stripper.flush();
+      if (tail) {
+        visibleParts.push(tail);
+        yield tail;
+      }
+
+      const toolCalls = done?.toolCalls ?? [];
+      if (!chatTools || toolCalls.length === 0) {
+        if (request.sessionId) {
+          this.sessionResolver.replaceLastAssistantTurn(request.sessionId, visibleParts.join(''));
+        }
+        if (memoryOn) {
+          this.applyTurnMemory(settings.profile, request.prompt, stripper, request.sessionId);
+        }
+        return;
+      }
+
+      exchange.push({ kind: 'assistant', text: done?.text, toolCalls });
+      for (const call of toolCalls) {
+        const result = await chatTools.execute(call.name, call.arguments);
+        exchange.push({
+          kind: 'tool_result',
+          toolCallId: call.id,
+          name: call.name,
+          content: result.content,
+          isError: result.isError,
+        });
       }
     }
-    const tail = stripper.flush();
-    if (tail) {
-      visibleParts.push(tail);
-      yield tail;
-    }
-    if (request.sessionId) {
-      this.sessionResolver.replaceLastAssistantTurn(request.sessionId, visibleParts.join(''));
-    }
-    if (memoryOn) {
-      this.applyTurnMemory(settings.profile, request.prompt, stripper, request.sessionId);
-    }
+  }
+
+  /** Run the web search backend directly (the /search chat command). */
+  async searchWeb(query: string, maxResults?: number): Promise<string> {
+    const config = resolveWebSearchConfig(this.options.loadedConfig.config.webSearch);
+    const results = await this.searchBackend.search(query, maxResults ?? config.maxResults);
+    return formatSearchResults(query, results);
   }
 
   rememberMemory(
@@ -184,6 +258,104 @@ export class MarifoldRuntime {
     return this.sessionResolver.rename(fromSessionId, toSessionId);
   }
 
+  /**
+   * Build an approval-aware agent runner over this runtime's engine wiring,
+   * TaskStore, and config policy. Pass a custom registry to replace the
+   * default file/shell/delegate tool set.
+   */
+  createAgentRunner(registry?: ToolRegistry): AgentRunner {
+    return new AgentRunner({
+      taskStore: this.taskStore,
+      registry: registry ?? this.createDefaultToolRegistry(),
+      agentConfig: resolveAgentConfig(this.options.loadedConfig.config.agent),
+      resolveSettings: request => this.resolveSettings(request),
+      prepareEngine: async settings => {
+        await this.refreshProviderCredentialsIfNeeded(settings.provider);
+        return {
+          engine: this.createEngine(settings.provider, false),
+          config: this.toPriestConfig(settings),
+        };
+      },
+    });
+  }
+
+  private createDefaultToolRegistry(): ToolRegistry {
+    const registry = new ToolRegistry();
+    registry.register(new ReadFileTool());
+    registry.register(new WriteFileTool());
+    registry.register(new ShellExecTool());
+    registry.register(new DelegateTool({
+      ask: async request => {
+        const response = await this.ask({ prompt: request.prompt, profile: request.profile });
+        return { ok: response.ok, text: response.text, error: response.error };
+      },
+      listProfileNames: () => this.profileResolver.list().map(profile => profile.name),
+    }));
+    return registry;
+  }
+
+  createSchedule(input: ScheduleCreateInput): ScheduleState {
+    return this.scheduleStore.create(input);
+  }
+
+  listSchedules(): ScheduleState[] {
+    return this.scheduleStore.list();
+  }
+
+  getSchedule(scheduleId: string): ScheduleState | undefined {
+    return this.scheduleStore.get(scheduleId);
+  }
+
+  updateSchedule(scheduleId: string, input: ScheduleUpdateInput): ScheduleState {
+    return this.scheduleStore.update(scheduleId, input);
+  }
+
+  deleteSchedule(scheduleId: string): boolean {
+    return this.scheduleStore.delete(scheduleId);
+  }
+
+  /**
+   * Execute one schedule unattended: [agent.unattended] approval overrides
+   * apply and 'ask' degrades to deny. Records lastRunAt/lastTaskId.
+   */
+  async runScheduleUnattended(scheduleId: string): Promise<{ taskId?: string; status: string }> {
+    const schedule = this.scheduleStore.require(scheduleId);
+    const result = await this.runScheduledAgent(schedule);
+    this.scheduleStore.update(schedule.id, {
+      lastRunAt: new Date().toISOString(),
+      ...(result.taskId ? { lastTaskId: result.taskId } : {}),
+      lastResultSeen: false,
+    });
+    return result;
+  }
+
+  /** Scheduler for the long-running service process. Call start()/stop(). */
+  createScheduler(log?: (message: string) => void): Scheduler {
+    return new Scheduler({
+      store: this.scheduleStore,
+      runSchedule: schedule => this.runScheduledAgent(schedule),
+      log,
+    });
+  }
+
+  private async runScheduledAgent(schedule: ScheduleState): Promise<{ taskId?: string; status: string }> {
+    const runner = this.createAgentRunner();
+    let taskId: string | undefined;
+    let status = 'failed';
+    for await (const event of runner.run({
+      objective: schedule.objective,
+      profile: schedule.profile,
+      tags: ['scheduled'],
+      unattended: true,
+    })) {
+      if (event.type === 'done') {
+        taskId = event.taskId;
+        status = event.status;
+      }
+    }
+    return { taskId, status };
+  }
+
   createTask(input: TaskCreateInput): TaskState {
     return this.taskStore.create(input);
   }
@@ -222,7 +394,7 @@ export class MarifoldRuntime {
   }
 
   private async refreshProviderCredentialsIfNeeded(providerName: string): Promise<void> {
-    if (providerName !== 'github_copilot') return;
+    if (providerName !== 'github_copilot' && providerName !== 'chatgpt') return;
 
     const provider = this.options.loadedConfig.config.providers[providerName];
     if (!provider?.oauthToken) return;
@@ -238,17 +410,71 @@ export class MarifoldRuntime {
       return;
     }
 
+    if (providerName === 'github_copilot') {
+      try {
+        const refreshed = await exchangeGitHubTokenForCopilotToken(provider.oauthToken);
+        provider.apiKey = refreshed.token;
+        provider.baseUrl = refreshed.baseUrl;
+        provider.apiKeyExpiresAt = refreshed.expiresAt;
+        new ConfigManager(this.options.loadedConfig).save();
+      } catch (error) {
+        throw MarifoldError.configInvalid(
+          `GitHub Copilot authorization could not be refreshed: ${error instanceof Error ? error.message : String(error)}. Re-run marifold model add github_copilot to authorize again.`,
+        );
+      }
+      return;
+    }
+
+    // chatgpt: refresh the API credential from the stored OAuth refresh token.
+    // ChatGPT credentials without an apiKeyExpiresAt were issued before
+    // refresh support and may still be valid — only refresh when expiry is
+    // known or the key is missing.
+    if (provider.apiKey && provider.apiKeyExpiresAt === undefined) return;
     try {
-      const refreshed = await exchangeGitHubTokenForCopilotToken(provider.oauthToken);
-      provider.apiKey = refreshed.token;
-      provider.baseUrl = refreshed.baseUrl;
+      const refreshed: ChatGptRefreshedTokens = await refreshChatGptAccessToken(provider.oauthToken);
+      provider.apiKey = refreshed.apiKey;
+      provider.oauthToken = refreshed.refreshToken;
       provider.apiKeyExpiresAt = refreshed.expiresAt;
       new ConfigManager(this.options.loadedConfig).save();
     } catch (error) {
       throw MarifoldError.configInvalid(
-        `GitHub Copilot authorization could not be refreshed: ${error instanceof Error ? error.message : String(error)}. Re-run marifold model add github_copilot to authorize again.`,
+        `ChatGPT authorization could not be refreshed: ${error instanceof Error ? error.message : String(error)}. Re-run marifold model add chatgpt to sign in again.`,
       );
     }
+  }
+
+  /**
+   * Model-initiated tools for chat turns. Opt-in via [web_search].enabled;
+   * web_search joins unless network policy is deny, read_file joins only when
+   * read policy is allow.
+   */
+  private chatTools(request: MarifoldRunRequest): {
+    definitions: ToolDefinition[];
+    execute: (name: string, args: Record<string, JSONValue>) => Promise<{ content: string; isError?: boolean }>;
+  } | undefined {
+    const webSearch = resolveWebSearchConfig(this.options.loadedConfig.config.webSearch);
+    if (!webSearch.enabled || request.chatTools === false) return undefined;
+
+    const approval = resolveAgentConfig(this.options.loadedConfig.config.agent).approval;
+    const tools: AgentTool[] = [];
+    if (approval.network !== 'deny') tools.push(new WebSearchTool(this.searchBackend, webSearch.maxResults));
+    if (approval.read === 'allow') tools.push(new ReadFileTool());
+    if (tools.length === 0) return undefined;
+
+    const outputLimit = resolveAgentConfig(this.options.loadedConfig.config.agent).toolOutputLimit;
+    return {
+      definitions: tools.map(tool => tool.definition),
+      execute: async (name, args) => {
+        const tool = tools.find(t => t.definition.name === name);
+        if (!tool) return { content: `Unknown tool '${name}'.`, isError: true };
+        try {
+          const result = await tool.execute(args, { cwd: process.cwd(), outputLimit });
+          return { content: result.content, isError: result.isError };
+        } catch (error) {
+          return { content: `Tool '${name}' failed: ${error instanceof Error ? error.message : String(error)}`, isError: true };
+        }
+      },
+    };
   }
 
   private toPriestConfig(settings: MarifoldResolvedSettings): PriestConfig {

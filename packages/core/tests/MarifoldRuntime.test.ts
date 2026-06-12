@@ -473,17 +473,15 @@ describe('MarifoldRuntime', () => {
   });
 });
 
+// ask() uses the SDK's non-streaming complete() since @priest-ai/core 2.4,
+// so the fake returns one Ollama JSON object rather than NDJSON chunks.
 function ollamaStreamResponse(chunks: string[]): Response {
-  const encoder = new TextEncoder();
-  const body = new ReadableStream<Uint8Array>({
-    start(controller) {
-      for (const chunk of chunks) {
-        controller.enqueue(encoder.encode(`${JSON.stringify({ message: { content: chunk } })}\n`));
-      }
-      controller.close();
-    },
+  const body = JSON.stringify({
+    message: { content: chunks.join('') },
+    done: true,
+    done_reason: 'stop',
   });
-  return new Response(body, { status: 200 });
+  return new Response(body, { status: 200, headers: { 'Content-Type': 'application/json' } });
 }
 
 function readMemoryRows(profilesDir: string, profile: string, fileName: string): Array<Record<string, unknown>> {

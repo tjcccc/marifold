@@ -172,6 +172,9 @@ export class ConfigManager {
       case 'tasks_dir':
         this.config.paths.tasksDir = resolveUserPath(value);
         return;
+      case 'schedules_dir':
+        this.config.paths.schedulesDir = resolveUserPath(value);
+        return;
       default:
         throw MarifoldError.configInvalid(`Unknown config key: paths.${key}`);
     }
@@ -243,6 +246,7 @@ export function renderMarifoldConfig(config: MarifoldConfig): string {
     `profiles_dir = ${tomlString(config.paths.profilesDir)}`,
     `sessions_db = ${tomlString(config.paths.sessionsDb)}`,
     `tasks_dir = ${tomlString(config.paths.tasksDir)}`,
+    ...(config.paths.schedulesDir ? [`schedules_dir = ${tomlString(config.paths.schedulesDir)}`] : []),
   ];
 
   const modelLines = [
@@ -256,11 +260,46 @@ export function renderMarifoldConfig(config: MarifoldConfig): string {
     `context_limit = ${config.memory.contextLimit}`,
   ];
 
+  const agentSection = config.agent === undefined ? undefined : [
+    '[agent]',
+    `max_iterations = ${config.agent.maxIterations}`,
+    `tool_output_limit = ${config.agent.toolOutputLimit}`,
+    `tool_mode = ${tomlString(config.agent.toolMode)}`,
+    '',
+    '[agent.approval]',
+    `read = ${tomlString(config.agent.approval.read)}`,
+    `write = ${tomlString(config.agent.approval.write)}`,
+    `shell = ${tomlString(config.agent.approval.shell)}`,
+    `network = ${tomlString(config.agent.approval.network)}`,
+    `delegate = ${tomlString(config.agent.approval.delegate)}`,
+    ...(config.agent.unattended ? [
+      '',
+      '[agent.unattended]',
+      ...Object.entries(config.agent.unattended).map(([kind, mode]) => `${kind} = ${tomlString(mode)}`),
+    ] : []),
+  ].join('\n');
+
+  const webSearchSection = config.webSearch === undefined ? undefined : [
+    '[web_search]',
+    `enabled = ${config.webSearch.enabled}`,
+    `max_results = ${config.webSearch.maxResults}`,
+    ...(config.webSearch.proxy ? [`proxy = ${tomlString(config.webSearch.proxy)}`] : []),
+  ].join('\n');
+
   const providerTables = Object.entries(config.providers)
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([name, provider]) => renderProvider(name, provider));
 
-  return `${defaultLines.join('\n')}\n\n${modelLines.join('\n')}\n\n${memoryLines.join('\n')}\n\n${pathLines.join('\n')}\n\n${providerTables.join('\n\n')}\n`;
+  const sections = [
+    defaultLines.join('\n'),
+    modelLines.join('\n'),
+    memoryLines.join('\n'),
+    ...(agentSection ? [agentSection] : []),
+    ...(webSearchSection ? [webSearchSection] : []),
+    pathLines.join('\n'),
+    ...providerTables,
+  ];
+  return `${sections.join('\n\n')}\n`;
 }
 
 function renderProvider(name: string, provider: MarifoldProviderConfig): string {

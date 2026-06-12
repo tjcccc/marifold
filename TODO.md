@@ -2,10 +2,14 @@
 
 ## Current Plan
 
-- v0.9.0: structured memory system upgrade. See [docs/roadmap.md](docs/roadmap.md).
-- v0.10.0: local service API plus task/session foundation. Implemented a loopback-only Fastify service, stable app-client routes, SSE streaming chat, and task-state primitives.
-- v0.11.0: basic CLI agent loop using the task-state model. Keep tools narrow and approval-aware before adding Web UI or Apple clients.
-- v0.12.0+: Web UI first, then macOS/iOS clients, backed by the stable local service API.
+- v0.10.0: local service API plus task/session foundation. Done.
+- v0.11.0: basic CLI agent loop using the task-state model, with narrow approval-aware tools, native tool calling through `@priest-ai/core` 2.4, and a control-block fallback. Done.
+- v0.12.0: selective chat parity — web search and file reading as agent tools reused by chat, ChatGPT OAuth token refresh, and image plumbing. Done.
+- SkillApp schema spec (docs + validator only, no runtime). Done: [docs/skillapp.md](docs/skillapp.md) defines `marifold.skillapp.v0` with a core parser/validator (`packages/core/src/skillapp`); runtime/rendering stays deferred until a client UI exists.
+- v0.13.0: scheduled task execution hosted in `marifold service` with an unattended approval policy. Done.
+- Spec 2.4.0 synced across all SDKs (2026-06-12): Python `priest` 2.4.0 (reference), `priest-dotnet` 2.4.0, `priest-rs` 2.4.0, `PriestSwift` 2.4.0 — all with caller-executes tool calling, the run-with-tools loop helper, stream-events (native in TS/Python; fallback wrapping in dotnet/rs/swift), and the tool-turn session persistence rule.
+- Publish `@priest-ai/core` 2.4.0 to npm, remove the `link:../priest-typescript` pnpm override in the workspace `package.json`, and reinstall. The other SDK packages (PyPI/NuGet/crates.io/SwiftPM tag) publish from their committed 2.4.0 states.
+- Then: the main `marifold` TUI (Codex/Claude-like terminal app), followed by Web UI and macOS/iOS clients. The TUI renders the `AgentEvent` stream and chat streaming; its prerequisites are complete.
 
 ## Completed in v0.8.0
 
@@ -35,6 +39,35 @@
 - Added core task-state storage with objective, status, plan, events, summary, next action, tags, profile/session references, timestamps, and JSON-file persistence.
 - Added task-state API routes for create, list, show, update, append event, and delete.
 - Added targeted core task-state tests and Fastify inject service tests.
+
+## Completed in v0.11.0
+
+- Upgraded `@priest-ai/core` to 2.4.0: native tool calling (caller-executes contract), `runWithTools` loop helper, `streamEvents` structured streaming, AbortSignal cancellation, and ImageInput parity — with spec docs synced to the priest repository (Python implementation sync pending).
+- Added `packages/core/src/agent`: AgentRunner (plan → tool loop → verification → summary over TaskStore), renderer-agnostic AgentEvent stream, ToolRegistry, and approval policy.
+- Added built-in tools: `read_file`, `write_file` (workspace jail with escalation), `shell_exec`, and `ask_profile` delegation.
+- Added control-block tool fallback for models without native tool support, with automatic switching in `auto` mode.
+- Added the optional `[agent]` / `[agent.approval]` config section with config round-tripping.
+- Added `marifold agent` with interactive approvals, `--yes`, `--tool-mode`, `--max-iterations`, and Ctrl+C cancellation.
+- Updated `MarifoldOpenAICompatProvider` for v2.4 adapter options, including Responses API tool mapping for GitHub Copilot models.
+- Added `scripts/agent-eval.mjs` provider-backed agent eval (validated live against Ollama qwen3.5:9b in both native and control-block modes).
+
+## Completed in v0.12.0
+
+- Added a pluggable `SearchBackend` with a DuckDuckGo default (`duck-duck-scrape`, no API key) and a `WebSearchTool` for agent runs (`network` approval kind).
+- Added chat `/search <query>` (direct backend call, results injected as turn-local context) and model-initiated `web_search`/`read_file` chat tools behind `[web_search].enabled` using a bounded tool loop with memory-payload deferral to the final response.
+- Added chat `/read <path>` file attachment with 100k-char truncation.
+- Added image plumbing: `MarifoldRunRequest.images` → `PriestRequest.images`, `ask --image <path>` (repeatable), chat `/image <path>` / `/image clear`, and base64/URL images on service `/v1/ask`.
+- Added ChatGPT OAuth token refresh in core (`ChatGptTokenRefresh`), generalizing the provider credential refresh dispatch beyond GitHub Copilot, with refresh-token rotation persisted to config.
+- Added the optional `[web_search]` config section with round-tripping.
+
+## Completed in v0.13.0
+
+- Added `packages/core/src/schedule`: file-backed `ScheduleStore` (cron via `croner`, validated expressions) and a minute-resolution `Scheduler` for the service process.
+- Added `[paths].schedules_dir` (default `~/.marifold/schedules`) across init, config set, and backup-compatible config rendering.
+- Added unattended runs: `AgentRunOptions.unattended` applies `[agent.unattended]` approval overrides; `ask` degrades to deny without a handler.
+- Added `marifold schedule add|list|show|rm|enable|disable|run` and scheduler hosting in `marifold service` (opt-out via the service factory).
+- Added read-only `/v1/schedules` routes, `scheduled` task tags, and the `lastResultSeen` flag for future unread-result surfacing.
+- Validated live: a `* * * * *` schedule fired inside `marifold service` against Ollama and completed a tagged task unattended.
 
 ## Future Agent-App Core Features
 

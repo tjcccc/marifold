@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import { parse } from 'smol-toml';
+import { ApprovalMode, AgentToolMode, MarifoldAgentConfig, resolveAgentConfig } from '../agent/ApprovalPolicy';
 import { MarifoldError } from '../errors/MarifoldError';
 import {
   LoadedMarifoldConfig,
@@ -9,11 +10,14 @@ import {
   MarifoldModelsConfig,
   MarifoldPathsConfig,
   MarifoldProviderConfig,
+  MarifoldWebSearchConfig,
   ProviderType,
+  resolveWebSearchConfig,
 } from './ConfigSchema';
 import {
   defaultConfigPath,
   defaultProfilesDir,
+  defaultSchedulesDir,
   defaultSessionsDb,
   defaultTasksDir,
   resolveUserPath,
@@ -76,7 +80,39 @@ export class ConfigLoader {
       memory: this.normalizeMemory(memoryRaw),
       paths: this.normalizePaths(pathsRaw),
       providers: this.normalizeProviders(providersRaw),
+      ...(raw.agent !== undefined ? { agent: this.normalizeAgent(asObject(raw.agent, 'agent')) } : {}),
+      ...(raw.web_search !== undefined ? { webSearch: this.normalizeWebSearch(asObject(raw.web_search, 'web_search')) } : {}),
     };
+  }
+
+  private normalizeWebSearch(raw: TomlObject): MarifoldWebSearchConfig {
+    return resolveWebSearchConfig({
+      enabled: optionalBoolean(raw.enabled, 'web_search.enabled'),
+      maxResults: optionalPositiveInteger(raw.max_results, 'web_search.max_results'),
+      proxy: optionalString(raw.proxy, 'web_search.proxy'),
+    });
+  }
+
+  private normalizeAgent(raw: TomlObject): MarifoldAgentConfig {
+    return resolveAgentConfig({
+      approval: this.normalizeApprovalModes(optionalObject(raw.approval, 'agent.approval'), 'agent.approval'),
+      unattended: this.normalizeApprovalModes(optionalObject(raw.unattended, 'agent.unattended'), 'agent.unattended'),
+      maxIterations: optionalPositiveInteger(raw.max_iterations, 'agent.max_iterations'),
+      toolOutputLimit: optionalNonNegativeNumber(raw.tool_output_limit, 'agent.tool_output_limit'),
+      toolMode: optionalToolMode(raw.tool_mode, 'agent.tool_mode'),
+    });
+  }
+
+  private normalizeApprovalModes(
+    raw: TomlObject,
+    label: string,
+  ): Partial<Record<'read' | 'write' | 'shell' | 'network' | 'delegate', ApprovalMode>> {
+    const modes: Partial<Record<'read' | 'write' | 'shell' | 'network' | 'delegate', ApprovalMode>> = {};
+    for (const kind of ['read', 'write', 'shell', 'network', 'delegate'] as const) {
+      const mode = optionalApprovalMode(raw[kind], `${label}.${kind}`);
+      if (mode !== undefined) modes[kind] = mode;
+    }
+    return modes;
   }
 
   private normalizeDefault(raw: TomlObject): MarifoldDefaultConfig {
@@ -96,6 +132,7 @@ export class ConfigLoader {
       profilesDir: resolveUserPath(optionalString(raw.profiles_dir, 'paths.profiles_dir') ?? defaultProfilesDir()),
       sessionsDb: resolveUserPath(optionalString(raw.sessions_db, 'paths.sessions_db') ?? defaultSessionsDb()),
       tasksDir: resolveUserPath(optionalString(raw.tasks_dir, 'paths.tasks_dir') ?? defaultTasksDir()),
+      schedulesDir: resolveUserPath(optionalString(raw.schedules_dir, 'paths.schedules_dir') ?? defaultSchedulesDir()),
     };
   }
 
@@ -190,6 +227,27 @@ function optionalBoolean(value: unknown, label: string): boolean | undefined {
   if (value === undefined) return undefined;
   if (typeof value === 'boolean') return value;
   throw MarifoldError.configInvalid(`Expected ${label} to be a boolean.`);
+}
+
+function optionalApprovalMode(value: unknown, label: string): ApprovalMode | undefined {
+  const mode = optionalString(value, label);
+  if (mode === undefined) return undefined;
+  if (mode === 'allow' || mode === 'ask' || mode === 'deny') return mode;
+  throw MarifoldError.configInvalid(`Expected ${label} to be "allow", "ask", or "deny".`);
+}
+
+function optionalToolMode(value: unknown, label: string): AgentToolMode | undefined {
+  const mode = optionalString(value, label);
+  if (mode === undefined) return undefined;
+  if (mode === 'auto' || mode === 'native' || mode === 'control-block') return mode;
+  throw MarifoldError.configInvalid(`Expected ${label} to be "auto", "native", or "control-block".`);
+}
+
+function optionalPositiveInteger(value: unknown, label: string): number | undefined {
+  const number = optionalNumber(value, label);
+  if (number === undefined) return undefined;
+  if (Number.isInteger(number) && number >= 1) return number;
+  throw MarifoldError.configInvalid(`Expected ${label} to be a positive integer.`);
 }
 
 function optionalProviderType(value: unknown, label: string): ProviderType | undefined {

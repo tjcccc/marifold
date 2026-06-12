@@ -17,6 +17,9 @@ import {
 export interface MarifoldServiceOptions {
   loadedConfig: LoadedMarifoldConfig;
   logger?: boolean;
+  /** Run the schedule scheduler inside this service process. Default true.
+   * Schedules only fire while the service is running. */
+  scheduler?: boolean;
 }
 
 export interface MarifoldServiceStartOptions extends MarifoldServiceOptions {
@@ -42,7 +45,13 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
   const runtime = new MarifoldRuntime({ loadedConfig: options.loadedConfig });
   const server = fastify({ logger: options.logger ?? false });
 
+  const scheduler = (options.scheduler ?? true)
+    ? runtime.createScheduler(message => server.log.info(message))
+    : undefined;
+  scheduler?.start();
+
   server.addHook('onClose', async () => {
+    scheduler?.stop();
     runtime.close();
   });
 
@@ -163,6 +172,26 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
     await streamChat(reply, runtime, parseRunRequest(request.body));
   });
 
+  server.get('/v1/schedules', async () => ({
+    ok: true,
+    schedules: runtime.listSchedules(),
+  }));
+
+  server.get<{ Params: { id: string } }>('/v1/schedules/:id', async (request, reply) => {
+    const schedule = runtime.getSchedule(request.params.id);
+    if (!schedule) {
+      reply.status(404);
+      return {
+        ok: false,
+        error: {
+          code: 'SCHEDULE_NOT_FOUND',
+          message: `Schedule not found: ${request.params.id}`,
+        },
+      };
+    }
+    return { ok: true, schedule };
+  });
+
   server.post('/v1/tasks', async (request, reply) => {
     reply.status(201);
     return {
@@ -269,7 +298,32 @@ function parseRunRequest(value: unknown): MarifoldRunRequest {
     ...optionalStringField('sessionId', body.sessionId),
     ...optionalBooleanField('memories', body.memories),
     ...optionalBooleanField('think', body.think),
+    ...optionalImagesField(body.images),
   };
+}
+
+// App clients send images as base64 payloads ({data, mediaType}) or URLs;
+// local file paths are not accepted over the service boundary.
+function optionalImagesField(value: unknown): { images: NonNullable<MarifoldRunRequest['images']> } | Record<string, never> {
+  if (value === undefined) return {};
+  if (!Array.isArray(value)) throw MarifoldError.configInvalid('Expected images to be an array.');
+  const images = value.map((item, index) => {
+    if (typeof item !== 'object' || item === null || Array.isArray(item)) {
+      throw MarifoldError.configInvalid(`Expected images[${index}] to be an object.`);
+    }
+    const image = item as { data?: unknown; url?: unknown; mediaType?: unknown };
+    const data = typeof image.data === 'string' && image.data ? image.data : undefined;
+    const url = typeof image.url === 'string' && image.url ? image.url : undefined;
+    if ((data === undefined) === (url === undefined)) {
+      throw MarifoldError.configInvalid(`Expected images[${index}] to set exactly one of data or url.`);
+    }
+    return {
+      ...(data !== undefined ? { data } : {}),
+      ...(url !== undefined ? { url } : {}),
+      ...(typeof image.mediaType === 'string' && image.mediaType ? { mediaType: image.mediaType } : {}),
+    };
+  });
+  return { images };
 }
 
 function parseTaskCreateInput(value: unknown): TaskCreateInput {
@@ -374,12 +428,13 @@ function normalizeError(error: unknown): { statusCode: number; error: JsonObject
 }
 
 function statusCodeForError(error: MarifoldError): number {
-  if (error.code === 'TASK_NOT_FOUND') return 404;
+  if (error.code === 'TASK_NOT_FOUND' || error.code === 'SCHEDULE_NOT_FOUND') return 404;
   if (
     error.code === 'CONFIG_INVALID'
     || error.code === 'PROFILE_INVALID'
     || error.code === 'MEMORY_INVALID'
     || error.code === 'TASK_INVALID'
+    || error.code === 'SCHEDULE_INVALID'
   ) {
     return 400;
   }

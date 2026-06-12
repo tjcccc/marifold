@@ -16,6 +16,7 @@ interface InitOptions {
   profilesDir?: string;
   sessionsDb?: string;
   tasksDir?: string;
+  schedulesDir?: string;
   baseUrl?: string;
   apiKeyEnv?: string;
 }
@@ -32,6 +33,7 @@ export function registerInitCommand(program: Command, printer: ConsolePrinter): 
     .option('--profiles-dir <path>', 'Profiles directory.')
     .option('--sessions-db <path>', 'SQLite sessions database path.')
     .option('--tasks-dir <path>', 'Task-state directory.')
+    .option('--schedules-dir <path>', 'Schedules directory.')
     .option('--base-url <url>', 'Provider base URL.')
     .option('--api-key-env <name>', 'Environment variable containing the provider API key.')
     .action((options: InitOptions) => {
@@ -48,6 +50,7 @@ export function registerInitCommand(program: Command, printer: ConsolePrinter): 
           profilesDir: options.profilesDir,
           sessionsDb: options.sessionsDb,
           tasksDir: options.tasksDir,
+          schedulesDir: options.schedulesDir,
           baseUrl: options.baseUrl,
           apiKeyEnv: options.apiKeyEnv,
         });

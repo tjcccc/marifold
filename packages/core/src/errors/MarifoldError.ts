@@ -9,7 +9,11 @@ export type MarifoldErrorCode =
   | 'TASK_INVALID'
   | 'TASK_NOT_FOUND'
   | 'SESSION_STORE_ERROR'
-  | 'WORKSPACE_ALREADY_INITIALIZED';
+  | 'WORKSPACE_ALREADY_INITIALIZED'
+  | 'AGENT_TOOL_INVALID'
+  | 'AGENT_RUN_INVALID'
+  | 'SCHEDULE_INVALID'
+  | 'SCHEDULE_NOT_FOUND';
 
 export class MarifoldError extends Error {
   readonly code: MarifoldErrorCode;
@@ -72,6 +76,22 @@ export class MarifoldError extends Error {
 
   static taskNotFound(taskId: string): MarifoldError {
     return new MarifoldError('TASK_NOT_FOUND', `Task not found: ${taskId}`, { taskId });
+  }
+
+  static agentToolInvalid(message: string, tool?: string): MarifoldError {
+    return new MarifoldError('AGENT_TOOL_INVALID', message, tool ? { tool } : {});
+  }
+
+  static agentRunInvalid(message: string): MarifoldError {
+    return new MarifoldError('AGENT_RUN_INVALID', message);
+  }
+
+  static scheduleInvalid(message: string, scheduleId?: string): MarifoldError {
+    return new MarifoldError('SCHEDULE_INVALID', message, scheduleId ? { schedule_id: scheduleId } : {});
+  }
+
+  static scheduleNotFound(scheduleId: string): MarifoldError {
+    return new MarifoldError('SCHEDULE_NOT_FOUND', `Schedule not found: ${scheduleId}`, { schedule_id: scheduleId });
   }
 
   static workspaceAlreadyInitialized(configPath: string): MarifoldError {

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { Command } from 'commander';
+import { registerAgentCommand } from './commands/agent';
 import { registerAskCommand } from './commands/ask';
 import { registerChatCommand } from './commands/chat';
 import { registerConfigCommand } from './commands/config';
@@ -7,6 +8,7 @@ import { registerInitCommand } from './commands/init';
 import { registerModelCommand } from './commands/model';
 import { registerProfileCommand } from './commands/profile';
 import { registerProviderCommand } from './commands/provider';
+import { registerScheduleCommand } from './commands/schedule';
 import { registerServiceCommand } from './commands/service';
 import { registerSessionCommand } from './commands/session';
 import { ConsolePrinter } from './output/ConsolePrinter';
@@ -16,16 +18,18 @@ const printer = new ConsolePrinter();
 const program = new Command()
   .name('marifold')
   .description('Marifold local-first AI workspace CLI.')
-  .version('0.10.0')
+  .version('0.13.0')
   .option('--config <path>', 'Path to Marifold config.toml.');
 
 registerInitCommand(program, printer);
+registerAgentCommand(program, printer);
 registerAskCommand(program, printer);
 registerChatCommand(program, printer);
 registerConfigCommand(program, printer);
 registerModelCommand(program, printer);
 registerProfileCommand(program, printer);
 registerProviderCommand(program, printer);
+registerScheduleCommand(program, printer);
 registerServiceCommand(program, printer);
 registerSessionCommand(program, printer);
 
