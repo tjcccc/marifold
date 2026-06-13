@@ -2,6 +2,15 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-06-13 — tooling — adopt projnavi navigation layer
+
+- Added a `.projnavi/` navigation layer (project/module/flow notes, glossary, 14 evidence-backed claims) and the Claude Code skill at `.claude/skills/projnavi/SKILL.md`. Notes are pointer-style — they defer to `docs/architecture.md`/`AGENTS.md` rather than restating them.
+- Added a thin repo `CLAUDE.md` (loads every turn): authoritative-doc pointers + a proactive policy to run `projnavi guide "<task>"` before broad work, with a bounded-upkeep rule (refresh `.projnavi` at release boundaries, not continuously).
+- Benchmarked a cross-layer task ("add an http_fetch tool + network approval + CLI render"): projnavi = 1 command / ~870 tokens vs cold full-file orientation ~11.8k tokens (~93% less) or careful targeted reads ~3.6k (~75% less), plus a correctness boost (the flow note enumerates the config-render and test steps a grep pass can miss).
+- Also removed a stray `~/tempfiles/greeting.txt` accidentally tracked in v0.13.1.
+
+Open: claim line-ranges drift as files change; `projnavi verify` catches hash drift but re-onboard is manual. Ranking quality depends on claim granularity (keep claims narrow).
+
 ## 2026-06-12 — v0.13.1 — pnpm v11 migration and agent path fixes
 
 - Migrated off the removed `pnpm` package.json field (settings live in `pnpm-workspace.yaml` since pnpm v11); dropped the obsolete `@priest-ai/core` override now that 2.4.0 is published, and moved `croner` from the workspace root into `packages/core` where it belongs.

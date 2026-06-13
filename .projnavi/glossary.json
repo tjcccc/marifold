@@ -1,0 +1,100 @@
+{
+  "terms": [
+    {
+      "term": "agent event stream",
+      "aliases": ["AgentEvent", "agent events", "render contract", "event union"],
+      "mapsTo": ["AgentEvent", "AgentRunner"],
+      "topics": ["agent", "events", "tui", "contract"],
+      "paths": ["packages/core/src/agent/AgentEvents.ts", "packages/core/src/agent/AgentRunner.ts", "packages/cli/src/commands/agent.ts"],
+      "notes": "The renderer-agnostic event union every client consumes. Start here for any TUI/Web/Apple rendering work."
+    },
+    {
+      "term": "agent loop",
+      "aliases": ["agent runner", "marifold agent", "plan tool loop verification"],
+      "mapsTo": ["AgentRunner"],
+      "topics": ["agent", "loop", "tools", "tasks"],
+      "paths": ["packages/core/src/agent/AgentRunner.ts", "packages/cli/src/commands/agent.ts"],
+      "notes": "plan -> tool loop -> verification -> summary over TaskStore."
+    },
+    {
+      "term": "approval policy",
+      "aliases": ["approval handler", "tool approval", "ask deny allow", "unattended approval"],
+      "mapsTo": ["ApprovalHandler", "ApprovalPolicy", "MarifoldAgentConfig"],
+      "topics": ["agent", "approval", "policy", "config"],
+      "paths": ["packages/core/src/agent/ApprovalPolicy.ts", "packages/core/src/config/ConfigLoader.ts"],
+      "notes": "Per-tool-kind allow/ask/deny; ask degrades to deny when unattended."
+    },
+    {
+      "term": "agent tool",
+      "aliases": ["tool registry", "read_file write_file shell_exec", "ask_profile", "delegate tool"],
+      "mapsTo": ["ToolRegistry", "AgentTool"],
+      "topics": ["agent", "tools", "registry"],
+      "paths": ["packages/core/src/agent/ToolRegistry.ts", "packages/core/src/agent/tools/ReadFileTool.ts", "packages/core/src/agent/tools/WriteFileTool.ts", "packages/core/src/agent/tools/ShellExecTool.ts", "packages/core/src/agent/tools/DelegateTool.ts"],
+      "notes": "Built-in tools and the registry. WriteFileTool has a workspace jail and ~ expansion."
+    },
+    {
+      "term": "control-block fallback",
+      "aliases": ["tool_call block", "prompt tool calling", "models without native tools"],
+      "mapsTo": ["parseControlBlockCalls", "buildControlBlockInstructions"],
+      "topics": ["agent", "tools", "fallback"],
+      "paths": ["packages/core/src/agent/ControlBlockTools.ts", "packages/core/src/agent/AgentRunner.ts"],
+      "notes": "Prompt-based <tool_call> tools for models lacking native tool calling; auto-switch in 'auto' mode."
+    },
+    {
+      "term": "provider routing",
+      "aliases": ["copilot responses api", "openai compatible adapter", "endpointForModel", "responses path"],
+      "mapsTo": ["MarifoldOpenAICompatProvider", "ProviderRegistry"],
+      "topics": ["providers", "copilot", "routing", "openai-compatible"],
+      "paths": ["packages/core/src/config/MarifoldOpenAICompatProvider.ts", "packages/core/src/config/ProviderRegistry.ts"],
+      "notes": "Chat-completions vs Copilot Responses API routing and tool mapping."
+    },
+    {
+      "term": "chatgpt token refresh",
+      "aliases": ["oauth refresh", "copilot token refresh", "credential refresh"],
+      "mapsTo": ["refreshProviderCredentialsIfNeeded", "ChatGptTokenRefresh", "GitHubCopilotAuth"],
+      "topics": ["providers", "oauth", "auth"],
+      "paths": ["packages/core/src/config/ChatGptTokenRefresh.ts", "packages/core/src/config/GitHubCopilotAuth.ts", "packages/core/src/runtime/MarifoldRuntime.ts"],
+      "notes": "Per-provider OAuth refresh dispatched before provider calls."
+    },
+    {
+      "term": "chat tool loop",
+      "aliases": ["web search chat", "model-initiated chat tools", "/search"],
+      "mapsTo": ["chatTools", "WebSearchTool", "SearchBackend"],
+      "topics": ["chat", "tools", "search", "runtime"],
+      "paths": ["packages/core/src/runtime/MarifoldRuntime.ts", "packages/core/src/search/SearchBackend.ts", "packages/core/src/search/DuckDuckGoBackend.ts", "packages/core/src/agent/tools/WebSearchTool.ts"],
+      "notes": "Bounded tool loop on chat turns under [web_search].enabled; memory applied only on final response."
+    },
+    {
+      "term": "memory control blocks",
+      "aliases": ["memory_save", "memory_forget", "hidden memory blocks", "strip memory"],
+      "mapsTo": ["stripMemoryControls", "MemoryControlStripper", "MemoryStore"],
+      "topics": ["memory", "controls", "chat", "agent"],
+      "paths": ["packages/core/src/memory/MemoryControls.ts", "packages/core/src/memory/MemoryStore.ts"],
+      "notes": "Chat applies save/forget payloads; agent runs strip and discard them."
+    },
+    {
+      "term": "scheduled run",
+      "aliases": ["cron schedule", "unattended agent run", "scheduler", "marifold schedule"],
+      "mapsTo": ["ScheduleStore", "Scheduler"],
+      "topics": ["schedule", "cron", "service", "agent"],
+      "paths": ["packages/core/src/schedule/ScheduleStore.ts", "packages/core/src/schedule/Scheduler.ts", "packages/cli/src/commands/schedule.ts"],
+      "notes": "Cron schedules run unattended agents inside marifold service."
+    },
+    {
+      "term": "skillapp schema",
+      "aliases": ["mini app", "marifold.skillapp.v0", "skillapp validator"],
+      "mapsTo": ["validateSkillApp", "SKILLAPP_SCHEMA"],
+      "topics": ["skillapp", "schema", "validation"],
+      "paths": ["packages/core/src/skillapp/SkillAppValidator.ts", "packages/core/src/skillapp/SkillAppSchema.ts", "docs/skillapp.md"],
+      "notes": "Spec + validator only; no runtime yet."
+    },
+    {
+      "term": "config sections",
+      "aliases": ["agent config", "web_search config", "config.toml", "approval config"],
+      "mapsTo": ["ConfigLoader", "resolveAgentConfig", "renderMarifoldConfig"],
+      "topics": ["config", "toml", "agent", "paths"],
+      "paths": ["packages/core/src/config/ConfigSchema.ts", "packages/core/src/config/ConfigLoader.ts", "packages/core/src/config/ConfigManager.ts"],
+      "notes": "[agent], [agent.approval], [agent.unattended], [web_search], [paths] parsing and rendering."
+    }
+  ]
+}
