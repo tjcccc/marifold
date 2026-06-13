@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "projnaviVersion": "0.4.0",
-  "generatedAt": "2026-06-13T03:36:17.894Z",
+  "projnaviVersion": "0.5.0",
+  "generatedAt": "2026-06-13T05:20:40.380Z",
   "root": ".",
   "files": {
     ".claude/skills/projnavi/SKILL.md": {
@@ -15,8 +15,8 @@
       "category": "docs"
     },
     "CLAUDE.md": {
-      "hash": "a2f24c85d4efa170ae0bef7e5a0279b321a01ef35ce7d67649b6db3fa8f5b28e",
-      "size": 1109,
+      "hash": "1d2117162fa9f80c538c355d83f7a88bbe5dd54f9c69ef806156d2391097894d",
+      "size": 1333,
       "category": "docs"
     },
     "DEVLOG.md": {
