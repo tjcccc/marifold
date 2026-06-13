@@ -1,6 +1,6 @@
 # Architecture
 
-Marifold v0.13.0 completes the pre-TUI foundation: the basic agent loop (v0.11.0), chat parity (v0.12.0), the SkillApp schema spec, and scheduled task execution (v0.13.0) on top of the v0.10.0 service and task-state foundation. It provides a TypeScript CLI for priests-style profile chat, one-shot requests, an approval-aware agent loop, workspace initialization, chat resume behavior, saved model options, model validation, structured profile memory, thinking mode controls, OAuth provider setup, GitHub Copilot Responses API routing, config backup/import, local management commands, a loopback-only Fastify service API, and an ephemeral task-state subsystem.
+Marifold v0.14.0 adds the TUI — an Ink/React terminal app (`packages/tui`) that is the primary interactive surface — on top of the v0.13.0 pre-TUI foundation: the basic agent loop (v0.11.0), chat parity (v0.12.0), the SkillApp schema spec, and scheduled task execution (v0.13.0). It provides a TypeScript CLI for priests-style profile chat, one-shot requests, an approval-aware agent loop, workspace initialization, chat resume behavior, saved model options, model validation, structured profile memory, thinking mode controls, OAuth provider setup, GitHub Copilot Responses API routing, config backup/import, local management commands, a loopback-only Fastify service API, an ephemeral task-state subsystem, and the `marifold.skill.v0` skill primitive.
 
 ## Current Scope
 
@@ -9,6 +9,7 @@ The dependency direction is:
 ```text
 packages/cli -> packages/core -> @priest-ai/core -> provider
 packages/cli -> packages/service -> packages/core
+packages/cli -> packages/tui -> packages/core   (dynamic import; ESM)
 ```
 
 `packages/cli` owns command parsing, terminal input/output, and the interactive chat loop.
@@ -36,6 +37,10 @@ Chat reuses the same tool layer selectively: `/search` calls the pluggable `Sear
 Scheduling lives in `packages/core/src/schedule`: a file-backed `ScheduleStore` (cron via `croner`) and a minute-resolution `Scheduler` hosted inside the `marifold service` process. Scheduled firings are unattended agent runs (`AgentRunOptions.unattended`): `[agent.unattended]` approval overrides apply, and `ask` degrades to deny. Schedule results link to TaskStore tasks tagged `scheduled`.
 
 The SkillApp subsystem (`packages/core/src/skillapp`) is spec-only: `docs/skillapp.md` defines `marifold.skillapp.v0` and the validator enforces it. No runtime or rendering exists until a client UI does.
+
+The skill subsystem (`packages/core/src/skill`) defines the `marifold.skill.v0` primitive — a prompt template with declared `{{variables}}` and an optional run mode. `SkillStore` loads skills from `[paths].skills_dir` (default `~/.marifold/skills`) and each profile's `skills/` directory, with profile skills shadowing global ones; `parseSkill`/`renderSkillPrompt` validate and expand them. A skill is the shared unit both the TUI (`$name`) and a future graphical SkillApp consume — the SkillApp is a GUI binding over the same primitive. See `docs/tui.md`.
+
+The TUI (`packages/tui`, Ink/React) is the primary interactive surface and a pure renderer of two existing core streams — `MarifoldRuntime.stream` (chat) and `AgentRunner.run`→`AgentEvent` (agent). It adds no model-side logic. It is an ESM-only package the CommonJS CLI loads through a dynamic `import()` (kept a real import via a `new Function` escape hatch so `tsc`'s CommonJS emit does not turn it into a `require()`). Logic lives in pure, unit-tested modules under `src/core/` (input grammar, event→view mapping, an `appState` reducer, command/skill registries); Ink components under `src/ui/` stay thin. The `/btw` steering hook (`AgentRunOptions.steering`) is the only core change the TUI required: a drain callback the runner calls between iterations to surface queued user guidance via `userContext`. Approval UX (allow-once / session-grant / persist-to-config / deny, with escalated calls always prompting) reuses the core `ApprovalPolicy` engine unchanged; the kind-level model is deliberately simpler than per-command/per-path allowlists or a sandbox, which are deferred to the future high-stakes-tools milestone.
 
 Config, profile, model, provider, and session commands are local management surfaces. Config export/import copies local config, profile files, memories, and optional sessions; it does not introduce cloud sync. These commands do not introduce agent tools or web/app runtimes.
 

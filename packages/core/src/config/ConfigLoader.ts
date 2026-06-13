@@ -19,6 +19,7 @@ import {
   defaultProfilesDir,
   defaultSchedulesDir,
   defaultSessionsDb,
+  defaultSkillsDir,
   defaultTasksDir,
   resolveUserPath,
 } from '../workspace/WorkspacePaths';
@@ -133,6 +134,7 @@ export class ConfigLoader {
       sessionsDb: resolveUserPath(optionalString(raw.sessions_db, 'paths.sessions_db') ?? defaultSessionsDb()),
       tasksDir: resolveUserPath(optionalString(raw.tasks_dir, 'paths.tasks_dir') ?? defaultTasksDir()),
       schedulesDir: resolveUserPath(optionalString(raw.schedules_dir, 'paths.schedules_dir') ?? defaultSchedulesDir()),
+      skillsDir: resolveUserPath(optionalString(raw.skills_dir, 'paths.skills_dir') ?? defaultSkillsDir()),
     };
   }
 

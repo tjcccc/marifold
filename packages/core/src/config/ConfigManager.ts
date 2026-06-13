@@ -175,6 +175,9 @@ export class ConfigManager {
       case 'schedules_dir':
         this.config.paths.schedulesDir = resolveUserPath(value);
         return;
+      case 'skills_dir':
+        this.config.paths.skillsDir = resolveUserPath(value);
+        return;
       default:
         throw MarifoldError.configInvalid(`Unknown config key: paths.${key}`);
     }
@@ -247,6 +250,7 @@ export function renderMarifoldConfig(config: MarifoldConfig): string {
     `sessions_db = ${tomlString(config.paths.sessionsDb)}`,
     `tasks_dir = ${tomlString(config.paths.tasksDir)}`,
     ...(config.paths.schedulesDir ? [`schedules_dir = ${tomlString(config.paths.schedulesDir)}`] : []),
+    ...(config.paths.skillsDir ? [`skills_dir = ${tomlString(config.paths.skillsDir)}`] : []),
   ];
 
   const modelLines = [

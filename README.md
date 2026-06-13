@@ -2,9 +2,24 @@
 
 Marifold is a local-first personal AI workspace for profiles, chats, skills, mini apps, workflows, and external agents.
 
-v0.13.0 is the pre-TUI foundation release: the basic agent loop, chat parity, the SkillApp schema spec, and scheduled task execution. On top of the v0.10.0 service and task-state foundation, it adds an approval-aware agent loop with native provider tool calling (through `@priest-ai/core` 2.4), a control-block fallback for models without native tool support, narrow built-in tools (file read/write, shell, web search, profile delegation), a workspace write boundary, config-driven approval policy, a `marifold agent` command, a provider-backed agent eval script, chat `/search` and `/read` and `/image` commands, model-initiated chat tools, ChatGPT OAuth token refresh, image attachment plumbing, the `marifold.skillapp.v0` schema spec with a validator, and cron-scheduled unattended agent runs hosted inside `marifold service` — alongside the existing priests-style profile chat, structured memory, model management, OAuth provider setup, config backup/import, loopback-only Fastify service API, and ephemeral task-state storage.
+v0.14.0 adds the **TUI** — an Ink/React terminal app (`packages/tui`) that becomes Marifold's primary interactive surface. Bare `marifold` launches it: an agent-first terminal UI that renders the existing chat and agent-event streams, with `/` commands, `$skill` invocation, an approval modal, `/btw` mid-run steering, a skills manager, and a profile-aware header. It introduces the `marifold.skill.v0` skill primitive (a prompt template with variables, run via `$name`), a `[paths].skills_dir`, and a small `AgentRunner` steering hook — built entirely on the v0.13.0 core, with no SDK change.
 
-For product direction and future scope, see [docs/vision.md](docs/vision.md) and [docs/roadmap.md](docs/roadmap.md).
+The v0.13.0 pre-TUI foundation remains: an approval-aware agent loop with native provider tool calling (through `@priest-ai/core` 2.4), a control-block fallback for models without native tool support, narrow built-in tools (file read/write, shell, web search, profile delegation), a workspace write boundary, config-driven approval policy, a `marifold agent` command, chat `/search`/`/read`/`/image` commands, model-initiated chat tools, ChatGPT OAuth token refresh, the `marifold.skillapp.v0` schema spec with a validator, and cron-scheduled unattended agent runs hosted inside `marifold service` — alongside priests-style profile chat, structured memory, model management, OAuth provider setup, config backup/import, the loopback-only Fastify service API, and ephemeral task-state storage.
+
+For product direction and future scope, see [docs/vision.md](docs/vision.md) and [docs/roadmap.md](docs/roadmap.md). For the terminal app, see [docs/tui.md](docs/tui.md).
+
+## What v0.14.0 Supports
+
+- The TUI: launch with bare `marifold` (or `marifold --profile <name>`); agent mode by default, `/chat` for chat.
+- Input grammar: plain text → agent/chat, `/command` → code-executed command, `$skill [args]` → model-backed skill.
+- `/` commands: `/help` `/exit` `/new` `/agent` `/chat` `/model` `/profile` `/session` `/think` `/clear` `/stop` `/btw` `/permissions` `/skills` `/install-skill` `/doctor`, plus `/search` `/read` `/image` `/remember` `/forget` `/delete-memory`.
+- Approval modal that previews the tool's input (file content / shell command), with allow-once / session-grant / persist-to-config / deny; escalated (out-of-cwd) calls always prompt; `/permissions` shows modes and grants.
+- `/btw <text>` steers a running task without cancelling it; Esc / Ctrl+C cancels a run, and a second Ctrl+C when idle exits.
+- Input editing: history (Up/Down), multi-line via trailing `\`, readline keys (Ctrl+A/E/U/W), and Tab completion for `/commands` and `$skills`.
+- `marifold.skill.v0` skills run via `$name [args]` (inline prompting for missing variables), managed with `/skills` (Enter run, Del remove) and `/install-skill <path|url>`; bundled examples in `examples/skills/`.
+- A launch-time profile picker when no default profile resolves.
+- The launch directory is the workspace; `~/.marifold` stays config/state; profiles are identities, not workspaces.
+- Non-TTY invocation falls back with a hint instead of starting Ink.
 
 ## What v0.13.0 Supports
 

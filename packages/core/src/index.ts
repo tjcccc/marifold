@@ -132,6 +132,23 @@ export { Scheduler } from './schedule/Scheduler';
 export type { ScheduleRunResult, SchedulerDeps } from './schedule/Scheduler';
 export { SessionResolver } from './sessions/SessionResolver';
 export {
+  SKILL_SCHEMA_ID,
+  extractTemplateVariables,
+  parseSkill,
+  validateSkill,
+  renderSkillPrompt,
+  resolveSkillValues,
+  SkillStore,
+} from './skill';
+export type {
+  MarifoldSkill,
+  SkillMode,
+  SkillVariable,
+  SkillRenderResult,
+  SkillScope,
+  SkillStoreOptions,
+} from './skill';
+export {
   DEFAULT_SKILLAPP_PERMISSIONS,
   SKILLAPP_KNOWN_TOOLS,
   SKILLAPP_SCHEMA,
@@ -179,6 +196,7 @@ export {
   defaultProfilesDir,
   defaultSessionsDb,
   defaultSchedulesDir,
+  defaultSkillsDir,
   defaultTasksDir,
   expandHome,
   marifoldHome,

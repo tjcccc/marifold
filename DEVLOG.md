@@ -2,6 +2,19 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-06-13 — v0.14.0 — TUI (the primary interactive entrypoint)
+
+- New `packages/tui` (Ink 7 + React 19), an **ESM-only** package the CommonJS CLI loads via a dynamic `import()` through a `new Function('s','return import(s)')` escape hatch so `tsc` does not downlevel it into a `require()` (which would throw `ERR_REQUIRE_ESM`). Verified the emit contains no `require("@marifold/tui")` and the import resolves at runtime.
+- Bare `marifold` (+ root `--profile`) launches the TUI; added `program.enablePositionalOptions()` so the root `--profile` coexists with `model default --profile` (the 116-check command-test passes again). Non-TTY launch prints a hint instead of starting Ink.
+- Thin-components / fat-testable-core split: pure `inputGrammar`, `eventView`, `appState` reducer, `commands`, `skills` under `src/core/`; Ink components under `src/ui/` (Header, Transcript, InputBox, ApprovalModal, SelectList, InfoPanel, StatusLine, App).
+- Agent-first: renders `AgentRunner.run`→`AgentEvent` and `runtime.stream`; approval modal resolves the TUI `ApprovalHandler` promise with allow-once / session-grant / persist-to-config / deny; escalated calls always prompt; `/permissions` view.
+- `/btw` steering: new optional `AgentRunOptions.steering` drain hook in `AgentRunner` surfaces queued guidance to the model via `userContext` between iterations — the one core change, covered by a scripted-engine test; event contract unchanged.
+- `marifold.skill.v0` primitive: new `packages/core/src/skill` (schema + validator + templater + store), `[paths].skills_dir` wired through config/init, runtime skill methods, `$name` run path with inline variable prompting, `/skills` manage + `/install-skill`, and two bundled examples in `examples/skills/`.
+- Input/layout: `InputBox` does cursor editing (left/right, insert-at-cursor, backspace handling the macOS DEL 0x7f, control-char filtering) inside a rounded border (Claude-Code style); transcript history renders through Ink `<Static>` (native scrollback) so the marifold bar + input + status line stay pinned at the bottom.
+- Polish round (post-review): (1) `AgentRunner` plan/loop/verify prompts now steer the model away from gratuitous tool use — conversational objectives answer directly instead of grabbing `write_file` (the "hello → write_file" wart); (2) input history (Up/Down); (3) multi-line input via trailing-`\` continuation; (4) readline keys (Ctrl+A/E/U/W); (5) double-Ctrl+C to exit (single press cancels a run); (6) animated braille thinking spinner (no dep); (7) approval modal previews the tool input (file content / shell command) before you approve; (8) `/session` resume renders past turns; (9) `/install-skill` accepts a URL; (10) Tab completion for `/commands` and `$skills`; (11) launch-time profile picker when no default resolves.
+- Tests: core 123 pass (added 14 skill + 1 steering); TUI 23 pass (12 pure-core/component + InputBox history/backspace/multiline/Tab + approval-preview + App mount/mode-switch smoke); service 4 pass; command-test 116 pass. Full `pnpm build`/`typecheck` green across all four packages.
+- Open: live token usage not shown (no usage event on the agent stream yet); markdown rendering of replies is deferred pending the UI-design decision; interactive Ollama smoke is the remaining manual gap.
+
 ## 2026-06-13 — tooling — adopt projnavi navigation layer
 
 - Added a `.projnavi/` navigation layer (project/module/flow notes, glossary, 14 evidence-backed claims) and the Claude Code skill at `.claude/skills/projnavi/SKILL.md`. Notes are pointer-style — they defer to `docs/architecture.md`/`AGENTS.md` rather than restating them.

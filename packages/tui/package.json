@@ -1,7 +1,8 @@
 {
-  "name": "@marifold/core",
+  "name": "@marifold/tui",
   "version": "0.14.0",
-  "description": "Core runtime for Marifold",
+  "description": "Ink-based terminal UI for Marifold",
+  "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
@@ -10,18 +11,17 @@
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@priest-ai/core": "^2.4.0",
-    "better-sqlite3": "^11.10.0",
-    "croner": "^10.0.1",
-    "duck-duck-scrape": "^2.2.7",
-    "smol-toml": "^1.6.1"
+    "@marifold/core": "workspace:*",
+    "ink": "^7.0.5",
+    "react": "^19.2.7"
   },
   "devDependencies": {
-    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.19.19",
+    "@types/react": "^19.2.17",
+    "ink-testing-library": "^4.0.0",
     "typescript": "^5.5.4",
     "vitest": "^2.1.9"
   },

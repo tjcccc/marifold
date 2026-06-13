@@ -1,4 +1,5 @@
 import { JSONValue, PriestConfig, PriestEngine, PriestRequest, PriestResponse, ToolDefinition, ToolExchangeTurn } from '@priest-ai/core';
+import * as path from 'path';
 import { AgentRunner } from '../agent/AgentRunner';
 import { resolveAgentConfig } from '../agent/ApprovalPolicy';
 import { DelegateTool } from '../agent/tools/DelegateTool';
@@ -30,8 +31,11 @@ import { ProfileResolver } from '../profiles/ProfileResolver';
 import { Scheduler } from '../schedule/Scheduler';
 import { ScheduleCreateInput, ScheduleState, ScheduleStore, ScheduleUpdateInput } from '../schedule/ScheduleStore';
 import { SessionResolver } from '../sessions/SessionResolver';
+import { SkillStore } from '../skill/SkillStore';
+import { MarifoldSkill } from '../skill/SkillSchema';
+import { SkillScope } from '../skill/SkillStore';
 import { TaskStore } from '../tasks/TaskStore';
-import { defaultSchedulesDir } from '../workspace/WorkspacePaths';
+import { defaultSchedulesDir, defaultSkillsDir } from '../workspace/WorkspacePaths';
 import type { TaskCreateInput, TaskEventInput, TaskListOptions, TaskState, TaskSummary, TaskUpdateInput } from '../tasks/TaskStore';
 import { MarifoldAskResponse, MarifoldResolvedSettings, MarifoldRunRequest } from './MarifoldTypes';
 
@@ -292,6 +296,40 @@ export class MarifoldRuntime {
       listProfileNames: () => this.profileResolver.list().map(profile => profile.name),
     }));
     return registry;
+  }
+
+  /**
+   * Skill store over the shared skills dir ([paths].skills_dir) and the given
+   * profile's skills/ dir (profile skills shadow global ones). Defaults to the
+   * configured default profile.
+   */
+  createSkillStore(profile?: string): SkillStore {
+    const { config } = this.options.loadedConfig;
+    const resolvedProfile = profile ?? config.default.profile;
+    return new SkillStore({
+      globalDir: config.paths.skillsDir ?? defaultSkillsDir(),
+      profileDir: path.join(config.paths.profilesDir, resolvedProfile, 'skills'),
+    });
+  }
+
+  listSkills(profile?: string): MarifoldSkill[] {
+    return this.createSkillStore(profile).list();
+  }
+
+  getSkill(name: string, profile?: string): MarifoldSkill | undefined {
+    return this.createSkillStore(profile).get(name);
+  }
+
+  installSkillFromText(text: string, scope: SkillScope = 'global', profile?: string): MarifoldSkill {
+    return this.createSkillStore(profile).installFromText(text, scope);
+  }
+
+  installSkillFromFile(filePath: string, scope: SkillScope = 'global', profile?: string): MarifoldSkill {
+    return this.createSkillStore(profile).installFromFile(filePath, scope);
+  }
+
+  removeSkill(name: string, profile?: string): boolean {
+    return this.createSkillStore(profile).remove(name);
   }
 
   createSchedule(input: ScheduleCreateInput): ScheduleState {

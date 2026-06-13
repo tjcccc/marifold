@@ -1,6 +1,6 @@
 {
   "name": "marifold",
-  "version": "0.13.1",
+  "version": "0.14.0",
   "description": "Marifold CLI",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -19,6 +19,7 @@
   "dependencies": {
     "@marifold/core": "workspace:*",
     "@marifold/service": "workspace:*",
+    "@marifold/tui": "workspace:*",
     "commander": "^12.1.0"
   },
   "devDependencies": {

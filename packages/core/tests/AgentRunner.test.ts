@@ -106,6 +106,9 @@ describe('AgentRunner', () => {
     expect(done.status).toBe('completed');
     expect(done.summary).toBe('The file says hello.');
 
+    // The loop prompt steers the model away from gratuitous tool use.
+    expect(engine.requests[1].prompt).toContain('Use tools only when');
+
     // Second loop request must replay the tool exchange.
     const loopRequest = engine.requests[2];
     expect(loopRequest.toolExchange).toMatchObject([
@@ -275,6 +278,35 @@ describe('AgentRunner', () => {
     expect(executed).toBe(1);
     const done = events[events.length - 1] as Extract<AgentEvent, { type: 'done' }>;
     expect(done.status).toBe('completed');
+  });
+
+  it('drains /btw steering between iterations and surfaces it to the model', async () => {
+    const engine = new ScriptedEngine([
+      planResponse,
+      response({ toolCalls: [{ id: 'call_0', name: 'read_file', arguments: {} }] }),
+      response({ text: 'Done with the steering applied.' }),
+      verifyPassResponse,
+    ]);
+    const { runner, taskStore } = makeRunner(engine, [fakeTool()]);
+
+    let drained = false;
+    const events = await collect(runner.run({
+      objective: 'Do work.',
+      cwd: tempDir(),
+      steering: () => {
+        if (drained) return [];
+        drained = true;
+        return ['prioritize the summary'];
+      },
+    }));
+
+    const done = events[events.length - 1] as Extract<AgentEvent, { type: 'done' }>;
+    expect(done.status).toBe('completed');
+
+    // The first loop request (after the plan) carries the steering as userContext.
+    expect(engine.requests[1].userContext?.join('\n')).toContain('prioritize the summary');
+    // The steering is recorded on the task.
+    expect(taskStore.get(done.taskId)?.events.some(e => e.message.includes('Steering: prioritize the summary'))).toBe(true);
   });
 
   it('escalates risky calls to ask even when policy allows', async () => {

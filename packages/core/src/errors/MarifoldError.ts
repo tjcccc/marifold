@@ -13,7 +13,9 @@ export type MarifoldErrorCode =
   | 'AGENT_TOOL_INVALID'
   | 'AGENT_RUN_INVALID'
   | 'SCHEDULE_INVALID'
-  | 'SCHEDULE_NOT_FOUND';
+  | 'SCHEDULE_NOT_FOUND'
+  | 'SKILL_INVALID'
+  | 'SKILL_NOT_FOUND';
 
 export class MarifoldError extends Error {
   readonly code: MarifoldErrorCode;
@@ -92,6 +94,14 @@ export class MarifoldError extends Error {
 
   static scheduleNotFound(scheduleId: string): MarifoldError {
     return new MarifoldError('SCHEDULE_NOT_FOUND', `Schedule not found: ${scheduleId}`, { schedule_id: scheduleId });
+  }
+
+  static skillInvalid(message: string, source?: string): MarifoldError {
+    return new MarifoldError('SKILL_INVALID', message, source ? { source } : {});
+  }
+
+  static skillNotFound(name: string): MarifoldError {
+    return new MarifoldError('SKILL_NOT_FOUND', `Skill not found: ${name}`, { name });
   }
 
   static workspaceAlreadyInitialized(configPath: string): MarifoldError {

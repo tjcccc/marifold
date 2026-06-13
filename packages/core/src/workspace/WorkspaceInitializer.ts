@@ -8,6 +8,7 @@ import {
   defaultProfilesDir,
   defaultSessionsDb,
   defaultSchedulesDir,
+  defaultSkillsDir,
   defaultTasksDir,
   resolveUserPath,
 } from './WorkspacePaths';
@@ -53,6 +54,7 @@ export interface WorkspaceInitOptions {
   sessionsDb?: string;
   tasksDir?: string;
   schedulesDir?: string;
+  skillsDir?: string;
   baseUrl?: string;
   apiKeyEnv?: string;
   force?: boolean;
@@ -64,6 +66,7 @@ export interface WorkspaceInitResult {
   sessionsDb: string;
   tasksDir: string;
   schedulesDir: string;
+  skillsDir: string;
   provider: string;
   providerType: ProviderType;
   model: string;
@@ -88,6 +91,7 @@ export class WorkspaceInitializer {
     const sessionsDb = resolveUserPath(options.sessionsDb ?? defaultSessionsDb());
     const tasksDir = resolveUserPath(options.tasksDir ?? defaultTasksDir());
     const schedulesDir = resolveUserPath(options.schedulesDir ?? defaultSchedulesDir());
+    const skillsDir = resolveUserPath(options.skillsDir ?? defaultSkillsDir());
     const baseUrl = resolveBaseUrl(provider, providerType, options.baseUrl);
     const apiKeyEnv = resolveApiKeyEnv(provider, providerType, options.apiKeyEnv);
 
@@ -97,6 +101,7 @@ export class WorkspaceInitializer {
     fs.mkdirSync(path.dirname(sessionsDb), { recursive: true });
     fs.mkdirSync(tasksDir, { recursive: true });
     fs.mkdirSync(schedulesDir, { recursive: true });
+    fs.mkdirSync(skillsDir, { recursive: true });
 
     const configStatus: WorkspaceInitFileStatus = fs.existsSync(configPath) ? 'updated' : 'created';
     fs.writeFileSync(configPath, renderConfig({
@@ -108,6 +113,7 @@ export class WorkspaceInitializer {
       sessionsDb,
       tasksDir,
       schedulesDir,
+      skillsDir,
       baseUrl,
       apiKeyEnv,
     }));
@@ -127,6 +133,7 @@ export class WorkspaceInitializer {
       sessionsDb,
       tasksDir,
       schedulesDir,
+      skillsDir,
       provider,
       providerType,
       model,
@@ -145,6 +152,7 @@ interface RenderConfigOptions {
   sessionsDb: string;
   tasksDir: string;
   schedulesDir: string;
+  skillsDir: string;
   baseUrl?: string;
   apiKeyEnv?: string;
 }
@@ -178,6 +186,7 @@ profiles_dir = ${tomlString(options.profilesDir)}
 sessions_db = ${tomlString(options.sessionsDb)}
 tasks_dir = ${tomlString(options.tasksDir)}
 schedules_dir = ${tomlString(options.schedulesDir)}
+skills_dir = ${tomlString(options.skillsDir)}
 
 ${providerLines.join('\n')}
 `;

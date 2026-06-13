@@ -43,6 +43,7 @@ profiles_dir = "~/.marifold/profiles"
 sessions_db = "~/.marifold/sessions.db"
 tasks_dir = "~/.marifold/tasks"
 schedules_dir = "~/.marifold/schedules"
+skills_dir = "~/.marifold/skills"
 
 [providers.ollama]
 type = "ollama"

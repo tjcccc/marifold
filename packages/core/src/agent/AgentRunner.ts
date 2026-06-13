@@ -56,6 +56,13 @@ export interface AgentRunOptions {
   toolMode?: AgentToolMode;
   /** Extra tags stored on the task (e.g. 'scheduled'). */
   tags?: string[];
+  /**
+   * Mid-run steering hook (the TUI's `/btw`). Called once between loop
+   * iterations; returns any text the user injected since the last drain (and
+   * should clear that queue). The notes are surfaced to the model as extra
+   * guidance on the next turn so a running task adapts without cancelling.
+   */
+  steering?: () => string[];
   /** Unattended run (scheduled tasks): applies [agent.unattended] approval
    * overrides; with no approvalHandler present, 'ask' degrades to deny. */
   unattended?: boolean;
@@ -85,6 +92,8 @@ interface LoopState {
   exchange: ToolExchangeTurn[];      // native mode
   transcript: string[];              // control-block mode
   toolSummaries: string[];
+  /** Mid-run `/btw` guidance, surfaced to the model via userContext. */
+  steeringNotes: string[];
 }
 
 /**
@@ -128,6 +137,7 @@ export class AgentRunner {
       exchange: [],
       transcript: [],
       toolSummaries: [],
+      steeringNotes: [],
     };
 
     try {
@@ -149,6 +159,7 @@ export class AgentRunner {
       while (iterations < maxIterations) {
         iterations += 1;
         this.assertNotAborted(options.signal);
+        this.drainSteering(task.id, options, state);
 
         const response = await engine.run(this.loopRequest(config, settings.profile, options, state), {
           signal: options.signal,
@@ -351,6 +362,17 @@ export class AgentRunner {
     }
   }
 
+  /** Drain any `/btw` steering the caller queued and record it for the next turn. */
+  private drainSteering(taskId: string, options: AgentRunOptions, state: LoopState): void {
+    if (!options.steering) return;
+    for (const note of options.steering()) {
+      const text = note.trim();
+      if (!text) continue;
+      state.steeringNotes.push(text);
+      this.deps.taskStore.appendEvent(taskId, { kind: 'note', message: `Steering: ${text}` });
+    }
+  }
+
   private loopRequest(
     config: PriestConfig,
     profile: string,
@@ -360,25 +382,30 @@ export class AgentRunner {
     const base: PriestRequest = {
       config,
       profile,
-      prompt: `Objective: ${options.objective}\n\nWork toward this objective step by step, using tools when needed. When the objective is complete, reply with a short final answer describing the outcome.`,
+      prompt: `Objective: ${options.objective}\n\nUse tools only when the objective genuinely requires reading or writing files, running commands, searching the web, or delegating. Many objectives — greetings, questions, explanations, drafting text — need no tools at all; for those, answer directly from your own knowledge. Do not invent tool calls. When the objective is complete, reply with a short final answer describing the outcome.`,
       context: this.agentContext(state, options.cwd ?? process.cwd()),
     };
+    const steering = state.steeringNotes.map(
+      note => `The user added this guidance while you were working — take it into account: ${note}`,
+    );
     if (state.mode === 'native') {
       return {
         ...base,
         tools: this.deps.registry.definitions(),
         toolExchange: state.exchange,
+        ...(steering.length > 0 ? { userContext: steering } : {}),
       };
     }
     return {
       ...base,
-      userContext: state.transcript,
+      userContext: [...state.transcript, ...steering],
     };
   }
 
   private agentContext(state: LoopState, cwd: string): string[] {
     const context = [
       'You are running as the Marifold agent. Stay focused on the stated objective and keep replies concise.',
+      'Prefer answering directly. Reach for a tool only when the objective cannot be completed from your own knowledge — never use a tool just to demonstrate one.',
       `Working directory: ${cwd}. Relative tool paths resolve against it; ~ means the user's home directory.`,
     ];
     if (state.mode === 'control-block') {
@@ -452,6 +479,7 @@ export class AgentRunner {
       context: [
         'You are verifying an agent task outcome. Reply with JSON only.',
         'Judge only whether the final outcome satisfies the objective. Do not judge style, efficiency, or whether a different approach would have been better. If the objective was achieved, passed must be true. Set passed to false only when the outcome is missing, wrong, or incomplete.',
+        'For conversational objectives (greetings, questions, explanations), an appropriate direct reply fully satisfies the objective — no tool use or file output is required.',
       ],
       output: { jsonSchema: VERIFICATION_SCHEMA, jsonSchemaName: 'agent_verification' },
     }, { signal: options.signal });
