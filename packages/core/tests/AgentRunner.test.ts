@@ -81,6 +81,36 @@ const planResponse = response({ text: '{"title": "Test plan", "steps": ["Read th
 const verifyPassResponse = response({ text: '{"passed": true, "notes": "objective met"}' });
 
 describe('AgentRunner', () => {
+  it('tallies token usage across plan, loop, and verification turns', async () => {
+    const withUsage = (partial: Partial<PriestResponse>, usage: { inputTokens: number; outputTokens: number }): PriestResponse =>
+      response({ ...partial, usage: { ...usage, totalTokens: usage.inputTokens + usage.outputTokens, estimatedCostUSD: 0.001 } });
+    const engine = new ScriptedEngine([
+      withUsage({ text: '{"title": "T", "steps": ["s"]}' }, { inputTokens: 10, outputTokens: 5 }), // plan
+      withUsage({ text: 'Final answer.' }, { inputTokens: 20, outputTokens: 8 }), // loop turn
+      withUsage({ text: '{"passed": true, "notes": "ok"}' }, { inputTokens: 7, outputTokens: 3 }), // verify
+    ]);
+    const { runner } = makeRunner(engine, [fakeTool()]);
+    const events = await collect(runner.run({ objective: 'Do it.', cwd: tempDir() }));
+    const done = events.find(e => e.type === 'done') as Extract<AgentEvent, { type: 'done' }>;
+    expect(done.usage).toEqual({ inputTokens: 37, outputTokens: 16, totalTokens: 53, estimatedCostUSD: 0.003 });
+  });
+
+  it('forwards objective images on the first agent turn only', async () => {
+    const engine = new ScriptedEngine([
+      planResponse,
+      response({ text: 'I can see the image.' }),
+      verifyPassResponse,
+    ]);
+    const { runner } = makeRunner(engine, [fakeTool()]);
+    const images = [{ path: '/tmp/pic.png' }];
+
+    await collect(runner.run({ objective: 'Describe the image.', cwd: tempDir(), images }));
+
+    expect(engine.requests[0].images).toBeUndefined(); // plan turn
+    expect(engine.requests[1].images).toEqual(images); // first loop turn
+    expect(engine.requests[2].images).toBeUndefined(); // verification turn
+  });
+
   it('runs plan, tool loop, verification, and summary with native tool calls', async () => {
     const engine = new ScriptedEngine([
       planResponse,

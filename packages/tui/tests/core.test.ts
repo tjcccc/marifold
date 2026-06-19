@@ -7,7 +7,7 @@ import { runCommand, type CommandContext } from '../src/core/commands.js';
 import { bindSkillArgs, skillUsage } from '../src/core/skills.js';
 
 function initial() {
-  return createInitialState({ profile: 'default', provider: 'ollama', model: 'm', cwd: '/tmp' });
+  return createInitialState({ profile: 'default', provider: 'ollama', model: 'm', cwd: '/tmp', version: '0.0.0-test' });
 }
 
 describe('inputGrammar', () => {
@@ -43,7 +43,8 @@ describe('eventView', () => {
       .toMatchObject({ kind: 'notice', tone: 'warn' });
     expect(agentEventToItems({ type: 'verification', passed: true, notes: 'n' })[0]).toMatchObject({ kind: 'verification', passed: true });
     expect(agentEventToItems({ type: 'error', code: 'X', message: 'm' })[0]).toMatchObject({ kind: 'notice', tone: 'error' });
-    expect(agentEventToItems({ type: 'done', taskId: 't', status: 'completed' })[0]).toMatchObject({ kind: 'notice' });
+    // done produces no item; the App emits the completion line with timing/tokens.
+    expect(agentEventToItems({ type: 'done', taskId: 't', status: 'completed' })).toEqual([]);
     // status/step/approval_request produce no transcript item.
     expect(agentEventToItems({ type: 'status', taskId: 't', status: 'running' })).toEqual([]);
   });

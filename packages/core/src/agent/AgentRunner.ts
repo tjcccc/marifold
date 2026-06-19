@@ -1,16 +1,18 @@
 import {
+  ImageInput,
   JSONValue,
   PriestConfig,
   PriestRequest,
   PriestResponse,
   ToolCall,
   ToolExchangeTurn,
+  UsageInfo,
 } from '@priest-ai/core';
 import * as crypto from 'crypto';
 import { stripMemoryControls } from '../memory/MemoryControls';
 import { MarifoldResolvedSettings, MarifoldRunRequest } from '../runtime/MarifoldTypes';
 import { TaskState, TaskStatus, TaskStore } from '../tasks/TaskStore';
-import { AgentEvent } from './AgentEvents';
+import { AgentEvent, AgentUsage } from './AgentEvents';
 import {
   AgentToolMode,
   ApprovalHandler,
@@ -47,6 +49,9 @@ export interface AgentRunOptions {
   profile?: string;
   provider?: string;
   model?: string;
+  /** Images attached to the objective. Sent to the model on the first turn
+   * (priest carries them through the request, exactly like the chat path). */
+  images?: ImageInput[];
   /** Working directory for filesystem/shell tools. Defaults to process.cwd(). */
   cwd?: string;
   /** Resolves 'ask' approvals. Absent (unattended runs): 'ask' degrades to deny. */
@@ -114,7 +119,10 @@ export class AgentRunner {
   async *run(options: AgentRunOptions): AsyncGenerator<AgentEvent, void, unknown> {
     const agentConfig = this.deps.agentConfig;
     const settings = this.deps.resolveSettings(options);
-    const { engine, config } = await this.deps.prepareEngine(settings);
+    const { engine: rawEngine, config } = await this.deps.prepareEngine(settings);
+    // Tally token usage across every model call (plan, loop turns, verify).
+    const usage: AgentUsage = {};
+    const engine = withUsageTally(rawEngine, usage);
     const cwd = options.cwd ?? process.cwd();
     const maxIterations = Math.max(1, options.maxIterations ?? agentConfig.maxIterations);
     const requestedMode = options.toolMode ?? agentConfig.toolMode;
@@ -177,7 +185,7 @@ export class AgentRunner {
           }
           if (response.error?.code === 'REQUEST_ABORTED') throw new AbortedError();
           yield { type: 'error', code: response.error?.code ?? 'PROVIDER_ERROR', message: response.error?.message ?? 'Provider call failed.' };
-          yield* this.finish(task.id, 'failed', undefined, 'Retry the run once the provider issue is resolved.');
+          yield* this.finish(task.id, 'failed', undefined, 'Retry the run once the provider issue is resolved.', usage);
           return;
         }
 
@@ -206,7 +214,7 @@ export class AgentRunner {
           kind: 'blocker',
           message: `Iteration cap of ${maxIterations} reached before the objective was completed.`,
         });
-        yield* this.finish(task.id, 'failed', 'Stopped at the iteration cap before completing the objective.', 'Re-run with a higher iteration cap or a narrower objective.');
+        yield* this.finish(task.id, 'failed', 'Stopped at the iteration cap before completing the objective.', 'Re-run with a higher iteration cap or a narrower objective.', usage);
         return;
       }
 
@@ -227,16 +235,17 @@ export class AgentRunner {
         status,
         finalText,
         verification.passed ? undefined : verification.notes,
+        usage,
       );
     } catch (error) {
       if (error instanceof AbortedError || (options.signal?.aborted ?? false)) {
         this.deps.taskStore.appendEvent(task.id, { kind: 'note', message: 'Run cancelled by the user.' });
-        yield* this.finish(task.id, 'cancelled', undefined, 'Resume by starting a new run with the same objective.');
+        yield* this.finish(task.id, 'cancelled', undefined, 'Resume by starting a new run with the same objective.', usage);
         return;
       }
       const message = error instanceof Error ? error.message : String(error);
       yield { type: 'error', code: 'AGENT_RUN_ERROR', message };
-      yield* this.finish(task.id, 'failed', undefined, message);
+      yield* this.finish(task.id, 'failed', undefined, message, usage);
     }
   }
 
@@ -379,11 +388,16 @@ export class AgentRunner {
     options: AgentRunOptions,
     state: LoopState,
   ): PriestRequest {
+    // Attach the objective's images on the first turn only (before any tool
+    // exchange/transcript accrues), so the model sees them without re-uploading
+    // on every iteration.
+    const firstTurn = state.exchange.length === 0 && state.transcript.length === 0;
     const base: PriestRequest = {
       config,
       profile,
       prompt: `Objective: ${options.objective}\n\nUse tools only when the objective genuinely requires reading or writing files, running commands, searching the web, or delegating. Many objectives — greetings, questions, explanations, drafting text — need no tools at all; for those, answer directly from your own knowledge. Do not invent tool calls. When the objective is complete, reply with a short final answer describing the outcome.`,
       context: this.agentContext(state, options.cwd ?? process.cwd()),
+      ...(firstTurn && options.images && options.images.length > 0 ? { images: options.images } : {}),
     };
     const steering = state.steeringNotes.map(
       note => `The user added this guidance while you were working — take it into account: ${note}`,
@@ -508,6 +522,7 @@ export class AgentRunner {
     status: TaskStatus,
     summary?: string,
     nextAction?: string,
+    usage?: AgentUsage,
   ): AsyncGenerator<AgentEvent, void, unknown> {
     const updated: TaskState = this.deps.taskStore.update(taskId, {
       status,
@@ -515,7 +530,13 @@ export class AgentRunner {
       ...(nextAction ? { nextAction: truncate(nextAction, 500) } : {}),
     });
     yield { type: 'status', taskId, status: updated.status };
-    yield { type: 'done', taskId, status: updated.status, ...(updated.summary ? { summary: updated.summary } : {}) };
+    yield {
+      type: 'done',
+      taskId,
+      status: updated.status,
+      ...(updated.summary ? { summary: updated.summary } : {}),
+      ...(usage && hasUsage(usage) ? { usage } : {}),
+    };
   }
 
   private assertNotAborted(signal?: AbortSignal): void {
@@ -549,4 +570,33 @@ function parseJsonObject(text: string): Record<string, JSONValue> | undefined {
 
 function truncate(text: string, limit: number): string {
   return text.length <= limit ? text : `${text.slice(0, limit - 3)}...`;
+}
+
+/** Wrap an engine so each model call's token usage accrues into `total`. */
+function withUsageTally(engine: AgentEngine, total: AgentUsage): AgentEngine {
+  return {
+    run: async (request, options) => {
+      const response = await engine.run(request, options);
+      addUsage(total, response.usage);
+      return response;
+    },
+  };
+}
+
+function addUsage(total: AgentUsage, usage?: UsageInfo): void {
+  if (!usage) return;
+  if (usage.inputTokens != null) total.inputTokens = (total.inputTokens ?? 0) + usage.inputTokens;
+  if (usage.outputTokens != null) total.outputTokens = (total.outputTokens ?? 0) + usage.outputTokens;
+  const turnTotal = usage.totalTokens ?? sumDefined(usage.inputTokens, usage.outputTokens);
+  if (turnTotal != null) total.totalTokens = (total.totalTokens ?? 0) + turnTotal;
+  if (usage.estimatedCostUSD != null) total.estimatedCostUSD = (total.estimatedCostUSD ?? 0) + usage.estimatedCostUSD;
+}
+
+function sumDefined(a?: number, b?: number): number | undefined {
+  if (a == null && b == null) return undefined;
+  return (a ?? 0) + (b ?? 0);
+}
+
+function hasUsage(usage: AgentUsage): boolean {
+  return usage.inputTokens != null || usage.outputTokens != null || usage.totalTokens != null || usage.estimatedCostUSD != null;
 }

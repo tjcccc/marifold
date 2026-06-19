@@ -2,6 +2,19 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-06-19 — v0.15.0 — TUI design polish (inline layout, completion, markdown, usage)
+
+- Visual redesign to the TUIStudio spec: `#EAA221` accent, three-row header banner, `>` prompt, image-drop tokens, and a thinking/run line. New `src/ui/theme.ts`, `Markdown.tsx`, `RunStatus.tsx`, `src/core/displayPaths.ts` (tilde-compress).
+- **Inline layout** (Claude-style): banner + transcript render through Ink `<Static>` into native scrollback (persists after exit); run line, input, and status pin below. Submitted input is a turn divider with top/bottom accent rules — plain `>` message, violet `/command`, cyan `$skill` echoes.
+- **Input** (`InputBox`): live completion menu for `/commands` and `$skills` (names + descriptions, ↑/↓/Tab/Enter/Esc); image drops → green `[image #n]` tokens (per-message indices) via **bracketed paste** (`ESC[?2004h`) so fragmented/escaped drops coalesce; static block cursor; Ctrl+J / Ctrl-Enter (modifyOtherKeys + CSI-u) / Shift/Alt-Enter newlines; Ctrl+K, Home/End; height bounded to `MAX_INPUT_ROWS` with explicit wrapping (caps the live frame so Ink erases cleanly on delete).
+- **Markdown** rendering for assistant output (code fences, headings, lists, inline `code`/**bold**/*italic*).
+- **Images in agent mode**: `AgentRunOptions.images` threaded into the first agent turn (priest already supports it); chat path unchanged. Verified end-to-end both modes (test: images on first turn only).
+- **Token usage + time**: `runtime.stream` gains a non-breaking `onComplete` callback; `AgentRunner` tallies usage across plan/loop/verify via an engine wrapper into the `done` event's new `AgentUsage`. End-of-run line shows `Task completed. (9.1s, 919 tokens)` — cost only when a provider reports it (local shows tokens). New `UsageInfo`/`AgentUsage` core exports.
+- New commands: `/status` (profile, mode, model, thinking, session, turns) and `/copy` (last response's original un-wrapped text via `pbcopy`/`clip`/`xclip`). Overlays recolored to the marifold accent.
+- Version 0.14.0 → 0.15.0 across all five packages + CLI `.version`.
+- Verified: core 125 tests, TUI 24, all packages `pnpm build`/`typecheck` green; behaviors confirmed via Ink frame dumps.
+- **Open**: line-duplication on terminal **resize** persists in inline mode — Ink clears its live region on shrink but can't track the `<Static>` scrollback reflow (header in `<Static>` is unaffected; input rules duplicate). Ink 7 exposes `alternateScreen` (the categorical Codex/vim fix) but it clears on exit. **Plan B next**: keep inline, rework the full-width input border rules (prime reflow suspect) before considering alt-screen. Resize is unverified in the harness (no real TTY).
+
 ## 2026-06-13 — v0.14.0 — TUI (the primary interactive entrypoint)
 
 - New `packages/tui` (Ink 7 + React 19), an **ESM-only** package the CommonJS CLI loads via a dynamic `import()` through a `new Function('s','return import(s)')` escape hatch so `tsc` does not downlevel it into a `require()` (which would throw `ERR_REQUIRE_ESM`). Verified the emit contains no `require("@marifold/tui")` and the import resolves at runtime.

@@ -22,6 +22,10 @@ export interface AppState {
   model: string;
   mode: Mode;
   cwd: string;
+  /** This build's version, shown in the header banner. */
+  version: string;
+  /** A known newer version; drives the header's update notice when set. */
+  latestVersion?: string;
   sessionId?: string;
   transcript: TranscriptItem[];
   running: boolean;
@@ -40,6 +44,8 @@ export interface InitialAppState {
   provider: string;
   model: string;
   cwd: string;
+  version: string;
+  latestVersion?: string;
   mode?: Mode;
   sessionId?: string;
 }
@@ -51,6 +57,8 @@ export function createInitialState(init: InitialAppState): AppState {
     model: init.model,
     mode: init.mode ?? 'agent',
     cwd: init.cwd,
+    version: init.version,
+    ...(init.latestVersion ? { latestVersion: init.latestVersion } : {}),
     ...(init.sessionId ? { sessionId: init.sessionId } : {}),
     transcript: [],
     running: false,

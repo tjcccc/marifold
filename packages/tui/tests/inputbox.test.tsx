@@ -11,8 +11,8 @@ function renderInput(overrides: Partial<Parameters<typeof InputBox>[0]> = {}) {
     onSubmit,
     onInterrupt: noop,
     history: [] as string[],
-    commandNames: ['help', 'chat', 'clear'],
-    skillNames: ['translate'],
+    commands: [{ name: 'help' }, { name: 'chat' }, { name: 'clear' }],
+    skills: [{ name: 'translate' }],
     ...overrides,
   };
   return { onSubmit, ...render(<InputBox {...props} />) };
@@ -37,7 +37,7 @@ describe('InputBox', () => {
     await delay();
     stdin.write('\r');
     await delay();
-    expect(onSubmit).toHaveBeenCalledWith('hello');
+    expect(onSubmit).toHaveBeenCalledWith('hello', []);
   });
 
   it('continues onto a new line when the line ends with a backslash', async () => {
@@ -51,7 +51,7 @@ describe('InputBox', () => {
     await delay();
     stdin.write('\r'); // submit
     await delay();
-    expect(onSubmit).toHaveBeenCalledWith('line1\nline2');
+    expect(onSubmit).toHaveBeenCalledWith('line1\nline2', []);
   });
 
   it('recalls history with the up arrow', async () => {
@@ -71,5 +71,21 @@ describe('InputBox', () => {
     stdin.write('\t');
     await delay();
     expect(lastFrame()).toContain('/chat');
+  });
+
+  it('inserts a newline (not garbage) for modified Enter escape sequences', async () => {
+    for (const seq of ['\x1b[27;5;13~', '\x1b[13;5u']) {
+      const { stdin, lastFrame, onSubmit } = renderInput();
+      stdin.write('a');
+      await delay();
+      stdin.write(seq); // Ctrl+Enter (modifyOtherKeys / CSI-u)
+      await delay();
+      stdin.write('b');
+      await delay();
+      const frame = lastFrame() ?? '';
+      expect(frame).not.toMatch(/27;5;13|13;5u/); // no raw escape leaked
+      expect(onSubmit).not.toHaveBeenCalled(); // modified Enter does not submit
+      expect(frame).toMatch(/a\n\s+b|a[\s\S]*\n[\s\S]*b/); // a and b on separate lines
+    }
   });
 });

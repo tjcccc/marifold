@@ -1,6 +1,7 @@
 import React from 'react';
 import { Box, Text, useInput } from 'ink';
 import type { ApprovalRequest, PriestJSONValue } from '@marifold/core';
+import { ACCENT, ATTACHMENT, DIM } from './theme.js';
 
 const PREVIEW_MAX_LINES = 12;
 const PREVIEW_MAX_BODY_LINES = 8;
@@ -63,8 +64,14 @@ export function ApprovalModal({
         </Box>
       ) : null}
       <Box marginTop={1}>
-        <Text dimColor>
-          [a]llow once · [s]ession {request.kind} · [p]ersist {request.kind} · [d]eny
+        <Text>
+          <Text color={ATTACHMENT} bold>[a]</Text><Text color={DIM}>llow once</Text>
+          <Text color={DIM}> · </Text>
+          <Text color={ACCENT} bold>[s]</Text><Text color={DIM}>ession {request.kind}</Text>
+          <Text color={DIM}> · </Text>
+          <Text color={ACCENT} bold>[p]</Text><Text color={DIM}>ersist {request.kind}</Text>
+          <Text color={DIM}> · </Text>
+          <Text color="red" bold>[d]</Text><Text color={DIM}>eny</Text>
         </Text>
       </Box>
       {request.escalated ? (

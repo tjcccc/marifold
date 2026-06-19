@@ -1,7 +1,8 @@
 export type { ImageInput, JSONValue as PriestJSONValue, ToolCall, ToolDefinition } from '@priest-ai/core';
 export { AgentRunner } from './agent/AgentRunner';
 export type { AgentEngineContext, AgentRunnerDeps, AgentRunOptions } from './agent/AgentRunner';
-export type { AgentEvent } from './agent/AgentEvents';
+export type { AgentEvent, AgentUsage } from './agent/AgentEvents';
+export type { UsageInfo } from '@priest-ai/core';
 export {
   DEFAULT_AGENT_CONFIG,
   resolveAgentConfig,

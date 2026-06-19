@@ -20,6 +20,8 @@ export interface CommandContext {
   openSkills(): void;
   showPermissions(): void;
   showHelp(): void;
+  showStatus(): void;
+  copyLast(): void;
   showSessions(): void;
   runDoctor(): void;
   installSkill(arg: string): void;
@@ -41,6 +43,8 @@ export interface CommandSpec {
 
 const COMMANDS: CommandSpec[] = [
   { name: 'help', summary: 'List commands and input syntax.', run: ctx => ctx.showHelp() },
+  { name: 'status', summary: 'Show profile, mode, model, thinking, and session.', run: ctx => ctx.showStatus() },
+  { name: 'copy', summary: "Copy the last response's original text to the clipboard.", run: ctx => ctx.copyLast() },
   { name: 'exit', aliases: ['quit'], summary: 'Leave the TUI.', run: ctx => ctx.exit() },
   { name: 'new', summary: 'Start a fresh session (clear transcript).', run: ctx => ctx.newSession() },
   { name: 'agent', summary: 'Switch to agent mode (default).', run: ctx => ctx.setMode('agent') },

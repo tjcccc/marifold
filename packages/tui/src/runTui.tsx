@@ -1,8 +1,20 @@
+import { readFileSync } from 'fs';
 import { Box, render, Text } from 'ink';
 import { MarifoldRuntime } from '@marifold/core';
 import type { LoadedMarifoldConfig, MarifoldResolvedSettings, ProfileSummary } from '@marifold/core';
 import { App } from './ui/App.js';
 import { SelectList } from './ui/SelectList.js';
+
+/** This package's version, read from its own package.json at runtime so the
+ * header banner never drifts from the published version. */
+function readVersion(): string {
+  try {
+    const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf-8'));
+    return typeof pkg.version === 'string' ? pkg.version : '0.0.0';
+  } catch {
+    return '0.0.0';
+  }
+}
 
 export interface RunTuiOptions {
   loadedConfig: LoadedMarifoldConfig;
@@ -50,12 +62,26 @@ export async function runTui(options: RunTuiOptions): Promise<void> {
       model: settings.model,
       think: settings.think,
       cwd: process.cwd(),
+      version: readVersion(),
     };
-    const app = render(
-      <App runtime={runtime} loadedConfig={options.loadedConfig} initial={initial} />,
-      { exitOnCtrlC: false },
-    );
-    await app.waitUntilExit();
+    // Render inline in the normal buffer (no screen clear / alternate screen):
+    // for an agentic tool the conversation — code, command output, explanations
+    // — stays in the terminal's native scrollback, scrollable and copyable
+    // during the session and preserved after exit.
+    //
+    // Enable bracketed paste so dropped/pasted file paths arrive as one buffered
+    // event (Ink coalesces them) instead of fragmented keystrokes — otherwise a
+    // long dropped path lands as loose text instead of an `[image #n]` token.
+    process.stdout.write('\x1b[?2004h');
+    try {
+      const app = render(
+        <App runtime={runtime} loadedConfig={options.loadedConfig} initial={initial} />,
+        { exitOnCtrlC: false },
+      );
+      await app.waitUntilExit();
+    } finally {
+      process.stdout.write('\x1b[?2004l');
+    }
   } finally {
     runtime.close();
   }

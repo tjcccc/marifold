@@ -1,4 +1,4 @@
-import { JSONValue, PriestConfig, PriestEngine, PriestRequest, PriestResponse, ToolDefinition, ToolExchangeTurn } from '@priest-ai/core';
+import { JSONValue, PriestConfig, PriestEngine, PriestRequest, PriestResponse, ToolDefinition, ToolExchangeTurn, UsageInfo } from '@priest-ai/core';
 import * as path from 'path';
 import { AgentRunner } from '../agent/AgentRunner';
 import { resolveAgentConfig } from '../agent/ApprovalPolicy';
@@ -114,9 +114,13 @@ export class MarifoldRuntime {
     };
   }
 
-  async *stream(request: MarifoldRunRequest): AsyncGenerator<string, void, unknown> {
+  async *stream(
+    request: MarifoldRunRequest,
+    onComplete?: (summary: { usage?: UsageInfo; latencyMs?: number }) => void,
+  ): AsyncGenerator<string, void, unknown> {
     const settings = this.resolveSettings(request);
     await this.refreshProviderCredentialsIfNeeded(settings.provider);
+    let aggregateUsage: UsageInfo | undefined;
     const engine = this.createEngine(settings.provider, Boolean(request.sessionId));
     const memoryOn = this.memoryEnabled(settings.profile, request.memories);
     const memory = this.memoryForRequest(settings.profile, request.memories, request.prompt, settings.think);
@@ -167,6 +171,7 @@ export class MarifoldRuntime {
         yield tail;
       }
 
+      aggregateUsage = sumUsage(aggregateUsage, done?.usage);
       const toolCalls = done?.toolCalls ?? [];
       if (!chatTools || toolCalls.length === 0) {
         if (request.sessionId) {
@@ -175,6 +180,7 @@ export class MarifoldRuntime {
         if (memoryOn) {
           this.applyTurnMemory(settings.profile, request.prompt, stripper, request.sessionId);
         }
+        onComplete?.({ usage: aggregateUsage, latencyMs: done?.execution?.latencyMs });
         return;
       }
 
@@ -568,4 +574,19 @@ export class MarifoldRuntime {
     this.memoryStore.save(profile, extractPromptMemoryInputs(prompt), { sessionId });
     this.memoryStore.trimShortTerm(profile, this.options.loadedConfig.config.memory.sizeLimit);
   }
+}
+
+/** Sum two provider usage reports, preserving undefined when neither side has
+ * a given field (so absent token data stays absent rather than showing 0). */
+function sumUsage(a: UsageInfo | undefined, b: UsageInfo | undefined): UsageInfo | undefined {
+  if (!a) return b;
+  if (!b) return a;
+  const add = (x?: number, y?: number): number | undefined =>
+    x == null && y == null ? undefined : (x ?? 0) + (y ?? 0);
+  return {
+    inputTokens: add(a.inputTokens, b.inputTokens),
+    outputTokens: add(a.outputTokens, b.outputTokens),
+    totalTokens: add(a.totalTokens, b.totalTokens),
+    estimatedCostUSD: add(a.estimatedCostUSD, b.estimatedCostUSD),
+  };
 }

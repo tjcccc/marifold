@@ -2,6 +2,16 @@ import { JSONValue } from '@priest-ai/core';
 import { TaskPlanItem, TaskStatus, TaskStepStatus } from '../tasks/TaskStore';
 import { ApprovalRequest, ToolKind } from './ApprovalPolicy';
 
+/** Token usage accumulated over an agent run's model calls (plan, loop turns,
+ * verification), as reported by the provider. Fields are undefined when the
+ * provider does not report usage (e.g. some local models). */
+export interface AgentUsage {
+  inputTokens?: number;
+  outputTokens?: number;
+  totalTokens?: number;
+  estimatedCostUSD?: number;
+}
+
 /**
  * Renderer-agnostic agent run events. This union is the contract every
  * Marifold client (CLI today; TUI, Web UI, and Apple clients later) renders,
@@ -27,4 +37,4 @@ export type AgentEvent =
   | { type: 'tool_result'; callId: string; tool: string; summary: string; isError: boolean }
   | { type: 'verification'; passed: boolean; notes: string }
   | { type: 'error'; code: string; message: string }
-  | { type: 'done'; taskId: string; status: TaskStatus; summary?: string };
+  | { type: 'done'; taskId: string; status: TaskStatus; summary?: string; usage?: AgentUsage };

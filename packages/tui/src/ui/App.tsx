@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo, useReducer, useRef, useState } from 'react';
 import { Box, Static, useApp } from 'ink';
 import { randomUUID } from 'crypto';
+import { spawn } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 import {
@@ -11,6 +12,7 @@ import {
   resolveAgentConfig,
 } from '@marifold/core';
 import type {
+  AgentUsage,
   ApprovalDecision,
   ApprovalRequest,
   ImageInput,
@@ -19,14 +21,15 @@ import type {
   MarifoldSkill,
   ToolKind,
 } from '@marifold/core';
-import { appReducer, createInitialState, type Mode, type NoticeTone } from '../core/appState.js';
+import { appReducer, createInitialState, type Mode, type NoticeTone, type TranscriptItem } from '../core/appState.js';
 import { parseInput } from '../core/inputGrammar.js';
 import { listCommands, runCommand, type CommandContext } from '../core/commands.js';
 import { bindSkillArgs, skillUsage } from '../core/skills.js';
 import { Header } from './Header.js';
 import { TranscriptRow } from './Transcript.js';
-import { InputBox } from './InputBox.js';
+import { InputBox, type CompletionItem } from './InputBox.js';
 import { StatusLine } from './StatusLine.js';
+import { RunStatus } from './RunStatus.js';
 import { ApprovalModal, type ApprovalChoice } from './ApprovalModal.js';
 import { SelectList, type SelectItem } from './SelectList.js';
 import { InfoPanel } from './InfoPanel.js';
@@ -36,7 +39,15 @@ const READ_FILE_CHAR_LIMIT = 100000;
 export interface AppProps {
   runtime: MarifoldRuntime;
   loadedConfig: LoadedMarifoldConfig;
-  initial: { profile: string; provider: string; model: string; think: boolean; cwd: string };
+  initial: {
+    profile: string;
+    provider: string;
+    model: string;
+    think: boolean;
+    cwd: string;
+    version: string;
+    latestVersion?: string;
+  };
 }
 
 type Overlay =
@@ -54,22 +65,29 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
   const { exit } = useApp();
   const [state, dispatch] = useReducer(
     appReducer,
-    createInitialState({ profile: initial.profile, provider: initial.provider, model: initial.model, cwd: initial.cwd }),
+    createInitialState({
+      profile: initial.profile,
+      provider: initial.provider,
+      model: initial.model,
+      cwd: initial.cwd,
+      version: initial.version,
+      ...(initial.latestVersion ? { latestVersion: initial.latestVersion } : {}),
+    }),
   );
   const [overlay, setOverlay] = useState<Overlay | null>(null);
   const [think, setThink] = useState(initial.think);
   const [steeringCount, setSteeringCount] = useState(0);
   const [pendingSkill, setPendingSkill] = useState<PendingSkill | null>(null);
   const [history, setHistory] = useState<string[]>([]);
-  const [skillNames, setSkillNames] = useState<string[]>(() => {
+  const [skillItems, setSkillItems] = useState<CompletionItem[]>(() => {
     try {
-      return runtime.listSkills(initial.profile).map(skill => skill.name);
+      return runtime.listSkills(initial.profile).map(skill => ({ name: skill.name, hint: skill.description }));
     } catch {
       return [];
     }
   });
-  const commandNames = useMemo(
-    () => listCommands().flatMap(spec => [spec.name, ...(spec.aliases ?? [])]),
+  const commandItems = useMemo<CompletionItem[]>(
+    () => listCommands().map(spec => ({ name: spec.name, hint: spec.summary })),
     [],
   );
 
@@ -95,9 +113,9 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
 
   const refreshSkills = useCallback(() => {
     try {
-      setSkillNames(runtime.listSkills(stateRef.current.profile).map(skill => skill.name));
+      setSkillItems(runtime.listSkills(stateRef.current.profile).map(skill => ({ name: skill.name, hint: skill.description })));
     } catch {
-      setSkillNames([]);
+      setSkillItems([]);
     }
   }, [runtime]);
 
@@ -150,7 +168,12 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
     abortRef.current = controller;
     steeringRef.current = [];
     setSteeringCount(0);
+    const images = pendingImagesRef.current;
+    pendingImagesRef.current = [];
     dispatch({ type: 'set_running', running: true });
+    const startedAt = Date.now();
+    let usage: AgentUsage | undefined;
+    let doneStatus: string | undefined;
     try {
       const runner = runtime.createAgentRunner();
       const current = stateRef.current;
@@ -159,6 +182,7 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
         profile: current.profile,
         provider: current.provider,
         model: current.model,
+        ...(images.length > 0 ? { images } : {}),
         signal: controller.signal,
         approvalHandler,
         steering: () => {
@@ -168,6 +192,10 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
           return queued;
         },
       })) {
+        if (event.type === 'done') {
+          usage = event.usage;
+          doneStatus = event.status;
+        }
         dispatch({ type: 'agent_event', event });
       }
     } catch (error) {
@@ -175,6 +203,10 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
     } finally {
       dispatch({ type: 'set_running', running: false });
       abortRef.current = null;
+      if (!controller.signal.aborted) {
+        const status = doneStatus ?? 'ended';
+        notify(`Task ${status}. ${runSummary(Date.now() - startedAt, usage)}`, status === 'completed' ? 'info' : 'warn');
+      }
     }
   }, [runtime, approvalHandler, notify]);
 
@@ -189,17 +221,22 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
     pendingImagesRef.current = [];
     dispatch({ type: 'set_running', running: true });
     dispatch({ type: 'set_activity', activity: 'thinking' });
+    const startedAt = Date.now();
+    let usage: AgentUsage | undefined;
     try {
-      for await (const chunk of runtime.stream({
-        prompt,
-        profile: current.profile,
-        provider: current.provider,
-        model: current.model,
-        sessionId,
-        think: thinkRef.current,
-        userContext: userContext.length > 0 ? userContext : undefined,
-        images: images.length > 0 ? images : undefined,
-      })) {
+      for await (const chunk of runtime.stream(
+        {
+          prompt,
+          profile: current.profile,
+          provider: current.provider,
+          model: current.model,
+          sessionId,
+          think: thinkRef.current,
+          userContext: userContext.length > 0 ? userContext : undefined,
+          images: images.length > 0 ? images : undefined,
+        },
+        summary => { usage = summary.usage; },
+      )) {
         if (cancelChatRef.current) break;
         dispatch({ type: 'assistant_delta', text: chunk });
       }
@@ -208,6 +245,7 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
     } finally {
       dispatch({ type: 'end_assistant' });
       dispatch({ type: 'set_running', running: false });
+      if (!cancelChatRef.current) notify(runSummary(Date.now() - startedAt, usage), 'info');
     }
   }, [runtime, notify]);
 
@@ -315,6 +353,41 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
     ];
     setOverlay({ type: 'info', title: 'Help', lines });
   }, []);
+
+  const showStatus = useCallback(() => {
+    const s = stateRef.current;
+    const userTurns = s.transcript.filter(item => item.kind === 'user').length;
+    // Only chat mode keeps a session (shared context across turns); agent runs
+    // are independent tasks, so there is no chat session id to show there.
+    const session = s.sessionId
+      ? s.sessionId
+      : s.mode === 'chat'
+        ? '(starts on your first chat message)'
+        : '(agent runs are independent — no chat session)';
+    const lines = [
+      `Profile:    ${s.profile}`,
+      `Mode:       ${s.mode}`,
+      `Provider:   ${s.provider}`,
+      `Model:      ${s.model}`,
+      `Thinking:   ${thinkRef.current ? 'on' : 'off'}`,
+      `Session:    ${session}`,
+      `Turns:      ${userTurns}`,
+      `Directory:  ${s.cwd}`,
+      `Version:    ${s.version}`,
+    ];
+    setOverlay({ type: 'info', title: 'Status', lines });
+  }, []);
+
+  const copyLast = useCallback(() => {
+    const last = [...stateRef.current.transcript].reverse().find(item => item.kind === 'assistant');
+    if (!last || last.kind !== 'assistant') {
+      notify('No response to copy yet.', 'warn');
+      return;
+    }
+    copyToClipboard(last.text)
+      .then(() => notify(`Copied the last response (${last.text.length} chars) to the clipboard.`, 'info'))
+      .catch(error => notify(`Copy failed: ${errorText(error)}`, 'error'));
+  }, [notify]);
 
   const showPermissions = useCallback(() => {
     const approval = resolveAgentConfig(loadedConfig.config.agent).approval;
@@ -449,6 +522,8 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
     openSkills,
     showPermissions,
     showHelp,
+    showStatus,
+    copyLast,
     showSessions,
     runDoctor,
     installSkill,
@@ -460,12 +535,12 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
     deleteMemory,
   }), [
     notify, stop, steer, exit, openModelPicker, openProfilePicker, openSkills,
-    showPermissions, showHelp, showSessions, runDoctor, installSkill, search,
+    showPermissions, showHelp, showStatus, copyLast, showSessions, runDoctor, installSkill, search,
     readFileCmd, setImage, remember, forget, deleteMemory,
   ]);
 
   // --- Input routing -------------------------------------------------------
-  const handleSubmit = useCallback((raw: string) => {
+  const handleSubmit = useCallback((raw: string, attachedImages: string[] = []) => {
     const trimmed = raw.trim();
     if (pendingSkill) {
       if (trimmed.length === 0) return;
@@ -473,11 +548,24 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
       return;
     }
     const parsed = parseInput(raw);
+    // Dropped images (`[image #n]` tokens) attach to the message about to run.
+    // Both the chat path (runChat) and the agent path (runAgent) consume
+    // pendingImagesRef, so this works in either mode for a text/skill turn.
+    if (attachedImages.length > 0) {
+      if (parsed.kind === 'text' || parsed.kind === 'skill') {
+        for (const file of attachedImages) pendingImagesRef.current.push({ path: file });
+      } else {
+        notify(`Images attach to a message, not /${parsed.kind === 'command' ? 'commands' : 'input'}. Ignored ${attachedImages.length} image(s).`, 'warn');
+      }
+    }
     if (parsed.kind !== 'empty') setHistory(entries => [...entries, trimmed]);
     switch (parsed.kind) {
       case 'empty':
         return;
       case 'command':
+        // Echo the command as a transcript divider (like a sent message) so its
+        // result is clearly separated from the previous turn.
+        dispatch({ type: 'add_user', text: trimmed });
         if (!runCommand(commandContext, parsed.name, parsed.args)) {
           notify(`Unknown command: /${parsed.name}. Type /help.`, 'warn');
         }
@@ -594,21 +682,35 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
     );
   }
 
-  // Committed transcript items go to <Static> (written once, into the
-  // terminal's native scrollback). A still-streaming assistant item stays in
-  // the live region until it ends, so the marifold bar, input, and status line
-  // stay pinned at the bottom of the terminal while history scrolls above.
+  // Inline layout (Claude-style): the banner prints once at the top of the
+  // terminal's native scrollback and the committed transcript appends below it,
+  // so the whole conversation stays scrollable and copyable in the terminal —
+  // and survives after exit. The run line, input, and status stay pinned just
+  // below the latest content. A still-streaming assistant item renders in the
+  // live region until it ends, so the bottom UI doesn't flicker mid-stream.
   const committed = state.streamingAssistant ? state.transcript.slice(0, -1) : state.transcript;
   const liveItem = state.streamingAssistant ? state.transcript[state.transcript.length - 1] : undefined;
+  const staticItems: StaticEntry[] = [{ id: BANNER_ID }, ...committed];
 
   return (
     <Box flexDirection="column">
-      <Static items={committed}>
-        {item => (
-          <Box key={item.id} paddingX={1} marginBottom={item.kind === 'plan' ? 1 : 0}>
-            <TranscriptRow item={item} />
-          </Box>
-        )}
+      <Static items={staticItems}>
+        {item =>
+          'kind' in item ? (
+            <Box
+              key={item.id}
+              paddingX={1}
+              marginTop={item.kind === 'user' || item.kind === 'verification' ? 1 : 0}
+              marginBottom={item.kind === 'plan' ? 1 : 0}
+            >
+              <TranscriptRow item={item} />
+            </Box>
+          ) : (
+            <Box key={item.id} marginTop={1} marginBottom={1}>
+              <Header state={state} />
+            </Box>
+          )
+        }
       </Static>
       <Box flexDirection="column">
         {liveItem ? (
@@ -616,23 +718,63 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
             <TranscriptRow item={liveItem} />
           </Box>
         ) : null}
-        <Header state={state} />
+        {state.running ? (
+          <RunStatus activity={state.activity} think={think} steeringQueued={steeringCount} />
+        ) : null}
         {activeOverlay ?? (
           <InputBox
             onSubmit={handleSubmit}
             onInterrupt={handleInterrupt}
             history={history}
-            commandNames={commandNames}
-            skillNames={skillNames}
+            commands={commandItems}
+            skills={skillItems}
             placeholder={pendingSkill ? `value for ${pendingSkill.missing[pendingSkill.index]}` : state.mode === 'agent' ? 'message the agent · /help' : 'chat · /help'}
           />
         )}
-        <StatusLine state={state} steeringQueued={steeringCount} />
+        <StatusLine state={state} />
       </Box>
     </Box>
   );
 }
 
+const BANNER_ID = '__banner__';
+type StaticEntry = { id: typeof BANNER_ID } | TranscriptItem;
+
 function errorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+/** A parenthetical run summary: elapsed time always, token count when the
+ * provider reported it, and cost only when a (cloud) provider reported one —
+ * e.g. `(9.1s, 919 tokens)`. */
+function runSummary(elapsedMs: number, usage?: AgentUsage): string {
+  const parts = [`${(elapsedMs / 1000).toFixed(1)}s`];
+  const total =
+    usage?.totalTokens ??
+    (usage?.inputTokens != null || usage?.outputTokens != null
+      ? (usage.inputTokens ?? 0) + (usage.outputTokens ?? 0)
+      : undefined);
+  if (total != null) parts.push(`${total.toLocaleString()} tokens`);
+  if (usage?.estimatedCostUSD != null && usage.estimatedCostUSD > 0) {
+    parts.push(`$${usage.estimatedCostUSD.toFixed(4)}`);
+  }
+  return `(${parts.join(', ')})`;
+}
+
+/** Copy text to the system clipboard via the platform's CLI utility. Used by
+ * /copy to grab a response's original (un-wrapped) text, since selecting from
+ * the terminal captures Ink's hard line wraps. */
+function copyToClipboard(text: string): Promise<void> {
+  const [command, args] =
+    process.platform === 'darwin'
+      ? ['pbcopy', [] as string[]]
+      : process.platform === 'win32'
+        ? ['clip', []]
+        : ['xclip', ['-selection', 'clipboard']];
+  return new Promise<void>((resolve, reject) => {
+    const child = spawn(command, args, { stdio: ['pipe', 'ignore', 'ignore'] });
+    child.on('error', reject);
+    child.on('close', code => (code === 0 ? resolve() : reject(new Error(`${command} exited with code ${code}`))));
+    child.stdin.end(text);
+  });
 }

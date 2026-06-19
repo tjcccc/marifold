@@ -46,12 +46,9 @@ export function agentEventToItems(event: AgentEvent): TranscriptItemData[] {
     case 'error':
       return [{ kind: 'notice', tone: 'error', text: `Error [${event.code}]: ${event.message}` }];
     case 'done':
-      // The final answer already arrived as a text event; show status only.
-      return [{
-        kind: 'notice',
-        tone: event.status === 'completed' ? 'info' : 'warn',
-        text: `Task ${event.status}.`,
-      }];
+      // The completion line (with timing/tokens) is emitted by the App once the
+      // run's wall-clock and usage are known, so nothing is added here.
+      return [];
     case 'status':
     case 'step':
     case 'approval_request':

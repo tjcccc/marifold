@@ -1,6 +1,8 @@
 import React from 'react';
 import { Box, Text } from 'ink';
 import type { NoticeTone, TranscriptItem } from '../core/appState.js';
+import { Markdown } from './Markdown.js';
+import { ACCENT, COMMAND, SKILL } from './theme.js';
 
 const NOTICE_COLOR: Record<NoticeTone, string> = {
   info: 'gray',
@@ -10,15 +12,35 @@ const NOTICE_COLOR: Record<NoticeTone, string> = {
 
 export function TranscriptRow({ item }: { item: TranscriptItem }): React.ReactElement | null {
   switch (item.kind) {
-    case 'user':
+    case 'user': {
+      // The submitted input is the divider between turns: framed with top and
+      // bottom accent rules. A `/command` and a `$skill` echo in their own
+      // colors; a plain message keeps the `>` prompt.
+      const command = item.text.startsWith('/');
+      const skill = item.text.startsWith('$');
       return (
-        <Box>
-          <Text color="green">{'› '}</Text>
-          <Text>{item.text}</Text>
+        <Box
+          borderStyle="single"
+          borderColor={ACCENT}
+          borderLeft={false}
+          borderRight={false}
+          width="100%"
+        >
+          {command ? (
+            <Text color={COMMAND} bold>{item.text}</Text>
+          ) : skill ? (
+            <Text color={SKILL} bold>{item.text}</Text>
+          ) : (
+            <>
+              <Text color={ACCENT} bold>{'> '}</Text>
+              <Text>{item.text}</Text>
+            </>
+          )}
         </Box>
       );
+    }
     case 'assistant':
-      return <Text>{item.text}</Text>;
+      return <Markdown text={item.text} />;
     case 'notice':
       return <Text color={NOTICE_COLOR[item.tone]}>{item.text}</Text>;
     case 'plan':
@@ -56,7 +78,11 @@ export function Transcript({ items }: { items: TranscriptItem[] }): React.ReactE
   return (
     <Box flexDirection="column" paddingX={1}>
       {items.map(item => (
-        <Box key={item.id} marginBottom={item.kind === 'plan' ? 1 : 0}>
+        <Box
+          key={item.id}
+          marginTop={item.kind === 'user' || item.kind === 'verification' ? 1 : 0}
+          marginBottom={item.kind === 'plan' ? 1 : 0}
+        >
           <TranscriptRow item={item} />
         </Box>
       ))}

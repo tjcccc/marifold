@@ -34,7 +34,7 @@ afterEach(() => {
 describe('App', () => {
   it('mounts, shows the header, and handles code-only commands incl. mode switch', async () => {
     const { runtime, loadedConfig } = workspace();
-    const initial = { profile: 'default', provider: 'ollama', model: 'test-model', think: false, cwd: '/tmp/work' };
+    const initial = { profile: 'default', provider: 'ollama', model: 'test-model', think: false, cwd: '/tmp/work', version: '0.0.0-test' };
     const { lastFrame, stdin, unmount } = render(
       <App runtime={runtime} loadedConfig={loadedConfig} initial={initial} />,
     );
