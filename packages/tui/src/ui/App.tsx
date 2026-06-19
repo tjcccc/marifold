@@ -1,5 +1,5 @@
-import React, { useCallback, useMemo, useReducer, useRef, useState } from 'react';
-import { Box, Static, useApp } from 'ink';
+import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { Box, Text, useApp, useInput } from 'ink';
 import { randomUUID } from 'crypto';
 import { spawn } from 'child_process';
 import * as fs from 'fs';
@@ -32,7 +32,9 @@ import { StatusLine } from './StatusLine.js';
 import { RunStatus } from './RunStatus.js';
 import { ApprovalModal, type ApprovalChoice } from './ApprovalModal.js';
 import { SelectList, type SelectItem } from './SelectList.js';
-import { InfoPanel } from './InfoPanel.js';
+import { useTerminalSize } from './useTerminalSize.js';
+import { selectTranscriptWindow } from '../core/transcriptWindow.js';
+import { DIM } from './theme.js';
 
 const READ_FILE_CHAR_LIMIT = 100000;
 
@@ -48,11 +50,12 @@ export interface AppProps {
     version: string;
     latestVersion?: string;
   };
+  /** Called with the formatted session transcript when exiting, so the host can
+   * print it to the normal buffer (the alternate screen is wiped on exit). */
+  onExit?: (transcript: string) => void;
 }
 
-type Overlay =
-  | { type: 'model' | 'profile' | 'skills' | 'sessions'; items: SelectItem[] }
-  | { type: 'info'; title: string; lines: string[] };
+type Overlay = { type: 'model' | 'profile' | 'skills' | 'sessions'; items: SelectItem[] };
 
 interface PendingSkill {
   skill: MarifoldSkill;
@@ -61,7 +64,7 @@ interface PendingSkill {
   index: number;
 }
 
-export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactElement {
+export function App({ runtime, loadedConfig, initial, onExit }: AppProps): React.ReactElement {
   const { exit } = useApp();
   const [state, dispatch] = useReducer(
     appReducer,
@@ -90,6 +93,17 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
     () => listCommands().map(spec => ({ name: spec.name, hint: spec.summary })),
     [],
   );
+  const { columns, rows } = useTerminalSize();
+
+  // Transcript scroll for the fullscreen layout (no native scrollback in the
+  // alternate screen): offset = number of newest items hidden below the view.
+  // New items snap back to the bottom; PgUp/PgDn page through history.
+  const [scrollOffset, setScrollOffset] = useState(0);
+  useEffect(() => setScrollOffset(0), [state.transcript.length]);
+  useInput((_input, key) => {
+    if (key.pageUp) setScrollOffset(offset => Math.min(Math.max(0, state.transcript.length - 1), offset + 1));
+    else if (key.pageDown) setScrollOffset(offset => Math.max(0, offset - 1));
+  });
 
   // Mutable run plumbing (does not drive rendering directly).
   const abortRef = useRef<AbortController | null>(null);
@@ -106,6 +120,14 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
   stateRef.current = state;
   const thinkRef = useRef(think);
   thinkRef.current = think;
+
+  // Exit: hand the transcript to the host (to reprint after the alternate
+  // screen is restored), then unmount.
+  const quit = useCallback(() => {
+    onExit?.(formatTranscript(stateRef.current.transcript));
+    dispatch({ type: 'exit' });
+    exit();
+  }, [exit, onExit]);
 
   const notify = useCallback((text: string, tone: NoticeTone = 'info') => {
     dispatch({ type: 'notice', tone, text });
@@ -170,18 +192,23 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
     setSteeringCount(0);
     const images = pendingImagesRef.current;
     pendingImagesRef.current = [];
+    const current = stateRef.current;
+    // One conversation session shared with chat mode, so the agent remembers
+    // earlier turns.
+    const sessionId = current.sessionId ?? randomUUID();
+    if (!current.sessionId) dispatch({ type: 'set_session', sessionId });
     dispatch({ type: 'set_running', running: true });
     const startedAt = Date.now();
     let usage: AgentUsage | undefined;
     let doneStatus: string | undefined;
     try {
       const runner = runtime.createAgentRunner();
-      const current = stateRef.current;
       for await (const event of runner.run({
         objective,
         profile: current.profile,
         provider: current.provider,
         model: current.model,
+        sessionId,
         ...(images.length > 0 ? { images } : {}),
         signal: controller.signal,
         approvalHandler,
@@ -351,19 +378,13 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
       '',
       ...listCommands().map(spec => `/${spec.name}${spec.aliases ? ` (/${spec.aliases.join(', /')})` : ''} — ${spec.summary}`),
     ];
-    setOverlay({ type: 'info', title: 'Help', lines });
+    dispatch({ type: 'add_item', item: { kind: 'info', title: 'Help', lines } });
   }, []);
 
   const showStatus = useCallback(() => {
     const s = stateRef.current;
     const userTurns = s.transcript.filter(item => item.kind === 'user').length;
-    // Only chat mode keeps a session (shared context across turns); agent runs
-    // are independent tasks, so there is no chat session id to show there.
-    const session = s.sessionId
-      ? s.sessionId
-      : s.mode === 'chat'
-        ? '(starts on your first chat message)'
-        : '(agent runs are independent — no chat session)';
+    const session = s.sessionId ?? '(starts on your first message)';
     const lines = [
       `Profile:    ${s.profile}`,
       `Mode:       ${s.mode}`,
@@ -375,7 +396,7 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
       `Directory:  ${s.cwd}`,
       `Version:    ${s.version}`,
     ];
-    setOverlay({ type: 'info', title: 'Status', lines });
+    dispatch({ type: 'add_item', item: { kind: 'info', title: 'Status', lines } });
   }, []);
 
   const copyLast = useCallback(() => {
@@ -400,7 +421,7 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
       '',
       'Escalated calls (e.g. writes outside the working dir) always prompt.',
     ];
-    setOverlay({ type: 'info', title: 'Permissions', lines });
+    dispatch({ type: 'add_item', item: { kind: 'info', title: 'Permissions', lines } });
   }, [loadedConfig]);
 
   const runDoctor = useCallback(() => {
@@ -418,7 +439,7 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
       '',
       'Run `marifold model` for full provider checks.',
     ];
-    setOverlay({ type: 'info', title: 'Doctor', lines });
+    dispatch({ type: 'add_item', item: { kind: 'info', title: 'Doctor', lines } });
   }, [loadedConfig]);
 
   const installSkill = useCallback((arg: string) => {
@@ -515,7 +536,7 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
     clear: () => dispatch({ type: 'clear' }),
     stop,
     steer,
-    exit: () => { dispatch({ type: 'exit' }); exit(); },
+    exit: quit,
     setThink: (on: boolean) => { setThink(on); notify(`Thinking ${on ? 'on' : 'off'}.`, 'info'); },
     openModelPicker,
     openProfilePicker,
@@ -597,14 +618,13 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
       // drops the session.
       const now = Date.now();
       if (now - lastCtrlCRef.current < 1500) {
-        dispatch({ type: 'exit' });
-        exit();
+        quit();
       } else {
         lastCtrlCRef.current = now;
         notify('Press Ctrl+C again to exit.', 'info');
       }
     }
-  }, [stop, exit, notify]);
+  }, [stop, quit, notify]);
 
   const onModelSelect = useCallback((value: string) => {
     setOverlay(null);
@@ -638,19 +658,19 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
       return <ApprovalModal request={state.approval} onResolve={resolveApproval} />;
     }
     if (!overlay) return null;
-    if (overlay.type === 'info') {
-      return <InfoPanel title={overlay.title} lines={overlay.lines} onClose={() => setOverlay(null)} />;
-    }
+    // Cap overlay height so it fits between the banner and status line.
+    const overlayMaxRows = Math.max(4, rows - 9);
     if (overlay.type === 'model') {
-      return <SelectList title="Select model" items={overlay.items} onSelect={onModelSelect} onCancel={() => setOverlay(null)} />;
+      return <SelectList title="Select model" items={overlay.items} onSelect={onModelSelect} onCancel={() => setOverlay(null)} maxRows={overlayMaxRows} />;
     }
     if (overlay.type === 'profile') {
-      return <SelectList title="Select profile" items={overlay.items} onSelect={onProfileSelect} onCancel={() => setOverlay(null)} />;
+      return <SelectList title="Select profile" items={overlay.items} onSelect={onProfileSelect} onCancel={() => setOverlay(null)} maxRows={overlayMaxRows} />;
     }
     if (overlay.type === 'sessions') {
       return (
         <SelectList
           title="Recent sessions"
+          maxRows={overlayMaxRows}
           items={overlay.items}
           onSelect={value => {
             setOverlay(null);
@@ -669,6 +689,7 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
     return (
       <SelectList
         title="Skills — Enter runs, Del removes"
+        maxRows={overlayMaxRows}
         items={overlay.items}
         onSelect={value => { setOverlay(null); runSkill(value, []); }}
         onCancel={() => setOverlay(null)}
@@ -682,42 +703,52 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
     );
   }
 
-  // Inline layout (Claude-style): the banner prints once at the top of the
-  // terminal's native scrollback and the committed transcript appends below it,
-  // so the whole conversation stays scrollable and copyable in the terminal —
-  // and survives after exit. The run line, input, and status stay pinned just
-  // below the latest content. A still-streaming assistant item renders in the
-  // live region until it ends, so the bottom UI doesn't flicker mid-stream.
-  const committed = state.streamingAssistant ? state.transcript.slice(0, -1) : state.transcript;
-  const liveItem = state.streamingAssistant ? state.transcript[state.transcript.length - 1] : undefined;
-  const staticItems: StaticEntry[] = [{ id: BANNER_ID }, ...committed];
+  // Fullscreen (alternate-screen) layout: a full-height frame. The banner is
+  // pinned at the top; the run line, input, and status are pinned at the bottom.
+  // The transcript fills the middle, anchored to the bottom (justify flex-end)
+  // and explicitly windowed so it always fits (Ink's overflow clipping is
+  // unreliable). The whole surface redraws on resize, so there's no reflow
+  // duplication. PgUp/PgDn scroll; while an overlay is open it owns the middle.
+  const CHROME_ROWS = 11; // banner (~7) + input (~3) + status (1)
+  const maxRows = Math.max(1, rows - CHROME_ROWS - (state.running ? 1 : 0) - 2 /* hint lines */);
+  const { visible, hiddenAbove, hiddenBelow } = selectTranscriptWindow(state.transcript, {
+    columns,
+    maxRows,
+    scrollOffset,
+  });
 
   return (
-    <Box flexDirection="column">
-      <Static items={staticItems}>
-        {item =>
-          'kind' in item ? (
-            <Box
-              key={item.id}
-              paddingX={1}
-              marginTop={item.kind === 'user' || item.kind === 'verification' ? 1 : 0}
-              marginBottom={item.kind === 'plan' ? 1 : 0}
-            >
-              <TranscriptRow item={item} />
-            </Box>
-          ) : (
-            <Box key={item.id} marginTop={1} marginBottom={1}>
-              <Header state={state} />
-            </Box>
-          )
-        }
-      </Static>
-      <Box flexDirection="column">
-        {liveItem ? (
-          <Box paddingX={1}>
-            <TranscriptRow item={liveItem} />
-          </Box>
-        ) : null}
+    <Box flexDirection="column" height={rows}>
+      <Box flexShrink={0} marginTop={1} marginBottom={1}>
+        <Header state={state} />
+      </Box>
+      <Box flexDirection="column" flexGrow={1} justifyContent="flex-end">
+        {activeOverlay ? null : (
+          <>
+            {hiddenAbove > 0 ? (
+              <Box paddingX={1}>
+                <Text color={DIM}>↑ {hiddenAbove} more · PgUp</Text>
+              </Box>
+            ) : null}
+            {visible.map(item => (
+              <Box
+                key={item.id}
+                paddingX={1}
+                marginTop={item.kind === 'user' || item.kind === 'verification' ? 1 : 0}
+                marginBottom={item.kind === 'plan' ? 1 : 0}
+              >
+                <TranscriptRow item={item} />
+              </Box>
+            ))}
+            {hiddenBelow > 0 ? (
+              <Box paddingX={1}>
+                <Text color={DIM}>↓ {hiddenBelow} more · PgDn</Text>
+              </Box>
+            ) : null}
+          </>
+        )}
+      </Box>
+      <Box flexDirection="column" flexShrink={0}>
         {state.running ? (
           <RunStatus activity={state.activity} think={think} steeringQueued={steeringCount} />
         ) : null}
@@ -737,11 +768,20 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
   );
 }
 
-const BANNER_ID = '__banner__';
-type StaticEntry = { id: typeof BANNER_ID } | TranscriptItem;
-
 function errorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+/** Plain-text rendering of the conversation for the on-exit dump to the normal
+ * buffer (the alternate screen is wiped). Only real messages and replies are
+ * kept — `/command` echoes are control actions, not conversation. */
+function formatTranscript(items: TranscriptItem[]): string {
+  const lines: string[] = [];
+  for (const item of items) {
+    if (item.kind === 'user' && !item.text.startsWith('/')) lines.push(`> ${item.text}`, '');
+    else if (item.kind === 'assistant') lines.push(item.text, '');
+  }
+  return lines.length > 0 ? `\nmarifold session\n\n${lines.join('\n')}` : '';
 }
 
 /** A parenthetical run summary: elapsed time always, token count when the

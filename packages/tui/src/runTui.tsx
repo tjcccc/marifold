@@ -64,24 +64,34 @@ export async function runTui(options: RunTuiOptions): Promise<void> {
       cwd: process.cwd(),
       version: readVersion(),
     };
-    // Render inline in the normal buffer (no screen clear / alternate screen):
-    // for an agentic tool the conversation — code, command output, explanations
-    // — stays in the terminal's native scrollback, scrollable and copyable
-    // during the session and preserved after exit.
+    // Render in the alternate screen (like vim/htop/Codex): Ink redraws the full
+    // surface on resize, so there's no inline reflow/duplication. The original
+    // terminal is restored on exit; we reprint the conversation to the normal
+    // buffer afterward so the session isn't lost.
     //
     // Enable bracketed paste so dropped/pasted file paths arrive as one buffered
     // event (Ink coalesces them) instead of fragmented keystrokes — otherwise a
     // long dropped path lands as loose text instead of an `[image #n]` token.
     process.stdout.write('\x1b[?2004h');
+    let transcriptDump = '';
     try {
       const app = render(
-        <App runtime={runtime} loadedConfig={options.loadedConfig} initial={initial} />,
-        { exitOnCtrlC: false },
+        <App
+          runtime={runtime}
+          loadedConfig={options.loadedConfig}
+          initial={initial}
+          onExit={dump => {
+            transcriptDump = dump;
+          }}
+        />,
+        { exitOnCtrlC: false, alternateScreen: true },
       );
       await app.waitUntilExit();
     } finally {
       process.stdout.write('\x1b[?2004l');
     }
+    // Back on the primary screen — preserve the conversation.
+    if (transcriptDump) process.stdout.write(`${transcriptDump}\n`);
   } finally {
     runtime.close();
   }

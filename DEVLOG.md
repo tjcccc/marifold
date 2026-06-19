@@ -2,6 +2,16 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-06-19 — v0.16.0 — Fullscreen TUI, agent session, in-transcript info
+
+- **Alternate-screen layout** (`render(..., { alternateScreen: true })`): full-height frame — banner pinned top, transcript windowed in the middle, input/status pinned bottom — so terminal **resize redraws cleanly** (the inline `<Static>` reflow duplicated rows; the alt-screen is how vim/htop/Codex avoid it). New `src/core/transcriptWindow.ts` (explicit fit windowing, Ink's `overflow` clipping is unreliable) + `src/ui/useTerminalSize.ts`; `PgUp`/`PgDn` scroll history; on exit the conversation is reprinted to the normal buffer (commands excluded). Header has 1-col internal padding; status sits at the bottom row.
+- Investigated the root cause in Ink 7 source: it clears the live region on width-decrease but can't track `<Static>` scrollback reflow — hence the duplication. Plan B (plain-text input rules vs Ink border box) didn't fix it; alt-screen did. Resize is unverified in the harness (no real TTY).
+- **Agent session**: `AgentRunOptions.sessionId` threaded into the main loop turns (not plan/verify) as a priest session, so agent mode **remembers earlier turns**; chat and agent share one conversation session. `/status` shows a real session id. Test asserts the session lands on the loop turn only.
+- **Info commands in the transcript**: `/status`, `/help`, `/permissions`, `/doctor` now print into the conversation (and stay) instead of a dismissable modal — labeled by the `/command` echo divider. Removed `InfoPanel`. Interactive pickers + approval stay overlays.
+- Version 0.15.0 → 0.16.0 across all packages + CLI.
+- Verified: core 126 + tui 24 tests, all packages build/typecheck green; behaviors via Ink frame dumps.
+- **Open**: alt-screen clears on launch / restores on exit (vim/htop/Codex behavior; user is weighing an inline↔alt-screen hybrid — Ink can't toggle `alternateScreen` live, so that needs lifting state out + remount). Agent session stores the verbose loop prompt as its turn (functional, could persist a clean objective instead).
+
 ## 2026-06-19 — v0.15.0 — TUI design polish (inline layout, completion, markdown, usage)
 
 - Visual redesign to the TUIStudio spec: `#EAA221` accent, three-row header banner, `>` prompt, image-drop tokens, and a thinking/run line. New `src/ui/theme.ts`, `Markdown.tsx`, `RunStatus.tsx`, `src/core/displayPaths.ts` (tilde-compress).

@@ -13,7 +13,7 @@ import { ACCENT, DIM } from './theme.js';
  */
 export function Header({ state }: { state: AppState }): React.ReactElement {
   return (
-    <Box borderStyle="round" borderColor={ACCENT} width="100%" paddingX={0} flexDirection="column">
+    <Box borderStyle="round" borderColor={ACCENT} width="100%" paddingX={1} flexDirection="column">
       <Box justifyContent="space-between">
         <Text>
           <Text color={ACCENT} bold>marifold</Text>

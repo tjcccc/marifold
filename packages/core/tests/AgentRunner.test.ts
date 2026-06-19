@@ -95,6 +95,19 @@ describe('AgentRunner', () => {
     expect(done.usage).toEqual({ inputTokens: 37, outputTokens: 16, totalTokens: 53, estimatedCostUSD: 0.003 });
   });
 
+  it('passes the session id to the main loop turns only', async () => {
+    const engine = new ScriptedEngine([
+      planResponse,
+      response({ text: 'Done.' }),
+      verifyPassResponse,
+    ]);
+    const { runner } = makeRunner(engine, [fakeTool()]);
+    await collect(runner.run({ objective: 'Remember this.', cwd: tempDir(), sessionId: 'sess-1' }));
+    expect(engine.requests[0].session).toBeUndefined(); // plan turn
+    expect(engine.requests[1].session).toEqual({ id: 'sess-1', createIfMissing: true }); // loop turn
+    expect(engine.requests[2].session).toBeUndefined(); // verification turn
+  });
+
   it('forwards objective images on the first agent turn only', async () => {
     const engine = new ScriptedEngine([
       planResponse,

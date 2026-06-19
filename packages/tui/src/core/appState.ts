@@ -12,7 +12,8 @@ export type TranscriptItemData =
   | { kind: 'notice'; tone: NoticeTone; text: string }
   | { kind: 'plan'; steps: Array<{ id: string; text: string; status: string }> }
   | { kind: 'tool'; tool: string; toolKind?: ToolKind; summary: string; phase: 'request' | 'result'; isError?: boolean }
-  | { kind: 'verification'; passed: boolean; notes: string };
+  | { kind: 'verification'; passed: boolean; notes: string }
+  | { kind: 'info'; title: string; lines: string[] };
 
 export type TranscriptItem = TranscriptItemData & { id: string };
 

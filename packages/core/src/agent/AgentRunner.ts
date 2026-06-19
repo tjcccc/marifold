@@ -52,6 +52,9 @@ export interface AgentRunOptions {
   /** Images attached to the objective. Sent to the model on the first turn
    * (priest carries them through the request, exactly like the chat path). */
   images?: ImageInput[];
+  /** Conversation session id. When set, the main loop turns persist to and read
+   * from the priest session, so the agent remembers earlier turns. */
+  sessionId?: string;
   /** Working directory for filesystem/shell tools. Defaults to process.cwd(). */
   cwd?: string;
   /** Resolves 'ask' approvals. Absent (unattended runs): 'ask' degrades to deny. */
@@ -397,6 +400,7 @@ export class AgentRunner {
       profile,
       prompt: `Objective: ${options.objective}\n\nUse tools only when the objective genuinely requires reading or writing files, running commands, searching the web, or delegating. Many objectives — greetings, questions, explanations, drafting text — need no tools at all; for those, answer directly from your own knowledge. Do not invent tool calls. When the objective is complete, reply with a short final answer describing the outcome.`,
       context: this.agentContext(state, options.cwd ?? process.cwd()),
+      ...(options.sessionId ? { session: { id: options.sessionId, createIfMissing: true } } : {}),
       ...(firstTurn && options.images && options.images.length > 0 ? { images: options.images } : {}),
     };
     const steering = state.steeringNotes.map(

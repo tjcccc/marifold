@@ -2,7 +2,7 @@ import React from 'react';
 import { Box, Text } from 'ink';
 import type { NoticeTone, TranscriptItem } from '../core/appState.js';
 import { Markdown } from './Markdown.js';
-import { ACCENT, COMMAND, SKILL } from './theme.js';
+import { ACCENT, COMMAND, DIM, SKILL } from './theme.js';
 
 const NOTICE_COLOR: Record<NoticeTone, string> = {
   info: 'gray',
@@ -68,6 +68,16 @@ export function TranscriptRow({ item }: { item: TranscriptItem }): React.ReactEl
         <Text color={item.passed ? 'green' : 'yellow'}>
           {item.passed ? '✓ verified' : '⚠ not verified'}: {item.notes}
         </Text>
+      );
+    case 'info':
+      // The `/command` echo above already labels this block, so the title is
+      // not repeated — just the lines.
+      return (
+        <Box flexDirection="column">
+          {item.lines.map((line, i) => (
+            <Text key={i} color={DIM}>{line}</Text>
+          ))}
+        </Box>
       );
     default:
       return null;

@@ -45,17 +45,17 @@ describe('App', () => {
     expect(lastFrame()).toContain('default');
     expect(lastFrame()).toContain('agent');
 
-    // /help opens the read-only help overlay.
-    stdin.write('/help');
+    // /status prints into the transcript (not a modal overlay).
+    stdin.write('/status');
     await delay();
     stdin.write('\r');
     await delay();
-    expect(lastFrame()).toContain('Help');
+    expect(lastFrame()).toContain('Profile:');
 
-    // Any key closes the overlay back to the input box.
-    stdin.write('');
+    // It stays in the transcript — typing does not dismiss it.
+    stdin.write('x');
     await delay();
-    expect(lastFrame()).not.toContain('Help');
+    expect(lastFrame()).toContain('Profile:');
 
     // /chat switches mode — the plan's required mode-switch smoke.
     stdin.write('/chat');

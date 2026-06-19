@@ -7,6 +7,7 @@ import { ACCENT, ATTACHMENT, DIM } from './theme.js';
 
 const PROMPT = '> ';
 const CONT = '  '; // continuation-line indent, aligned past the prompt
+const RULE = '─'; // input separator (plain text, not an Ink border — see render)
 const MENU_LIMIT = 8;
 // Cap the input's rendered height. A tall, changing input near the bottom of
 // the inline layout makes Ink's frame exceed the viewport, and on shrink (e.g.
@@ -226,9 +227,11 @@ export function InputBox({
           ))}
         </Box>
       ) : null}
-      <Box borderStyle="single" borderColor={ACCENT} borderLeft={false} borderRight={false} flexDirection="column">
-        {renderLines()}
-      </Box>
+      {/* Plain-text rules (not an Ink border box, which duplicates on resize).
+          `columns - 1` avoids the exact-width wrap. */}
+      <Text color={ACCENT}>{RULE.repeat(Math.max(1, columns - 1))}</Text>
+      <Box flexDirection="column">{renderLines()}</Box>
+      <Text color={ACCENT}>{RULE.repeat(Math.max(1, columns - 1))}</Text>
     </Box>
   );
 
