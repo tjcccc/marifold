@@ -16,25 +16,26 @@ export interface SkillStoreOptions {
 export type SkillScope = 'global' | 'profile';
 
 /**
- * Loads `marifold.skill.v0` files from the shared skills dir and the active
- * profile's skills/ dir. A profile skill shadows a global skill of the same
- * name. Skills are the TUI's `$name` primitive and a future SkillApp's source.
+ * Loads `marifold.skill.v0` skills from the shared skills dir and the active
+ * profile's skills/ dir. Each skill is a folder `<name>/SKILL.md` (the Claude
+ * Code layout), so a skill can carry bundled files. A profile skill shadows a
+ * global one of the same name. Skills are the TUI's `$name` primitive and a
+ * future SkillApp's source.
  */
 export class SkillStore {
   constructor(private readonly options: SkillStoreOptions) {}
 
-  /** All loadable skills, profile skills shadowing global, sorted by name.
-   * Files that fail to parse are skipped so one broken skill can't hide the
-   * rest; use get() for a precise error on a single named skill. */
-  list(): MarifoldSkill[] {
+  /** Loadable skills, sorted by name. With no scope, profile skills shadow
+   * global ones (the merged, runnable set); pass a scope to list just that
+   * layer. Folders that fail to parse are skipped — use get() for a precise
+   * error on a single named skill. */
+  list(scope?: SkillScope): MarifoldSkill[] {
     const byName = new Map<string, MarifoldSkill>();
-    for (const skill of this.loadDir(this.options.globalDir, 'global')) {
-      byName.set(skill.name, skill);
+    if (scope !== 'profile') {
+      for (const skill of this.loadDir(this.options.globalDir, 'global')) byName.set(skill.name, skill);
     }
-    if (this.options.profileDir) {
-      for (const skill of this.loadDir(this.options.profileDir, 'profile')) {
-        byName.set(skill.name, skill);
-      }
+    if (scope !== 'global' && this.options.profileDir) {
+      for (const skill of this.loadDir(this.options.profileDir, 'profile')) byName.set(skill.name, skill);
     }
     return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name));
   }
@@ -43,10 +44,9 @@ export class SkillStore {
     assertSafeName(name);
     // Profile takes precedence over global.
     for (const [dir, scope] of this.scopedDirs().reverse()) {
-      const filePath = path.join(dir, `${name}.toml`);
-      if (fs.existsSync(filePath)) {
-        const skill = parseSkill(fs.readFileSync(filePath, 'utf-8'), filePath);
-        return { ...skill, scope };
+      const skillMd = path.join(dir, name, 'SKILL.md');
+      if (fs.existsSync(skillMd)) {
+        return { ...parseSkill(fs.readFileSync(skillMd, 'utf-8'), skillMd), scope };
       }
     }
     return undefined;
@@ -58,30 +58,42 @@ export class SkillStore {
     return skill;
   }
 
-  /** Validate then write a skill into the target scope, returning the stored skill. */
+  /** Validate then write a skill into the target scope as `<name>/SKILL.md`. */
   installFromText(text: string, scope: SkillScope = 'global'): MarifoldSkill {
     const skill = parseSkill(text);
-    const dir = this.dirForScope(scope);
-    fs.mkdirSync(dir, { recursive: true });
-    const filePath = path.join(dir, `${skill.name}.toml`);
-    fs.writeFileSync(filePath, text.endsWith('\n') ? text : `${text}\n`);
-    return { ...skill, source: filePath, scope };
+    const skillDir = path.join(this.dirForScope(scope), skill.name);
+    fs.mkdirSync(skillDir, { recursive: true });
+    const skillMd = path.join(skillDir, 'SKILL.md');
+    fs.writeFileSync(skillMd, text.endsWith('\n') ? text : `${text}\n`);
+    return { ...skill, source: skillMd, scope };
   }
 
+  /** Install from a `.md` file or a Claude Code-style skill folder containing
+   * `SKILL.md`. Either way the skill lands at `<scope>/<name>/SKILL.md`; a
+   * folder source is copied whole (bundled files travel, though marifold
+   * currently only uses SKILL.md). */
   installFromFile(filePath: string, scope: SkillScope = 'global'): MarifoldSkill {
-    if (!fs.existsSync(filePath)) {
-      throw MarifoldError.skillInvalid(`Skill file not found: ${filePath}`);
-    }
-    return this.installFromText(fs.readFileSync(filePath, 'utf-8'), scope);
+    const { skillMd, folder } = resolveSkillSource(filePath);
+    const text = fs.readFileSync(skillMd, 'utf-8');
+    if (!folder) return this.installFromText(text, scope);
+    const skill = parseSkill(text, skillMd); // validate before writing
+    const destDir = path.join(this.dirForScope(scope), skill.name);
+    fs.rmSync(destDir, { recursive: true, force: true });
+    fs.cpSync(folder, destDir, { recursive: true });
+    return { ...skill, source: path.join(destDir, 'SKILL.md'), scope };
   }
 
-  remove(name: string): boolean {
+  /** Remove a skill (its whole `<name>/` folder). With no scope, deletes it
+   * from every layer; pass a scope to delete only that layer (e.g. the profile
+   * copy, revealing a global one). */
+  remove(name: string, scope?: SkillScope): boolean {
     assertSafeName(name);
     let removed = false;
-    for (const [dir] of this.scopedDirs()) {
-      const filePath = path.join(dir, `${name}.toml`);
-      if (fs.existsSync(filePath)) {
-        fs.rmSync(filePath);
+    for (const [dir, dirScope] of this.scopedDirs()) {
+      if (scope !== undefined && dirScope !== scope) continue;
+      const skillDir = path.join(dir, name);
+      if (fs.existsSync(path.join(skillDir, 'SKILL.md'))) {
+        fs.rmSync(skillDir, { recursive: true, force: true });
         removed = true;
       }
     }
@@ -108,12 +120,13 @@ export class SkillStore {
     if (!fs.existsSync(dir)) return [];
     const skills: MarifoldSkill[] = [];
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-      if (!entry.isFile() || !entry.name.endsWith('.toml')) continue;
-      const filePath = path.join(dir, entry.name);
+      if (!entry.isDirectory()) continue;
+      const skillMd = path.join(dir, entry.name, 'SKILL.md');
+      if (!fs.existsSync(skillMd)) continue;
       try {
-        skills.push({ ...parseSkill(fs.readFileSync(filePath, 'utf-8'), filePath), scope });
+        skills.push({ ...parseSkill(fs.readFileSync(skillMd, 'utf-8'), skillMd), scope });
       } catch {
-        // Skip unparseable skill files; get() surfaces the precise error.
+        // Skip unparseable skill folders; get() surfaces the precise error.
       }
     }
     return skills;
@@ -124,4 +137,20 @@ function assertSafeName(name: string): void {
   if (!SAFE_SKILL_NAME.test(name)) {
     throw MarifoldError.skillInvalid(`Invalid skill name '${name}'.`);
   }
+}
+
+/** Resolve an install target to its `SKILL.md` and, for a folder source, the
+ * folder to copy: a `.md` file directly, or a `SKILL.md` inside a skill folder. */
+function resolveSkillSource(target: string): { skillMd: string; folder?: string } {
+  if (!fs.existsSync(target)) {
+    throw MarifoldError.skillInvalid(`Skill not found: ${target}`);
+  }
+  if (fs.statSync(target).isDirectory()) {
+    const skillMd = path.join(target, 'SKILL.md');
+    if (!fs.existsSync(skillMd)) {
+      throw MarifoldError.skillInvalid(`Skill folder has no SKILL.md: ${target}`);
+    }
+    return { skillMd, folder: target };
+  }
+  return { skillMd: target };
 }

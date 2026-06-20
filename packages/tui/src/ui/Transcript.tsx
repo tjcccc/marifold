@@ -18,6 +18,10 @@ export function TranscriptRow({ item }: { item: TranscriptItem }): React.ReactEl
       // colors; a plain message keeps the `>` prompt.
       const command = item.text.startsWith('/');
       const skill = item.text.startsWith('$');
+      // For a skill, color only the `$name` head; the args stay default white.
+      const sp = item.text.indexOf(' ');
+      const head = sp === -1 ? item.text : item.text.slice(0, sp);
+      const rest = sp === -1 ? '' : item.text.slice(sp);
       return (
         <Box
           borderStyle="single"
@@ -29,7 +33,7 @@ export function TranscriptRow({ item }: { item: TranscriptItem }): React.ReactEl
           {command ? (
             <Text color={COMMAND} bold>{item.text}</Text>
           ) : skill ? (
-            <Text color={SKILL} bold>{item.text}</Text>
+            <Text><Text color={SKILL} bold>{head}</Text>{rest}</Text>
           ) : (
             <>
               <Text color={ACCENT} bold>{'> '}</Text>

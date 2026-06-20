@@ -67,4 +67,35 @@ describe('App', () => {
     unmount();
     runtime.close();
   });
+
+  it('switches profile via the picker (Enter) and the direct /profile <name> form', async () => {
+    const { runtime, loadedConfig } = workspace();
+    const initial = { profile: 'default', provider: 'ollama', model: 'test-model', think: false, cwd: '/tmp/work', version: '0.0.0-test' };
+    const { lastFrame, stdin, unmount } = render(
+      <App runtime={runtime} loadedConfig={loadedConfig} initial={initial} />,
+    );
+    await delay();
+
+    // Bare /profile opens the picker.
+    stdin.write('/profile');
+    await delay();
+    stdin.write('\r');
+    await delay();
+    expect(lastFrame()).toContain('Select profile');
+
+    // Enter selects the highlighted profile → confirmation in the transcript.
+    stdin.write('\r');
+    await delay();
+    expect(lastFrame()).toContain('Switched to profile');
+
+    // Direct form: /profile <name> switches without the picker.
+    stdin.write('/profile default');
+    await delay();
+    stdin.write('\r');
+    await delay();
+    expect(lastFrame()).toContain('Switched to profile');
+
+    unmount();
+    runtime.close();
+  });
 });

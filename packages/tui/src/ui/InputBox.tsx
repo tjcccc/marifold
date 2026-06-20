@@ -3,7 +3,7 @@ import { Box, Text, useInput, useStdout } from 'ink';
 import * as fs from 'fs';
 import * as path from 'path';
 import { expandHome } from '@marifold/core';
-import { ACCENT, ATTACHMENT, DIM } from './theme.js';
+import { ACCENT, ATTACHMENT, COMMAND, DIM, SKILL } from './theme.js';
 
 const PROMPT = '> ';
 const CONT = '  '; // continuation-line indent, aligned past the prompt
@@ -274,54 +274,65 @@ export function InputBox({
     if (visual.length > MAX_INPUT_ROWS) {
       start = Math.min(Math.max(0, cursorLine - (MAX_INPUT_ROWS - 1)), visual.length - MAX_INPUT_ROWS);
     }
+    // Color the leading `$name` / `/cmd` head token (line 0 only).
+    const headMatch = value.match(/^([/$])\S*/);
+    const headColor = headMatch ? (headMatch[1] === '$' ? SKILL : COMMAND) : undefined;
+    const headLen = headMatch ? headMatch[0].length : 0;
+
     const shown = visual.slice(start, start + MAX_INPUT_ROWS);
     return shown.map((vl, idx) => {
       const globalIndex = start + idx;
       return (
         <Box key={globalIndex}>
           {globalIndex === 0 ? <Text color={ACCENT} bold>{PROMPT}</Text> : <Text>{CONT}</Text>}
-          <Box flexGrow={1}>{renderLine(vl.text, globalIndex === cursorLine ? cursorColumn : -1)}</Box>
+          <Box flexGrow={1}>
+            {renderLine(
+              vl.text,
+              globalIndex === cursorLine ? cursorColumn : -1,
+              globalIndex === 0 ? headLen : 0,
+              headColor,
+            )}
+          </Box>
         </Box>
       );
     });
   }
 
-  /** Render one line, coloring `[image #n]` tokens and overlaying the cursor. */
-  function renderLine(line: string, cursorCol: number): React.ReactElement {
-    const segments: Array<{ text: string; token: boolean }> = [];
-    let last = 0;
-    let match: RegExpExecArray | null;
+  /** Render one line: color the head token (`headLen` chars in `headColor`) and
+   * `[image #n]` tokens, and overlay the block cursor — all via a per-character
+   * color so the three can overlap (e.g. cursor inside the head). */
+  function renderLine(line: string, cursorCol: number, headLen = 0, headColor?: string): React.ReactElement {
+    const tokenRanges: Array<[number, number]> = [];
     IMAGE_TOKEN.lastIndex = 0;
+    let match: RegExpExecArray | null;
     while ((match = IMAGE_TOKEN.exec(line)) !== null) {
-      if (match.index > last) segments.push({ text: line.slice(last, match.index), token: false });
-      segments.push({ text: match[0], token: true });
-      last = match.index + match[0].length;
+      tokenRanges.push([match.index, match.index + match[0].length]);
     }
-    if (last < line.length) segments.push({ text: line.slice(last), token: false });
-    if (segments.length === 0) segments.push({ text: '', token: false });
+    const colorAt = (i: number): string | undefined => {
+      if (i < headLen) return headColor;
+      for (const [s, e] of tokenRanges) if (i >= s && i < e) return ATTACHMENT;
+      return undefined;
+    };
 
     const out: React.ReactNode[] = [];
-    let pos = 0;
-    let placed = false;
-    segments.forEach((seg, i) => {
-      const color = seg.token ? ATTACHMENT : undefined;
-      const start = pos;
-      const end = pos + seg.text.length;
-      if (!placed && cursorCol >= start && cursorCol < end) {
-        const local = cursorCol - start;
-        out.push(<Text key={`${i}a`} color={color}>{seg.text.slice(0, local)}</Text>);
-        out.push(<Text key={`${i}c`} color={color} inverse>{seg.text.slice(local, local + 1)}</Text>);
-        out.push(<Text key={`${i}b`} color={color}>{seg.text.slice(local + 1)}</Text>);
-        placed = true;
-      } else {
-        out.push(<Text key={i} color={color}>{seg.text}</Text>);
+    let key = 0;
+    let i = 0;
+    while (i < line.length) {
+      if (i === cursorCol) {
+        out.push(<Text key={key++} color={colorAt(i)} inverse>{line[i]}</Text>);
+        i += 1;
+        continue;
       }
-      pos = end;
-    });
-    if (!placed && cursorCol >= line.length && cursorCol >= 0) {
+      const color = colorAt(i);
+      let j = i + 1;
+      while (j < line.length && j !== cursorCol && colorAt(j) === color) j += 1;
+      out.push(<Text key={key++} color={color}>{line.slice(i, j)}</Text>);
+      i = j;
+    }
+    if (cursorCol >= line.length && cursorCol >= 0) {
       out.push(<Text key="cur" inverse> </Text>);
     }
-    return <Text>{out}</Text>;
+    return <Text>{out.length ? out : ' '}</Text>;
   }
 }
 

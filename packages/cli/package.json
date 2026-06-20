@@ -1,6 +1,6 @@
 {
   "name": "marifold",
-  "version": "0.18.0",
+  "version": "0.19.0",
   "description": "Marifold CLI",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

@@ -16,6 +16,7 @@ export function SelectList({
   onCancel,
   onDelete,
   maxRows,
+  emptyHint,
 }: {
   title: string;
   items: SelectItem[];
@@ -23,6 +24,8 @@ export function SelectList({
   onCancel: () => void;
   onDelete?: (value: string) => void;
   maxRows?: number;
+  /** Extra dim lines shown under "(none)" when the list is empty. */
+  emptyHint?: string[];
 }): React.ReactElement {
   const [index, setIndex] = useState(0);
   const clamped = Math.min(index, Math.max(0, items.length - 1));
@@ -51,7 +54,10 @@ export function SelectList({
     <Box borderStyle="round" borderColor={ACCENT} flexDirection="column" paddingX={1}>
       <Text bold color={ACCENT}>{title}</Text>
       {items.length === 0 ? (
-        <Text dimColor>(none)</Text>
+        <Box flexDirection="column">
+          <Text dimColor>(none)</Text>
+          {emptyHint?.map((line, i) => <Text key={i} dimColor>{line}</Text>)}
+        </Box>
       ) : (
         windowed.map((item, i) => {
           const actual = start + i;

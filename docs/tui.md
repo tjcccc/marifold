@@ -49,7 +49,7 @@ prompt.
 
 `/help` `/exit` (`/quit`) `/new` `/agent` `/chat` `/model` `/profile` `/session`
 `/think on|off` `/clear` `/stop` `/btw <text>` `/permissions` `/skills`
-`/install-skill <path|url>` `/doctor`, plus chat carry-overs `/search` `/read`
+`/install-skill [--global] <path|url>` `/doctor`, plus chat carry-overs `/read`
 `/image` `/remember` `/forget` `/delete-memory`.
 
 - `/btw <text>` steers a **running** task without cancelling it: the text is
@@ -60,34 +60,44 @@ prompt.
 
 ## Skills
 
-A skill is a `marifold.skill.v0` TOML file — a prompt template with declared
-`{{variables}}` and an optional `mode` (`agent` or `chat`). Skills live in
+A skill is a `marifold.skill.v0` markdown file — a YAML frontmatter block with
+the metadata, then a prompt body with declared `{{variables}}`. `mode` is
+optional (`agent` or `chat`, default `chat`). Skills live in
 `[paths].skills_dir` (default `~/.marifold/skills`) and in each profile's
 `skills/` directory (profile skills shadow global ones).
 
-```toml
-schema = "marifold.skill.v0"
-name = "translate"
-description = "Translate text into a target language."
-mode = "chat"
-prompt = "Translate into {{language}}:\n\n{{text}}"
+Skills are stored as `<name>/SKILL.md` folders (the Claude Code layout).
+`/install-skill` accepts either a single `.md` file (saved as `<name>/SKILL.md`)
+or a skill **folder** containing a `SKILL.md` (e.g. `/install-skill ./translate`),
+which is copied whole. marifold currently only reads `SKILL.md`; bundled files
+travel with the skill for future use.
 
-[[variables]]
-name = "language"
-default = "English"
+```markdown
+---
+name: translate
+description: Translate text into a target language.
+mode: chat
+variables:
+  - name: language
+    default: English
+  - name: text
+    required: true
+---
 
-[[variables]]
-name = "text"
-required = true
+Translate into {{language}}:
+
+{{text}}
 ```
 
 Run it with `$translate ja こんにちは` — positional args fill the declared
 variables in order, and the final variable absorbs trailing words. Missing
-required variables are prompted inline. Install the bundled examples with:
+required variables are prompted inline. `/install-skill <path>` adds to the
+current profile; `--global` adds for all profiles. Install the bundled examples
+with:
 
 ```text
-/install-skill examples/skills/translate.toml
-/install-skill examples/skills/summarize-file.toml
+/install-skill examples/skills/translate          # a SKILL.md skill folder
+/install-skill --global examples/skills/summarize-file.md
 ```
 
 There is intentionally no `$new`/`$run`/`$remove` verb. Creating or editing a

@@ -17,7 +17,8 @@ export interface CommandContext {
   setThink(on: boolean): void;
   openModelPicker(): void;
   openProfilePicker(): void;
-  openSkills(): void;
+  selectProfile(name: string): void;
+  openSkills(scope?: 'global' | 'profile'): void;
   showPermissions(): void;
   showHelp(): void;
   showStatus(): void;
@@ -60,7 +61,15 @@ const COMMANDS: CommandSpec[] = [
     },
   },
   { name: 'model', summary: 'Pick the active model.', run: ctx => ctx.openModelPicker() },
-  { name: 'profile', summary: 'Switch profile.', run: ctx => ctx.openProfilePicker() },
+  {
+    name: 'profile',
+    summary: 'Switch profile: /profile [name] (omit name for a picker).',
+    run: (ctx, args) => {
+      const name = args.trim();
+      if (name) ctx.selectProfile(name);
+      else ctx.openProfilePicker();
+    },
+  },
   { name: 'session', summary: 'List recent sessions.', run: ctx => ctx.showSessions() },
   {
     name: 'think',
@@ -73,10 +82,14 @@ const COMMANDS: CommandSpec[] = [
     },
   },
   { name: 'permissions', summary: 'Show approval modes and active session grants.', run: ctx => ctx.showPermissions() },
-  { name: 'skills', summary: 'List skills (Enter runs, Del removes).', run: ctx => ctx.openSkills() },
+  {
+    name: 'skills',
+    summary: 'Manage skills: /skills (this profile) or /skills --global.',
+    run: (ctx, args) => ctx.openSkills(args.trim() === '--global' ? 'global' : 'profile'),
+  },
   {
     name: 'install-skill',
-    summary: 'Install a skill: /install-skill <path>.',
+    summary: 'Install a skill: /install-skill [--global] <path|url>.',
     run: (ctx, args) => {
       const arg = args.trim();
       if (!arg) ctx.notify('Usage: /install-skill <path>', 'warn');

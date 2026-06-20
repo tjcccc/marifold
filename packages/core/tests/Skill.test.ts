@@ -20,19 +20,20 @@ afterEach(() => {
   }
 });
 
-const TRANSLATE = `schema = "marifold.skill.v0"
-name = "translate"
-description = "Translate text."
-mode = "chat"
-prompt = "Translate into {{language}}:\\n\\n{{text}}"
+const TRANSLATE = `---
+name: translate
+description: Translate text.
+mode: chat
+variables:
+  - name: text
+    required: true
+  - name: language
+    default: English
+---
 
-[[variables]]
-name = "text"
-required = true
+Translate into {{language}}:
 
-[[variables]]
-name = "language"
-default = "English"
+{{text}}
 `;
 
 describe('parseSkill', () => {
@@ -45,23 +46,24 @@ describe('parseSkill', () => {
     expect(skill.variables[1].default).toBe('English');
   });
 
-  it('defaults mode to agent', () => {
-    const skill = parseSkill('schema = "marifold.skill.v0"\nname = "x"\nprompt = "hello"\n');
-    expect(skill.mode).toBe('agent');
+  it('defaults mode to chat', () => {
+    const skill = parseSkill('---\nname: x\n---\nhello\n');
+    expect(skill.mode).toBe('chat');
   });
 
   it.each([
-    ['wrong schema', 'schema = "other"\nname = "x"\nprompt = "p"\n'],
-    ['missing name', 'schema = "marifold.skill.v0"\nprompt = "p"\n'],
-    ['empty prompt', 'schema = "marifold.skill.v0"\nname = "x"\nprompt = "   "\n'],
-    ['bad name', 'schema = "marifold.skill.v0"\nname = "Bad Name"\nprompt = "p"\n'],
-    ['undeclared variable', 'schema = "marifold.skill.v0"\nname = "x"\nprompt = "hi {{who}}"\n'],
+    ['no frontmatter', 'just a body, no frontmatter\n'],
+    ['wrong schema', '---\nschema: other\nname: x\n---\np\n'],
+    ['missing name', '---\ndescription: d\n---\np\n'],
+    ['empty prompt', '---\nname: x\n---\n   '],
+    ['bad name', '---\nname: Bad Name\n---\np\n'],
+    ['undeclared variable', '---\nname: x\n---\nhi {{who}}\n'],
   ])('rejects %s', (_label: string, text: string) => {
     expect(() => parseSkill(text)).toThrow();
   });
 
   it('rejects duplicate variables', () => {
-    const text = 'schema = "marifold.skill.v0"\nname = "x"\nprompt = "{{a}}"\n[[variables]]\nname = "a"\n[[variables]]\nname = "a"\n';
+    const text = '---\nname: x\nvariables:\n  - name: a\n  - name: a\n---\n{{a}}\n';
     expect(() => parseSkill(text)).toThrow(/[Dd]uplicate/);
   });
 });
@@ -115,9 +117,38 @@ describe('SkillStore', () => {
     expect(store.get('translate')?.scope).toBe('profile');
   });
 
-  it('skips unparseable files when listing', () => {
+  it('lists and removes by scope without touching the other layer', () => {
+    const store = new SkillStore({ globalDir: tempDir(), profileDir: tempDir() });
+    store.installFromText(TRANSLATE, 'global');
+    store.installFromText(TRANSLATE, 'profile');
+
+    expect(store.list('global').map(s => s.scope)).toEqual(['global']);
+    expect(store.list('profile').map(s => s.scope)).toEqual(['profile']);
+
+    // Scope-aware remove deletes only the profile copy, revealing the global one.
+    expect(store.remove('translate', 'profile')).toBe(true);
+    expect(store.list('profile')).toHaveLength(0);
+    expect(store.get('translate')?.scope).toBe('global');
+  });
+
+  it('installs from a skill folder containing SKILL.md', () => {
+    const folder = path.join(tempDir(), 'translate');
+    fs.mkdirSync(folder);
+    fs.writeFileSync(path.join(folder, 'SKILL.md'), TRANSLATE);
+    const store = new SkillStore({ globalDir: tempDir() });
+    expect(store.installFromFile(folder).name).toBe('translate');
+    expect(store.list().map(s => s.name)).toEqual(['translate']);
+  });
+
+  it('rejects a skill folder without SKILL.md', () => {
+    const store = new SkillStore({ globalDir: tempDir() });
+    expect(() => store.installFromFile(tempDir())).toThrow(/SKILL\.md/);
+  });
+
+  it('skips unparseable skill folders when listing', () => {
     const dir = tempDir();
-    fs.writeFileSync(path.join(dir, 'broken.toml'), 'not a skill = [');
+    fs.mkdirSync(path.join(dir, 'broken'));
+    fs.writeFileSync(path.join(dir, 'broken', 'SKILL.md'), 'no frontmatter here');
     const store = new SkillStore({ globalDir: dir });
     expect(store.list()).toHaveLength(0);
   });

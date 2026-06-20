@@ -325,8 +325,8 @@ export class MarifoldRuntime {
     });
   }
 
-  listSkills(profile?: string): MarifoldSkill[] {
-    return this.createSkillStore(profile).list();
+  listSkills(profile?: string, scope?: SkillScope): MarifoldSkill[] {
+    return this.createSkillStore(profile).list(scope);
   }
 
   getSkill(name: string, profile?: string): MarifoldSkill | undefined {
@@ -341,8 +341,8 @@ export class MarifoldRuntime {
     return this.createSkillStore(profile).installFromFile(filePath, scope);
   }
 
-  removeSkill(name: string, profile?: string): boolean {
-    return this.createSkillStore(profile).remove(name);
+  removeSkill(name: string, profile?: string, scope?: SkillScope): boolean {
+    return this.createSkillStore(profile).remove(name, scope);
   }
 
   createSchedule(input: ScheduleCreateInput): ScheduleState {

@@ -2,6 +2,20 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-06-20 — v0.19.0 — Markdown skills (SKILL.md folders) + TUI fixes
+
+- **Skills are now markdown, Claude Code style.** `marifold.skill.v0` is a `SKILL.md` with a YAML frontmatter block (name/description/mode/variables) + a prompt body — no more TOML (TOML stays for config and the `skillapp` UI layout). New `yaml` dep in core; `schema:` is optional; `mode` defaults to `chat` (safest for weak local models). `SkillValidator` parses frontmatter+body.
+- **Folder storage with bundled files.** Skills live at `<scope>/<name>/SKILL.md`. `/install-skill` accepts a `.md` file (saved as `<name>/SKILL.md`) **or** a skill folder containing `SKILL.md`, which is copied whole via `fs.cpSync` — bundled files (e.g. `vars.toml`) travel, though marifold currently only reads `SKILL.md`. Converted `examples/skills` (echo.md, summarize-file.md, translate/SKILL.md).
+- **Scope-aware skill management.** `SkillStore.list`/`remove` take an optional scope; `/skills` manages the **profile** layer, `/skills --global` the **global** layer (Del removes only the viewed layer, so a shadowed global copy is reachable). Title cross-references the other layer; empty-state shows install hints. `/install-skill [--global]` installs to the current profile by default. The `$name` menu still shows the merged runnable set.
+- **TUI fixes uncovered by testing:**
+  - **Transcript resets were silently broken in the inline layout** — `<Static>` is append-only, so `/new`, `/clear`, **profile switch**, and session resume cleared the state but not the screen (and the new notice never rendered). Now any item *removal* (vs append) forces a clean repaint (remount `<Static>` + clear). New app-level integration test covers the profile picker + direct form.
+  - `/profile <name>` direct switch (in addition to the picker) with a clear `Switched to profile: … (new session)` confirmation; the App-level Ctrl+L `useInput` is now inactive while an overlay/modal owns input.
+  - Skill turns echo the **full invocation** (`$translate korean 晚上好！`), not just `$name`; head-token coloring for `$skill`/`/command` in both the input and the transcript (args stay default white) via a per-character color map in `InputBox`; LaTeX-free temps already handled.
+  - Path args (`/install-skill`, `/read`, `/image`) strip surrounding quotes/backticks.
+- Version 0.18.0 → 0.19.0 across all packages + CLI `.version`.
+- Verified: core 138, tui 26, service 4 — all pass; all 4 packages build/typecheck green. End-to-end (built runtime): markdown + folder skills install/list/scope/remove; bundled `vars.toml` copied for the real `make-gpt-image-prompt` skill.
+- **Open**: resets use a full clear (`\x1b[2J\x1b[3J\x1b[H`), which also wipes scrollback — a soft clear could preserve the previous session above; deferred pending preference. A `vars.toml`/`#name` skill-runtime (so folder skills run as designed) is a future feature.
+
 ## 2026-06-20 — v0.18.0 — Pluggable web search (Firecrawl BYOK) + autonomous model search
 
 - **Provider-pluggable search.** `[web_search]` gains `provider` (`duckduckgo`|`firecrawl`, default duckduckgo), `api_key_env`/`api_key` (BYOK — prefer the env var), and `scrape`. New `src/search/FirecrawlBackend.ts` (Firecrawl `/v2/search`, Bearer or keyless, optional markdown scrape, best-effort proxy via optional `undici`) and `src/search/createSearchBackend.ts` factory; `MarifoldRuntime` selects the backend by config. DuckDuckGo stays the keyless best-effort floor. Hardened `resolveWebSearchConfig` so an absent key never clobbers a default.

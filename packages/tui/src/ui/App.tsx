@@ -50,7 +50,10 @@ export interface AppProps {
   };
 }
 
-type Overlay = { type: 'model' | 'profile' | 'skills' | 'sessions'; items: SelectItem[] };
+type SkillScope = 'global' | 'profile';
+type Overlay =
+  | { type: 'model' | 'profile' | 'sessions'; items: SelectItem[] }
+  | { type: 'skills'; scope: SkillScope; items: SelectItem[]; title: string; emptyHint: string[] };
 
 interface PendingSkill {
   skill: MarifoldSkill;
@@ -111,9 +114,23 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
     if (wasResizing.current && !resizing) repaint();
     wasResizing.current = resizing;
   }, [resizing, repaint]);
+  // Ctrl+L forces a clean repaint. Inactive while an overlay/modal owns input,
+  // so it never competes with the picker's or approval modal's key handling.
   useInput((input, key) => {
     if (key.ctrl && input === 'l') repaint();
-  });
+  }, { isActive: !overlay && !state.approval });
+
+  // The committed transcript lives in Ink's <Static>, which is append-only and
+  // cannot un-render. So whenever items are removed/reset (a /new, /clear,
+  // profile switch, or session resume) rather than just appended, force a clean
+  // repaint so the screen reflects the new transcript instead of stale rows.
+  const prevItemIds = useRef<string[]>([]);
+  useEffect(() => {
+    const ids = state.transcript.map(item => item.id);
+    const appendedOnly = prevItemIds.current.every((id, index) => ids[index] === id);
+    prevItemIds.current = ids;
+    if (!appendedOnly) repaint();
+  }, [state.transcript, repaint]);
 
   // Mutable run plumbing (does not drive rendering directly).
   const abortRef = useRef<AbortController | null>(null);
@@ -304,8 +321,8 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
   }, [notify]);
 
   // --- Skills --------------------------------------------------------------
-  const startSkillRun = useCallback((skill: MarifoldSkill, prompt: string) => {
-    dispatch({ type: 'add_user', text: `$${skill.name}` });
+  const startSkillRun = useCallback((skill: MarifoldSkill, prompt: string, displayText: string) => {
+    dispatch({ type: 'add_user', text: displayText });
     if (skill.mode === 'chat') void runChat(prompt);
     else void runAgent(prompt);
   }, [runAgent, runChat]);
@@ -329,7 +346,7 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
       notify(`${skillUsage(skill)} — enter ${missing[0]}:`, 'info');
       return;
     }
-    startSkillRun(skill, prompt);
+    startSkillRun(skill, prompt, skillInvocation(name, argv));
   }, [runtime, notify, startSkillRun]);
 
   const fillSkillVariable = useCallback((value: string) => {
@@ -346,7 +363,10 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
         notify(`Missing values for: ${missing.join(', ')}`, 'warn');
         return null;
       }
-      startSkillRun(current.skill, prompt);
+      const args = current.skill.variables
+        .map(variable => supplied[variable.name])
+        .filter((value): value is string => typeof value === 'string' && value.length > 0);
+      startSkillRun(current.skill, prompt, skillInvocation(current.skill.name, args));
       return null;
     });
   }, [notify, startSkillRun]);
@@ -362,13 +382,25 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
     setOverlay({ type: 'profile', items });
   }, [runtime]);
 
-  const openSkills = useCallback(() => {
-    const items = runtime.listSkills(stateRef.current.profile).map(skill => ({
+  const openSkills = useCallback((scope: SkillScope = 'profile') => {
+    const profile = stateRef.current.profile;
+    const items = runtime.listSkills(profile, scope).map(skill => ({
       label: skill.name,
       value: skill.name,
       hint: skill.description,
     }));
-    setOverlay({ type: 'skills', items });
+    // Cross-reference the other layer so global skills stay discoverable from
+    // the profile view (and vice versa).
+    const other: SkillScope = scope === 'global' ? 'profile' : 'global';
+    const otherCount = runtime.listSkills(profile, other).length;
+    const otherCmd = other === 'global' ? '/skills --global' : '/skills';
+    const base = scope === 'global' ? 'Global skills' : 'Profile skills';
+    const title = `${base} — Enter runs, Del removes${otherCount ? `  (+${otherCount} ${other}: ${otherCmd})` : ''}`;
+    const emptyHint = scope === 'global'
+      ? ['/install-skill --global <path>  installs a global skill (all profiles)']
+      : ['/install-skill <path>  installs a skill into this profile'];
+    if (otherCount) emptyHint.push(`${otherCount} ${other} skill(s) — ${otherCmd}`);
+    setOverlay({ type: 'skills', scope, items, title, emptyHint });
   }, [runtime]);
 
   const showSessions = useCallback(() => {
@@ -452,18 +484,29 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
   }, [loadedConfig]);
 
   const installSkill = useCallback((arg: string) => {
+    // `--global` installs for every profile; otherwise the skill lands in the
+    // current profile (profile skills shadow global ones).
+    const tokens = arg.trim().split(/\s+/).filter(Boolean);
+    const global = tokens.includes('--global');
+    const target = unwrapPath(tokens.filter(token => token !== '--global').join(' '));
+    const scope = global ? 'global' : 'profile';
+    const profile = stateRef.current.profile;
     const run = async () => {
       try {
+        if (!target) {
+          notify('Usage: /install-skill [--global] <path|url>', 'warn');
+          return;
+        }
         let installed;
-        if (/^https?:\/\//i.test(arg)) {
-          const response = await fetch(arg);
-          if (!response.ok) throw new Error(`HTTP ${response.status} fetching ${arg}`);
-          installed = runtime.installSkillFromText(await response.text());
+        if (/^https?:\/\//i.test(target)) {
+          const response = await fetch(target);
+          if (!response.ok) throw new Error(`HTTP ${response.status} fetching ${target}`);
+          installed = runtime.installSkillFromText(await response.text(), scope, profile);
         } else {
-          installed = runtime.installSkillFromFile(path.resolve(expandHome(arg)));
+          installed = runtime.installSkillFromFile(path.resolve(expandHome(target)), scope, profile);
         }
         refreshSkills();
-        notify(`Installed skill: $${installed.name}`, 'info');
+        notify(`Installed skill: $${installed.name} (${global ? 'global' : `profile ${profile}`})`, 'info');
       } catch (error) {
         notify(`Install failed: ${errorText(error)}`, 'error');
       }
@@ -473,7 +516,7 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
 
   const readFileCmd = useCallback((file: string) => {
     try {
-      const resolved = path.resolve(expandHome(file));
+      const resolved = path.resolve(expandHome(unwrapPath(file)));
       const content = fs.readFileSync(resolved, 'utf-8');
       const truncated = content.length > READ_FILE_CHAR_LIMIT;
       const body = truncated
@@ -492,7 +535,7 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
       notify('Cleared pending images.', 'info');
       return;
     }
-    const resolved = path.resolve(expandHome(arg));
+    const resolved = path.resolve(expandHome(unwrapPath(arg)));
     if (!fs.existsSync(resolved)) {
       notify(`Image not found: ${resolved}`, 'error');
       return;
@@ -526,6 +569,22 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
     }
   }, [notify, startTextRun]);
 
+  // Switch profile (from `/profile <name>` or the picker): starts a fresh
+  // session and confirms in the transcript.
+  const selectProfile = useCallback((value: string) => {
+    setOverlay(null);
+    try {
+      const settings = runtime.resolveSettings({ profile: value });
+      dispatch({ type: 'set_profile', profile: settings.profile, provider: settings.provider, model: settings.model });
+      dispatch({ type: 'new_session', sessionId: undefined });
+      sessionGrantsRef.current.clear();
+      refreshSkills();
+      notify(`Switched to profile: ${settings.profile} · ${settings.provider}/${settings.model} (new session)`, 'info');
+    } catch (error) {
+      notify(`Could not switch profile: ${errorText(error)}`, 'error');
+    }
+  }, [runtime, notify, refreshSkills]);
+
   // CommandContext bound to the live handlers.
   const commandContext = useMemo<CommandContext>(() => ({
     notify,
@@ -538,6 +597,7 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
     setThink: (on: boolean) => { setThink(on); notify(`Thinking ${on ? 'on' : 'off'}.`, 'info'); },
     openModelPicker,
     openProfilePicker,
+    selectProfile,
     openSkills,
     showPermissions,
     showHelp,
@@ -552,7 +612,7 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
     forget,
     deleteMemory,
   }), [
-    notify, stop, steer, exit, openModelPicker, openProfilePicker, openSkills,
+    notify, stop, steer, exit, openModelPicker, openProfilePicker, selectProfile, openSkills,
     showPermissions, showHelp, showStatus, copyLast, showSessions, runDoctor, installSkill,
     readFileCmd, setImage, remember, forget, deleteMemory,
   ]);
@@ -633,19 +693,6 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
     }
   }, [notify]);
 
-  const onProfileSelect = useCallback((value: string) => {
-    setOverlay(null);
-    try {
-      const settings = runtime.resolveSettings({ profile: value });
-      dispatch({ type: 'set_profile', profile: settings.profile, provider: settings.provider, model: settings.model });
-      dispatch({ type: 'new_session', sessionId: undefined });
-      sessionGrantsRef.current.clear();
-      refreshSkills();
-      notify(`Profile: ${settings.profile} (${settings.provider}/${settings.model})`, 'info');
-    } catch (error) {
-      notify(`Could not switch profile: ${errorText(error)}`, 'error');
-    }
-  }, [runtime, notify, refreshSkills]);
 
   // --- Render --------------------------------------------------------------
   const activeOverlay = renderOverlay();
@@ -661,7 +708,7 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
       return <SelectList title="Select model" items={overlay.items} onSelect={onModelSelect} onCancel={() => setOverlay(null)} maxRows={overlayMaxRows} />;
     }
     if (overlay.type === 'profile') {
-      return <SelectList title="Select profile" items={overlay.items} onSelect={onProfileSelect} onCancel={() => setOverlay(null)} maxRows={overlayMaxRows} />;
+      return <SelectList title="Select profile" items={overlay.items} onSelect={selectProfile} onCancel={() => setOverlay(null)} maxRows={overlayMaxRows} />;
     }
     if (overlay.type === 'sessions') {
       return (
@@ -682,22 +729,27 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
         />
       );
     }
-    // skills
-    return (
-      <SelectList
-        title="Skills — Enter runs, Del removes"
-        maxRows={overlayMaxRows}
-        items={overlay.items}
-        onSelect={value => { setOverlay(null); runSkill(value, []); }}
-        onCancel={() => setOverlay(null)}
-        onDelete={value => {
-          runtime.removeSkill(value, stateRef.current.profile);
-          refreshSkills();
-          notify(`Removed skill: $${value}`, 'info');
-          openSkills();
-        }}
-      />
-    );
+    // skills (scope-aware: profile or global)
+    if (overlay.type === 'skills') {
+      const scope = overlay.scope;
+      return (
+        <SelectList
+          title={overlay.title}
+          maxRows={overlayMaxRows}
+          items={overlay.items}
+          emptyHint={overlay.emptyHint}
+          onSelect={value => { setOverlay(null); runSkill(value, []); }}
+          onCancel={() => setOverlay(null)}
+          onDelete={value => {
+            runtime.removeSkill(value, stateRef.current.profile, scope);
+            refreshSkills();
+            notify(`Removed ${scope} skill: $${value}`, 'info');
+            openSkills(scope);
+          }}
+        />
+      );
+    }
+    return null;
   }
 
   // Inline layout (Claude/Codex-style): the banner prints once at the top of the
@@ -763,6 +815,22 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
 
 const BANNER_ID = '__banner__';
 type StaticEntry = { id: typeof BANNER_ID } | TranscriptItem;
+
+/** Echo text for a skill turn: `$name arg1 arg2…` (or just `$name` with no args). */
+function skillInvocation(name: string, args: string[]): string {
+  return args.length ? `$${name} ${args.join(' ')}` : `$${name}`;
+}
+
+/** Strip one pair of matching surrounding quotes/backticks from a path argument
+ * — users wrap or paste paths in `…`, "…", or '…'. */
+function unwrapPath(value: string): string {
+  const trimmed = value.trim();
+  const first = trimmed[0];
+  if (trimmed.length >= 2 && (first === '`' || first === '"' || first === "'") && trimmed.endsWith(first)) {
+    return trimmed.slice(1, -1).trim();
+  }
+  return trimmed;
+}
 
 function errorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
