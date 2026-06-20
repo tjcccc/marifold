@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
-import { Box, Text, useApp, useInput } from 'ink';
+import { Box, Static, useApp, useInput, useStdout } from 'ink';
 import { randomUUID } from 'crypto';
 import { spawn } from 'child_process';
 import * as fs from 'fs';
@@ -33,8 +33,7 @@ import { RunStatus } from './RunStatus.js';
 import { ApprovalModal, type ApprovalChoice } from './ApprovalModal.js';
 import { SelectList, type SelectItem } from './SelectList.js';
 import { useTerminalSize } from './useTerminalSize.js';
-import { selectTranscriptWindow } from '../core/transcriptWindow.js';
-import { DIM } from './theme.js';
+import { useResizing } from './useResizing.js';
 
 const READ_FILE_CHAR_LIMIT = 100000;
 
@@ -50,9 +49,6 @@ export interface AppProps {
     version: string;
     latestVersion?: string;
   };
-  /** Called with the formatted session transcript when exiting, so the host can
-   * print it to the normal buffer (the alternate screen is wiped on exit). */
-  onExit?: (transcript: string) => void;
 }
 
 type Overlay = { type: 'model' | 'profile' | 'skills' | 'sessions'; items: SelectItem[] };
@@ -64,7 +60,7 @@ interface PendingSkill {
   index: number;
 }
 
-export function App({ runtime, loadedConfig, initial, onExit }: AppProps): React.ReactElement {
+export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactElement {
   const { exit } = useApp();
   const [state, dispatch] = useReducer(
     appReducer,
@@ -93,16 +89,31 @@ export function App({ runtime, loadedConfig, initial, onExit }: AppProps): React
     () => listCommands().map(spec => ({ name: spec.name, hint: spec.summary })),
     [],
   );
-  const { columns, rows } = useTerminalSize();
+  // Used to cap overlay (picker) height between the latest content and the input.
+  const { rows } = useTerminalSize();
+  // While the terminal is actively resizing, the live region collapses to a
+  // single line so Ink's erase math can't desync and duplicate the input.
+  const resizing = useResizing();
 
-  // Transcript scroll for the fullscreen layout (no native scrollback in the
-  // alternate screen): offset = number of newest items hidden below the view.
-  // New items snap back to the bottom; PgUp/PgDn page through history.
-  const [scrollOffset, setScrollOffset] = useState(0);
-  useEffect(() => setScrollOffset(0), [state.transcript.length]);
-  useInput((_input, key) => {
-    if (key.pageUp) setScrollOffset(offset => Math.min(Math.max(0, state.transcript.length - 1), offset + 1));
-    else if (key.pageDown) setScrollOffset(offset => Math.max(0, offset - 1));
+  // A full clean repaint — bound to Ctrl+L, and fired once when a resize
+  // settles — to clear lines the terminal stranded while reflowing scrollback
+  // mid-resize. We clear the screen, then bump the <Static> key so Ink re-emits
+  // the whole committed transcript from the top (its `handleStaticChange` resets
+  // the cached static output). Nothing is lost: the banner and every turn are
+  // reprinted clean.
+  const { stdout } = useStdout();
+  const [staticEpoch, setStaticEpoch] = useState(0);
+  const wasResizing = useRef(false);
+  const repaint = useCallback(() => {
+    (stdout ?? process.stdout).write('\x1b[2J\x1b[3J\x1b[H');
+    setStaticEpoch(epoch => epoch + 1);
+  }, [stdout]);
+  useEffect(() => {
+    if (wasResizing.current && !resizing) repaint();
+    wasResizing.current = resizing;
+  }, [resizing, repaint]);
+  useInput((input, key) => {
+    if (key.ctrl && input === 'l') repaint();
   });
 
   // Mutable run plumbing (does not drive rendering directly).
@@ -121,13 +132,12 @@ export function App({ runtime, loadedConfig, initial, onExit }: AppProps): React
   const thinkRef = useRef(think);
   thinkRef.current = think;
 
-  // Exit: hand the transcript to the host (to reprint after the alternate
-  // screen is restored), then unmount.
+  // Exit: the conversation already lives in the terminal's native scrollback
+  // (inline layout), so there's nothing to reprint — just unmount.
   const quit = useCallback(() => {
-    onExit?.(formatTranscript(stateRef.current.transcript));
     dispatch({ type: 'exit' });
     exit();
-  }, [exit, onExit]);
+  }, [exit]);
 
   const notify = useCallback((text: string, tone: NoticeTone = 'info') => {
     dispatch({ type: 'notice', tone, text });
@@ -703,53 +713,48 @@ export function App({ runtime, loadedConfig, initial, onExit }: AppProps): React
     );
   }
 
-  // Fullscreen (alternate-screen) layout: a full-height frame. The banner is
-  // pinned at the top; the run line, input, and status are pinned at the bottom.
-  // The transcript fills the middle, anchored to the bottom (justify flex-end)
-  // and explicitly windowed so it always fits (Ink's overflow clipping is
-  // unreliable). The whole surface redraws on resize, so there's no reflow
-  // duplication. PgUp/PgDn scroll; while an overlay is open it owns the middle.
-  const CHROME_ROWS = 11; // banner (~7) + input (~3) + status (1)
-  const maxRows = Math.max(1, rows - CHROME_ROWS - (state.running ? 1 : 0) - 2 /* hint lines */);
-  const { visible, hiddenAbove, hiddenBelow } = selectTranscriptWindow(state.transcript, {
-    columns,
-    maxRows,
-    scrollOffset,
-  });
+  // Inline layout (Claude/Codex-style): the banner prints once at the top of the
+  // terminal's native scrollback and the committed transcript appends below it,
+  // so the whole conversation stays scrollable and copyable in the terminal — and
+  // survives after exit. The run line, input, and status stay pinned just below
+  // the latest content. A still-streaming assistant item renders in the live
+  // region until it ends, so the bottom UI doesn't flicker mid-stream.
+  //
+  // Ink 7 clears its live region on width-decrease (its `resized` handler), so
+  // the input/status don't duplicate on shrink. Committed history is left to the
+  // terminal's own reflow — which we keep clean by holding the live region small
+  // (the input box bounds its own height).
+  const committed = state.streamingAssistant ? state.transcript.slice(0, -1) : state.transcript;
+  const liveItem = state.streamingAssistant ? state.transcript[state.transcript.length - 1] : undefined;
+  const staticItems: StaticEntry[] = [{ id: BANNER_ID }, ...committed];
 
   return (
-    <Box flexDirection="column" height={rows}>
-      <Box flexShrink={0} marginTop={1} marginBottom={1}>
-        <Header state={state} />
-      </Box>
-      <Box flexDirection="column" flexGrow={1} justifyContent="flex-end">
-        {activeOverlay ? null : (
-          <>
-            {hiddenAbove > 0 ? (
-              <Box paddingX={1}>
-                <Text color={DIM}>↑ {hiddenAbove} more · PgUp</Text>
-              </Box>
-            ) : null}
-            {visible.map(item => (
-              <Box
-                key={item.id}
-                paddingX={1}
-                marginTop={item.kind === 'user' || item.kind === 'verification' ? 1 : 0}
-                marginBottom={item.kind === 'plan' ? 1 : 0}
-              >
-                <TranscriptRow item={item} />
-              </Box>
-            ))}
-            {hiddenBelow > 0 ? (
-              <Box paddingX={1}>
-                <Text color={DIM}>↓ {hiddenBelow} more · PgDn</Text>
-              </Box>
-            ) : null}
-          </>
-        )}
-      </Box>
-      <Box flexDirection="column" flexShrink={0}>
-        {state.running ? (
+    <Box flexDirection="column">
+      <Static key={staticEpoch} items={staticItems}>
+        {item =>
+          'kind' in item ? (
+            <Box
+              key={item.id}
+              paddingX={1}
+              marginTop={item.kind === 'user' || item.kind === 'verification' ? 1 : 0}
+              marginBottom={item.kind === 'plan' ? 1 : 0}
+            >
+              <TranscriptRow item={item} />
+            </Box>
+          ) : (
+            <Box key={item.id} marginTop={1} marginBottom={1}>
+              <Header state={state} />
+            </Box>
+          )
+        }
+      </Static>
+      <Box flexDirection="column">
+        {!resizing && liveItem ? (
+          <Box paddingX={1}>
+            <TranscriptRow item={liveItem} />
+          </Box>
+        ) : null}
+        {!resizing && state.running ? (
           <RunStatus activity={state.activity} think={think} steeringQueued={steeringCount} />
         ) : null}
         {activeOverlay ?? (
@@ -759,29 +764,21 @@ export function App({ runtime, loadedConfig, initial, onExit }: AppProps): React
             history={history}
             commands={commandItems}
             skills={skillItems}
+            resizing={resizing}
             placeholder={pendingSkill ? `value for ${pendingSkill.missing[pendingSkill.index]}` : state.mode === 'agent' ? 'message the agent · /help' : 'chat · /help'}
           />
         )}
-        <StatusLine state={state} />
+        {!resizing ? <StatusLine state={state} /> : null}
       </Box>
     </Box>
   );
 }
 
+const BANNER_ID = '__banner__';
+type StaticEntry = { id: typeof BANNER_ID } | TranscriptItem;
+
 function errorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
-}
-
-/** Plain-text rendering of the conversation for the on-exit dump to the normal
- * buffer (the alternate screen is wiped). Only real messages and replies are
- * kept — `/command` echoes are control actions, not conversation. */
-function formatTranscript(items: TranscriptItem[]): string {
-  const lines: string[] = [];
-  for (const item of items) {
-    if (item.kind === 'user' && !item.text.startsWith('/')) lines.push(`> ${item.text}`, '');
-    else if (item.kind === 'assistant') lines.push(item.text, '');
-  }
-  return lines.length > 0 ? `\nmarifold session\n\n${lines.join('\n')}` : '';
 }
 
 /** A parenthetical run summary: elapsed time always, token count when the

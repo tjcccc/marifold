@@ -64,34 +64,26 @@ export async function runTui(options: RunTuiOptions): Promise<void> {
       cwd: process.cwd(),
       version: readVersion(),
     };
-    // Render in the alternate screen (like vim/htop/Codex): Ink redraws the full
-    // surface on resize, so there's no inline reflow/duplication. The original
-    // terminal is restored on exit; we reprint the conversation to the normal
-    // buffer afterward so the session isn't lost.
+    // Render inline (like Claude Code / Codex), not in the alternate screen: the
+    // banner and transcript live in the terminal's native scrollback, so the
+    // conversation stays scrollable, copyable, and survives after exit — and the
+    // CLI never takes over the whole terminal. Ink 7 clears its live region on
+    // width-decrease (its `resized` handler), so the input area doesn't duplicate
+    // on shrink; committed history is left to the terminal's own reflow.
     //
     // Enable bracketed paste so dropped/pasted file paths arrive as one buffered
     // event (Ink coalesces them) instead of fragmented keystrokes — otherwise a
     // long dropped path lands as loose text instead of an `[image #n]` token.
     process.stdout.write('\x1b[?2004h');
-    let transcriptDump = '';
     try {
       const app = render(
-        <App
-          runtime={runtime}
-          loadedConfig={options.loadedConfig}
-          initial={initial}
-          onExit={dump => {
-            transcriptDump = dump;
-          }}
-        />,
-        { exitOnCtrlC: false, alternateScreen: true },
+        <App runtime={runtime} loadedConfig={options.loadedConfig} initial={initial} />,
+        { exitOnCtrlC: false },
       );
       await app.waitUntilExit();
     } finally {
       process.stdout.write('\x1b[?2004l');
     }
-    // Back on the primary screen — preserve the conversation.
-    if (transcriptDump) process.stdout.write(`${transcriptDump}\n`);
   } finally {
     runtime.close();
   }

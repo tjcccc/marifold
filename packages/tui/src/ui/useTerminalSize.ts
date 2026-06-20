@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useStdout } from 'ink';
 
-/** Terminal dimensions, kept current across resizes, for the full-height
- * (alternate-screen) layout and transcript windowing. */
+/** Terminal dimensions, kept current across resizes. The inline layout uses
+ * `rows` only to cap overlay (picker) height; Ink handles input/transcript
+ * wrapping itself. */
 export function useTerminalSize(): { columns: number; rows: number } {
   const { stdout } = useStdout();
   const [size, setSize] = useState(() => ({

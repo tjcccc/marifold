@@ -55,6 +55,7 @@ export function InputBox({
   history,
   commands,
   skills,
+  resizing = false,
 }: {
   onSubmit: (value: string, images: string[]) => void;
   onInterrupt: (reason: 'ctrl-c' | 'escape') => void;
@@ -62,6 +63,9 @@ export function InputBox({
   history: string[];
   commands: CompletionItem[];
   skills: CompletionItem[];
+  /** While the terminal is resizing, collapse to a single line and ignore
+   * typing so Ink's erase math can't desync and duplicate the input box. */
+  resizing?: boolean;
 }): React.ReactElement {
   const [value, setValue] = useState('');
   const [cursor, setCursor] = useState(0);
@@ -112,6 +116,7 @@ export function InputBox({
 
   useInput((input, key) => {
     if (key.ctrl && input === 'c') return onInterrupt('ctrl-c');
+    if (resizing) return; // ignore typing mid-resize (the box is collapsed)
 
     // The completion menu intercepts navigation/accept/dismiss before history,
     // submit, and Esc-to-cancel.
@@ -211,6 +216,16 @@ export function InputBox({
       setCursor(histDraft.length);
       setHistIndex(null);
     }
+  }
+
+  // Collapsed to a single stable line while the terminal resizes (the component
+  // stays mounted, so the typed value is preserved for when the size settles).
+  if (resizing) {
+    return (
+      <Box paddingX={1}>
+        <Text color={DIM}>↔ resizing…</Text>
+      </Box>
+    );
   }
 
   return (
