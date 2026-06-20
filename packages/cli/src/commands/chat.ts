@@ -2,7 +2,7 @@ import { randomUUID } from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import { Command } from 'commander';
-import { expandHome, formatSearchContext } from '@marifold/core';
+import { expandHome } from '@marifold/core';
 import type { ImageInput, MemoryKind } from '@marifold/core';
 import { InteractivePrompt } from '../input/InteractivePrompt';
 import { ConsolePrinter } from '../output/ConsolePrinter';
@@ -26,7 +26,6 @@ const CHAT_HELP = `Chat commands:
   /new                  Start a new session with the same profile and model.
   /think on             Enable thinking mode for supported providers.
   /think off            Disable thinking mode.
-  /search <query>       Search the web and answer using the results.
   /read <path>          Attach a local file's content to your next message.
   /image <path>         Attach an image to your next message. Repeatable.
   /image clear          Drop pending image attachments.
@@ -135,23 +134,6 @@ export function registerChatCommand(program: Command, printer: ConsolePrinter): 
             }
             think = next;
             process.stdout.write(style.dim(`Thinking mode ${think ? 'on' : 'off'}.\n\n`));
-            continue;
-          }
-          if (isCommand(message, '/search')) {
-            const query = commandPayload(message, '/search');
-            if (!query) {
-              process.stderr.write('Usage: /search <query>\n');
-              continue;
-            }
-            let results: string;
-            try {
-              process.stdout.write(style.dim('Searching the web...\n'));
-              results = await runtime.searchWeb(query);
-            } catch (error) {
-              process.stderr.write(`Web search failed: ${error instanceof Error ? error.message : String(error)}\n`);
-              continue;
-            }
-            await streamTurn(query, [formatSearchContext(results)]);
             continue;
           }
           if (isCommand(message, '/read')) {

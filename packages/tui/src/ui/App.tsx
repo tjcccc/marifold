@@ -7,7 +7,6 @@ import * as path from 'path';
 import {
   ConfigManager,
   expandHome,
-  formatSearchContext,
   renderSkillPrompt,
   resolveAgentConfig,
 } from '@marifold/core';
@@ -472,17 +471,6 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
     void run();
   }, [runtime, notify, refreshSkills]);
 
-  const search = useCallback(async (query: string) => {
-    notify(`Searching the web: ${query}`, 'info');
-    try {
-      const results = await runtime.searchWeb(query);
-      dispatch({ type: 'add_user', text: `/search ${query}` });
-      await runChat(query, [formatSearchContext(results)]);
-    } catch (error) {
-      notify(`Web search failed: ${errorText(error)}`, 'error');
-    }
-  }, [runtime, runChat, notify]);
-
   const readFileCmd = useCallback((file: string) => {
     try {
       const resolved = path.resolve(expandHome(file));
@@ -558,7 +546,6 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
     showSessions,
     runDoctor,
     installSkill,
-    search: q => void search(q),
     readFile: readFileCmd,
     setImage,
     remember,
@@ -566,7 +553,7 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
     deleteMemory,
   }), [
     notify, stop, steer, exit, openModelPicker, openProfilePicker, openSkills,
-    showPermissions, showHelp, showStatus, copyLast, showSessions, runDoctor, installSkill, search,
+    showPermissions, showHelp, showStatus, copyLast, showSessions, runDoctor, installSkill,
     readFileCmd, setImage, remember, forget, deleteMemory,
   ]);
 

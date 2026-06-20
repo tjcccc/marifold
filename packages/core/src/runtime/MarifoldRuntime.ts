@@ -12,7 +12,7 @@ import { ChatGptRefreshedTokens, refreshChatGptAccessToken } from '../config/Cha
 import { ConfigManager } from '../config/ConfigManager';
 import { LoadedMarifoldConfig, ProfileDetail, ProfileSummary, resolveWebSearchConfig, SessionDetail, SessionSummary } from '../config/ConfigSchema';
 import { exchangeGitHubTokenForCopilotToken } from '../config/GitHubCopilotAuth';
-import { DuckDuckGoBackend } from '../search/DuckDuckGoBackend';
+import { createSearchBackend } from '../search/createSearchBackend';
 import { formatSearchResults, SearchBackend } from '../search/SearchBackend';
 import { ProviderFactory } from '../config/ProviderFactory';
 import { MarifoldError } from '../errors/MarifoldError';
@@ -65,7 +65,7 @@ export class MarifoldRuntime {
     this.memoryStore = new MemoryStore(config.paths.profilesDir);
     this.taskStore = new TaskStore(config.paths.tasksDir);
     this.searchBackend = options.searchBackend
-      ?? new DuckDuckGoBackend({ proxy: resolveWebSearchConfig(config.webSearch).proxy });
+      ?? createSearchBackend(resolveWebSearchConfig(config.webSearch));
     this.scheduleStore = new ScheduleStore(config.paths.schedulesDir ?? defaultSchedulesDir());
   }
 
@@ -294,6 +294,13 @@ export class MarifoldRuntime {
     registry.register(new ReadFileTool());
     registry.register(new WriteFileTool());
     registry.register(new ShellExecTool());
+    // web_search joins the agent's toolset when search is enabled and the
+    // network isn't denied — so the model can look things up on its own.
+    const webSearch = resolveWebSearchConfig(this.options.loadedConfig.config.webSearch);
+    const approval = resolveAgentConfig(this.options.loadedConfig.config.agent).approval;
+    if (webSearch.enabled && approval.network !== 'deny') {
+      registry.register(new WebSearchTool(this.searchBackend, webSearch.maxResults));
+    }
     registry.register(new DelegateTool({
       ask: async request => {
         const response = await this.ask({ prompt: request.prompt, profile: request.profile });

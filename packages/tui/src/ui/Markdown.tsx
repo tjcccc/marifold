@@ -75,7 +75,8 @@ export function Markdown({ text }: { text: string }): React.ReactElement {
 const INLINE = /(`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*|_[^_]+_)/g;
 
 /** Split a line into inline-styled segments (code / bold / italic). */
-function renderInline(text: string): React.ReactNode {
+function renderInline(input: string): React.ReactNode {
+  const text = normalizeMath(input);
   const parts: React.ReactNode[] = [];
   let last = 0;
   let key = 0;
@@ -95,4 +96,29 @@ function renderInline(text: string): React.ReactNode {
   }
   if (last < text.length) parts.push(text.slice(last));
   return parts.length ? parts : text;
+}
+
+// Terminals can't render LaTeX, but models (esp. on math-y answers) emit it for
+// things like "23°C". Convert the common inline patterns to plain unicode. We
+// only rewrite `$…$` / `\(…\)` spans that contain a LaTeX command (a backslash),
+// so plain currency like "$30" is never touched.
+const MATH_SPAN = /\$([^$]*\\[^$]*)\$|\\\(([^)]*\\[^)]*)\\\)/g;
+
+function normalizeMath(text: string): string {
+  if (!text.includes('\\')) return text;
+  return text.replace(MATH_SPAN, (_match, dollar, paren) => simplifyTex(dollar ?? paren));
+}
+
+function simplifyTex(tex: string): string {
+  return tex
+    .replace(/\\text\s*\{([^}]*)\}/g, '$1')
+    .replace(/\^\s*\{?\s*\\circ\s*\}?/g, '°')
+    .replace(/\\(?:circ|degree|deg)/g, '°')
+    .replace(/\\times/g, '×')
+    .replace(/\\pm/g, '±')
+    .replace(/\\to/g, '→')
+    .replace(/\\(?:,|;|:|!|quad|qquad)/g, ' ')
+    .replace(/[{}]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
 }

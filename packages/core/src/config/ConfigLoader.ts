@@ -13,6 +13,7 @@ import {
   MarifoldWebSearchConfig,
   ProviderType,
   resolveWebSearchConfig,
+  WebSearchProvider,
 } from './ConfigSchema';
 import {
   defaultConfigPath,
@@ -90,6 +91,10 @@ export class ConfigLoader {
     return resolveWebSearchConfig({
       enabled: optionalBoolean(raw.enabled, 'web_search.enabled'),
       maxResults: optionalPositiveInteger(raw.max_results, 'web_search.max_results'),
+      provider: optionalWebSearchProvider(raw.provider, 'web_search.provider'),
+      apiKeyEnv: optionalString(raw.api_key_env, 'web_search.api_key_env'),
+      apiKey: optionalString(raw.api_key, 'web_search.api_key'),
+      scrape: optionalBoolean(raw.scrape, 'web_search.scrape'),
       proxy: optionalString(raw.proxy, 'web_search.proxy'),
     });
   }
@@ -243,6 +248,13 @@ function optionalToolMode(value: unknown, label: string): AgentToolMode | undefi
   if (mode === undefined) return undefined;
   if (mode === 'auto' || mode === 'native' || mode === 'control-block') return mode;
   throw MarifoldError.configInvalid(`Expected ${label} to be "auto", "native", or "control-block".`);
+}
+
+function optionalWebSearchProvider(value: unknown, label: string): WebSearchProvider | undefined {
+  const provider = optionalString(value, label);
+  if (provider === undefined) return undefined;
+  if (provider === 'duckduckgo' || provider === 'firecrawl') return provider;
+  throw MarifoldError.configInvalid(`Expected ${label} to be "duckduckgo" or "firecrawl".`);
 }
 
 function optionalPositiveInteger(value: unknown, label: string): number | undefined {

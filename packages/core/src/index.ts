@@ -37,6 +37,9 @@ export { ShellExecTool } from './agent/tools/ShellExecTool';
 export { WebSearchTool } from './agent/tools/WebSearchTool';
 export { isInsideWorkspace, WriteFileTool } from './agent/tools/WriteFileTool';
 export { DuckDuckGoBackend } from './search/DuckDuckGoBackend';
+export { FirecrawlBackend } from './search/FirecrawlBackend';
+export type { FirecrawlBackendOptions } from './search/FirecrawlBackend';
+export { createSearchBackend } from './search/createSearchBackend';
 export { formatSearchContext, formatSearchResults } from './search/SearchBackend';
 export type { SearchBackend, SearchResultItem } from './search/SearchBackend';
 export { refreshChatGptAccessToken } from './config/ChatGptTokenRefresh';
@@ -50,6 +53,7 @@ export type {
   MarifoldPathsConfig,
   MarifoldProviderConfig,
   MarifoldWebSearchConfig,
+  WebSearchProvider,
   ProfileDetail,
   ProfileFileSummary,
   ProfileSettings,

@@ -2,6 +2,17 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-06-20 — v0.18.0 — Pluggable web search (Firecrawl BYOK) + autonomous model search
+
+- **Provider-pluggable search.** `[web_search]` gains `provider` (`duckduckgo`|`firecrawl`, default duckduckgo), `api_key_env`/`api_key` (BYOK — prefer the env var), and `scrape`. New `src/search/FirecrawlBackend.ts` (Firecrawl `/v2/search`, Bearer or keyless, optional markdown scrape, best-effort proxy via optional `undici`) and `src/search/createSearchBackend.ts` factory; `MarifoldRuntime` selects the backend by config. DuckDuckGo stays the keyless best-effort floor. Hardened `resolveWebSearchConfig` so an absent key never clobbers a default.
+- **Autonomous search; `/search` removed.** The model decides when to search via the `web_search` tool (chat + agent) instead of a manual command — matching Claude Code/Codex. Dropped `/search` from the TUI (`commands.ts`/`App.tsx`) and CLI (`chat.ts`). `enabled` is now the master switch for both modes; configuring a provider turns it on.
+- **Fix: the agent never had `web_search`.** `createDefaultToolRegistry` registered read/write/shell/delegate but not search, so agent mode couldn't search at all (the model correctly reported "no web_search tool"). Now registered when `enabled` and `network` approval isn't `deny` — the agent tool list is built dynamically from the registry, so it surfaces to the model. (Caught only after live testing; the plan wrongly assumed agent mode already had it.)
+- **Fix: LaTeX math rendered as raw source.** Models emit `$\text{23.2}^\circ\text{C}$` for temperatures; the terminal can't render math, so `Markdown.tsx` now normalizes inline `$…$`/`\(…\)` spans that contain LaTeX commands to plain unicode (`23.2°C`, `×`, `±`, `→`), leaving plain currency like `$30` untouched.
+- **CLI:** `marifold config search` (interactive provider/key/scrape + `--provider/--api-key-env/--scrape/--enable/--disable`); `marifold init` gains scripted `--search-provider`/`--search-api-key-env`.
+- Version 0.17.0 → 0.18.0 across all packages + CLI `.version`.
+- Verified: core 134 (+8 `SearchProviders.test.ts`), tui 25 (+1 markdown-math), service 4; all packages build/typecheck green. End-to-end: `config search`/`init` write the section; the agent autonomously searches (Firecrawl) and a weather query renders `27/21°C` and passes verification.
+- **Open**: tier-1 **native** provider search (Anthropic/OpenAI server-side `web_search`) is a future *priest* capability (the `provider` enum leaves a `native` seam); not built here. Small local models (gemma4:e4b) reliably call `web_search` but often hedge instead of committing, so the verify phase blocks them — a stronger model (qwen3.5:9b/cloud) is needed for confident answers. No automated test for the agent-registry wiring (test infra builds runners from explicit tools); verified via build output + manual run.
+
 ## 2026-06-20 — v0.17.0 — Inline TUI with resize-clean rendering (reverses alt-screen)
 
 - **Back to inline, deliberately.** Reverted v0.16.0's alternate-screen layout — it felt "too serious," took over the terminal, and cleared on launch. The TUI again renders inline: `<Static>` banner + transcript in native scrollback (scrollable, copyable, survives exit) + a small live composer. Removed the full-height frame, `src/core/transcriptWindow.ts`, the `PgUp`/`PgDn` windowing, and the on-exit reprint (redundant when history is already in scrollback).

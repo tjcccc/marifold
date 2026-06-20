@@ -25,7 +25,6 @@ export interface CommandContext {
   showSessions(): void;
   runDoctor(): void;
   installSkill(arg: string): void;
-  search(query: string): void;
   readFile(path: string): void;
   setImage(arg: string): void;
   remember(text: string): void;
@@ -85,15 +84,6 @@ const COMMANDS: CommandSpec[] = [
     },
   },
   { name: 'doctor', summary: 'Check provider/model health.', run: ctx => ctx.runDoctor() },
-  {
-    name: 'search',
-    summary: 'Web search: /search <query>.',
-    run: (ctx, args) => {
-      const query = args.trim();
-      if (!query) ctx.notify('Usage: /search <query>', 'warn');
-      else ctx.search(query);
-    },
-  },
   {
     name: 'read',
     summary: 'Read a file into context: /read <path>.',

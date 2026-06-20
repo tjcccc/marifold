@@ -31,11 +31,25 @@ export interface MarifoldMemoryConfig {
   contextLimit: number;
 }
 
+export type WebSearchProvider = 'duckduckgo' | 'firecrawl';
+
 export interface MarifoldWebSearchConfig {
-  /** Enables model-initiated web_search/read_file tools on chat turns.
-   * The explicit /search chat command works regardless of this flag. */
+  /** Master switch for the model-initiated web_search tool, in both chat and
+   * agent mode — the model decides when to search. Agent calls additionally
+   * honor the `network` approval policy. */
   enabled: boolean;
   maxResults: number;
+  /** Active search backend. Defaults to the keyless DuckDuckGo floor;
+   * `firecrawl` adds AI-ready scraped results (BYOK). */
+  provider: WebSearchProvider;
+  /** Env var holding the provider's API key. Preferred over `apiKey` so the
+   * secret stays out of config.toml. */
+  apiKeyEnv?: string;
+  /** API key stored directly in config (BYOK). Prefer `apiKeyEnv`. */
+  apiKey?: string;
+  /** Firecrawl only: scrape each result into LLM-ready markdown (costs more
+   * per the provider; off by default). */
+  scrape?: boolean;
   /** HTTP proxy for the search backend, e.g. "http://127.0.0.1:7890".
    * Falls back to the HTTPS_PROXY/https_proxy environment variables. */
   proxy?: string;
@@ -44,10 +58,15 @@ export interface MarifoldWebSearchConfig {
 export const DEFAULT_WEB_SEARCH_CONFIG: MarifoldWebSearchConfig = {
   enabled: false,
   maxResults: 5,
+  provider: 'duckduckgo',
 };
 
 export function resolveWebSearchConfig(partial?: Partial<MarifoldWebSearchConfig>): MarifoldWebSearchConfig {
-  return { ...DEFAULT_WEB_SEARCH_CONFIG, ...(partial ?? {}) };
+  // Drop undefined values so an absent key never clobbers a default.
+  const defined = Object.fromEntries(
+    Object.entries(partial ?? {}).filter(([, value]) => value !== undefined),
+  ) as Partial<MarifoldWebSearchConfig>;
+  return { ...DEFAULT_WEB_SEARCH_CONFIG, ...defined };
 }
 
 export interface MarifoldProviderConfig {

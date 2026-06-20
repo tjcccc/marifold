@@ -90,7 +90,7 @@ function fakeCtx(): { ctx: CommandContext; calls: Record<string, unknown[]> } {
     setThink: record('setThink'), openModelPicker: record('openModelPicker'), openProfilePicker: record('openProfilePicker'),
     openSkills: record('openSkills'), showPermissions: record('showPermissions'), showHelp: record('showHelp'),
     showSessions: record('showSessions'), runDoctor: record('runDoctor'), installSkill: record('installSkill'),
-    search: record('search'), readFile: record('readFile'), setImage: record('setImage'),
+    readFile: record('readFile'), setImage: record('setImage'),
     remember: record('remember'), forget: record('forget'), deleteMemory: record('deleteMemory'),
   } as unknown as CommandContext;
   return { ctx, calls };

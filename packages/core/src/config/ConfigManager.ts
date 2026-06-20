@@ -1,6 +1,13 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { LoadedMarifoldConfig, MarifoldConfig, MarifoldProviderConfig, ProviderType } from './ConfigSchema';
+import {
+  LoadedMarifoldConfig,
+  MarifoldConfig,
+  MarifoldProviderConfig,
+  MarifoldWebSearchConfig,
+  ProviderType,
+  resolveWebSearchConfig,
+} from './ConfigSchema';
 import { MarifoldError } from '../errors/MarifoldError';
 import { resolveUserPath } from '../workspace/WorkspacePaths';
 import { getProviderRegistryEntry, providerConfigFromRegistry } from './ProviderRegistry';
@@ -87,6 +94,17 @@ export class ConfigManager {
     this.registerModelOption(provider, model);
     this.save();
     return { configPath: this.configPath, key: 'models.options', value: `${provider}/${model}` };
+  }
+
+  /** Merge changes into the [web_search] section (undefined keys are left as-is)
+   * and persist. Used by `marifold config search`. */
+  updateWebSearch(partial: Partial<MarifoldWebSearchConfig>): ConfigSetResult {
+    const defined = Object.fromEntries(
+      Object.entries(partial).filter(([, value]) => value !== undefined),
+    ) as Partial<MarifoldWebSearchConfig>;
+    this.config.webSearch = { ...resolveWebSearchConfig(this.config.webSearch), ...defined };
+    this.save();
+    return { configPath: this.configPath, key: 'web_search.provider', value: this.config.webSearch.provider };
   }
 
   removeModel(provider: string, model: string): ConfigRemoveModelResult {
@@ -287,8 +305,12 @@ export function renderMarifoldConfig(config: MarifoldConfig): string {
     '[web_search]',
     `enabled = ${config.webSearch.enabled}`,
     `max_results = ${config.webSearch.maxResults}`,
+    `provider = ${tomlString(config.webSearch.provider)}`,
+    optionalStringLine('api_key_env', config.webSearch.apiKeyEnv),
+    optionalStringLine('api_key', config.webSearch.apiKey),
+    ...(config.webSearch.scrape ? ['scrape = true'] : []),
     ...(config.webSearch.proxy ? [`proxy = ${tomlString(config.webSearch.proxy)}`] : []),
-  ].join('\n');
+  ].filter(Boolean).join('\n');
 
   const providerTables = Object.entries(config.providers)
     .sort(([a], [b]) => a.localeCompare(b))

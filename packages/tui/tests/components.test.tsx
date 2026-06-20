@@ -2,11 +2,25 @@ import { describe, expect, it, vi } from 'vitest';
 import { render } from 'ink-testing-library';
 import type { ApprovalRequest } from '@marifold/core';
 import { Transcript } from '../src/ui/Transcript.js';
+import { Markdown } from '../src/ui/Markdown.js';
 import { ApprovalModal } from '../src/ui/ApprovalModal.js';
 import { SelectList } from '../src/ui/SelectList.js';
 import type { TranscriptItem } from '../src/core/appState.js';
 
 const delay = () => new Promise(resolve => setTimeout(resolve, 20));
+
+describe('Markdown math normalization', () => {
+  it('renders inline LaTeX temperatures as plain unicode, leaving currency alone', () => {
+    const frame = render(
+      <Markdown text={'Range ($\\text{23.2}^\\circ\\text{C}$ to $\\text{25.6}^\\circ\\text{C}$), about $30 total.'} />,
+    ).lastFrame() ?? '';
+    expect(frame).toContain('23.2°C');
+    expect(frame).toContain('25.6°C');
+    expect(frame).not.toContain('\\text');
+    expect(frame).not.toContain('\\circ');
+    expect(frame).toContain('$30 total'); // plain currency untouched
+  });
+});
 
 describe('Transcript', () => {
   it('renders user, assistant, tool, and notice rows', () => {
