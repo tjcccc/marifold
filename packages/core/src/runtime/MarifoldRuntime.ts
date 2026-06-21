@@ -10,7 +10,7 @@ import { WriteFileTool } from '../agent/tools/WriteFileTool';
 import { AgentTool, ToolRegistry } from '../agent/ToolRegistry';
 import { ChatGptRefreshedTokens, refreshChatGptAccessToken } from '../config/ChatGptTokenRefresh';
 import { ConfigManager } from '../config/ConfigManager';
-import { LoadedMarifoldConfig, ProfileDetail, ProfileSummary, resolveWebSearchConfig, SessionDetail, SessionSummary } from '../config/ConfigSchema';
+import { LoadedMarifoldConfig, ProfileDetail, ProfileMode, ProfileSummary, resolveWebSearchConfig, SessionDetail, SessionSummary } from '../config/ConfigSchema';
 import { exchangeGitHubTokenForCopilotToken } from '../config/GitHubCopilotAuth';
 import { createSearchBackend } from '../search/createSearchBackend';
 import { formatSearchResults, SearchBackend } from '../search/SearchBackend';
@@ -28,6 +28,7 @@ import {
 } from '../memory/MemoryControls';
 import type { MemoryControlPayloads } from '../memory/MemoryControls';
 import { ProfileResolver } from '../profiles/ProfileResolver';
+import { ProfileManager } from '../profiles/ProfileManager';
 import { Scheduler } from '../schedule/Scheduler';
 import { ScheduleCreateInput, ScheduleState, ScheduleStore, ScheduleUpdateInput } from '../schedule/ScheduleStore';
 import { SessionResolver } from '../sessions/SessionResolver';
@@ -50,6 +51,7 @@ export interface MarifoldRuntimeOptions {
 
 export class MarifoldRuntime {
   private readonly profileResolver: ProfileResolver;
+  private readonly profileManager: ProfileManager;
   private readonly sessionResolver: SessionResolver;
   private readonly providerFactory: ProviderFactory;
   private readonly memoryStore: MemoryStore;
@@ -60,6 +62,7 @@ export class MarifoldRuntime {
   constructor(private readonly options: MarifoldRuntimeOptions) {
     const { config, configPath } = options.loadedConfig;
     this.profileResolver = new ProfileResolver(config.paths.profilesDir);
+    this.profileManager = new ProfileManager(config.paths.profilesDir);
     this.sessionResolver = new SessionResolver(config.paths.sessionsDb);
     this.providerFactory = new ProviderFactory(config, configPath);
     this.memoryStore = new MemoryStore(config.paths.profilesDir);
@@ -76,8 +79,9 @@ export class MarifoldRuntime {
     const provider = request.provider ?? profileSettings.provider ?? config.default.provider;
     const model = request.model ?? profileSettings.model ?? config.default.model;
     const think = request.think ?? config.default.think;
+    const mode = profileSettings.mode ?? 'agent';
     if (!provider || !model) throw MarifoldError.missingProviderModel(configPath);
-    return { profile, provider, model, think };
+    return { profile, provider, model, think, mode };
   }
 
   async ask(request: MarifoldRunRequest): Promise<MarifoldAskResponse> {
@@ -242,6 +246,12 @@ export class MarifoldRuntime {
 
   getProfile(name: string): ProfileDetail {
     return this.profileResolver.detail(name);
+  }
+
+  /** Persist a profile's default TUI mode to its profile.toml. Returns the
+   * mode that was written. */
+  setProfileMode(name: string, mode: ProfileMode): ProfileMode {
+    return this.profileManager.setMode(name, mode).mode;
   }
 
   listSessions(limit?: number, profileName?: string): SessionSummary[] {

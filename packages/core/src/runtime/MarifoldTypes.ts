@@ -1,4 +1,5 @@
 import type { ImageInput } from '@priest-ai/core';
+import type { ProfileMode } from '../config/ConfigSchema';
 
 export interface MarifoldRunRequest {
   prompt: string;
@@ -21,6 +22,8 @@ export interface MarifoldResolvedSettings {
   provider: string;
   model: string;
   think: boolean;
+  /** The profile's default TUI mode (`agent` unless the profile overrides it). */
+  mode: ProfileMode;
 }
 
 export interface MarifoldRunError {

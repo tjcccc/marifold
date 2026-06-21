@@ -2,6 +2,17 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-06-21 — v0.20.0 — Per-profile default mode + TUI vertical-rhythm polish
+
+- **Per-profile default mode.** `profile.toml` gains `mode = "agent" | "chat"` (parsed + validated in `ProfileResolver`; rejects anything else). `agent` stays the global default — a profile with no `mode` launches in agent. `resolveSettings` now surfaces `mode`, `runTui` passes it as the initial mode, and switching profiles adopts the target profile's default mode (the switch notice shows it).
+- **`/agent` & `/chat` gain a `default` form.** Bare `/agent`/`/chat` switch the **current session** only (unchanged); `/agent default` / `/chat default` additionally **persist** to the active profile's `profile.toml` via new `ProfileManager.setMode` (an `upsertMode` writer that preserves every other key, symmetric with the model-override writer) exposed as `runtime.setProfileMode`. Persisting to a profile with no on-disk directory (e.g. the pure built-in `default`) reports a clear error — consistent with the existing model-override constraint.
+- **Fix: run-clock reset on resize.** `RunStatus` unmounts during a resize burst (`!resizing && running`), so its `useState(Date.now())` restarted the elapsed counter at 0 on remount. The start time is now anchored in `App` (a ref above the resize gate) and passed in as `startedAt`, so the counter — and the seeded activity verb — survive a resize.
+- **Fix: spacing around the run-summary footer + unified vertical rhythm.** Introduced `topGap(kind, prevKind)`: one blank line separates adjacent transcript items of **different** kind, while a run of same-kind items (e.g. a tool-call stream) stays tight. Applied in both render paths (the `<Static>` map and the `Transcript` component); replaces the old per-kind margin rules and the short-lived `notice.spaced` flag. Result: user → plan → tools(tight) → response → verify → time/token each get one blank, and the live region is separated from the committed transcript by a single blank.
+- **Fix: stale `<Static>` header on mode switch.** The header (which shows mode) is append-only, so a bare `/chat`/`/agent` flipped only the live `StatusLine`. `setMode`/`setDefaultMode` now `repaint()` (same mechanism as profile-switch/Ctrl+L) so the top and bottom stay in sync.
+- Version 0.19.0 → 0.20.0 across all packages + CLI `.version`.
+- Verified: core 141 (+3 profile-mode parse/validate/round-trip), tui 27 (+1 mode-command routing), service 4 — all pass; all 4 packages build/typecheck green.
+- **Open**: persisting a default mode requires the profile to have a directory on disk (built-in `default` with no folder can't be written to) — acceptable and consistent with model overrides, but a future scaffold-on-write could smooth it.
+
 ## 2026-06-20 — v0.19.0 — Markdown skills (SKILL.md folders) + TUI fixes
 
 - **Skills are now markdown, Claude Code style.** `marifold.skill.v0` is a `SKILL.md` with a YAML frontmatter block (name/description/mode/variables) + a prompt body — no more TOML (TOML stays for config and the `skillapp` UI layout). New `yaml` dep in core; `schema:` is optional; `mode` defaults to `chat` (safest for weak local models). `SkillValidator` parses frontmatter+body.

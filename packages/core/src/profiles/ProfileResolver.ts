@@ -3,7 +3,7 @@ import * as path from 'path';
 import { parse } from 'smol-toml';
 import { Profile, ProfileLoader } from '@priest-ai/core';
 import { MarifoldError } from '../errors/MarifoldError';
-import { ProfileDetail, ProfileFileSummary, ProfileSettings, ProfileSummary } from '../config/ConfigSchema';
+import { ProfileDetail, ProfileFileSummary, ProfileMode, ProfileSettings, ProfileSummary } from '../config/ConfigSchema';
 
 const SAFE_PROFILE_NAME = /^[A-Za-z0-9_-]+$/;
 
@@ -41,13 +41,20 @@ export class ProfileResolver implements ProfileLoader {
     const provider = optionalString(raw.provider, `${name}.profile.toml provider`);
     const model = optionalString(raw.model, `${name}.profile.toml model`);
     const memories = optionalBoolean(raw.memories, `${name}.profile.toml memories`) ?? true;
+    const rawMode = optionalString(raw.mode, `${name}.profile.toml mode`);
+    if (rawMode !== undefined && rawMode !== 'agent' && rawMode !== 'chat') {
+      throw MarifoldError.profileInvalid(
+        `Profile '${name}' has an invalid mode '${rawMode}' in profile.toml; use "agent" or "chat".`,
+        name,
+      );
+    }
     if ((provider && !model) || (!provider && model)) {
       throw MarifoldError.profileInvalid(
         `Profile '${name}' must set both provider and model in profile.toml, or neither.`,
         name,
       );
     }
-    return { provider, model, memories };
+    return { provider, model, memories, mode: rawMode as ProfileMode | undefined };
   }
 
   list(): ProfileSummary[] {

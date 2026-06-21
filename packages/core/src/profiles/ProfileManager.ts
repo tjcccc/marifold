@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { MarifoldError } from '../errors/MarifoldError';
 import { ensureProfileMemoryFiles } from '../memory/MemoryStore';
+import type { ProfileMode } from '../config/ConfigSchema';
 
 const SAFE_PROFILE_NAME = /^[A-Za-z0-9_-]+$/;
 
@@ -23,6 +24,9 @@ const PROFILE_TOML_STUB = `# Optional per-profile model override.
 
 memories = true
 
+# Default TUI mode for this profile: "agent" or "chat" (default "agent").
+# mode = "agent"
+
 # provider = "ollama"
 # model = "gemma4:e4b"
 `;
@@ -39,6 +43,12 @@ export interface ProfileModelOverrideResult {
   provider?: string;
   model?: string;
   cleared: boolean;
+}
+
+export interface ProfileModeResult {
+  name: string;
+  path: string;
+  mode: ProfileMode;
 }
 
 export interface ProfileRenameResult {
@@ -97,6 +107,17 @@ export class ProfileManager {
       fs.writeFileSync(profileToml, removeModelOverride(fs.readFileSync(profileToml, 'utf-8')));
     }
     return { name, path: profileToml, cleared: true };
+  }
+
+  /** Persist the profile's default TUI mode into its profile.toml, preserving
+   * every other key. Used by the TUI's `/agent default` / `/chat default`. */
+  setMode(name: string, mode: ProfileMode): ProfileModeResult {
+    assertSafeName(name);
+    const profileDir = this.requireProfileDir(name);
+    const profileToml = path.join(profileDir, 'profile.toml');
+    const current = fs.existsSync(profileToml) ? fs.readFileSync(profileToml, 'utf-8') : PROFILE_TOML_STUB;
+    fs.writeFileSync(profileToml, upsertMode(current, mode));
+    return { name, path: profileToml, mode };
   }
 
   rename(from: string, to: string): ProfileRenameResult {
@@ -173,6 +194,13 @@ function upsertProfileToml(text: string, provider: string, model: string): strin
   const cleaned = removeModelOverride(text).trimEnd();
   const prefix = cleaned ? `${cleaned}\n\n` : '';
   return `${prefix}provider = ${tomlString(provider)}\nmodel = ${tomlString(model)}\n`;
+}
+
+function upsertMode(text: string, mode: ProfileMode): string {
+  const lines = text.split(/\r?\n/).filter(line => !line.trimStart().startsWith('mode ='));
+  const cleaned = lines.join('\n').trimEnd();
+  const prefix = cleaned ? `${cleaned}\n\n` : '';
+  return `${prefix}mode = ${tomlString(mode)}\n`;
 }
 
 function removeModelOverride(text: string): string {

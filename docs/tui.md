@@ -57,6 +57,12 @@ prompt.
   as a normal message.
 - `/stop` (or Esc / Ctrl+C while running) cancels the current run.
 - `/skills` opens an arrow-key list: Enter runs the selected skill, Del removes it.
+- `/agent` / `/chat` switch the **current session's** mode. `/agent default` /
+  `/chat default` additionally persist it as the active profile's default mode
+  (written to that profile's `profile.toml` as `mode = "agent" | "chat"`), so it
+  also applies to future launches. A profile with no `mode` set launches in
+  `agent` (the global default); switching profiles adopts the target profile's
+  default mode.
 
 ## Skills
 

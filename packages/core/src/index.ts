@@ -56,6 +56,7 @@ export type {
   WebSearchProvider,
   ProfileDetail,
   ProfileFileSummary,
+  ProfileMode,
   ProfileSettings,
   ProfileSummary,
   SessionDetail,

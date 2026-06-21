@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { ProfileResolver } from '../src';
+import { ProfileResolver, ProfileManager } from '../src';
 
 const tempDirs: string[] = [];
 
@@ -74,6 +74,39 @@ describe('ProfileResolver', () => {
     expect(detail.files.profile.content).toBe('Writer identity');
     expect(detail.files.rules.content).toBe('Writer rules');
     expect(detail.files.custom.content).toBe('Writer custom');
+  });
+
+  it('loads the profile default mode from profile.toml', () => {
+    const root = tempDir();
+    const profileDir = path.join(root, 'reader');
+    fs.mkdirSync(profileDir, { recursive: true });
+    fs.writeFileSync(path.join(profileDir, 'profile.toml'), 'memories = true\nmode = "chat"\n');
+
+    const settings = new ProfileResolver(root).loadSettings('reader');
+
+    expect(settings.mode).toBe('chat');
+  });
+
+  it('rejects an invalid profile mode', () => {
+    const root = tempDir();
+    const profileDir = path.join(root, 'broken');
+    fs.mkdirSync(profileDir, { recursive: true });
+    fs.writeFileSync(path.join(profileDir, 'profile.toml'), 'mode = "wizard"\n');
+
+    expect(() => new ProfileResolver(root).loadSettings('broken')).toThrow(/invalid mode/i);
+  });
+
+  it('persists a default mode via ProfileManager and preserves other keys', () => {
+    const root = tempDir();
+    const profileDir = path.join(root, 'coder');
+    fs.mkdirSync(profileDir, { recursive: true });
+    fs.writeFileSync(path.join(profileDir, 'profile.toml'), 'memories = false\nprovider = "ollama"\nmodel = "codellama"\n');
+
+    const result = new ProfileManager(root).setMode('coder', 'chat');
+    const settings = new ProfileResolver(root).loadSettings('coder');
+
+    expect(result.mode).toBe('chat');
+    expect(settings).toEqual({ provider: 'ollama', model: 'codellama', memories: false, mode: 'chat' });
   });
 
   it('returns the built-in default profile when no default profile exists', () => {

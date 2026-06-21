@@ -25,7 +25,7 @@ import { parseInput } from '../core/inputGrammar.js';
 import { listCommands, runCommand, type CommandContext } from '../core/commands.js';
 import { bindSkillArgs, skillUsage } from '../core/skills.js';
 import { Header } from './Header.js';
-import { TranscriptRow } from './Transcript.js';
+import { TranscriptRow, topGap } from './Transcript.js';
 import { InputBox, type CompletionItem } from './InputBox.js';
 import { StatusLine } from './StatusLine.js';
 import { RunStatus } from './RunStatus.js';
@@ -44,6 +44,7 @@ export interface AppProps {
     provider: string;
     model: string;
     think: boolean;
+    mode?: Mode;
     cwd: string;
     version: string;
     latestVersion?: string;
@@ -72,6 +73,7 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
       model: initial.model,
       cwd: initial.cwd,
       version: initial.version,
+      ...(initial.mode ? { mode: initial.mode } : {}),
       ...(initial.latestVersion ? { latestVersion: initial.latestVersion } : {}),
     }),
   );
@@ -114,6 +116,15 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
     if (wasResizing.current && !resizing) repaint();
     wasResizing.current = resizing;
   }, [resizing, repaint]);
+  // Anchor the run clock here so it survives RunStatus unmounting during a
+  // resize burst (`!resizing && state.running` below). If RunStatus owned the
+  // start time, remounting after the resize settled would restart it at 0.
+  const runStartedAt = useRef(0);
+  if (state.running) {
+    if (runStartedAt.current === 0) runStartedAt.current = Date.now();
+  } else {
+    runStartedAt.current = 0;
+  }
   // Ctrl+L forces a clean repaint. Inactive while an overlay/modal owns input,
   // so it never competes with the picker's or approval modal's key handling.
   useInput((input, key) => {
@@ -576,10 +587,11 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
     try {
       const settings = runtime.resolveSettings({ profile: value });
       dispatch({ type: 'set_profile', profile: settings.profile, provider: settings.provider, model: settings.model });
+      dispatch({ type: 'set_mode', mode: settings.mode });
       dispatch({ type: 'new_session', sessionId: undefined });
       sessionGrantsRef.current.clear();
       refreshSkills();
-      notify(`Switched to profile: ${settings.profile} · ${settings.provider}/${settings.model} (new session)`, 'info');
+      notify(`Switched to profile: ${settings.profile} · ${settings.provider}/${settings.model} · ${settings.mode} (new session)`, 'info');
     } catch (error) {
       notify(`Could not switch profile: ${errorText(error)}`, 'error');
     }
@@ -588,7 +600,20 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
   // CommandContext bound to the live handlers.
   const commandContext = useMemo<CommandContext>(() => ({
     notify,
-    setMode: (mode: Mode) => { dispatch({ type: 'set_mode', mode }); notify(`Mode: ${mode}`, 'info'); },
+    // The Header (mode shown) lives in the append-only <Static>, so a mode
+    // change needs a repaint to refresh it — otherwise the top line goes stale
+    // while the live StatusLine flips. repaint() remounts Static with the new mode.
+    setMode: (mode: Mode) => { dispatch({ type: 'set_mode', mode }); notify(`Mode: ${mode}`, 'info'); repaint(); },
+    setDefaultMode: (mode: Mode) => {
+      try {
+        runtime.setProfileMode(stateRef.current.profile, mode);
+        dispatch({ type: 'set_mode', mode });
+        notify(`Default mode for ${stateRef.current.profile} set to ${mode} (this and future sessions).`, 'info');
+        repaint();
+      } catch (error) {
+        notify(`Could not set default mode: ${errorText(error)}`, 'error');
+      }
+    },
     newSession: () => { dispatch({ type: 'new_session', sessionId: undefined }); notify('Started a new session.', 'info'); },
     clear: () => dispatch({ type: 'clear' }),
     stop,
@@ -614,7 +639,7 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
   }), [
     notify, stop, steer, exit, openModelPicker, openProfilePicker, selectProfile, openSkills,
     showPermissions, showHelp, showStatus, copyLast, showSessions, runDoctor, installSkill,
-    readFileCmd, setImage, remember, forget, deleteMemory,
+    readFileCmd, setImage, remember, forget, deleteMemory, repaint, runtime,
   ]);
 
   // --- Input routing -------------------------------------------------------
@@ -770,31 +795,35 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
   return (
     <Box flexDirection="column">
       <Static key={staticEpoch} items={staticItems}>
-        {item =>
-          'kind' in item ? (
-            <Box
-              key={item.id}
-              paddingX={1}
-              marginTop={item.kind === 'user' || item.kind === 'verification' ? 1 : 0}
-              marginBottom={item.kind === 'plan' ? 1 : 0}
-            >
+        {(item, index) => {
+          if (!('kind' in item)) {
+            // The banner (header) leads the scrollback; the next row's own top
+            // gap separates it from the first turn.
+            return (
+              <Box key={item.id} marginTop={1}>
+                <Header state={state} />
+              </Box>
+            );
+          }
+          const prev = staticItems[index - 1];
+          const prevKind = prev && 'kind' in prev ? prev.kind : 'banner';
+          return (
+            <Box key={item.id} paddingX={1} marginTop={topGap(item.kind, prevKind)}>
               <TranscriptRow item={item} />
             </Box>
-          ) : (
-            <Box key={item.id} marginTop={1} marginBottom={1}>
-              <Header state={state} />
-            </Box>
-          )
-        }
+          );
+        }}
       </Static>
-      <Box flexDirection="column">
+      {/* A single blank separates the committed transcript from the live region
+          (a streaming response, or the input area when idle). */}
+      <Box flexDirection="column" marginTop={1}>
         {!resizing && liveItem ? (
           <Box paddingX={1}>
             <TranscriptRow item={liveItem} />
           </Box>
         ) : null}
         {!resizing && state.running ? (
-          <RunStatus activity={state.activity} think={think} steeringQueued={steeringCount} />
+          <RunStatus startedAt={runStartedAt.current} activity={state.activity} think={think} steeringQueued={steeringCount} />
         ) : null}
         {activeOverlay ?? (
           <InputBox

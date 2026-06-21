@@ -85,7 +85,7 @@ function fakeCtx(): { ctx: CommandContext; calls: Record<string, unknown[]> } {
   const calls: Record<string, unknown[]> = {};
   const record = (name: string) => (...args: unknown[]) => { calls[name] = args; };
   const ctx = {
-    notify: record('notify'), setMode: record('setMode'), newSession: record('newSession'),
+    notify: record('notify'), setMode: record('setMode'), setDefaultMode: record('setDefaultMode'), newSession: record('newSession'),
     clear: record('clear'), stop: record('stop'), steer: record('steer'), exit: record('exit'),
     setThink: record('setThink'), openModelPicker: record('openModelPicker'), openProfilePicker: record('openProfilePicker'),
     openSkills: record('openSkills'), showPermissions: record('showPermissions'), showHelp: record('showHelp'),
@@ -106,6 +106,15 @@ describe('commands', () => {
     expect(runCommand(ctx, 'quit', '')).toBe(true); // alias of exit
     expect(calls.exit).toBeDefined();
     expect(runCommand(ctx, 'nope', '')).toBe(false);
+  });
+
+  it('routes mode commands: bare = session, "default" = persist', () => {
+    const { ctx, calls } = fakeCtx();
+    runCommand(ctx, 'agent', '');
+    expect(calls.setMode).toEqual(['agent']);
+    expect(calls.setDefaultMode).toBeUndefined();
+    runCommand(ctx, 'chat', 'default');
+    expect(calls.setDefaultMode).toEqual(['chat']);
   });
 
   it('validates think argument', () => {

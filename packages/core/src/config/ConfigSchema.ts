@@ -98,10 +98,16 @@ export interface LoadedMarifoldConfig {
   foundConfig: boolean;
 }
 
+/** A profile's default interaction mode for the TUI: autonomous `agent` (the
+ * global default) or single-turn `chat`. */
+export type ProfileMode = 'agent' | 'chat';
+
 export interface ProfileSettings {
   provider?: string;
   model?: string;
   memories: boolean;
+  /** Default TUI mode for this profile; undefined falls back to `agent`. */
+  mode?: ProfileMode;
 }
 
 export interface ProfileSummary {

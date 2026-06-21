@@ -13,21 +13,24 @@ const VERBS = [
 /**
  * Transient run line shown above the input while a task is active: a verb,
  * elapsed time, the think/effort hint, any queued steering, and the cancel
- * hint. It mounts only while running, so its elapsed clock resets per run.
+ * hint. The `startedAt` anchor is owned by App so the elapsed clock keeps
+ * counting even when this component unmounts/remounts during a resize burst.
  *
  * Token counts are intentionally omitted — they are not part of the
  * renderer-agnostic AgentEvent contract today.
  */
 export function RunStatus({
+  startedAt,
   activity,
   think,
   steeringQueued,
 }: {
+  startedAt: number;
   activity?: string;
   think: boolean;
   steeringQueued: number;
 }): React.ReactElement {
-  const [start] = useState(() => Date.now());
+  const start = startedAt;
   const [, tick] = useState(0);
   useEffect(() => {
     const timer = setInterval(() => tick(n => n + 1), 1000);

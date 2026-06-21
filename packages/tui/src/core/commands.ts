@@ -9,6 +9,8 @@ import type { Mode, NoticeTone } from './appState.js';
 export interface CommandContext {
   notify(text: string, tone?: NoticeTone): void;
   setMode(mode: Mode): void;
+  /** Persist `mode` as the current profile's default (profile.toml) and apply it now. */
+  setDefaultMode(mode: Mode): void;
   newSession(): void;
   clear(): void;
   stop(): void;
@@ -47,8 +49,16 @@ const COMMANDS: CommandSpec[] = [
   { name: 'copy', summary: "Copy the last response's original text to the clipboard.", run: ctx => ctx.copyLast() },
   { name: 'exit', aliases: ['quit'], summary: 'Leave the TUI.', run: ctx => ctx.exit() },
   { name: 'new', summary: 'Start a fresh session (clear transcript).', run: ctx => ctx.newSession() },
-  { name: 'agent', summary: 'Switch to agent mode (default).', run: ctx => ctx.setMode('agent') },
-  { name: 'chat', summary: 'Switch to chat mode.', run: ctx => ctx.setMode('chat') },
+  {
+    name: 'agent',
+    summary: 'Agent mode: /agent (this session) or /agent default (save to profile).',
+    run: (ctx, args) => (args.trim() === 'default' ? ctx.setDefaultMode('agent') : ctx.setMode('agent')),
+  },
+  {
+    name: 'chat',
+    summary: 'Chat mode: /chat (this session) or /chat default (save to profile).',
+    run: (ctx, args) => (args.trim() === 'default' ? ctx.setDefaultMode('chat') : ctx.setMode('chat')),
+  },
   { name: 'clear', summary: 'Clear the transcript.', run: ctx => ctx.clear() },
   { name: 'stop', summary: 'Cancel the running task.', run: ctx => ctx.stop() },
   {

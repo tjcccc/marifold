@@ -61,6 +61,7 @@ export async function runTui(options: RunTuiOptions): Promise<void> {
       provider: settings.provider,
       model: settings.model,
       think: settings.think,
+      mode: settings.mode,
       cwd: process.cwd(),
       version: readVersion(),
     };

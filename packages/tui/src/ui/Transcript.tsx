@@ -10,6 +10,17 @@ const NOTICE_COLOR: Record<NoticeTone, string> = {
   error: 'red',
 };
 
+/**
+ * Vertical rhythm for the transcript: one blank line separates two adjacent
+ * items of different kind, while a run of same-kind items (e.g. a stream of
+ * tool request/result lines) stays tight as one visual block. `prevKind` is
+ * the kind of the row above — pass `'banner'` for the header, `undefined` when
+ * there is no row above.
+ */
+export function topGap(kind: string, prevKind: string | undefined): 0 | 1 {
+  return prevKind !== undefined && prevKind !== kind ? 1 : 0;
+}
+
 export function TranscriptRow({ item }: { item: TranscriptItem }): React.ReactElement | null {
   switch (item.kind) {
     case 'user': {
@@ -91,12 +102,8 @@ export function TranscriptRow({ item }: { item: TranscriptItem }): React.ReactEl
 export function Transcript({ items }: { items: TranscriptItem[] }): React.ReactElement {
   return (
     <Box flexDirection="column" paddingX={1}>
-      {items.map(item => (
-        <Box
-          key={item.id}
-          marginTop={item.kind === 'user' || item.kind === 'verification' ? 1 : 0}
-          marginBottom={item.kind === 'plan' ? 1 : 0}
-        >
+      {items.map((item, i) => (
+        <Box key={item.id} marginTop={topGap(item.kind, items[i - 1]?.kind)}>
           <TranscriptRow item={item} />
         </Box>
       ))}
