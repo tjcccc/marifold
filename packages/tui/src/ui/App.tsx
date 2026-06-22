@@ -20,7 +20,7 @@ import type {
   MarifoldSkill,
   ToolKind,
 } from '@marifold/core';
-import { appReducer, createInitialState, type Mode, type NoticeTone, type TranscriptItem } from '../core/appState.js';
+import { appReducer, createInitialState, type Mode, type NoticeTone, type TranscriptItem, type TranscriptItemData } from '../core/appState.js';
 import { parseInput } from '../core/inputGrammar.js';
 import { listCommands, runCommand, type CommandContext } from '../core/commands.js';
 import { bindSkillArgs, skillUsage } from '../core/skills.js';
@@ -48,6 +48,8 @@ export interface AppProps {
     cwd: string;
     version: string;
     latestVersion?: string;
+    sessionId?: string;
+    transcript?: TranscriptItemData[];
   };
 }
 
@@ -75,6 +77,8 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
       version: initial.version,
       ...(initial.mode ? { mode: initial.mode } : {}),
       ...(initial.latestVersion ? { latestVersion: initial.latestVersion } : {}),
+      ...(initial.sessionId ? { sessionId: initial.sessionId } : {}),
+      ...(initial.transcript ? { transcript: initial.transcript } : {}),
     }),
   );
   const [overlay, setOverlay] = useState<Overlay | null>(null);
@@ -169,6 +173,17 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
   const notify = useCallback((text: string, tone: NoticeTone = 'info') => {
     dispatch({ type: 'notice', tone, text });
   }, []);
+
+  // Confirm a `--resume` launch with a notice below the replayed turns, so the
+  // boundary between prior history and the current session is clear.
+  const resumeNoticeShown = useRef(false);
+  useEffect(() => {
+    if (resumeNoticeShown.current) return;
+    resumeNoticeShown.current = true;
+    if (initial.sessionId) {
+      notify(`Resumed session ${initial.sessionId.slice(0, 8)} — your next message continues it.`, 'info');
+    }
+  }, [notify, initial.sessionId]);
 
   const refreshSkills = useCallback(() => {
     try {
@@ -571,6 +586,13 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
   }, [runtime, notify]);
 
   const steer = useCallback((text: string) => {
+    // Steering only has meaning inside the agent loop; chat is a single-turn
+    // request that never reads the steering queue, so a `/btw` there would be
+    // silently dropped. Reject it with a clear message instead.
+    if (stateRef.current.mode === 'chat') {
+      notify('/btw (steering) only applies in agent mode.', 'warn');
+      return;
+    }
     if (stateRef.current.running) {
       steeringRef.current.push(text);
       setSteeringCount(count => count + 1);

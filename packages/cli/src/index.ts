@@ -19,13 +19,17 @@ const printer = new ConsolePrinter();
 const program = new Command()
   .name('marifold')
   .description('Marifold local-first AI workspace CLI.')
-  .version('0.20.0')
+  .version('0.21.0')
   // Allow a root --profile (for the bare-`marifold` TUI launch) to coexist with
   // subcommand options of the same name: root options must precede the
   // subcommand, and options after the subcommand bind to it.
   .enablePositionalOptions()
   .option('--config <path>', 'Path to Marifold config.toml.')
-  .option('--profile <name>', 'Profile to launch the TUI with.');
+  .option('--profile <name>', 'Profile to launch the TUI with.')
+  .option(
+    '--resume [id]',
+    'Resume a session: bare --resume continues the most recent session for the profile; --resume <id> continues that specific session.',
+  );
 
 registerInitCommand(program, printer);
 registerAgentCommand(program, printer);
@@ -48,10 +52,14 @@ const importEsm = new Function('specifier', 'return import(specifier);') as (
 ) => Promise<typeof import('@marifold/tui')>;
 
 program.action(async () => {
-  const options = program.opts<{ profile?: string }>();
+  const options = program.opts<{ profile?: string; resume?: string | boolean }>();
   const loadedConfig = loadConfig(program);
   const { runTui } = await importEsm('@marifold/tui');
-  await runTui({ loadedConfig, ...(options.profile ? { profile: options.profile } : {}) });
+  await runTui({
+    loadedConfig,
+    ...(options.profile ? { profile: options.profile } : {}),
+    ...(options.resume !== undefined ? { resume: options.resume } : {}),
+  });
 });
 
 program.parseAsync(process.argv).catch(error => {

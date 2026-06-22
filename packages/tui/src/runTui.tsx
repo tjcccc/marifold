@@ -4,6 +4,7 @@ import { MarifoldRuntime } from '@marifold/core';
 import type { LoadedMarifoldConfig, MarifoldResolvedSettings, ProfileSummary } from '@marifold/core';
 import { App } from './ui/App.js';
 import { SelectList } from './ui/SelectList.js';
+import type { TranscriptItemData } from './core/appState.js';
 
 /** This package's version, read from its own package.json at runtime so the
  * header banner never drifts from the published version. */
@@ -20,6 +21,11 @@ export interface RunTuiOptions {
   loadedConfig: LoadedMarifoldConfig;
   /** Profile to launch with; defaults to the configured default profile. */
   profile?: string;
+  /** Resume a session: `true` continues the most recent session for the
+   * resolved profile; a string continues that specific session id. The prior
+   * turns are replayed into the transcript and the next message continues the
+   * session's context. */
+  resume?: string | boolean;
 }
 
 /**
@@ -56,6 +62,28 @@ export async function runTui(options: RunTuiOptions): Promise<void> {
       return;
     }
 
+    // Resolve `--resume` to a concrete session before launch. A bare flag picks
+    // the most recent session for the resolved profile; an explicit id is looked
+    // up directly so a typo starts fresh with a clear message instead of
+    // silently creating an orphan session under the bad id. When a session is
+    // found, its turns seed the transcript so the prior conversation is shown.
+    let resumeSessionId: string | undefined;
+    let resumeTranscript: TranscriptItemData[] | undefined;
+    if (options.resume !== undefined) {
+      const id = typeof options.resume === 'string'
+        ? options.resume
+        : runtime.listSessions(1, settings.profile)[0]?.id;
+      const detail = id ? runtime.getSession(id) : undefined;
+      if (detail) {
+        resumeSessionId = detail.id;
+        resumeTranscript = detail.turns.map(turn => ({ kind: turn.role, text: turn.content }));
+      } else if (typeof options.resume === 'string') {
+        process.stderr.write(`Session not found: ${options.resume}. Starting a new session.\n`);
+      } else {
+        process.stderr.write(`No previous session for profile "${settings.profile}". Starting a new session.\n`);
+      }
+    }
+
     const initial = {
       profile: settings.profile,
       provider: settings.provider,
@@ -64,6 +92,8 @@ export async function runTui(options: RunTuiOptions): Promise<void> {
       mode: settings.mode,
       cwd: process.cwd(),
       version: readVersion(),
+      ...(resumeSessionId ? { sessionId: resumeSessionId } : {}),
+      ...(resumeTranscript ? { transcript: resumeTranscript } : {}),
     };
     // Render inline (like Claude Code / Codex), not in the alternate screen: the
     // banner and transcript live in the terminal's native scrollback, so the
@@ -88,6 +118,14 @@ export async function runTui(options: RunTuiOptions): Promise<void> {
   } finally {
     runtime.close();
   }
+  // Force the process to exit. On a programmatic exit (`/exit`, double Ctrl+C),
+  // Ink unmounts the React tree but leaves handles ref'd that keep the Node
+  // event loop alive — confirmed via getActiveResourcesInfo() to be the stdin
+  // TTY (Ink reads it in raw mode) plus a Timeout/Immediate from Ink's output
+  // throttle and React's scheduler. None of those are ours to cancel, so without
+  // this the CLI hangs instead of returning to the shell. Terminal teardown and
+  // runtime.close() have already run above, so exiting here is safe.
+  process.exit(process.exitCode ?? 0);
 }
 
 function tryResolve(runtime: MarifoldRuntime, profile?: string): MarifoldResolvedSettings | undefined {

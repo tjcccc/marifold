@@ -2,6 +2,20 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-06-22 — v0.21.0 — Session resume, provider add, and TUI/prompt polish
+
+- **`marifold --resume [id]`.** Bare `--resume` continues the most recent session for the resolved profile; `--resume <id>` continues that specific session (an unknown id starts fresh with a clear message). Prior turns are **replayed into the transcript** — `createInitialState` seeds the history with the reducer's own `item_${seq}` id scheme and advances `seq` past it, and a "Resumed session …" notice marks the boundary. No `--session` flag (one verb-flag; the in-TUI `/session` picker still handles interactive selection).
+- **`marifold provider add`.** Interactive registry-driven flow: pick a provider (arrow-key menu with a numbered fallback), enter the Server URL (default `http://127.0.0.1:11434` for Ollama — the remote-IP/Tailscale entry point), then it saves and pings the server for reachability. API providers capture only the env-var *name* (never the secret); OAuth stays in `model add`. Keeps one provider per registry name so model ids stay clean (`ollama/model`). `--base-url`/`--api-key-env` skip the prompts.
+- **Esc handling in prompts.** `InteractivePrompt.readUserMessage` gained `onEscape: 'cancel' | 'back'` (wires a keypress listener + AbortController; arrow keys carry their own names, so only a bare Esc matches). `provider add` uses it as a wizard: Esc at a text prompt steps **back** to the provider picker (new `PromptBackError`), Esc at the picker or Ctrl+C cancels.
+- **`/btw` disabled in chat mode.** `runChat` never reads the steering queue, so chat-mode `/btw` silently dropped text while reporting "Queued steering". `steer` now rejects it with `/btw (steering) only applies in agent mode.`
+- **Fix: `/exit` hang.** Programmatic exit left framework-owned handles alive (stdin TTY + Ink-throttle Timeout + React-scheduler Immediate, confirmed via `getActiveResourcesInfo()`), so the process never drained. `runTui` now force-exits after terminal teardown — a documented backstop, since the residual handles aren't ours to cancel.
+- **TUI:** submitted-prompt accent split into `DIM_ACCENT` (border + `>` marker) so it can be tuned apart from the header accent.
+- **Config:** default `timeout_seconds` 120 → 300 (template) for slow local large models; for streaming Ollama chat this is effectively a connect/first-token budget, for non-streaming/agent calls a hard cap.
+- Captured deferred design notes in `TODO.md`: consult-vs-transfer, "profiles as contacts" app model, per-profile memory invariant, and schema-typed linear agent pipelines (before group chat).
+- Version 0.20.0 → 0.21.0 across all packages + CLI `.version`.
+- Verified: core 141, tui 28 (+1 resume-seeding regression), service 4 — all pass; all 4 packages build/typecheck green. `provider add` validated against a temp config (remote unreachable, API env-only, real local Ollama "Reachable — 6 models").
+- **Open**: the interactive Esc-back loop and the `/exit` force-exit need a real-TTY manual check (auto-tests can't drive raw keystrokes). `model add` text prompts don't yet share the Esc-back affordance.
+
 ## 2026-06-21 — v0.20.0 — Per-profile default mode + TUI vertical-rhythm polish
 
 - **Per-profile default mode.** `profile.toml` gains `mode = "agent" | "chat"` (parsed + validated in `ProfileResolver`; rejects anything else). `agent` stays the global default — a profile with no `mode` launches in agent. `resolveSettings` now surfaces `mode`, `runTui` passes it as the initial mode, and switching profiles adopts the target profile's default mode (the switch notice shows it).

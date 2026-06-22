@@ -49,9 +49,14 @@ export interface InitialAppState {
   latestVersion?: string;
   mode?: Mode;
   sessionId?: string;
+  /** Pre-existing transcript to seed (e.g. a resumed session's turns). */
+  transcript?: TranscriptItemData[];
 }
 
 export function createInitialState(init: InitialAppState): AppState {
+  // Seed any provided history with the same `item_${seq}` id scheme the reducer
+  // uses, and start `seq` past it so later items continue the sequence.
+  const seeded = (init.transcript ?? []).map((item, index) => ({ ...item, id: `item_${index + 1}` }));
   return {
     profile: init.profile,
     provider: init.provider,
@@ -61,11 +66,11 @@ export function createInitialState(init: InitialAppState): AppState {
     version: init.version,
     ...(init.latestVersion ? { latestVersion: init.latestVersion } : {}),
     ...(init.sessionId ? { sessionId: init.sessionId } : {}),
-    transcript: [],
+    transcript: seeded,
     running: false,
     streamingAssistant: false,
     exiting: false,
-    seq: 0,
+    seq: seeded.length,
   };
 }
 

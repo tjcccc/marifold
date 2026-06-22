@@ -2,7 +2,7 @@ import React from 'react';
 import { Box, Text } from 'ink';
 import type { NoticeTone, TranscriptItem } from '../core/appState.js';
 import { Markdown } from './Markdown.js';
-import { ACCENT, COMMAND, DIM, SKILL } from './theme.js';
+import { ACCENT, DIM_ACCENT, COMMAND, DIM, SKILL } from './theme.js';
 
 const NOTICE_COLOR: Record<NoticeTone, string> = {
   info: 'gray',
@@ -36,7 +36,7 @@ export function TranscriptRow({ item }: { item: TranscriptItem }): React.ReactEl
       return (
         <Box
           borderStyle="single"
-          borderColor={ACCENT}
+          borderColor={DIM_ACCENT}
           borderLeft={false}
           borderRight={false}
           width="100%"
@@ -47,7 +47,7 @@ export function TranscriptRow({ item }: { item: TranscriptItem }): React.ReactEl
             <Text><Text color={SKILL} bold>{head}</Text>{rest}</Text>
           ) : (
             <>
-              <Text color={ACCENT} bold>{'> '}</Text>
+              <Text color={DIM_ACCENT} bold>{'> '}</Text>
               <Text>{item.text}</Text>
             </>
           )}

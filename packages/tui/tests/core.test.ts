@@ -79,6 +79,25 @@ describe('appReducer', () => {
     expect(state.transcript).toEqual([]);
     expect(state.sessionId).toBe('s1');
   });
+
+  it('seeds a resumed transcript with continuous ids and seq', () => {
+    const state = createInitialState({
+      profile: 'default', provider: 'ollama', model: 'm', cwd: '/tmp', version: '0.0.0-test',
+      sessionId: 'sess-1',
+      transcript: [
+        { kind: 'user', text: 'hello' },
+        { kind: 'assistant', text: 'hi there' },
+      ],
+    });
+    expect(state.sessionId).toBe('sess-1');
+    expect(state.transcript).toEqual([
+      { id: 'item_1', kind: 'user', text: 'hello' },
+      { id: 'item_2', kind: 'assistant', text: 'hi there' },
+    ]);
+    // A new item must continue past the seeded ids rather than collide.
+    const next = appReducer(state, { type: 'add_user', text: 'next' });
+    expect(next.transcript[2]).toMatchObject({ id: 'item_3', kind: 'user', text: 'next' });
+  });
 });
 
 function fakeCtx(): { ctx: CommandContext; calls: Record<string, unknown[]> } {

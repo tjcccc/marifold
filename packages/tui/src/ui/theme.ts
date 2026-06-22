@@ -1,6 +1,7 @@
 /** Shared TUI palette. Hex values render on truecolor terminals; Ink falls
  * back to the nearest ANSI color elsewhere. */
 export const ACCENT = '#EAA221';
+export const DIM_ACCENT = '#87744F';
 export const DIM = '#999999';
 /** Inline attachment tokens like `[image #1]`. */
 export const ATTACHMENT = '#3FB950';
