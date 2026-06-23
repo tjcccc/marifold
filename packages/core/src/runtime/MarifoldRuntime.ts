@@ -292,10 +292,17 @@ export class MarifoldRuntime {
       prepareEngine: async settings => {
         await this.refreshProviderCredentialsIfNeeded(settings.provider);
         return {
+          // No engine-level session store: priest would otherwise persist the
+          // raw per-iteration `Objective:`/tool framing (and duplicates). The
+          // runner instead persists one clean turn pair via `persistTurn` below.
           engine: this.createEngine(settings.provider, false),
           config: this.toPriestConfig(settings),
         };
       },
+      // Record the run as a single tidy user→assistant exchange so resuming the
+      // session shows the result, not the agent's internal framing.
+      persistTurn: (sessionId, profile, userText, assistantText) =>
+        this.sessionResolver.appendExchange(sessionId, profile, userText, assistantText),
     });
   }
 

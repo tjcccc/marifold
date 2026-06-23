@@ -12,6 +12,14 @@ Cross-session development log. Newest first. Keep entries short: what shipped, w
 - Version 0.23.0 → 0.24.0 across all packages + CLI `.version`.
 - Verified: core 141, tui 30, service 4 — all pass; all 4 packages build/typecheck green. Non-interactive `init` paths, unknown-command rejection, and bare-launch routing checked against the built CLI. The interactive picker itself needs a real TTY (confirmed live by the user).
 
+## 2026-06-23 — v0.24.1 — Agent runs persist a clean session turn (fixes lost skill output)
+
+- **Fix: agent-mode output was never saved.** `createAgentRunner` built the priest engine with no session store (`createEngine(provider, false)`), so priest's persistence guard (`session && this.sessionStore`) never fired — an agent run's final answer was dropped, and resuming a session showed nothing from it. Since skills now run agentically, their generated output vanished on `--resume`.
+- **Clean single-turn persistence.** Rather than re-enabling priest's raw per-iteration writes (which stored the wrapped `Objective: …Use tools…` prompt *and* duplicate turns), the runner now persists exactly one tidy pair via new `SessionResolver.appendExchange`: the **user's actual invocation** (e.g. `$make-grok-imagine-prompt #photo1 …`, passed as `AgentRunOptions.userTurn`) and the **final answer**. Run mechanics (plan, tool calls, verification, timing/tokens) stay in ephemeral task state, not the conversation — so resumed transcripts are clean.
+- README refreshed from the stale v0.14.0 framing to current (TUI-first overview, interactive `init`, `--resume`, `provider add`, agentic skills, `marifold` as the command, `timeout_seconds` default 300).
+- Version 0.24.0 → 0.24.1 across all packages + CLI `.version`.
+- Verified: core 141, tui 30, service 4 — all pass; all 4 packages build/typecheck green. `SessionResolver.appendExchange` verified directly (one clean user/assistant pair, retrievable); full agent→resume path confirmed live by the user.
+
 ## 2026-06-23 — v0.23.0 — Skills run as agentic tools (read their own bundled files)
 
 - **Skills are now real agentic tools, like Codex/Claude Code.** Invoking a skill no longer drops the user's input or runs a doc-shaped prompt; the skill body is delivered as **authoritative instructions** (new `MarifoldRunRequest.instructions` → priest `PriestRequest.context`, injected at the top of the system prompt, in both `stream` and `ask`; `AgentRunner` merges them to the front of its agent context), and the user's typed input is the turn the model acts on.

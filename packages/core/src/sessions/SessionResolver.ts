@@ -195,6 +195,18 @@ export class SessionResolver {
     }
   }
 
+  /** Append one clean user→assistant exchange to a session (creating it if
+   * needed). Agent runs use this to record the objective + final answer as a
+   * single tidy pair, instead of priest's raw per-iteration `Objective:`/tool
+   * framing that made resumed transcripts confusing. */
+  async appendExchange(sessionId: string, profileName: string, userText: string, assistantText: string): Promise<void> {
+    const store = this.openStore();
+    const session = (await store.get(sessionId)) ?? (await store.create(profileName, sessionId));
+    session.appendTurn('user', userText);
+    session.appendTurn('assistant', assistantText);
+    await store.save(session);
+  }
+
   rename(fromSessionId: string, toSessionId: string): boolean {
     if (!fs.existsSync(this.sessionsDb)) return false;
     if (!toSessionId.trim()) throw MarifoldError.configInvalid('New session id cannot be empty.');

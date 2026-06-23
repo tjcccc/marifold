@@ -2,14 +2,17 @@
 
 Marifold is a local-first personal AI workspace for profiles, chats, skills, mini apps, workflows, and external agents.
 
-v0.14.0 adds the **TUI** — an Ink/React terminal app (`packages/tui`) that becomes Marifold's primary interactive surface. Bare `marifold` launches it: an agent-first terminal UI that renders the existing chat and agent-event streams, with `/` commands, `$skill` invocation, an approval modal, `/btw` mid-run steering, a skills manager, and a profile-aware header. It introduces the `marifold.skill.v0` skill primitive (a prompt template with variables, run via `$name`), a `[paths].skills_dir`, and a small `AgentRunner` steering hook — built entirely on the v0.13.0 core, with no SDK change.
+The primary surface is the **TUI** — an Ink/React terminal app launched by bare `marifold`. It's agent-first (with a `/chat` mode), rendering chat and agent-event streams with `/` commands, `$skill` invocation, an approval modal, `/btw` mid-run steering, a skills manager, a profile-aware header, and session resume (`--resume`). Skills (`marifold.skill.v0`, run via `$name`) execute as agentic tools: the skill body is authoritative instructions and, in agent mode, the model reads the skill's own bundled files (e.g. a `vars.toml`) to do its work. `marifold init` and `marifold provider add` walk you through choosing a provider/model interactively.
 
-The v0.13.0 pre-TUI foundation remains: an approval-aware agent loop with native provider tool calling (through `@priest-ai/core` 2.4), a control-block fallback for models without native tool support, narrow built-in tools (file read/write, shell, web search, profile delegation), a workspace write boundary, config-driven approval policy, a `marifold agent` command, chat `/search`/`/read`/`/image` commands, model-initiated chat tools, ChatGPT OAuth token refresh, the `marifold.skillapp.v0` schema spec with a validator, and cron-scheduled unattended agent runs hosted inside `marifold service` — alongside priests-style profile chat, structured memory, model management, OAuth provider setup, config backup/import, the loopback-only Fastify service API, and ephemeral task-state storage.
+Underneath sits an approval-aware agent loop with native provider tool calling (through `@priest-ai/core` 2.4) and a control-block fallback, narrow built-in tools (file read/write, shell, web search, profile delegation), a workspace write boundary, config-driven approval policy, a `marifold agent` command, chat `/search`/`/read`/`/image`, ChatGPT/Copilot OAuth, the `marifold.skillapp.v0` schema spec, and cron-scheduled unattended runs hosted inside `marifold service` — alongside priests-style profile chat, structured per-profile memory, model/provider management, config backup/import, the loopback-only Fastify service API, and ephemeral task-state storage.
 
 For product direction and future scope, see [docs/vision.md](docs/vision.md) and [docs/roadmap.md](docs/roadmap.md). For the terminal app, see [docs/tui.md](docs/tui.md).
 
-## What v0.14.0 Supports
+## What Marifold Supports
 
+- Onboarding: `marifold init` writes config and interactively picks a provider/model (so a first run never points at a model you don't have); `marifold provider add` configures a provider (including pointing Ollama at a remote/Tailscale server); running `marifold` before `init` prints a clear hint instead of failing.
+- Session resume: `marifold --resume` (most recent) or `--resume <id>` replays the conversation; the in-TUI `/session` picker resumes too. Agent/skill runs persist one clean turn (your invocation → the final answer).
+- Skills as agentic tools: `$name [args]` runs a skill; the skill body is authoritative instructions and, in agent mode, the model reads the skill's bundled files (e.g. `vars.toml` for `#name` fragments) via `read_file`. A skill's run mode follows the session unless it declares `mode:`.
 - The TUI: launch with bare `marifold` (or `marifold --profile <name>`); agent mode by default, `/chat` for chat.
 - Input grammar: plain text → agent/chat, `/command` → code-executed command, `$skill [args]` → model-backed skill.
 - `/` commands: `/help` `/exit` `/new` `/agent` `/chat` `/model` `/profile` `/session` `/think` `/clear` `/stop` `/btw` `/permissions` `/skills` `/install-skill` `/doctor`, plus `/search` `/read` `/image` `/remember` `/forget` `/delete-memory`.
@@ -21,7 +24,7 @@ For product direction and future scope, see [docs/vision.md](docs/vision.md) and
 - The launch directory is the workspace; `~/.marifold` stays config/state; profiles are identities, not workspaces.
 - Non-TTY invocation falls back with a hint instead of starting Ink.
 
-## What v0.13.0 Supports
+## Core capabilities (pre-TUI foundation)
 
 - Scheduled agent runs: `marifold schedule add --cron "0 9 * * 1-5" "<objective>"` plus `list`/`show`/`enable`/`disable`/`rm`/`run`.
 - A scheduler hosted inside `marifold service` (minute resolution); schedules fire only while the service runs, and a firing missed during downtime fires once on the next tick.
@@ -88,7 +91,7 @@ For product direction and future scope, see [docs/vision.md](docs/vision.md) and
 
 ## Non-goals
 
-v0.13.0 does not include semantic/vector retrieval, memory encryption, full memory edit UI, Web UI, SkillApp runtime/rendering, Workflow, Apple apps, external-agent aliases, terminal image paste (deferred to the TUI), provider-owned model deletion, remote service auth, service daemon packaging (schedules fire only while `marifold service` runs), or agent-run service routes.
+Marifold does not yet include semantic/vector retrieval, memory encryption, a full memory edit UI, a Web UI, SkillApp runtime/rendering, Workflow, Apple apps, external-agent aliases, provider-owned model deletion, remote service auth, or service daemon packaging (schedules fire only while `marifold service` runs).
 
 Web search uses DuckDuckGo scraping by default, which requires no API key but can be blocked by DuckDuckGo's anomaly detection on some networks. Errors surface clearly in `/search` output and tool results, and the `SearchBackend` interface is pluggable for alternative engines.
 
@@ -107,7 +110,7 @@ Create local configuration:
 pnpm marifold init
 ```
 
-This writes `~/.marifold/config.toml`, creates `~/.marifold/profiles/default`, and keeps existing profile files if you re-run with `--force`.
+This writes `~/.marifold/config.toml`, creates `~/.marifold/profiles/default`, and keeps existing profile files if you re-run with `--force`. On a terminal it then **interactively picks your provider and model** (and offers an optional web-search toggle), so the default model is one you actually have. Pass `--model <name>` (or run non-interactively) to skip the picker.
 
 Edit `~/.marifold/config.toml` if you want a provider other than the default Ollama setup.
 
@@ -267,7 +270,7 @@ Config shape:
 provider = "ollama"
 model = "gemma4:e4b"
 profile = "default"
-timeout_seconds = 120
+timeout_seconds = 300
 think = false
 
 [models]
@@ -318,7 +321,7 @@ For `openai-compatible`, `base_url` may be the API root such as `https://api.ope
 
 `marifold init` accepts `--provider`, `--provider-type`, `--model`, `--base-url`, `--api-key-env`, `--profiles-dir`, `--sessions-db`, `--tasks-dir`, and `--force`. Non-Ollama providers require `--model`; custom OpenAI-compatible providers also require `--base-url`.
 
-`marifold service` starts a Fastify HTTP service bound to `127.0.0.1:32140` by default. v0.10.0 intentionally accepts loopback hosts only. The first API surface is `/health` and `/v1/*` routes for app-client foundations: sanitized config/provider/model views, profiles, memories, sessions, ask/chat, SSE streaming chat, and task state.
+`marifold service` starts a Fastify HTTP service bound to `127.0.0.1:32140` by default. It intentionally accepts loopback hosts only. The first API surface is `/health` and `/v1/*` routes for app-client foundations: sanitized config/provider/model views, profiles, memories, sessions, ask/chat, SSE streaming chat, and task state.
 
 `marifold config export <file>` writes config, profile files, memory files, and optional sessions into a local JSON backup. Treat backups as sensitive if your config contains saved `api_key` or `oauth_token` values.
 
@@ -365,7 +368,7 @@ Each run creates a task tagged `scheduled` and records `lastTaskId`/`lastResultS
 
 ## Profiles
 
-Marifold v0.10.0 loads priests-style profile directories:
+Marifold loads priests-style profile directories:
 
 ```text
 profiles/default/

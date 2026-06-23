@@ -237,7 +237,7 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
   }, [loadedConfig, notify]);
 
   // --- Runs ----------------------------------------------------------------
-  const runAgent = useCallback(async (objective: string, options: { instructions?: string[] } = {}) => {
+  const runAgent = useCallback(async (objective: string, options: { instructions?: string[]; userTurn?: string } = {}) => {
     const controller = new AbortController();
     abortRef.current = controller;
     steeringRef.current = [];
@@ -264,6 +264,7 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
         model: current.model,
         sessionId,
         ...(options.instructions ? { instructions: options.instructions } : {}),
+        ...(options.userTurn ? { userTurn: options.userTurn } : {}),
         ...(images.length > 0 ? { images } : {}),
         signal: controller.signal,
         approvalHandler,
@@ -371,7 +372,9 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
       const instructions = dir
         ? [body, `This skill's bundled files are in ${dir}. When the instructions reference files such as vars.toml, read them from there with read_file.`]
         : [body];
-      void runAgent(prompt, { instructions });
+      // Persist the invocation the user typed (e.g. `$make-… #photo1 …`) as the
+      // resumable user turn, not the agent's internal objective.
+      void runAgent(prompt, { instructions, userTurn: displayText });
     }
   }, [runAgent, runChat]);
 

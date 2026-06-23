@@ -52,9 +52,12 @@ export interface AgentRunOptions {
   /** Images attached to the objective. Sent to the model on the first turn
    * (priest carries them through the request, exactly like the chat path). */
   images?: ImageInput[];
-  /** Conversation session id. When set, the main loop turns persist to and read
-   * from the priest session, so the agent remembers earlier turns. */
+  /** Conversation session id. When set, a single clean turn pair (the user's
+   * text + the final answer) is persisted so the session can be resumed. */
   sessionId?: string;
+  /** Text to store as the user turn on resume (e.g. the full `$skill …`
+   * invocation). Defaults to `objective` when omitted. */
+  userTurn?: string;
   /** Working directory for filesystem/shell tools. Defaults to process.cwd(). */
   cwd?: string;
   /** Authoritative instructions (e.g. a skill body) injected at the top of the
@@ -95,6 +98,9 @@ export interface AgentRunnerDeps {
   agentConfig: MarifoldAgentConfig;
   resolveSettings: (request: Pick<MarifoldRunRequest, 'profile' | 'provider' | 'model'>) => MarifoldResolvedSettings;
   prepareEngine: (settings: MarifoldResolvedSettings) => Promise<AgentEngineContext>;
+  /** Persist one clean conversation turn (objective → final answer) to the
+   * session, so resuming shows the result without the raw agent framing. */
+  persistTurn?: (sessionId: string, profile: string, userText: string, assistantText: string) => Promise<void>;
 }
 
 interface LoopState {
@@ -222,6 +228,12 @@ export class AgentRunner {
         });
         yield* this.finish(task.id, 'failed', 'Stopped at the iteration cap before completing the objective.', 'Re-run with a higher iteration cap or a narrower objective.', usage);
         return;
+      }
+
+      // Persist a single clean turn pair (objective → final answer) so resuming
+      // the session shows the result, not the raw `Objective:`/tool framing.
+      if (options.sessionId && this.deps.persistTurn) {
+        await this.deps.persistTurn(options.sessionId, settings.profile, options.userTurn ?? options.objective, finalText);
       }
 
       // Phase 3 — verification
