@@ -12,6 +12,15 @@ Cross-session development log. Newest first. Keep entries short: what shipped, w
 - Version 0.23.0 → 0.24.0 across all packages + CLI `.version`.
 - Verified: core 141, tui 30, service 4 — all pass; all 4 packages build/typecheck green. Non-interactive `init` paths, unknown-command rejection, and bare-launch routing checked against the built CLI. The interactive picker itself needs a real TTY (confirmed live by the user).
 
+## 2026-06-24 — v0.24.2 — Lean skill runs + drop the verify phase (token/latency cut)
+
+- **Lean skill execution.** Skills now run with `AgentRunOptions.lean`: terse framing and an "emit only the final output" directive, so the model stops narrating plan/preamble/reasoning across the loop. Measured on `bailian/qwen3.6-plus`: a `make-*` run dropped from `10,969` → `8,218` tokens (output `3,503` → `1,471`) and `68s` → `28s`, with the produced prompt unchanged.
+- **Verify phase removed (all agent runs).** It was a separate self-grading model call that was **non-actionable** (a failed grade never retried or fixed anything) and unreliable (models rubber-stamp themselves) — pure token overhead. Real checks belong in tools the agent runs in-loop, not a final self-assessment. Runs now complete after the loop produces a final answer.
+- **Plan kept for every run, including skills.** A separate `make-*` family is just one kind of skill; others may be multi-step, so the (cheap) plan stays as insurance. Adaptive, model-driven planning (a plan/todo *tool* the model invokes only when needed, Claude/Codex-style) is noted as a future, model-tier-gated option — deferred because it depends on model judgment that weak local models lack.
+- Version 0.24.1 → 0.24.2 across all packages + CLI `.version`.
+- Verified: core 141, tui 30, service 4 — all pass (5 AgentRunner tests updated for the no-verify/plan-kept structure); all 4 packages build/typecheck green. Lean-run token/latency drop measured live.
+- **Open**: with plan kept, a skill run sits ~10.6k again (the plan call adds ~2.8k); the next lever is adaptive planning (skip the plan call on trivial/transform skills) plus prefix caching + leaner skill specs.
+
 ## 2026-06-23 — v0.24.1 — Agent runs persist a clean session turn (fixes lost skill output)
 
 - **Fix: agent-mode output was never saved.** `createAgentRunner` built the priest engine with no session store (`createEngine(provider, false)`), so priest's persistence guard (`session && this.sessionStore`) never fired — an agent run's final answer was dropped, and resuming a session showed nothing from it. Since skills now run agentically, their generated output vanished on `--resume`.

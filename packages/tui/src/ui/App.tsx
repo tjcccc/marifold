@@ -237,7 +237,7 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
   }, [loadedConfig, notify]);
 
   // --- Runs ----------------------------------------------------------------
-  const runAgent = useCallback(async (objective: string, options: { instructions?: string[]; userTurn?: string } = {}) => {
+  const runAgent = useCallback(async (objective: string, options: { instructions?: string[]; userTurn?: string; lean?: boolean } = {}) => {
     const controller = new AbortController();
     abortRef.current = controller;
     steeringRef.current = [];
@@ -265,6 +265,7 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
         sessionId,
         ...(options.instructions ? { instructions: options.instructions } : {}),
         ...(options.userTurn ? { userTurn: options.userTurn } : {}),
+        ...(options.lean ? { lean: true } : {}),
         ...(images.length > 0 ? { images } : {}),
         signal: controller.signal,
         approvalHandler,
@@ -373,8 +374,10 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
         ? [body, `This skill's bundled files are in ${dir}. When the instructions reference files such as vars.toml, read them from there with read_file.`]
         : [body];
       // Persist the invocation the user typed (e.g. `$make-… #photo1 …`) as the
-      // resumable user turn, not the agent's internal objective.
-      void runAgent(prompt, { instructions, userTurn: displayText });
+      // resumable user turn, not the agent's internal objective. `lean` skips the
+      // plan/verify phases and verbose framing — a skill is a single transform,
+      // so that's pure token overhead.
+      void runAgent(prompt, { instructions, userTurn: displayText, lean: true });
     }
   }, [runAgent, runChat]);
 

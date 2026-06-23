@@ -35,15 +35,6 @@ const PLAN_SCHEMA = {
   required: ['title', 'steps'],
 };
 
-const VERIFICATION_SCHEMA = {
-  type: 'object',
-  properties: {
-    passed: { type: 'boolean' },
-    notes: { type: 'string' },
-  },
-  required: ['passed', 'notes'],
-};
-
 export interface AgentRunOptions {
   objective: string;
   profile?: string;
@@ -58,6 +49,10 @@ export interface AgentRunOptions {
   /** Text to store as the user turn on resume (e.g. the full `$skill …`
    * invocation). Defaults to `objective` when omitted. */
   userTurn?: string;
+  /** Lean run (e.g. a skill): keep tools (so it can read bundled files) but skip
+   * the plan and verify phases and the verbose agent framing, and ask for only
+   * the final output. Cuts token cost sharply without changing the result. */
+  lean?: boolean;
   /** Working directory for filesystem/shell tools. Defaults to process.cwd(). */
   cwd?: string;
   /** Authoritative instructions (e.g. a skill body) injected at the top of the
@@ -161,7 +156,8 @@ export class AgentRunner {
     };
 
     try {
-      // Phase 1 — plan
+      // Phase 1 — plan (kept for every run, including skills: a plan is cheap
+      // insurance and some skills are genuinely multi-step).
       const plan = await this.buildPlan(engine, config, settings.profile, options);
       const planned = this.deps.taskStore.update(task.id, {
         title: plan.title,
@@ -236,25 +232,12 @@ export class AgentRunner {
         await this.deps.persistTurn(options.sessionId, settings.profile, options.userTurn ?? options.objective, finalText);
       }
 
-      // Phase 3 — verification
-      this.assertNotAborted(options.signal);
-      const verification = await this.verify(engine, config, settings.profile, options, state, finalText);
-      yield { type: 'verification', passed: verification.passed, notes: verification.notes };
-      this.deps.taskStore.appendEvent(task.id, {
-        kind: 'verification',
-        message: `${verification.passed ? 'Passed' : 'Not confirmed'}: ${verification.notes}`,
-      });
-
-      // Phase 4 — summary
-      const status: TaskStatus = verification.passed ? 'completed' : 'blocked';
-      this.completePlanSteps(task.id, verification.passed);
-      yield* this.finish(
-        task.id,
-        status,
-        finalText,
-        verification.passed ? undefined : verification.notes,
-        usage,
-      );
+      // Complete. No verification phase: a separate self-grading model call was
+      // non-actionable (a failed grade didn't retry or fix anything) and models
+      // self-grade unreliably — so it was pure token overhead. Real checks belong
+      // in tools the agent runs inside the loop, not a final self-assessment.
+      this.completePlanSteps(task.id, true);
+      yield* this.finish(task.id, 'completed', finalText, undefined, usage);
     } catch (error) {
       if (error instanceof AbortedError || (options.signal?.aborted ?? false)) {
         this.deps.taskStore.appendEvent(task.id, { kind: 'note', message: 'Run cancelled by the user.' });
@@ -413,8 +396,10 @@ export class AgentRunner {
     const base: PriestRequest = {
       config,
       profile,
-      prompt: `Objective: ${options.objective}\n\nUse tools only when the objective genuinely requires reading or writing files, running commands, searching the web, or delegating. Many objectives — greetings, questions, explanations, drafting text — need no tools at all; for those, answer directly from your own knowledge. Do not invent tool calls. When the objective is complete, reply with a short final answer describing the outcome.`,
-      context: this.agentContext(state, options.cwd ?? process.cwd(), options.instructions),
+      prompt: options.lean
+        ? options.objective
+        : `Objective: ${options.objective}\n\nUse tools only when the objective genuinely requires reading or writing files, running commands, searching the web, or delegating. Many objectives — greetings, questions, explanations, drafting text — need no tools at all; for those, answer directly from your own knowledge. Do not invent tool calls. When the objective is complete, reply with a short final answer describing the outcome.`,
+      context: this.agentContext(state, options.cwd ?? process.cwd(), options.instructions, options.lean),
       ...(options.sessionId ? { session: { id: options.sessionId, createIfMissing: true } } : {}),
       ...(firstTurn && options.images && options.images.length > 0 ? { images: options.images } : {}),
     };
@@ -435,7 +420,19 @@ export class AgentRunner {
     };
   }
 
-  private agentContext(state: LoopState, cwd: string, instructions?: string[]): string[] {
+  private agentContext(state: LoopState, cwd: string, instructions?: string[], lean = false): string[] {
+    // Lean run (skills): minimal framing — the instructions are authoritative,
+    // and we ask for only the final output to avoid plan/preamble/reasoning prose.
+    if (lean) {
+      const context = [...(instructions ?? [])];
+      context.push(
+        `Working directory: ${cwd}. Use read_file only if the instructions reference a bundled file (e.g. vars.toml); resolve it, then reply with ONLY the final output the instructions define — no plan, preamble, reasoning, or commentary.`,
+      );
+      if (state.mode === 'control-block') {
+        context.push(buildControlBlockInstructions(this.deps.registry.definitions()));
+      }
+      return context;
+    }
     const context = [
       'You are running as the Marifold agent. Stay focused on the stated objective and keep replies concise.',
       'Prefer answering directly. Reach for a tool only when the objective cannot be completed from your own knowledge — never use a tool just to demonstrate one.',
@@ -496,37 +493,6 @@ export class AgentRunner {
       ? parsed.steps.filter((step): step is string => typeof step === 'string' && step.trim().length > 0).slice(0, 5)
       : [];
     return { title, steps: steps.length > 0 ? steps : fallback.steps };
-  }
-
-  private async verify(
-    engine: AgentEngine,
-    config: PriestConfig,
-    profile: string,
-    options: AgentRunOptions,
-    state: LoopState,
-    finalText: string,
-  ): Promise<{ passed: boolean; notes: string }> {
-    const work = state.toolSummaries.length > 0 ? state.toolSummaries.map(s => `- ${s}`).join('\n') : '(no tools were used)';
-    const response = await engine.run({
-      config,
-      profile,
-      prompt: `Objective: ${options.objective}\n\nWork performed:\n${work}\n\nFinal answer:\n${finalText}\n\nWas the objective achieved? Reply with JSON {"passed": boolean, "notes": string}.`,
-      context: [
-        'You are verifying an agent task outcome. Reply with JSON only.',
-        'Judge only whether the final outcome satisfies the objective. Do not judge style, efficiency, or whether a different approach would have been better. If the objective was achieved, passed must be true. Set passed to false only when the outcome is missing, wrong, or incomplete.',
-        'For conversational objectives (greetings, questions, explanations), an appropriate direct reply fully satisfies the objective — no tool use or file output is required.',
-      ],
-      output: { jsonSchema: VERIFICATION_SCHEMA, jsonSchemaName: 'agent_verification' },
-    }, { signal: options.signal });
-    if (!response.ok) {
-      if (response.error?.code === 'REQUEST_ABORTED') throw new AbortedError();
-      return { passed: false, notes: `Verification call failed: ${response.error?.message ?? 'unknown error'}` };
-    }
-    const parsed = parseJsonObject(response.text ?? '');
-    return {
-      passed: parsed?.passed === true,
-      notes: typeof parsed?.notes === 'string' && parsed.notes.trim() ? parsed.notes.trim() : 'No verification notes.',
-    };
   }
 
   private completePlanSteps(taskId: string, passed: boolean): void {

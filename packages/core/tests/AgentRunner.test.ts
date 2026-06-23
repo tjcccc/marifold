@@ -65,7 +65,7 @@ function makeRunner(engine: AgentEngine, tools: AgentTool[], configOverrides: Pa
     taskStore,
     registry,
     agentConfig: resolveAgentConfig(configOverrides),
-    resolveSettings: () => ({ profile: 'default', provider: 'mock', model: 'test-model', think: false }),
+    resolveSettings: () => ({ profile: 'default', provider: 'mock', model: 'test-model', think: false, mode: 'agent' }),
     prepareEngine: async () => ({ engine, config: { provider: 'mock', model: 'test-model' } }),
   });
   return { runner, taskStore };
@@ -81,38 +81,34 @@ const planResponse = response({ text: '{"title": "Test plan", "steps": ["Read th
 const verifyPassResponse = response({ text: '{"passed": true, "notes": "objective met"}' });
 
 describe('AgentRunner', () => {
-  it('tallies token usage across plan, loop, and verification turns', async () => {
+  it('tallies token usage across plan and loop turns', async () => {
     const withUsage = (partial: Partial<PriestResponse>, usage: { inputTokens: number; outputTokens: number }): PriestResponse =>
       response({ ...partial, usage: { ...usage, totalTokens: usage.inputTokens + usage.outputTokens, estimatedCostUSD: 0.001 } });
     const engine = new ScriptedEngine([
       withUsage({ text: '{"title": "T", "steps": ["s"]}' }, { inputTokens: 10, outputTokens: 5 }), // plan
       withUsage({ text: 'Final answer.' }, { inputTokens: 20, outputTokens: 8 }), // loop turn
-      withUsage({ text: '{"passed": true, "notes": "ok"}' }, { inputTokens: 7, outputTokens: 3 }), // verify
     ]);
     const { runner } = makeRunner(engine, [fakeTool()]);
     const events = await collect(runner.run({ objective: 'Do it.', cwd: tempDir() }));
     const done = events.find(e => e.type === 'done') as Extract<AgentEvent, { type: 'done' }>;
-    expect(done.usage).toEqual({ inputTokens: 37, outputTokens: 16, totalTokens: 53, estimatedCostUSD: 0.003 });
+    expect(done.usage).toEqual({ inputTokens: 30, outputTokens: 13, totalTokens: 43, estimatedCostUSD: 0.002 });
   });
 
   it('passes the session id to the main loop turns only', async () => {
     const engine = new ScriptedEngine([
       planResponse,
       response({ text: 'Done.' }),
-      verifyPassResponse,
     ]);
     const { runner } = makeRunner(engine, [fakeTool()]);
     await collect(runner.run({ objective: 'Remember this.', cwd: tempDir(), sessionId: 'sess-1' }));
     expect(engine.requests[0].session).toBeUndefined(); // plan turn
     expect(engine.requests[1].session).toEqual({ id: 'sess-1', createIfMissing: true }); // loop turn
-    expect(engine.requests[2].session).toBeUndefined(); // verification turn
   });
 
   it('forwards objective images on the first agent turn only', async () => {
     const engine = new ScriptedEngine([
       planResponse,
       response({ text: 'I can see the image.' }),
-      verifyPassResponse,
     ]);
     const { runner } = makeRunner(engine, [fakeTool()]);
     const images = [{ path: '/tmp/pic.png' }];
@@ -121,10 +117,9 @@ describe('AgentRunner', () => {
 
     expect(engine.requests[0].images).toBeUndefined(); // plan turn
     expect(engine.requests[1].images).toEqual(images); // first loop turn
-    expect(engine.requests[2].images).toBeUndefined(); // verification turn
   });
 
-  it('runs plan, tool loop, verification, and summary with native tool calls', async () => {
+  it('runs plan, tool loop, and summary with native tool calls', async () => {
     const engine = new ScriptedEngine([
       planResponse,
       response({
@@ -133,7 +128,6 @@ describe('AgentRunner', () => {
         execution: { provider: 'mock', model: 'test-model', profile: 'default', finishedReason: 'tool_calls' },
       }),
       response({ text: 'The file says hello.' }),
-      verifyPassResponse,
     ]);
     const { runner, taskStore } = makeRunner(engine, [fakeTool()]);
 
@@ -142,7 +136,7 @@ describe('AgentRunner', () => {
     expect(types).toEqual([
       'status', 'plan',
       'tool_request', 'approval_decision', 'tool_result',
-      'text', 'verification', 'status', 'done',
+      'text', 'status', 'done',
     ]);
 
     const done = events[events.length - 1] as Extract<AgentEvent, { type: 'done' }>;
@@ -166,7 +160,6 @@ describe('AgentRunner', () => {
     expect(task.title).toBe('Test plan');
     expect(task.plan.map(step => step.status)).toEqual(['completed', 'completed']);
     expect(task.events.some(e => e.kind === 'observation')).toBe(true);
-    expect(task.events.some(e => e.kind === 'verification')).toBe(true);
   });
 
   it('denies ask-mode tools on unattended runs without executing', async () => {
@@ -177,7 +170,6 @@ describe('AgentRunner', () => {
         toolCalls: [{ id: 'call_0', name: 'write_note', arguments: { path: 'n.md' } }],
       }),
       response({ text: 'Stopped because writing was denied.' }),
-      response({ text: '{"passed": false, "notes": "write denied"}' }),
     ]);
     const tool = fakeTool({
       name: 'write_note',
@@ -200,8 +192,10 @@ describe('AgentRunner', () => {
     const followUp = engine.requests[2];
     expect(followUp.toolExchange?.[1]).toMatchObject({ kind: 'tool_result', isError: true });
 
+    // With no verify phase, a completed loop is 'completed' (the denial is the
+    // agent's recorded outcome, surfaced via the error tool result above).
     const done = events[events.length - 1] as Extract<AgentEvent, { type: 'done' }>;
-    expect(done.status).toBe('blocked');
+    expect(done.status).toBe('completed');
   });
 
   it('asks the approval handler and honors its decision', async () => {
