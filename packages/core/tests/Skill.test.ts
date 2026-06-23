@@ -46,9 +46,9 @@ describe('parseSkill', () => {
     expect(skill.variables[1].default).toBe('English');
   });
 
-  it('defaults mode to chat', () => {
+  it('leaves mode undefined when not declared (run follows the session mode)', () => {
     const skill = parseSkill('---\nname: x\n---\nhello\n');
-    expect(skill.mode).toBe('chat');
+    expect(skill.mode).toBeUndefined();
   });
 
   it.each([

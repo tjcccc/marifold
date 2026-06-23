@@ -237,7 +237,7 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
   }, [loadedConfig, notify]);
 
   // --- Runs ----------------------------------------------------------------
-  const runAgent = useCallback(async (objective: string) => {
+  const runAgent = useCallback(async (objective: string, options: { instructions?: string[] } = {}) => {
     const controller = new AbortController();
     abortRef.current = controller;
     steeringRef.current = [];
@@ -246,7 +246,9 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
     pendingImagesRef.current = [];
     const current = stateRef.current;
     // One conversation session shared with chat mode, so the agent remembers
-    // earlier turns.
+    // earlier turns. Skills pass their body via `instructions` (authoritative,
+    // not persisted) rather than isolating, so context-aware skills still see
+    // the conversation.
     const sessionId = current.sessionId ?? randomUUID();
     if (!current.sessionId) dispatch({ type: 'set_session', sessionId });
     dispatch({ type: 'set_running', running: true });
@@ -261,6 +263,7 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
         provider: current.provider,
         model: current.model,
         sessionId,
+        ...(options.instructions ? { instructions: options.instructions } : {}),
         ...(images.length > 0 ? { images } : {}),
         signal: controller.signal,
         approvalHandler,
@@ -289,7 +292,7 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
     }
   }, [runtime, approvalHandler, notify]);
 
-  const runChat = useCallback(async (prompt: string, extraContext: string[] = []) => {
+  const runChat = useCallback(async (prompt: string, extraContext: string[] = [], options: { instructions?: string[] } = {}) => {
     cancelChatRef.current = false;
     const current = stateRef.current;
     const sessionId = current.sessionId ?? randomUUID();
@@ -312,6 +315,7 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
           sessionId,
           think: thinkRef.current,
           userContext: userContext.length > 0 ? userContext : undefined,
+          ...(options.instructions ? { instructions: options.instructions } : {}),
           images: images.length > 0 ? images : undefined,
         },
         summary => { usage = summary.usage; },
@@ -347,10 +351,28 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
   }, [notify]);
 
   // --- Skills --------------------------------------------------------------
-  const startSkillRun = useCallback((skill: MarifoldSkill, prompt: string, displayText: string) => {
+  const startSkillRun = useCallback((skill: MarifoldSkill, body: string, userInput: string, displayText: string) => {
     dispatch({ type: 'add_user', text: displayText });
-    if (skill.mode === 'chat') void runChat(prompt);
-    else void runAgent(prompt);
+    // Codex/Claude-style: the skill body is authoritative instructions (sent via
+    // `instructions`, top of the system prompt), and the user's typed input is
+    // the turn the model acts on — so input is never dropped and the skill is not
+    // polluted by prior turns, without isolating it from the conversation.
+    const prompt = userInput.trim() || 'Follow the skill instructions above and produce the output.';
+    // An undeclared mode follows the session: a skill invoked in an agent session
+    // runs agentically (with tools), so it can read its own bundled files.
+    const mode = skill.mode ?? stateRef.current.mode;
+    if (mode === 'chat') {
+      void runChat(prompt, [], { instructions: [body] });
+    } else {
+      // Tell the agent where the skill's bundled files live so it can read them
+      // (e.g. a vars.toml of `#name` fragments) with read_file, as the skill
+      // instructions direct — the agentic-tool model, like Codex/Claude.
+      const dir = skill.source?.replace(/\/SKILL\.md$/, '');
+      const instructions = dir
+        ? [body, `This skill's bundled files are in ${dir}. When the instructions reference files such as vars.toml, read them from there with read_file.`]
+        : [body];
+      void runAgent(prompt, { instructions });
+    }
   }, [runAgent, runChat]);
 
   const runSkill = useCallback((name: string, argv: string[]) => {
@@ -372,7 +394,7 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
       notify(`${skillUsage(skill)} — enter ${missing[0]}:`, 'info');
       return;
     }
-    startSkillRun(skill, prompt, skillInvocation(name, argv));
+    startSkillRun(skill, prompt, argv.join(' '), skillInvocation(name, argv));
   }, [runtime, notify, startSkillRun]);
 
   const fillSkillVariable = useCallback((value: string) => {
@@ -392,7 +414,7 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
       const args = current.skill.variables
         .map(variable => supplied[variable.name])
         .filter((value): value is string => typeof value === 'string' && value.length > 0);
-      startSkillRun(current.skill, prompt, skillInvocation(current.skill.name, args));
+      startSkillRun(current.skill, prompt, args.join(' '), skillInvocation(current.skill.name, args));
       return null;
     });
   }, [notify, startSkillRun]);

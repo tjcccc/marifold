@@ -89,10 +89,10 @@ export function validateSkill(raw: RawRecord, source?: string): MarifoldSkill {
   };
 }
 
-function normalizeMode(value: unknown, source?: string): SkillMode {
-  // Default to chat: a plain prompt turn is the least-surprising run for a
-  // skill, and avoids the agent verify loop blocking weak local models.
-  if (value === undefined) return 'chat';
+function normalizeMode(value: unknown, source?: string): SkillMode | undefined {
+  // Undefined when not declared: the run follows the session's mode (agent →
+  // agentic with tools; chat → plain turn). A skill pins a mode by declaring it.
+  if (value === undefined) return undefined;
   const mode = requireString(value, 'mode', source);
   if (mode === 'agent' || mode === 'chat') return mode;
   throw MarifoldError.skillInvalid('Expected mode to be "agent" or "chat".', source);

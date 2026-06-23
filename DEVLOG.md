@@ -2,6 +2,16 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-06-23 — v0.23.0 — Skills run as agentic tools (read their own bundled files)
+
+- **Skills are now real agentic tools, like Codex/Claude Code.** Invoking a skill no longer drops the user's input or runs a doc-shaped prompt; the skill body is delivered as **authoritative instructions** (new `MarifoldRunRequest.instructions` → priest `PriestRequest.context`, injected at the top of the system prompt, in both `stream` and `ask`; `AgentRunner` merges them to the front of its agent context), and the user's typed input is the turn the model acts on.
+- **Skill `mode` follows the session when undeclared.** `mode` is now optional in the schema (validator returns `undefined` when absent). `startSkillRun` runs `skill.mode ?? sessionMode`, so a skill invoked in an **agent** session runs **agentically** (with tools) instead of silently downgrading to chat. A skill still pins a mode by declaring `mode:`.
+- **Agent skills read their own bundled files.** The run's instructions now tell the agent the skill's folder path, so it can `read_file` siblings like `vars.toml` (the `#name` fragment table) and resolve them itself — verified live: gpt-5.4-mini read `vars.toml`, expanded `#photo1`/`#camera1`, and produced a correct one-line Midjourney prompt. No deterministic expansion in marifold (a brief `SkillVars` experiment was reverted — chat-mode skills that need tools are the author's responsibility, not marifold's to crutch).
+- Root cause this fixed: variable-less skills (no `{{user_input}}`) dropped the user's input entirely, and skills ignored the session mode — so the model got a 240-line spec with no input and (in chat) couldn't read `vars.toml`. Both are gone.
+- Version 0.22.0 → 0.23.0 across all packages + CLI `.version`.
+- Verified: core 141, tui 30, service 4 — all pass; all 4 packages build/typecheck green. End-to-end skill run confirmed live in agent mode (`vars.toml` read + expansion + verify).
+- **Differences from Codex/Claude that remain (by design):** explicit `$name` invocation (no auto-trigger by description), a narrower/approval-gated tool surface (`shell_exec` is ask-gated), and full SKILL.md injected per run rather than progressive disclosure.
+
 ## 2026-06-23 — v0.22.0 — TUI input polish: edge-triggered history, aligned menus
 
 - **Edge-triggered history (Claude Code style).** In a multi-line draft, ↑/↓ now move the cursor between lines and only recall/advance history at the **first/last visual line**. A new `cursorVisual()` maps the cursor to its wrapped line/column using the renderer's width; column is clamped to the target line (no desired-column memory yet). Single-line input is unchanged (its one line is both first and last).

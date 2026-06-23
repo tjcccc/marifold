@@ -57,6 +57,9 @@ export interface AgentRunOptions {
   sessionId?: string;
   /** Working directory for filesystem/shell tools. Defaults to process.cwd(). */
   cwd?: string;
+  /** Authoritative instructions (e.g. a skill body) injected at the top of the
+   * system prompt for every loop turn, so the run is guided by them. */
+  instructions?: string[];
   /** Resolves 'ask' approvals. Absent (unattended runs): 'ask' degrades to deny. */
   approvalHandler?: ApprovalHandler;
   signal?: AbortSignal;
@@ -399,7 +402,7 @@ export class AgentRunner {
       config,
       profile,
       prompt: `Objective: ${options.objective}\n\nUse tools only when the objective genuinely requires reading or writing files, running commands, searching the web, or delegating. Many objectives — greetings, questions, explanations, drafting text — need no tools at all; for those, answer directly from your own knowledge. Do not invent tool calls. When the objective is complete, reply with a short final answer describing the outcome.`,
-      context: this.agentContext(state, options.cwd ?? process.cwd()),
+      context: this.agentContext(state, options.cwd ?? process.cwd(), options.instructions),
       ...(options.sessionId ? { session: { id: options.sessionId, createIfMissing: true } } : {}),
       ...(firstTurn && options.images && options.images.length > 0 ? { images: options.images } : {}),
     };
@@ -420,12 +423,14 @@ export class AgentRunner {
     };
   }
 
-  private agentContext(state: LoopState, cwd: string): string[] {
+  private agentContext(state: LoopState, cwd: string, instructions?: string[]): string[] {
     const context = [
       'You are running as the Marifold agent. Stay focused on the stated objective and keep replies concise.',
       'Prefer answering directly. Reach for a tool only when the objective cannot be completed from your own knowledge — never use a tool just to demonstrate one.',
       `Working directory: ${cwd}. Relative tool paths resolve against it; ~ means the user's home directory.`,
     ];
+    // Skill instructions are authoritative for this run — lead with them.
+    if (instructions?.length) context.unshift(...instructions);
     if (state.mode === 'control-block') {
       context.push(buildControlBlockInstructions(this.deps.registry.definitions()));
     }

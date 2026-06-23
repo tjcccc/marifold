@@ -25,7 +25,10 @@ export interface MarifoldSkill {
   description: string;
   /** Prompt template; `{{var}}` placeholders are replaced at run time. */
   prompt: string;
-  mode: SkillMode;
+  /** Declared run mode. Undefined means "follow the session's mode" — so a skill
+   * invoked in an agent session runs agentically (with tools), and in a chat
+   * session runs as a plain turn. A skill pins a mode by declaring `mode:`. */
+  mode?: SkillMode;
   variables: SkillVariable[];
   /** Absolute path the skill was loaded from (set by the loader). */
   source?: string;

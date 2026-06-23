@@ -1,6 +1,6 @@
 {
   "name": "@marifold/service",
-  "version": "0.22.0",
+  "version": "0.23.0",
   "description": "Local HTTP service for Marifold",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

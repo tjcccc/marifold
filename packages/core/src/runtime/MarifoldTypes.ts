@@ -13,6 +13,10 @@ export interface MarifoldRunRequest {
   images?: ImageInput[];
   /** Per-turn ephemeral strings appended to the user message (e.g. /search results, /read file content). */
   userContext?: string[];
+  /** Authoritative instructions injected at the top of the system prompt (e.g. a
+   * skill body). Guides the turn like a system directive; not persisted as a
+   * conversation turn, so it never pollutes later turns. */
+  instructions?: string[];
   /** Set false to disable model-initiated chat tools for this run even when [web_search].enabled is true. */
   chatTools?: boolean;
 }
