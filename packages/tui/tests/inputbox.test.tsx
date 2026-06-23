@@ -64,6 +64,40 @@ describe('InputBox', () => {
     expect(lastFrame()).toContain('first');
   });
 
+  it('moves the cursor between lines mid-draft, recalling history only at the first line', async () => {
+    const { stdin, lastFrame } = renderInput({ history: ['oldcmd'] });
+    stdin.write('aaa');
+    await delay();
+    stdin.write('\n'); // newline (Ctrl+J / LF), not submit
+    await delay();
+    stdin.write('bbb');
+    await delay();
+    // Cursor is on the last line → ↑ moves up a line, it must NOT recall history.
+    stdin.write('\x1b[A');
+    await delay();
+    let frame = lastFrame() ?? '';
+    expect(frame).toContain('aaa');
+    expect(frame).toContain('bbb');
+    expect(frame).not.toContain('oldcmd');
+    // Now on the first line → ↑ recalls history.
+    stdin.write('\x1b[A');
+    await delay();
+    frame = lastFrame() ?? '';
+    expect(frame).toContain('oldcmd');
+  });
+
+  it('recalls history through a fully-typed command (menu does not trap ↑)', async () => {
+    const { stdin, lastFrame } = renderInput({ history: ['older', 'prev'] });
+    stdin.write('/chat'); // exact command — menu shows a single, already-typed item
+    await delay();
+    stdin.write('\x1b[A'); // ↑ must fall through to history, not cycle the menu
+    await delay();
+    expect(lastFrame()).toContain('prev');
+    stdin.write('\x1b[A');
+    await delay();
+    expect(lastFrame()).toContain('older');
+  });
+
   it('completes a command prefix on Tab', async () => {
     const { stdin, lastFrame } = renderInput();
     stdin.write('/ch');

@@ -2,6 +2,15 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-06-23 — v0.22.0 — TUI input polish: edge-triggered history, aligned menus
+
+- **Edge-triggered history (Claude Code style).** In a multi-line draft, ↑/↓ now move the cursor between lines and only recall/advance history at the **first/last visual line**. A new `cursorVisual()` maps the cursor to its wrapped line/column using the renderer's width; column is clamped to the target line (no desired-column memory yet). Single-line input is unchanged (its one line is both first and last).
+- **Fix: completion menu trapped history.** A fully-typed command (e.g. `/chat`) showed a single, already-typed suggestion whose menu hijacked ↑/↓, so history couldn't be recalled. The menu now only captures ↑/↓ when *navigable* (more than one suggestion, or the sole suggestion isn't already fully typed); otherwise ↑/↓ fall through to history.
+- **Aligned, single-line list rows.** Both the `$`/`/` completion menu (`InputBox`) and the `SelectList` (`/skills`, model/profile/session pickers) now pad the name into a fixed column (capped at 28, longer names clipped) and clip the hint to the remaining width, so descriptions line up and never wrap onto a stray second line. New `ui/text.ts` with `truncate`/`padTo`. `SelectList` selection switched from full-line green inverse to `›` + accent-bold with a dim hint, matching the menu.
+- Version 0.21.0 → 0.22.0 across all packages + CLI `.version`.
+- Verified: core 141, tui 30 (+2: mid-draft cursor movement, history recall through a fully-typed command), service 4 — all pass; all 4 packages build/typecheck green. Menu/list alignment confirmed via a render trace.
+- **Note (not a bug):** the `make-*` image-prompt skills "acknowledge instead of execute" on small local models (gemma 4 e4b/12b). Diagnosis: these skills run in **chat** mode (default; no `mode:` declared) — not agent — and are authored as ~240-line agent-onboarding specs (`## Scope` "Multi-agent…", `## Design Basis`) that small models can't follow; they echo the doc and wait for input. Fix is skill-authoring (lean, input-anchored prompts) or pinning a capable model — no marifold change.
+
 ## 2026-06-22 — v0.21.0 — Session resume, provider add, and TUI/prompt polish
 
 - **`marifold --resume [id]`.** Bare `--resume` continues the most recent session for the resolved profile; `--resume <id>` continues that specific session (an unknown id starts fresh with a clear message). Prior turns are **replayed into the transcript** — `createInitialState` seeds the history with the reducer's own `item_${seq}` id scheme and advances `seq` past it, and a "Resumed session …" notice marks the boundary. No `--session` flag (one verb-flag; the in-TUI `/session` picker still handles interactive selection).

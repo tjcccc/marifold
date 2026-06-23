@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Box, Text, useInput } from 'ink';
-import { ACCENT } from './theme.js';
+import { Box, Text, useInput, useStdout } from 'ink';
+import { ACCENT, DIM } from './theme.js';
+import { padTo, truncate } from './text.js';
 
 export interface SelectItem {
   label: string;
@@ -29,6 +30,8 @@ export function SelectList({
 }): React.ReactElement {
   const [index, setIndex] = useState(0);
   const clamped = Math.min(index, Math.max(0, items.length - 1));
+  const { stdout } = useStdout();
+  const columns = stdout?.columns ?? 80;
 
   // Window items around the selection so a long list never overflows the frame
   // (reserve rows for border, title, and the footer hint).
@@ -59,14 +62,26 @@ export function SelectList({
           {emptyHint?.map((line, i) => <Text key={i} dimColor>{line}</Text>)}
         </Box>
       ) : (
-        windowed.map((item, i) => {
-          const actual = start + i;
-          return (
-            <Text key={item.value} color={actual === clamped ? 'green' : undefined} inverse={actual === clamped}>
-              {actual === clamped ? '› ' : '  '}{item.label}{item.hint ? `  ${item.hint}` : ''}
-            </Text>
-          );
-        })
+        (() => {
+          // Align hints into a column: pad each label to the widest (capped),
+          // then clip the hint to the remaining inner width (terminal − border(2)
+          // − padding(2)) so every row stays a single, non-wrapping line.
+          const labelCol = Math.min(28, Math.max(...windowed.map(it => it.label.length)));
+          const hintMax = columns - 4 /*border+padding*/ - 2 /*prefix*/ - labelCol - 2 /*gap*/ - 1;
+          return windowed.map((item, i) => {
+            const actual = start + i;
+            const selected = actual === clamped;
+            const prefix = selected ? '› ' : '  ';
+            const label = padTo(truncate(item.label, labelCol), labelCol);
+            const hint = item.hint ? truncate(item.hint, hintMax) : '';
+            return (
+              <Box key={item.value}>
+                <Text color={selected ? ACCENT : undefined} bold={selected}>{prefix}{label}</Text>
+                {hint ? <Text color={DIM}>{'  '}{hint}</Text> : null}
+              </Box>
+            );
+          });
+        })()
       )}
       {above > 0 || below > 0 ? (
         <Text dimColor>{above > 0 ? `↑ ${above} ` : ''}{below > 0 ? `↓ ${below}` : ''}</Text>

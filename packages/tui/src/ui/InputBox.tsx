@@ -4,6 +4,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { expandHome } from '@marifold/core';
 import { ACCENT, ATTACHMENT, COMMAND, DIM, SKILL } from './theme.js';
+import { padTo, truncate } from './text.js';
 
 const PROMPT = '> ';
 const CONT = '  '; // continuation-line indent, aligned past the prompt
@@ -104,6 +105,10 @@ export function InputBox({
     : [];
   const showMenu = menuOpen && suggestions.length > 0;
   const menuIdx = Math.min(menuIndex, Math.max(0, suggestions.length - 1));
+  // When the only suggestion is already fully typed (e.g. `/chat`), the menu has
+  // nothing to navigate — so ↑/↓ should fall through to history instead of being
+  // trapped cycling a single item.
+  const menuNavigable = showMenu && !(suggestions.length === 1 && suggestions[0].name === partial);
 
   const set = (next: string, caret = next.length) => {
     setValue(next);
@@ -114,6 +119,14 @@ export function InputBox({
   const insertNewline = () => set(`${value.slice(0, cursor)}\n${value.slice(cursor)}`, cursor + 1);
   const acceptSuggestion = (name: string) => set(`${sigil}${name} `);
 
+  // The cursor's visual (wrapped) line/column, using the same width as the
+  // renderer, so ↑/↓ can move between lines and detect the first/last line.
+  const cursorVisual = (): { line: number; column: number; visual: VisualLine[] } => {
+    const width = Math.max(1, columns - PROMPT.length - 1);
+    const visual = wrapToVisualLines(value, width);
+    return { ...locateVisualCursor(visual, cursor), visual };
+  };
+
   useInput((input, key) => {
     if (key.ctrl && input === 'c') return onInterrupt('ctrl-c');
     if (resizing) return; // ignore typing mid-resize (the box is collapsed)
@@ -121,8 +134,8 @@ export function InputBox({
     // The completion menu intercepts navigation/accept/dismiss before history,
     // submit, and Esc-to-cancel.
     if (showMenu) {
-      if (key.upArrow) return setMenuIndex(i => (i <= 0 ? suggestions.length - 1 : i - 1));
-      if (key.downArrow) return setMenuIndex(i => (i >= suggestions.length - 1 ? 0 : i + 1));
+      if (menuNavigable && key.upArrow) return setMenuIndex(i => (i <= 0 ? suggestions.length - 1 : i - 1));
+      if (menuNavigable && key.downArrow) return setMenuIndex(i => (i >= suggestions.length - 1 ? 0 : i + 1));
       if (key.tab) return acceptSuggestion(suggestions[menuIdx].name);
       if (key.escape) return setMenuOpen(false);
       // Enter accepts the highlighted item unless it is already fully typed,
@@ -165,8 +178,22 @@ export function InputBox({
 
     if (key.leftArrow) return setCursor(c => Math.max(0, c - 1));
     if (key.rightArrow) return setCursor(c => Math.min(value.length, c + 1));
-    if (key.upArrow) return historyPrev();
-    if (key.downArrow) return historyNext();
+    // Edge-triggered history (Claude Code style): ↑ recalls history only on the
+    // first visual line, ↓ advances it only on the last; otherwise they move the
+    // cursor between lines of a multi-line draft. Single-line input has one line
+    // that is both first and last, so ↑/↓ keep their plain history behavior.
+    if (key.upArrow) {
+      const { line, column, visual } = cursorVisual();
+      if (line === 0) return historyPrev();
+      const target = visual[line - 1];
+      return setCursor(target.start + Math.min(column, target.text.length));
+    }
+    if (key.downArrow) {
+      const { line, column, visual } = cursorVisual();
+      if (line >= visual.length - 1) return historyNext();
+      const target = visual[line + 1];
+      return setCursor(target.start + Math.min(column, target.text.length));
+    }
 
     if (key.backspace || key.delete || input === '\x7f' || input === '\b') {
       if (cursor === 0) return;
@@ -232,14 +259,23 @@ export function InputBox({
     <Box flexDirection="column">
       {showMenu ? (
         <Box flexDirection="column" paddingX={1}>
-          {suggestions.map((item, i) => (
-            <Box key={item.name}>
-              <Text color={i === menuIdx ? ACCENT : undefined} bold={i === menuIdx}>
-                {i === menuIdx ? '› ' : '  '}{sigil}{item.name}
-              </Text>
-              {item.hint ? <Text color={DIM}>  {item.hint}</Text> : null}
-            </Box>
-          ))}
+          {(() => {
+            // Align hints into a column: pad each name to the widest name (capped),
+            // then clip the hint to what's left so every row is one line.
+            const nameCol = Math.min(28, Math.max(...suggestions.map(s => sigil.length + s.name.length)));
+            const hintMax = columns - 2 /*padding*/ - 2 /*prefix*/ - nameCol - 2 /*gap*/ - 1;
+            return suggestions.map((item, i) => {
+              const prefix = i === menuIdx ? '› ' : '  ';
+              const name = padTo(truncate(`${sigil}${item.name}`, nameCol), nameCol);
+              const hint = item.hint ? truncate(item.hint, hintMax) : '';
+              return (
+                <Box key={item.name}>
+                  <Text color={i === menuIdx ? ACCENT : undefined} bold={i === menuIdx}>{prefix}{name}</Text>
+                  {hint ? <Text color={DIM}>{'  '}{hint}</Text> : null}
+                </Box>
+              );
+            });
+          })()}
         </Box>
       ) : null}
       {/* Plain-text rules (not an Ink border box, which duplicates on resize).
