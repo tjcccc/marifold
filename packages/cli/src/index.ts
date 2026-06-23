@@ -19,7 +19,7 @@ const printer = new ConsolePrinter();
 const program = new Command()
   .name('marifold')
   .description('Marifold local-first AI workspace CLI.')
-  .version('0.23.0')
+  .version('0.24.0')
   // Allow a root --profile (for the bare-`marifold` TUI launch) to coexist with
   // subcommand options of the same name: root options must precede the
   // subcommand, and options after the subcommand bind to it.
@@ -52,6 +52,14 @@ const importEsm = new Function('specifier', 'return import(specifier);') as (
 ) => Promise<typeof import('@marifold/tui')>;
 
 program.action(async () => {
+  // Only a bare `marifold` (optionally with root options) launches the TUI. A
+  // stray/unknown subcommand (e.g. `marifold frobnicate`) lands here too because
+  // this is the default action — reject it instead of silently opening the TUI.
+  if (program.args.length > 0) {
+    printer.printError(new Error(`unknown command '${program.args[0]}'. Run \`marifold --help\` to see available commands.`));
+    process.exitCode = 1;
+    return;
+  }
   const options = program.opts<{ profile?: string; resume?: string | boolean }>();
   const loadedConfig = loadConfig(program);
   const { runTui } = await importEsm('@marifold/tui');

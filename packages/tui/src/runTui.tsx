@@ -42,6 +42,14 @@ export async function runTui(options: RunTuiOptions): Promise<void> {
     return;
   }
 
+  // Not initialized yet: no config file. Show one clear hint instead of a
+  // pointless profile picker that can't resolve a provider/model anyway.
+  if (!options.loadedConfig.foundConfig) {
+    process.stderr.write('Marifold is not initialized yet. Run `marifold init` to get started.\n');
+    process.exitCode = 1;
+    return;
+  }
+
   const runtime = new MarifoldRuntime({ loadedConfig: options.loadedConfig });
   try {
     let profile = options.profile;

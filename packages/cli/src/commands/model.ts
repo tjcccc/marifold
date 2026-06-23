@@ -488,7 +488,7 @@ function assertCanSaveModelOption(provider: string, model: string): void {
   }
 }
 
-async function resolveModelAddTarget(
+export async function resolveModelAddTarget(
   loadedConfig: LoadedMarifoldConfig,
   getPrompt: PromptFactory,
   style: TerminalStyle,

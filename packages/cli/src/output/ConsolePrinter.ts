@@ -47,9 +47,12 @@ export class ConsolePrinter {
     }
   }
 
-  printInitResult(result: WorkspaceInitResult): void {
+  printInitResult(result: WorkspaceInitResult, options: { showModel?: boolean; showNextSteps?: boolean } = {}): void {
+    const { showModel = true, showNextSteps = true } = options;
     process.stdout.write(`Initialized Marifold at ${result.configPath}\n`);
-    process.stdout.write(`Provider: ${result.provider}/${result.model} (${result.providerType})\n`);
+    // The model line is suppressed during interactive init, where the chosen
+    // model is printed after the picker instead of the bootstrap placeholder.
+    if (showModel) process.stdout.write(`Provider: ${result.provider}/${result.model} (${result.providerType})\n`);
     process.stdout.write(`Profile:  ${result.profile}\n`);
     process.stdout.write(`Profiles: ${result.profilesDir}\n`);
     process.stdout.write(`Sessions: ${result.sessionsDb}\n`);
@@ -59,10 +62,9 @@ export class ConsolePrinter {
       process.stdout.write(`${file.status.padEnd(7)} ${file.path}\n`);
     }
 
-    process.stdout.write('\nNext steps:\n');
-    process.stdout.write('  pnpm marifold chat\n');
-    process.stdout.write('  pnpm marifold ask "Hello"\n');
-    process.stdout.write('  pnpm marifold profile list\n');
+    if (showNextSteps) {
+      process.stdout.write('\nRun `marifold` to start.\n');
+    }
   }
 
   printError(error: unknown): void {

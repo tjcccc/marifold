@@ -2,6 +2,16 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-06-23 — v0.24.0 — Onboarding: interactive init, clearer first-run errors
+
+- **`marifold init` picks the model interactively.** On a TTY with no `--model`, after writing the base config it runs the same provider/model picker as `marifold model add`/`model default` (exported `resolveModelAddTarget`), sets the choice as the default, removes the bootstrap `ollama/gemma4:e4b` placeholder, and offers an optional DuckDuckGo web-search toggle. This fixes the first-run error when the hardcoded default model isn't installed. Back-compat preserved: `--model` or non-TTY (scripts/CI) stays fully non-interactive.
+- **Clean init output.** `printInitResult` gained `{ showModel, showNextSteps }`; interactive runs suppress the misleading bootstrap `Provider:` line and the premature "Next steps", printing the *chosen* model and a "Run `marifold` to start." line after the picker instead.
+- **Not-initialized hint.** Running `marifold` (the TUI) before `init` now prints `Marifold is not initialized yet. Run \`marifold init\` to get started.` and exits, instead of showing a pointless profile picker that can't resolve a provider/model (gated on `loadedConfig.foundConfig`).
+- **Unknown commands no longer launch the TUI.** A stray/unknown subcommand (e.g. `marifold frobnicate`, or a typo like `marifold marifold model`) was falling through to the bare-launch default action and opening the TUI. The root action now rejects leftover operands with `unknown command '…'`; bare `marifold` (with/without root options) still launches the TUI.
+- **Production-facing hints use `marifold`, not `pnpm marifold`.**
+- Version 0.23.0 → 0.24.0 across all packages + CLI `.version`.
+- Verified: core 141, tui 30, service 4 — all pass; all 4 packages build/typecheck green. Non-interactive `init` paths, unknown-command rejection, and bare-launch routing checked against the built CLI. The interactive picker itself needs a real TTY (confirmed live by the user).
+
 ## 2026-06-23 — v0.23.0 — Skills run as agentic tools (read their own bundled files)
 
 - **Skills are now real agentic tools, like Codex/Claude Code.** Invoking a skill no longer drops the user's input or runs a doc-shaped prompt; the skill body is delivered as **authoritative instructions** (new `MarifoldRunRequest.instructions` → priest `PriestRequest.context`, injected at the top of the system prompt, in both `stream` and `ask`; `AgentRunner` merges them to the front of its agent context), and the user's typed input is the turn the model acts on.
