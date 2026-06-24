@@ -1,5 +1,12 @@
 # TODO
 
+## Refactor backlog
+
+- **Split `App.tsx` (TUI controller) into hooks — staged, needs a TTY session.** Done so far (v0.25.0+): pure helpers moved to `ui/appHelpers.ts`; the `model`/`provider` pickers were pulled out of `commands/model.ts` into `input/ModelPicker.ts`. The remaining run/command-binding logic in `App.tsx` is *not* covered by the unit suite (the 177 tests exercise `core/` reducers, the command registry, `eventView`, skill binding — never `runAgent`/`runChat`/`commandContext`), so a hook extraction would stay green while silently broken (stale closure / wrong dep array / dead ref). Do it only in a session with a real terminal. Concrete shape:
+  - `useRuns(runtime, { dispatch, stateRef, thinkRef, planNextRef, setPlanNext, notify, approvalHandler })` — *owns* `abortRef`, `cancelChatRef`, `steeringRef`, `pendingContextRef`, `pendingImagesRef`, `steeringCount`; returns `runAgent / runChat / startTextRun / stop` + `enqueueContext / enqueueImage`.
+  - `useSkills(...)` layered on `useRuns` — *owns* `pendingSkill`; returns `runSkill / fillSkillVariable / startSkillRun`.
+  - Verification gate (TTY smoke, all must pass before commit): chat turn streams; agent turn streams; skill run; `/steps` arms then a planned turn fires; `/stop` mid-run cancels; an approval prompt resolves.
+
 ## Current Plan
 
 - v0.10.0: local service API plus task/session foundation. Done.
