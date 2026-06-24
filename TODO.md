@@ -2,10 +2,10 @@
 
 ## Refactor backlog
 
-- **Split `App.tsx` (TUI controller) into hooks — staged, needs a TTY session.** Done so far (v0.25.0+): pure helpers moved to `ui/appHelpers.ts`; the `model`/`provider` pickers were pulled out of `commands/model.ts` into `input/ModelPicker.ts`. The remaining run/command-binding logic in `App.tsx` is *not* covered by the unit suite (the 177 tests exercise `core/` reducers, the command registry, `eventView`, skill binding — never `runAgent`/`runChat`/`commandContext`), so a hook extraction would stay green while silently broken (stale closure / wrong dep array / dead ref). Do it only in a session with a real terminal. Concrete shape:
+- **Split `App.tsx` (TUI controller) into hooks — now testable here, no TTY needed for the logic.** Done so far (v0.25.0+): pure helpers moved to `ui/appHelpers.ts`; the `model`/`provider` pickers pulled out of `commands/model.ts` into `input/ModelPicker.ts`; and a **Tier-2 fake-runtime harness** (`tests/AppRuns.test.tsx`, via `ink-testing-library`) now covers the run-binding logic that was previously uncovered — message → chat/agent routing, `/steps` arming, `/stop` aborting the in-flight run. So a hook extraction can be verified by *extending that harness*, not eyeballed in a terminal. Concrete shape:
   - `useRuns(runtime, { dispatch, stateRef, thinkRef, planNextRef, setPlanNext, notify, approvalHandler })` — *owns* `abortRef`, `cancelChatRef`, `steeringRef`, `pendingContextRef`, `pendingImagesRef`, `steeringCount`; returns `runAgent / runChat / startTextRun / stop` + `enqueueContext / enqueueImage`.
   - `useSkills(...)` layered on `useRuns` — *owns* `pendingSkill`; returns `runSkill / fillSkillVariable / startSkillRun`.
-  - Verification gate (TTY smoke, all must pass before commit): chat turn streams; agent turn streams; skill run; `/steps` arms then a planned turn fires; `/stop` mid-run cancels; an approval prompt resolves.
+  - Before committing the extraction, extend `AppRuns.test.tsx` to also cover: a skill run routes through `startSkillRun`, and an approval prompt resolves (fake runner calls `approvalHandler`, then drive the modal key). Only true terminal fidelity (the `<Static>` repaint of single-line tool rows, resize reflow, live streaming) still needs a human eyeball — that's Tier 3, out of scope for the refactor's correctness.
 
 ## Current Plan
 
