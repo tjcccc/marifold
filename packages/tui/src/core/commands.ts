@@ -24,6 +24,8 @@ export interface CommandContext {
   showPermissions(): void;
   showHelp(): void;
   showStatus(): void;
+  /** Arm a one-shot forced plan for the next message (toggles off if armed). */
+  toggleForcePlan(): void;
   copyLast(): void;
   showSessions(): void;
   runDoctor(): void;
@@ -60,6 +62,7 @@ const COMMANDS: CommandSpec[] = [
     run: (ctx, args) => (args.trim() === 'default' ? ctx.setDefaultMode('chat') : ctx.setMode('chat')),
   },
   { name: 'clear', summary: 'Clear the transcript.', run: ctx => ctx.clear() },
+  { name: 'steps', summary: 'Force a step-by-step plan on your next message (one-shot).', run: ctx => ctx.toggleForcePlan() },
   { name: 'stop', summary: 'Cancel the running task.', run: ctx => ctx.stop() },
   {
     name: 'btw',

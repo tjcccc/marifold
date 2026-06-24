@@ -89,9 +89,20 @@ describe('AgentRunner', () => {
       withUsage({ text: 'Final answer.' }, { inputTokens: 20, outputTokens: 8 }), // loop turn
     ]);
     const { runner } = makeRunner(engine, [fakeTool()]);
-    const events = await collect(runner.run({ objective: 'Do it.', cwd: tempDir() }));
+    const events = await collect(runner.run({ objective: 'Do it.', cwd: tempDir(), forcePlan: true }));
     const done = events.find(e => e.type === 'done') as Extract<AgentEvent, { type: 'done' }>;
     expect(done.usage).toEqual({ inputTokens: 30, outputTokens: 13, totalTokens: 43, estimatedCostUSD: 0.002 });
+  });
+
+  it('skips the plan phase by default (adaptive) — first model call is the loop', async () => {
+    const engine = new ScriptedEngine([response({ text: 'Direct answer, no plan needed.' })]);
+    const { runner } = makeRunner(engine, [fakeTool()]);
+    const events = await collect(runner.run({ objective: 'hi', cwd: tempDir() }));
+    // No 'plan' event, and the only request is the loop turn (not a plan call).
+    expect(events.some(e => e.type === 'plan')).toBe(false);
+    expect(engine.requests).toHaveLength(1);
+    const done = events[events.length - 1] as Extract<AgentEvent, { type: 'done' }>;
+    expect(done.status).toBe('completed');
   });
 
   it('passes the session id to the main loop turns only', async () => {
@@ -100,7 +111,7 @@ describe('AgentRunner', () => {
       response({ text: 'Done.' }),
     ]);
     const { runner } = makeRunner(engine, [fakeTool()]);
-    await collect(runner.run({ objective: 'Remember this.', cwd: tempDir(), sessionId: 'sess-1' }));
+    await collect(runner.run({ objective: 'Remember this.', cwd: tempDir(), forcePlan: true, sessionId: 'sess-1' }));
     expect(engine.requests[0].session).toBeUndefined(); // plan turn
     expect(engine.requests[1].session).toEqual({ id: 'sess-1', createIfMissing: true }); // loop turn
   });
@@ -113,7 +124,7 @@ describe('AgentRunner', () => {
     const { runner } = makeRunner(engine, [fakeTool()]);
     const images = [{ path: '/tmp/pic.png' }];
 
-    await collect(runner.run({ objective: 'Describe the image.', cwd: tempDir(), images }));
+    await collect(runner.run({ objective: 'Describe the image.', cwd: tempDir(), forcePlan: true, images }));
 
     expect(engine.requests[0].images).toBeUndefined(); // plan turn
     expect(engine.requests[1].images).toEqual(images); // first loop turn
@@ -131,7 +142,7 @@ describe('AgentRunner', () => {
     ]);
     const { runner, taskStore } = makeRunner(engine, [fakeTool()]);
 
-    const events = await collect(runner.run({ objective: 'Read a.txt and summarize it.', cwd: tempDir() }));
+    const events = await collect(runner.run({ objective: 'Read a.txt and summarize it.', cwd: tempDir(), forcePlan: true }));
     const types = events.map(e => e.type);
     expect(types).toEqual([
       'status', 'plan',
@@ -178,7 +189,7 @@ describe('AgentRunner', () => {
     });
     const { runner } = makeRunner(engine, [tool]);
 
-    const events = await collect(runner.run({ objective: 'Write a note.', cwd: tempDir() }));
+    const events = await collect(runner.run({ objective: 'Write a note.', cwd: tempDir(), forcePlan: true }));
     expect(executed).toBe(0);
 
     const decision = events.find(e => e.type === 'approval_decision') as Extract<AgentEvent, { type: 'approval_decision' }>;
@@ -211,7 +222,7 @@ describe('AgentRunner', () => {
 
     const events = await collect(runner.run({
       objective: 'Write.',
-      cwd: tempDir(),
+      cwd: tempDir(), forcePlan: true,
       approvalHandler: async request => {
         seen.push(request.tool);
         return { approved: true };
@@ -232,7 +243,7 @@ describe('AgentRunner', () => {
     ]);
     const { runner, taskStore } = makeRunner(engine, [fakeTool()]);
 
-    const events = await collect(runner.run({ objective: 'Loop forever.', cwd: tempDir(), maxIterations: 2 }));
+    const events = await collect(runner.run({ objective: 'Loop forever.', cwd: tempDir(), forcePlan: true, maxIterations: 2 }));
     const done = events[events.length - 1] as Extract<AgentEvent, { type: 'done' }>;
     expect(done.status).toBe('failed');
 
@@ -247,7 +258,7 @@ describe('AgentRunner', () => {
     const engine = new ScriptedEngine([planResponse]);
     const { runner, taskStore } = makeRunner(engine, [fakeTool()]);
 
-    const events = await collect(runner.run({ objective: 'Anything.', cwd: tempDir(), signal: controller.signal }));
+    const events = await collect(runner.run({ objective: 'Anything.', cwd: tempDir(), forcePlan: true, signal: controller.signal }));
     const done = events[events.length - 1] as Extract<AgentEvent, { type: 'done' }>;
     expect(done.status).toBe('cancelled');
     expect(taskStore.get(done.taskId)?.status).toBe('cancelled');
@@ -263,7 +274,7 @@ describe('AgentRunner', () => {
     ]);
     const { runner, taskStore } = makeRunner(engine, [fakeTool()]);
 
-    const events = await collect(runner.run({ objective: 'Read a.txt.', cwd: tempDir(), toolMode: 'auto' }));
+    const events = await collect(runner.run({ objective: 'Read a.txt.', cwd: tempDir(), forcePlan: true, toolMode: 'auto' }));
     const done = events[events.length - 1] as Extract<AgentEvent, { type: 'done' }>;
     expect(done.status).toBe('completed');
 
@@ -289,7 +300,7 @@ describe('AgentRunner', () => {
     ]);
     const { runner } = makeRunner(engine, [fakeTool()]);
 
-    const events = await collect(runner.run({ objective: 'Answer.', cwd: tempDir() }));
+    const events = await collect(runner.run({ objective: 'Answer.', cwd: tempDir(), forcePlan: true }));
     const text = events.find(e => e.type === 'text') as Extract<AgentEvent, { type: 'text' }>;
     expect(text.text).toBe('Answer ready.');
     expect(text.text).not.toContain('memory_save');
@@ -311,7 +322,7 @@ describe('AgentRunner', () => {
     // write defaults to ask; unattended override allows it without a handler.
     const { runner } = makeRunner(engine, [tool], { unattended: { write: 'allow' } });
 
-    const events = await collect(runner.run({ objective: 'Write.', cwd: tempDir(), unattended: true }));
+    const events = await collect(runner.run({ objective: 'Write.', cwd: tempDir(), forcePlan: true, unattended: true }));
     expect(executed).toBe(1);
     const done = events[events.length - 1] as Extract<AgentEvent, { type: 'done' }>;
     expect(done.status).toBe('completed');
@@ -329,7 +340,7 @@ describe('AgentRunner', () => {
     let drained = false;
     const events = await collect(runner.run({
       objective: 'Do work.',
-      cwd: tempDir(),
+      cwd: tempDir(), forcePlan: true,
       steering: () => {
         if (drained) return [];
         drained = true;
@@ -361,7 +372,7 @@ describe('AgentRunner', () => {
     const { runner } = makeRunner(engine, [tool]);
 
     // read policy defaults to allow, but escalation + no handler => denied.
-    const events = await collect(runner.run({ objective: 'Risky.', cwd: tempDir() }));
+    const events = await collect(runner.run({ objective: 'Risky.', cwd: tempDir(), forcePlan: true }));
     const decision = events.find(e => e.type === 'approval_decision') as Extract<AgentEvent, { type: 'approval_decision' }>;
     expect(decision.approved).toBe(false);
   });

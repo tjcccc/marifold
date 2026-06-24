@@ -12,6 +12,15 @@ Cross-session development log. Newest first. Keep entries short: what shipped, w
 - Version 0.23.0 → 0.24.0 across all packages + CLI `.version`.
 - Verified: core 141, tui 30, service 4 — all pass; all 4 packages build/typecheck green. Non-interactive `init` paths, unknown-command rejection, and bare-launch routing checked against the built CLI. The interactive picker itself needs a real TTY (confirmed live by the user).
 
+## 2026-06-24 — v0.25.0 — Adaptive planning, `/steps`, and single-line tool rows
+
+- **Adaptive planning by default.** The forced plan phase is now gated on `AgentRunOptions.forcePlan` (off by default), so a run no longer pays for a separate planning call on trivial/transform tasks — the model reasons inline. Measured: a `make-*` run on `bailian/qwen3.6-plus` is back to ~8k tokens / 28s (vs ~10.6k / 68s with the forced plan).
+- **`/steps` — one-shot forced plan.** A deterministic command (no model call inside it — honors the `/command` rule) that arms a forced, planned **agent** turn for the **next** message, then auto-disarms; running it again toggles off; it survives intervening `/commands`; the input placeholder shows `planned · …` while armed. Works for plain messages and skills.
+- **Single self-updating tool rows.** A tool result now folds onto its request row (matched by `callId`): `→ read_file …` becomes `← read_file: read N from …` in place — one line, path shown once — instead of two rows. (Reducer updates the row and bumps its id so the append-only `<Static>` repaints it.)
+- Version 0.24.2 → 0.25.0 across all packages + CLI `.version`.
+- Verified: core 142 (+1 adaptive-skip), tui 31 (+1 tool-fold), service 4 — all pass; all 4 packages build/typecheck green. Adaptive default measured live (no plan emitted, ~8k); `/steps` confirmed live (plan shown on the next turn).
+- **Open / deferred:** model-driven `update_plan` tool (structured adaptive plan the model invokes itself); `[agent].plan = "always"` config for weak-model forcing; prefix caching of the stable system+skill prefix; and the visual tool-row fold still wants a real-TTY eyeball. Refactor backlog: extract run-orchestration/command-context from `App.tsx` (971 lines) and move the model pickers out of `commands/model.ts` (803) into a shared `cli/input` module.
+
 ## 2026-06-24 — v0.24.2 — Lean skill runs + drop the verify phase (token/latency cut)
 
 - **Lean skill execution.** Skills now run with `AgentRunOptions.lean`: terse framing and an "emit only the final output" directive, so the model stops narrating plan/preamble/reasoning across the loop. Measured on `bailian/qwen3.6-plus`: a `make-*` run dropped from `10,969` → `8,218` tokens (output `3,503` → `1,471`) and `68s` → `28s`, with the produced prompt unchanged.

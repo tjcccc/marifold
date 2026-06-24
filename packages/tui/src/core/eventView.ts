@@ -23,14 +23,18 @@ export function agentEventToItems(event: AgentEvent): TranscriptItemData[] {
         toolKind: event.call.kind,
         summary: event.call.summary,
         phase: 'request',
+        callId: event.call.id,
       }];
     case 'tool_result':
+      // Normally folded onto the request line by the reducer (matched by
+      // callId); this item is only used if no matching request is found.
       return [{
         kind: 'tool',
         tool: event.tool,
         summary: event.summary,
         phase: 'result',
         isError: event.isError,
+        callId: event.callId,
       }];
     case 'approval_decision':
       // Approvals show in the modal; only surface denials in the transcript.

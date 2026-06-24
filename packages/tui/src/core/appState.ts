@@ -11,7 +11,7 @@ export type TranscriptItemData =
   | { kind: 'assistant'; text: string }
   | { kind: 'notice'; tone: NoticeTone; text: string }
   | { kind: 'plan'; steps: Array<{ id: string; text: string; status: string }> }
-  | { kind: 'tool'; tool: string; toolKind?: ToolKind; summary: string; phase: 'request' | 'result'; isError?: boolean }
+  | { kind: 'tool'; tool: string; toolKind?: ToolKind; summary: string; phase: 'request' | 'result'; isError?: boolean; callId?: string }
   | { kind: 'verification'; passed: boolean; notes: string }
   | { kind: 'info'; title: string; lines: string[] };
 
@@ -164,6 +164,23 @@ export function appReducer(state: AppState, action: AppAction): AppState {
 /** Fold a single AgentEvent into state: transcript items via eventView, plus
  * the status-line / modal transitions the transcript itself doesn't show. */
 function applyAgentEvent(state: AppState, event: AgentEvent): AppState {
+  // A tool result folds onto its own request row (matched by callId) so each
+  // tool call is one self-updating line — `→ read_file …` becomes `← read_file …`
+  // in place — instead of two rows with the path repeated.
+  if (event.type === 'tool_result') {
+    const transcript = [...state.transcript];
+    for (let i = transcript.length - 1; i >= 0; i -= 1) {
+      const item = transcript[i];
+      if (item.kind === 'tool' && item.callId === event.callId && item.phase === 'request') {
+        // New id so the App's append-only <Static> repaints this row in place
+        // (it only redraws on id changes), turning `→ …` into `← …` on one line.
+        transcript[i] = { ...item, id: `${item.id}~done`, phase: 'result', summary: event.summary, isError: event.isError };
+        return { ...state, streamingAssistant: false, transcript };
+      }
+    }
+    // No matching request found — fall back to appending a standalone result.
+    return withItems({ ...state, streamingAssistant: false }, agentEventToItems(event));
+  }
   let next = withItems({ ...state, streamingAssistant: false }, agentEventToItems(event));
   switch (event.type) {
     case 'status':

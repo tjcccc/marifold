@@ -53,6 +53,10 @@ export interface AgentRunOptions {
    * the plan and verify phases and the verbose agent framing, and ask for only
    * the final output. Cuts token cost sharply without changing the result. */
   lean?: boolean;
+  /** Force a planning pass before the loop. Off by default (adaptive: the model
+   * plans inline only when the task warrants it). The TUI's `/steps` sets this
+   * for one turn; weak models can force it via config. */
+  forcePlan?: boolean;
   /** Working directory for filesystem/shell tools. Defaults to process.cwd(). */
   cwd?: string;
   /** Authoritative instructions (e.g. a skill body) injected at the top of the
@@ -156,18 +160,21 @@ export class AgentRunner {
     };
 
     try {
-      // Phase 1 — plan (kept for every run, including skills: a plan is cheap
-      // insurance and some skills are genuinely multi-step).
-      const plan = await this.buildPlan(engine, config, settings.profile, options);
-      const planned = this.deps.taskStore.update(task.id, {
-        title: plan.title,
-        plan: plan.steps.map((text, index) => ({
-          id: `step_${index + 1}`,
-          text,
-          status: index === 0 ? 'in_progress' : 'pending',
-        })),
-      });
-      yield { type: 'plan', taskId: task.id, plan: planned.plan };
+      // Phase 1 — plan, only when forced (the TUI's `/steps`, or a weak-model
+      // config). Adaptive by default: a separate planning call is overhead for
+      // the common single-step task, so the model just reasons inline.
+      if (options.forcePlan) {
+        const plan = await this.buildPlan(engine, config, settings.profile, options);
+        const planned = this.deps.taskStore.update(task.id, {
+          title: plan.title,
+          plan: plan.steps.map((text, index) => ({
+            id: `step_${index + 1}`,
+            text,
+            status: index === 0 ? 'in_progress' : 'pending',
+          })),
+        });
+        yield { type: 'plan', taskId: task.id, plan: planned.plan };
+      }
 
       // Phase 2 — tool loop
       let finalText: string | undefined;

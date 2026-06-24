@@ -62,6 +62,16 @@ describe('appReducer', () => {
     expect(state.transcript).toHaveLength(3);
   });
 
+  it('folds a tool result onto its request row (one self-updating line)', () => {
+    let state = appReducer(initial(), { type: 'set_running', running: true });
+    state = appReducer(state, { type: 'agent_event', event: { type: 'tool_request', call: { id: 'c1', tool: 'read_file', kind: 'read', input: {}, summary: 'read vars.toml' } } });
+    expect(state.transcript.filter(i => i.kind === 'tool')).toHaveLength(1);
+    state = appReducer(state, { type: 'agent_event', event: { type: 'tool_result', callId: 'c1', tool: 'read_file', summary: 'read 2.0KB from vars.toml', isError: false } });
+    const tools = state.transcript.filter(i => i.kind === 'tool');
+    expect(tools).toHaveLength(1); // folded, not appended as a second row
+    expect(tools[0]).toMatchObject({ kind: 'tool', phase: 'result', summary: 'read 2.0KB from vars.toml', callId: 'c1' });
+  });
+
   it('folds agent events into transcript and approval/run state', () => {
     let state = appReducer(initial(), { type: 'set_running', running: true });
     const request = { id: 'c', tool: 'write_note', kind: 'write' as const, summary: 's', input: {}, escalated: false };

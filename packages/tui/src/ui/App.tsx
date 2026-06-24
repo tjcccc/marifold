@@ -83,6 +83,8 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
   );
   const [overlay, setOverlay] = useState<Overlay | null>(null);
   const [think, setThink] = useState(initial.think);
+  // `/steps` arms a one-shot forced plan for the next model turn (then auto-disarms).
+  const [planNext, setPlanNext] = useState(false);
   const [steeringCount, setSteeringCount] = useState(0);
   const [pendingSkill, setPendingSkill] = useState<PendingSkill | null>(null);
   const [history, setHistory] = useState<string[]>([]);
@@ -162,6 +164,8 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
   stateRef.current = state;
   const thinkRef = useRef(think);
   thinkRef.current = think;
+  const planNextRef = useRef(planNext);
+  planNextRef.current = planNext;
 
   // Exit: the conversation already lives in the terminal's native scrollback
   // (inline layout), so there's nothing to reprint — just unmount.
@@ -237,7 +241,7 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
   }, [loadedConfig, notify]);
 
   // --- Runs ----------------------------------------------------------------
-  const runAgent = useCallback(async (objective: string, options: { instructions?: string[]; userTurn?: string; lean?: boolean } = {}) => {
+  const runAgent = useCallback(async (objective: string, options: { instructions?: string[]; userTurn?: string; lean?: boolean; forcePlan?: boolean } = {}) => {
     const controller = new AbortController();
     abortRef.current = controller;
     steeringRef.current = [];
@@ -266,6 +270,7 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
         ...(options.instructions ? { instructions: options.instructions } : {}),
         ...(options.userTurn ? { userTurn: options.userTurn } : {}),
         ...(options.lean ? { lean: true } : {}),
+        ...(options.forcePlan ? { forcePlan: true } : {}),
         ...(images.length > 0 ? { images } : {}),
         signal: controller.signal,
         approvalHandler,
@@ -336,6 +341,13 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
 
   const startTextRun = useCallback((text: string) => {
     dispatch({ type: 'add_user', text });
+    // `/steps` armed: run this turn as a planned agent turn (planning is an agent
+    // concept), then auto-disarm.
+    if (planNextRef.current) {
+      setPlanNext(false);
+      void runAgent(text, { forcePlan: true });
+      return;
+    }
     if (stateRef.current.mode === 'chat') void runChat(text);
     else void runAgent(text);
   }, [runAgent, runChat]);
@@ -360,9 +372,13 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
     // the turn the model acts on — so input is never dropped and the skill is not
     // polluted by prior turns, without isolating it from the conversation.
     const prompt = userInput.trim() || 'Follow the skill instructions above and produce the output.';
+    // `/steps` armed: force a planned agent run for this skill (then disarm).
+    const forcePlan = planNextRef.current;
+    if (forcePlan) setPlanNext(false);
     // An undeclared mode follows the session: a skill invoked in an agent session
-    // runs agentically (with tools), so it can read its own bundled files.
-    const mode = skill.mode ?? stateRef.current.mode;
+    // runs agentically (with tools), so it can read its own bundled files. A
+    // forced plan always runs as an agent (planning needs the agent loop).
+    const mode = forcePlan ? 'agent' : (skill.mode ?? stateRef.current.mode);
     if (mode === 'chat') {
       void runChat(prompt, [], { instructions: [body] });
     } else {
@@ -377,7 +393,7 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
       // resumable user turn, not the agent's internal objective. `lean` skips the
       // plan/verify phases and verbose framing — a skill is a single transform,
       // so that's pure token overhead.
-      void runAgent(prompt, { instructions, userTurn: displayText, lean: true });
+      void runAgent(prompt, { instructions, userTurn: displayText, lean: true, ...(forcePlan ? { forcePlan: true } : {}) });
     }
   }, [runAgent, runChat]);
 
@@ -670,6 +686,10 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
     steer,
     exit: quit,
     setThink: (on: boolean) => { setThink(on); notify(`Thinking ${on ? 'on' : 'off'}.`, 'info'); },
+    toggleForcePlan: () => setPlanNext(armed => {
+      notify(armed ? 'Planning disarmed.' : 'Next message will be planned step-by-step.', 'info');
+      return !armed;
+    }),
     openModelPicker,
     openProfilePicker,
     selectProfile,
@@ -883,7 +903,7 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
             commands={commandItems}
             skills={skillItems}
             resizing={resizing}
-            placeholder={pendingSkill ? `value for ${pendingSkill.missing[pendingSkill.index]}` : state.mode === 'agent' ? 'message the agent · /help' : 'chat · /help'}
+            placeholder={pendingSkill ? `value for ${pendingSkill.missing[pendingSkill.index]}` : planNext ? 'planned · your next message will be planned step-by-step' : state.mode === 'agent' ? 'message the agent · /help' : 'chat · /help'}
           />
         )}
         {!resizing ? <StatusLine state={state} /> : null}
