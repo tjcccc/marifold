@@ -2,15 +2,15 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
-## 2026-06-23 — v0.24.0 — Onboarding: interactive init, clearer first-run errors
+## 2026-06-24 — v0.25.1 — Refactor + test hardening (model pickers, App helpers, run-routing harness)
 
-- **`marifold init` picks the model interactively.** On a TTY with no `--model`, after writing the base config it runs the same provider/model picker as `marifold model add`/`model default` (exported `resolveModelAddTarget`), sets the choice as the default, removes the bootstrap `ollama/gemma4:e4b` placeholder, and offers an optional DuckDuckGo web-search toggle. This fixes the first-run error when the hardcoded default model isn't installed. Back-compat preserved: `--model` or non-TTY (scripts/CI) stays fully non-interactive.
-- **Clean init output.** `printInitResult` gained `{ showModel, showNextSteps }`; interactive runs suppress the misleading bootstrap `Provider:` line and the premature "Next steps", printing the *chosen* model and a "Run `marifold` to start." line after the picker instead.
-- **Not-initialized hint.** Running `marifold` (the TUI) before `init` now prints `Marifold is not initialized yet. Run \`marifold init\` to get started.` and exits, instead of showing a pointless profile picker that can't resolve a provider/model (gated on `loadedConfig.foundConfig`).
-- **Unknown commands no longer launch the TUI.** A stray/unknown subcommand (e.g. `marifold frobnicate`, or a typo like `marifold marifold model`) was falling through to the bare-launch default action and opening the TUI. The root action now rejects leftover operands with `unknown command '…'`; bare `marifold` (with/without root options) still launches the TUI.
-- **Production-facing hints use `marifold`, not `pnpm marifold`.**
-- Version 0.23.0 → 0.24.0 across all packages + CLI `.version`.
-- Verified: core 141, tui 30, service 4 — all pass; all 4 packages build/typecheck green. Non-interactive `init` paths, unknown-command rejection, and bare-launch routing checked against the built CLI. The interactive picker itself needs a real TTY (confirmed live by the user).
+- **`commands/model.ts` slimmed 803 → 472 lines.** The interactive provider/model pickers (`resolveModelAddTarget` and its helpers, plus the OAuth credential prompts) moved into a shared `cli/src/input/ModelPicker.ts`; `init` now imports them from there instead of from the `model` command, removing a cross-command import. Behavior unchanged.
+- **`App.tsx` pure helpers extracted** to `ui/appHelpers.ts` (`errorText`, `runSummary`, `copyToClipboard`, `unwrapPath`, `skillInvocation`); 971 → 916 lines. No closures, so fully covered by `tsc` + tests.
+- **Run-routing test harness.** New `tests/AppRuns.test.tsx` fakes the runtime (via `ink-testing-library`) to cover App controller logic the suite never reached before: a plain message routing to chat vs agent, `/steps` arming a one-shot forced plan, and `/stop` aborting the in-flight run. Complements `app.test.tsx` (real runtime, code-only commands).
+- DEVLOG ordering repaired: the v0.24.0 entry had floated above newer entries; restored to newest-first.
+- Version 0.25.0 → 0.25.1 across all packages + CLI `.version`.
+- Verified: core 142, service 4, tui 35 (+4 run-routing) — all pass; all 4 packages build/typecheck green. Internal-only (refactors + tests): no behavior or public-API change.
+- **Open / deferred:** the `App.tsx` hook split (`useRuns`/`useSkills`) is now verifiable through the new harness rather than TTY-blocked — see the TODO refactor backlog.
 
 ## 2026-06-24 — v0.25.0 — Adaptive planning, `/steps`, and single-line tool rows
 
@@ -37,6 +37,16 @@ Cross-session development log. Newest first. Keep entries short: what shipped, w
 - README refreshed from the stale v0.14.0 framing to current (TUI-first overview, interactive `init`, `--resume`, `provider add`, agentic skills, `marifold` as the command, `timeout_seconds` default 300).
 - Version 0.24.0 → 0.24.1 across all packages + CLI `.version`.
 - Verified: core 141, tui 30, service 4 — all pass; all 4 packages build/typecheck green. `SessionResolver.appendExchange` verified directly (one clean user/assistant pair, retrievable); full agent→resume path confirmed live by the user.
+
+## 2026-06-23 — v0.24.0 — Onboarding: interactive init, clearer first-run errors
+
+- **`marifold init` picks the model interactively.** On a TTY with no `--model`, after writing the base config it runs the same provider/model picker as `marifold model add`/`model default` (exported `resolveModelAddTarget`), sets the choice as the default, removes the bootstrap `ollama/gemma4:e4b` placeholder, and offers an optional DuckDuckGo web-search toggle. This fixes the first-run error when the hardcoded default model isn't installed. Back-compat preserved: `--model` or non-TTY (scripts/CI) stays fully non-interactive.
+- **Clean init output.** `printInitResult` gained `{ showModel, showNextSteps }`; interactive runs suppress the misleading bootstrap `Provider:` line and the premature "Next steps", printing the *chosen* model and a "Run `marifold` to start." line after the picker instead.
+- **Not-initialized hint.** Running `marifold` (the TUI) before `init` now prints `Marifold is not initialized yet. Run \`marifold init\` to get started.` and exits, instead of showing a pointless profile picker that can't resolve a provider/model (gated on `loadedConfig.foundConfig`).
+- **Unknown commands no longer launch the TUI.** A stray/unknown subcommand (e.g. `marifold frobnicate`, or a typo like `marifold marifold model`) was falling through to the bare-launch default action and opening the TUI. The root action now rejects leftover operands with `unknown command '…'`; bare `marifold` (with/without root options) still launches the TUI.
+- **Production-facing hints use `marifold`, not `pnpm marifold`.**
+- Version 0.23.0 → 0.24.0 across all packages + CLI `.version`.
+- Verified: core 141, tui 30, service 4 — all pass; all 4 packages build/typecheck green. Non-interactive `init` paths, unknown-command rejection, and bare-launch routing checked against the built CLI. The interactive picker itself needs a real TTY (confirmed live by the user).
 
 ## 2026-06-23 — v0.23.0 — Skills run as agentic tools (read their own bundled files)
 
