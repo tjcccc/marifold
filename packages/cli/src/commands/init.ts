@@ -9,8 +9,8 @@ import { InteractivePrompt } from '../input/InteractivePrompt';
 import { isPromptAbortError } from '../input/PromptAbort';
 import { ConsolePrinter } from '../output/ConsolePrinter';
 import { TerminalStyle } from '../output/TerminalStyle';
+import { resolveModelAddTarget } from '../input/ModelPicker';
 import { searchUpdateFromFlags } from './config';
-import { resolveModelAddTarget } from './model';
 import { loadConfig, RootCommandOptions } from './RuntimeFactory';
 
 interface InitOptions {
