@@ -153,6 +153,33 @@ describe('AgentRunner', () => {
     expect(ctx).not.toContain('SECRET-PRIOR-OUTPUT');
   });
 
+  it('caps NON-lean history to the last N turns when session_context_turns is set', async () => {
+    const engine = new ScriptedEngine([response({ text: 'Saved.' })]);
+    const registry = new ToolRegistry();
+    registry.register(fakeTool());
+    const recent = [
+      { role: 'user' as const, content: 'OLDEST-Q' },
+      { role: 'assistant' as const, content: 'oldest-a' },
+      { role: 'user' as const, content: 'mid-q' },
+      { role: 'assistant' as const, content: 'mid-a' },
+      { role: 'user' as const, content: 'NEWEST-Q' },
+      { role: 'assistant' as const, content: 'newest-a' },
+    ];
+    const runner = new AgentRunner({
+      taskStore: new TaskStore(tempDir()),
+      registry,
+      agentConfig: resolveAgentConfig({}),
+      resolveSettings: () => ({ profile: 'default', provider: 'mock', model: 'test-model', think: false, mode: 'agent', maxContextTokens: 16000, sessionContextTurns: 2 }),
+      prepareEngine: async () => ({ engine, config: { provider: 'mock', model: 'test-model' } }),
+      loadRecentTurns: () => recent,
+    });
+    await collect(runner.run({ objective: 'save the above', cwd: tempDir(), sessionId: 'sess-1' }));
+    const ctx = (engine.requests[0].context ?? []).join('\n');
+    expect(ctx).toContain('## Earlier in this conversation');
+    expect(ctx).toContain('NEWEST-Q');     // within the window
+    expect(ctx).not.toContain('OLDEST-Q'); // dropped by the turn cap
+  });
+
   it('forwards objective images on the first agent turn only', async () => {
     const engine = new ScriptedEngine([
       planResponse,

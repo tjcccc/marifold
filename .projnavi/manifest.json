@@ -1,7 +1,7 @@
 {
   "version": 1,
   "projnaviVersion": "0.5.0",
-  "generatedAt": "2026-06-25T09:34:17.273Z",
+  "generatedAt": "2026-06-25T14:19:29.705Z",
   "root": ".",
   "files": {
     ".claude/skills/projnavi/SKILL.md": {
@@ -20,8 +20,8 @@
       "category": "docs"
     },
     "DEVLOG.md": {
-      "hash": "4990e8efcaad22ed989fe5b15b6810460a3364fef3f14c9d734809749d63fe28",
-      "size": 41602,
+      "hash": "29a8aaae16391fbfc1c2f6e26ada597037875e8584b942c1924da26762f0c17c",
+      "size": 45412,
       "category": "docs"
     },
     "docs/architecture.md": {
@@ -85,12 +85,12 @@
       "category": "docs"
     },
     "package.json": {
-      "hash": "2ac22dc394de1d0c02a463ff9036c50055c7470777ca58952c973bb8711748a3",
+      "hash": "e0e7e92e1393e6fd6816d7420ab7ea18c9f375186370f0f5114c7f390c56eb67",
       "size": 855,
       "category": "config"
     },
     "packages/cli/package.json": {
-      "hash": "f4465877eb6def4e6fa1b39e7bfb27456f149d99b30ef3d89ca18b1011e69499",
+      "hash": "ec403d7be0e5b146dee8d7064e465a0edf2ee7326e792739f3953636ef0a4cf6",
       "size": 738,
       "category": "config"
     },
@@ -165,7 +165,7 @@
       "category": "source"
     },
     "packages/cli/src/index.ts": {
-      "hash": "7f21a884b2b060ed6a2688c7bade86a9e6a08424986435c6d1c0faad3ff77ccd",
+      "hash": "71f875815cff18b90000258f0a1dd40476bad5c57424f1eebc9cab77a37361b1",
       "size": 3367,
       "category": "source"
     },
@@ -210,7 +210,7 @@
       "category": "config"
     },
     "packages/core/package.json": {
-      "hash": "a1856cfc728139e6ca68fddbb614a7bdfb60b038f7140fe80b134fa004bc6907",
+      "hash": "f8a281093f57db6d506ea52b7d3118636562cc7986e7a7e6501babf84552f6a6",
       "size": 706,
       "category": "config"
     },
@@ -225,8 +225,8 @@
       "category": "source"
     },
     "packages/core/src/agent/AgentRunner.ts": {
-      "hash": "427e78d9e0d57a5f28fe01cda8d6997dab39a3c8c93721757b166b02c3a1840d",
-      "size": 27898,
+      "hash": "cab89dfbdb79f476aee66554e668a8a224cc6cad6c747025db024a23e49892bb",
+      "size": 28238,
       "category": "source"
     },
     "packages/core/src/agent/ApprovalPolicy.ts": {
@@ -280,18 +280,18 @@
       "category": "source"
     },
     "packages/core/src/config/ConfigLoader.ts": {
-      "hash": "175c45e3ee06226e758ca2062447145740b2cf3fb0dc3a3b02dbaf32095e6820",
-      "size": 11683,
+      "hash": "bc1af3e95067653c467167eee5eac6f05ba3eeaace83820375026d5c8ad72e73",
+      "size": 12289,
       "category": "source"
     },
     "packages/core/src/config/ConfigManager.ts": {
-      "hash": "1e568eee98422235c6fd3049e31f9055dbb6ef309f48b65a0f174f35b358ca34",
-      "size": 14989,
+      "hash": "d3cc7c89fd8732b18bced17bcd81eb5cf0a88088bc523ecd14fb3e48f98fe63d",
+      "size": 15660,
       "category": "source"
     },
     "packages/core/src/config/ConfigSchema.ts": {
-      "hash": "f3e5fef3dca45e3032ccb94e8164986510ff579dd4cf33257b3426286aedfd6e",
-      "size": 4724,
+      "hash": "eaaf138cc5896027b702b604fbdb225494653016a616e3d8c2c04af66fc69183",
+      "size": 5034,
       "category": "source"
     },
     "packages/core/src/config/GitHubCopilotAuth.ts": {
@@ -350,18 +350,18 @@
       "category": "source"
     },
     "packages/core/src/profiles/ProfileResolver.ts": {
-      "hash": "e390c792484a94c326645627ce76870a4a76b04d6204efa6fa2831da713ec466",
-      "size": 8396,
+      "hash": "b9aa7a1033cfeb5ea7f367292b63039279cabf3e5db1b43260f1335d55f6bac3",
+      "size": 9083,
       "category": "source"
     },
     "packages/core/src/runtime/MarifoldRuntime.ts": {
-      "hash": "d8f5f15118292ce12d3b61cf31ea6540f8b796d5678a9bfcce06102ed0c78754",
-      "size": 27527,
+      "hash": "17d2c9efa2880cd5d82bc014017c830a59ff77f0b462f947275179518ddc4fde",
+      "size": 27703,
       "category": "source"
     },
     "packages/core/src/runtime/MarifoldTypes.ts": {
-      "hash": "86fb01a02bfe544dbcac025e47311e1dda274a72d71c1a13a5a3dcdde04a97a8",
-      "size": 1744,
+      "hash": "575fdd70a8a28d45ffb0d728a9884edce88cef948877a39dbbec846fb6a37e5c",
+      "size": 1945,
       "category": "source"
     },
     "packages/core/src/schedule/Scheduler.ts": {
@@ -445,8 +445,8 @@
       "category": "source"
     },
     "packages/core/src/workspace/WorkspaceInitializer.ts": {
-      "hash": "fd6f1d8a9650fcabc2dfa7adf29db3b9df85dd9a8dac309a935acf56dd5d23c6",
-      "size": 7675,
+      "hash": "7a5058a2f21e4d7f1d2a77f2f08702c6969da71fabf245c6c30aed5e9ed1335f",
+      "size": 7964,
       "category": "source"
     },
     "packages/core/src/workspace/WorkspacePaths.ts": {
@@ -460,8 +460,8 @@
       "category": "test"
     },
     "packages/core/tests/AgentRunner.test.ts": {
-      "hash": "36e08b749bbbcd3d34cd41862fc06eabf8942bcb4ddd29745af9996cd1686b49",
-      "size": 18361,
+      "hash": "8f2408a12700dd2f09b6c4dc89273036b136e2c4898d2c20b6af5c1044a562e0",
+      "size": 19788,
       "category": "test"
     },
     "packages/core/tests/AgentTools.test.ts": {
@@ -495,8 +495,8 @@
       "category": "test"
     },
     "packages/core/tests/MarifoldRuntime.test.ts": {
-      "hash": "8ca18241dfc509cdee45edb51f27eb4572ad3767ef23e4bb4552e48015634dd6",
-      "size": 14647,
+      "hash": "b51cb91adad65576a23080a719a4dc6956d7a23ee7c708e6240b8ca793cd56f3",
+      "size": 16869,
       "category": "test"
     },
     "packages/core/tests/MemoryControls.test.ts": {
@@ -510,8 +510,8 @@
       "category": "test"
     },
     "packages/core/tests/ProfileResolver.test.ts": {
-      "hash": "72ca817a585cd9d8b94bf9a3f5586f2012cdbe0f4d4e348ed2f637c6600abdc4",
-      "size": 4817,
+      "hash": "2f6040144863daca16f4576bfcc0535ceab960fd497517fd7a80f3e3ffe63409",
+      "size": 6284,
       "category": "test"
     },
     "packages/core/tests/ProviderInspector.test.ts": {
@@ -555,7 +555,7 @@
       "category": "config"
     },
     "packages/service/package.json": {
-      "hash": "4709427c5ed72426fcd62ea5add4c8856921fbca28679c670438a119b20a2dfd",
+      "hash": "2777deaecbffa2be0704662ff908793b65b206bde6edc3e03d76fce11636a91d",
       "size": 563,
       "category": "config"
     },
@@ -580,7 +580,7 @@
       "category": "config"
     },
     "packages/tui/package.json": {
-      "hash": "38fb01e1ddb8108e81a8b57f47968a5a51ca114083991fa989f1d4f95ae7934f",
+      "hash": "e476b570a54e6311066780ee48eebbd395fc78712c1f5cb2a416f321b9030707",
       "size": 688,
       "category": "config"
     },
@@ -735,18 +735,18 @@
       "category": "config"
     },
     "pnpm-lock.yaml": {
-      "hash": "91cdeed6dee0b9c93f36cbb0d3efa90133098bf3abf6ede1b4d4cdd146e3c172",
+      "hash": "300b982cb442f2917b588c5f64ac57aaaf683478ab80cafe1338e8b0a91e2532",
       "size": 63767,
       "category": "source"
     },
     "pnpm-workspace.yaml": {
-      "hash": "66bb006463742127cf7b8feccb4fc7fd29210e944815716d95ea7e3b4fe4383a",
+      "hash": "a309220d8f482456e626303dd8e638f7a2b1051fcb661895555741f4a0811855",
       "size": 133,
       "category": "config"
     },
     "README.md": {
-      "hash": "152dd15114dda37b78119ad77c2b61d4f26c5ccd6be1e4b6c057cafcbb3a980d",
-      "size": 26037,
+      "hash": "2b2824ce123fa640b647b243b163200edbdacecaab5a20f282ea2d5c2fd81ef7",
+      "size": 27863,
       "category": "docs"
     },
     "scripts/agent-eval.mjs": {
@@ -886,8 +886,8 @@
       ]
     },
     "packages/core/src/agent/AgentRunner.ts": {
-      "hash": "427e78d9e0d57a5f28fe01cda8d6997dab39a3c8c93721757b166b02c3a1840d",
-      "size": 27898,
+      "hash": "cab89dfbdb79f476aee66554e668a8a224cc6cad6c747025db024a23e49892bb",
+      "size": 28238,
       "category": "source",
       "claimIds": [
         "claim-agent-event-contract-001",
@@ -969,8 +969,8 @@
       ]
     },
     "packages/core/src/config/ConfigLoader.ts": {
-      "hash": "175c45e3ee06226e758ca2062447145740b2cf3fb0dc3a3b02dbaf32095e6820",
-      "size": 11683,
+      "hash": "bc1af3e95067653c467167eee5eac6f05ba3eeaace83820375026d5c8ad72e73",
+      "size": 12289,
       "category": "source",
       "claimIds": [
         "claim-approval-policy-001",
@@ -978,16 +978,16 @@
       ]
     },
     "packages/core/src/config/ConfigManager.ts": {
-      "hash": "1e568eee98422235c6fd3049e31f9055dbb6ef309f48b65a0f174f35b358ca34",
-      "size": 14989,
+      "hash": "d3cc7c89fd8732b18bced17bcd81eb5cf0a88088bc523ecd14fb3e48f98fe63d",
+      "size": 15660,
       "category": "source",
       "claimIds": [
         "claim-config-sections-001"
       ]
     },
     "packages/core/src/config/ConfigSchema.ts": {
-      "hash": "f3e5fef3dca45e3032ccb94e8164986510ff579dd4cf33257b3426286aedfd6e",
-      "size": 4724,
+      "hash": "eaaf138cc5896027b702b604fbdb225494653016a616e3d8c2c04af66fc69183",
+      "size": 5034,
       "category": "source",
       "claimIds": [
         "claim-config-sections-001"
@@ -1035,8 +1035,8 @@
       ]
     },
     "packages/core/src/runtime/MarifoldRuntime.ts": {
-      "hash": "d8f5f15118292ce12d3b61cf31ea6540f8b796d5678a9bfcce06102ed0c78754",
-      "size": 27527,
+      "hash": "17d2c9efa2880cd5d82bc014017c830a59ff77f0b462f947275179518ddc4fde",
+      "size": 27703,
       "category": "source",
       "claimIds": [
         "claim-chat-tool-loop-001",

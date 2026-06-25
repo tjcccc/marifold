@@ -42,6 +42,7 @@ export class ProfileResolver implements ProfileLoader {
     const model = optionalString(raw.model, `${name}.profile.toml model`);
     const memories = optionalBoolean(raw.memories, `${name}.profile.toml memories`) ?? true;
     const maxContextTokens = optionalNumber(raw.max_context_tokens, `${name}.profile.toml max_context_tokens`);
+    const sessionContextTurns = optionalTurnWindow(raw.session_context_turns, `${name}.profile.toml session_context_turns`);
     const rawMode = optionalString(raw.mode, `${name}.profile.toml mode`);
     if (rawMode !== undefined && rawMode !== 'agent' && rawMode !== 'chat') {
       throw MarifoldError.profileInvalid(
@@ -55,7 +56,7 @@ export class ProfileResolver implements ProfileLoader {
         name,
       );
     }
-    return { provider, model, memories, mode: rawMode as ProfileMode | undefined, maxContextTokens };
+    return { provider, model, memories, mode: rawMode as ProfileMode | undefined, maxContextTokens, sessionContextTurns };
   }
 
   list(): ProfileSummary[] {
@@ -221,4 +222,13 @@ function optionalNumber(value: unknown, label: string): number | undefined {
   if (value === undefined) return undefined;
   if (typeof value === 'number' && Number.isFinite(value)) return value;
   throw MarifoldError.configInvalid(`Expected ${label} to be a number.`);
+}
+
+/** Parse `session_context_turns`: `"all"` (or unset) → undefined (no cap),
+ *  a non-negative integer → that many recent turns. */
+function optionalTurnWindow(value: unknown, label: string): number | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value === 'string' && value.trim().toLowerCase() === 'all') return undefined;
+  if (typeof value === 'number' && Number.isInteger(value) && value >= 0) return value;
+  throw MarifoldError.configInvalid(`Expected ${label} to be a non-negative integer or "all".`);
 }

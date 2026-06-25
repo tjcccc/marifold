@@ -32,6 +32,9 @@ export interface MarifoldResolvedSettings {
   mode: ProfileMode;
   /** Per-profile conversation-context budget in tokens; undefined falls back to default.maxContextTokens. */
   maxContextTokens?: number;
+  /** Per-profile cap on recent session turns replayed to the model; undefined falls back
+   * to default.sessionContextTurns (and undefined there means replay all). */
+  sessionContextTurns?: number;
 }
 
 export interface MarifoldRunError {

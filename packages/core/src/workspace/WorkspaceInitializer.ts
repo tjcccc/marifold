@@ -175,6 +175,10 @@ think = false
 # older turns fold into a running summary so cost stops growing with the thread.
 # Profiles inherit this; override per-profile in profile.toml. Set 0 to disable.
 max_context_tokens = 16000
+# Recent session turns the model sees each chat turn: "all" (default), or an integer
+# (e.g. 5, 10; 0 = none). A hard window — older turns stay on disk but aren't sent.
+# Override per-profile in profile.toml. Pairs with max_context_tokens (the safety net).
+# session_context_turns = all
 
 [models]
 options = [

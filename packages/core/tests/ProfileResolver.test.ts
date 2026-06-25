@@ -109,6 +109,37 @@ describe('ProfileResolver', () => {
     expect(settings).toEqual({ provider: 'ollama', model: 'codellama', memories: false, mode: 'chat' });
   });
 
+  it('parses session_context_turns as an integer turn window', () => {
+    const root = tempDir();
+    const profileDir = path.join(root, 'x-runner');
+    fs.mkdirSync(profileDir, { recursive: true });
+    fs.writeFileSync(path.join(profileDir, 'profile.toml'), 'session_context_turns = 5\n');
+
+    expect(new ProfileResolver(root).loadSettings('x-runner').sessionContextTurns).toBe(5);
+  });
+
+  it('treats session_context_turns = "all" as no cap (undefined) and accepts 0', () => {
+    const root = tempDir();
+    const allDir = path.join(root, 'full');
+    fs.mkdirSync(allDir, { recursive: true });
+    fs.writeFileSync(path.join(allDir, 'profile.toml'), 'session_context_turns = "all"\n');
+    expect(new ProfileResolver(root).loadSettings('full').sessionContextTurns).toBeUndefined();
+
+    const zeroDir = path.join(root, 'fresh');
+    fs.mkdirSync(zeroDir, { recursive: true });
+    fs.writeFileSync(path.join(zeroDir, 'profile.toml'), 'session_context_turns = 0\n');
+    expect(new ProfileResolver(root).loadSettings('fresh').sessionContextTurns).toBe(0);
+  });
+
+  it('rejects an invalid session_context_turns value', () => {
+    const root = tempDir();
+    const profileDir = path.join(root, 'bad');
+    fs.mkdirSync(profileDir, { recursive: true });
+    fs.writeFileSync(path.join(profileDir, 'profile.toml'), 'session_context_turns = -2\n');
+
+    expect(() => new ProfileResolver(root).loadSettings('bad')).toThrow(/non-negative integer or "all"/i);
+  });
+
   it('returns the built-in default profile when no default profile exists', () => {
     const root = tempDir();
 

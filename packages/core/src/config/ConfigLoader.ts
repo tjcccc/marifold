@@ -131,6 +131,7 @@ export class ConfigLoader {
       maxSystemChars: optionalNumber(raw.max_system_chars, 'default.max_system_chars'),
       maxContextTokens: optionalNumber(raw.max_context_tokens, 'default.max_context_tokens'),
       compactionKeepTurns: optionalNumber(raw.compaction_keep_turns, 'default.compaction_keep_turns'),
+      sessionContextTurns: optionalTurnWindow(raw.session_context_turns, 'default.session_context_turns'),
       think: optionalBoolean(raw.think, 'default.think') ?? false,
     };
   }
@@ -224,6 +225,14 @@ function optionalNonNegativeNumber(value: unknown, label: string): number | unde
   if (number === undefined) return undefined;
   if (number >= 0) return number;
   throw MarifoldError.configInvalid(`Expected ${label} to be a non-negative number.`);
+}
+
+/** `"all"` (or unset) → undefined (no cap); a non-negative integer → that turn count. */
+function optionalTurnWindow(value: unknown, label: string): number | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value === 'string' && value.trim().toLowerCase() === 'all') return undefined;
+  if (typeof value === 'number' && Number.isInteger(value) && value >= 0) return value;
+  throw MarifoldError.configInvalid(`Expected ${label} to be a non-negative integer or "all".`);
 }
 
 function optionalStringArray(value: unknown, label: string): string[] {

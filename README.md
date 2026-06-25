@@ -272,6 +272,8 @@ model = "gemma4:e4b"
 profile = "default"
 timeout_seconds = 300
 think = false
+max_context_tokens = 16000
+# session_context_turns = "all"   # "all" | 0 | 5 | 10 — recent turns the model sees per turn
 
 [models]
 options = [
@@ -341,6 +343,8 @@ For GitHub Copilot OAuth, Marifold refreshes the short-lived Copilot IDE token f
 
 `[default].think` controls default thinking mode. Thinking is passed as provider option `think` only to providers known to support it: Ollama-compatible providers plus `bailian` and `alibaba_cloud`.
 
+`[default]` also holds the conversation-context controls. `max_context_tokens` (budget that triggers summary compaction near ~80%; `0` disables it) and `session_context_turns` (hard cap on recent turns the model sees each turn — `"all"`/absent means no cap) are inherited by profiles and overridable per-profile in `profile.toml`. `compaction_keep_turns` (recent turns kept verbatim when compacting; defaults to 6) is global-only. See the `profile.toml` properties table below for the per-profile form.
+
 The `[web_search]` section is optional. `enabled = true` lets the model call `web_search` (and `read_file`, when read policy is `allow`) during chat turns through a bounded tool loop; the explicit `/search` command works regardless of this flag. Intermediate tool turns are turn-local — sessions store only your prompt and the final answer, and memory updates apply only from the final response.
 
 For ChatGPT OAuth (`marifold model add chatgpt`), Marifold refreshes the expired API credential from the saved refresh token before provider requests, persisting the rotated refresh token — matching the GitHub Copilot refresh behavior.
@@ -384,9 +388,27 @@ profiles/default/
 
 `PROFILE.md` defines identity, `RULES.md` defines behavior rules, and `CUSTOM.md` is optional extra system guidance.
 
-`profile.toml` may set both `provider` and `model` to override the global default for that profile.
+### `profile.toml` properties
 
-`profile.toml` may also set `memories = false` for tool profiles that should not receive profile memory. Per-run `--no-memories` disables memory for one `ask` or `chat` invocation.
+All keys are optional. An absent key inherits the global `[default]` value (where one exists), then the built-in default — so an empty `profile.toml` behaves exactly like the defaults.
+
+| Key | Type | Default | Effect |
+|-----|------|---------|--------|
+| `provider` | string | inherits `[default].provider` | Provider override. Must be set **together with** `model` (both or neither). |
+| `model` | string | inherits `[default].model` | Model override. Must be set together with `provider`. |
+| `memories` | boolean | `true` | Load profile memory for this profile. Set `false` for tool profiles. Per-run `--no-memories` disables it for one `ask`/`chat`. |
+| `mode` | `"agent"` \| `"chat"` | `"agent"` | Default TUI interaction mode for this profile. |
+| `max_context_tokens` | integer | inherits `[default].max_context_tokens` | Conversation-context budget in tokens; near ~80% older turns fold into a running summary. `0` disables compaction. |
+| `session_context_turns` | integer ≥ 0 \| `"all"` | `"all"` (inherits `[default].session_context_turns`) | Hard cap on the recent session turns the model sees each turn — applies to chat replay and non-lean agent history. `0` = none; `"all"` or absent = no cap. Older turns stay on disk; this only bounds what is sent per turn. Pairs with `max_context_tokens` (the budget safety net). |
+
+Example:
+
+```toml
+provider = "bailian"
+model = "qwen3.6-plus"
+mode = "chat"
+session_context_turns = 5
+```
 
 `memories/user.jsonl` stores durable user facts, `memories/preferences.jsonl` stores durable preferences, and `memories/auto_short.jsonl` stores short-term notes. Each JSONL entry stores rich metadata such as `priority`, `confidence`, `stability`, `source`, `source_type`, `scope`, timestamps, optional `evidence`, optional `reason`, optional `conflict_key`, and supersession status.
 

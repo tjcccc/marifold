@@ -164,14 +164,20 @@ export class AgentRunner {
     };
     // Bounded cross-objective memory: inject a window of the recent clean
     // session pairs so a NON-lean task can reference prior turns ("save the
-    // above prompt"). Lean/skill runs stay stateless (isolated). Char budget ≈
-    // the token budget (CJK-heavy ~0.5 tok/char), so history never dominates.
-    const historyContext = !options.lean && options.sessionId && this.deps.loadRecentTurns
-      ? buildHistoryContext(
-          this.deps.loadRecentTurns(options.sessionId),
-          settings.maxContextTokens ?? HISTORY_BUDGET_DEFAULT_CHARS,
-        )
-      : undefined;
+    // above prompt"). Lean/skill runs stay stateless (isolated).
+    const recentTurns = !options.lean && options.sessionId && this.deps.loadRecentTurns
+      ? this.deps.loadRecentTurns(options.sessionId)
+      : [];
+    // Cap to the last N turns when the profile sets session_context_turns — the
+    // same turn window chat uses, so the knob means the same thing in both modes.
+    // The char budget (≈ the token budget) remains the secondary bound.
+    const windowedTurns = settings.sessionContextTurns != null
+      ? recentTurns.slice(Math.max(0, recentTurns.length - settings.sessionContextTurns))
+      : recentTurns;
+    const historyContext = buildHistoryContext(
+      windowedTurns,
+      settings.maxContextTokens ?? HISTORY_BUDGET_DEFAULT_CHARS,
+    );
 
     const state: LoopState = {
       mode: requestedMode === 'auto' ? 'native' : requestedMode,

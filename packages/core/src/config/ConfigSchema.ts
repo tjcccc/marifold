@@ -13,6 +13,8 @@ export interface MarifoldDefaultConfig {
   maxContextTokens?: number;
   /** Recent turns kept verbatim when compacting; older turns fold into the summary. */
   compactionKeepTurns?: number;
+  /** Hard cap on recent session turns replayed to the model (undefined = all). Per-profile overridable. */
+  sessionContextTurns?: number;
   think: boolean;
 }
 
@@ -114,6 +116,9 @@ export interface ProfileSettings {
   mode?: ProfileMode;
   /** Per-profile conversation-context budget in tokens; falls back to default.maxContextTokens. */
   maxContextTokens?: number;
+  /** Per-profile cap on recent session turns replayed to the model (undefined = all);
+   * falls back to default.sessionContextTurns. */
+  sessionContextTurns?: number;
 }
 
 export interface ProfileSummary {

@@ -329,6 +329,50 @@ describe('MarifoldRuntime', () => {
     }
   });
 
+  it('replays only the last N session turns when a profile sets session_context_turns', async () => {
+    const dir = tempDir();
+    const profilesDir = path.join(dir, 'profiles');
+    fs.mkdirSync(path.join(profilesDir, 'windowed'), { recursive: true });
+    fs.writeFileSync(path.join(profilesDir, 'windowed', 'profile.toml'), 'session_context_turns = 2\n');
+
+    const config: MarifoldConfig = {
+      default: { provider: 'ollama', model: 'gemma4:e4b', profile: 'default', think: false },
+      models: { options: ['ollama/gemma4:e4b'] },
+      memory: { sizeLimit: 50000, contextLimit: 2400 },
+      paths: { profilesDir, sessionsDb: path.join(dir, 'sessions.db'), tasksDir: path.join(dir, 'tasks') },
+      providers: { ollama: { type: 'ollama', baseUrl: 'http://localhost:11434' } },
+    };
+
+    let requestBody: { messages?: Array<{ role: string; content: string }> } | undefined;
+    vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      requestBody = JSON.parse(String(init?.body));
+      return ollamaStreamResponse(['ok']);
+    }));
+
+    const runtime = new MarifoldRuntime({
+      loadedConfig: { config, configPath: path.join(dir, 'config.toml'), foundConfig: true },
+    });
+
+    try {
+      for (const prompt of ['alpha', 'bravo']) {
+        await runtime.ask({ prompt, sessionId: 'win', profile: 'windowed', memories: false });
+      }
+      // Third turn: prior turns = [alpha, ok, bravo, ok]; window of 2 keeps only [bravo, ok].
+      await runtime.ask({ prompt: 'charlie', sessionId: 'win', profile: 'windowed', memories: false });
+
+      const messages = requestBody?.messages ?? [];
+      // Replayed history = all non-system messages except the current user turn.
+      const replayed = messages.filter(m => m.role !== 'system').slice(0, -1);
+      expect(replayed).toHaveLength(2); // window of 2, not the full 4 prior turns
+      const allContent = messages.map(m => m.content).join('\n');
+      expect(allContent).not.toContain('alpha'); // oldest turn dropped from the request
+      expect(allContent).toContain('bravo');     // within the window
+      expect(messages.at(-1)?.content).toBe('charlie');
+    } finally {
+      runtime.close();
+    }
+  });
+
   it('refreshes expired GitHub Copilot credentials from the saved OAuth token before a run', async () => {
     const dir = tempDir();
     const configPath = path.join(dir, 'config.toml');

@@ -2,6 +2,15 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-06-25 — v0.28.0 — Per-profile `session_context_turns` (recent-turn window)
+
+- **New `session_context_turns` knob** (`profile.toml`, with an optional global `[default]` fallback): a hard cap on how many recent session turns the model sees per turn. `"all"`/absent = no cap (default, fully backward compatible), `N` = last N turns, `0` = none. Older turns stay on disk; only the per-turn request is bounded. Built on **priest `@priest-ai/core@2.6.0`**'s new `PriestConfig.sessionContextTurns` (ContextBuilder windows the replay and snaps an odd window down to a user turn so it never opens on an orphan assistant message — DashScope rejects that).
+- **Uniform across modes.** Chat uses priest's windowed replay; **non-lean agent** runs apply the same cap to the bounded cross-objective history (`AgentRunner` slices `loadRecentTurns` to the last N). Lean `$skill` runs stay stateless. So the knob means the same thing whether you're in chat or agent.
+- **Plumbing:** `ProfileResolver` parses `session_context_turns` (`"all"`→undefined | int ≥ 0); threaded through `MarifoldResolvedSettings` → `toPriestConfig`; global default in `ConfigSchema`/`Loader`/`Manager`; commented hint in the generated `config.toml`. Dep swapped to npm `@priest-ai/core@^2.6.0` (local link removed; `minimumReleaseAgeExclude` → 2.6.0).
+- **Docs:** README `## Config` gains a full `profile.toml` properties table (provider/model/memories/mode/max_context_tokens/session_context_turns) plus the inheritable `[default]` context keys.
+- **Measured live (x-runner, bailian/qwen3.6-plus):** input fell from ~30K (106%) to ~5.6K (35%) with `session_context_turns = 5`. (Output cost is separate — `/think off` cut a reasoning run from 87s/10.3K to 24s/7K; thinking is not governed by this knob.)
+- Verified: core 158 (+4: turn-window parse/all/0/invalid, runtime windowed replay, agent turn-cap), service 4, tui 42 — all pass against the published npm artifact; 4 packages build clean. Per-profile `think` offered as a follow-up, not included.
+
 ## 2026-06-25 — v0.27.0 — Bounded cross-objective agent memory + agent-cost trace
 
 - **Agent mode was stateless across objectives.** The agent engine has no session store (to avoid persisting raw `Objective:`/tool framing), so a regular task saw only `system + objective` and couldn't reference a prior turn — "save the above prompt" silently saved the wrong content (the profile's system prompt). Now **non-lean** agent tasks get a **bounded window of the recent clean session pairs** (objective → answer, the ones `appendExchange` persists — never raw framing) injected as an `## Earlier in this conversation` context block, capped by the profile's `max_context_tokens` char budget. Deterministic window — no model call, no priest change. **Lean/skill runs stay stateless** (isolated, subagent-style), matching the chat=stateful / skill=isolated split. Verified live: "save the above prompt" now writes the actual prompt.

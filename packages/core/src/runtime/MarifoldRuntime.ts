@@ -81,7 +81,11 @@ export class MarifoldRuntime {
     const think = request.think ?? config.default.think;
     const mode = profileSettings.mode ?? 'agent';
     if (!provider || !model) throw MarifoldError.missingProviderModel(configPath);
-    return { profile, provider, model, think, mode, maxContextTokens: request.maxContextTokens ?? profileSettings.maxContextTokens };
+    return {
+      profile, provider, model, think, mode,
+      maxContextTokens: request.maxContextTokens ?? profileSettings.maxContextTokens,
+      sessionContextTurns: profileSettings.sessionContextTurns,
+    };
   }
 
   async ask(request: MarifoldRunRequest): Promise<MarifoldAskResponse> {
@@ -578,6 +582,7 @@ export class MarifoldRuntime {
       maxSystemChars: config.default.maxSystemChars,
       maxContextTokens: settings.maxContextTokens ?? config.default.maxContextTokens,
       compactionKeepTurns: config.default.compactionKeepTurns,
+      sessionContextTurns: settings.sessionContextTurns ?? config.default.sessionContextTurns,
       providerOptions: this.supportsThink(settings.provider) ? { think: settings.think } : undefined,
     };
   }

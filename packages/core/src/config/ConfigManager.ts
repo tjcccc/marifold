@@ -177,6 +177,19 @@ export class ConfigManager {
       case 'compaction_keep_turns':
         this.config.default.compactionKeepTurns = parseNumber(value, 'default.compaction_keep_turns');
         return;
+      case 'session_context_turns': {
+        const trimmed = value.trim().toLowerCase();
+        if (trimmed === 'all' || trimmed === '') {
+          this.config.default.sessionContextTurns = undefined;
+        } else {
+          const turns = parseNumber(value, 'default.session_context_turns');
+          if (!Number.isInteger(turns) || turns < 0) {
+            throw MarifoldError.configInvalid('Expected default.session_context_turns to be a non-negative integer or "all".');
+          }
+          this.config.default.sessionContextTurns = turns;
+        }
+        return;
+      }
       case 'think':
         this.config.default.think = parseBoolean(value, 'default.think');
         return;
@@ -267,6 +280,7 @@ export function renderMarifoldConfig(config: MarifoldConfig): string {
     optionalNumberLine('max_system_chars', config.default.maxSystemChars),
     optionalNumberLine('max_context_tokens', config.default.maxContextTokens),
     optionalNumberLine('compaction_keep_turns', config.default.compactionKeepTurns),
+    optionalNumberLine('session_context_turns', config.default.sessionContextTurns),
     `think = ${config.default.think}`,
   ].filter(Boolean);
 
