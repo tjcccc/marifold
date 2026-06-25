@@ -41,6 +41,7 @@ export class ProfileResolver implements ProfileLoader {
     const provider = optionalString(raw.provider, `${name}.profile.toml provider`);
     const model = optionalString(raw.model, `${name}.profile.toml model`);
     const memories = optionalBoolean(raw.memories, `${name}.profile.toml memories`) ?? true;
+    const maxContextTokens = optionalNumber(raw.max_context_tokens, `${name}.profile.toml max_context_tokens`);
     const rawMode = optionalString(raw.mode, `${name}.profile.toml mode`);
     if (rawMode !== undefined && rawMode !== 'agent' && rawMode !== 'chat') {
       throw MarifoldError.profileInvalid(
@@ -54,7 +55,7 @@ export class ProfileResolver implements ProfileLoader {
         name,
       );
     }
-    return { provider, model, memories, mode: rawMode as ProfileMode | undefined };
+    return { provider, model, memories, mode: rawMode as ProfileMode | undefined, maxContextTokens };
   }
 
   list(): ProfileSummary[] {
@@ -214,4 +215,10 @@ function optionalBoolean(value: unknown, label: string): boolean | undefined {
   if (value === undefined) return undefined;
   if (typeof value === 'boolean') return value;
   throw MarifoldError.configInvalid(`Expected ${label} to be a boolean.`);
+}
+
+function optionalNumber(value: unknown, label: string): number | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  throw MarifoldError.configInvalid(`Expected ${label} to be a number.`);
 }

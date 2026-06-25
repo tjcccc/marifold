@@ -35,6 +35,14 @@ export interface CommandContext {
   remember(text: string): void;
   forget(query: string): void;
   deleteMemory(query: string): void;
+  /** Show the current context budget + usage. */
+  showContextWindow(): void;
+  /** Set the context budget for this session (tokens), or 0/undefined to disable. */
+  setContextWindow(tokens?: number): void;
+  /** Persist the context budget as the current profile's default (profile.toml). */
+  setDefaultContextWindow(tokens?: number): void;
+  /** Compact the current session now (model-backed). */
+  compactNow(): void;
 }
 
 export interface CommandSpec {
@@ -151,7 +159,41 @@ const COMMANDS: CommandSpec[] = [
       else ctx.deleteMemory(query);
     },
   },
+  {
+    name: 'context-window',
+    aliases: ['ctx'],
+    summary: 'Context budget: /context-window, set <tokens|off> [default].',
+    run: (ctx, args) => {
+      const parts = args.trim().split(/\s+/).filter(Boolean);
+      if (parts.length === 0) { ctx.showContextWindow(); return; }
+      if (parts[0].toLowerCase() !== 'set') {
+        ctx.notify('Usage: /context-window [set <tokens|off> [default]]', 'warn');
+        return;
+      }
+      const toDefault = parts[2]?.toLowerCase() === 'default';
+      const raw = (parts[1] ?? '').toLowerCase();
+      if (raw === 'off') {
+        if (toDefault) ctx.setDefaultContextWindow(undefined); else ctx.setContextWindow(undefined);
+        return;
+      }
+      const tokens = parseTokens(raw);
+      if (tokens == null) {
+        ctx.notify('Usage: /context-window set <tokens|off> [default] (e.g. 16000 or 16k)', 'warn');
+        return;
+      }
+      if (toDefault) ctx.setDefaultContextWindow(tokens); else ctx.setContextWindow(tokens);
+    },
+  },
+  { name: 'compact', summary: 'Compact the current session now (summarize older turns).', run: ctx => ctx.compactNow() },
 ];
+
+/** Parse a token count: "16000" or "16k"/"16K" → 16000. Returns undefined when invalid. */
+function parseTokens(raw: string): number | undefined {
+  const match = /^(\d+(?:\.\d+)?)(k)?$/i.exec(raw);
+  if (!match) return undefined;
+  const value = Number(match[1]) * (match[2] ? 1000 : 1);
+  return Number.isFinite(value) && value > 0 ? Math.round(value) : undefined;
+}
 
 const REGISTRY = new Map<string, CommandSpec>();
 for (const spec of COMMANDS) {

@@ -4,4 +4,4 @@ allowBuilds:
   better-sqlite3: true
   esbuild: true
 minimumReleaseAgeExclude:
-  - '@priest-ai/core@2.4.0'
+  - '@priest-ai/core@2.5.0'

@@ -28,6 +28,10 @@ export interface AppState {
   /** A known newer version; drives the header's update notice when set. */
   latestVersion?: string;
   sessionId?: string;
+  /** Conversation-context budget in tokens for the active profile (undefined = compaction off). */
+  maxContextTokens?: number;
+  /** Input tokens the last turn sent — drives the context gauge. */
+  contextTokens?: number;
   transcript: TranscriptItem[];
   running: boolean;
   /** Pending approval request; non-undefined drives the approval modal. */
@@ -49,6 +53,8 @@ export interface InitialAppState {
   latestVersion?: string;
   mode?: Mode;
   sessionId?: string;
+  /** Conversation-context budget in tokens for the launch profile (undefined = off). */
+  maxContextTokens?: number;
   /** Pre-existing transcript to seed (e.g. a resumed session's turns). */
   transcript?: TranscriptItemData[];
 }
@@ -66,6 +72,7 @@ export function createInitialState(init: InitialAppState): AppState {
     version: init.version,
     ...(init.latestVersion ? { latestVersion: init.latestVersion } : {}),
     ...(init.sessionId ? { sessionId: init.sessionId } : {}),
+    ...(init.maxContextTokens != null ? { maxContextTokens: init.maxContextTokens } : {}),
     transcript: seeded,
     running: false,
     streamingAssistant: false,
@@ -77,7 +84,7 @@ export function createInitialState(init: InitialAppState): AppState {
 export type AppAction =
   | { type: 'set_mode'; mode: Mode }
   | { type: 'set_model'; provider: string; model: string }
-  | { type: 'set_profile'; profile: string; provider: string; model: string }
+  | { type: 'set_profile'; profile: string; provider: string; model: string; maxContextTokens?: number }
   | { type: 'add_user'; text: string }
   | { type: 'add_item'; item: TranscriptItemData }
   | { type: 'assistant_delta'; text: string }
@@ -90,6 +97,8 @@ export type AppAction =
   | { type: 'clear' }
   | { type: 'new_session'; sessionId?: string }
   | { type: 'set_session'; sessionId?: string }
+  | { type: 'set_context_usage'; tokens?: number }
+  | { type: 'set_context_budget'; maxContextTokens?: number }
   | { type: 'exit' };
 
 function withItem(state: AppState, item: TranscriptItemData): AppState {
@@ -113,7 +122,14 @@ export function appReducer(state: AppState, action: AppAction): AppState {
     case 'set_model':
       return { ...state, provider: action.provider, model: action.model };
     case 'set_profile':
-      return { ...state, profile: action.profile, provider: action.provider, model: action.model };
+      return {
+        ...state,
+        profile: action.profile,
+        provider: action.provider,
+        model: action.model,
+        maxContextTokens: action.maxContextTokens,
+        contextTokens: undefined,
+      };
     case 'add_user':
       return withItem(state, { kind: 'user', text: action.text });
     case 'add_item':
@@ -151,9 +167,13 @@ export function appReducer(state: AppState, action: AppAction): AppState {
     case 'clear':
       return { ...state, transcript: [], streamingAssistant: false };
     case 'new_session':
-      return { ...state, transcript: [], streamingAssistant: false, sessionId: action.sessionId };
+      return { ...state, transcript: [], streamingAssistant: false, sessionId: action.sessionId, contextTokens: undefined };
     case 'set_session':
       return { ...state, sessionId: action.sessionId };
+    case 'set_context_usage':
+      return { ...state, contextTokens: action.tokens };
+    case 'set_context_budget':
+      return { ...state, maxContextTokens: action.maxContextTokens };
     case 'exit':
       return { ...state, exiting: true };
     default:

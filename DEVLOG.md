@@ -2,6 +2,16 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-06-25 — v0.26.0 — Conversation context compaction (chat) + context-budget UI
+
+- **Bounds chat token cost.** Sessions replayed full history every turn (linear per turn, quadratic per session). Now on `@priest-ai/core@2.5.0`, which folds older turns into a running summary once a turn's input exceeds ~80% of a token budget — non-destructive (raw turns kept; summary in session metadata). Verified live: x-runner chat dropped ~33K → ~4K tokens.
+- **Config:** `default.max_context_tokens` (+ `compaction_keep_turns`) and per-profile `max_context_tokens`, with a session-scoped run override. New workspaces ship `max_context_tokens = 16000`; profiles inherit it (override per-profile or globally). 16K chosen from measured turn density — ~10 turns between compactions, no thrash.
+- **TUI:** footer context gauge (`ctx 62% · 9.9K/16K`), cached-input-token figure in the run summary, `/context-window` (status / `set N` / `set N default` / `set off`; `ctx` alias) and `/compact` (manual fold). Auto-compaction's summary call is cancellable via the run's abort signal.
+- **Runtime:** `compactSession`, `setProfileMaxContextTokens`, cached-token usage propagation through `AgentUsage`/`sumUsage`.
+- Swapped `@priest-ai/core` `^2.4.0` → `^2.5.0` (published).
+- **Scope: chat.** The agent *session* (clean objective→answer pairs) is also compactable, but the agent *intra-run loop* context (plan + tool outputs) is NOT bounded by this — separate next track. Footer gauge is chat-accurate, rough in agent mode (sums input across a run's internal calls).
+- Verified: core 146, tui 42, service 4 — all pass; all 4 packages build/typecheck green. DashScope/bailian returns no `cached_tokens`, so no prefix caching to exploit (16K cost-safe is correct).
+
 ## 2026-06-24 — v0.25.1 — Refactor + test hardening (model pickers, App helpers, run-routing harness)
 
 - **`commands/model.ts` slimmed 803 → 472 lines.** The interactive provider/model pickers (`resolveModelAddTarget` and its helpers, plus the OAuth credential prompts) moved into a shared `cli/src/input/ModelPicker.ts`; `init` now imports them from there instead of from the `model` command, removing a cross-command import. Behavior unchanged.

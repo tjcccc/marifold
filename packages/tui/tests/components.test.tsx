@@ -5,9 +5,26 @@ import { Transcript } from '../src/ui/Transcript.js';
 import { Markdown } from '../src/ui/Markdown.js';
 import { ApprovalModal } from '../src/ui/ApprovalModal.js';
 import { SelectList } from '../src/ui/SelectList.js';
+import { StatusLine } from '../src/ui/StatusLine.js';
+import { createInitialState } from '../src/core/appState.js';
 import type { TranscriptItem } from '../src/core/appState.js';
 
 const delay = () => new Promise(resolve => setTimeout(resolve, 20));
+
+describe('StatusLine context gauge', () => {
+  const base = { profile: 'x-runner', provider: 'bailian', model: 'qwen', cwd: '/tmp/work', version: '0' };
+
+  it('hides the gauge when no budget is set', () => {
+    const frame = render(<StatusLine state={createInitialState({ ...base })} />).lastFrame() ?? '';
+    expect(frame).not.toContain('ctx');
+  });
+
+  it('shows budget placeholder before any turn, then percent + usage', () => {
+    const seeded = createInitialState({ ...base, maxContextTokens: 16000 });
+    expect(render(<StatusLine state={seeded} />).lastFrame() ?? '').toContain('ctx –/16K');
+    expect(render(<StatusLine state={{ ...seeded, contextTokens: 9900 }} />).lastFrame() ?? '').toContain('ctx 62% · 9.9K/16K');
+  });
+});
 
 describe('Markdown math normalization', () => {
   it('renders inline LaTeX temperatures as plain unicode, leaving currency alone', () => {

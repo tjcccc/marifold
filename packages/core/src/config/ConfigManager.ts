@@ -171,6 +171,12 @@ export class ConfigManager {
       case 'max_system_chars':
         this.config.default.maxSystemChars = parseNumber(value, 'default.max_system_chars');
         return;
+      case 'max_context_tokens':
+        this.config.default.maxContextTokens = parseNumber(value, 'default.max_context_tokens');
+        return;
+      case 'compaction_keep_turns':
+        this.config.default.compactionKeepTurns = parseNumber(value, 'default.compaction_keep_turns');
+        return;
       case 'think':
         this.config.default.think = parseBoolean(value, 'default.think');
         return;
@@ -259,6 +265,8 @@ export function renderMarifoldConfig(config: MarifoldConfig): string {
     optionalNumberLine('timeout_seconds', config.default.timeoutSeconds),
     optionalNumberLine('max_output_tokens', config.default.maxOutputTokens),
     optionalNumberLine('max_system_chars', config.default.maxSystemChars),
+    optionalNumberLine('max_context_tokens', config.default.maxContextTokens),
+    optionalNumberLine('compaction_keep_turns', config.default.compactionKeepTurns),
     `think = ${config.default.think}`,
   ].filter(Boolean);
 

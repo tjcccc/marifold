@@ -100,6 +100,7 @@ export async function runTui(options: RunTuiOptions): Promise<void> {
       mode: settings.mode,
       cwd: process.cwd(),
       version: readVersion(),
+      maxContextTokens: settings.maxContextTokens ?? options.loadedConfig.config.default.maxContextTokens,
       ...(resumeSessionId ? { sessionId: resumeSessionId } : {}),
       ...(resumeTranscript ? { transcript: resumeTranscript } : {}),
     };

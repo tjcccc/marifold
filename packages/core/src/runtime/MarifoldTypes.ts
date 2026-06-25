@@ -19,6 +19,8 @@ export interface MarifoldRunRequest {
   instructions?: string[];
   /** Set false to disable model-initiated chat tools for this run even when [web_search].enabled is true. */
   chatTools?: boolean;
+  /** Session-scoped context-budget override (e.g. /context-window set N). Wins over profile/global. */
+  maxContextTokens?: number;
 }
 
 export interface MarifoldResolvedSettings {
@@ -28,6 +30,8 @@ export interface MarifoldResolvedSettings {
   think: boolean;
   /** The profile's default TUI mode (`agent` unless the profile overrides it). */
   mode: ProfileMode;
+  /** Per-profile conversation-context budget in tokens; undefined falls back to default.maxContextTokens. */
+  maxContextTokens?: number;
 }
 
 export interface MarifoldRunError {

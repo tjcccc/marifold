@@ -129,6 +129,8 @@ export class ConfigLoader {
       timeoutSeconds: optionalNumber(raw.timeout_seconds, 'default.timeout_seconds'),
       maxOutputTokens: optionalNumber(raw.max_output_tokens, 'default.max_output_tokens'),
       maxSystemChars: optionalNumber(raw.max_system_chars, 'default.max_system_chars'),
+      maxContextTokens: optionalNumber(raw.max_context_tokens, 'default.max_context_tokens'),
+      compactionKeepTurns: optionalNumber(raw.compaction_keep_turns, 'default.compaction_keep_turns'),
       think: optionalBoolean(raw.think, 'default.think') ?? false,
     };
   }

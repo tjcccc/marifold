@@ -52,6 +52,8 @@ describe('WorkspaceInitializer', () => {
       model: 'gemma4:e4b',
       profile: 'default',
       think: false,
+      // New workspaces ship with conversation compaction on by default; profiles inherit it.
+      maxContextTokens: 16000,
     });
     expect(loaded.config.models.options).toEqual(['ollama/gemma4:e4b']);
     expect(loaded.config.memory).toEqual({ sizeLimit: 50000, contextLimit: 2400 });

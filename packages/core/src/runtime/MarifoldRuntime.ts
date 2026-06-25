@@ -72,7 +72,7 @@ export class MarifoldRuntime {
     this.scheduleStore = new ScheduleStore(config.paths.schedulesDir ?? defaultSchedulesDir());
   }
 
-  resolveSettings(request: Pick<MarifoldRunRequest, 'profile' | 'provider' | 'model' | 'think'>): MarifoldResolvedSettings {
+  resolveSettings(request: Pick<MarifoldRunRequest, 'profile' | 'provider' | 'model' | 'think' | 'maxContextTokens'>): MarifoldResolvedSettings {
     const { config, configPath } = this.options.loadedConfig;
     const profile = request.profile ?? config.default.profile;
     const profileSettings = this.profileResolver.loadSettings(profile);
@@ -81,7 +81,7 @@ export class MarifoldRuntime {
     const think = request.think ?? config.default.think;
     const mode = profileSettings.mode ?? 'agent';
     if (!provider || !model) throw MarifoldError.missingProviderModel(configPath);
-    return { profile, provider, model, think, mode };
+    return { profile, provider, model, think, mode, maxContextTokens: request.maxContextTokens ?? profileSettings.maxContextTokens };
   }
 
   async ask(request: MarifoldRunRequest): Promise<MarifoldAskResponse> {
@@ -252,6 +252,23 @@ export class MarifoldRuntime {
    * mode that was written. */
   setProfileMode(name: string, mode: ProfileMode): ProfileMode {
     return this.profileManager.setMode(name, mode).mode;
+  }
+
+  /** Persist (or clear) a profile's conversation-context budget in profile.toml. */
+  setProfileMaxContextTokens(name: string, tokens: number | undefined): number | undefined {
+    return this.profileManager.setMaxContextTokens(name, tokens).maxContextTokens;
+  }
+
+  /** Manually compact a session now (the /compact command). Returns whether anything was folded. */
+  async compactSession(
+    sessionId: string,
+    request: Pick<MarifoldRunRequest, 'profile' | 'provider' | 'model' | 'think' | 'maxContextTokens'>,
+  ): Promise<{ compacted: boolean }> {
+    const settings = this.resolveSettings(request);
+    await this.refreshProviderCredentialsIfNeeded(settings.provider);
+    const engine = this.createEngine(settings.provider, true);
+    const result = await engine.compactSession(sessionId, this.toPriestConfig(settings));
+    return { compacted: result.compacted };
   }
 
   listSessions(limit?: number, profileName?: string): SessionSummary[] {
@@ -553,6 +570,8 @@ export class MarifoldRuntime {
       timeoutSeconds: config.default.timeoutSeconds,
       maxOutputTokens: config.default.maxOutputTokens,
       maxSystemChars: config.default.maxSystemChars,
+      maxContextTokens: settings.maxContextTokens ?? config.default.maxContextTokens,
+      compactionKeepTurns: config.default.compactionKeepTurns,
       providerOptions: this.supportsThink(settings.provider) ? { think: settings.think } : undefined,
     };
   }
@@ -611,6 +630,7 @@ function sumUsage(a: UsageInfo | undefined, b: UsageInfo | undefined): UsageInfo
     inputTokens: add(a.inputTokens, b.inputTokens),
     outputTokens: add(a.outputTokens, b.outputTokens),
     totalTokens: add(a.totalTokens, b.totalTokens),
+    cachedInputTokens: add(a.cachedInputTokens, b.cachedInputTokens),
     estimatedCostUSD: add(a.estimatedCostUSD, b.estimatedCostUSD),
   };
 }

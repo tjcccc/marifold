@@ -9,6 +9,10 @@ export interface MarifoldDefaultConfig {
   timeoutSeconds?: number;
   maxOutputTokens?: number;
   maxSystemChars?: number;
+  /** Conversation-context budget in tokens. Enables session compaction when set (unset = off). */
+  maxContextTokens?: number;
+  /** Recent turns kept verbatim when compacting; older turns fold into the summary. */
+  compactionKeepTurns?: number;
   think: boolean;
 }
 
@@ -108,6 +112,8 @@ export interface ProfileSettings {
   memories: boolean;
   /** Default TUI mode for this profile; undefined falls back to `agent`. */
   mode?: ProfileMode;
+  /** Per-profile conversation-context budget in tokens; falls back to default.maxContextTokens. */
+  maxContextTokens?: number;
 }
 
 export interface ProfileSummary {

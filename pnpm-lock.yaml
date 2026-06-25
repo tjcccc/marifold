@@ -49,8 +49,8 @@ importers:
   packages/core:
     dependencies:
       '@priest-ai/core':
-        specifier: ^2.4.0
-        version: 2.4.0
+        specifier: ^2.5.0
+        version: 2.5.0
       better-sqlite3:
         specifier: ^11.10.0
         version: 11.10.0
@@ -289,8 +289,8 @@ packages:
   '@pinojs/redact@0.4.0':
     resolution: {integrity: sha512-k2ENnmBugE/rzQfEcdWHcCY+/FM3VLzH9cYEsbdsoqrvzAKRhUZeRNhAZvB8OitQJ1TBed3yqWtdjzS6wJKBwg==}
 
-  '@priest-ai/core@2.4.0':
-    resolution: {integrity: sha512-KU9hPMlmJedbQqHCaOR+uIBFkm2ojoDncGXTcZJESD5+ypu51BBgkP4Ap+Mmk/ua4SDYMLeU5aE4TOBE1zRiYA==}
+  '@priest-ai/core@2.5.0':
+    resolution: {integrity: sha512-WcS23pDZtzyyiCeDdRUtolAP3OlMgJtePfU1OAYFYg7Shy6icEZ3cuhYzZtZgI0Hj3wLGdY6yiz1mZvehQ0spg==}
     engines: {node: '>=18.0.0'}
 
   '@rollup/rollup-android-arm-eabi@4.61.0':
@@ -1253,7 +1253,7 @@ snapshots:
 
   '@pinojs/redact@0.4.0': {}
 
-  '@priest-ai/core@2.4.0':
+  '@priest-ai/core@2.5.0':
     dependencies:
       better-sqlite3: 11.10.0
 

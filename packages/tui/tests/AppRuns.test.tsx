@@ -66,6 +66,17 @@ function initial(mode: Mode) {
 const delay = () => new Promise(resolve => setTimeout(resolve, 30));
 
 describe('App run routing', () => {
+  it('seeds the context gauge from the launch budget (inherited from config/profile)', async () => {
+    const { runtime } = makeRuntime();
+    const { lastFrame, unmount } = render(
+      <App runtime={runtime} loadedConfig={config} initial={{ ...initial('chat'), maxContextTokens: 16000 }} />,
+    );
+    await delay();
+    // The gauge shows the budget at launch, before any turn is measured.
+    expect(lastFrame()).toContain('ctx –/16K');
+    unmount();
+  });
+
   it('routes a plain message to the agent in agent mode (no forced plan)', async () => {
     const { runtime, runSpy, streamSpy } = makeRuntime();
     const { stdin, unmount } = render(<App runtime={runtime} loadedConfig={config} initial={initial('agent')} />);

@@ -32,6 +32,9 @@ export function runSummary(elapsedMs: number, usage?: AgentUsage): string {
       ? (usage.inputTokens ?? 0) + (usage.outputTokens ?? 0)
       : undefined);
   if (total != null) parts.push(`${total.toLocaleString()} tokens`);
+  if (usage?.cachedInputTokens != null && usage.cachedInputTokens > 0) {
+    parts.push(`${usage.cachedInputTokens.toLocaleString()} cached`);
+  }
   if (usage?.estimatedCostUSD != null && usage.estimatedCostUSD > 0) {
     parts.push(`$${usage.estimatedCostUSD.toFixed(4)}`);
   }

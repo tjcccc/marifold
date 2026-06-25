@@ -120,6 +120,16 @@ export class ProfileManager {
     return { name, path: profileToml, mode };
   }
 
+  /** Persist (or clear, when tokens is undefined/0) the profile's context budget. */
+  setMaxContextTokens(name: string, tokens: number | undefined): { name: string; path: string; maxContextTokens?: number } {
+    assertSafeName(name);
+    const profileDir = this.requireProfileDir(name);
+    const profileToml = path.join(profileDir, 'profile.toml');
+    const current = fs.existsSync(profileToml) ? fs.readFileSync(profileToml, 'utf-8') : PROFILE_TOML_STUB;
+    fs.writeFileSync(profileToml, upsertMaxContextTokens(current, tokens));
+    return { name, path: profileToml, maxContextTokens: tokens && tokens > 0 ? tokens : undefined };
+  }
+
   rename(from: string, to: string): ProfileRenameResult {
     assertSafeName(from);
     assertSafeName(to);
@@ -201,6 +211,14 @@ function upsertMode(text: string, mode: ProfileMode): string {
   const cleaned = lines.join('\n').trimEnd();
   const prefix = cleaned ? `${cleaned}\n\n` : '';
   return `${prefix}mode = ${tomlString(mode)}\n`;
+}
+
+function upsertMaxContextTokens(text: string, tokens: number | undefined): string {
+  const lines = text.split(/\r?\n/).filter(line => !line.trimStart().startsWith('max_context_tokens ='));
+  const cleaned = lines.join('\n').trimEnd();
+  if (tokens == null || tokens <= 0) return cleaned ? `${cleaned}\n` : PROFILE_TOML_STUB;
+  const prefix = cleaned ? `${cleaned}\n\n` : '';
+  return `${prefix}max_context_tokens = ${Math.round(tokens)}\n`;
 }
 
 function removeModelOverride(text: string): string {

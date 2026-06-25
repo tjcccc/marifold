@@ -9,6 +9,8 @@ export interface AgentUsage {
   inputTokens?: number;
   outputTokens?: number;
   totalTokens?: number;
+  /** Portion of inputTokens served from the provider's prompt cache, when reported. */
+  cachedInputTokens?: number;
   estimatedCostUSD?: number;
 }
 

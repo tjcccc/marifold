@@ -49,6 +49,7 @@ export interface AppProps {
     version: string;
     latestVersion?: string;
     sessionId?: string;
+    maxContextTokens?: number;
     transcript?: TranscriptItemData[];
   };
 }
@@ -78,6 +79,7 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
       ...(initial.mode ? { mode: initial.mode } : {}),
       ...(initial.latestVersion ? { latestVersion: initial.latestVersion } : {}),
       ...(initial.sessionId ? { sessionId: initial.sessionId } : {}),
+      ...(initial.maxContextTokens != null ? { maxContextTokens: initial.maxContextTokens } : {}),
       ...(initial.transcript ? { transcript: initial.transcript } : {}),
     }),
   );
@@ -292,6 +294,7 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
     } finally {
       dispatch({ type: 'set_running', running: false });
       abortRef.current = null;
+      if (usage?.inputTokens != null) dispatch({ type: 'set_context_usage', tokens: usage.inputTokens });
       if (!controller.signal.aborted) {
         const status = doneStatus ?? 'ended';
         notify(`Task ${status}. ${runSummary(Date.now() - startedAt, usage)}`, status === 'completed' ? 'info' : 'warn');
@@ -321,6 +324,7 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
           model: current.model,
           sessionId,
           think: thinkRef.current,
+          ...(current.maxContextTokens != null ? { maxContextTokens: current.maxContextTokens } : {}),
           userContext: userContext.length > 0 ? userContext : undefined,
           ...(options.instructions ? { instructions: options.instructions } : {}),
           images: images.length > 0 ? images : undefined,
@@ -335,6 +339,7 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
     } finally {
       dispatch({ type: 'end_assistant' });
       dispatch({ type: 'set_running', running: false });
+      if (usage?.inputTokens != null) dispatch({ type: 'set_context_usage', tokens: usage.inputTokens });
       if (!cancelChatRef.current) notify(runSummary(Date.now() - startedAt, usage), 'info');
     }
   }, [runtime, notify]);
@@ -652,7 +657,13 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
     setOverlay(null);
     try {
       const settings = runtime.resolveSettings({ profile: value });
-      dispatch({ type: 'set_profile', profile: settings.profile, provider: settings.provider, model: settings.model });
+      dispatch({
+        type: 'set_profile',
+        profile: settings.profile,
+        provider: settings.provider,
+        model: settings.model,
+        maxContextTokens: settings.maxContextTokens ?? loadedConfig.config.default.maxContextTokens,
+      });
       dispatch({ type: 'set_mode', mode: settings.mode });
       dispatch({ type: 'new_session', sessionId: undefined });
       sessionGrantsRef.current.clear();
@@ -706,6 +717,42 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
     remember,
     forget,
     deleteMemory,
+    showContextWindow: () => {
+      const s = stateRef.current;
+      if (s.maxContextTokens == null || s.maxContextTokens <= 0) {
+        notify('Context budget: off (compaction disabled). Enable with /context-window set <tokens>.', 'info');
+        return;
+      }
+      const used = s.contextTokens;
+      const pct = used != null ? ` · using ${used.toLocaleString()} (${Math.round((used / s.maxContextTokens) * 100)}%)` : ' · no turn measured yet';
+      notify(`Context budget: ${s.maxContextTokens.toLocaleString()} tokens${pct}. Compacts past ~80%.`, 'info');
+    },
+    setContextWindow: (tokens?: number) => {
+      dispatch({ type: 'set_context_budget', maxContextTokens: tokens });
+      notify(tokens ? `Context budget set to ${tokens.toLocaleString()} tokens for this session.` : 'Compaction disabled for this session.', 'info');
+    },
+    setDefaultContextWindow: (tokens?: number) => {
+      try {
+        const saved = runtime.setProfileMaxContextTokens(stateRef.current.profile, tokens);
+        dispatch({ type: 'set_context_budget', maxContextTokens: saved });
+        notify(saved
+          ? `Default context budget for ${stateRef.current.profile} set to ${saved.toLocaleString()} tokens (this and future sessions).`
+          : `Compaction disabled by default for ${stateRef.current.profile}.`, 'info');
+      } catch (error) {
+        notify(`Could not set default context budget: ${errorText(error)}`, 'error');
+      }
+    },
+    compactNow: () => {
+      const s = stateRef.current;
+      if (!s.sessionId) { notify('No active session to compact yet — send a message first.', 'warn'); return; }
+      if (s.maxContextTokens == null) { notify('Set a context budget first: /context-window set <tokens>.', 'warn'); return; }
+      notify('Compacting context…', 'info');
+      runtime.compactSession(s.sessionId, {
+        profile: s.profile, provider: s.provider, model: s.model, think: thinkRef.current, maxContextTokens: s.maxContextTokens,
+      }).then(result => {
+        notify(result.compacted ? 'Context compacted — older turns folded into a summary.' : 'Nothing to compact yet (history fits within the kept tail).', 'info');
+      }).catch(error => notify(`Compaction failed: ${errorText(error)}`, 'error'));
+    },
   }), [
     notify, stop, steer, exit, openModelPicker, openProfilePicker, selectProfile, openSkills,
     showPermissions, showHelp, showStatus, copyLast, showSessions, runDoctor, installSkill,

@@ -90,6 +90,25 @@ describe('appReducer', () => {
     expect(state.sessionId).toBe('s1');
   });
 
+  it('tracks the context gauge: budget, usage, and resets across session/profile', () => {
+    let state = appReducer({ ...initial(), maxContextTokens: 16000 }, { type: 'set_context_usage', tokens: 9900 });
+    expect(state.contextTokens).toBe(9900);
+
+    // A new session clears measured usage but keeps the budget.
+    state = appReducer(state, { type: 'new_session', sessionId: 's2' });
+    expect(state.contextTokens).toBeUndefined();
+    expect(state.maxContextTokens).toBe(16000);
+
+    // set_context_budget changes the budget in place.
+    state = appReducer(state, { type: 'set_context_budget', maxContextTokens: 24000 });
+    expect(state.maxContextTokens).toBe(24000);
+
+    // Switching profile applies the new profile's budget and resets usage.
+    state = appReducer({ ...state, contextTokens: 5000 }, { type: 'set_profile', profile: 'p2', provider: 'x', model: 'm', maxContextTokens: 8000 });
+    expect(state.maxContextTokens).toBe(8000);
+    expect(state.contextTokens).toBeUndefined();
+  });
+
   it('seeds a resumed transcript with continuous ids and seq', () => {
     const state = createInitialState({
       profile: 'default', provider: 'ollama', model: 'm', cwd: '/tmp', version: '0.0.0-test',
@@ -121,6 +140,8 @@ function fakeCtx(): { ctx: CommandContext; calls: Record<string, unknown[]> } {
     showSessions: record('showSessions'), runDoctor: record('runDoctor'), installSkill: record('installSkill'),
     readFile: record('readFile'), setImage: record('setImage'),
     remember: record('remember'), forget: record('forget'), deleteMemory: record('deleteMemory'),
+    showContextWindow: record('showContextWindow'), setContextWindow: record('setContextWindow'),
+    setDefaultContextWindow: record('setDefaultContextWindow'), compactNow: record('compactNow'),
   } as unknown as CommandContext;
   return { ctx, calls };
 }
@@ -152,6 +173,40 @@ describe('commands', () => {
     expect(calls.setThink).toEqual([true]);
     runCommand(ctx, 'think', 'sideways');
     expect(calls.notify).toBeDefined();
+  });
+
+  it('routes /context-window: status, session set, profile default, off, and k-suffix', () => {
+    const { ctx, calls } = fakeCtx();
+    runCommand(ctx, 'context-window', '');
+    expect(calls.showContextWindow).toBeDefined();
+
+    runCommand(ctx, 'context-window', 'set 16000');
+    expect(calls.setContextWindow).toEqual([16000]);
+
+    runCommand(ctx, 'context-window', 'set 16k');
+    expect(calls.setContextWindow).toEqual([16000]);
+
+    runCommand(ctx, 'context-window', 'set 24000 default');
+    expect(calls.setDefaultContextWindow).toEqual([24000]);
+
+    runCommand(ctx, 'context-window', 'set off');
+    expect(calls.setContextWindow).toEqual([undefined]);
+
+    runCommand(ctx, 'ctx', 'set off default'); // alias + disable default
+    expect(calls.setDefaultContextWindow).toEqual([undefined]);
+  });
+
+  it('rejects an invalid /context-window token argument', () => {
+    const { ctx, calls } = fakeCtx();
+    runCommand(ctx, 'context-window', 'set lots');
+    expect(calls.setContextWindow).toBeUndefined();
+    expect(calls.notify).toBeDefined();
+  });
+
+  it('/compact triggers a manual fold', () => {
+    const { ctx, calls } = fakeCtx();
+    expect(runCommand(ctx, 'compact', '')).toBe(true);
+    expect(calls.compactNow).toBeDefined();
   });
 });
 
