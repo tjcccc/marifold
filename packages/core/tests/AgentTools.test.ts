@@ -38,6 +38,15 @@ describe('ToolRegistry', () => {
     expect(capToolOutput('abcdef', 3)).toContain('truncated');
     expect(capToolOutput('abc', 10)).toBe('abc');
   });
+
+  it('keeps head AND tail when capping a large output', () => {
+    const content = `HEAD${'x'.repeat(100)}TAIL`;
+    const out = capToolOutput(content, 20);
+    expect(out).toContain('HEAD');
+    expect(out).toContain('TAIL'); // the end survives, unlike head-only truncation
+    expect(out).toContain('truncated');
+    expect(out.length).toBeLessThan(content.length);
+  });
 });
 
 describe('ReadFileTool', () => {

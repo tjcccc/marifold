@@ -2,6 +2,13 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-06-25 — v0.27.0 — Bounded cross-objective agent memory + agent-cost trace
+
+- **Agent mode was stateless across objectives.** The agent engine has no session store (to avoid persisting raw `Objective:`/tool framing), so a regular task saw only `system + objective` and couldn't reference a prior turn — "save the above prompt" silently saved the wrong content (the profile's system prompt). Now **non-lean** agent tasks get a **bounded window of the recent clean session pairs** (objective → answer, the ones `appendExchange` persists — never raw framing) injected as an `## Earlier in this conversation` context block, capped by the profile's `max_context_tokens` char budget. Deterministic window — no model call, no priest change. **Lean/skill runs stay stateless** (isolated, subagent-style), matching the chat=stateful / skill=isolated split. Verified live: "save the above prompt" now writes the actual prompt.
+- **Tool-output cap keeps head + tail** (`capToolOutput`) so the end of a large read/shell output survives truncation; default 100K cap left unchanged (measurement showed no intra-run explosion in real use, so lowering it would only risk reliability).
+- **Agent-cost trace** (opt-in: `MARIFOLD_AGENT_TRACE=1` → `~/.marifold/agent-trace.jsonl`): per-iteration input tokens, cumulative loop size, and per-tool-result sizes. Off by default, file-based, never throws. The measurement it enabled confirmed agent loops don't explode for this workload (tool results are tiny confirmations) → eviction not needed; kept as a diagnostic for future tuning.
+- Verified: core 153 (+7: history window, non-lean injection, lean-stays-stateless, head+tail cap), service 4, tui 42 — all pass; 4 packages build clean. projnavi manifest refreshed.
+
 ## 2026-06-25 — v0.26.0 — Conversation context compaction (chat) + context-budget UI
 
 - **Bounds chat token cost.** Sessions replayed full history every turn (linear per turn, quadratic per session). Now on `@priest-ai/core@2.5.0`, which folds older turns into a running summary once a turn's input exceeds ~80% of a token budget — non-destructive (raw turns kept; summary in session metadata). Verified live: x-runner chat dropped ~33K → ~4K tokens.

@@ -320,6 +320,12 @@ export class MarifoldRuntime {
       // session shows the result, not the agent's internal framing.
       persistTurn: (sessionId, profile, userText, assistantText) =>
         this.sessionResolver.appendExchange(sessionId, profile, userText, assistantText),
+      // Bounded cross-objective memory for non-lean tasks: replay the clean
+      // pairs (objective → answer) that persistTurn wrote, never raw framing.
+      loadRecentTurns: sessionId =>
+        (this.sessionResolver.get(sessionId)?.turns ?? [])
+          .filter(t => t.role === 'user' || t.role === 'assistant')
+          .map(t => ({ role: t.role as 'user' | 'assistant', content: t.content })),
     });
   }
 

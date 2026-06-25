@@ -116,6 +116,43 @@ describe('AgentRunner', () => {
     expect(engine.requests[1].session).toEqual({ id: 'sess-1', createIfMissing: true }); // loop turn
   });
 
+  function runnerWithHistory(engine: AgentEngine, recent: Array<{ role: 'user' | 'assistant'; content: string }>): AgentRunner {
+    const registry = new ToolRegistry();
+    registry.register(fakeTool());
+    return new AgentRunner({
+      taskStore: new TaskStore(tempDir()),
+      registry,
+      agentConfig: resolveAgentConfig({}),
+      resolveSettings: () => ({ profile: 'default', provider: 'mock', model: 'test-model', think: false, mode: 'agent', maxContextTokens: 16000 }),
+      prepareEngine: async () => ({ engine, config: { provider: 'mock', model: 'test-model' } }),
+      loadRecentTurns: () => recent,
+    });
+  }
+
+  it('injects bounded prior-conversation memory into NON-lean runs', async () => {
+    const engine = new ScriptedEngine([response({ text: 'Saved.' })]);
+    const runner = runnerWithHistory(engine, [
+      { role: 'user', content: 'make a prompt' },
+      { role: 'assistant', content: 'A colossal spacecraft glides past Jupiter.' },
+    ]);
+    await collect(runner.run({ objective: 'save the above prompt', cwd: tempDir(), sessionId: 'sess-1' }));
+    const ctx = (engine.requests[0].context ?? []).join('\n');
+    expect(ctx).toContain('## Earlier in this conversation');
+    expect(ctx).toContain('A colossal spacecraft glides past Jupiter.');
+  });
+
+  it('keeps lean (skill) runs stateless — no prior conversation injected', async () => {
+    const engine = new ScriptedEngine([response({ text: 'Output.' })]);
+    const runner = runnerWithHistory(engine, [
+      { role: 'user', content: 'prior' },
+      { role: 'assistant', content: 'SECRET-PRIOR-OUTPUT' },
+    ]);
+    await collect(runner.run({ objective: 'run skill', cwd: tempDir(), sessionId: 'sess-1', lean: true, instructions: ['skill body'] }));
+    const ctx = (engine.requests[0].context ?? []).join('\n');
+    expect(ctx).not.toContain('Earlier in this conversation');
+    expect(ctx).not.toContain('SECRET-PRIOR-OUTPUT');
+  });
+
   it('forwards objective images on the first agent turn only', async () => {
     const engine = new ScriptedEngine([
       planResponse,

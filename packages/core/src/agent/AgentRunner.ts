@@ -9,7 +9,11 @@ import {
   UsageInfo,
 } from '@priest-ai/core';
 import * as crypto from 'crypto';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import { stripMemoryControls } from '../memory/MemoryControls';
+import { buildHistoryContext, HistoryTurn } from './AgentHistory';
 import { MarifoldResolvedSettings, MarifoldRunRequest } from '../runtime/MarifoldTypes';
 import { TaskState, TaskStatus, TaskStore } from '../tasks/TaskStore';
 import { AgentEvent, AgentUsage } from './AgentEvents';
@@ -100,13 +104,21 @@ export interface AgentRunnerDeps {
   /** Persist one clean conversation turn (objective → final answer) to the
    * session, so resuming shows the result without the raw agent framing. */
   persistTurn?: (sessionId: string, profile: string, userText: string, assistantText: string) => Promise<void>;
+  /** Load the session's clean turns (objective → answer pairs) for bounded
+   * cross-objective memory on NON-lean runs. Lean/skill runs stay stateless. */
+  loadRecentTurns?: (sessionId: string) => HistoryTurn[];
 }
+
+/** Char budget for the injected history window when no profile budget is set. */
+const HISTORY_BUDGET_DEFAULT_CHARS = 16000;
 
 interface LoopState {
   mode: Exclude<AgentToolMode, 'auto'>;
   triedNativeFallback: boolean;
   exchange: ToolExchangeTurn[];      // native mode
   transcript: string[];              // control-block mode
+  /** Bounded window of prior clean conversation (non-lean runs only). */
+  historyContext?: string;
   toolSummaries: string[];
   /** Mid-run `/btw` guidance, surfaced to the model via userContext. */
   steeringNotes: string[];
@@ -150,11 +162,23 @@ export class AgentRunner {
       signal: options.signal,
       outputLimit: agentConfig.toolOutputLimit,
     };
+    // Bounded cross-objective memory: inject a window of the recent clean
+    // session pairs so a NON-lean task can reference prior turns ("save the
+    // above prompt"). Lean/skill runs stay stateless (isolated). Char budget ≈
+    // the token budget (CJK-heavy ~0.5 tok/char), so history never dominates.
+    const historyContext = !options.lean && options.sessionId && this.deps.loadRecentTurns
+      ? buildHistoryContext(
+          this.deps.loadRecentTurns(options.sessionId),
+          settings.maxContextTokens ?? HISTORY_BUDGET_DEFAULT_CHARS,
+        )
+      : undefined;
+
     const state: LoopState = {
       mode: requestedMode === 'auto' ? 'native' : requestedMode,
       triedNativeFallback: requestedMode !== 'auto',
       exchange: [],
       transcript: [],
+      historyContext,
       toolSummaries: [],
       steeringNotes: [],
     };
@@ -186,6 +210,18 @@ export class AgentRunner {
 
         const response = await engine.run(this.loopRequest(config, settings.profile, options, state), {
           signal: options.signal,
+        });
+
+        this.trace({
+          kind: 'iteration',
+          iteration: iterations,
+          mode: state.mode,
+          inputTokens: response.usage?.inputTokens,
+          outputTokens: response.usage?.outputTokens,
+          // Cumulative loop context the model saw this turn (the thing that grows).
+          exchangeTurns: state.exchange.length,
+          exchangeChars: state.exchange.reduce((n, t) => n + (t.kind === 'tool_result' ? t.content.length : (t.text?.length ?? 0)), 0),
+          transcriptChars: state.transcript.reduce((n, t) => n + t.length, 0),
         });
 
         if (!response.ok) {
@@ -355,6 +391,27 @@ export class AgentRunner {
     return decision;
   }
 
+  /**
+   * Opt-in diagnostic trace for agent-mode context cost (off by default).
+   * Set `MARIFOLD_AGENT_TRACE=1` to append JSONL to ~/.marifold/agent-trace.jsonl,
+   * or `MARIFOLD_AGENT_TRACE=<path>` for a custom file. Captures per-iteration
+   * input tokens + cumulative loop-context size and per-tool-result sizes, so we
+   * can see whether huge results or many small steps drive the growth. Never
+   * throws — tracing must not affect a run.
+   */
+  private trace(record: Record<string, unknown>): void {
+    const target = process.env.MARIFOLD_AGENT_TRACE;
+    if (!target) return;
+    try {
+      const file = target === '1' || target === 'true'
+        ? path.join(os.homedir(), '.marifold', 'agent-trace.jsonl')
+        : target;
+      fs.appendFileSync(file, JSON.stringify({ ts: new Date().toISOString(), ...record }) + '\n');
+    } catch {
+      // Diagnostics are best-effort; a trace failure must never break a run.
+    }
+  }
+
   private recordToolResult(
     taskId: string,
     state: LoopState,
@@ -364,6 +421,7 @@ export class AgentRunner {
     summary: string,
     appendObservation = true,
   ): void {
+    this.trace({ kind: 'tool_result', tool: call.name, chars: content.length, isError });
     if (state.mode === 'native') {
       state.exchange.push({ kind: 'tool_result', toolCallId: call.id, name: call.name, content, isError });
     } else {
@@ -447,6 +505,9 @@ export class AgentRunner {
     ];
     // Skill instructions are authoritative for this run — lead with them.
     if (instructions?.length) context.unshift(...instructions);
+    // Bounded prior-conversation memory (non-lean only) so the objective can
+    // reference earlier turns. Placed after framing, before tool instructions.
+    if (state.historyContext) context.push(state.historyContext);
     if (state.mode === 'control-block') {
       context.push(buildControlBlockInstructions(this.deps.registry.definitions()));
     }

@@ -60,10 +60,16 @@ export class ToolRegistry {
   }
 }
 
-/** Truncate tool output to the configured limit with an explicit marker. */
+/** Truncate tool output to the configured limit, keeping head AND tail so the
+ * end of an output (often where the result/error lives) survives — more useful
+ * to the agent than head-only when a large read/shell output is capped. */
 export function capToolOutput(content: string, limit: number): string {
   if (limit <= 0 || content.length <= limit) return content;
-  return `${content.slice(0, limit)}\n[output truncated at ${limit} characters]`;
+  const head = Math.ceil(limit * 0.7);
+  const tail = limit - head;
+  const omitted = content.length - limit;
+  const tailPart = tail > 0 ? `\n${content.slice(content.length - tail)}` : '';
+  return `${content.slice(0, head)}\n[output truncated — ${omitted} of ${content.length} characters omitted]${tailPart}`;
 }
 
 export function requireStringInput(input: Record<string, JSONValue>, key: string, tool: string): string {
