@@ -40,6 +40,23 @@ export async function selectTerminalOption<T>(
   let rendered = false;
   let settled = false;
 
+  // Window long lists so the rendered block never exceeds the terminal height —
+  // otherwise it scrolls past the top and the cursor-up redraw can't reach the
+  // scrolled-off rows, leaving the selection invisible above the viewport.
+  // Reserve rows for the header, the scroll hint, and a little safety margin.
+  const terminalRows = typeof output.rows === 'number' && output.rows > 0 ? output.rows : 24;
+  const visible = Math.min(options.length, Math.max(3, terminalRows - 4));
+  const windowed = options.length > visible;
+  // Constant across renders (no mid-prompt resize handling), so the cursor-up
+  // count below stays in sync with what was drawn.
+  const lineCount = 1 /* header */ + visible + (windowed ? 1 /* scroll hint */ : 0);
+
+  // Clip every drawn line to the terminal width: a wrapped line would occupy two
+  // physical rows but count as one in `lineCount`, desyncing the cursor-up redraw.
+  const terminalColumns = typeof output.columns === 'number' && output.columns > 0 ? output.columns : 80;
+  const clip = (line: string): string =>
+    line.length > terminalColumns ? `${line.slice(0, Math.max(0, terminalColumns - 1))}…` : line;
+
   input.setRawMode?.(true);
   input.resume();
 
@@ -95,23 +112,36 @@ export async function selectTerminalOption<T>(
     };
 
     const render = (): void => {
-      const lineCount = options.length + 1;
+      // Center the selection within the window, clamped to the list bounds.
+      const start = windowed
+        ? Math.min(Math.max(0, selectedIndex - Math.floor(visible / 2)), options.length - visible)
+        : 0;
       if (rendered) output.write(`\x1b[${lineCount}F`);
-      output.write(`\x1b[2K? ${message} (Use arrow keys)\n`);
-      options.forEach((option, index) => {
+      output.write(`\x1b[2K${clip(`? ${message} (Use arrow keys)`)}\n`);
+      for (let i = 0; i < visible; i += 1) {
+        const index = start + i;
+        const option = options[index];
         const prefix = index === selectedIndex ? ' » ' : '   ';
-        output.write(`\x1b[2K${prefix}${option.label}\n`);
-      });
+        output.write(`\x1b[2K${clip(`${prefix}${option.label}`)}\n`);
+      }
+      if (windowed) {
+        const above = start;
+        const below = options.length - (start + visible);
+        const hint = [above > 0 ? `↑ ${above} more` : '', below > 0 ? `↓ ${below} more` : '']
+          .filter(Boolean)
+          .join('   ');
+        output.write(`\x1b[2K${clip(`   ${hint}`)}\n`);
+      }
       rendered = true;
     };
 
     const renderFinal = (): void => {
       if (!rendered) return;
-      const lineCount = options.length + 1;
       output.write(`\x1b[${lineCount}F`);
-      output.write(`\x1b[2K? ${message} ${options[selectedIndex].label}\n`);
-      options.forEach(() => output.write('\x1b[2K\n'));
-      output.write(`\x1b[${options.length}F`);
+      output.write(`\x1b[2K${clip(`? ${message} ${options[selectedIndex].label}`)}\n`);
+      const rest = lineCount - 1;
+      for (let i = 0; i < rest; i += 1) output.write('\x1b[2K\n');
+      output.write(`\x1b[${rest}F`);
     };
 
     input.on('data', onData);
