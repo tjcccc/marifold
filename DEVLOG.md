@@ -2,6 +2,13 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-06-27 — v0.28.2 — Model-picker viewport, cached-on-server label, priest 2.6.1
+
+- **`marifold model add` picker no longer overflows.** `selectTerminalOption` (`packages/cli`) rendered every option as its own line with no viewport, so a 50+ model list overflowed the terminal and the cursor-up redraw couldn't reach scrolled-off rows — the list pinned to the bottom and the selection cursor scrolled above the top edge. Now it renders a **windowed viewport** centered on the selection with a constant block height (`<= terminal rows`) and a `↑ N more / ↓ M more` hint, plus a **width clip** so long model names can't wrap and re-desync the cursor-up math. New `TerminalSelect` tests (height cap, selection-stays-in-window, short-list full render, width clip). The in-app TUI `SelectList` was left as-is (its windowing only disengages when the full list also fits).
+- **Run-summary cached tokens now read `cached on server`.** `cachedInputTokens` is the provider's server-side prompt cache (e.g. DashScope), not the local session store; the bare `cached` was ambiguous.
+- **`@priest-ai/core` → npm `^2.6.1`.** Dropped the temporary local link now that 2.6.1 is published. 2.6.1 makes OpenAI-compatible **streaming** requests opt into token usage (`stream_options.include_usage`), so models like `deepseek-v4-flash` on bailian now report cost/context instead of `ctx –/16K`. `minimumReleaseAgeExclude` bumped to 2.6.1.
+- Verified: resolves from npm (`@priest-ai+core@2.6.1`, published dist carries the fix); typecheck + build clean; core 159, tui 42, cli 4 pass. CLI picker's real-TTY cursor path covered at the unit level only.
+
 ## 2026-06-27 — v0.28.1 — Chat-mode cancel actually aborts the in-flight request
 
 - **ESC/`/stop` in chat mode didn't stop generation.** `runChat` never created an `AbortController`, so `MarifoldRuntime.stream()` got no signal and the provider's streaming `fetch` ran to completion; `abortRef` was only set in agent mode, so `stop()`'s `abort()` was a no-op in chat; the lone `cancelChatRef` break only fired at the *next* chunk boundary, after the await. Net effect: "Cancelling…" showed but the model kept running "for a while" — exactly the reported symptom.
