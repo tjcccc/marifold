@@ -13,7 +13,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@priest-ai/core": "^2.6.0",
+    "@priest-ai/core": "^2.6.1",
     "better-sqlite3": "^11.10.0",
     "croner": "^10.0.1",
     "duck-duck-scrape": "^2.2.7",
