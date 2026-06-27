@@ -2,6 +2,13 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-06-27 — v0.28.1 — Chat-mode cancel actually aborts the in-flight request
+
+- **ESC/`/stop` in chat mode didn't stop generation.** `runChat` never created an `AbortController`, so `MarifoldRuntime.stream()` got no signal and the provider's streaming `fetch` ran to completion; `abortRef` was only set in agent mode, so `stop()`'s `abort()` was a no-op in chat; the lone `cancelChatRef` break only fired at the *next* chunk boundary, after the await. Net effect: "Cancelling…" showed but the model kept running "for a while" — exactly the reported symptom.
+- **Fix:** `MarifoldRunRequest` gains `signal?: AbortSignal`, forwarded to `engine.streamEvents(..., { signal })`; the OpenAI-compat/Ollama providers already wire that signal into the streaming body read, so an abort tears down the connection immediately. `runChat` now owns an `AbortController` (sets/clears `abortRef`, suppresses the spurious error toast on abort). Unified both modes on `controller.signal.aborted` and removed the redundant `cancelChatRef`.
+- **UX:** on cancel the lingering "Cancelling…" is replaced by a terminal **"Cancelled."** notice (chat *and* agent), so a cancel is visibly resolved.
+- Verified: core 159 (+1: runtime forwards the run signal to the provider so a cancel aborts the in-flight stream), tui 42 — all pass; 4 packages typecheck + build clean. TTY keypath not runnable here; covered at the runtime level.
+
 ## 2026-06-25 — v0.28.0 — Per-profile `session_context_turns` (recent-turn window)
 
 - **New `session_context_turns` knob** (`profile.toml`, with an optional global `[default]` fallback): a hard cap on how many recent session turns the model sees per turn. `"all"`/absent = no cap (default, fully backward compatible), `N` = last N turns, `0` = none. Older turns stay on disk; only the per-turn request is bounded. Built on **priest `@priest-ai/core@2.6.0`**'s new `PriestConfig.sessionContextTurns` (ContextBuilder windows the replay and snaps an odd window down to a user turn so it never opens on an orphan assistant message — DashScope rejects that).

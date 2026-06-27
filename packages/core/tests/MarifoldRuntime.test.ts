@@ -515,6 +515,48 @@ describe('MarifoldRuntime', () => {
       runtime.close();
     }
   });
+
+  it('forwards the run signal to the provider so a cancel aborts the in-flight stream', async () => {
+    const dir = tempDir();
+    const config: MarifoldConfig = {
+      default: { provider: 'ollama', model: 'gemma4:e4b', profile: 'default', think: false },
+      models: { options: ['ollama/gemma4:e4b'] },
+      memory: { sizeLimit: 50000, contextLimit: 2400 },
+      paths: {
+        profilesDir: path.join(dir, 'profiles'),
+        sessionsDb: path.join(dir, 'sessions.db'),
+        tasksDir: path.join(dir, 'tasks'),
+      },
+      providers: { ollama: { type: 'ollama', baseUrl: 'http://localhost:11434' } },
+    };
+
+    let capturedSignal: AbortSignal | undefined;
+    vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      capturedSignal = init?.signal ?? undefined;
+      return ollamaStreamingResponse(['hello ', 'world']);
+    }));
+
+    const runtime = new MarifoldRuntime({
+      loadedConfig: { config, configPath: path.join(dir, 'config.toml'), foundConfig: true },
+    });
+
+    try {
+      const controller = new AbortController();
+      const stream = runtime.stream({ prompt: 'hi', signal: controller.signal });
+      // Consume the first chunk so fetch has been issued with our signal wired in.
+      const first = await stream.next();
+      expect(first.value).toBe('hello ');
+      expect(capturedSignal).toBeDefined();
+      expect(capturedSignal!.aborted).toBe(false);
+
+      // Cancelling the run aborts the provider's in-flight request.
+      controller.abort();
+      expect(capturedSignal!.aborted).toBe(true);
+      await stream.return(undefined);
+    } finally {
+      runtime.close();
+    }
+  });
 });
 
 // ask() uses the SDK's non-streaming complete() since @priest-ai/core 2.4,
@@ -526,6 +568,23 @@ function ollamaStreamResponse(chunks: string[]): Response {
     done_reason: 'stop',
   });
   return new Response(body, { status: 200, headers: { 'Content-Type': 'application/json' } });
+}
+
+// Streaming NDJSON body for runtime.stream() — one Ollama chunk object per line,
+// terminated by a `done` marker.
+function ollamaStreamingResponse(chunks: string[]): Response {
+  const lines = [
+    ...chunks.map(content => JSON.stringify({ message: { content }, done: false })),
+    JSON.stringify({ message: { content: '' }, done: true, done_reason: 'stop' }),
+  ];
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      const encoder = new TextEncoder();
+      for (const line of lines) controller.enqueue(encoder.encode(line + '\n'));
+      controller.close();
+    },
+  });
+  return new Response(body, { status: 200, headers: { 'Content-Type': 'application/x-ndjson' } });
 }
 
 function readMemoryRows(profilesDir: string, profile: string, fileName: string): Array<Record<string, unknown>> {

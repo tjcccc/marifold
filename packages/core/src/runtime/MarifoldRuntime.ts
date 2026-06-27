@@ -158,11 +158,14 @@ export class MarifoldRuntime {
       let done: PriestResponse | undefined;
       const lastIteration = iteration === maxIterations - 1;
 
-      for await (const event of engine.streamEvents({
-        ...baseRequest,
-        ...(chatTools && !lastIteration ? { tools: chatTools.definitions } : {}),
-        ...(exchange.length > 0 ? { toolExchange: exchange } : {}),
-      })) {
+      for await (const event of engine.streamEvents(
+        {
+          ...baseRequest,
+          ...(chatTools && !lastIteration ? { tools: chatTools.definitions } : {}),
+          ...(exchange.length > 0 ? { toolExchange: exchange } : {}),
+        },
+        request.signal ? { signal: request.signal } : undefined,
+      )) {
         if (event.type === 'text_delta') {
           const visible = stripper.feed(event.text);
           if (visible) {

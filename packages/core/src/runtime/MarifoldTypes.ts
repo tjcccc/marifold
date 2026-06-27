@@ -21,6 +21,8 @@ export interface MarifoldRunRequest {
   chatTools?: boolean;
   /** Session-scoped context-budget override (e.g. /context-window set N). Wins over profile/global. */
   maxContextTokens?: number;
+  /** Cancels the in-flight provider request when aborted (e.g. ESC/Ctrl-C). Forwarded to the engine stream. */
+  signal?: AbortSignal;
 }
 
 export interface MarifoldResolvedSettings {

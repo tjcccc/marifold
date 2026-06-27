@@ -153,7 +153,6 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
 
   // Mutable run plumbing (does not drive rendering directly).
   const abortRef = useRef<AbortController | null>(null);
-  const cancelChatRef = useRef(false);
   const approvalResolverRef = useRef<((decision: ApprovalDecision) => void) | null>(null);
   const sessionGrantsRef = useRef<Set<ToolKind>>(new Set());
   const steeringRef = useRef<string[]>([]);
@@ -295,7 +294,9 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
       dispatch({ type: 'set_running', running: false });
       abortRef.current = null;
       if (usage?.inputTokens != null) dispatch({ type: 'set_context_usage', tokens: usage.inputTokens });
-      if (!controller.signal.aborted) {
+      if (controller.signal.aborted) {
+        notify('Cancelled.', 'warn');
+      } else {
         const status = doneStatus ?? 'ended';
         notify(`Task ${status}. ${runSummary(Date.now() - startedAt, usage)}`, status === 'completed' ? 'info' : 'warn');
       }
@@ -303,7 +304,8 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
   }, [runtime, approvalHandler, notify]);
 
   const runChat = useCallback(async (prompt: string, extraContext: string[] = [], options: { instructions?: string[] } = {}) => {
-    cancelChatRef.current = false;
+    const controller = new AbortController();
+    abortRef.current = controller;
     const current = stateRef.current;
     const sessionId = current.sessionId ?? randomUUID();
     if (!current.sessionId) dispatch({ type: 'set_session', sessionId });
@@ -328,19 +330,22 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
           userContext: userContext.length > 0 ? userContext : undefined,
           ...(options.instructions ? { instructions: options.instructions } : {}),
           images: images.length > 0 ? images : undefined,
+          signal: controller.signal,
         },
         summary => { usage = summary.usage; },
       )) {
-        if (cancelChatRef.current) break;
+        if (controller.signal.aborted) break;
         dispatch({ type: 'assistant_delta', text: chunk });
       }
     } catch (error) {
-      notify(errorText(error), 'error');
+      if (!controller.signal.aborted) notify(errorText(error), 'error');
     } finally {
       dispatch({ type: 'end_assistant' });
       dispatch({ type: 'set_running', running: false });
+      abortRef.current = null;
       if (usage?.inputTokens != null) dispatch({ type: 'set_context_usage', tokens: usage.inputTokens });
-      if (!cancelChatRef.current) notify(runSummary(Date.now() - startedAt, usage), 'info');
+      if (controller.signal.aborted) notify('Cancelled.', 'warn');
+      else notify(runSummary(Date.now() - startedAt, usage), 'info');
     }
   }, [runtime, notify]);
 
@@ -358,7 +363,6 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
   }, [runAgent, runChat]);
 
   const stop = useCallback(() => {
-    cancelChatRef.current = true;
     abortRef.current?.abort();
     const resolve = approvalResolverRef.current;
     if (resolve) {
