@@ -167,6 +167,8 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
   thinkRef.current = think;
   const planNextRef = useRef(planNext);
   planNextRef.current = planNext;
+  // Last plain-text prompt, for `/retry`.
+  const lastPromptRef = useRef<string | null>(null);
 
   // Exit: the conversation already lives in the terminal's native scrollback
   // (inline layout), so there's nothing to reprint — just unmount.
@@ -350,6 +352,10 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
   }, [runtime, notify]);
 
   const startTextRun = useCallback((text: string) => {
+    // Remember the last plain-text prompt so `/retry` can re-run it. Captured
+    // here (the sole text-run entry) rather than read from the transcript, which
+    // also records `/command` and `$skill` echoes as user items.
+    lastPromptRef.current = text;
     dispatch({ type: 'add_user', text });
     // `/steps` armed: run this turn as a planned agent turn (planning is an agent
     // concept), then auto-disarm.
@@ -361,6 +367,22 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
     if (stateRef.current.mode === 'chat') void runChat(text);
     else void runAgent(text);
   }, [runAgent, runChat]);
+
+  // Re-run the last plain-text message through the current profile/model/mode —
+  // handy for A/B-ing models (switch with /model, then /retry). Appends a new
+  // turn; does not re-invoke a `$skill` or re-attach prior images/context.
+  const retryLast = useCallback(() => {
+    if (stateRef.current.running) {
+      notify('A task is running. Use /btw to steer or /stop to cancel.', 'warn');
+      return;
+    }
+    const last = lastPromptRef.current;
+    if (!last) {
+      notify('Nothing to retry yet — send a message first.', 'warn');
+      return;
+    }
+    startTextRun(last);
+  }, [notify, startTextRun]);
 
   const stop = useCallback(() => {
     abortRef.current?.abort();
@@ -669,6 +691,9 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
         maxContextTokens: settings.maxContextTokens ?? loadedConfig.config.default.maxContextTokens,
       });
       dispatch({ type: 'set_mode', mode: settings.mode });
+      // Adopt the new profile's thinking default (bare setter — selectProfile
+      // emits its own notice; the wrapped ctx.setThink would add a spurious one).
+      setThink(settings.think);
       dispatch({ type: 'new_session', sessionId: undefined });
       sessionGrantsRef.current.clear();
       refreshSkills();
@@ -713,6 +738,7 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
     showHelp,
     showStatus,
     copyLast,
+    retryLast,
     showSessions,
     runDoctor,
     installSkill,
@@ -759,7 +785,7 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
     },
   }), [
     notify, stop, steer, exit, openModelPicker, openProfilePicker, selectProfile, openSkills,
-    showPermissions, showHelp, showStatus, copyLast, showSessions, runDoctor, installSkill,
+    showPermissions, showHelp, showStatus, copyLast, retryLast, showSessions, runDoctor, installSkill,
     readFileCmd, setImage, remember, forget, deleteMemory, repaint, runtime,
   ]);
 

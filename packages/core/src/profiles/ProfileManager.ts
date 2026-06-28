@@ -19,16 +19,32 @@ Be concise unless the user asks for depth.
 Replace this content with specific guidance for this profile's role.
 `;
 
-const PROFILE_TOML_STUB = `# Optional per-profile model override.
-# Set both provider and model to override [default].
+/** Documented per-profile config template. Shared by `profile create` and the
+ * default profile scaffolded at `marifold init`, so both list every option. */
+export const PROFILE_TOML_STUB = `# profile.toml — per-profile overrides. Every key is optional; uncomment to set.
+# Anything left commented falls back to the global [default] in config.toml.
 
-memories = true
+# Provider + model override (set BOTH or NEITHER). Blank = use [default].
+# provider = "ollama"
+# model = "gemma4:e4b"
 
 # Default TUI mode for this profile: "agent" or "chat" (default "agent").
 # mode = "agent"
 
-# provider = "ollama"
-# model = "gemma4:e4b"
+# Load this profile's structured memory into context (default true).
+# memories = true
+
+# Thinking for this profile (default off). On = stronger reasoning, slower and
+# more expensive. Toggle per session with /think on|off.
+# think = false
+
+# Conversation-context budget in tokens; enables compaction past ~80%.
+# Falls back to default.max_context_tokens.
+# max_context_tokens = 16000
+
+# Hard cap on recent session turns replayed each request: "all" = no cap,
+# N = last N, 0 = none. Falls back to default.session_context_turns.
+# session_context_turns = "all"
 `;
 
 export interface ProfileInitResult {

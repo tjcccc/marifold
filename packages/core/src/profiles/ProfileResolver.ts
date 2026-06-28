@@ -43,6 +43,7 @@ export class ProfileResolver implements ProfileLoader {
     const memories = optionalBoolean(raw.memories, `${name}.profile.toml memories`) ?? true;
     const maxContextTokens = optionalNumber(raw.max_context_tokens, `${name}.profile.toml max_context_tokens`);
     const sessionContextTurns = optionalTurnWindow(raw.session_context_turns, `${name}.profile.toml session_context_turns`);
+    const think = optionalBoolean(raw.think, `${name}.profile.toml think`);
     const rawMode = optionalString(raw.mode, `${name}.profile.toml mode`);
     if (rawMode !== undefined && rawMode !== 'agent' && rawMode !== 'chat') {
       throw MarifoldError.profileInvalid(
@@ -56,7 +57,7 @@ export class ProfileResolver implements ProfileLoader {
         name,
       );
     }
-    return { provider, model, memories, mode: rawMode as ProfileMode | undefined, maxContextTokens, sessionContextTurns };
+    return { provider, model, memories, mode: rawMode as ProfileMode | undefined, maxContextTokens, sessionContextTurns, think };
   }
 
   list(): ProfileSummary[] {

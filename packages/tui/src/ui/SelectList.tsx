@@ -34,8 +34,11 @@ export function SelectList({
   const columns = stdout?.columns ?? 80;
 
   // Window items around the selection so a long list never overflows the frame
-  // (reserve rows for border, title, and the footer hint).
-  const cap = maxRows ? Math.max(1, maxRows - 5) : items.length;
+  // (reserve rows for border, title, and the footer hint). Also cap to a fixed
+  // comfortable maximum so a long list still windows (with a scroll counter) on
+  // very tall terminals, where `maxRows - 5` would otherwise exceed the list.
+  const MAX_VISIBLE = 12;
+  const cap = Math.min(maxRows ? Math.max(1, maxRows - 5) : items.length, MAX_VISIBLE);
   const start = Math.min(Math.max(0, clamped - Math.floor(cap / 2)), Math.max(0, items.length - cap));
   const windowed = items.slice(start, start + cap);
   const above = start;

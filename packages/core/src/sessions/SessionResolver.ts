@@ -5,10 +5,62 @@ import { SQLiteSessionStore } from '@priest-ai/core';
 import { SessionDetail, SessionSummary, SessionTurnSummary } from '../config/ConfigSchema';
 import { MarifoldError } from '../errors/MarifoldError';
 
+/** Result of a session-DB integrity check (used by `marifold doctor`). */
+export interface SessionDbHealth {
+  ok: boolean;
+  /** False when the DB file does not exist yet (fresh install — not an error). */
+  exists: boolean;
+  /** First integrity-check failures, or the open error, when not ok. */
+  error?: string;
+  sessions?: number;
+  turns?: number;
+}
+
 export class SessionResolver {
   private store?: SQLiteSessionStore;
 
   constructor(private readonly sessionsDb: string) {}
+
+  /** Open a connection with crash-resilience pragmas. `journal_mode = WAL` is a
+   * persistent file property — set by any connection it sticks and is inherited
+   * by every later opener (including priest's session store), making interrupted
+   * writes far less likely to corrupt the file. `synchronous` and `busy_timeout`
+   * are per-connection, so they are reapplied on every open. */
+  private open(): Database.Database {
+    const db = new Database(this.sessionsDb, { fileMustExist: true });
+    db.pragma('journal_mode = WAL');
+    db.pragma('synchronous = NORMAL');
+    db.pragma('busy_timeout = 5000');
+    return db;
+  }
+
+  /** Read-only health check. Safe to run when the DB is corrupt (it is the whole
+   * point — `marifold doctor` must work when the app won't start), and never
+   * throws: failures are returned as `{ ok: false }`. Opens read/write like the
+   * app does, so a pass means the app can actually read the DB. */
+  checkIntegrity(): SessionDbHealth {
+    if (!fs.existsSync(this.sessionsDb)) return { ok: true, exists: false };
+    let db: Database.Database;
+    try {
+      db = new Database(this.sessionsDb, { fileMustExist: true });
+    } catch (error) {
+      return { ok: false, exists: true, error: `cannot open: ${String(error)}` };
+    }
+    try {
+      const rows = db.pragma('integrity_check') as Array<{ integrity_check: string }>;
+      const results = rows.map(row => row.integrity_check);
+      if (results.length === 1 && results[0] === 'ok') {
+        const sessions = (db.prepare('SELECT count(*) AS c FROM sessions').get() as { c: number }).c;
+        const turns = (db.prepare('SELECT count(*) AS c FROM turns').get() as { c: number }).c;
+        return { ok: true, exists: true, sessions, turns };
+      }
+      return { ok: false, exists: true, error: results.slice(0, 3).join('; ') };
+    } catch (error) {
+      return { ok: false, exists: true, error: String(error) };
+    } finally {
+      db.close();
+    }
+  }
 
   openStore(): SQLiteSessionStore {
     if (!this.store) {
@@ -22,7 +74,7 @@ export class SessionResolver {
   list(limit = 50, profileName?: string): SessionSummary[] {
     if (!fs.existsSync(this.sessionsDb)) return [];
 
-    const db = new Database(this.sessionsDb, { fileMustExist: true });
+    const db = this.open();
     try {
       const rows = db.prepare(`
         SELECT
@@ -69,7 +121,7 @@ export class SessionResolver {
   get(sessionId: string): SessionDetail | undefined {
     if (!fs.existsSync(this.sessionsDb)) return undefined;
 
-    const db = new Database(this.sessionsDb, { fileMustExist: true });
+    const db = this.open();
     try {
       const row = db.prepare(`
         SELECT
@@ -109,7 +161,7 @@ export class SessionResolver {
   delete(sessionId: string): boolean {
     if (!fs.existsSync(this.sessionsDb)) return false;
 
-    const db = new Database(this.sessionsDb, { fileMustExist: true });
+    const db = this.open();
     try {
       const transaction = db.transaction(() => {
         db.prepare('DELETE FROM turns WHERE session_id = ?').run(sessionId);
@@ -130,7 +182,7 @@ export class SessionResolver {
       throw MarifoldError.configInvalid('keepLast must be a non-negative integer.');
     }
 
-    const db = new Database(this.sessionsDb, { fileMustExist: true });
+    const db = this.open();
     try {
       const where: string[] = [];
       const params: string[] = [];
@@ -174,7 +226,7 @@ export class SessionResolver {
   replaceLastAssistantTurn(sessionId: string, content: string): boolean {
     if (!fs.existsSync(this.sessionsDb)) return false;
 
-    const db = new Database(this.sessionsDb, { fileMustExist: true });
+    const db = this.open();
     try {
       const result = db.prepare(`
         UPDATE turns
@@ -211,7 +263,7 @@ export class SessionResolver {
     if (!fs.existsSync(this.sessionsDb)) return false;
     if (!toSessionId.trim()) throw MarifoldError.configInvalid('New session id cannot be empty.');
 
-    const db = new Database(this.sessionsDb, { fileMustExist: true });
+    const db = this.open();
     try {
       const exists = db.prepare('SELECT id FROM sessions WHERE id = ?').get(fromSessionId);
       if (!exists) return false;

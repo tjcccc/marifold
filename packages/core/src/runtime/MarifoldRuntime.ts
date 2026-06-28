@@ -31,7 +31,7 @@ import { ProfileResolver } from '../profiles/ProfileResolver';
 import { ProfileManager } from '../profiles/ProfileManager';
 import { Scheduler } from '../schedule/Scheduler';
 import { ScheduleCreateInput, ScheduleState, ScheduleStore, ScheduleUpdateInput } from '../schedule/ScheduleStore';
-import { SessionResolver } from '../sessions/SessionResolver';
+import { SessionResolver, SessionDbHealth } from '../sessions/SessionResolver';
 import { SkillStore } from '../skill/SkillStore';
 import { MarifoldSkill } from '../skill/SkillSchema';
 import { SkillScope } from '../skill/SkillStore';
@@ -78,7 +78,7 @@ export class MarifoldRuntime {
     const profileSettings = this.profileResolver.loadSettings(profile);
     const provider = request.provider ?? profileSettings.provider ?? config.default.provider;
     const model = request.model ?? profileSettings.model ?? config.default.model;
-    const think = request.think ?? config.default.think;
+    const think = request.think ?? profileSettings.think ?? config.default.think;
     const mode = profileSettings.mode ?? 'agent';
     if (!provider || !model) throw MarifoldError.missingProviderModel(configPath);
     return {
@@ -280,6 +280,16 @@ export class MarifoldRuntime {
 
   listSessions(limit?: number, profileName?: string): SessionSummary[] {
     return this.sessionResolver.list(limit, profileName);
+  }
+
+  /** Read-only integrity check of the session DB (for `marifold doctor`). Never throws. */
+  checkSessionDb(): SessionDbHealth {
+    return this.sessionResolver.checkIntegrity();
+  }
+
+  /** Filesystem path of the session DB, for diagnostics. */
+  get sessionDbPath(): string {
+    return this.options.loadedConfig.config.paths.sessionsDb;
   }
 
   latestSession(profileName?: string): SessionSummary | undefined {

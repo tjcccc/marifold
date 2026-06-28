@@ -118,6 +118,19 @@ describe('ProfileResolver', () => {
     expect(new ProfileResolver(root).loadSettings('x-runner').sessionContextTurns).toBe(5);
   });
 
+  it('parses a per-profile think override (and leaves it undefined when unset)', () => {
+    const root = tempDir();
+    const onDir = path.join(root, 'thinker');
+    fs.mkdirSync(onDir, { recursive: true });
+    fs.writeFileSync(path.join(onDir, 'profile.toml'), 'think = true\n');
+    expect(new ProfileResolver(root).loadSettings('thinker').think).toBe(true);
+
+    const offDir = path.join(root, 'plain');
+    fs.mkdirSync(offDir, { recursive: true });
+    fs.writeFileSync(path.join(offDir, 'profile.toml'), 'memories = true\n');
+    expect(new ProfileResolver(root).loadSettings('plain').think).toBeUndefined();
+  });
+
   it('treats session_context_turns = "all" as no cap (undefined) and accepts 0', () => {
     const root = tempDir();
     const allDir = path.join(root, 'full');

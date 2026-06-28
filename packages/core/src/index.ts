@@ -136,7 +136,7 @@ export { SCHEDULE_SCHEMA, ScheduleStore } from './schedule/ScheduleStore';
 export type { ScheduleCreateInput, ScheduleState, ScheduleUpdateInput } from './schedule/ScheduleStore';
 export { Scheduler } from './schedule/Scheduler';
 export type { ScheduleRunResult, SchedulerDeps } from './schedule/Scheduler';
-export { SessionResolver } from './sessions/SessionResolver';
+export { SessionResolver, type SessionDbHealth } from './sessions/SessionResolver';
 export {
   SKILL_SCHEMA_ID,
   extractTemplateVariables,

@@ -373,6 +373,37 @@ describe('MarifoldRuntime', () => {
     }
   });
 
+  it('resolves think with request > profile > default precedence (default off)', () => {
+    const dir = tempDir();
+    const profilesDir = path.join(dir, 'profiles');
+    fs.mkdirSync(path.join(profilesDir, 'thinker'), { recursive: true });
+    fs.writeFileSync(path.join(profilesDir, 'thinker', 'profile.toml'), 'think = true\n');
+    fs.mkdirSync(path.join(profilesDir, 'plain'), { recursive: true });
+    fs.writeFileSync(path.join(profilesDir, 'plain', 'profile.toml'), 'memories = true\n');
+
+    const config: MarifoldConfig = {
+      default: { provider: 'ollama', model: 'gemma4:e4b', profile: 'default', think: false },
+      models: { options: ['ollama/gemma4:e4b'] },
+      memory: { sizeLimit: 50000, contextLimit: 2400 },
+      paths: { profilesDir, sessionsDb: path.join(dir, 'sessions.db'), tasksDir: path.join(dir, 'tasks') },
+      providers: { ollama: { type: 'ollama', baseUrl: 'http://localhost:11434' } },
+    };
+    const runtime = new MarifoldRuntime({
+      loadedConfig: { config, configPath: path.join(dir, 'config.toml'), foundConfig: true },
+    });
+
+    try {
+      // Profile override wins over the (off) global default.
+      expect(runtime.resolveSettings({ profile: 'thinker' }).think).toBe(true);
+      // An explicit request value wins over the profile override.
+      expect(runtime.resolveSettings({ profile: 'thinker', think: false }).think).toBe(false);
+      // Unset profile falls back to default.think (off) — no profile edits needed.
+      expect(runtime.resolveSettings({ profile: 'plain' }).think).toBe(false);
+    } finally {
+      runtime.close();
+    }
+  });
+
   it('refreshes expired GitHub Copilot credentials from the saved OAuth token before a run', async () => {
     const dir = tempDir();
     const configPath = path.join(dir, 'config.toml');

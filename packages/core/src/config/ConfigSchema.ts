@@ -119,6 +119,8 @@ export interface ProfileSettings {
   /** Per-profile cap on recent session turns replayed to the model (undefined = all);
    * falls back to default.sessionContextTurns. */
   sessionContextTurns?: number;
+  /** Per-profile thinking default; undefined falls back to default.think (off). */
+  think?: boolean;
 }
 
 export interface ProfileSummary {

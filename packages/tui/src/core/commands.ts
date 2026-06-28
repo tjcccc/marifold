@@ -27,6 +27,8 @@ export interface CommandContext {
   /** Arm a one-shot forced plan for the next message (toggles off if armed). */
   toggleForcePlan(): void;
   copyLast(): void;
+  /** Re-run the last plain-text message through the current profile/model/mode. */
+  retryLast(): void;
   showSessions(): void;
   runDoctor(): void;
   installSkill(arg: string): void;
@@ -57,6 +59,7 @@ const COMMANDS: CommandSpec[] = [
   { name: 'help', summary: 'List commands and input syntax.', run: ctx => ctx.showHelp() },
   { name: 'status', summary: 'Show profile, mode, model, thinking, and session.', run: ctx => ctx.showStatus() },
   { name: 'copy', summary: "Copy the last response's original text to the clipboard.", run: ctx => ctx.copyLast() },
+  { name: 'retry', aliases: ['regenerate'], summary: 'Re-run your last message (e.g. after /model to compare).', run: ctx => ctx.retryLast() },
   { name: 'exit', aliases: ['quit'], summary: 'Leave the TUI.', run: ctx => ctx.exit() },
   { name: 'new', summary: 'Start a fresh session (clear transcript).', run: ctx => ctx.newSession() },
   {

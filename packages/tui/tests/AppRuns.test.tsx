@@ -29,7 +29,7 @@ function makeRuntime(opts: { agentRun?: (call: RunnerCall) => AsyncGenerator<unk
     listSkills: () => [],
     listProfiles: () => [{ name: 'default' }],
     listSessions: () => [],
-    resolveSettings: ({ profile }: { profile: string }) => ({ profile, provider: 'p', model: 'm', mode: 'agent' as Mode }),
+    resolveSettings: ({ profile }: { profile: string }) => ({ profile, provider: 'p', model: 'm', mode: 'agent' as Mode, think: false }),
     createAgentRunner: () => ({
       run: (call: RunnerCall) => {
         runSpy(call);
@@ -117,6 +117,24 @@ describe('App run routing', () => {
     stdin.write('\r');
     await vi.waitFor(() => expect(runSpy).toHaveBeenCalled());
     expect(runSpy.mock.calls[0][0]).toMatchObject({ objective: 'hello', forcePlan: true });
+    unmount();
+  });
+
+  it('/retry re-runs the last message (the prompt, not the "/retry" echo)', async () => {
+    const { runtime, streamSpy } = makeRuntime();
+    const { stdin, unmount } = render(<App runtime={runtime} loadedConfig={config} initial={initial('chat')} />);
+    await delay();
+    stdin.write('hello');
+    await delay();
+    stdin.write('\r');
+    await vi.waitFor(() => expect(streamSpy).toHaveBeenCalledTimes(1));
+    await delay(); // let the run settle so `running` clears before /retry
+    stdin.write('/retry');
+    await delay();
+    stdin.write('\r');
+    await vi.waitFor(() => expect(streamSpy).toHaveBeenCalledTimes(2));
+    // The re-run replays the prior prompt, not the command echo.
+    expect(streamSpy.mock.calls[1][0]).toMatchObject({ prompt: 'hello' });
     unmount();
   });
 

@@ -3,6 +3,7 @@ import * as path from 'path';
 import { MarifoldError } from '../errors/MarifoldError';
 import { ProviderType } from '../config/ConfigSchema';
 import { ensureProfileMemoryFiles } from '../memory/MemoryStore';
+import { PROFILE_TOML_STUB } from '../profiles/ProfileManager';
 import {
   defaultConfigPath,
   defaultProfilesDir,
@@ -28,14 +29,6 @@ Do not claim unsupported capabilities.
 
 const DEFAULT_CUSTOM = '';
 
-const DEFAULT_PROFILE_TOML = `# Optional per-profile model override.
-# Set both provider and model to override [default].
-
-memories = true
-
-# provider = "ollama"
-# model = "gemma4:e4b"
-`;
 
 export type WorkspaceInitFileStatus = 'created' | 'updated' | 'kept';
 
@@ -124,7 +117,7 @@ export class WorkspaceInitializer {
     files.push(writeIfMissing(path.join(profileDir, 'PROFILE.md'), DEFAULT_PROFILE));
     files.push(writeIfMissing(path.join(profileDir, 'RULES.md'), DEFAULT_RULES));
     files.push(writeIfMissing(path.join(profileDir, 'CUSTOM.md'), DEFAULT_CUSTOM));
-    files.push(writeIfMissing(path.join(profileDir, 'profile.toml'), DEFAULT_PROFILE_TOML));
+    files.push(writeIfMissing(path.join(profileDir, 'profile.toml'), PROFILE_TOML_STUB));
     files.push(...ensureProfileMemoryFiles(profileDir));
 
     return {
