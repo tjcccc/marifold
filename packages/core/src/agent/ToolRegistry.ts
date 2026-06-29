@@ -6,6 +6,9 @@ export interface ToolExecutionContext {
   /** Working directory the run was started from. Filesystem tools resolve
    * relative paths against it and treat it as the workspace boundary. */
   cwd: string;
+  /** Extra absolute folders trusted for file writes (outside the workspace).
+   * A write inside one is non-escalated and auto-approved. */
+  trustedFolders?: string[];
   signal?: AbortSignal;
   /** Cap applied to tool output before it is returned to the model. */
   outputLimit: number;
@@ -23,6 +26,12 @@ export interface ToolRiskAssessment {
   /** True forces interactive approval even when policy says allow. */
   escalate: boolean;
   reason?: string;
+  /** True when the call is in a trusted folder — auto-approved regardless of
+   * the tool kind's approval mode. */
+  trusted?: boolean;
+  /** Absolute target path of an escalated file call, so a client can offer to
+   * trust its folder. */
+  targetPath?: string;
 }
 
 export interface AgentTool {

@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import { parse } from 'smol-toml';
-import { ApprovalMode, AgentToolMode, MarifoldAgentConfig, resolveAgentConfig } from '../agent/ApprovalPolicy';
+import { AgentApprovalConfig, ApprovalMode, AgentToolMode, PartialAgentConfig, resolveAgentConfig } from '../agent/ApprovalPolicy';
 import { MarifoldError } from '../errors/MarifoldError';
 import {
   LoadedMarifoldConfig,
@@ -82,7 +82,7 @@ export class ConfigLoader {
       memory: this.normalizeMemory(memoryRaw),
       paths: this.normalizePaths(pathsRaw),
       providers: this.normalizeProviders(providersRaw),
-      ...(raw.agent !== undefined ? { agent: this.normalizeAgent(asObject(raw.agent, 'agent')) } : {}),
+      ...(raw.agent !== undefined ? { agent: resolveAgentConfig(parsePartialAgentConfig(raw.agent, 'agent')) } : {}),
       ...(raw.web_search !== undefined ? { webSearch: this.normalizeWebSearch(asObject(raw.web_search, 'web_search')) } : {}),
     };
   }
@@ -97,28 +97,6 @@ export class ConfigLoader {
       scrape: optionalBoolean(raw.scrape, 'web_search.scrape'),
       proxy: optionalString(raw.proxy, 'web_search.proxy'),
     });
-  }
-
-  private normalizeAgent(raw: TomlObject): MarifoldAgentConfig {
-    return resolveAgentConfig({
-      approval: this.normalizeApprovalModes(optionalObject(raw.approval, 'agent.approval'), 'agent.approval'),
-      unattended: this.normalizeApprovalModes(optionalObject(raw.unattended, 'agent.unattended'), 'agent.unattended'),
-      maxIterations: optionalPositiveInteger(raw.max_iterations, 'agent.max_iterations'),
-      toolOutputLimit: optionalNonNegativeNumber(raw.tool_output_limit, 'agent.tool_output_limit'),
-      toolMode: optionalToolMode(raw.tool_mode, 'agent.tool_mode'),
-    });
-  }
-
-  private normalizeApprovalModes(
-    raw: TomlObject,
-    label: string,
-  ): Partial<Record<'read' | 'write' | 'shell' | 'network' | 'delegate', ApprovalMode>> {
-    const modes: Partial<Record<'read' | 'write' | 'shell' | 'network' | 'delegate', ApprovalMode>> = {};
-    for (const kind of ['read', 'write', 'shell', 'network', 'delegate'] as const) {
-      const mode = optionalApprovalMode(raw[kind], `${label}.${kind}`);
-      if (mode !== undefined) modes[kind] = mode;
-    }
-    return modes;
   }
 
   private normalizeDefault(raw: TomlObject): MarifoldDefaultConfig {
@@ -259,6 +237,36 @@ function optionalToolMode(value: unknown, label: string): AgentToolMode | undefi
   if (mode === undefined) return undefined;
   if (mode === 'auto' || mode === 'native' || mode === 'control-block') return mode;
   throw MarifoldError.configInvalid(`Expected ${label} to be "auto", "native", or "control-block".`);
+}
+
+function normalizeApprovalModes(raw: TomlObject, label: string): Partial<AgentApprovalConfig> {
+  const modes: Partial<AgentApprovalConfig> = {};
+  for (const kind of ['read', 'write', 'shell', 'network', 'delegate'] as const) {
+    const mode = optionalApprovalMode(raw[kind], `${label}.${kind}`);
+    if (mode !== undefined) modes[kind] = mode;
+  }
+  return modes;
+}
+
+/**
+ * Parse a TOML `[agent]` table into a {@link PartialAgentConfig} — only the keys
+ * actually present, with NO defaults applied — so it can be merged over the
+ * global config. Shared by ConfigLoader (global `[agent]`) and ProfileResolver
+ * (per-profile `[agent]` in profile.toml) so validation is identical.
+ */
+export function parsePartialAgentConfig(raw: unknown, label: string): PartialAgentConfig {
+  const obj = asObject(raw, label);
+  const trustedFolders = obj.trusted_folders !== undefined
+    ? optionalStringArray(obj.trusted_folders, `${label}.trusted_folders`)
+    : undefined;
+  return {
+    approval: normalizeApprovalModes(optionalObject(obj.approval, `${label}.approval`), `${label}.approval`),
+    unattended: normalizeApprovalModes(optionalObject(obj.unattended, `${label}.unattended`), `${label}.unattended`),
+    ...(trustedFolders ? { trustedFolders } : {}),
+    maxIterations: optionalPositiveInteger(obj.max_iterations, `${label}.max_iterations`),
+    toolOutputLimit: optionalNonNegativeNumber(obj.tool_output_limit, `${label}.tool_output_limit`),
+    toolMode: optionalToolMode(obj.tool_mode, `${label}.tool_mode`),
+  };
 }
 
 function optionalWebSearchProvider(value: unknown, label: string): WebSearchProvider | undefined {

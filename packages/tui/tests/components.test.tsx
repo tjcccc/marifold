@@ -73,9 +73,8 @@ describe('ApprovalModal', () => {
 
   it.each([
     ['a', 'once'],
-    ['s', 'session'],
-    ['p', 'persist'],
-    ['d', 'deny'],
+    ['t', 'always'],
+    ['d', 'no'],
   ])('resolves %s as %s', async (keypress: string, expected: string) => {
     const onResolve = vi.fn();
     const { stdin, unmount } = render(<ApprovalModal request={request} onResolve={onResolve} />);
@@ -84,6 +83,18 @@ describe('ApprovalModal', () => {
     await delay();
     expect(onResolve).toHaveBeenCalledWith(expected);
     unmount();
+  });
+
+  it('shows the folder a trust would add for an escalated write', () => {
+    const escalated: ApprovalRequest = {
+      id: 'c', tool: 'write_file', kind: 'write', summary: 'write 1B to ~/blog/x.md',
+      input: { path: '~/blog/x.md' }, escalated: true,
+      escalationReason: 'target /home/u/blog/x.md is outside the working directory /repo',
+      escalatedPath: '/home/u/blog/x.md',
+    };
+    const frame = render(<ApprovalModal request={escalated} onResolve={() => {}} />).lastFrame() ?? '';
+    expect(frame).toContain('/home/u/blog');     // the folder a trust would add
+    expect(frame).toContain('allow always');
   });
 });
 

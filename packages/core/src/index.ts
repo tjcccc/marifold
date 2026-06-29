@@ -35,7 +35,7 @@ export type { DelegateAskRequest, DelegateAskResult, DelegateToolDeps } from './
 export { ReadFileTool } from './agent/tools/ReadFileTool';
 export { ShellExecTool } from './agent/tools/ShellExecTool';
 export { WebSearchTool } from './agent/tools/WebSearchTool';
-export { isInsideWorkspace, WriteFileTool } from './agent/tools/WriteFileTool';
+export { isInsideWorkspace, isInsideAny, WriteFileTool } from './agent/tools/WriteFileTool';
 export { DuckDuckGoBackend } from './search/DuckDuckGoBackend';
 export { FirecrawlBackend } from './search/FirecrawlBackend';
 export type { FirecrawlBackendOptions } from './search/FirecrawlBackend';

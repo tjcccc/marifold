@@ -41,8 +41,8 @@ For product direction and future scope, see [docs/vision.md](docs/vision.md) and
 - Native provider tool calling via `@priest-ai/core` 2.4 for Ollama, OpenAI-compatible (including the GitHub Copilot Responses API path), and Anthropic providers.
 - Automatic control-block tool fallback (`<tool_call>` prompt blocks) for models without native tool support, plus `--tool-mode auto|native|control-block`.
 - Built-in agent tools: `read_file`, `write_file`, `shell_exec`, and `ask_profile` (one-shot delegation to another profile/model).
-- Config-driven approval policy per tool kind (`allow`/`ask`/`deny`) with interactive y/N prompts, `--yes`, and unattended ask-degrades-to-deny behavior.
-- Workspace write boundary: writes outside the run's working directory always require interactive approval.
+- Per-profile approval policy per tool kind (`allow`/`ask`/`deny`), overriding a global `[agent]` default, with an Allow-once / Trust / Deny prompt, `--yes`, and unattended ask-degrades-to-deny behavior.
+- Workspace write boundary: writes outside the run's working directory require interactive approval, except inside a profile's `agent.trusted_folders` allowlist (added via `/trust-folder` or the prompt's "Trust").
 - Agent runs bypass profile memory: hidden memory control blocks are stripped and discarded, and task state is never promoted into profile memory.
 - Provider-backed agent eval through `pnpm agent-eval -- --provider ollama --model qwen3.5:9b`.
 - Marifold-branded CLI.
@@ -349,7 +349,11 @@ The `[web_search]` section is optional. `enabled = true` lets the model call `we
 
 For ChatGPT OAuth (`marifold model add chatgpt`), Marifold refreshes the expired API credential from the saved refresh token before provider requests, persisting the rotated refresh token — matching the GitHub Copilot refresh behavior.
 
-The `[agent]` section is optional; defaults apply when it is absent. `[agent.approval]` sets per-tool-kind policy (`allow`, `ask`, or `deny`) for `read`, `write`, `shell`, `network`, and `delegate` tools. In interactive runs, `ask` prompts y/N; in unattended runs (no approval handler), `ask` degrades to deny. Writes outside the run's working directory always escalate to an interactive prompt even when `write = "allow"`. `tool_mode = "auto"` uses native provider tool calling and falls back to prompt control blocks when the provider rejects tools.
+The `[agent]` section is optional; defaults apply when it is absent. `[agent.approval]` sets per-tool-kind policy (`allow`, `ask`, or `deny`) for `read`, `write`, `shell`, `network`, and `delegate` tools. In interactive runs, `ask` prompts; in unattended runs (no approval handler), `ask` degrades to deny. `tool_mode = "auto"` uses native provider tool calling and falls back to prompt control blocks when the provider rejects tools.
+
+The whole `[agent]` table (approval, `unattended`, `trusted_folders`, `max_iterations`, `tool_mode`) is **per-profile overridable** in `profile.toml` — a profile's keys merge over the global `[agent]`, so e.g. a `computer_helper` profile can set `agent.approval.shell = "allow"` while a `writing_helper` stays restricted. The interactive approval prompt is **Allow once / Trust (and allow always) / Deny** — "Trust" persists to the active profile (`agent.approval.<kind> = "allow"`, or, for a write outside the workspace, the folder into `agent.trusted_folders`).
+
+Writes outside the run's working directory escalate to an interactive prompt even when `write = "allow"` — **unless** the target is inside an `agent.trusted_folders` entry (a flat allowlist of folders where writes are allowed without prompting; add with `/trust-folder <path>` or the prompt's "Trust" button). This is what lets an unattended/scheduled profile write outside the project (e.g. a daily blog to `~/my_docs/blog`). Sensitive roots (`~`, `/`, `~/.ssh`, `~/.marifold`) are refused.
 
 ## Agent
 
@@ -400,6 +404,9 @@ All keys are optional. An absent key inherits the global `[default]` value (wher
 | `mode` | `"agent"` \| `"chat"` | `"agent"` | Default TUI interaction mode for this profile. |
 | `max_context_tokens` | integer | inherits `[default].max_context_tokens` | Conversation-context budget in tokens; near ~80% older turns fold into a running summary. `0` disables compaction. |
 | `session_context_turns` | integer ≥ 0 \| `"all"` | `"all"` (inherits `[default].session_context_turns`) | Hard cap on the recent session turns the model sees each turn — applies to chat replay and non-lean agent history. `0` = none; `"all"` or absent = no cap. Older turns stay on disk; this only bounds what is sent per turn. Pairs with `max_context_tokens` (the budget safety net). |
+| `think` | boolean | inherits `[default].think` (off) | Per-profile thinking default. Toggle per session with `/think on\|off`. |
+| `agent.approval.<kind>` | `"allow"` \| `"ask"` \| `"deny"` | inherits global `[agent.approval]` | Per-profile tool permission for `read`/`write`/`shell`/`network`/`delegate`. Persisted by the approval prompt's "Trust". |
+| `agent.trusted_folders` | array of paths | `[]` (union of global) | Folders where this profile may write without prompting (a flat allowlist). Add with `/trust-folder` or the prompt. The whole `[agent]` table (incl. `max_iterations`, `tool_mode`, `unattended`) is per-profile overridable. |
 
 Example:
 

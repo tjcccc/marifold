@@ -118,6 +118,7 @@ shell = "deny"
     const loaded = new ConfigLoader().load({ configPath: withAgent });
     expect(loaded.config.agent).toEqual({
       approval: { read: 'allow', write: 'ask', shell: 'deny', network: 'ask', delegate: 'allow' },
+      trustedFolders: [],
       maxIterations: 8,
       toolOutputLimit: 100000,
       toolMode: 'control-block',

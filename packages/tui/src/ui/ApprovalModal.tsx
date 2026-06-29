@@ -1,7 +1,19 @@
 import React from 'react';
+import * as os from 'os';
+import * as path from 'path';
 import { Box, Text, useInput } from 'ink';
 import type { ApprovalRequest, PriestJSONValue } from '@marifold/core';
 import { ACCENT, ATTACHMENT, DIM } from './theme.js';
+
+/** The folder a "trust" action would add, for an escalated file write. */
+export function trustTargetFolder(request: ApprovalRequest): string | undefined {
+  return request.escalated && request.escalatedPath ? path.dirname(request.escalatedPath) : undefined;
+}
+
+function tildify(p: string): string {
+  const home = os.homedir();
+  return p === home || p.startsWith(`${home}${path.sep}`) ? `~${p.slice(home.length)}` : p;
+}
 
 const PREVIEW_MAX_LINES = 12;
 const PREVIEW_MAX_BODY_LINES = 8;
@@ -31,8 +43,8 @@ function previewLines(input: Record<string, PriestJSONValue>): string[] {
 }
 
 /** What the user chose in the approval modal. The App maps this to an
- * ApprovalDecision plus any session-grant or config-persist side effect. */
-export type ApprovalChoice = 'once' | 'session' | 'persist' | 'deny';
+ * ApprovalDecision plus the "Always" side effect (persist allow / trust folder). */
+export type ApprovalChoice = 'once' | 'always' | 'no';
 
 export function ApprovalModal({
   request,
@@ -43,11 +55,17 @@ export function ApprovalModal({
 }): React.ReactElement {
   useInput((input, key) => {
     const ch = input.toLowerCase();
-    if (key.escape || ch === 'n' || ch === 'd') onResolve('deny');
+    // Enter = allow once (safe default) — never persists/trusts on a stray keypress.
+    if (key.escape || ch === 'd') onResolve('no');
     else if (key.return || ch === 'a' || ch === 'y') onResolve('once');
-    else if (ch === 's') onResolve('session');
-    else if (ch === 'p') onResolve('persist');
+    else if (ch === 't') onResolve('always');
   });
+
+  // The "always" action: trust this folder (escalated write), else allow this kind.
+  const trustFolder = trustTargetFolder(request);
+  const alwaysLabel = trustFolder
+    ? `rust (${tildify(trustFolder)}) and allow always`
+    : `rust ${request.kind} (allow always)`;
 
   return (
     <Box borderStyle="round" borderColor="yellow" flexDirection="column" paddingX={1}>
@@ -67,16 +85,11 @@ export function ApprovalModal({
         <Text>
           <Text color={ATTACHMENT} bold>[a]</Text><Text color={DIM}>llow once</Text>
           <Text color={DIM}> · </Text>
-          <Text color={ACCENT} bold>[s]</Text><Text color={DIM}>ession {request.kind}</Text>
+          <Text color={ACCENT} bold>[t]</Text><Text color={DIM}>{alwaysLabel}</Text>
           <Text color={DIM}> · </Text>
-          <Text color={ACCENT} bold>[p]</Text><Text color={DIM}>ersist {request.kind}</Text>
-          <Text color={DIM}> · </Text>
-          <Text color="red" bold>[d]</Text><Text color={DIM}>eny</Text>
+          <Text color="red" bold>[d]</Text><Text color={DIM}>eny (this time)</Text>
         </Text>
       </Box>
-      {request.escalated ? (
-        <Text dimColor>(escalated calls always prompt — session/persist apply to future non-escalated {request.kind} calls)</Text>
-      ) : null}
     </Box>
   );
 }

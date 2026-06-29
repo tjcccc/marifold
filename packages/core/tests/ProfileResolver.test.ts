@@ -109,6 +109,56 @@ describe('ProfileResolver', () => {
     expect(settings).toEqual({ provider: 'ollama', model: 'codellama', memories: false, mode: 'chat' });
   });
 
+  it('persists a per-profile approval via ProfileManager and preserves other keys', () => {
+    const root = tempDir();
+    const dir = path.join(root, 'helper');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'profile.toml'), 'provider = "ollama"\nmodel = "codellama"\nmode = "agent"\n');
+
+    new ProfileManager(root).setAgentApproval('helper', 'shell', 'allow');
+    const settings = new ProfileResolver(root).loadSettings('helper');
+
+    expect(settings.agent?.approval?.shell).toBe('allow');
+    expect(settings.provider).toBe('ollama');
+    expect(settings.model).toBe('codellama');
+    expect(settings.mode).toBe('agent');
+
+    // Re-setting the same kind replaces (no duplicate key -> still parses).
+    new ProfileManager(root).setAgentApproval('helper', 'shell', 'deny');
+    expect(new ProfileResolver(root).loadSettings('helper').agent?.approval?.shell).toBe('deny');
+  });
+
+  it('adds a trusted folder and round-trips it (refusing sensitive roots)', () => {
+    const root = tempDir();
+    const dir = path.join(root, 'blogger');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'profile.toml'), 'provider = "ollama"\nmodel = "codellama"\n');
+
+    const pm = new ProfileManager(root);
+    pm.addTrustedFolder('blogger', '/tmp/my-blog');
+    pm.addTrustedFolder('blogger', '/tmp/other');
+    const settings = new ProfileResolver(root).loadSettings('blogger');
+    expect(settings.agent?.trustedFolders).toEqual(['/tmp/my-blog', '/tmp/other']);
+    expect(settings.provider).toBe('ollama'); // other keys preserved
+
+    // Re-adding is idempotent (no duplicate -> still parses).
+    pm.addTrustedFolder('blogger', '/tmp/my-blog');
+    expect(new ProfileResolver(root).loadSettings('blogger').agent?.trustedFolders).toEqual(['/tmp/my-blog', '/tmp/other']);
+
+    // Sensitive / too-broad roots are refused.
+    expect(() => pm.addTrustedFolder('blogger', os.homedir())).toThrow(/too broad|sensitive/i);
+    expect(() => pm.addTrustedFolder('blogger', '/')).toThrow(/too broad|sensitive/i);
+    expect(() => pm.addTrustedFolder('blogger', path.join(os.homedir(), '.ssh'))).toThrow(/too broad|sensitive/i);
+  });
+
+  it('persists approval for a profile with no pre-existing directory (e.g. default)', () => {
+    const root = tempDir();
+    // No profiles/default/ dir — as a fresh workspace's built-in default profile.
+    new ProfileManager(root).setAgentApproval('default', 'shell', 'allow');
+    expect(fs.existsSync(path.join(root, 'default', 'profile.toml'))).toBe(true);
+    expect(new ProfileResolver(root).loadSettings('default').agent?.approval?.shell).toBe('allow');
+  });
+
   it('parses session_context_turns as an integer turn window', () => {
     const root = tempDir();
     const profileDir = path.join(root, 'x-runner');
@@ -116,6 +166,33 @@ describe('ProfileResolver', () => {
     fs.writeFileSync(path.join(profileDir, 'profile.toml'), 'session_context_turns = 5\n');
 
     expect(new ProfileResolver(root).loadSettings('x-runner').sessionContextTurns).toBe(5);
+  });
+
+  it('parses a per-profile [agent] approval override (dotted or table form)', () => {
+    const root = tempDir();
+    const dottedDir = path.join(root, 'helper');
+    fs.mkdirSync(dottedDir, { recursive: true });
+    fs.writeFileSync(path.join(dottedDir, 'profile.toml'), 'agent.approval.shell = "allow"\n');
+    expect(new ProfileResolver(root).loadSettings('helper').agent?.approval?.shell).toBe('allow');
+
+    const tableDir = path.join(root, 'writer');
+    fs.mkdirSync(tableDir, { recursive: true });
+    fs.writeFileSync(path.join(tableDir, 'profile.toml'), '[agent.approval]\nshell = "deny"\nwrite = "ask"\n');
+    const writer = new ProfileResolver(root).loadSettings('writer').agent;
+    expect(writer?.approval).toMatchObject({ shell: 'deny', write: 'ask' });
+
+    const plain = path.join(root, 'plain2');
+    fs.mkdirSync(plain, { recursive: true });
+    fs.writeFileSync(path.join(plain, 'profile.toml'), 'memories = true\n');
+    expect(new ProfileResolver(root).loadSettings('plain2').agent).toBeUndefined();
+  });
+
+  it('rejects an invalid per-profile approval mode', () => {
+    const root = tempDir();
+    const dir = path.join(root, 'broken-agent');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'profile.toml'), 'agent.approval.shell = "maybe"\n');
+    expect(() => new ProfileResolver(root).loadSettings('broken-agent')).toThrow(/allow.*ask.*deny/i);
   });
 
   it('parses a per-profile think override (and leaves it undefined when unset)', () => {

@@ -4,10 +4,9 @@ import { randomUUID } from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import {
-  ConfigManager,
   expandHome,
+  isInsideAny,
   renderSkillPrompt,
-  resolveAgentConfig,
 } from '@marifold/core';
 import type {
   AgentUsage,
@@ -28,7 +27,7 @@ import { TranscriptRow, topGap } from './Transcript.js';
 import { InputBox, type CompletionItem } from './InputBox.js';
 import { StatusLine } from './StatusLine.js';
 import { RunStatus } from './RunStatus.js';
-import { ApprovalModal, type ApprovalChoice } from './ApprovalModal.js';
+import { ApprovalModal, trustTargetFolder, type ApprovalChoice } from './ApprovalModal.js';
 import { SelectList, type SelectItem } from './SelectList.js';
 import { useTerminalSize } from './useTerminalSize.js';
 import { useResizing } from './useResizing.js';
@@ -155,6 +154,7 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
   const abortRef = useRef<AbortController | null>(null);
   const approvalResolverRef = useRef<((decision: ApprovalDecision) => void) | null>(null);
   const sessionGrantsRef = useRef<Set<ToolKind>>(new Set());
+  const sessionTrustedFoldersRef = useRef<Set<string>>(new Set());
   const steeringRef = useRef<string[]>([]);
   const pendingContextRef = useRef<string[]>([]);
   const pendingImagesRef = useRef<ImageInput[]>([]);
@@ -202,9 +202,14 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
 
   // --- Approvals -----------------------------------------------------------
   const approvalHandler = useCallback((request: ApprovalRequest): Promise<ApprovalDecision> => {
-    // Escalated calls always prompt; a session grant only auto-approves
-    // ordinary calls of the same kind.
+    // Auto-approve from this session's "Always" grants — the run's baked config
+    // can't see them, so the App layer applies them: a kind grant for ordinary
+    // calls, a trusted folder for escalated writes inside it.
     if (!request.escalated && sessionGrantsRef.current.has(request.kind)) {
+      return Promise.resolve({ approved: true });
+    }
+    if (request.escalated && request.escalatedPath
+        && isInsideAny(request.escalatedPath, [...sessionTrustedFoldersRef.current])) {
       return Promise.resolve({ approved: true });
     }
     dispatch({ type: 'set_approval', request });
@@ -219,29 +224,42 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
     approvalResolverRef.current = null;
     dispatch({ type: 'set_approval', request: undefined });
     if (!request || !resolve) return;
-    if (choice === 'deny') {
+    if (choice === 'no') {
       resolve({ approved: false, reason: 'denied by user' });
       return;
     }
-    if (choice === 'session') {
-      sessionGrantsRef.current.add(request.kind);
-    } else if (choice === 'persist') {
-      sessionGrantsRef.current.add(request.kind);
-      persistApprovalKind(request.kind);
+    if (choice === 'always') {
+      const folder = trustTargetFolder(request);
+      if (folder) trustFolderForProfile(folder);   // escalated write → trust the folder
+      else persistApprovalKind(request.kind);       // ordinary call → allow this kind
     }
     resolve({ approved: true });
   }, []);
 
+  // "Always (allow <kind>)": persist to the active profile + grant for this session.
   const persistApprovalKind = useCallback((kind: ToolKind) => {
+    const profile = stateRef.current.profile;
+    sessionGrantsRef.current.add(kind);
     try {
-      const agent = resolveAgentConfig(loadedConfig.config.agent);
-      loadedConfig.config.agent = { ...agent, approval: { ...agent.approval, [kind]: 'allow' } };
-      new ConfigManager(loadedConfig).save();
-      notify(`Persisted approval: ${kind} = allow`, 'info');
+      runtime.setProfileAgentApproval(profile, kind, 'allow');
+      notify(`Persisted approval: ${kind} = allow for ${profile}`, 'info');
     } catch (error) {
       notify(`Could not persist approval: ${errorText(error)}`, 'error');
     }
-  }, [loadedConfig, notify]);
+  }, [runtime, notify]);
+
+  // "Always (trust <folder>)" / `/trust-folder`: persist to the active profile +
+  // trust for this session (the running run can't re-read profile.toml).
+  const trustFolderForProfile = useCallback((folder: string) => {
+    const profile = stateRef.current.profile;
+    try {
+      const resolved = runtime.addProfileTrustedFolder(profile, folder);
+      sessionTrustedFoldersRef.current.add(resolved);
+      notify(`Trusting ${resolved} for ${profile} (writes here won't ask).`, 'info');
+    } catch (error) {
+      notify(`Could not trust folder: ${errorText(error)}`, 'error');
+    }
+  }, [runtime, notify]);
 
   // --- Runs ----------------------------------------------------------------
   const runAgent = useCallback(async (objective: string, options: { instructions?: string[]; userTurn?: string; lean?: boolean; forcePlan?: boolean } = {}) => {
@@ -263,7 +281,7 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
     let usage: AgentUsage | undefined;
     let doneStatus: string | undefined;
     try {
-      const runner = runtime.createAgentRunner();
+      const runner = runtime.createAgentRunner(current.profile);
       for await (const event of runner.run({
         objective,
         profile: current.profile,
@@ -553,18 +571,22 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
   }, [notify]);
 
   const showPermissions = useCallback(() => {
-    const approval = resolveAgentConfig(loadedConfig.config.agent).approval;
+    const profile = stateRef.current.profile;
+    const agent = runtime.resolveAgentConfigForProfile(profile);
     const grants = [...sessionGrantsRef.current];
+    const sessionTrusted = [...sessionTrustedFoldersRef.current];
     const lines = [
-      'Approval modes (config):',
-      ...Object.entries(approval).map(([kind, mode]) => `  ${kind}: ${mode}`),
+      `Approval modes (profile ${profile}):`,
+      ...Object.entries(agent.approval).map(([kind, mode]) => `  ${kind}: ${mode}`),
       '',
+      `Trusted folders: ${agent.trustedFolders.length ? agent.trustedFolders.join(', ') : '(none)'}`,
       `Session grants: ${grants.length ? grants.join(', ') : '(none)'}`,
+      ...(sessionTrusted.length ? [`Trusted this session: ${sessionTrusted.join(', ')}`] : []),
       '',
-      'Escalated calls (e.g. writes outside the working dir) always prompt.',
+      'Writes outside the working dir and trusted folders prompt (Once / Always / No).',
     ];
     dispatch({ type: 'add_item', item: { kind: 'info', title: 'Permissions', lines } });
-  }, [loadedConfig]);
+  }, [runtime]);
 
   const runDoctor = useCallback(() => {
     const current = stateRef.current;
@@ -696,6 +718,7 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
       setThink(settings.think);
       dispatch({ type: 'new_session', sessionId: undefined });
       sessionGrantsRef.current.clear();
+      sessionTrustedFoldersRef.current.clear();
       refreshSkills();
       notify(`Switched to profile: ${settings.profile} · ${settings.provider}/${settings.model} · ${settings.mode} (new session)`, 'info');
     } catch (error) {
@@ -783,10 +806,11 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
         notify(result.compacted ? 'Context compacted — older turns folded into a summary.' : 'Nothing to compact yet (history fits within the kept tail).', 'info');
       }).catch(error => notify(`Compaction failed: ${errorText(error)}`, 'error'));
     },
+    trustFolder: trustFolderForProfile,
   }), [
     notify, stop, steer, exit, openModelPicker, openProfilePicker, selectProfile, openSkills,
     showPermissions, showHelp, showStatus, copyLast, retryLast, showSessions, runDoctor, installSkill,
-    readFileCmd, setImage, remember, forget, deleteMemory, repaint, runtime,
+    readFileCmd, setImage, remember, forget, deleteMemory, repaint, runtime, trustFolderForProfile,
   ]);
 
   // --- Input routing -------------------------------------------------------

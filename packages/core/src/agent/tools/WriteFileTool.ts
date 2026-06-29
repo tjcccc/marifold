@@ -29,10 +29,10 @@ export class WriteFileTool implements AgentTool {
   assessRisk(input: Record<string, JSONValue>, ctx: ToolExecutionContext): ToolRiskAssessment {
     if (typeof input.path !== 'string') return { escalate: false };
     const target = path.resolve(ctx.cwd, expandHome(input.path));
-    if (!isInsideWorkspace(target, ctx.cwd)) {
-      return { escalate: true, reason: `target ${target} is outside the working directory ${ctx.cwd}` };
-    }
-    return { escalate: false };
+    if (isInsideWorkspace(target, ctx.cwd)) return { escalate: false };
+    // A write inside a trusted folder is allowed without prompting.
+    if (isInsideAny(target, ctx.trustedFolders)) return { escalate: false, trusted: true };
+    return { escalate: true, reason: `target ${target} is outside the working directory ${ctx.cwd}`, targetPath: target };
   }
 
   async execute(input: Record<string, JSONValue>, ctx: ToolExecutionContext): Promise<ToolExecutionResult> {
@@ -59,4 +59,9 @@ export class WriteFileTool implements AgentTool {
 export function isInsideWorkspace(target: string, cwd: string): boolean {
   const relative = path.relative(path.resolve(cwd), target);
   return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+}
+
+/** True when `target` is inside any of `roots` (each treated like a workspace). */
+export function isInsideAny(target: string, roots?: string[]): boolean {
+  return (roots ?? []).some(root => isInsideWorkspace(target, expandHome(root)));
 }

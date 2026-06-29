@@ -4,6 +4,7 @@ import { parse } from 'smol-toml';
 import { Profile, ProfileLoader } from '@priest-ai/core';
 import { MarifoldError } from '../errors/MarifoldError';
 import { ProfileDetail, ProfileFileSummary, ProfileMode, ProfileSettings, ProfileSummary } from '../config/ConfigSchema';
+import { parsePartialAgentConfig } from '../config/ConfigLoader';
 
 const SAFE_PROFILE_NAME = /^[A-Za-z0-9_-]+$/;
 
@@ -44,6 +45,7 @@ export class ProfileResolver implements ProfileLoader {
     const maxContextTokens = optionalNumber(raw.max_context_tokens, `${name}.profile.toml max_context_tokens`);
     const sessionContextTurns = optionalTurnWindow(raw.session_context_turns, `${name}.profile.toml session_context_turns`);
     const think = optionalBoolean(raw.think, `${name}.profile.toml think`);
+    const agent = raw.agent !== undefined ? parsePartialAgentConfig(raw.agent, `${name}.profile.toml [agent]`) : undefined;
     const rawMode = optionalString(raw.mode, `${name}.profile.toml mode`);
     if (rawMode !== undefined && rawMode !== 'agent' && rawMode !== 'chat') {
       throw MarifoldError.profileInvalid(
@@ -57,7 +59,7 @@ export class ProfileResolver implements ProfileLoader {
         name,
       );
     }
-    return { provider, model, memories, mode: rawMode as ProfileMode | undefined, maxContextTokens, sessionContextTurns, think };
+    return { provider, model, memories, mode: rawMode as ProfileMode | undefined, maxContextTokens, sessionContextTurns, think, agent };
   }
 
   list(): ProfileSummary[] {

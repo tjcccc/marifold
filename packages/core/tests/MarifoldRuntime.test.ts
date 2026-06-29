@@ -373,6 +373,43 @@ describe('MarifoldRuntime', () => {
     }
   });
 
+  it('merges per-profile [agent] over the global agent config (profile wins, rest inherits)', () => {
+    const dir = tempDir();
+    const profilesDir = path.join(dir, 'profiles');
+    fs.mkdirSync(path.join(profilesDir, 'helper'), { recursive: true });
+    fs.writeFileSync(path.join(profilesDir, 'helper', 'profile.toml'), 'agent.approval.shell = "allow"\nagent.max_iterations = 3\nagent.trusted_folders = ["/tmp/blog"]\n');
+    fs.mkdirSync(path.join(profilesDir, 'plain'), { recursive: true });
+    fs.writeFileSync(path.join(profilesDir, 'plain', 'profile.toml'), 'memories = true\n');
+
+    const config: MarifoldConfig = {
+      default: { provider: 'ollama', model: 'gemma4:e4b', profile: 'default', think: false },
+      models: { options: ['ollama/gemma4:e4b'] },
+      memory: { sizeLimit: 50000, contextLimit: 2400 },
+      paths: { profilesDir, sessionsDb: path.join(dir, 'sessions.db'), tasksDir: path.join(dir, 'tasks') },
+      providers: { ollama: { type: 'ollama', baseUrl: 'http://localhost:11434' } },
+      // Global [agent]: shell asks, custom maxIterations.
+      agent: { approval: { read: 'allow', write: 'ask', shell: 'ask', network: 'ask', delegate: 'allow' }, trustedFolders: ['/tmp/global'], maxIterations: 9, toolOutputLimit: 100000, toolMode: 'auto' },
+    };
+    const runtime = new MarifoldRuntime({
+      loadedConfig: { config, configPath: path.join(dir, 'config.toml'), foundConfig: true },
+    });
+
+    try {
+      const helper = runtime.resolveAgentConfigForProfile('helper');
+      expect(helper.approval.shell).toBe('allow'); // profile override wins
+      expect(helper.approval.write).toBe('ask');    // inherited from global
+      expect(helper.maxIterations).toBe(3);          // profile override
+      expect(helper.trustedFolders).toEqual(['/tmp/global', '/tmp/blog']); // union: global + profile
+
+      const plain = runtime.resolveAgentConfigForProfile('plain');
+      expect(plain.approval.shell).toBe('ask');      // global (no override)
+      expect(plain.maxIterations).toBe(9);
+      expect(plain.trustedFolders).toEqual(['/tmp/global']); // global only
+    } finally {
+      runtime.close();
+    }
+  });
+
   it('resolves think with request > profile > default precedence (default off)', () => {
     const dir = tempDir();
     const profilesDir = path.join(dir, 'profiles');

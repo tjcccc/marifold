@@ -7,6 +7,7 @@ import { AgentEngine, AgentRunner } from '../src/agent/AgentRunner';
 import { AgentEvent } from '../src/agent/AgentEvents';
 import { resolveAgentConfig } from '../src/agent/ApprovalPolicy';
 import { AgentTool, ToolRegistry } from '../src/agent/ToolRegistry';
+import { WriteFileTool } from '../src/agent/tools/WriteFileTool';
 import { TaskStore } from '../src/tasks/TaskStore';
 
 const tempDirs: string[] = [];
@@ -235,6 +236,29 @@ describe('AgentRunner', () => {
     expect(task.title).toBe('Test plan');
     expect(task.plan.map(step => step.status)).toEqual(['completed', 'completed']);
     expect(task.events.some(e => e.kind === 'observation')).toBe(true);
+  });
+
+  it('auto-approves an out-of-workspace write inside a trusted folder on an unattended run', async () => {
+    // The blog-automation case: a scheduled (no approvalHandler) run writes to a
+    // trusted folder outside the workspace — it must execute, not be denied.
+    const cwd = tempDir();
+    const trusted = tempDir();
+    const target = path.join(trusted, 'blog.md');
+    const engine = new ScriptedEngine([
+      planResponse,
+      response({ toolCalls: [{ id: 'call_0', name: 'write_file', arguments: { path: target, content: 'hello blog' } }] }),
+      response({ text: 'Wrote the blog.' }),
+    ]);
+    const { runner } = makeRunner(engine, [new WriteFileTool()], { trustedFolders: [trusted] });
+
+    const events = await collect(runner.run({ objective: 'write the daily blog', cwd, forcePlan: true }));
+
+    const decision = events.find(e => e.type === 'approval_decision') as Extract<AgentEvent, { type: 'approval_decision' }>;
+    expect(decision.approved).toBe(true);
+    expect(decision.source).toBe('policy'); // trusted-folder auto-approval, not a handler
+    const result = events.find(e => e.type === 'tool_result') as Extract<AgentEvent, { type: 'tool_result' }>;
+    expect(result.isError).toBeFalsy();
+    expect(fs.readFileSync(target, 'utf-8')).toBe('hello blog'); // actually written, no prompt
   });
 
   it('denies ask-mode tools on unattended runs without executing', async () => {

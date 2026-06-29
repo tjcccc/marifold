@@ -159,6 +159,7 @@ export class AgentRunner {
 
     const toolContext: ToolExecutionContext = {
       cwd,
+      trustedFolders: agentConfig.trustedFolders,
       signal: options.signal,
       outputLimit: agentConfig.toolOutputLimit,
     };
@@ -355,6 +356,11 @@ export class AgentRunner {
     toolContext: ToolExecutionContext,
   ): AsyncGenerator<AgentEvent, { approved: boolean; reason?: string }, unknown> {
     const risk = tool.assessRisk?.(call.arguments, toolContext) ?? { escalate: false };
+    // A call inside a trusted folder is auto-approved regardless of kind policy.
+    if (risk.trusted) {
+      yield { type: 'approval_decision', requestId: call.id, approved: true, source: 'policy' };
+      return { approved: true };
+    }
     const approval = options.unattended
       ? { ...this.deps.agentConfig.approval, ...(this.deps.agentConfig.unattended ?? {}) }
       : this.deps.agentConfig.approval;
@@ -384,6 +390,7 @@ export class AgentRunner {
       input: call.arguments,
       escalated: risk.escalate,
       ...(risk.reason ? { escalationReason: risk.reason } : {}),
+      ...(risk.targetPath ? { escalatedPath: risk.targetPath } : {}),
     };
     yield { type: 'approval_request', request };
     const decision = await options.approvalHandler(request);

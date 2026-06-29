@@ -1,4 +1,4 @@
-import type { MarifoldAgentConfig } from '../agent/ApprovalPolicy';
+import type { MarifoldAgentConfig, PartialAgentConfig } from '../agent/ApprovalPolicy';
 
 export type ProviderType = 'ollama' | 'openai-compatible' | 'anthropic';
 
@@ -121,6 +121,9 @@ export interface ProfileSettings {
   sessionContextTurns?: number;
   /** Per-profile thinking default; undefined falls back to default.think (off). */
   think?: boolean;
+  /** Per-profile agent overrides (approval/permissions, tool mode, iterations).
+   * Merged over the global `[agent]`; undefined keys inherit global/defaults. */
+  agent?: PartialAgentConfig;
 }
 
 export interface ProfileSummary {

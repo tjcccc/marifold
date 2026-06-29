@@ -1,7 +1,7 @@
 import { JSONValue, PriestConfig, PriestEngine, PriestRequest, PriestResponse, ToolDefinition, ToolExchangeTurn, UsageInfo } from '@priest-ai/core';
 import * as path from 'path';
 import { AgentRunner } from '../agent/AgentRunner';
-import { resolveAgentConfig } from '../agent/ApprovalPolicy';
+import { ApprovalMode, MarifoldAgentConfig, ToolKind, resolveAgentConfig } from '../agent/ApprovalPolicy';
 import { DelegateTool } from '../agent/tools/DelegateTool';
 import { ReadFileTool } from '../agent/tools/ReadFileTool';
 import { ShellExecTool } from '../agent/tools/ShellExecTool';
@@ -266,6 +266,18 @@ export class MarifoldRuntime {
     return this.profileManager.setMaxContextTokens(name, tokens).maxContextTokens;
   }
 
+  /** Persist a per-profile approval decision into the profile's profile.toml
+   * `[agent.approval]` (e.g. the TUI's "always allow"). */
+  setProfileAgentApproval(name: string, kind: ToolKind, mode: ApprovalMode): void {
+    this.profileManager.setAgentApproval(name, kind, mode);
+  }
+
+  /** Add a trusted folder (writes allowed without prompting) to a profile.
+   * Returns the resolved absolute folder. */
+  addProfileTrustedFolder(name: string, folder: string): string {
+    return this.profileManager.addTrustedFolder(name, folder).folder;
+  }
+
   /** Manually compact a session now (the /compact command). Returns whether anything was folded. */
   async compactSession(
     sessionId: string,
@@ -317,11 +329,33 @@ export class MarifoldRuntime {
    * TaskStore, and config policy. Pass a custom registry to replace the
    * default file/shell/delegate tool set.
    */
-  createAgentRunner(registry?: ToolRegistry): AgentRunner {
+  /**
+   * Effective agent config for a profile: the global `[agent]` with the
+   * profile's `[agent]` overrides (profile.toml) merged on top. Unset profile
+   * keys inherit global/defaults; `undefined` profile → global only.
+   */
+  resolveAgentConfigForProfile(profile?: string): MarifoldAgentConfig {
+    const global = resolveAgentConfig(this.options.loadedConfig.config.agent);
+    const name = profile ?? this.options.loadedConfig.config.default.profile;
+    const override = this.profileResolver.loadSettings(name).agent;
+    if (!override) return global;
+    const unattended = { ...(global.unattended ?? {}), ...(override.unattended ?? {}) };
+    return {
+      approval: { ...global.approval, ...(override.approval ?? {}) },
+      ...(Object.keys(unattended).length > 0 ? { unattended } : {}),
+      // Trusted folders are additive: a profile adds to any global ones.
+      trustedFolders: [...new Set([...global.trustedFolders, ...(override.trustedFolders ?? [])])],
+      maxIterations: override.maxIterations ?? global.maxIterations,
+      toolOutputLimit: override.toolOutputLimit ?? global.toolOutputLimit,
+      toolMode: override.toolMode ?? global.toolMode,
+    };
+  }
+
+  createAgentRunner(profile?: string, registry?: ToolRegistry): AgentRunner {
     return new AgentRunner({
       taskStore: this.taskStore,
-      registry: registry ?? this.createDefaultToolRegistry(),
-      agentConfig: resolveAgentConfig(this.options.loadedConfig.config.agent),
+      registry: registry ?? this.createDefaultToolRegistry(profile),
+      agentConfig: this.resolveAgentConfigForProfile(profile),
       resolveSettings: request => this.resolveSettings(request),
       prepareEngine: async settings => {
         await this.refreshProviderCredentialsIfNeeded(settings.provider);
@@ -346,7 +380,7 @@ export class MarifoldRuntime {
     });
   }
 
-  private createDefaultToolRegistry(): ToolRegistry {
+  private createDefaultToolRegistry(profile?: string): ToolRegistry {
     const registry = new ToolRegistry();
     registry.register(new ReadFileTool());
     registry.register(new WriteFileTool());
@@ -354,7 +388,7 @@ export class MarifoldRuntime {
     // web_search joins the agent's toolset when search is enabled and the
     // network isn't denied — so the model can look things up on its own.
     const webSearch = resolveWebSearchConfig(this.options.loadedConfig.config.webSearch);
-    const approval = resolveAgentConfig(this.options.loadedConfig.config.agent).approval;
+    const approval = this.resolveAgentConfigForProfile(profile).approval;
     if (webSearch.enabled && approval.network !== 'deny') {
       registry.register(new WebSearchTool(this.searchBackend, webSearch.maxResults));
     }
@@ -447,7 +481,7 @@ export class MarifoldRuntime {
   }
 
   private async runScheduledAgent(schedule: ScheduleState): Promise<{ taskId?: string; status: string }> {
-    const runner = this.createAgentRunner();
+    const runner = this.createAgentRunner(schedule.profile);
     let taskId: string | undefined;
     let status = 'failed';
     for await (const event of runner.run({
@@ -563,13 +597,14 @@ export class MarifoldRuntime {
     const webSearch = resolveWebSearchConfig(this.options.loadedConfig.config.webSearch);
     if (!webSearch.enabled || request.chatTools === false) return undefined;
 
-    const approval = resolveAgentConfig(this.options.loadedConfig.config.agent).approval;
+    const agentConfig = this.resolveAgentConfigForProfile(request.profile);
+    const approval = agentConfig.approval;
     const tools: AgentTool[] = [];
     if (approval.network !== 'deny') tools.push(new WebSearchTool(this.searchBackend, webSearch.maxResults));
     if (approval.read === 'allow') tools.push(new ReadFileTool());
     if (tools.length === 0) return undefined;
 
-    const outputLimit = resolveAgentConfig(this.options.loadedConfig.config.agent).toolOutputLimit;
+    const outputLimit = agentConfig.toolOutputLimit;
     return {
       definitions: tools.map(tool => tool.definition),
       execute: async (name, args) => {

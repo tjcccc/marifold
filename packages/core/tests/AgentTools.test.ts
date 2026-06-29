@@ -92,6 +92,24 @@ describe('WriteFileTool', () => {
     expect(inside.escalate).toBe(false);
   });
 
+  it('treats a write in a trusted folder as non-escalated and trusted', () => {
+    const dir = tempDir();
+    const trusted = tempDir();
+    const tool = new WriteFileTool();
+    const ctx: ToolExecutionContext = { ...context(dir), trustedFolders: [trusted] };
+
+    const inTrusted = tool.assessRisk({ path: path.join(trusted, 'blog.md'), content: 'x' }, ctx);
+    expect(inTrusted.escalate).toBe(false);
+    expect(inTrusted.trusted).toBe(true);
+
+    // A path in neither the workspace nor a trusted folder still escalates,
+    // and exposes its target so a client can offer to trust the folder.
+    const elsewhere = tempDir();
+    const risk = tool.assessRisk({ path: path.join(elsewhere, 'x.md'), content: 'x' }, ctx);
+    expect(risk.escalate).toBe(true);
+    expect(risk.targetPath).toBe(path.join(elsewhere, 'x.md'));
+  });
+
   it('expands ~ in read and write paths', async () => {
     const dir = tempDir();
     const home = os.homedir();

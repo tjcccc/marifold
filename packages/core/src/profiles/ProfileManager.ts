@@ -1,8 +1,12 @@
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
+import { parse } from 'smol-toml';
 import { MarifoldError } from '../errors/MarifoldError';
 import { ensureProfileMemoryFiles } from '../memory/MemoryStore';
+import { expandHome } from '../workspace/WorkspacePaths';
 import type { ProfileMode } from '../config/ConfigSchema';
+import type { ApprovalMode, ToolKind } from '../agent/ApprovalPolicy';
 
 const SAFE_PROFILE_NAME = /^[A-Za-z0-9_-]+$/;
 
@@ -45,6 +49,18 @@ export const PROFILE_TOML_STUB = `# profile.toml — per-profile overrides. Ever
 # Hard cap on recent session turns replayed each request: "all" = no cap,
 # N = last N, 0 = none. Falls back to default.session_context_turns.
 # session_context_turns = "all"
+
+# Per-profile agent tool permissions — override the global [agent.approval].
+# Kinds: read | write | shell | network | delegate. Modes: "allow" | "ask" | "deny".
+# Unset kinds inherit the global default; "ask" with no interactive handler
+# (e.g. an unattended/messaging context) safely degrades to deny.
+# agent.approval.shell = "allow"
+# agent.approval.write = "ask"
+
+# Folders (outside the project) where this profile may write files without
+# asking — a flat allowlist. Add with /trust-folder or the "Always" approval
+# button. e.g. a profile that writes a daily blog:
+# agent.trusted_folders = ["~/my_docs/blog"]
 `;
 
 export interface ProfileInitResult {
@@ -146,6 +162,34 @@ export class ProfileManager {
     return { name, path: profileToml, maxContextTokens: tokens && tokens > 0 ? tokens : undefined };
   }
 
+  /** Persist a per-profile approval decision into profile.toml as a dotted key
+   * (e.g. `agent.approval.shell = "allow"`), overriding the global `[agent]`. */
+  setAgentApproval(name: string, kind: ToolKind, mode: ApprovalMode): { name: string; path: string; kind: ToolKind; mode: ApprovalMode } {
+    assertSafeName(name);
+    // Create the profile dir if absent — the built-in `default` profile is served
+    // without one, and "always allow" must still persist there (mirrors setModelOverride).
+    const profileDir = path.join(this.profilesDir, name);
+    fs.mkdirSync(profileDir, { recursive: true });
+    const profileToml = path.join(profileDir, 'profile.toml');
+    const current = fs.existsSync(profileToml) ? fs.readFileSync(profileToml, 'utf-8') : PROFILE_TOML_STUB;
+    fs.writeFileSync(profileToml, upsertAgentApproval(current, kind, mode));
+    return { name, path: profileToml, kind, mode };
+  }
+
+  /** Add a trusted folder (where file writes are allowed without prompting) to
+   * the profile's profile.toml. Refuses overly broad / sensitive roots. */
+  addTrustedFolder(name: string, folder: string): { name: string; path: string; folder: string } {
+    assertSafeName(name);
+    const resolved = path.resolve(expandHome(folder));
+    assertSafeTrustedFolder(resolved);
+    const profileDir = path.join(this.profilesDir, name);
+    fs.mkdirSync(profileDir, { recursive: true });
+    const profileToml = path.join(profileDir, 'profile.toml');
+    const current = fs.existsSync(profileToml) ? fs.readFileSync(profileToml, 'utf-8') : PROFILE_TOML_STUB;
+    fs.writeFileSync(profileToml, upsertTrustedFolder(current, resolved));
+    return { name, path: profileToml, folder: resolved };
+  }
+
   rename(from: string, to: string): ProfileRenameResult {
     assertSafeName(from);
     assertSafeName(to);
@@ -227,6 +271,45 @@ function upsertMode(text: string, mode: ProfileMode): string {
   const cleaned = lines.join('\n').trimEnd();
   const prefix = cleaned ? `${cleaned}\n\n` : '';
   return `${prefix}mode = ${tomlString(mode)}\n`;
+}
+
+function upsertAgentApproval(text: string, kind: ToolKind, mode: ApprovalMode): string {
+  // Dotted key (not an [agent.approval] table) so it stays a flat line like the
+  // other overrides — no table header that would strand later flat-key writes.
+  const dotted = `agent.approval.${kind} =`;
+  const lines = text.split(/\r?\n/).filter(line => !line.trimStart().startsWith(dotted));
+  const cleaned = lines.join('\n').trimEnd();
+  const prefix = cleaned ? `${cleaned}\n\n` : '';
+  return `${prefix}agent.approval.${kind} = ${tomlString(mode)}\n`;
+}
+
+function upsertTrustedFolder(text: string, folder: string): string {
+  // Merge into any existing trusted_folders (dotted or table form parses the same).
+  let folders: string[] = [];
+  try {
+    const parsed = parse(text) as { agent?: { trusted_folders?: unknown } };
+    const existing = parsed.agent?.trusted_folders;
+    if (Array.isArray(existing)) folders = existing.filter((v): v is string => typeof v === 'string');
+  } catch { /* unparseable — start fresh */ }
+  if (!folders.includes(folder)) folders.push(folder);
+  const dotted = 'agent.trusted_folders =';
+  const lines = text.split(/\r?\n/).filter(line => !line.trimStart().startsWith(dotted));
+  const cleaned = lines.join('\n').trimEnd();
+  const prefix = cleaned ? `${cleaned}\n\n` : '';
+  return `${prefix}agent.trusted_folders = [${folders.map(tomlString).join(', ')}]\n`;
+}
+
+/** Refuse trusting roots that would grant the agent far too much. */
+function assertSafeTrustedFolder(resolved: string): void {
+  const home = os.homedir();
+  const sensitive = [path.join(home, '.ssh'), path.join(home, '.marifold')];
+  const tooBroad = resolved === path.parse(resolved).root // filesystem root
+    || resolved === home
+    // an ancestor of (or equal to) a sensitive dir.
+    || sensitive.some(s => s === resolved || !path.relative(resolved, s).startsWith('..'));
+  if (tooBroad) {
+    throw MarifoldError.profileInvalid(`Refusing to trust '${resolved}' — too broad or sensitive a folder.`, resolved);
+  }
 }
 
 function upsertMaxContextTokens(text: string, tokens: number | undefined): string {

@@ -45,6 +45,8 @@ export interface CommandContext {
   setDefaultContextWindow(tokens?: number): void;
   /** Compact the current session now (model-backed). */
   compactNow(): void;
+  /** Trust a folder for the active profile — file writes there won't prompt. */
+  trustFolder(path: string): void;
 }
 
 export interface CommandSpec {
@@ -106,6 +108,15 @@ const COMMANDS: CommandSpec[] = [
     },
   },
   { name: 'permissions', summary: 'Show approval modes and active session grants.', run: ctx => ctx.showPermissions() },
+  {
+    name: 'trust-folder',
+    summary: 'Trust a folder for this profile: /trust-folder <path> (writes there stop asking).',
+    run: (ctx, args) => {
+      const target = args.trim();
+      if (!target) ctx.notify('Usage: /trust-folder <path>', 'warn');
+      else ctx.trustFolder(target);
+    },
+  },
   {
     name: 'skills',
     summary: 'Manage skills: /skills (this profile) or /skills --global.',

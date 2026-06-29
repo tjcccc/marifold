@@ -17,6 +17,10 @@ export interface MarifoldAgentConfig {
    * approval; 'ask' still degrades to deny when no handler is present, so
    * only explicit 'allow' entries widen unattended capability. */
   unattended?: Partial<AgentApprovalConfig>;
+  /** Folders (outside the workspace) where file writes are allowed without
+   * prompting — a flat allowlist, not a per-folder permission. A write inside
+   * one is non-escalated and auto-approved. */
+  trustedFolders: string[];
   maxIterations: number;
   toolOutputLimit: number;
   toolMode: AgentToolMode;
@@ -38,6 +42,7 @@ export const DEFAULT_AGENT_CONFIG: MarifoldAgentConfig = {
     network: 'ask',
     delegate: 'allow',
   },
+  trustedFolders: [],
   maxIterations: 20,
   toolOutputLimit: 100000,
   toolMode: 'auto',
@@ -46,6 +51,7 @@ export const DEFAULT_AGENT_CONFIG: MarifoldAgentConfig = {
 export interface PartialAgentConfig {
   approval?: Partial<AgentApprovalConfig>;
   unattended?: Partial<AgentApprovalConfig>;
+  trustedFolders?: string[];
   maxIterations?: number;
   toolOutputLimit?: number;
   toolMode?: AgentToolMode;
@@ -56,6 +62,7 @@ export function resolveAgentConfig(partial?: PartialAgentConfig): MarifoldAgentC
   return {
     approval: { ...DEFAULT_AGENT_CONFIG.approval, ...(partial?.approval ?? {}) },
     ...(partial?.unattended && Object.keys(partial.unattended).length > 0 ? { unattended: { ...partial.unattended } } : {}),
+    trustedFolders: [...(partial?.trustedFolders ?? DEFAULT_AGENT_CONFIG.trustedFolders)],
     maxIterations: partial?.maxIterations ?? DEFAULT_AGENT_CONFIG.maxIterations,
     toolOutputLimit: partial?.toolOutputLimit ?? DEFAULT_AGENT_CONFIG.toolOutputLimit,
     toolMode: partial?.toolMode ?? DEFAULT_AGENT_CONFIG.toolMode,
@@ -74,6 +81,9 @@ export interface ApprovalRequest {
   escalated: boolean;
   /** Tool-provided reason for the escalation. */
   escalationReason?: string;
+  /** Absolute target path of an escalated file write, so a client can offer to
+   * trust its containing folder. */
+  escalatedPath?: string;
 }
 
 export interface ApprovalDecision {

@@ -34,7 +34,7 @@ export function registerAgentCommand(program: Command, printer: ConsolePrinter):
       process.on('SIGINT', onSigint);
 
       try {
-        const runner = runtime.createAgentRunner();
+        const runner = runtime.createAgentRunner(options.profile);
         const approvalHandler = options.yes
           ? (async () => ({ approved: true }))
           : ((request: ApprovalRequest) => promptForApproval(prompt, style, request));
