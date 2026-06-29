@@ -2,6 +2,17 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-06-29 — v0.30.0 — Per-profile permissions + trusted folders
+
+Groundwork for the upcoming Telegram/messaging channel (a remote bot honours *its profile's* permissions). Two ideas, one prompt — no per-folder permission matrix.
+
+- **Per-profile `[agent]`.** `profile.toml` can override the whole `[agent]` table (approval kinds, `trusted_folders`, `max_iterations`, `tool_mode`), merged `default < global < profile`. So a `computer_helper` profile can `agent.approval.shell = "allow"` while a `writing_helper` (weak model) stays restricted. A shared `parsePartialAgentConfig` validates both the global `[agent]` and the profile form; `resolveAgentConfigForProfile` + `createAgentRunner(profile)` thread the run's profile through (chat tools + scheduled runs included).
+- **Trusted folders.** `agent.trusted_folders` is a flat allowlist of folders (outside the workspace) where file writes are allowed without prompting. `WriteFileTool.assessRisk` returns non-escalated + `trusted` there, and `AgentRunner` auto-approves it **before** the unattended-deny — so a scheduled profile can write outside the project (e.g. a daily blog to `~/my_docs/blog`). `ProfileManager.addTrustedFolder` persists (array upsert) and **refuses sensitive roots** (`~`, `/`, `~/.ssh`, `~/.marifold`). New `/trust-folder <path>` command.
+- **Simplified approval prompt: Allow once / Trust / Deny.** "Trust" persists to the **active profile** — allow-always for the kind, or (for an out-of-workspace write) the folder into `trusted_folders`. **Enter = allow once** (safe default; never persists/trusts on a stray key). An in-session layer (`sessionGrants` + `sessionTrustedFolders`) makes the *current* run stop asking, since the run's baked config can't see the new on-disk grant. `/permissions` now shows the per-profile resolved approval + trusted folders.
+- **Docs:** README `[agent]` section + `profile.toml` properties table updated (per-profile override, `trusted_folders`, the new prompt).
+- Verified: core 173 (+ per-profile parse/merge incl. trusted-folder union, `assessRisk` trusted, `addTrustedFolder` round-trip + sensitive-root refusal, and the **unattended trusted-write executes end-to-end** — the blog case), tui 43 (modal keys + contextual trust label), service 4, cli 4 — all pass; 4 packages typecheck + build clean.
+- **Residual:** trust granularity is the immediate parent dir (`/trust-folder <broader>` to widen); `isInsideAny` uses `path.relative` (not realpath), matching the pre-existing workspace check; the within-run "Trust → stop asking" *feel* and real keypress→trust path are TTY-staged (their inputs are unit-tested).
+
 ## 2026-06-28 — v0.29.0 — Session-DB doctor + small UX (/retry, picker cap, per-profile think)
 
 - **`marifold doctor` (new CLI command).** Reports the active provider/model config and runs a **read-only session-DB integrity check** (`SessionResolver.checkIntegrity` → `runtime.checkSessionDb`). It lives on the CLI rather than the TUI `/doctor` on purpose: when the session DB is corrupt the TUI can't even start (`listSessions` throws at launch), so the diagnostic must be reachable from a command that never opens the store eagerly. Never throws; reports OK (with session/turn counts), CORRUPT (with the integrity error), or "none yet".

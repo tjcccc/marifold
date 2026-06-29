@@ -1,5 +1,10 @@
 # TODO
 
+## Session-DB resilience backlog (from v0.29.0 doctor work)
+
+- **`busy_timeout` on priest's `SQLiteSessionStore` write connection.** priest's store already sets `journal_mode=WAL` but has no `busy_timeout`, so the *main chat-write path* still errors (`SQLITE_BUSY`) instead of waiting under lock contention — the path most likely behind the 2026-06-28 corruption (concurrent access, since the DB was already WAL). Highest-leverage concurrency hardening, but it's a **priest change** (reopens the publish + local-link/sync dance). marifold-side connections already got `busy_timeout=5000` in v0.29.0.
+- **`marifold session repair` — guided, backup-first recovery (Step 2 of the doctor work).** Codify the manual rescue: back up `sessions.db` → `sqlite3 .recover` into a fresh DB → `PRAGMA integrity_check` → swap only if "ok"; refuse to swap on failure. Recovery ladder when `sqlite3` CLI is absent: JS best-effort row-salvage → reset (move aside + recreate empty). Always back up **before** any open (a read-write open of a corrupt DB can trigger mutating recovery). `marifold doctor` already detects corruption and points here.
+
 ## Refactor backlog
 
 - **Split `App.tsx` (TUI controller) into hooks — now testable here, no TTY needed for the logic.** Done so far (v0.25.0+): pure helpers moved to `ui/appHelpers.ts`; the `model`/`provider` pickers pulled out of `commands/model.ts` into `input/ModelPicker.ts`; and a **Tier-2 fake-runtime harness** (`tests/AppRuns.test.tsx`, via `ink-testing-library`) now covers the run-binding logic that was previously uncovered — message → chat/agent routing, `/steps` arming, `/stop` aborting the in-flight run. So a hook extraction can be verified by *extending that harness*, not eyeballed in a terminal. Concrete shape:
