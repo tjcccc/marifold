@@ -2,6 +2,17 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-06-30 — v0.31.0 — Telegram channel: pre-bridge foundation (prep only)
+
+**Prep only — there is no running Telegram bridge yet.** This builds everything that *isn't* Telegram-network-specific so the actual bot (a long-poll loop) becomes a thin shim. Decisions for v1: **unattended** approvals (bot honors the profile's permissions + trusted folders; `ask`→deny — no approval-over-Telegram) and **single-user** (defer concurrency hardening).
+
+- **`respond()`** (`packages/core/src/channels/respond.ts`) — the reusable, channel-agnostic "run one turn → reply" helper any bridge calls. `chat` accumulates `runtime.stream` chunks; `agent` runs `createAgentRunner(profile)` with **no `approvalHandler`** (unattended). Returns `{ text, ok, denied }`: `denied` names tools it couldn't run; **`ok` flags a non-completed agent run** so a channel never sends a silent/empty reply on a failed run.
+- **`[channel.telegram]` config surface** — `ConfigSchema` (`enabled`/`botTokenEnv`/`botToken`/`allowlist`/`profile`/`defaultMode`; token follows the provider secret pattern, `botTokenEnv` preferred), parsed in `ConfigLoader`, serialized in `ConfigManager`.
+- **`marifold channel telegram setup`** — interactive: bot token (SecretPrompt) + allowlist + profile picker + default mode → writes the config.
+- **`marifold doctor`** — a **Channel (telegram)** readiness section: token resolvable, allowlist non-empty, linked profile exists → ✓ ready / ✗ not ready.
+- Verified: core 178 (+ `respond` chat/agent/denied/failed-run, `[channel.telegram]` parse + bad-`default_mode` reject), tui 43, service 4, cli 4 — all pass; 4 packages typecheck + build clean. Doctor channel section exercised live (token unset→not-ready, set→ready). No behavior change to existing flows.
+- **Next:** the bridge itself — `marifold channel telegram` (long-poll `getUpdates` → allowlist → `respond()` → `sendMessage`, per-chat `/chat`·`/agent`, `sessionId = "tg-<chat_id>"`). Deferred: `busy_timeout` on priest's session-write path (only if concurrency grows), approval-over-Telegram. Plus your manual @BotFather bot + a dedicated profile.
+
 ## 2026-06-29 — v0.30.0 — Per-profile permissions + trusted folders
 
 Groundwork for the upcoming Telegram/messaging channel (a remote bot honours *its profile's* permissions). Two ideas, one prompt — no per-folder permission matrix.
