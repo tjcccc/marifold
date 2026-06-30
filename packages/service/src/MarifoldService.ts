@@ -32,7 +32,14 @@ export interface MarifoldServiceStartResult {
   address: string;
   host: string;
   port: number;
+  /** Present when the Telegram bridge started inside this service. */
+  telegram?: { profile: string };
 }
+
+/** Internal: the active Telegram bridge info stashed on the Fastify instance so
+ * startMarifoldService can report it without changing createMarifoldService's
+ * return type. */
+type ServiceWithBridge = FastifyInstance & { marifoldTelegram?: { profile: string } };
 
 const API_VERSION = 'v1';
 const DEFAULT_HOST = '127.0.0.1';
@@ -50,7 +57,15 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
     : undefined;
   scheduler?.start();
 
+  // Messaging bridge(s) run inside the same long-lived process as the HTTP API
+  // and scheduler, so one `marifold service` powers everything (TUI, future
+  // Web/desktop/mobile, Telegram).
+  const telegramBridge = runtime.createTelegramBridge(message => server.log.info(message));
+  telegramBridge?.start();
+  (server as ServiceWithBridge).marifoldTelegram = telegramBridge ? { profile: telegramBridge.profile } : undefined;
+
   server.addHook('onClose', async () => {
+    telegramBridge?.stop();
     scheduler?.stop();
     runtime.close();
   });
@@ -244,7 +259,7 @@ export async function startMarifoldService(options: MarifoldServiceStartOptions)
   assertLoopbackHost(host);
   const server = createMarifoldService(options);
   const address = await server.listen({ host, port });
-  return { server, address, host, port };
+  return { server, address, host, port, telegram: (server as ServiceWithBridge).marifoldTelegram };
 }
 
 function assertLoopbackHost(host: string): void {

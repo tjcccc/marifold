@@ -27,6 +27,9 @@ export function registerServiceCommand(program: Command, printer: ConsolePrinter
         });
 
         process.stdout.write(`Marifold service listening at ${result.address}\n`);
+        if (result.telegram) {
+          process.stdout.write(`Telegram bridge active (profile ${result.telegram.profile}).\n`);
+        }
         process.stdout.write('Press Ctrl+C to stop.\n');
         await waitForShutdown(result.server.close.bind(result.server));
       } catch (error) {

@@ -2,6 +2,16 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-06-30 — v0.33.0 — Telegram bridge (live, in-service) + edit-aware channel setup
+
+The bridge deferred in v0.31.0 is live: a Telegram bot running **inside `marifold service`** replies through a profile's model — verified end-to-end (message from a phone → reply) behind a proxy.
+
+- **`TelegramBridge`** (`core/channels/TelegramBridge.ts`) — long-poll `getUpdates` → allowlist check → `respond()` under the configured profile (unattended; the profile's permissions govern) → `sendMessage`. Per-chat mode with `/agent` `/chat` `/new` `/help`, 4096-char chunking, **proxy-aware** (Telegram is blocked in CN), and it never crashes the service (poll errors → log + backoff).
+- **`runtime.createTelegramBridge()`** mirrors `createScheduler`; `createMarifoldService` starts/stops it alongside the scheduler so **one `marifold service` powers HTTP + schedules + Telegram** (and the future Web/desktop/mobile clients). `marifold service` prints `Telegram bridge active (profile X)`.
+- **`channel telegram setup` is now edit-aware:** re-run to change a single field — profile preselects the current one (else `default`, the init-created profile); token/allowlist/mode keep on an empty Enter. Fixed a stdin-handoff bug where the eagerly-created readline interface swallowed the input meant for the allowlist prompt (it returned EOF immediately).
+- Verified: core **193** (+7 bridge routing tests: allowlist filter, command routing, `/agent` switch, denied-tool note, chunking), service 4, cli 4 — all pass; 4 packages typecheck + build clean. Live over Telegram: `/start`, a chat reply, and a model Q&A.
+- **Next:** per-chat concurrency hardening (`busy_timeout`) only if it grows; Slack/other channels reuse the same `respond()` seam.
+
 ## 2026-06-30 — v0.32.0 — ChatGPT subscription provider (Codex backend) + proxy plumbing
 
 ChatGPT sign-in now works on a **ChatGPT plan** (no platform org, no API key) by talking to the **Codex backend** the way the Codex CLI does — verified live end-to-end behind a proxy (OAuth → streamed reply with token usage).

@@ -30,6 +30,7 @@ import type { MemoryControlPayloads } from '../memory/MemoryControls';
 import { ProfileResolver } from '../profiles/ProfileResolver';
 import { ProfileManager } from '../profiles/ProfileManager';
 import { Scheduler } from '../schedule/Scheduler';
+import { TelegramBridge } from '../channels/TelegramBridge';
 import { ScheduleCreateInput, ScheduleState, ScheduleStore, ScheduleUpdateInput } from '../schedule/ScheduleStore';
 import { SessionResolver, SessionDbHealth } from '../sessions/SessionResolver';
 import { SkillStore } from '../skill/SkillStore';
@@ -478,6 +479,19 @@ export class MarifoldRuntime {
       runSchedule: schedule => this.runScheduledAgent(schedule),
       log,
     });
+  }
+
+  /** Telegram bridge for the service process, or undefined when not configured,
+   * disabled, or missing a resolvable token. Call start()/stop(). */
+  createTelegramBridge(log?: (message: string) => void): TelegramBridge | undefined {
+    const config = this.options.loadedConfig.config.channels?.telegram;
+    if (!config || config.enabled === false) return undefined;
+    const token = config.botTokenEnv ? process.env[config.botTokenEnv] : config.botToken;
+    if (!token) {
+      log?.(`Telegram channel configured but no bot token resolved${config.botTokenEnv ? ` (env ${config.botTokenEnv} unset)` : ''} — bridge not started.`);
+      return undefined;
+    }
+    return new TelegramBridge({ runtime: this, token, config, log });
   }
 
   private async runScheduledAgent(schedule: ScheduleState): Promise<{ taskId?: string; status: string }> {
