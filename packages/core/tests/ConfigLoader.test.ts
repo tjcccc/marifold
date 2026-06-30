@@ -137,4 +137,31 @@ write = "maybe"
 `);
     expect(() => new ConfigLoader().load({ configPath })).toThrow(/allow.*ask.*deny/);
   });
+
+  it('parses [channel.telegram] (and rejects a bad default_mode)', () => {
+    const dir = tempDir();
+    const configPath = path.join(dir, 'config.toml');
+    fs.writeFileSync(configPath, `
+[default]
+profile = "default"
+
+[channel.telegram]
+bot_token_env = "MARIFOLD_TG_TOKEN"
+allowlist = [123, 456]
+profile = "messenger"
+default_mode = "agent"
+`);
+    const tg = new ConfigLoader().load({ configPath }).config.channels?.telegram;
+    expect(tg).toEqual({
+      enabled: undefined,
+      botTokenEnv: 'MARIFOLD_TG_TOKEN',
+      botToken: undefined,
+      allowlist: [123, 456],
+      profile: 'messenger',
+      defaultMode: 'agent',
+    });
+
+    fs.writeFileSync(configPath, '[default]\nprofile = "default"\n[channel.telegram]\nprofile = "x"\ndefault_mode = "wizard"\n');
+    expect(() => new ConfigLoader().load({ configPath })).toThrow(/default_mode/);
+  });
 });

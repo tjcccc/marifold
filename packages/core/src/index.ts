@@ -126,6 +126,8 @@ export type {
 export { ProfileResolver } from './profiles/ProfileResolver';
 export { MarifoldRuntime } from './runtime/MarifoldRuntime';
 export type { MarifoldRuntimeOptions } from './runtime/MarifoldRuntime';
+export { respond } from './channels/respond';
+export type { RespondRequest, RespondResult } from './channels/respond';
 export type {
   MarifoldAskResponse,
   MarifoldResolvedSettings,

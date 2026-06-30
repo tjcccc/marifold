@@ -334,6 +334,17 @@ export function renderMarifoldConfig(config: MarifoldConfig): string {
     ...(config.webSearch.proxy ? [`proxy = ${tomlString(config.webSearch.proxy)}`] : []),
   ].filter(Boolean).join('\n');
 
+  const tg = config.channels?.telegram;
+  const telegramSection = tg === undefined ? undefined : [
+    '[channel.telegram]',
+    ...(tg.enabled === false ? ['enabled = false'] : []),
+    optionalStringLine('bot_token_env', tg.botTokenEnv),
+    optionalStringLine('bot_token', tg.botToken),
+    `allowlist = [${tg.allowlist.join(', ')}]`,
+    `profile = ${tomlString(tg.profile)}`,
+    `default_mode = ${tomlString(tg.defaultMode)}`,
+  ].filter(Boolean).join('\n');
+
   const providerTables = Object.entries(config.providers)
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([name, provider]) => renderProvider(name, provider));
@@ -344,6 +355,7 @@ export function renderMarifoldConfig(config: MarifoldConfig): string {
     memoryLines.join('\n'),
     ...(agentSection ? [agentSection] : []),
     ...(webSearchSection ? [webSearchSection] : []),
+    ...(telegramSection ? [telegramSection] : []),
     pathLines.join('\n'),
     ...providerTables,
   ];

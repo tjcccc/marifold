@@ -96,6 +96,29 @@ export interface MarifoldConfig {
   /** Normalized [web_search] section. Absent when the config file has none;
    * use resolveWebSearchConfig() for effective defaults. */
   webSearch?: MarifoldWebSearchConfig;
+  /** Normalized [channel.*] sections (messaging bridges). Absent when none. */
+  channels?: MarifoldChannelsConfig;
+}
+
+export interface MarifoldChannelsConfig {
+  telegram?: TelegramChannelConfig;
+}
+
+/** A messaging bridge that runs a profile in-process over Telegram. */
+export interface TelegramChannelConfig {
+  /** When false, the bridge refuses to start even if configured. Defaults true. */
+  enabled?: boolean;
+  /** Env var holding the bot token. Preferred over `botToken` so the secret
+   * stays out of config.toml. */
+  botTokenEnv?: string;
+  /** Bot token stored directly in config. Prefer `botTokenEnv`. */
+  botToken?: string;
+  /** Telegram user ids allowed to talk to the bot. Empty = nobody (locked). */
+  allowlist: number[];
+  /** Profile whose model + permissions the bot runs under. */
+  profile: string;
+  /** Default interaction mode for a new chat (`/chat` `/agent` switch per chat). */
+  defaultMode: ProfileMode;
 }
 
 export interface LoadedMarifoldConfig {

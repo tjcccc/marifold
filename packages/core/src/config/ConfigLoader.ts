@@ -8,9 +8,12 @@ import {
   MarifoldDefaultConfig,
   MarifoldMemoryConfig,
   MarifoldModelsConfig,
+  MarifoldChannelsConfig,
   MarifoldPathsConfig,
   MarifoldProviderConfig,
   MarifoldWebSearchConfig,
+  ProfileMode,
+  TelegramChannelConfig,
   ProviderType,
   resolveWebSearchConfig,
   WebSearchProvider,
@@ -84,6 +87,30 @@ export class ConfigLoader {
       providers: this.normalizeProviders(providersRaw),
       ...(raw.agent !== undefined ? { agent: resolveAgentConfig(parsePartialAgentConfig(raw.agent, 'agent')) } : {}),
       ...(raw.web_search !== undefined ? { webSearch: this.normalizeWebSearch(asObject(raw.web_search, 'web_search')) } : {}),
+      ...(raw.channel !== undefined ? { channels: this.normalizeChannels(asObject(raw.channel, 'channel')) } : {}),
+    };
+  }
+
+  private normalizeChannels(raw: TomlObject): MarifoldChannelsConfig {
+    const telegram = raw.telegram !== undefined
+      ? this.normalizeTelegramChannel(asObject(raw.telegram, 'channel.telegram'))
+      : undefined;
+    return { ...(telegram ? { telegram } : {}) };
+  }
+
+  private normalizeTelegramChannel(raw: TomlObject): TelegramChannelConfig {
+    const mode = optionalString(raw.default_mode, 'channel.telegram.default_mode');
+    if (mode !== undefined && mode !== 'agent' && mode !== 'chat') {
+      throw MarifoldError.configInvalid('channel.telegram.default_mode must be "agent" or "chat".');
+    }
+    const allowlist = optionalNumberArray(raw.allowlist, 'channel.telegram.allowlist');
+    return {
+      enabled: optionalBoolean(raw.enabled, 'channel.telegram.enabled'),
+      botTokenEnv: optionalString(raw.bot_token_env, 'channel.telegram.bot_token_env'),
+      botToken: optionalString(raw.bot_token, 'channel.telegram.bot_token'),
+      allowlist,
+      profile: optionalString(raw.profile, 'channel.telegram.profile') ?? 'default',
+      defaultMode: (mode as ProfileMode | undefined) ?? 'agent',
     };
   }
 
@@ -217,6 +244,12 @@ function optionalStringArray(value: unknown, label: string): string[] {
   if (value === undefined) return [];
   if (Array.isArray(value) && value.every(item => typeof item === 'string')) return [...value];
   throw MarifoldError.configInvalid(`Expected ${label} to be an array of strings.`);
+}
+
+function optionalNumberArray(value: unknown, label: string): number[] {
+  if (value === undefined) return [];
+  if (Array.isArray(value) && value.every(item => typeof item === 'number' && Number.isFinite(item))) return [...value];
+  throw MarifoldError.configInvalid(`Expected ${label} to be an array of numbers.`);
 }
 
 function optionalBoolean(value: unknown, label: string): boolean | undefined {

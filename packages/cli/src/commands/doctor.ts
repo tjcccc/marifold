@@ -53,6 +53,25 @@ export function registerDoctorCommand(program: Command, printer: ConsolePrinter)
           out.write('  The session DB is damaged. A guided repair (backs up first) is coming in `marifold session repair`.\n');
           process.exitCode = 1;
         }
+
+        // Channels — only when a [channel.*] section is configured.
+        const tg = loadConfig(program).config.channels?.telegram;
+        if (tg) {
+          out.write('\nChannel (telegram)\n');
+          const tokenOk = tg.botTokenEnv ? Boolean(process.env[tg.botTokenEnv]) : Boolean(tg.botToken);
+          const tokenDesc = tg.botTokenEnv ? `${tg.botTokenEnv} ${process.env[tg.botTokenEnv] ? '✓ set' : '✗ unset'}` : (tg.botToken ? 'in config' : '✗ missing');
+          const profileOk = runtime.listProfiles().some(p => p.name === tg.profile);
+          out.write(`  Bot token:    ${tokenDesc}\n`);
+          out.write(`  Allowlist:    ${tg.allowlist.length} user(s)${tg.allowlist.length === 0 ? ' ✗ (bot is locked)' : ''}\n`);
+          out.write(`  Profile:      ${tg.profile}${profileOk ? '' : ' ✗ (not found)'}\n`);
+          out.write(`  Default mode: ${tg.defaultMode}\n`);
+          if (!tokenOk || tg.allowlist.length === 0 || !profileOk) {
+            out.write('  Status: ✗ not ready — fix the ✗ items (or rerun `marifold channel telegram setup`).\n');
+            process.exitCode = 1;
+          } else {
+            out.write('  Status: ✓ ready\n');
+          }
+        }
       } catch (error) {
         printer.printError(error);
         process.exitCode = 1;
