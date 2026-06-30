@@ -187,6 +187,7 @@ export class ConfigLoader {
       const apiKey = optionalString(providerRaw.api_key, `providers.${name}.api_key`);
       const oauthToken = optionalString(providerRaw.oauth_token, `providers.${name}.oauth_token`);
       const apiKeyExpiresAt = optionalNumber(providerRaw.api_key_expires_at, `providers.${name}.api_key_expires_at`);
+      const accountId = optionalString(providerRaw.account_id, `providers.${name}.account_id`);
       providers[name] = {
         type,
         ...(baseUrl !== undefined ? { baseUrl } : {}),
@@ -194,6 +195,7 @@ export class ConfigLoader {
         ...(apiKey !== undefined ? { apiKey } : {}),
         ...(oauthToken !== undefined ? { oauthToken } : {}),
         ...(apiKeyExpiresAt !== undefined ? { apiKeyExpiresAt } : {}),
+        ...(accountId !== undefined ? { accountId } : {}),
       };
     }
 

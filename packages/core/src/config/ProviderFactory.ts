@@ -23,6 +23,7 @@ export class ProviderFactory {
       case 'openai-compatible':
         return new MarifoldOpenAICompatProvider(this.requireBaseUrl(providerName, provider), this.readOptionalApiKey(providerName, provider), {
           providerName,
+          accountId: provider.accountId,
         });
       case 'anthropic':
         return new AnthropicProvider(this.readRequiredApiKey(providerName, provider));

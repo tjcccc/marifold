@@ -82,6 +82,9 @@ export interface MarifoldProviderConfig {
   apiKey?: string;
   oauthToken?: string;
   apiKeyExpiresAt?: number;
+  /** ChatGPT subscription account id, sent as the `chatgpt-account-id` header
+   * on Codex-backend requests. Set during ChatGPT OAuth sign-in. */
+  accountId?: string;
 }
 
 export interface MarifoldConfig {

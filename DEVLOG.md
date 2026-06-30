@@ -2,6 +2,18 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-06-30 — v0.32.0 — ChatGPT subscription provider (Codex backend) + proxy plumbing
+
+ChatGPT sign-in now works on a **ChatGPT plan** (no platform org, no API key) by talking to the **Codex backend** the way the Codex CLI does — verified live end-to-end behind a proxy (OAuth → streamed reply with token usage).
+
+- **Subscription mode, not api-key exchange.** A ChatGPT-plan id_token carries no `organization_id`, so the old `requested_token=openai-api-key` exchange always 401'd (`Invalid ID token: missing organization_id`). Replaced it: the OAuth **access token** is the credential, and `chatgpt_account_id` is decoded from the id_token (`core/util/idToken.ts`) and sent as the `chatgpt-account-id` header.
+- **Transport.** `chatgpt` provider → `https://chatgpt.com/backend-api/codex` (was `api.openai.com`), always the Responses API, with headers `chatgpt-account-id`, `originator: codex_cli_rs`, `OpenAI-Beta: responses=experimental`, `session_id`, plus `store:false`. The backend is **SSE-only** (`"Stream must be set to true"`), so the non-streaming `complete()` path drives the stream and accumulates. `knownModels` → `gpt-5.5`, `gpt-5.3-codex`, `gpt-5.4-mini` (unversioned `gpt-5`/`gpt-5-codex` are sunsetting); model listing skips the nonexistent `/models` probe.
+- **Storage + refresh.** New `account_id` provider field (schema/loader/manager/runtime); refresh returns the access token directly (no exchange) and re-derives `accountId`.
+- **Proxy plumbing (prerequisite from China).** Node's `fetch` ignores `HTTPS_PROXY`; wired undici `ProxyAgent` into the ChatGPT OAuth/refresh, Copilot/ChatGPT model calls, and search backends (`core/util/proxy.ts`). Fixed a `??`→`||` empty-string bug (some tools set `HTTPS_PROXY=""` + lowercase `https_proxy`). Added `undici` as a core dep.
+- **Sign-in robustness.** Force-close the local OAuth callback's keep-alive sockets (`server.closeAllConnections()`) so sign-in no longer hangs after the token exchange; token-exchange timeout 20s→60s for slow proxies.
+- Verified: core 186 (+ id_token account-id extraction, Codex-backend URL/headers/`store:false`/`stream:true`, proxy empty-string regression), tui 43, cli 4 — all pass; 4 packages typecheck + build clean. Live: ChatGPT Plus reply through the Codex backend with token usage.
+- **Caveat:** unofficial, gray-area path (same fragility Codex/OpenClaw carry) — OpenAI can change it anytime, and Codex-account model names churn.
+
 ## 2026-06-30 — v0.31.0 — Telegram channel: pre-bridge foundation (prep only)
 
 **Prep only — there is no running Telegram bridge yet.** This builds everything that *isn't* Telegram-network-specific so the actual bot (a long-poll loop) becomes a thin shim. Decisions for v1: **unattended** approvals (bot honors the profile's permissions + trusted folders; `ask`→deny — no approval-over-Telegram) and **single-user** (defer concurrency hardening).

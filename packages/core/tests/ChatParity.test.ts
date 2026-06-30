@@ -228,11 +228,13 @@ describe('ChatGPT credential refresh', () => {
     try {
       const response = await runtime.ask({ prompt: 'Hi', memories: false });
       expect(response.ok).toBe(true);
-      expect(config.providers.chatgpt.apiKey).toBe('fresh-api-key');
+      // Subscription mode: the refreshed access token is the credential — no
+      // id_token→API-key exchange, so only the single refresh call is made.
+      expect(config.providers.chatgpt.apiKey).toBe('new-access');
       expect(config.providers.chatgpt.oauthToken).toBe('refresh-token-2');
       expect(config.providers.chatgpt.apiKeyExpiresAt).toBeGreaterThan(Math.floor(Date.now() / 1000));
-      expect(urls.filter(u => u.includes('auth.openai.com'))).toHaveLength(2);
-      expect(fs.readFileSync(configPath, 'utf-8')).toContain('fresh-api-key');
+      expect(urls.filter(u => u.includes('auth.openai.com'))).toHaveLength(1);
+      expect(fs.readFileSync(configPath, 'utf-8')).toContain('new-access');
     } finally {
       runtime.close();
     }

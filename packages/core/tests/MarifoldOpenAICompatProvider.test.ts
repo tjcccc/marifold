@@ -103,6 +103,46 @@ describe('MarifoldOpenAICompatProvider', () => {
     expect(result.text).toBe('hello chat');
     expect(requestUrl).toBe('https://api.githubcopilot.com/chat/completions');
   });
+
+  it('routes ChatGPT subscription calls to the Codex backend with account headers, store:false, and forced streaming', async () => {
+    let requestUrl: string | undefined;
+    let requestHeaders: Record<string, string> | undefined;
+    let requestBody: Record<string, unknown> | undefined;
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      requestUrl = String(input);
+      requestHeaders = init?.headers as Record<string, string>;
+      requestBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      // The Codex backend is SSE-only — return a stream, mirroring the real API.
+      return sseResponse([
+        { type: 'response.output_text.delta', delta: 'hi' },
+        { type: 'response.completed' },
+      ]);
+    }));
+
+    const provider = new MarifoldOpenAICompatProvider('https://chatgpt.com/backend-api/codex', 'access-tok', {
+      providerName: 'chatgpt',
+      accountId: 'acct_123',
+    });
+    // complete() must still work even though the backend rejects non-streaming —
+    // it drives the streaming path and accumulates.
+    const result = await provider.complete([{ role: 'user', content: 'Hello' }], {
+      provider: 'chatgpt',
+      model: 'gpt-5-codex',
+    });
+
+    expect(result.text).toBe('hi');
+    // Codex backend root serves /responses directly (no /v1 segment).
+    expect(requestUrl).toBe('https://chatgpt.com/backend-api/codex/responses');
+    expect(requestHeaders).toMatchObject({
+      Authorization: 'Bearer access-tok',
+      'chatgpt-account-id': 'acct_123',
+      originator: 'codex_cli_rs',
+      'OpenAI-Beta': 'responses=experimental',
+    });
+    expect(typeof requestHeaders?.session_id).toBe('string');
+    // The Codex backend rejects store:true and requires stream:true.
+    expect(requestBody).toMatchObject({ model: 'gpt-5-codex', store: false, stream: true });
+  });
 });
 
 function sseResponse(events: Array<Record<string, unknown>>): Response {

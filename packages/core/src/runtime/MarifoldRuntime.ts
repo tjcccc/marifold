@@ -577,6 +577,7 @@ export class MarifoldRuntime {
       provider.apiKey = refreshed.apiKey;
       provider.oauthToken = refreshed.refreshToken;
       provider.apiKeyExpiresAt = refreshed.expiresAt;
+      if (refreshed.accountId) provider.accountId = refreshed.accountId;
       new ConfigManager(this.options.loadedConfig).save();
     } catch (error) {
       throw MarifoldError.configInvalid(

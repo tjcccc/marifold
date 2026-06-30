@@ -1,11 +1,14 @@
 import { createHash, randomBytes } from 'crypto';
 import { createServer, Server } from 'http';
 import { spawn } from 'child_process';
+import { accountIdFromIdToken, proxyDispatcher } from '@marifold/core';
 
 export interface ChatGptAuthTokens {
   accessToken: string;
   refreshToken: string;
-  apiKey?: string;
+  /** ChatGPT account id from the id_token, sent as the `chatgpt-account-id`
+   * header on Codex-backend requests. */
+  accountId?: string;
   idToken?: string;
   expiresAt?: number;
 }
@@ -35,6 +38,7 @@ export async function authorizeChatGptWithBrowser(
     write(`${authUrl}\n`);
     write('Waiting for the browser redirect...\n');
     const code = await callback.waitForCode();
+    write('Received the authorization code — exchanging tokens with OpenAI...\n');
     return await exchangeChatGptCodeForTokens(code, callback.redirectUri, pkce);
   } finally {
     await callback.close();
@@ -77,45 +81,39 @@ async function exchangeChatGptCodeForTokens(
   }
 
   const idToken = stringField(data.id_token);
-  const apiKey = idToken ? await exchangeChatGptIdTokenForApiKey(idToken) : undefined;
   const expiresIn = numberField(data.expires_in);
 
   return {
     accessToken,
     refreshToken,
-    apiKey,
+    // Subscription (ChatGPT plan) accounts have no platform organization, so we
+    // use the access token directly against the Codex backend rather than
+    // exchanging the id_token for a platform API key. The account id from the
+    // id_token is required as the `chatgpt-account-id` request header.
+    accountId: idToken ? accountIdFromIdToken(idToken) : undefined,
     idToken,
     expiresAt: expiresIn !== undefined ? Math.floor(Date.now() / 1000) + expiresIn : undefined,
   };
 }
 
-async function exchangeChatGptIdTokenForApiKey(idToken: string): Promise<string> {
-  const data = await postForm(`${CHATGPT_AUTH_ISSUER}/oauth/token`, {
-    grant_type: 'urn:ietf:params:oauth:grant-type:token-exchange',
-    client_id: CHATGPT_OAUTH_CLIENT_ID,
-    requested_token: 'openai-api-key',
-    subject_token: idToken,
-    subject_token_type: 'urn:ietf:params:oauth:token-type:id_token',
-  }, 'ChatGPT API key exchange failed');
-
-  const apiKey = stringField(data.access_token);
-  if (!apiKey) throw new Error('ChatGPT API key exchange response did not include an access token.');
-  return apiKey;
-}
-
 async function postForm(url: string, data: Record<string, string>, label: string): Promise<Record<string, unknown>> {
-  const response = await fetch(url, {
+  // Node's fetch ignores HTTPS_PROXY by default; honor it for this external call
+  // (OpenAI's token endpoint) so the exchange works behind a proxy like the browser.
+  const init: Record<string, unknown> = {
     method: 'POST',
     headers: {
       Accept: 'application/json',
       'Content-Type': 'application/x-www-form-urlencoded',
     },
     body: new URLSearchParams(data),
-    signal: AbortSignal.timeout(20000),
-  }).catch(error => {
+    // Generous ceiling: the OAuth token endpoint can be slow through a proxy.
+    signal: AbortSignal.timeout(60000),
+  };
+  const dispatcher = proxyDispatcher();
+  if (dispatcher) init.dispatcher = dispatcher;
+  const response = await fetch(url, init as RequestInit).catch(error => {
     throw new Error(`${label}: ${stringifyError(error)}`);
   });
-
   if (!response.ok) throw new Error(`${label}: HTTP ${response.status}: ${await response.text()}`);
   return await response.json() as Record<string, unknown>;
 }
@@ -212,7 +210,13 @@ function respond(response: { writeHead: (status: number, headers?: Record<string
 }
 
 function closeServer(server: Server): Promise<void> {
-  return new Promise(resolve => server.close(() => resolve()));
+  return new Promise(resolve => {
+    server.close(() => resolve());
+    // The browser keeps the success-page connection alive, which blocks
+    // server.close() from ever completing; force lingering sockets closed so
+    // the sign-in returns promptly instead of hanging after the token exchange.
+    server.closeAllConnections();
+  });
 }
 
 function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {

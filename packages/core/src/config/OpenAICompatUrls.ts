@@ -14,6 +14,9 @@ export function openAIResponsesUrl(baseUrl: string, options: OpenAICompatUrlOpti
   const normalized = normalizeBaseUrl(baseUrl);
   if (normalized.endsWith('/responses')) return normalized;
   if (options.providerName === 'github_copilot') return `${normalized}/responses`;
+  // ChatGPT subscription hits the Codex backend root (…/backend-api/codex),
+  // which serves /responses directly with no /v1 segment.
+  if (options.providerName === 'chatgpt') return `${normalized}/responses`;
   if (isVersionRoot(normalized)) return `${normalized}/responses`;
   return `${normalized}/v1/responses`;
 }

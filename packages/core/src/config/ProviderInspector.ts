@@ -78,6 +78,17 @@ export class ProviderInspector {
     }
     const registryModels = registry?.knownModels ?? undefined;
 
+    // The ChatGPT subscription (Codex backend) exposes no model-listing endpoint;
+    // probing …/codex/v1/models stalls. Always show the registry's known models.
+    if (providerName === 'chatgpt' && Array.isArray(registryModels)) {
+      return {
+        provider: providerName,
+        reachable: null,
+        models: registryModels,
+        message: 'Showing known models for the ChatGPT subscription.',
+      };
+    }
+
     if (provider.type === 'ollama') {
       const result = await this.fetchOllamaModels(provider.baseUrl ?? 'http://localhost:11434');
       if (shouldShowRegistryModelFallback(providerName, result) && Array.isArray(registryModels) && registryModels.length > 0) {

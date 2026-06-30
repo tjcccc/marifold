@@ -20,7 +20,7 @@ export class DuckDuckGoBackend implements SearchBackend {
   private readonly proxy: string | undefined;
 
   constructor(options: DuckDuckGoBackendOptions = {}) {
-    this.proxy = options.proxy ?? process.env.HTTPS_PROXY ?? process.env.https_proxy;
+    this.proxy = options.proxy || process.env.HTTPS_PROXY || process.env.https_proxy || undefined;
   }
 
   async search(query: string, maxResults = DEFAULT_MAX_RESULTS): Promise<SearchResultItem[]> {

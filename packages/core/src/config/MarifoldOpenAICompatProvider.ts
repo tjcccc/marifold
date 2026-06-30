@@ -15,13 +15,18 @@ import {
   ToolCall,
   ToolChoice,
 } from '@priest-ai/core';
+import { randomUUID } from 'crypto';
 import { openAIChatCompletionsUrl, openAIResponsesUrl } from './OpenAICompatUrls';
 import { isGitHubCopilotResponsesModelId } from './ProviderRegistry';
+import { proxyDispatcher } from '../util/proxy';
 
 type OpenAICompatEndpoint = 'chat-completions' | 'responses';
 
 interface MarifoldOpenAICompatProviderOptions {
   providerName?: string;
+  /** ChatGPT subscription account id, sent as `chatgpt-account-id` to the
+   * Codex backend. */
+  accountId?: string;
 }
 
 interface ResponsesOutputItem {
@@ -77,6 +82,8 @@ interface ResponsesStreamEvent {
  */
 export class MarifoldOpenAICompatProvider implements ProviderAdapter {
   private readonly chatProvider: OpenAICompatProvider;
+  /** Stable per-instance session id for Codex-backend requests. */
+  private readonly sessionId = randomUUID();
 
   constructor(
     private readonly baseUrl: string,
@@ -131,6 +138,11 @@ export class MarifoldOpenAICompatProvider implements ProviderAdapter {
     outputSpec?: OutputSpec,
     options?: AdapterCallOptions,
   ): Promise<AdapterResult> {
+    // The ChatGPT Codex backend is SSE-only ("Stream must be set to true"), so a
+    // non-streaming complete() must drive the streaming path and accumulate.
+    if (this.options.providerName === 'chatgpt') {
+      return this.accumulateStream(messages, config, outputSpec, options);
+    }
     const body = this.responsesRequestBody(messages, config, outputSpec, options, false);
     const link = createLinkedAbort((config.timeoutSeconds ?? 60) * 1000, options?.signal);
 
@@ -155,6 +167,46 @@ export class MarifoldOpenAICompatProvider implements ProviderAdapter {
     } finally {
       link.dispose();
     }
+  }
+
+  /** Drive the streaming Responses path and fold its events into a single
+   * AdapterResult — used for providers whose backend rejects non-streaming
+   * requests (the ChatGPT Codex backend). */
+  private async accumulateStream(
+    messages: Message[],
+    config: PriestConfig,
+    outputSpec?: OutputSpec,
+    options?: AdapterCallOptions,
+  ): Promise<AdapterResult> {
+    let text = '';
+    const toolCalls: ToolCall[] = [];
+    let finishReason: string | undefined;
+    let inputTokens: number | undefined;
+    let outputTokens: number | undefined;
+    for await (const event of this.streamEventsResponses(messages, config, outputSpec, options)) {
+      switch (event.type) {
+        case 'text_delta':
+          text += event.text;
+          break;
+        case 'tool_call_end':
+          toolCalls.push(event.toolCall);
+          break;
+        case 'usage':
+          inputTokens = event.inputTokens;
+          outputTokens = event.outputTokens;
+          break;
+        case 'finish':
+          finishReason = event.finishReason;
+          break;
+      }
+    }
+    return {
+      text,
+      finishReason: toolCalls.length > 0 ? 'tool_calls' : (finishReason ?? 'stop'),
+      inputTokens,
+      outputTokens,
+      toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+    };
   }
 
   private async *streamEventsResponses(
@@ -297,6 +349,8 @@ export class MarifoldOpenAICompatProvider implements ProviderAdapter {
       stream,
       ...(config.providerOptions ?? {}),
     };
+    // The Codex backend is stateless (zero data retention) and rejects store:true.
+    if (this.options.providerName === 'chatgpt') body['store'] = false;
     if (outputSpec?.jsonSchema != null) {
       body['text'] = {
         format: {
@@ -328,12 +382,17 @@ export class MarifoldOpenAICompatProvider implements ProviderAdapter {
   }
 
   private async fetchResponse(url: string, body: Record<string, unknown>, signal: AbortSignal): Promise<Response> {
-    const response = await fetch(url, {
+    // Honor HTTPS_PROXY so ChatGPT/Copilot model calls work behind a proxy
+    // (Node's fetch ignores it by default). Direct when no proxy is set.
+    const init: Record<string, unknown> = {
       method: 'POST',
       headers: this.headers(),
       body: JSON.stringify(body),
       signal,
-    });
+    };
+    const dispatcher = proxyDispatcher();
+    if (dispatcher) init.dispatcher = dispatcher;
+    const response = await fetch(url, init as RequestInit);
     if (!response.ok) {
       const errText = await response.text().catch(() => '');
       throw PriestError.providerError('openai-compat', `HTTP ${response.status}: ${errText}`);
@@ -351,6 +410,8 @@ export class MarifoldOpenAICompatProvider implements ProviderAdapter {
   }
 
   private endpointForModel(model: string): OpenAICompatEndpoint {
+    // ChatGPT subscription only speaks the Codex backend Responses API.
+    if (this.options.providerName === 'chatgpt') return 'responses';
     if (this.options.providerName === 'github_copilot' && isGitHubCopilotResponsesModelId(model)) {
       return 'responses';
     }
@@ -367,10 +428,24 @@ export class MarifoldOpenAICompatProvider implements ProviderAdapter {
     };
   }
 
+  private chatgptHeaders(): Record<string, string> {
+    if (this.options.providerName !== 'chatgpt') return {};
+    // Match the Codex CLI's request to the ChatGPT backend: identify as the Codex
+    // CLI, enable the experimental Responses API, bind to the subscription account
+    // (no platform organization involved), and tag a session.
+    const headers: Record<string, string> = {
+      originator: 'codex_cli_rs',
+      'OpenAI-Beta': 'responses=experimental',
+      session_id: this.sessionId,
+    };
+    if (this.options.accountId) headers['chatgpt-account-id'] = this.options.accountId;
+    return headers;
+  }
+
   private headers(): Record<string, string> {
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     if (this.apiKey) headers.Authorization = `Bearer ${this.apiKey}`;
-    return { ...headers, ...this.copilotHeaders() };
+    return { ...headers, ...this.copilotHeaders(), ...this.chatgptHeaders() };
   }
 }
 

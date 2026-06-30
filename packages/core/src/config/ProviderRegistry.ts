@@ -261,18 +261,18 @@ const REGISTRY: ProviderRegistryEntry[] = [
   },
   {
     name: 'chatgpt',
-    label: 'ChatGPT (OpenAI OAuth)',
+    label: 'ChatGPT (subscription OAuth)',
     kind: 'oauth',
     type: 'openai-compatible',
-    defaultBaseUrl: 'https://api.openai.com',
+    // ChatGPT plan sign-in authorizes the Codex backend (not the platform API):
+    // the OAuth access token + chatgpt-account-id header are used directly here.
+    defaultBaseUrl: 'https://chatgpt.com/backend-api/codex',
     apiKeyEnv: 'CHATGPT_API_KEY',
-    knownModels: [
-      'gpt-5.5',
-      'gpt-5.4', 'gpt-5.4-mini', 'gpt-5.4-nano',
-      'gpt-5.2', 'gpt-5-mini', 'gpt-5-nano',
-      'gpt-4.1', 'gpt-4.1-mini', 'gpt-4.1-nano',
-      'gpt-4o', 'gpt-4o-mini',
-    ],
+    // The Codex backend only accepts ChatGPT-account-enabled models; others are
+    // rejected with "not supported for ChatGPT account". Model names churn (a
+    // sunset runs mid-2026) — these are the current set; the picker also accepts
+    // a custom id.
+    knownModels: ['gpt-5.5', 'gpt-5.3-codex', 'gpt-5.4-mini'],
   },
   {
     name: 'custom',

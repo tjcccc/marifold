@@ -128,6 +128,8 @@ export { MarifoldRuntime } from './runtime/MarifoldRuntime';
 export type { MarifoldRuntimeOptions } from './runtime/MarifoldRuntime';
 export { respond } from './channels/respond';
 export type { RespondRequest, RespondResult } from './channels/respond';
+export { proxyDispatcher } from './util/proxy';
+export { accountIdFromIdToken } from './util/idToken';
 export type {
   MarifoldAskResponse,
   MarifoldResolvedSettings,

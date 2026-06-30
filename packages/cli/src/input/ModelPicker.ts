@@ -232,6 +232,9 @@ async function promptProviderSetupIfNeeded(
     apiKey: credentials.apiKey,
     oauthToken: credentials.oauthToken,
     apiKeyExpiresAt: credentials.apiKeyExpiresAt,
+    // ChatGPT subscription: the account id authorizes the Codex backend; without
+    // it the chatgpt-account-id header is empty and chat requests are rejected.
+    accountId: credentials.accountId ?? current.accountId,
   };
 }
 
@@ -300,10 +303,13 @@ async function promptChatGptCredentials(
   if (method === 'oauth') {
     const tokens = await authorizeChatGptWithBrowser();
     return {
-      apiKey: tokens.apiKey ?? tokens.accessToken,
+      // The OAuth access token is the Codex-backend bearer credential; ChatGPT
+      // subscription accounts have no platform API key to exchange for.
+      apiKey: tokens.accessToken,
       baseUrl: provider.defaultBaseUrl,
       oauthToken: tokens.refreshToken,
       apiKeyExpiresAt: tokens.expiresAt,
+      accountId: tokens.accountId,
     };
   }
 

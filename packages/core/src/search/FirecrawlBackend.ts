@@ -1,4 +1,5 @@
 import { SearchBackend, SearchResultItem } from './SearchBackend';
+import { proxyDispatcher } from '../util/proxy';
 
 const FIRECRAWL_SEARCH_URL = 'https://api.firecrawl.dev/v2/search';
 const DEFAULT_MAX_RESULTS = 5;
@@ -39,7 +40,7 @@ export class FirecrawlBackend implements SearchBackend {
     this.apiKey = options.apiKey
       ?? (options.apiKeyEnv ? process.env[options.apiKeyEnv] : undefined);
     this.scrape = options.scrape ?? false;
-    this.proxy = options.proxy ?? process.env.HTTPS_PROXY ?? process.env.https_proxy;
+    this.proxy = options.proxy || process.env.HTTPS_PROXY || process.env.https_proxy || undefined;
     this.maxResults = options.maxResults ?? DEFAULT_MAX_RESULTS;
   }
 
@@ -59,7 +60,7 @@ export class FirecrawlBackend implements SearchBackend {
       headers,
       body: JSON.stringify(body),
     };
-    const dispatcher = await proxyDispatcher(this.proxy);
+    const dispatcher = proxyDispatcher(this.proxy);
     if (dispatcher) init.dispatcher = dispatcher;
 
     const response = await fetch(FIRECRAWL_SEARCH_URL, init as RequestInit);
@@ -95,17 +96,3 @@ async function safeText(response: Response): Promise<string> {
   }
 }
 
-/** Best-effort proxy dispatcher via undici (bundled with Node's fetch but not a
- * hard dependency here). Returns undefined when no proxy is set or undici can't
- * be resolved, in which case fetch goes direct. */
-async function proxyDispatcher(proxy: string | undefined): Promise<unknown | undefined> {
-  if (!proxy) return undefined;
-  try {
-    // Indirect specifier so the optional `undici` peer isn't a static dependency.
-    const undiciModule = 'undici';
-    const { ProxyAgent } = await import(undiciModule);
-    return new ProxyAgent(proxy);
-  } catch {
-    return undefined;
-  }
-}

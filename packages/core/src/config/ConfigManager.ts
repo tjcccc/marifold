@@ -91,6 +91,7 @@ export class ConfigManager {
     if (options.apiKey) providerConfig.apiKey = options.apiKey;
     if (options.oauthToken) providerConfig.oauthToken = options.oauthToken;
     if (options.apiKeyExpiresAt !== undefined) providerConfig.apiKeyExpiresAt = options.apiKeyExpiresAt;
+    if (options.accountId) providerConfig.accountId = options.accountId;
     this.registerModelOption(provider, model);
     this.save();
     return { configPath: this.configPath, key: 'models.options', value: `${provider}/${model}` };
@@ -254,6 +255,9 @@ export class ConfigManager {
       case 'api_key_expires_at':
         provider.apiKeyExpiresAt = parseNumber(value, `providers.${providerName}.api_key_expires_at`);
         return;
+      case 'account_id':
+        provider.accountId = value;
+        return;
       default:
         throw MarifoldError.configInvalid(`Unknown config key: providers.${providerName}.${key}`);
     }
@@ -371,6 +375,7 @@ function renderProvider(name: string, provider: MarifoldProviderConfig): string 
     optionalStringLine('api_key', provider.apiKey),
     optionalStringLine('oauth_token', provider.oauthToken),
     optionalNumberLine('api_key_expires_at', provider.apiKeyExpiresAt),
+    optionalStringLine('account_id', provider.accountId),
   ].filter(Boolean);
   return lines.join('\n');
 }
