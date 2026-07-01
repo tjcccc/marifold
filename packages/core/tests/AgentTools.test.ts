@@ -102,6 +102,13 @@ describe('WriteFileTool', () => {
     expect(inTrusted.escalate).toBe(false);
     expect(inTrusted.trusted).toBe(true);
 
+    // A trusted folder that is also the cwd (e.g. a channel's outbox) is still
+    // trusted — auto-approved, not merely non-escalated. Checked before the
+    // workspace so write=ask doesn't prompt for it.
+    const asCwd: ToolExecutionContext = { ...context(trusted), trustedFolders: [trusted] };
+    const inCwdTrusted = tool.assessRisk({ path: 'report.md', content: 'x' }, asCwd);
+    expect(inCwdTrusted.trusted).toBe(true);
+
     // A path in neither the workspace nor a trusted folder still escalates,
     // and exposes its target so a client can offer to trust the folder.
     const elsewhere = tempDir();

@@ -19,6 +19,12 @@ const MAX_MESSAGE_CHARS = 4096; // Telegram's per-message limit
 const APPROVAL_TIMEOUT_MS = 5 * 60 * 1000; // auto-deny if the user never taps
 const OUTBOX_SENT_DIR = 'sent'; // delivered files are moved here to keep them
 const IMAGE_EXTS = new Set(['.jpg', '.jpeg', '.png', '.gif', '.webp']);
+const DOWNLOAD_ATTEMPTS = 3; // Telegram downloads can transiently fail behind a proxy
+
+// Injected atop the agent's system prompt so it knows the outbox mechanics.
+const OUTBOX_INSTRUCTIONS = [
+  'You are speaking to the user over Telegram. Any file you write to the current working directory is automatically delivered to them as a file/photo attachment — so to send or give the user a file, just write it here (these writes need no approval). You CAN send files this way; never tell the user you cannot.',
+];
 
 const USAGE = [
   'marifold bot — commands:',
@@ -250,12 +256,23 @@ export class TelegramBridge {
         prompt: fullPrompt,
         sessionId,
         ...(mode === 'agent'
-          ? { approvalHandler: request => this.requestApproval(chatId, request), cwd: outbox, trustedFolders: [outbox] }
+          ? {
+              approvalHandler: request => this.requestApproval(chatId, request),
+              cwd: outbox,
+              trustedFolders: [outbox],
+              instructions: OUTBOX_INSTRUCTIONS,
+            }
           : {}),
       });
-      reply = result.text || '(no response)';
-      if (!result.ok) reply = `⚠️ The run didn't complete.\n\n${reply}`;
-      if (result.denied.length > 0) reply += `\n\n(Couldn't run: ${result.denied.join(', ')} — denied.)`;
+      let text = result.text;
+      if (result.denied.length > 0) text += `${text ? '\n\n' : ''}(Couldn't run: ${result.denied.join(', ')} — denied.)`;
+      if (result.ok) {
+        reply = text || '(no response)';
+      } else if (text) {
+        reply = `⚠️ (Didn't fully finish.)\n\n${text}`;
+      } else {
+        reply = '⚠️ I couldn\'t finish that — the run stopped early (a step may have been denied, timed out, or hit the step limit). Try rephrasing, or send /new to reset.';
+      }
     } catch (error) {
       this.log?.(`Telegram turn failed (chat ${chatId}): ${errorMessage(error)}`);
       reply = `⚠️ Error: ${errorMessage(error)}`;
@@ -311,17 +328,26 @@ export class TelegramBridge {
     const info = await this.call<{ file_path?: string }>('getFile', { file_id: fileId }, SEND_TIMEOUT_MS);
     if (!info.file_path) throw new Error('Telegram getFile returned no file_path');
     const url = `${TELEGRAM_FILE_BASE}/bot${this.token}/${info.file_path}`;
-    const link = createLinkedAbort(FILE_TIMEOUT_MS, this.abort?.signal);
-    const init: Record<string, unknown> = { signal: link.signal };
-    const dispatcher = proxyDispatcher();
-    if (dispatcher) init.dispatcher = dispatcher;
-    try {
-      const response = await this.fetchImpl(url, init as RequestInit);
-      if (!response.ok) throw new Error(`download HTTP ${response.status}`);
-      return Buffer.from(await response.arrayBuffer());
-    } finally {
-      link.dispose();
+
+    // Downloads through a proxy can transiently "fetch failed" — retry a few times.
+    let lastError: unknown;
+    for (let attempt = 1; attempt <= DOWNLOAD_ATTEMPTS; attempt++) {
+      const link = createLinkedAbort(FILE_TIMEOUT_MS, this.abort?.signal);
+      const init: Record<string, unknown> = { signal: link.signal };
+      const dispatcher = proxyDispatcher();
+      if (dispatcher) init.dispatcher = dispatcher;
+      try {
+        const response = await this.fetchImpl(url, init as RequestInit);
+        if (!response.ok) throw new Error(`download HTTP ${response.status}`);
+        return Buffer.from(await response.arrayBuffer());
+      } catch (error) {
+        lastError = error;
+        if (attempt < DOWNLOAD_ATTEMPTS) await this.sleep(ERROR_BACKOFF_MS);
+      } finally {
+        link.dispose();
+      }
     }
+    throw lastError instanceof Error ? lastError : new Error(String(lastError));
   }
 
   /** Upload a local file via sendDocument/sendPhoto (multipart). */

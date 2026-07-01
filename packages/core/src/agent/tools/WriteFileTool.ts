@@ -29,9 +29,11 @@ export class WriteFileTool implements AgentTool {
   assessRisk(input: Record<string, JSONValue>, ctx: ToolExecutionContext): ToolRiskAssessment {
     if (typeof input.path !== 'string') return { escalate: false };
     const target = path.resolve(ctx.cwd, expandHome(input.path));
-    if (isInsideWorkspace(target, ctx.cwd)) return { escalate: false };
-    // A write inside a trusted folder is allowed without prompting.
+    // A write inside a trusted folder is auto-approved — checked before the
+    // workspace so a trusted folder set as cwd (e.g. a channel's outbox) is
+    // silent, not merely non-escalated (which still asks under write=ask).
     if (isInsideAny(target, ctx.trustedFolders)) return { escalate: false, trusted: true };
+    if (isInsideWorkspace(target, ctx.cwd)) return { escalate: false };
     return { escalate: true, reason: `target ${target} is outside the working directory ${ctx.cwd}`, targetPath: target };
   }
 

@@ -19,6 +19,9 @@ export interface RespondRequest {
   cwd?: string;
   /** Extra trusted folders for this run (writes there are auto-approved). */
   trustedFolders?: string[];
+  /** Authoritative instructions injected atop the system prompt (e.g. telling
+   * the agent that files it writes are delivered to the user). */
+  instructions?: string[];
 }
 
 export interface RespondResult {
@@ -41,7 +44,7 @@ export interface RespondResult {
  * Presentation/formatting (chunking, markdown) belongs to the channel bridge.
  */
 export async function respond(runtime: MarifoldRuntime, request: RespondRequest): Promise<RespondResult> {
-  const { profile, mode, prompt, sessionId, approvalHandler, cwd, trustedFolders } = request;
+  const { profile, mode, prompt, sessionId, approvalHandler, cwd, trustedFolders, instructions } = request;
 
   if (mode === 'chat') {
     let text = '';
@@ -57,7 +60,7 @@ export async function respond(runtime: MarifoldRuntime, request: RespondRequest)
   const denied = new Set<string>();
   let text = '';
   let ok = false;
-  for await (const event of runner.run({ objective: prompt, profile, sessionId, approvalHandler, cwd, trustedFolders })) {
+  for await (const event of runner.run({ objective: prompt, profile, sessionId, approvalHandler, cwd, trustedFolders, instructions })) {
     if (event.type === 'text') text += event.text;
     else if (event.type === 'tool_request') toolById.set(event.call.id, event.call.tool);
     else if (event.type === 'approval_decision' && !event.approved) {
