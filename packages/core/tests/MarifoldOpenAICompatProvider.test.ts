@@ -142,6 +142,23 @@ describe('MarifoldOpenAICompatProvider', () => {
     expect(typeof requestHeaders?.session_id).toBe('string');
     // The Codex backend rejects store:true and requires stream:true.
     expect(requestBody).toMatchObject({ model: 'gpt-5-codex', store: false, stream: true });
+    // Without thinking, no reasoning param and no raw think key (default flow).
+    expect(requestBody).not.toHaveProperty('reasoning');
+    expect(requestBody).not.toHaveProperty('think');
+  });
+
+  it('translates ChatGPT think=true into the Responses reasoning param (and drops raw think)', async () => {
+    let requestBody: Record<string, unknown> | undefined;
+    vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      requestBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      return sseResponse([{ type: 'response.completed' }]);
+    }));
+    const provider = new MarifoldOpenAICompatProvider('https://chatgpt.com/backend-api/codex', 'tok', { providerName: 'chatgpt', accountId: 'a' });
+    await provider.complete([{ role: 'user', content: 'Hi' }], {
+      provider: 'chatgpt', model: 'gpt-5-codex', providerOptions: { think: true },
+    });
+    expect(requestBody).toHaveProperty('reasoning', { effort: 'high' });
+    expect(requestBody).not.toHaveProperty('think'); // raw flag never reaches the backend
   });
 });
 

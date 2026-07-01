@@ -350,7 +350,15 @@ export class MarifoldOpenAICompatProvider implements ProviderAdapter {
       ...(config.providerOptions ?? {}),
     };
     // The Codex backend is stateless (zero data retention) and rejects store:true.
-    if (this.options.providerName === 'chatgpt') body['store'] = false;
+    if (this.options.providerName === 'chatgpt') {
+      body['store'] = false;
+      // Translate marifold's think flag to the Responses `reasoning` param. Only
+      // act when thinking is ON so the default request stays byte-identical to
+      // the working flow; a raw `think` key is never sent to the backend.
+      const think = body['think'];
+      delete body['think'];
+      if (think === true) body['reasoning'] = { effort: 'high' };
+    }
     if (outputSpec?.jsonSchema != null) {
       body['text'] = {
         format: {

@@ -41,7 +41,10 @@ import { defaultSchedulesDir, defaultSkillsDir } from '../workspace/WorkspacePat
 import type { TaskCreateInput, TaskEventInput, TaskListOptions, TaskState, TaskSummary, TaskUpdateInput } from '../tasks/TaskStore';
 import { MarifoldAskResponse, MarifoldResolvedSettings, MarifoldRunRequest } from './MarifoldTypes';
 
-const THINK_PROVIDER_NAMES = new Set(['bailian', 'alibaba_cloud']);
+// Providers that honor marifold's think flag. bailian/alibaba_cloud take a raw
+// `{think}` provider option; chatgpt's think is translated to the Responses API
+// `reasoning: {effort}` param inside MarifoldOpenAICompatProvider.
+const THINK_PROVIDER_NAMES = new Set(['bailian', 'alibaba_cloud', 'chatgpt']);
 const CHAT_TOOL_MAX_ITERATIONS = 3;
 
 export interface MarifoldRuntimeOptions {
