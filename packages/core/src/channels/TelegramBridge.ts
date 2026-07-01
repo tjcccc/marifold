@@ -1,5 +1,6 @@
 import { randomUUID } from 'crypto';
-import { dirname, resolve, sep } from 'path';
+import { access, mkdir, readdir, readFile, rename, writeFile } from 'fs/promises';
+import { basename, dirname, extname, join, resolve, sep } from 'path';
 import { createLinkedAbort } from '@priest-ai/core';
 import type { MarifoldRuntime } from '../runtime/MarifoldRuntime';
 import type { ProfileMode, TelegramChannelConfig } from '../config/ConfigSchema';
@@ -8,12 +9,16 @@ import { proxyDispatcher } from '../util/proxy';
 import { respond } from './respond';
 
 const TELEGRAM_API_BASE = 'https://api.telegram.org';
+const TELEGRAM_FILE_BASE = 'https://api.telegram.org/file';
 const LONG_POLL_SECONDS = 25;
 const POLL_OVERHEAD_MS = 10_000; // client timeout beyond the server-side long-poll
 const SEND_TIMEOUT_MS = 30_000;
+const FILE_TIMEOUT_MS = 120_000; // uploads/downloads may be large
 const ERROR_BACKOFF_MS = 3_000;
 const MAX_MESSAGE_CHARS = 4096; // Telegram's per-message limit
 const APPROVAL_TIMEOUT_MS = 5 * 60 * 1000; // auto-deny if the user never taps
+const OUTBOX_SENT_DIR = 'sent'; // delivered files are moved here to keep them
+const IMAGE_EXTS = new Set(['.jpg', '.jpeg', '.png', '.gif', '.webp']);
 
 const USAGE = [
   'marifold bot — commands:',
@@ -21,6 +26,9 @@ const USAGE = [
   '/chat — plain chat mode (no tools)',
   '/new — start a fresh session',
   '/help — show this help',
+  '',
+  'Send me a file or photo and I\'ll keep it in your inbox. Ask me to make a',
+  'file (e.g. "write a poem and send the .md") and I\'ll send it back.',
 ].join('\n');
 
 /** The tap a user made on an approval prompt (plus the synthetic 'timeout'). */
@@ -32,6 +40,9 @@ interface TelegramUpdate {
     chat?: { id?: number };
     from?: { id?: number };
     text?: string;
+    caption?: string;
+    document?: { file_id: string; file_name?: string };
+    photo?: Array<{ file_id: string }>;
   };
   callback_query?: {
     id: string;
@@ -39,6 +50,8 @@ interface TelegramUpdate {
     data?: string;
   };
 }
+
+interface TelegramFileRef { fileId: string; name: string }
 
 interface TelegramResponse<T> {
   ok: boolean;
@@ -54,6 +67,9 @@ export interface TelegramBridgeDeps {
   runtime: MarifoldRuntime;
   token: string;
   config: TelegramChannelConfig;
+  /** Profiles root (`config.paths.profilesDir`); the bridge derives the
+   * profile's inbox/outbox under `<profilesDir>/<profile>/`. */
+  profilesDir: string;
   log?: (message: string) => void;
   /** Injectable for tests; defaults to global fetch (proxied via undici). */
   fetchImpl?: typeof fetch;
@@ -74,11 +90,15 @@ export class TelegramBridge {
   private readonly runtime: MarifoldRuntime;
   private readonly token: string;
   private readonly config: TelegramChannelConfig;
+  private readonly profileDir: string;
   private readonly log?: (message: string) => void;
   private readonly fetchImpl: typeof fetch;
 
   private readonly chatModes = new Map<number, ProfileMode>();
   private readonly chatEpoch = new Map<number, number>();
+  // Path of the most recently received file per chat, injected into the next
+  // turn so "use/save the file I sent" reaches the agent.
+  private readonly lastInbox = new Map<number, string>();
   // Session grants (mirror the TUI): once the user chooses "always"/"trust" we
   // stop re-prompting for that kind/folder for the bridge's lifetime.
   private readonly grantedKinds = new Set<ToolKind>();
@@ -94,8 +114,17 @@ export class TelegramBridge {
     this.token = deps.token;
     this.config = deps.config;
     this.profile = deps.config.profile;
+    this.profileDir = join(deps.profilesDir, deps.config.profile);
     this.log = deps.log;
     this.fetchImpl = deps.fetchImpl ?? fetch;
+  }
+
+  private outboxDir(): string {
+    return join(this.profileDir, 'outbox');
+  }
+
+  private inboxDir(): string {
+    return join(this.profileDir, 'inbox');
   }
 
   start(): void {
@@ -140,12 +169,21 @@ export class TelegramBridge {
     const message = update.message;
     const chatId = message?.chat?.id;
     const fromId = message?.from?.id;
-    const text = typeof message?.text === 'string' ? message.text.trim() : '';
-    if (chatId === undefined || !text) return;
+    if (chatId === undefined || !message) return;
     if (fromId === undefined || !this.config.allowlist.includes(fromId)) {
       this.log?.(`Ignored message from non-allowlisted user ${fromId ?? '?'}`);
       return;
     }
+
+    // File attachments → save to the inbox (kept for later use).
+    const file = fileRef(message);
+    if (file) {
+      await this.receiveFile(chatId, file);
+      return;
+    }
+
+    const text = typeof message.text === 'string' ? message.text.trim() : '';
+    if (!text) return;
 
     if (text.startsWith('/')) {
       await this.handleCommand(chatId, text);
@@ -193,15 +231,27 @@ export class TelegramBridge {
     const epoch = this.chatEpoch.get(chatId) ?? 0;
     const sessionId = epoch ? `tg-${chatId}-${epoch}` : `tg-${chatId}`;
 
+    // Offer a just-received file to this turn (once), so "use the file I sent"
+    // reaches the agent.
+    const recentFile = this.lastInbox.get(chatId);
+    this.lastInbox.delete(chatId);
+    const fullPrompt = recentFile ? `${prompt}\n\n[A file the user just sent is saved at: ${recentFile}]` : prompt;
+
+    // Agent runs work inside the profile's outbox (trusted → writes there don't
+    // prompt); whatever it leaves there is delivered afterwards.
+    const outbox = this.outboxDir();
+    if (mode === 'agent') await mkdir(outbox, { recursive: true }).catch(() => undefined);
+
     let reply: string;
     try {
       const result = await respond(this.runtime, {
         profile: this.profile,
         mode,
-        prompt,
+        prompt: fullPrompt,
         sessionId,
-        // Agent tool approvals prompt the user via Telegram buttons; chat has none.
-        approvalHandler: mode === 'agent' ? (request => this.requestApproval(chatId, request)) : undefined,
+        ...(mode === 'agent'
+          ? { approvalHandler: request => this.requestApproval(chatId, request), cwd: outbox, trustedFolders: [outbox] }
+          : {}),
       });
       reply = result.text || '(no response)';
       if (!result.ok) reply = `⚠️ The run didn't complete.\n\n${reply}`;
@@ -211,6 +261,88 @@ export class TelegramBridge {
       reply = `⚠️ Error: ${errorMessage(error)}`;
     }
     await this.sendMessage(chatId, reply);
+    if (mode === 'agent') await this.deliverOutbox(chatId);
+  }
+
+  // ── Inbox / outbox ────────────────────────────────────────────────────────
+
+  /** Download a received file into the profile's inbox and remember it for the
+   * next turn. */
+  private async receiveFile(chatId: number, file: TelegramFileRef): Promise<void> {
+    try {
+      const inbox = this.inboxDir();
+      await mkdir(inbox, { recursive: true });
+      const dest = await uniquePath(join(inbox, sanitizeName(file.name)));
+      const bytes = await this.downloadFile(file.fileId);
+      await writeFile(dest, bytes);
+      this.lastInbox.set(chatId, dest);
+      await this.sendMessage(chatId, `📎 Saved to your inbox: ${dest}`);
+    } catch (error) {
+      this.log?.(`Telegram inbox save failed (chat ${chatId}): ${errorMessage(error)}`);
+      await this.sendMessage(chatId, `⚠️ Couldn't save that file: ${errorMessage(error)}`);
+    }
+  }
+
+  /** Send every file the agent left in the outbox, then move each to outbox/sent/. */
+  private async deliverOutbox(chatId: number): Promise<void> {
+    const outbox = this.outboxDir();
+    let entries: string[];
+    try {
+      entries = (await readdir(outbox, { withFileTypes: true })).filter(e => e.isFile()).map(e => e.name);
+    } catch {
+      return; // no outbox yet
+    }
+    if (entries.length === 0) return;
+
+    const sentDir = join(outbox, OUTBOX_SENT_DIR);
+    await mkdir(sentDir, { recursive: true }).catch(() => undefined);
+    for (const name of entries) {
+      const filePath = join(outbox, name);
+      try {
+        await this.sendFile(chatId, filePath, IMAGE_EXTS.has(extname(name).toLowerCase()));
+        await rename(filePath, await uniquePath(join(sentDir, name)));
+      } catch (error) {
+        this.log?.(`Telegram outbox delivery failed for ${name}: ${errorMessage(error)}`);
+      }
+    }
+  }
+
+  private async downloadFile(fileId: string): Promise<Buffer> {
+    const info = await this.call<{ file_path?: string }>('getFile', { file_id: fileId }, SEND_TIMEOUT_MS);
+    if (!info.file_path) throw new Error('Telegram getFile returned no file_path');
+    const url = `${TELEGRAM_FILE_BASE}/bot${this.token}/${info.file_path}`;
+    const link = createLinkedAbort(FILE_TIMEOUT_MS, this.abort?.signal);
+    const init: Record<string, unknown> = { signal: link.signal };
+    const dispatcher = proxyDispatcher();
+    if (dispatcher) init.dispatcher = dispatcher;
+    try {
+      const response = await this.fetchImpl(url, init as RequestInit);
+      if (!response.ok) throw new Error(`download HTTP ${response.status}`);
+      return Buffer.from(await response.arrayBuffer());
+    } finally {
+      link.dispose();
+    }
+  }
+
+  /** Upload a local file via sendDocument/sendPhoto (multipart). */
+  private async sendFile(chatId: number, filePath: string, asPhoto: boolean): Promise<void> {
+    const method = asPhoto ? 'sendPhoto' : 'sendDocument';
+    const field = asPhoto ? 'photo' : 'document';
+    const form = new FormData();
+    form.append('chat_id', String(chatId));
+    form.append(field, new Blob([await readFile(filePath)]), basename(filePath));
+
+    const link = createLinkedAbort(FILE_TIMEOUT_MS, this.abort?.signal);
+    const init: Record<string, unknown> = { method: 'POST', body: form, signal: link.signal };
+    const dispatcher = proxyDispatcher();
+    if (dispatcher) init.dispatcher = dispatcher;
+    try {
+      const response = await this.fetchImpl(`${TELEGRAM_API_BASE}/bot${this.token}/${method}`, init as RequestInit);
+      const data = await response.json() as TelegramResponse<unknown>;
+      if (!data.ok) throw new Error(`Telegram ${method} failed: ${data.description ?? `HTTP ${response.status}`}`);
+    } finally {
+      link.dispose();
+    }
   }
 
   // ── Approval over Telegram ────────────────────────────────────────────────
@@ -373,6 +505,42 @@ export class TelegramBridge {
 
   private sleep(ms: number): Promise<void> {
     return new Promise(resolveSleep => setTimeout(resolveSleep, ms));
+  }
+}
+
+/** The downloadable attachment on a message (document preferred; else the
+ * largest photo size), or undefined for a plain/text message. */
+function fileRef(message: NonNullable<TelegramUpdate['message']>): TelegramFileRef | undefined {
+  if (message.document?.file_id) {
+    return { fileId: message.document.file_id, name: message.document.file_name || `file_${Date.now()}` };
+  }
+  const photo = message.photo;
+  if (photo && photo.length > 0) {
+    return { fileId: photo[photo.length - 1].file_id, name: `photo_${Date.now()}.jpg` }; // largest size is last
+  }
+  return undefined;
+}
+
+/** Reduce a Telegram-provided name to a safe basename. */
+function sanitizeName(name: string): string {
+  return basename(name).replace(/[^A-Za-z0-9._-]/g, '_') || `file_${Date.now()}`;
+}
+
+/** First non-colliding path: foo.md, foo-1.md, foo-2.md, … */
+async function uniquePath(desired: string): Promise<string> {
+  const ext = extname(desired);
+  const stem = join(dirname(desired), basename(desired, ext));
+  let candidate = desired;
+  for (let n = 1; await pathExists(candidate); n++) candidate = `${stem}-${n}${ext}`;
+  return candidate;
+}
+
+async function pathExists(target: string): Promise<boolean> {
+  try {
+    await access(target);
+    return true;
+  } catch {
+    return false;
   }
 }
 

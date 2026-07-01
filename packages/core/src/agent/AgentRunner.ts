@@ -63,6 +63,10 @@ export interface AgentRunOptions {
   forcePlan?: boolean;
   /** Working directory for filesystem/shell tools. Defaults to process.cwd(). */
   cwd?: string;
+  /** Extra trusted folders for this run only (writes there are auto-approved),
+   * merged over the profile's. Used by channels to make a scratch dir (e.g. a
+   * Telegram outbox) writable without prompting, without touching config. */
+  trustedFolders?: string[];
   /** Authoritative instructions (e.g. a skill body) injected at the top of the
    * system prompt for every loop turn, so the run is guided by them. */
   instructions?: string[];
@@ -159,7 +163,7 @@ export class AgentRunner {
 
     const toolContext: ToolExecutionContext = {
       cwd,
-      trustedFolders: agentConfig.trustedFolders,
+      trustedFolders: [...agentConfig.trustedFolders, ...(options.trustedFolders ?? [])],
       signal: options.signal,
       outputLimit: agentConfig.toolOutputLimit,
     };

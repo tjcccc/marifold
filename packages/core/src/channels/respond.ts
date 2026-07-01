@@ -15,6 +15,10 @@ export interface RespondRequest {
    * the channel prompts the user (e.g. Telegram inline buttons). When absent,
    * `ask` degrades to deny (unattended). */
   approvalHandler?: ApprovalHandler;
+  /** Working directory for agent file/shell tools (e.g. a channel's outbox). */
+  cwd?: string;
+  /** Extra trusted folders for this run (writes there are auto-approved). */
+  trustedFolders?: string[];
 }
 
 export interface RespondResult {
@@ -37,7 +41,7 @@ export interface RespondResult {
  * Presentation/formatting (chunking, markdown) belongs to the channel bridge.
  */
 export async function respond(runtime: MarifoldRuntime, request: RespondRequest): Promise<RespondResult> {
-  const { profile, mode, prompt, sessionId, approvalHandler } = request;
+  const { profile, mode, prompt, sessionId, approvalHandler, cwd, trustedFolders } = request;
 
   if (mode === 'chat') {
     let text = '';
@@ -53,7 +57,7 @@ export async function respond(runtime: MarifoldRuntime, request: RespondRequest)
   const denied = new Set<string>();
   let text = '';
   let ok = false;
-  for await (const event of runner.run({ objective: prompt, profile, sessionId, approvalHandler })) {
+  for await (const event of runner.run({ objective: prompt, profile, sessionId, approvalHandler, cwd, trustedFolders })) {
     if (event.type === 'text') text += event.text;
     else if (event.type === 'tool_request') toolById.set(event.call.id, event.call.tool);
     else if (event.type === 'approval_decision' && !event.approved) {

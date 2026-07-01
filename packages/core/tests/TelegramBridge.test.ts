@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
+import { mkdtemp, readdir, readFile, rm, writeFile } from 'fs/promises';
+import { tmpdir } from 'os';
+import { join } from 'path';
 import { TelegramBridge } from '../src/channels/TelegramBridge';
 import type { MarifoldRuntime } from '../src';
 import type { ProfileMode, TelegramChannelConfig } from '../src/config/ConfigSchema';
+
+const json = (obj: unknown) => new Response(JSON.stringify(obj), { status: 200 });
 
 interface Sent { chatId: number; text: string; replyMarkup?: { inline_keyboard: Array<Array<{ text: string; callback_data: string }>> } }
 
@@ -39,7 +44,7 @@ function makeBridge(opts: {
     profile: 'messenger',
     defaultMode: opts.defaultMode ?? 'chat',
   };
-  return { bridge: new TelegramBridge({ runtime, token: 'TKN', config, fetchImpl }), sent };
+  return { bridge: new TelegramBridge({ runtime, token: 'TKN', config, fetchImpl, profilesDir: '/tmp/marifold-test-profiles' }), sent };
 }
 
 function msg(text: string, fromId = 42, chatId = 100) {
@@ -171,5 +176,80 @@ describe('TelegramBridge.handleUpdate', () => {
     await bridge.handleUpdate(callback(denyData));
     await turn;
     expect(sent[sent.length - 1].text).toContain('web_search'); // denial note names the tool
+  });
+
+  it('saves a received document to the inbox and offers it to the next turn', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'mari-tg-'));
+    try {
+      const sentText: string[] = [];
+      let capturedPrompt = '';
+      const fetchImpl = (async (url: string | URL, init?: { body?: string }) => {
+        const u = String(url);
+        if (u.includes('/getFile')) return json({ ok: true, result: { file_path: 'documents/note.txt' } });
+        if (u.includes('/file/bot')) return new Response(Buffer.from('hello file'), { status: 200 });
+        if (u.includes('/sendMessage')) { sentText.push(JSON.parse(String(init?.body)).text); return json({ ok: true, result: { message_id: 1 } }); }
+        return json({ ok: true, result: [] });
+      }) as unknown as typeof fetch;
+      const runtime = {
+        createAgentRunner: () => ({
+          run: async function* (o: { objective: string }) {
+            capturedPrompt = o.objective;
+            yield { type: 'text', text: 'ok' };
+            yield { type: 'done', status: 'completed' };
+          },
+        }),
+      } as unknown as MarifoldRuntime;
+      const bridge = new TelegramBridge({
+        runtime, token: 'TKN', fetchImpl, profilesDir: dir,
+        config: { allowlist: [42], profile: 'messenger', defaultMode: 'agent' },
+      });
+
+      await bridge.handleUpdate({ update_id: 1, message: { chat: { id: 100 }, from: { id: 42 }, document: { file_id: 'f1', file_name: 'note.txt' } } });
+      const savedPath = join(dir, 'messenger', 'inbox', 'note.txt');
+      expect(await readFile(savedPath, 'utf8')).toBe('hello file');
+      expect(sentText.some(t => t.includes('inbox'))).toBe(true);
+
+      await bridge.handleUpdate({ update_id: 2, message: { chat: { id: 100 }, from: { id: 42 }, text: 'what is it?' } });
+      expect(capturedPrompt).toContain(savedPath); // the next turn is told where the file is
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('delivers files the agent writes to the outbox and moves them to sent/', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'mari-tg-'));
+    try {
+      const uploads: string[] = [];
+      const fetchImpl = (async (url: string | URL) => {
+        const u = String(url);
+        if (u.includes('/sendDocument') || u.includes('/sendPhoto')) {
+          uploads.push(u.includes('/sendPhoto') ? 'photo' : 'document');
+          return json({ ok: true, result: {} });
+        }
+        if (u.includes('/sendMessage')) return json({ ok: true, result: { message_id: 1 } });
+        return json({ ok: true, result: [] });
+      }) as unknown as typeof fetch;
+      const runtime = {
+        createAgentRunner: () => ({
+          run: async function* (o: { cwd: string }) {
+            await writeFile(join(o.cwd, 'report.md'), '# hi');
+            yield { type: 'text', text: 'wrote it' };
+            yield { type: 'done', status: 'completed' };
+          },
+        }),
+      } as unknown as MarifoldRuntime;
+      const bridge = new TelegramBridge({
+        runtime, token: 'TKN', fetchImpl, profilesDir: dir,
+        config: { allowlist: [42], profile: 'messenger', defaultMode: 'agent' },
+      });
+
+      await bridge.handleUpdate({ update_id: 1, message: { chat: { id: 100 }, from: { id: 42 }, text: 'make a report' } });
+
+      expect(uploads).toEqual(['document']);
+      expect(await readdir(join(dir, 'messenger', 'outbox', 'sent'))).toContain('report.md');
+      expect(await readdir(join(dir, 'messenger', 'outbox'))).not.toContain('report.md');
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 });

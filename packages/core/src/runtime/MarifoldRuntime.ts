@@ -491,7 +491,13 @@ export class MarifoldRuntime {
       log?.(`Telegram channel configured but no bot token resolved${config.botTokenEnv ? ` (env ${config.botTokenEnv} unset)` : ''} — bridge not started.`);
       return undefined;
     }
-    return new TelegramBridge({ runtime: this, token, config, log });
+    return new TelegramBridge({
+      runtime: this,
+      token,
+      config,
+      log,
+      profilesDir: this.options.loadedConfig.config.paths.profilesDir,
+    });
   }
 
   private async runScheduledAgent(schedule: ScheduleState): Promise<{ taskId?: string; status: string }> {
