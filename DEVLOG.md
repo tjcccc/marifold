@@ -2,6 +2,18 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-07-01 — v0.34.0 — Telegram: approvals, file inbox/outbox, /think, ChatGPT reasoning
+
+The in-service Telegram bot became genuinely useful — verified live (approvals tapped, a poem `.md` delivered as an attachment, a photo saved to the inbox).
+
+- **Approval over Telegram** — agent tool approvals prompt with inline buttons (`Allow once` / `Trust folder` | `Always allow <kind>` / `Deny`) and the run waits for the tap; "always"/"trust" persist to the profile + session, no tap in 5min auto-denies. `respond()` gained an optional `approvalHandler`; the bridge loop dispatches turns **detached** so a mid-run approval's `callback_query` (arriving on a later `getUpdates`) can't deadlock the poller (one turn at a time via a busy flag).
+- **File inbox/outbox** — photos/documents download to `~/.marifold/profiles/<profile>/inbox/` (with the path injected into the next turn); agent runs use `outbox/` as `cwd` (trusted → silent writes), and files left there are delivered via `sendDocument`/`sendPhoto` and moved to `outbox/sent/`. Multipart upload works through the proxy. Core: per-run `AgentRunOptions.trustedFolders` + `respond()` `cwd`/`trustedFolders`/`instructions`.
+- **Fixes from live testing** — `WriteFileTool` checks trusted folders **before** the workspace so a trusted cwd (the outbox) is auto-approved not merely non-escalated (outbox writes stopped prompting); the agent is told its files are auto-delivered (stops "I can't send files" then delivering one); friendlier "run didn't complete" reply; file downloads retry 3×.
+- **`/think` on|off** — per-chat, threaded through `respond()` to chat (`runtime.stream`) and agent (`AgentRunOptions.think`); warns when the provider won't honor it.
+- **ChatGPT reasoning** — `chatgpt` is now think-capable; the Codex-backend request translates `think=true` → `reasoning: {effort:'high'}` (raw `think` stripped), **only when on** so the default request is byte-identical to the working flow.
+- Verified: core 199 (+ approval routing, inbox/outbox integration, trusted-as-cwd, `/think`, reasoning translation), tui 43, service 4, cli 4 — all pass; 4 packages typecheck + build clean. Live over Telegram end-to-end.
+- **Open:** vision (the bot saves images but can't *see* their contents — needs multimodal image input); one live check that the Codex backend accepts the `reasoning` param on the chosen model.
+
 ## 2026-06-30 — v0.33.0 — Telegram bridge (live, in-service) + edit-aware channel setup
 
 The bridge deferred in v0.31.0 is live: a Telegram bot running **inside `marifold service`** replies through a profile's model — verified end-to-end (message from a phone → reply) behind a proxy.
