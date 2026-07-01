@@ -1,5 +1,6 @@
 import { MarifoldRuntime } from '../runtime/MarifoldRuntime';
 import { ProfileMode } from '../config/ConfigSchema';
+import { ApprovalHandler } from '../agent/ApprovalPolicy';
 
 export interface RespondRequest {
   /** Profile whose model + permissions the reply runs under. */
@@ -10,6 +11,10 @@ export interface RespondRequest {
   prompt: string;
   /** Stable conversation id (e.g. `tg-<chat_id>`) so history persists per chat. */
   sessionId: string;
+  /** Resolves `ask` approvals (agent mode). When present the run is *attended* —
+   * the channel prompts the user (e.g. Telegram inline buttons). When absent,
+   * `ask` degrades to deny (unattended). */
+  approvalHandler?: ApprovalHandler;
 }
 
 export interface RespondResult {
@@ -26,13 +31,13 @@ export interface RespondResult {
 
 /**
  * Run one turn for a messaging channel (Telegram, Slack, …) and collect a
- * plain-text reply. **Channel-agnostic and unattended:** agent runs get no
- * `approvalHandler`, so `ask` tools degrade to deny — the profile's `allow`
- * rules and `trusted_folders` are what govern. Presentation/formatting (chunking,
- * markdown) belongs to the channel bridge, not here.
+ * plain-text reply. **Channel-agnostic:** without an `approvalHandler` the agent
+ * run is unattended (`ask` degrades to deny — the profile's `allow` rules and
+ * `trusted_folders` govern); with one, the channel prompts the user to approve.
+ * Presentation/formatting (chunking, markdown) belongs to the channel bridge.
  */
 export async function respond(runtime: MarifoldRuntime, request: RespondRequest): Promise<RespondResult> {
-  const { profile, mode, prompt, sessionId } = request;
+  const { profile, mode, prompt, sessionId, approvalHandler } = request;
 
   if (mode === 'chat') {
     let text = '';
@@ -48,7 +53,7 @@ export async function respond(runtime: MarifoldRuntime, request: RespondRequest)
   const denied = new Set<string>();
   let text = '';
   let ok = false;
-  for await (const event of runner.run({ objective: prompt, profile, sessionId })) {
+  for await (const event of runner.run({ objective: prompt, profile, sessionId, approvalHandler })) {
     if (event.type === 'text') text += event.text;
     else if (event.type === 'tool_request') toolById.set(event.call.id, event.call.tool);
     else if (event.type === 'approval_decision' && !event.approved) {
