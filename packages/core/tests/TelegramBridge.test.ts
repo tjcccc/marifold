@@ -16,6 +16,7 @@ function makeBridge(opts: {
   chatChunks?: string[];
   agentEvents?: unknown[];
   runtime?: MarifoldRuntime;
+  supportsThink?: boolean;
 } = {}): { bridge: TelegramBridge; sent: Sent[] } {
   const sent: Sent[] = [];
   let messageId = 0;
@@ -37,6 +38,7 @@ function makeBridge(opts: {
         for (const e of (opts.agentEvents ?? [{ type: 'text', text: 'agent reply' }, { type: 'done', status: 'completed' }])) yield e;
       },
     }),
+    profileSupportsThink: () => opts.supportsThink ?? true,
   } as unknown as MarifoldRuntime);
 
   const config: TelegramChannelConfig = {
@@ -85,6 +87,21 @@ describe('TelegramBridge.handleUpdate', () => {
     expect(sent).toHaveLength(1);
     expect(sent[0].text).toContain('/agent');
     expect(sent[0].text).toContain('/chat');
+  });
+
+  it('/think on|off toggles, and warns when the provider does not support it', async () => {
+    const supported = makeBridge({ supportsThink: true });
+    await supported.bridge.handleUpdate(msg('/think on'));
+    expect(supported.sent[0].text).toBe('Thinking mode on.');
+
+    const unsupported = makeBridge({ supportsThink: false });
+    await unsupported.bridge.handleUpdate(msg('/think on'));
+    expect(unsupported.sent[0].text).toContain('Thinking mode on.');
+    expect(unsupported.sent[0].text).toContain('no effect');
+
+    const badArg = makeBridge();
+    await badArg.bridge.handleUpdate(msg('/think'));
+    expect(badArg.sent[0].text).toContain('Usage: /think');
   });
 
   it('/agent switches the chat to agent mode for the next message', async () => {

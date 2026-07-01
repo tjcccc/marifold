@@ -67,6 +67,8 @@ export interface AgentRunOptions {
    * merged over the profile's. Used by channels to make a scratch dir (e.g. a
    * Telegram outbox) writable without prompting, without touching config. */
   trustedFolders?: string[];
+  /** Per-run thinking-mode override (honored by think-capable providers). */
+  think?: boolean;
   /** Authoritative instructions (e.g. a skill body) injected at the top of the
    * system prompt for every loop turn, so the run is guided by them. */
   instructions?: string[];

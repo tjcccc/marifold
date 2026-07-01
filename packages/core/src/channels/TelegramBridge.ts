@@ -30,6 +30,7 @@ const USAGE = [
   'marifold bot — commands:',
   '/agent — agent mode (can use tools; asks before risky ones)',
   '/chat — plain chat mode (no tools)',
+  '/think on|off — thinking mode (for providers that support it)',
   '/new — start a fresh session',
   '/help — show this help',
   '',
@@ -102,6 +103,7 @@ export class TelegramBridge {
 
   private readonly chatModes = new Map<number, ProfileMode>();
   private readonly chatEpoch = new Map<number, number>();
+  private readonly chatThink = new Map<number, boolean>();
   // Path of the most recently received file per chat, injected into the next
   // turn so "use/save the file I sent" reaches the agent.
   private readonly lastInbox = new Map<number, string>();
@@ -227,6 +229,21 @@ export class TelegramBridge {
         this.chatEpoch.set(chatId, (this.chatEpoch.get(chatId) ?? 0) + 1);
         await this.sendMessage(chatId, 'Started a new session.');
         return;
+      case '/think': {
+        const arg = text.split(/\s+/)[1]?.toLowerCase();
+        if (arg !== 'on' && arg !== 'off') {
+          await this.sendMessage(chatId, 'Usage: /think on | /think off');
+          return;
+        }
+        const on = arg === 'on';
+        this.chatThink.set(chatId, on);
+        let note = `Thinking mode ${on ? 'on' : 'off'}.`;
+        if (on && !this.runtime.profileSupportsThink(this.profile)) {
+          note += `\n\n⚠️ This profile's provider doesn't honor thinking mode (only bailian, alibaba_cloud, and Ollama do), so it will have no effect.`;
+        }
+        await this.sendMessage(chatId, note);
+        return;
+      }
       default:
         await this.sendMessage(chatId, `Unknown command ${command}.\n\n${USAGE}`);
     }
@@ -255,6 +272,7 @@ export class TelegramBridge {
         mode,
         prompt: fullPrompt,
         sessionId,
+        think: this.chatThink.get(chatId) ?? undefined,
         ...(mode === 'agent'
           ? {
               approvalHandler: request => this.requestApproval(chatId, request),

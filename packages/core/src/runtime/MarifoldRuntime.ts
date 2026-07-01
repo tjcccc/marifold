@@ -661,6 +661,12 @@ export class MarifoldRuntime {
     return provider?.type === 'ollama' || THINK_PROVIDER_NAMES.has(providerName);
   }
 
+  /** Whether the profile's resolved provider honors thinking mode — so a channel
+   * can tell the user when `/think` would have no effect. */
+  profileSupportsThink(profile: string): boolean {
+    return this.supportsThink(this.resolveSettings({ profile }).provider);
+  }
+
   private memoryForRequest(profile: string, requestMemories = true, prompt = '', thinking = false): string[] {
     const { config } = this.options.loadedConfig;
     if (!this.memoryEnabled(profile, requestMemories)) return [];

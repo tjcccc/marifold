@@ -22,6 +22,8 @@ export interface RespondRequest {
   /** Authoritative instructions injected atop the system prompt (e.g. telling
    * the agent that files it writes are delivered to the user). */
   instructions?: string[];
+  /** Thinking mode (honored by think-capable providers). */
+  think?: boolean;
 }
 
 export interface RespondResult {
@@ -44,11 +46,11 @@ export interface RespondResult {
  * Presentation/formatting (chunking, markdown) belongs to the channel bridge.
  */
 export async function respond(runtime: MarifoldRuntime, request: RespondRequest): Promise<RespondResult> {
-  const { profile, mode, prompt, sessionId, approvalHandler, cwd, trustedFolders, instructions } = request;
+  const { profile, mode, prompt, sessionId, approvalHandler, cwd, trustedFolders, instructions, think } = request;
 
   if (mode === 'chat') {
     let text = '';
-    for await (const chunk of runtime.stream({ prompt, profile, sessionId })) text += chunk;
+    for await (const chunk of runtime.stream({ prompt, profile, sessionId, think })) text += chunk;
     return { text: text.trim(), ok: true, denied: [] };
   }
 
@@ -60,7 +62,7 @@ export async function respond(runtime: MarifoldRuntime, request: RespondRequest)
   const denied = new Set<string>();
   let text = '';
   let ok = false;
-  for await (const event of runner.run({ objective: prompt, profile, sessionId, approvalHandler, cwd, trustedFolders, instructions })) {
+  for await (const event of runner.run({ objective: prompt, profile, sessionId, approvalHandler, cwd, trustedFolders, instructions, think })) {
     if (event.type === 'text') text += event.text;
     else if (event.type === 'tool_request') toolById.set(event.call.id, event.call.tool);
     else if (event.type === 'approval_decision' && !event.approved) {
