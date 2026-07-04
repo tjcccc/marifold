@@ -30,6 +30,7 @@ import type { MemoryControlPayloads } from '../memory/MemoryControls';
 import { ProfileResolver } from '../profiles/ProfileResolver';
 import { ProfileManager } from '../profiles/ProfileManager';
 import { Scheduler } from '../schedule/Scheduler';
+import { RunRegistry } from '../runs/RunRegistry';
 import { TelegramBridge } from '../channels/TelegramBridge';
 import { ScheduleCreateInput, ScheduleState, ScheduleStore, ScheduleUpdateInput } from '../schedule/ScheduleStore';
 import { SessionResolver, SessionDbHealth } from '../sessions/SessionResolver';
@@ -500,6 +501,22 @@ export class MarifoldRuntime {
       config,
       log,
       profilesDir: this.options.loadedConfig.config.paths.profilesDir,
+    });
+  }
+
+  /** Live run-session registry for the service process: start/attach/approve/
+   * steer/cancel agent runs across separate requests. Call close() on shutdown. */
+  createRunRegistry(log?: (message: string) => void): RunRegistry {
+    return new RunRegistry({
+      runtime: {
+        createAgentRunner: profile => this.createAgentRunner(profile),
+        setProfileAgentApproval: (profile, kind, mode) => {
+          this.setProfileAgentApproval(profile, kind, mode);
+        },
+        addProfileTrustedFolder: (profile, folder) => this.addProfileTrustedFolder(profile, folder),
+        defaultProfile: () => this.options.loadedConfig.config.default.profile,
+      },
+      log,
     });
   }
 
