@@ -272,9 +272,14 @@ function assertLoopbackHost(host: string): void {
 
 async function streamChat(reply: FastifyReply, runtime: MarifoldRuntime, request: MarifoldRunRequest): Promise<void> {
   let closed = false;
+  // A disconnected client must tear down the in-flight provider request, not
+  // just stop the SSE writes — otherwise the model keeps generating unbilled-
+  // for output after the browser tab is gone.
+  const abort = new AbortController();
   reply.hijack();
   reply.raw.on('close', () => {
     closed = true;
+    abort.abort();
   });
   reply.raw.writeHead(200, {
     'Content-Type': 'text/event-stream; charset=utf-8',
@@ -283,7 +288,7 @@ async function streamChat(reply: FastifyReply, runtime: MarifoldRuntime, request
   });
 
   try {
-    for await (const chunk of runtime.stream(request)) {
+    for await (const chunk of runtime.stream({ ...request, signal: abort.signal })) {
       if (closed) break;
       writeSse(reply, 'chunk', { text: chunk });
     }

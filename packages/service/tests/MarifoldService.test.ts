@@ -141,6 +141,48 @@ describe('MarifoldService', () => {
     }
   });
 
+  it('aborts the in-flight provider stream when a chat-stream client disconnects', async () => {
+    const realFetch = globalThis.fetch;
+    let providerSignal: AbortSignal | undefined;
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes('localhost:11434')) {
+        providerSignal = init?.signal ?? undefined;
+        return stallingOllamaResponse(providerSignal);
+      }
+      return realFetch(input, init);
+    }));
+
+    const server = createMarifoldService({ loadedConfig: fixtureLoadedConfig(tempDir()), scheduler: false });
+    try {
+      await server.listen({ host: '127.0.0.1', port: 0 });
+      const address = server.server.address();
+      if (typeof address !== 'object' || address === null) throw new Error('service did not report a listen address');
+      const base = `http://127.0.0.1:${address.port}`;
+
+      const clientAbort = new AbortController();
+      const response = await realFetch(`${base}/v1/chat/stream`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: 'Hello', memories: false }),
+        signal: clientAbort.signal,
+      });
+      expect(response.status).toBe(200);
+      const reader = response.body!.getReader();
+      const first = await reader.read();
+      expect(new TextDecoder().decode(first.value)).toContain('event: chunk');
+
+      expect(providerSignal?.aborted).toBe(false);
+      clientAbort.abort();
+
+      await vi.waitFor(() => {
+        expect(providerSignal?.aborted).toBe(true);
+      }, { timeout: 2000, interval: 10 });
+    } finally {
+      await server.close();
+    }
+  });
+
   it('routes ask through the core runtime', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => ollamaStreamResponse(['service ', 'response'])));
     const server = createMarifoldService({ loadedConfig: fixtureLoadedConfig(tempDir()), scheduler: false });
@@ -199,6 +241,25 @@ function fixtureLoadedConfig(dir: string): LoadedMarifoldConfig {
     configPath: path.join(dir, 'config.toml'),
     foundConfig: true,
   };
+}
+
+// Mimics real fetch semantics for a streaming Ollama chat response: one NDJSON
+// chunk arrives, then the stream stalls until the request's AbortSignal fires,
+// which rejects the pending read exactly the way undici does on abort.
+function stallingOllamaResponse(signal: AbortSignal | undefined): Response {
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(new TextEncoder().encode(`${JSON.stringify({ message: { content: 'hello' }, done: false })}\n`));
+      signal?.addEventListener('abort', () => {
+        try {
+          controller.error(new DOMException('This operation was aborted', 'AbortError'));
+        } catch {
+          // stream already closed
+        }
+      }, { once: true });
+    },
+  });
+  return new Response(stream, { status: 200, headers: { 'Content-Type': 'application/x-ndjson' } });
 }
 
 // /v1/ask uses the SDK's non-streaming complete() since @priest-ai/core 2.4,
