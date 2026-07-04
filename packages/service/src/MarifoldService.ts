@@ -13,6 +13,7 @@ import {
   TaskStatus,
   TaskUpdateInput,
 } from '@marifold/core';
+import { registerSecurity, resolveSecurityOptions } from './Security';
 import { SSE_HEADERS, writeSse } from './Sse';
 
 export interface MarifoldServiceOptions {
@@ -21,6 +22,11 @@ export interface MarifoldServiceOptions {
   /** Run the schedule scheduler inside this service process. Default true.
    * Schedules only fire while the service is running. */
   scheduler?: boolean;
+  /** Bearer token override; falls back to [service].token_env / token. When
+   * neither resolves, auth is disabled (bare loopback, the historic default). */
+  auth?: { token?: string };
+  /** Allowed browser origins override; falls back to [service].cors_origins. */
+  cors?: { origins?: string[] };
 }
 
 export interface MarifoldServiceStartOptions extends MarifoldServiceOptions {
@@ -52,6 +58,11 @@ type JsonObject = Record<string, unknown>;
 export function createMarifoldService(options: MarifoldServiceOptions): FastifyInstance {
   const runtime = new MarifoldRuntime({ loadedConfig: options.loadedConfig });
   const server = fastify({ logger: options.logger ?? false });
+
+  registerSecurity(server, resolveSecurityOptions(options.loadedConfig.config.service, {
+    token: options.auth?.token,
+    corsOrigins: options.cors?.origins,
+  }));
 
   const scheduler = (options.scheduler ?? true)
     ? runtime.createScheduler(message => server.log.info(message))
@@ -440,17 +451,28 @@ function normalizeError(error: unknown): { statusCode: number; error: JsonObject
 }
 
 function statusCodeForError(error: MarifoldError): number {
-  if (error.code === 'TASK_NOT_FOUND' || error.code === 'SCHEDULE_NOT_FOUND') return 404;
+  if (
+    error.code === 'TASK_NOT_FOUND'
+    || error.code === 'SCHEDULE_NOT_FOUND'
+    || error.code === 'RUN_NOT_FOUND'
+    || error.code === 'APPROVAL_NOT_FOUND'
+  ) {
+    return 404;
+  }
   if (
     error.code === 'CONFIG_INVALID'
     || error.code === 'PROFILE_INVALID'
     || error.code === 'MEMORY_INVALID'
     || error.code === 'TASK_INVALID'
     || error.code === 'SCHEDULE_INVALID'
+    || error.code === 'AGENT_RUN_INVALID'
   ) {
     return 400;
   }
   if (error.code === 'CONFIG_FILE_NOT_FOUND') return 404;
+  if (error.code === 'UNAUTHORIZED') return 401;
+  if (error.code === 'ORIGIN_FORBIDDEN') return 403;
+  if (error.code === 'RUN_LIMIT_EXCEEDED') return 429;
   return 500;
 }
 

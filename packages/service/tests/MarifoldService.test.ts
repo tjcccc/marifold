@@ -1,23 +1,12 @@
 import * as fs from 'fs';
-import * as os from 'os';
 import * as path from 'path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { LoadedMarifoldConfig, MarifoldConfig } from '@marifold/core';
 import { createMarifoldService } from '../src';
-
-const tempDirs: string[] = [];
-
-function tempDir(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'marifold-service-'));
-  tempDirs.push(dir);
-  return dir;
-}
+import { cleanupTempDirs, fixtureLoadedConfig, ollamaStreamResponse, tempDir } from './helpers';
 
 afterEach(() => {
   vi.unstubAllGlobals();
-  for (const dir of tempDirs.splice(0)) {
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
+  cleanupTempDirs();
 });
 
 describe('MarifoldService', () => {
@@ -207,42 +196,6 @@ describe('MarifoldService', () => {
   });
 });
 
-function fixtureLoadedConfig(dir: string): LoadedMarifoldConfig {
-  const config: MarifoldConfig = {
-    default: {
-      provider: 'ollama',
-      model: 'gemma4:e4b',
-      profile: 'default',
-      think: false,
-    },
-    models: {
-      options: ['ollama/gemma4:e4b'],
-    },
-    memory: {
-      sizeLimit: 50000,
-      contextLimit: 2400,
-    },
-    paths: {
-      profilesDir: path.join(dir, 'profiles'),
-      sessionsDb: path.join(dir, 'sessions.db'),
-      tasksDir: path.join(dir, 'tasks'),
-      schedulesDir: path.join(dir, 'schedules'),
-    },
-    providers: {
-      ollama: {
-        type: 'ollama',
-        baseUrl: 'http://localhost:11434',
-        apiKey: 'test-secret-key',
-      },
-    },
-  };
-  return {
-    config,
-    configPath: path.join(dir, 'config.toml'),
-    foundConfig: true,
-  };
-}
-
 // Mimics real fetch semantics for a streaming Ollama chat response: one NDJSON
 // chunk arrives, then the stream stalls until the request's AbortSignal fires,
 // which rejects the pending read exactly the way undici does on abort.
@@ -260,15 +213,4 @@ function stallingOllamaResponse(signal: AbortSignal | undefined): Response {
     },
   });
   return new Response(stream, { status: 200, headers: { 'Content-Type': 'application/x-ndjson' } });
-}
-
-// /v1/ask uses the SDK's non-streaming complete() since @priest-ai/core 2.4,
-// so the fake returns one Ollama JSON object rather than NDJSON chunks.
-function ollamaStreamResponse(chunks: string[]): Response {
-  const body = JSON.stringify({
-    message: { content: chunks.join('') },
-    done: true,
-    done_reason: 'stop',
-  });
-  return new Response(body, { status: 200, headers: { 'Content-Type': 'application/json' } });
 }
