@@ -101,6 +101,21 @@ export interface MarifoldConfig {
   webSearch?: MarifoldWebSearchConfig;
   /** Normalized [channel.*] sections (messaging bridges). Absent when none. */
   channels?: MarifoldChannelsConfig;
+  /** Normalized [service] section (local HTTP API). Absent when the config
+   * file has none; the service falls back to tokenless loopback defaults. */
+  service?: MarifoldServiceConfig;
+}
+
+/** Settings for the local `marifold service` HTTP API. */
+export interface MarifoldServiceConfig {
+  /** Env var holding the bearer token clients must send. Preferred over
+   * `token` so the secret stays out of config.toml. */
+  tokenEnv?: string;
+  /** Bearer token stored directly in config. Prefer `tokenEnv`. */
+  token?: string;
+  /** Browser origins allowed to call the API (exact match, e.g.
+   * "http://localhost:5173"). Empty = no cross-origin browser access. */
+  corsOrigins: string[];
 }
 
 export interface MarifoldChannelsConfig {

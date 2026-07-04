@@ -349,6 +349,14 @@ export function renderMarifoldConfig(config: MarifoldConfig): string {
     `default_mode = ${tomlString(tg.defaultMode)}`,
   ].filter(Boolean).join('\n');
 
+  const svc = config.service;
+  const serviceSection = svc === undefined ? undefined : [
+    '[service]',
+    optionalStringLine('token_env', svc.tokenEnv),
+    optionalStringLine('token', svc.token),
+    `cors_origins = [${svc.corsOrigins.map(origin => tomlString(origin)).join(', ')}]`,
+  ].filter(Boolean).join('\n');
+
   const providerTables = Object.entries(config.providers)
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([name, provider]) => renderProvider(name, provider));
@@ -360,6 +368,7 @@ export function renderMarifoldConfig(config: MarifoldConfig): string {
     ...(agentSection ? [agentSection] : []),
     ...(webSearchSection ? [webSearchSection] : []),
     ...(telegramSection ? [telegramSection] : []),
+    ...(serviceSection ? [serviceSection] : []),
     pathLines.join('\n'),
     ...providerTables,
   ];

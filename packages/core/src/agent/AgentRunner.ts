@@ -219,7 +219,9 @@ export class AgentRunner {
       while (iterations < maxIterations) {
         iterations += 1;
         this.assertNotAborted(options.signal);
-        this.drainSteering(task.id, options, state);
+        for (const note of this.drainSteering(task.id, options, state)) {
+          yield { type: 'steering', taskId: task.id, text: note };
+        }
 
         const response = await engine.run(this.loopRequest(config, settings.profile, options, state), {
           signal: options.signal,
@@ -456,15 +458,20 @@ export class AgentRunner {
     }
   }
 
-  /** Drain any `/btw` steering the caller queued and record it for the next turn. */
-  private drainSteering(taskId: string, options: AgentRunOptions, state: LoopState): void {
-    if (!options.steering) return;
+  /** Drain any `/btw` steering the caller queued and record it for the next
+   * turn. Returns the drained notes so the run generator can surface each as a
+   * `steering` event to attached clients. */
+  private drainSteering(taskId: string, options: AgentRunOptions, state: LoopState): string[] {
+    if (!options.steering) return [];
+    const drained: string[] = [];
     for (const note of options.steering()) {
       const text = note.trim();
       if (!text) continue;
       state.steeringNotes.push(text);
+      drained.push(text);
       this.deps.taskStore.appendEvent(taskId, { kind: 'note', message: `Steering: ${text}` });
     }
+    return drained;
   }
 
   private loopRequest(

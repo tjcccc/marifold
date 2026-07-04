@@ -15,7 +15,12 @@ export type MarifoldErrorCode =
   | 'SCHEDULE_INVALID'
   | 'SCHEDULE_NOT_FOUND'
   | 'SKILL_INVALID'
-  | 'SKILL_NOT_FOUND';
+  | 'SKILL_NOT_FOUND'
+  | 'RUN_NOT_FOUND'
+  | 'APPROVAL_NOT_FOUND'
+  | 'RUN_LIMIT_EXCEEDED'
+  | 'UNAUTHORIZED'
+  | 'ORIGIN_FORBIDDEN';
 
 export class MarifoldError extends Error {
   readonly code: MarifoldErrorCode;
@@ -102,6 +107,38 @@ export class MarifoldError extends Error {
 
   static skillNotFound(name: string): MarifoldError {
     return new MarifoldError('SKILL_NOT_FOUND', `Skill not found: ${name}`, { name });
+  }
+
+  static runNotFound(runId: string): MarifoldError {
+    return new MarifoldError('RUN_NOT_FOUND', `Run not found: ${runId}`, { runId });
+  }
+
+  static approvalNotFound(requestId: string): MarifoldError {
+    return new MarifoldError(
+      'APPROVAL_NOT_FOUND',
+      `No pending approval with id ${requestId}. It may have expired, been answered, or belong to another run.`,
+      { requestId },
+    );
+  }
+
+  static runLimitExceeded(max: number): MarifoldError {
+    return new MarifoldError(
+      'RUN_LIMIT_EXCEEDED',
+      `Too many active agent runs (limit ${max}). Wait for a run to finish or cancel one.`,
+      { max: String(max) },
+    );
+  }
+
+  static unauthorized(): MarifoldError {
+    return new MarifoldError('UNAUTHORIZED', 'Missing or invalid bearer token.');
+  }
+
+  static originForbidden(origin: string): MarifoldError {
+    return new MarifoldError(
+      'ORIGIN_FORBIDDEN',
+      `Origin not allowed: ${origin}. Add it to [service].cors_origins.`,
+      { origin },
+    );
   }
 
   static workspaceAlreadyInitialized(configPath: string): MarifoldError {

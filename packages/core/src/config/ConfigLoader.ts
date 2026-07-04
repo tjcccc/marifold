@@ -11,6 +11,7 @@ import {
   MarifoldChannelsConfig,
   MarifoldPathsConfig,
   MarifoldProviderConfig,
+  MarifoldServiceConfig,
   MarifoldWebSearchConfig,
   ProfileMode,
   TelegramChannelConfig,
@@ -88,6 +89,15 @@ export class ConfigLoader {
       ...(raw.agent !== undefined ? { agent: resolveAgentConfig(parsePartialAgentConfig(raw.agent, 'agent')) } : {}),
       ...(raw.web_search !== undefined ? { webSearch: this.normalizeWebSearch(asObject(raw.web_search, 'web_search')) } : {}),
       ...(raw.channel !== undefined ? { channels: this.normalizeChannels(asObject(raw.channel, 'channel')) } : {}),
+      ...(raw.service !== undefined ? { service: this.normalizeService(asObject(raw.service, 'service')) } : {}),
+    };
+  }
+
+  private normalizeService(raw: TomlObject): MarifoldServiceConfig {
+    return {
+      tokenEnv: optionalString(raw.token_env, 'service.token_env'),
+      token: optionalString(raw.token, 'service.token'),
+      corsOrigins: optionalStringArray(raw.cors_origins, 'service.cors_origins'),
     };
   }
 

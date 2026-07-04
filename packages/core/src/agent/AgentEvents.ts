@@ -24,6 +24,9 @@ export type AgentEvent =
   | { type: 'plan'; taskId: string; plan: TaskPlanItem[] }
   | { type: 'step'; taskId: string; stepId: string; text: string; status: TaskStepStatus }
   | { type: 'text'; text: string }
+  /** User guidance queued mid-run (`/btw` or a service steer call), emitted
+   * when the runner drains it — so every attached client sees it in context. */
+  | { type: 'steering'; taskId: string; text: string }
   | {
       type: 'tool_request';
       call: {

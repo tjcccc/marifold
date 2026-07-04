@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { ConfigLoader, MarifoldError } from '../src';
+import { ConfigLoader, ConfigManager, MarifoldError } from '../src';
 
 const tempDirs: string[] = [];
 
@@ -163,5 +163,34 @@ default_mode = "agent"
 
     fs.writeFileSync(configPath, '[default]\nprofile = "default"\n[channel.telegram]\nprofile = "x"\ndefault_mode = "wizard"\n');
     expect(() => new ConfigLoader().load({ configPath })).toThrow(/default_mode/);
+  });
+
+  it('parses [service] and round-trips it through a config rewrite', () => {
+    const dir = tempDir();
+    const configPath = path.join(dir, 'config.toml');
+    fs.writeFileSync(configPath, `
+[default]
+profile = "default"
+
+[service]
+token_env = "MARIFOLD_SERVICE_TOKEN"
+cors_origins = ["http://localhost:5173", "http://127.0.0.1:5173"]
+`);
+    const loaded = new ConfigLoader().load({ configPath });
+    expect(loaded.config.service).toEqual({
+      tokenEnv: 'MARIFOLD_SERVICE_TOKEN',
+      token: undefined,
+      corsOrigins: ['http://localhost:5173', 'http://127.0.0.1:5173'],
+    });
+
+    // A ConfigManager rewrite must preserve the section.
+    new ConfigManager(loaded).setValue('default.model', 'gemma4:e4b');
+    const reloaded = new ConfigLoader().load({ configPath });
+    expect(reloaded.config.service).toEqual(loaded.config.service);
+    expect(reloaded.config.default.model).toBe('gemma4:e4b');
+
+    // Bad types are rejected with a dotted label.
+    fs.writeFileSync(configPath, '[default]\nprofile = "default"\n[service]\ncors_origins = [42]\n');
+    expect(() => new ConfigLoader().load({ configPath })).toThrow(/service\.cors_origins/);
   });
 });

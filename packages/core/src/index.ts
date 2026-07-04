@@ -52,6 +52,7 @@ export type {
   MarifoldMemoryConfig,
   MarifoldPathsConfig,
   MarifoldProviderConfig,
+  MarifoldServiceConfig,
   MarifoldWebSearchConfig,
   WebSearchProvider,
   ProfileDetail,

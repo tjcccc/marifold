@@ -443,6 +443,9 @@ describe('AgentRunner', () => {
     expect(engine.requests[1].userContext?.join('\n')).toContain('prioritize the summary');
     // The steering is recorded on the task.
     expect(taskStore.get(done.taskId)?.events.some(e => e.message.includes('Steering: prioritize the summary'))).toBe(true);
+    // Drained guidance is surfaced on the event stream so attached clients see it.
+    const steeringEvents = events.filter((e): e is Extract<AgentEvent, { type: 'steering' }> => e.type === 'steering');
+    expect(steeringEvents).toEqual([{ type: 'steering', taskId: done.taskId, text: 'prioritize the summary' }]);
   });
 
   it('escalates risky calls to ask even when policy allows', async () => {
