@@ -13,6 +13,7 @@ import {
   TaskStatus,
   TaskUpdateInput,
 } from '@marifold/core';
+import { SSE_HEADERS, writeSse } from './Sse';
 
 export interface MarifoldServiceOptions {
   loadedConfig: LoadedMarifoldConfig;
@@ -281,11 +282,7 @@ async function streamChat(reply: FastifyReply, runtime: MarifoldRuntime, request
     closed = true;
     abort.abort();
   });
-  reply.raw.writeHead(200, {
-    'Content-Type': 'text/event-stream; charset=utf-8',
-    'Cache-Control': 'no-cache, no-transform',
-    Connection: 'keep-alive',
-  });
+  reply.raw.writeHead(200, SSE_HEADERS);
 
   try {
     for await (const chunk of runtime.stream({ ...request, signal: abort.signal })) {
@@ -301,11 +298,6 @@ async function streamChat(reply: FastifyReply, runtime: MarifoldRuntime, request
   } finally {
     if (!closed) reply.raw.end();
   }
-}
-
-function writeSse(reply: FastifyReply, event: string, data: unknown): void {
-  reply.raw.write(`event: ${event}\n`);
-  reply.raw.write(`data: ${JSON.stringify(data)}\n\n`);
 }
 
 function parseRunRequest(value: unknown): MarifoldRunRequest {
