@@ -44,7 +44,7 @@ The TUI (`packages/tui`, Ink/React) is the primary interactive surface and a pur
 
 Config, profile, model, provider, and session commands are local management surfaces. Config export/import copies local config, profile files, memories, and optional sessions; it does not introduce cloud sync. These commands do not introduce agent tools or web/app runtimes.
 
-The service API is local-first and loopback-only in v0.10.0. It exposes health/status, sanitized config/provider/model data, profiles, memories, sessions, ask/chat, SSE streaming chat, and task-state CRUD/event routes. It does not provide remote auth, browser UI, WebSocket sync, multi-user access, or long-running agent execution yet.
+The service API is local-first and loopback-only. It exposes health/status, sanitized config/provider/model data, profiles, memories, sessions, ask/chat, SSE streaming chat, task-state CRUD/event routes, read-only schedules, and — since v0.35.0 — live agent-run routes: `POST /v1/runs` starts a run through core's `RunRegistry` (`packages/core/src/runs`), `GET /v1/runs/:id/events` streams the `AgentEvent` union over resumable SSE (sequence ids, `Last-Event-ID` replay, heartbeats), and approval/steer/cancel POSTs drive it mid-flight. The registry holds the live layer TaskStore cannot (abort handle, pending-approval resolution, steering queue, event buffer); approval semantics (once/always/trust/deny with profile persistence and timeout auto-deny) mirror the TUI and Telegram handlers. Security is one `onRequest` hook: an exact-match CORS origin allowlist (`[service].cors_origins`), a loopback Host check, and optional bearer-token auth (`[service].token_env`) — tokenless bare loopback stays the default. The wire contract is documented in [service-api.md](service-api.md); the AgentEvent union serialized verbatim is that contract. Still absent: browser UI, WebSocket sync, multi-user access, and remote (non-loopback) binding.
 
 Model validation checks local configuration and provider model-list endpoints where available. It does not delete, pull, or mutate local provider storage.
 
@@ -93,11 +93,6 @@ Workflow runtime
 
 External-agent aliases
   Future alias profiles that launch, wrap, delegate to, or compose with Codex, Claude Code, and similar tools.
-
-Agent-run service routes
-  Future bidirectional channel (SSE plus approval POSTs or WebSocket) so
-  app clients can drive agent runs remotely. Read-only /v1/tasks routes
-  already expose agent progress.
 ```
 
 Do not create empty future app directories until implementation begins.

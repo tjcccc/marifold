@@ -79,8 +79,8 @@ For product direction and future scope, see [docs/vision.md](docs/vision.md) and
 - Profile rename and delete commands for stored profiles.
 - Profile-filtered session listing.
 - Bulk session clearing with profile/date/keep-last filters.
-- Loopback-only local HTTP service through `marifold service`.
-- Service routes for health/status, sanitized config, providers, models, profiles, memories, sessions, ask, and streaming chat.
+- Loopback-only local HTTP service through `marifold service`, with optional bearer-token auth and a CORS origin allowlist (`[service]`).
+- Service routes for health/status, sanitized config, providers, models, profiles, memories, sessions, ask, streaming chat, and live agent runs (SSE `AgentEvent` stream + approval/steer/cancel) — see [docs/service-api.md](docs/service-api.md).
 - Server-sent event streaming for chat chunks through `/v1/chat/stream`.
 - Ephemeral task-state storage under `[paths].tasks_dir`, defaulting to `~/.marifold/tasks`.
 - Task API routes for objective, status, plan, events, summary, next action, and profile/session references.
@@ -91,7 +91,7 @@ For product direction and future scope, see [docs/vision.md](docs/vision.md) and
 
 ## Non-goals
 
-Marifold does not yet include semantic/vector retrieval, memory encryption, a full memory edit UI, a Web UI, SkillApp runtime/rendering, Workflow, Apple apps, external-agent aliases, provider-owned model deletion, remote service auth, or service daemon packaging (schedules fire only while `marifold service` runs).
+Marifold does not yet include semantic/vector retrieval, memory encryption, a full memory edit UI, a Web UI, SkillApp runtime/rendering, Workflow, Apple apps, external-agent aliases, provider-owned model deletion, remote (non-loopback) service binding, or service daemon packaging (schedules fire only while `marifold service` runs).
 
 Web search uses DuckDuckGo scraping by default, which requires no API key but can be blocked by DuckDuckGo's anomaly detection on some networks. Errors surface clearly in `/search` output and tool results, and the `SearchBackend` interface is pluggable for alternative engines.
 
@@ -323,7 +323,17 @@ For `openai-compatible`, `base_url` may be the API root such as `https://api.ope
 
 `marifold init` accepts `--provider`, `--provider-type`, `--model`, `--base-url`, `--api-key-env`, `--profiles-dir`, `--sessions-db`, `--tasks-dir`, and `--force`. Non-Ollama providers require `--model`; custom OpenAI-compatible providers also require `--base-url`.
 
-`marifold service` starts a Fastify HTTP service bound to `127.0.0.1:32140` by default. It intentionally accepts loopback hosts only. The first API surface is `/health` and `/v1/*` routes for app-client foundations: sanitized config/provider/model views, profiles, memories, sessions, ask/chat, SSE streaming chat, and task state.
+`marifold service` starts a Fastify HTTP service bound to `127.0.0.1:32140` by default. It intentionally accepts loopback hosts only. The API surface is `/health` and `/v1/*` routes for app clients: sanitized config/provider/model views, profiles, memories, sessions, ask/chat, SSE streaming chat, task state, read-only schedules, and live agent runs (`POST /v1/runs`, a resumable SSE `AgentEvent` stream, and approval/steer/cancel routes). The full wire contract is documented in [docs/service-api.md](docs/service-api.md).
+
+The optional `[service]` section configures API access for browser clients:
+
+```toml
+[service]
+token_env = "MARIFOLD_SERVICE_TOKEN"     # bearer token clients must send (preferred over inline `token`)
+cors_origins = ["http://localhost:5173"] # exact-match browser origins allowed to call the API
+```
+
+With no token resolved, auth is off (bare loopback, the historic default); with no `cors_origins`, cross-origin browser requests are rejected. `marifold service --token/--token-env/--cors-origin` override the config per start. `/health` stays auth-exempt.
 
 `marifold config export <file>` writes config, profile files, memory files, and optional sessions into a local JSON backup. Treat backups as sensitive if your config contains saved `api_key` or `oauth_token` values.
 
