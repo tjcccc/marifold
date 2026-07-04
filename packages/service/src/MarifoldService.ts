@@ -13,8 +13,18 @@ import {
   TaskStatus,
   TaskUpdateInput,
 } from '@marifold/core';
+import { registerRunRoutes } from './RunRoutes';
 import { registerSecurity, resolveSecurityOptions } from './Security';
-import { SSE_HEADERS, writeSse } from './Sse';
+import { SSE_HEADERS, startSseHeartbeat, writeSse } from './Sse';
+import {
+  JsonObject,
+  objectBody,
+  optionalBooleanField,
+  optionalStringField,
+  requiredString,
+  stringArray,
+  stringValue,
+} from './Validation';
 
 export interface MarifoldServiceOptions {
   loadedConfig: LoadedMarifoldConfig;
@@ -53,8 +63,6 @@ const DEFAULT_HOST = '127.0.0.1';
 const DEFAULT_PORT = 32140;
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '::1']);
 
-type JsonObject = Record<string, unknown>;
-
 export function createMarifoldService(options: MarifoldServiceOptions): FastifyInstance {
   const runtime = new MarifoldRuntime({ loadedConfig: options.loadedConfig });
   const server = fastify({ logger: options.logger ?? false });
@@ -76,9 +84,13 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
   telegramBridge?.start();
   (server as ServiceWithBridge).marifoldTelegram = telegramBridge ? { profile: telegramBridge.profile } : undefined;
 
+  const runRegistry = runtime.createRunRegistry(message => server.log.info(message));
+  registerRunRoutes(server, runRegistry);
+
   server.addHook('onClose', async () => {
     telegramBridge?.stop();
     scheduler?.stop();
+    runRegistry.close();
     runtime.close();
   });
 
@@ -294,6 +306,9 @@ async function streamChat(reply: FastifyReply, runtime: MarifoldRuntime, request
     abort.abort();
   });
   reply.raw.writeHead(200, SSE_HEADERS);
+  // No id:/retry: here on purpose — a chat POST is one-shot (an EventSource
+  // reconnect would re-run the prompt); only the runs stream is resumable.
+  const stopHeartbeat = startSseHeartbeat(reply);
 
   try {
     for await (const chunk of runtime.stream({ ...request, signal: abort.signal })) {
@@ -307,6 +322,7 @@ async function streamChat(reply: FastifyReply, runtime: MarifoldRuntime, request
       writeSse(reply, 'done', {});
     }
   } finally {
+    stopHeartbeat();
     if (!closed) reply.raw.end();
   }
 }
@@ -476,33 +492,6 @@ function statusCodeForError(error: MarifoldError): number {
   return 500;
 }
 
-function objectBody(value: unknown): JsonObject {
-  if (typeof value === 'object' && value !== null && !Array.isArray(value)) return value as JsonObject;
-  throw MarifoldError.configInvalid('Expected a JSON object request body.');
-}
-
-function requiredString(value: unknown, label: string): string {
-  const text = stringValue(value, label);
-  if (!text.trim()) throw MarifoldError.configInvalid(`${label} cannot be empty.`);
-  return text;
-}
-
-function stringValue(value: unknown, label: string): string {
-  if (typeof value !== 'string') throw MarifoldError.configInvalid(`${label} must be a string.`);
-  return value;
-}
-
-function optionalStringField<Key extends string>(key: Key, value: unknown): Record<Key, string> | Record<string, never> {
-  if (value === undefined) return {};
-  return { [key]: stringValue(value, key) } as Record<Key, string>;
-}
-
-function optionalBooleanField<Key extends string>(key: Key, value: unknown): Record<Key, boolean> | Record<string, never> {
-  if (value === undefined) return {};
-  if (typeof value !== 'boolean') throw MarifoldError.configInvalid(`${key} must be a boolean.`);
-  return { [key]: value } as Record<Key, boolean>;
-}
-
 function optionalTaskStatusField<Key extends string>(key: Key, value: unknown): Record<Key, TaskStatus> | Record<string, never> {
   if (value === undefined) return {};
   return { [key]: taskStatus(value) } as Record<Key, TaskStatus>;
@@ -527,11 +516,6 @@ function assignStringIfPresent(input: TaskUpdateInput, body: JsonObject, key: ke
     return;
   }
   input[key] = stringValue(value, key) as never;
-}
-
-function stringArray(value: unknown, label: string): string[] {
-  if (!Array.isArray(value)) throw MarifoldError.configInvalid(`${label} must be an array of strings.`);
-  return value.map((item, index) => stringValue(item, `${label}[${index}]`));
 }
 
 function planArray(value: unknown): TaskPlanInput[] {
