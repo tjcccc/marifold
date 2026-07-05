@@ -1,0 +1,923 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <meta name="design_doc_mode" content="canvas">
+  <style>
+    body { margin:0; background:#E9E8E4; }
+  </style>
+</helmet>
+
+<section style="font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Helvetica Neue',sans-serif;color:#1D1D1F;padding:64px 72px 120px 72px;display:flex;flex-direction:column;gap:56px">
+
+  <!-- ============ INTRO / DIRECTION ============ -->
+  <div style="max-width:1000px;display:flex;flex-direction:column;gap:16px">
+    <div style="font-size:34px;font-weight:700;letter-spacing:-0.02em">Marifold — Web concept</div>
+    <div style="font-size:15px;line-height:1.55;color:#515154;max-width:760px">An agent-first AI workspace that feels like a native Apple system app in the browser. One conversation thread; two visually distinct reply kinds — plain answers, and <b>runs</b> where the agent visibly works with tools and asks permission. Calm, minimal, system-level.</div>
+    <div style="display:flex;gap:32px;flex-wrap:wrap;margin-top:8px">
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div style="font-size:11px;font-weight:600;letter-spacing:0.08em;color:#86868B">TYPE</div>
+        <div style="font-size:13px;color:#515154">SF Pro Text / Display · 13px base · SF Mono for paths &amp; commands</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div style="font-size:11px;font-weight:600;letter-spacing:0.08em;color:#86868B">LIGHT</div>
+        <div style="display:flex;gap:6px">
+          <div style="width:28px;height:28px;border-radius:8px;background:#FFFFFF;box-shadow:inset 0 0 0 1px rgba(0,0,0,0.08)"></div>
+          <div style="width:28px;height:28px;border-radius:8px;background:#F6F6F4;box-shadow:inset 0 0 0 1px rgba(0,0,0,0.06)"></div>
+          <div style="width:28px;height:28px;border-radius:8px;background:#E9E9EB"></div>
+          <div style="width:28px;height:28px;border-radius:8px;background:#1D1D1F"></div>
+          <div style="width:28px;height:28px;border-radius:8px;background:#EAA221"></div>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div style="font-size:11px;font-weight:600;letter-spacing:0.08em;color:#86868B">DARK</div>
+        <div style="display:flex;gap:6px">
+          <div style="width:28px;height:28px;border-radius:8px;background:#1D1D1F"></div>
+          <div style="width:28px;height:28px;border-radius:8px;background:#28282A"></div>
+          <div style="width:28px;height:28px;border-radius:8px;background:#3A3A3C"></div>
+          <div style="width:28px;height:28px;border-radius:8px;background:#F5F5F7"></div>
+          <div style="width:28px;height:28px;border-radius:8px;background:#F0AF3A"></div>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div style="font-size:11px;font-weight:600;letter-spacing:0.08em;color:#86868B">MATERIALS</div>
+        <div style="font-size:13px;color:#515154;max-width:340px">Vibrancy on sidebar &amp; toolbar, hairline dividers, soft shadow only on the approval sheet. One marigold accent — used for selection, the running state, and primary actions only.</div>
+      </div>
+    </div>
+    <div style="font-size:13px;color:#86868B;margin-top:4px">Navigation: one segmented control in the toolbar switches Agent · Apps · Config. Left pane (profiles) and middle pane (sessions / apps / config sections) persist; only the right panel changes meaning. <a href="#1a" style="color:#EAA221;text-decoration:none">1a</a> Agent light · <a href="#1b" style="color:#EAA221;text-decoration:none">1b</a> Agent dark &amp; edge states · <a href="#1c" style="color:#EAA221;text-decoration:none">1c</a> Apps · <a href="#1d" style="color:#EAA221;text-decoration:none">1d</a> Config · <a href="#1e" style="color:#EAA221;text-decoration:none">1e</a> Mobile.</div>
+  </div>
+
+  <div style="display:flex;flex-wrap:wrap;gap:64px;align-items:flex-start">
+
+  <!-- ================================================================ -->
+  <!-- 1a — AGENT · LIGHT -->
+  <!-- ================================================================ -->
+  <div id="1a" style="display:flex;flex-direction:column;gap:14px">
+    <a href="#1a" style="text-decoration:none;align-self:flex-start;display:flex;align-items:center;gap:10px">
+      <span style="background:#1D1D1F;color:#fff;font-size:12px;font-weight:700;padding:4px 10px;border-radius:999px">1a</span>
+      <span style="font-size:14px;font-weight:600;color:#1D1D1F">Agent — the system itself (light)</span>
+    </a>
+
+    <div data-screen-label="1a Agent light" style="width:1320px;height:860px;background:#FFFFFF;border-radius:14px;box-shadow:0 30px 70px rgba(0,0,0,0.20),0 0 0 1px rgba(0,0,0,0.06);overflow:hidden;display:flex;flex-direction:column">
+
+      <!-- Toolbar -->
+      <div style="height:52px;display:flex;align-items:center;padding:0 16px;gap:14px;background:rgba(249,249,247,0.92);border-bottom:1px solid rgba(0,0,0,0.07);flex-shrink:0">
+        <div style="display:flex;gap:8px">
+          <div style="width:12px;height:12px;border-radius:50%;background:#FF5F57"></div>
+          <div style="width:12px;height:12px;border-radius:50%;background:#FEBC2E"></div>
+          <div style="width:12px;height:12px;border-radius:50%;background:#28C840"></div>
+        </div>
+        <div style="font-size:13px;font-weight:700;letter-spacing:-0.01em;margin-left:6px">Marifold</div>
+        <div style="flex:1"></div>
+        <div style="display:flex;background:rgba(0,0,0,0.05);border-radius:9px;padding:2px">
+          <div style="padding:5px 20px;border-radius:7px;background:#FFFFFF;box-shadow:0 1px 3px rgba(0,0,0,0.12);font-size:13px;font-weight:600">Agent</div>
+          <div style="padding:5px 20px;border-radius:7px;font-size:13px;color:#515154">Apps</div>
+          <div style="padding:5px 20px;border-radius:7px;font-size:13px;color:#515154">Config</div>
+        </div>
+        <div style="flex:1"></div>
+        <div style="font-size:13px;color:#515154;display:flex;gap:18px;align-items:center">
+          <span>Share</span>
+          <span style="letter-spacing:2px">•••</span>
+        </div>
+      </div>
+
+      <div style="flex:1;display:flex;min-height:0">
+
+        <!-- Left: profiles -->
+        <div style="width:248px;flex-shrink:0;background:rgba(246,246,244,0.94);border-right:1px solid rgba(0,0,0,0.07);display:flex;flex-direction:column;padding:12px 10px;gap:10px">
+          <div style="display:flex;gap:8px;align-items:center">
+            <div style="flex:1;background:rgba(0,0,0,0.05);border-radius:8px;padding:6px 10px;font-size:13px;color:#86868B;display:flex;align-items:center;gap:6px">
+              <svg width="12" height="12" viewBox="0 0 12 12"><circle cx="5" cy="5" r="3.6" fill="none" stroke="#86868B" stroke-width="1.4"></circle><line x1="8" y1="8" x2="11" y2="11" stroke="#86868B" stroke-width="1.4" stroke-linecap="round"></line></svg>
+              Search
+            </div>
+            <div style="width:26px;height:26px;border-radius:8px;background:rgba(0,0,0,0.05);display:flex;align-items:center;justify-content:center;font-size:15px;color:#515154">+</div>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:2px">
+            <!-- selected profile -->
+            <div style="display:flex;gap:10px;padding:9px 10px;border-radius:10px;background:rgba(234,162,33,0.14);align-items:center">
+              <div style="width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,#F0AF3A,#D98E08);color:#fff;font-size:15px;font-weight:600;display:flex;align-items:center;justify-content:center;flex-shrink:0">M</div>
+              <div style="min-width:0;flex:1">
+                <div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:13px;font-weight:600">Mari</span><span style="font-size:11px;color:#A05B0E">9:41</span></div>
+                <div style="font-size:12px;color:#8A6836;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Working · writing summary.md</div>
+              </div>
+            </div>
+            <div style="display:flex;gap:10px;padding:9px 10px;border-radius:10px;align-items:center">
+              <div style="width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,#8E9BAE,#5D6B80);color:#fff;font-size:15px;font-weight:600;display:flex;align-items:center;justify-content:center;flex-shrink:0">W</div>
+              <div style="min-width:0;flex:1">
+                <div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:13px;font-weight:600">Work</span><span style="font-size:11px;color:#86868B">Yesterday</span></div>
+                <div style="font-size:12px;color:#86868B;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Refactor plan is ready for review</div>
+              </div>
+            </div>
+            <div style="display:flex;gap:10px;padding:9px 10px;border-radius:10px;align-items:center">
+              <div style="width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,#9DAF8E,#6B805D);color:#fff;font-size:15px;font-weight:600;display:flex;align-items:center;justify-content:center;flex-shrink:0">R</div>
+              <div style="min-width:0;flex:1">
+                <div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:13px;font-weight:600">Research</span><span style="font-size:11px;color:#86868B">Tue</span></div>
+                <div style="font-size:12px;color:#86868B;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Found 12 papers on RAPTOR and…</div>
+              </div>
+            </div>
+            <div style="display:flex;gap:10px;padding:9px 10px;border-radius:10px;align-items:center">
+              <div style="width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,#AE8E9B,#805D6B);color:#fff;font-size:15px;font-weight:600;display:flex;align-items:center;justify-content:center;flex-shrink:0">S</div>
+              <div style="min-width:0;flex:1">
+                <div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:13px;font-weight:600">Studio</span><span style="font-size:11px;color:#86868B">Jun 28</span></div>
+                <div style="font-size:12px;color:#86868B;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Draft two is shorter and reads…</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Middle: sessions -->
+        <div style="width:274px;flex-shrink:0;border-right:1px solid rgba(0,0,0,0.07);display:flex;flex-direction:column;padding:12px 10px;gap:10px;background:#FCFCFB">
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:0 4px">
+            <div style="font-size:15px;font-weight:700;letter-spacing:-0.01em">Mari</div>
+            <div style="width:26px;height:26px;border-radius:8px;background:rgba(0,0,0,0.05);display:flex;align-items:center;justify-content:center;font-size:15px;color:#515154">+</div>
+          </div>
+          <div style="background:rgba(0,0,0,0.05);border-radius:8px;padding:6px 10px;font-size:13px;color:#86868B;display:flex;align-items:center;gap:6px">
+            <svg width="12" height="12" viewBox="0 0 12 12"><circle cx="5" cy="5" r="3.6" fill="none" stroke="#86868B" stroke-width="1.4"></circle><line x1="8" y1="8" x2="11" y2="11" stroke="#86868B" stroke-width="1.4" stroke-linecap="round"></line></svg>
+            Search sessions
+          </div>
+          <div style="display:flex;flex-direction:column;gap:2px">
+            <div style="padding:10px 12px;border-radius:10px;background:rgba(0,0,0,0.055)">
+              <div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:13px;font-weight:600">Learning-notes pipeline</span><span style="font-size:11px;color:#86868B">now</span></div>
+              <div style="font-size:12px;color:#C08110;display:flex;align-items:center;gap:6px;margin-top:2px"><span style="width:6px;height:6px;border-radius:50%;background:#EAA221;display:inline-block"></span>Working · writing summary.md</div>
+            </div>
+            <div style="padding:10px 12px;border-radius:10px">
+              <div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:13px;font-weight:600">RAG vs. learning memory</span><span style="font-size:11px;color:#86868B">9:12</span></div>
+              <div style="font-size:12px;color:#86868B;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px">You're right that plain RAG won't…</div>
+            </div>
+            <div style="padding:10px 12px;border-radius:10px">
+              <div style="display:flex;justify-content:space-between;align-items:baseline">
+                <span style="font-size:13px;font-weight:600;display:flex;align-items:center;gap:7px"><span style="width:7px;height:7px;border-radius:50%;background:#EAA221;display:inline-block"></span>Jul 4, 11:02 PM</span>
+                <span style="font-size:11px;color:#86868B">Yesterday</span>
+              </div>
+              <div style="font-size:12px;color:#86868B;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px">Finished while away · renamed 34 files</div>
+            </div>
+            <div style="padding:10px 12px;border-radius:10px">
+              <div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:13px;font-weight:600">Trip budget</span><span style="font-size:11px;color:#86868B">Tue</span></div>
+              <div style="font-size:12px;color:#86868B;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px">The spreadsheet totals now match…</div>
+            </div>
+            <div style="padding:10px 12px;border-radius:10px">
+              <div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:13px;font-weight:600">Reading list triage</span><span style="font-size:11px;color:#86868B">Jun 30</span></div>
+              <div style="font-size:12px;color:#86868B;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px">Kept 9, archived 22, flagged 3 to…</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right: conversation -->
+        <div style="flex:1;display:flex;flex-direction:column;min-width:0;background:#FFFFFF">
+          <div style="height:44px;display:flex;align-items:center;padding:0 20px;gap:10px;border-bottom:1px solid rgba(0,0,0,0.06);flex-shrink:0">
+            <div style="font-size:13px;font-weight:600">Learning-notes pipeline</div>
+            <div style="font-size:11px;color:#B0B0B5">double-click to rename</div>
+            <div style="flex:1"></div>
+            <div style="font-size:12px;color:#C08110;display:flex;align-items:center;gap:6px"><span style="width:6px;height:6px;border-radius:50%;background:#EAA221"></span>run in progress</div>
+          </div>
+
+          <div style="flex:1;overflow:hidden;padding:14px 28px 10px 28px;display:flex;flex-direction:column;gap:12px;min-height:0">
+            <div style="text-align:center;font-size:11px;color:#B0B0B5;font-weight:500">Today 9:26 AM</div>
+
+            <!-- user bubble -->
+            <div style="align-self:flex-end;max-width:62%;background:#E9E9EB;border-radius:18px;border-bottom-right-radius:5px;padding:9px 14px;font-size:14px;line-height:1.45">Quick sanity check — is a pre-digested knowledge base actually more reliable than plain RAG for my notes?</div>
+
+            <!-- plain agent answer -->
+            <div style="align-self:flex-start;max-width:78%;font-size:14px;line-height:1.55;color:#1D1D1F">
+              <div>Yes, for your case. Plain RAG retrieves raw chunks and hopes the answer is inside one; a <b>learning pass</b> reads first, then stores per-chapter summaries, cross-section themes and likely questions — each linked back to its source page.</div>
+              <div style="margin-top:6px">Slower to ingest, far better recall. Want me to build it from your RAPTOR notes?</div>
+            </div>
+
+            <!-- user task bubble -->
+            <div style="align-self:flex-end;max-width:62%;background:#E9E9EB;border-radius:18px;border-bottom-right-radius:5px;padding:9px 14px;font-size:14px;line-height:1.45">Yes — go through <span style="font-family:'SF Mono',ui-monospace,monospace;font-size:12.5px;background:rgba(0,0,0,0.05);padding:1px 5px;border-radius:5px">docs/raptor-notes/</span> and turn my highlights into one clean summary. Save it as summary.md.</div>
+
+            <!-- ============ THE RUN ============ -->
+            <div style="align-self:stretch;max-width:78%;display:flex;flex-direction:column;gap:10px">
+
+              <!-- status line -->
+              <div style="display:flex;align-items:center;gap:10px">
+                <div style="width:14px;height:14px;border-radius:50%;border:2px solid rgba(234,162,33,0.25);border-top-color:#EAA221"></div>
+                <div style="font-size:13px;font-weight:600;color:#C08110">Working — building your summary</div>
+                <div style="font-size:12px;color:#B0B0B5">1:24</div>
+                <div style="flex:1"></div>
+                <div style="font-size:12px;color:#86868B;border:1px solid rgba(0,0,0,0.12);border-radius:999px;padding:2px 12px">Cancel</div>
+              </div>
+
+              <!-- plan + tool log -->
+              <div style="border-left:2px solid rgba(0,0,0,0.08);padding:2px 0 2px 16px;display:flex;flex-direction:column;gap:10px">
+                <div style="display:flex;flex-direction:column;gap:4px;font-size:12.5px;color:#515154">
+                  <div style="display:flex;gap:8px;align-items:center"><span style="color:#28A745;font-size:12px">✓</span><span>Read all 14 note files</span></div>
+                  <div style="display:flex;gap:8px;align-items:center"><span style="color:#28A745;font-size:12px">✓</span><span>Group highlights by topic</span></div>
+                  <div style="display:flex;gap:8px;align-items:center"><span style="width:12px;text-align:center;color:#EAA221">●</span><span style="color:#1D1D1F;font-weight:500">Write summary.md</span></div>
+                  <div style="display:flex;gap:8px;align-items:center"><span style="width:12px;text-align:center;color:#C7C7CC">○</span><span style="color:#98989D">Link sources back to pages</span></div>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:5px;font-size:12px;color:#86868B;font-family:'SF Mono',ui-monospace,monospace">
+                  <div style="display:flex;gap:8px;align-items:center"><span style="color:#28A745;font-family:-apple-system,sans-serif">✓</span>Read docs/raptor-notes/ · 14 files</div>
+                  <div style="display:flex;gap:8px;align-items:center"><span style="color:#28A745;font-family:-apple-system,sans-serif">✓</span>Searched the web · “RAPTOR hierarchical summarization”</div>
+                  <div style="display:flex;gap:8px;align-items:center"><span style="color:#28A745;font-family:-apple-system,sans-serif">✓</span>Ran wc -l notes/*.md · 2,340 lines</div>
+                </div>
+              </div>
+
+              <!-- guidance applied marker -->
+              <div style="align-self:center;font-size:11.5px;color:#86868B;background:rgba(0,0,0,0.045);border-radius:999px;padding:3px 12px">Guidance applied — “keep it under one page”</div>
+
+              <!-- ============ APPROVAL SHEET ============ -->
+              <div style="background:#FFFFFF;border-radius:14px;box-shadow:0 8px 28px rgba(0,0,0,0.12),0 0 0 1px rgba(0,0,0,0.06),0 0 0 4px rgba(234,162,33,0.14);padding:16px 18px;display:flex;flex-direction:column;gap:12px;max-width:520px">
+                <div style="display:flex;gap:12px;align-items:flex-start">
+                  <div style="width:38px;height:38px;border-radius:10px;background:rgba(234,162,33,0.14);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                    <svg width="16" height="18" viewBox="0 0 16 18"><rect x="1.5" y="1.5" width="13" height="15" rx="2.5" fill="none" stroke="#C08110" stroke-width="1.6"></rect><line x1="5" y1="7" x2="11" y2="7" stroke="#C08110" stroke-width="1.6" stroke-linecap="round"></line><line x1="5" y1="10.5" x2="9" y2="10.5" stroke="#C08110" stroke-width="1.6" stroke-linecap="round"></line></svg>
+                  </div>
+                  <div style="display:flex;flex-direction:column;gap:3px">
+                    <div style="font-size:13.5px;font-weight:600">Mari wants to write a file</div>
+                    <div style="font-size:12.5px;font-family:'SF Mono',ui-monospace,monospace;color:#515154">docs/raptor-notes/summary.md</div>
+                    <div style="font-size:12px;color:#86868B">New file, inside your working folder · 1.2 KB</div>
+                  </div>
+                </div>
+                <div style="display:flex;gap:8px;justify-content:flex-end;align-items:center">
+                  <div style="font-size:13px;color:#86868B;padding:6px 14px;border-radius:8px">Deny</div>
+                  <div style="font-size:13px;color:#1D1D1F;padding:6px 14px;border-radius:8px;background:rgba(0,0,0,0.05)">Always allow file writes</div>
+                  <div style="font-size:13px;font-weight:600;color:#2E2205;padding:6px 16px;border-radius:8px;background:#EAA221;box-shadow:0 1px 3px rgba(234,162,33,0.4)">Allow once <span style="opacity:0.7;font-weight:400;margin-left:4px">⌘⏎</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- input bar -->
+          <div style="padding:10px 24px 16px 24px;flex-shrink:0">
+            <div style="display:flex;align-items:center;gap:10px;border:1px solid rgba(0,0,0,0.10);border-radius:22px;padding:8px 8px 8px 14px;box-shadow:0 1px 4px rgba(0,0,0,0.04)">
+              <div style="width:24px;height:24px;border-radius:50%;background:rgba(0,0,0,0.05);display:flex;align-items:center;justify-content:center;font-size:15px;color:#515154;flex-shrink:0">+</div>
+              <div style="flex:1;font-size:14px;color:#B0B0B5">Reply — the run keeps going; guidance is picked up mid-task</div>
+              <div style="font-size:12px;color:#515154;background:rgba(0,0,0,0.05);border-radius:999px;padding:4px 12px">Think</div>
+              <div style="font-size:12px;color:#515154;background:rgba(0,0,0,0.05);border-radius:999px;padding:4px 12px">Auto ⌄</div>
+              <div style="width:28px;height:28px;border-radius:50%;background:#EAA221;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="12" height="12" viewBox="0 0 12 12"><line x1="6" y1="10" x2="6" y2="2.5" stroke="#fff" stroke-width="1.8" stroke-linecap="round"></line><polyline points="2.8,5.6 6,2.4 9.2,5.6" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></polyline></svg></div>
+            </div>
+            <div style="text-align:center;font-size:11px;color:#C7C7CC;margin-top:8px">Drop files anywhere to attach</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="max-width:1320px;font-size:13px;line-height:1.6;color:#515154;display:flex;gap:40px">
+      <div style="flex:1"><b style="color:#1D1D1F">Screen: Agent (default landing).</b> iMessage-like thread. User messages are gray bubbles; plain answers are open markdown text — no card chrome. A <b>run</b> is a quiet indented block: status line with elapsed time + Cancel, a small plan checklist, and one-line tool rows in SF Mono that update in place. It reads like an activity log inside the conversation, never dominating it.</div>
+      <div style="flex:1"><b style="color:#1D1D1F">Approval &amp; steering.</b> The approval sheet is the trust surface: what, where, how big — then <b>Allow once</b> (default, ⌘⏎), Always allow this kind, Deny. A soft marigold halo is the only attention cue. The input bar stays live during runs; sent guidance shows as a centered “Guidance applied” marker when picked up.</div>
+    </div>
+  </div>
+
+  <!-- ================================================================ -->
+  <!-- 1b — AGENT · DARK + EDGE STATES -->
+  <!-- ================================================================ -->
+  <div id="1b" style="display:flex;flex-direction:column;gap:14px">
+    <a href="#1b" style="text-decoration:none;align-self:flex-start;display:flex;align-items:center;gap:10px">
+      <span style="background:#1D1D1F;color:#fff;font-size:12px;font-weight:700;padding:4px 10px;border-radius:999px">1b</span>
+      <span style="font-size:14px;font-weight:600;color:#1D1D1F">Agent — dark mode, trust-this-folder &amp; edge states</span>
+    </a>
+
+    <div data-screen-label="1b Agent dark" style="width:1320px;height:860px;background:#1E1E20;border-radius:14px;box-shadow:0 30px 70px rgba(0,0,0,0.35),0 0 0 1px rgba(255,255,255,0.08);overflow:hidden;display:flex;flex-direction:column;color:#F5F5F7">
+
+      <!-- Toolbar -->
+      <div style="height:52px;display:flex;align-items:center;padding:0 16px;gap:14px;background:rgba(40,40,42,0.92);border-bottom:1px solid rgba(255,255,255,0.08);flex-shrink:0">
+        <div style="display:flex;gap:8px">
+          <div style="width:12px;height:12px;border-radius:50%;background:#FF5F57"></div>
+          <div style="width:12px;height:12px;border-radius:50%;background:#FEBC2E"></div>
+          <div style="width:12px;height:12px;border-radius:50%;background:#28C840"></div>
+        </div>
+        <div style="font-size:13px;font-weight:700;margin-left:6px">Marifold</div>
+        <div style="flex:1"></div>
+        <div style="display:flex;background:rgba(255,255,255,0.08);border-radius:9px;padding:2px">
+          <div style="padding:5px 20px;border-radius:7px;background:#3A3A3C;box-shadow:0 1px 3px rgba(0,0,0,0.3);font-size:13px;font-weight:600">Agent</div>
+          <div style="padding:5px 20px;border-radius:7px;font-size:13px;color:#98989D">Apps</div>
+          <div style="padding:5px 20px;border-radius:7px;font-size:13px;color:#98989D">Config</div>
+        </div>
+        <div style="flex:1"></div>
+        <div style="font-size:13px;color:#98989D;display:flex;gap:18px;align-items:center"><span>Share</span><span style="letter-spacing:2px">•••</span></div>
+      </div>
+
+      <div style="flex:1;display:flex;min-height:0">
+        <!-- Left: profiles (dark, condensed) -->
+        <div style="width:248px;flex-shrink:0;background:rgba(40,40,42,0.94);border-right:1px solid rgba(255,255,255,0.08);display:flex;flex-direction:column;padding:12px 10px;gap:10px">
+          <div style="display:flex;gap:8px;align-items:center">
+            <div style="flex:1;background:rgba(255,255,255,0.08);border-radius:8px;padding:6px 10px;font-size:13px;color:#98989D;display:flex;align-items:center;gap:6px">
+              <svg width="12" height="12" viewBox="0 0 12 12"><circle cx="5" cy="5" r="3.6" fill="none" stroke="#98989D" stroke-width="1.4"></circle><line x1="8" y1="8" x2="11" y2="11" stroke="#98989D" stroke-width="1.4" stroke-linecap="round"></line></svg>
+              Search
+            </div>
+            <div style="width:26px;height:26px;border-radius:8px;background:rgba(255,255,255,0.08);display:flex;align-items:center;justify-content:center;font-size:15px;color:#98989D">+</div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:2px">
+            <div style="display:flex;gap:10px;padding:9px 10px;border-radius:10px;background:rgba(240,160,58,0.18);align-items:center">
+              <div style="width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,#F0AF3A,#D98E08);color:#fff;font-size:15px;font-weight:600;display:flex;align-items:center;justify-content:center;flex-shrink:0">M</div>
+              <div style="min-width:0;flex:1">
+                <div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:13px;font-weight:600">Mari</span><span style="font-size:11px;color:#F0AF3A">9:58</span></div>
+                <div style="font-size:12px;color:#C79A5E;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Waiting for your approval</div>
+              </div>
+            </div>
+            <div style="display:flex;gap:10px;padding:9px 10px;border-radius:10px;align-items:center">
+              <div style="width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,#8E9BAE,#5D6B80);color:#fff;font-size:15px;font-weight:600;display:flex;align-items:center;justify-content:center;flex-shrink:0">W</div>
+              <div style="min-width:0;flex:1">
+                <div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:13px;font-weight:600">Work</span><span style="font-size:11px;color:#98989D">Yesterday</span></div>
+                <div style="font-size:12px;color:#98989D;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Refactor plan is ready for review</div>
+              </div>
+            </div>
+            <div style="display:flex;gap:10px;padding:9px 10px;border-radius:10px;align-items:center">
+              <div style="width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,#9DAF8E,#6B805D);color:#fff;font-size:15px;font-weight:600;display:flex;align-items:center;justify-content:center;flex-shrink:0">R</div>
+              <div style="min-width:0;flex:1">
+                <div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:13px;font-weight:600">Research</span><span style="font-size:11px;color:#98989D">Tue</span></div>
+                <div style="font-size:12px;color:#98989D;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Found 12 papers on RAPTOR and…</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Middle: sessions (dark) -->
+        <div style="width:274px;flex-shrink:0;border-right:1px solid rgba(255,255,255,0.08);display:flex;flex-direction:column;padding:12px 10px;gap:10px;background:#232325">
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:0 4px">
+            <div style="font-size:15px;font-weight:700">Mari</div>
+            <div style="width:26px;height:26px;border-radius:8px;background:rgba(255,255,255,0.08);display:flex;align-items:center;justify-content:center;font-size:15px;color:#98989D">+</div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:2px">
+            <div style="padding:10px 12px;border-radius:10px;background:rgba(255,255,255,0.08)">
+              <div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:13px;font-weight:600">Screenshot cleanup</span><span style="font-size:11px;color:#98989D">now</span></div>
+              <div style="font-size:12px;color:#F0AF3A;display:flex;align-items:center;gap:6px;margin-top:2px"><span style="width:6px;height:6px;border-radius:50%;background:#F0AF3A;display:inline-block"></span>Waiting for approval</div>
+            </div>
+            <div style="padding:10px 12px;border-radius:10px">
+              <div style="display:flex;justify-content:space-between;align-items:baseline">
+                <span style="font-size:13px;font-weight:600;display:flex;align-items:center;gap:7px"><span style="width:7px;height:7px;border-radius:50%;background:#F0AF3A;display:inline-block"></span>Nightly digest</span>
+                <span style="font-size:11px;color:#98989D">6:00 AM</span>
+              </div>
+              <div style="font-size:12px;color:#98989D;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px">Finished while away · 3 tool actions</div>
+            </div>
+            <div style="padding:10px 12px;border-radius:10px">
+              <div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:13px;font-weight:600">Learning-notes pipeline</span><span style="font-size:11px;color:#98989D">9:41</span></div>
+              <div style="font-size:12px;color:#98989D;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px">Done — summary.md saved</div>
+            </div>
+            <div style="padding:10px 12px;border-radius:10px">
+              <div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:13px;font-weight:600">Trip budget</span><span style="font-size:11px;color:#98989D">Tue</span></div>
+              <div style="font-size:12px;color:#98989D;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px">The spreadsheet totals now match…</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right: conversation with edge states -->
+        <div style="flex:1;display:flex;flex-direction:column;min-width:0;background:#1E1E20">
+          <div style="height:44px;display:flex;align-items:center;padding:0 20px;gap:10px;border-bottom:1px solid rgba(255,255,255,0.07);flex-shrink:0">
+            <div style="font-size:13px;font-weight:600">Screenshot cleanup</div>
+            <div style="flex:1"></div>
+            <div style="font-size:12px;color:#F0AF3A;display:flex;align-items:center;gap:6px"><span style="width:6px;height:6px;border-radius:50%;background:#F0AF3A"></span>waiting for approval</div>
+          </div>
+
+          <div style="flex:1;overflow:hidden;padding:16px 28px 12px 28px;display:flex;flex-direction:column;gap:13px;min-height:0">
+
+            <!-- catching-up banner -->
+            <div style="align-self:center;display:flex;align-items:center;gap:10px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:7px 16px;font-size:12px;color:#98989D">
+              <span style="width:6px;height:6px;border-radius:50%;background:#F0AF3A"></span>
+              While you were away — the nightly digest run finished · 3 tool actions
+              <span style="color:#F0AF3A;font-weight:500">Show ⌄</span>
+            </div>
+
+            <div style="text-align:center;font-size:11px;color:#5C5C60;font-weight:500">Today 9:52 AM</div>
+
+            <!-- user -->
+            <div style="align-self:flex-end;max-width:62%;background:#3A3A3C;border-radius:18px;border-bottom-right-radius:5px;padding:9px 14px;font-size:14px;line-height:1.45">Clean up ~/Desktop/screenshots — rename by content, delete the blurry duplicates.</div>
+
+            <!-- cancelled run -->
+            <div style="align-self:stretch;max-width:78%;display:flex;flex-direction:column;gap:6px">
+              <div style="display:flex;align-items:center;gap:10px;font-size:12.5px;color:#98989D">
+                <span style="width:14px;height:14px;border-radius:50%;background:rgba(255,255,255,0.10);display:flex;align-items:center;justify-content:center;font-size:9px;color:#98989D">✕</span>
+                <span><b style="color:#B9B9BE;font-weight:600">Cancelled</b> after 0:18 — nothing was changed</span>
+                <span style="color:#F0AF3A;font-weight:500">Details ›</span>
+              </div>
+            </div>
+
+            <!-- user steers with a narrower ask -->
+            <div style="align-self:flex-end;max-width:62%;background:#3A3A3C;border-radius:18px;border-bottom-right-radius:5px;padding:9px 14px;font-size:14px;line-height:1.45">Sorry — only the ones from July, and don't delete anything, just move dupes to a folder.</div>
+
+            <!-- failed run -->
+            <div style="align-self:stretch;max-width:78%;display:flex;flex-direction:column;gap:6px">
+              <div style="display:flex;align-items:center;gap:10px;font-size:12.5px;color:#98989D">
+                <span style="width:14px;height:14px;border-radius:50%;background:rgba(255,90,80,0.18);display:flex;align-items:center;justify-content:center;font-size:9px;color:#FF7B72">!</span>
+                <span><b style="color:#FF9B94;font-weight:600">Failed</b> — <span style="font-family:'SF Mono',ui-monospace,monospace;font-size:12px">exiftool</span> isn't installed · nothing was changed</span>
+                <span style="color:#F0AF3A;font-weight:500">Retry</span>
+                <span style="color:#98989D">Show log ›</span>
+              </div>
+              <div style="font-size:13.5px;color:#F5F5F7;line-height:1.5;margin-left:24px">I can do the renaming without it, reading each image directly instead. Continuing that way.</div>
+            </div>
+
+            <!-- live run, waiting for approval with Trust this folder -->
+            <div style="align-self:stretch;max-width:78%;display:flex;flex-direction:column;gap:10px">
+              <div style="display:flex;align-items:center;gap:10px">
+                <div style="width:14px;height:14px;border-radius:50%;border:2px solid rgba(240,160,58,0.3);border-top-color:#F0AF3A"></div>
+                <div style="font-size:13px;font-weight:600;color:#F0AF3A">Paused — needs your approval</div>
+                <div style="font-size:12px;color:#5C5C60">2:03</div>
+                <div style="flex:1"></div>
+                <div style="font-size:12px;color:#98989D;border:1px solid rgba(255,255,255,0.15);border-radius:999px;padding:2px 12px">Cancel</div>
+              </div>
+              <div style="border-left:2px solid rgba(255,255,255,0.10);padding:2px 0 2px 16px;display:flex;flex-direction:column;gap:5px;font-size:12px;color:#98989D;font-family:'SF Mono',ui-monospace,monospace">
+                <div style="display:flex;gap:8px;align-items:center"><span style="color:#4CC38A;font-family:-apple-system,sans-serif">✓</span>Listed ~/Desktop/screenshots · 112 files, 34 from July</div>
+                <div style="display:flex;gap:8px;align-items:center"><span style="color:#4CC38A;font-family:-apple-system,sans-serif">✓</span>Read 34 images · grouped 6 duplicate sets</div>
+              </div>
+
+              <!-- approval with trust-this-folder -->
+              <div style="background:#2C2C2E;border-radius:14px;box-shadow:0 8px 28px rgba(0,0,0,0.4),0 0 0 1px rgba(255,255,255,0.08),0 0 0 4px rgba(240,160,58,0.16);padding:16px 18px;display:flex;flex-direction:column;gap:12px;max-width:560px">
+                <div style="display:flex;gap:12px;align-items:flex-start">
+                  <div style="width:38px;height:38px;border-radius:10px;background:rgba(240,160,58,0.16);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                    <svg width="18" height="15" viewBox="0 0 18 15"><path d="M1.5 4 a2 2 0 0 1 2 -2 h4 l1.5 2 h6 a2 2 0 0 1 2 2 v6 a2 2 0 0 1 -2 2 h-11.5 a2 2 0 0 1 -2 -2 z" fill="none" stroke="#F0AF3A" stroke-width="1.6" stroke-linejoin="round"></path></svg>
+                  </div>
+                  <div style="display:flex;flex-direction:column;gap:3px">
+                    <div style="font-size:13.5px;font-weight:600">Mari wants to move 12 files outside your working folder</div>
+                    <div style="font-size:12.5px;font-family:'SF Mono',ui-monospace,monospace;color:#B9B9BE">~/Desktop/screenshots/ → ~/Desktop/screenshots/duplicates/</div>
+                    <div style="font-size:12px;color:#98989D">This folder isn't trusted yet · files are moved, not deleted</div>
+                  </div>
+                </div>
+                <div style="display:flex;gap:8px;justify-content:flex-end;align-items:center">
+                  <div style="font-size:13px;color:#98989D;padding:6px 14px;border-radius:8px">Deny</div>
+                  <div style="font-size:13px;color:#F5F5F7;padding:6px 14px;border-radius:8px;background:rgba(255,255,255,0.09)">Trust this folder</div>
+                  <div style="font-size:13px;font-weight:600;color:#1D1D1F;padding:6px 16px;border-radius:8px;background:#F0AF3A">Allow once <span style="opacity:0.6;font-weight:400;margin-left:4px">⌘⏎</span></div>
+                </div>
+              </div>
+
+              <!-- done example footer -->
+              <div style="margin-top:6px;display:flex;flex-direction:column;gap:6px">
+                <div style="font-size:11px;color:#5C5C60;font-weight:500">HOW A FINISHED RUN READS</div>
+                <div style="display:flex;align-items:center;gap:10px;font-size:12.5px;color:#98989D">
+                  <span style="color:#4CC38A">✓</span><span>Ran 1m 24s · 6 tool actions</span><span style="color:#F0AF3A;font-weight:500">Show ⌄</span>
+                </div>
+                <div style="font-size:13.5px;color:#F5F5F7;line-height:1.5">Done — 34 screenshots renamed by content, 12 duplicates moved to <span style="font-family:'SF Mono',ui-monospace,monospace;font-size:12px;background:rgba(255,255,255,0.08);padding:1px 5px;border-radius:5px">duplicates/</span>.</div>
+                <div style="font-size:11px;color:#5C5C60">1m 24s · 12.4k tokens</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- input -->
+          <div style="padding:10px 24px 16px 24px;flex-shrink:0">
+            <div style="display:flex;align-items:center;gap:10px;border:1px solid rgba(255,255,255,0.12);border-radius:22px;padding:8px 8px 8px 14px;background:#2C2C2E">
+              <div style="width:24px;height:24px;border-radius:50%;background:rgba(255,255,255,0.09);display:flex;align-items:center;justify-content:center;font-size:15px;color:#98989D;flex-shrink:0">+</div>
+              <div style="flex:1;font-size:14px;color:#5C5C60">Ask anything</div>
+              <div style="font-size:12px;color:#98989D;background:rgba(255,255,255,0.09);border-radius:999px;padding:4px 12px">Think</div>
+              <div style="font-size:12px;color:#98989D;background:rgba(255,255,255,0.09);border-radius:999px;padding:4px 12px">Auto ⌄</div>
+              <div style="width:28px;height:28px;border-radius:50%;background:#F0AF3A;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="12" height="12" viewBox="0 0 12 12"><line x1="6" y1="10" x2="6" y2="2.5" stroke="#1D1D1F" stroke-width="1.8" stroke-linecap="round"></line><polyline points="2.8,5.6 6,2.4 9.2,5.6" fill="none" stroke="#1D1D1F" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></polyline></svg></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="max-width:1320px;font-size:13px;line-height:1.6;color:#515154;display:flex;gap:40px">
+      <div style="flex:1"><b style="color:#1D1D1F">Edge states, all inline.</b> Cancelled and failed runs collapse to a single quiet line — “nothing was changed” is always stated when true; failure offers Retry / Show log and the agent proposes a way forward. Returning to a session shows a centered <b>catching-up</b> banner that expands into what happened; the middle pane marks those sessions with a marigold dot.</div>
+      <div style="flex:1"><b style="color:#1D1D1F">Trust this folder.</b> When a write leaves the working folder, the second button becomes <b>Trust this folder</b> instead of “always allow”. Sensitive scope changes are named in plain words (“move, not delete”; “outside your working folder”). Paused runs tint the status line and the profile/session rows — a gentle cue, never a badge storm.</div>
+    </div>
+  </div>
+
+  <!-- ================================================================ -->
+  <!-- 1c — APPS -->
+  <!-- ================================================================ -->
+  <div id="1c" style="display:flex;flex-direction:column;gap:14px">
+    <a href="#1c" style="text-decoration:none;align-self:flex-start;display:flex;align-items:center;gap:10px">
+      <span style="background:#1D1D1F;color:#fff;font-size:12px;font-weight:700;padding:4px 10px;border-radius:999px">1c</span>
+      <span style="font-size:14px;font-weight:600;color:#1D1D1F">Apps — structured tools (Research Summarizer)</span>
+    </a>
+
+    <div data-screen-label="1c Apps" style="width:1320px;height:860px;background:#FFFFFF;border-radius:14px;box-shadow:0 30px 70px rgba(0,0,0,0.20),0 0 0 1px rgba(0,0,0,0.06);overflow:hidden;display:flex;flex-direction:column">
+      <!-- Toolbar -->
+      <div style="height:52px;display:flex;align-items:center;padding:0 16px;gap:14px;background:rgba(249,249,247,0.92);border-bottom:1px solid rgba(0,0,0,0.07);flex-shrink:0">
+        <div style="display:flex;gap:8px">
+          <div style="width:12px;height:12px;border-radius:50%;background:#FF5F57"></div>
+          <div style="width:12px;height:12px;border-radius:50%;background:#FEBC2E"></div>
+          <div style="width:12px;height:12px;border-radius:50%;background:#28C840"></div>
+        </div>
+        <div style="font-size:13px;font-weight:700;margin-left:6px">Marifold</div>
+        <div style="flex:1"></div>
+        <div style="display:flex;background:rgba(0,0,0,0.05);border-radius:9px;padding:2px">
+          <div style="padding:5px 20px;border-radius:7px;font-size:13px;color:#515154">Agent</div>
+          <div style="padding:5px 20px;border-radius:7px;background:#FFFFFF;box-shadow:0 1px 3px rgba(0,0,0,0.12);font-size:13px;font-weight:600">Apps</div>
+          <div style="padding:5px 20px;border-radius:7px;font-size:13px;color:#515154">Config</div>
+        </div>
+        <div style="flex:1"></div>
+        <div style="font-size:13px;color:#515154;display:flex;gap:18px;align-items:center"><span>Share</span><span style="letter-spacing:2px">•••</span></div>
+      </div>
+
+      <div style="flex:1;display:flex;min-height:0">
+        <!-- Left: profiles (unchanged, condensed) -->
+        <div style="width:248px;flex-shrink:0;background:rgba(246,246,244,0.94);border-right:1px solid rgba(0,0,0,0.07);display:flex;flex-direction:column;padding:12px 10px;gap:8px">
+          <div style="font-size:11px;font-weight:600;letter-spacing:0.06em;color:#86868B;padding:2px 6px">RUNS UNDER PROFILE</div>
+          <div style="display:flex;gap:10px;padding:9px 10px;border-radius:10px;background:rgba(234,162,33,0.14);align-items:center">
+            <div style="width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,#F0AF3A,#D98E08);color:#fff;font-size:14px;font-weight:600;display:flex;align-items:center;justify-content:center">M</div>
+            <div style="font-size:13px;font-weight:600">Mari</div>
+          </div>
+          <div style="display:flex;gap:10px;padding:9px 10px;border-radius:10px;align-items:center">
+            <div style="width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,#8E9BAE,#5D6B80);color:#fff;font-size:14px;font-weight:600;display:flex;align-items:center;justify-content:center">W</div>
+            <div style="font-size:13px;font-weight:600;color:#515154">Work</div>
+          </div>
+          <div style="display:flex;gap:10px;padding:9px 10px;border-radius:10px;align-items:center">
+            <div style="width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,#9DAF8E,#6B805D);color:#fff;font-size:14px;font-weight:600;display:flex;align-items:center;justify-content:center">R</div>
+            <div style="font-size:13px;font-weight:600;color:#515154">Research</div>
+          </div>
+          <div style="margin-top:auto;font-size:12px;color:#B0B0B5;padding:0 6px;line-height:1.5">Apps use the selected profile's model, memory and permissions.</div>
+        </div>
+
+        <!-- Middle: app list -->
+        <div style="width:274px;flex-shrink:0;border-right:1px solid rgba(0,0,0,0.07);display:flex;flex-direction:column;padding:12px 10px;gap:10px;background:#FCFCFB">
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:0 4px">
+            <div style="font-size:15px;font-weight:700">Apps</div>
+            <div style="width:26px;height:26px;border-radius:8px;background:rgba(0,0,0,0.05);display:flex;align-items:center;justify-content:center;font-size:15px;color:#515154">+</div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:2px">
+            <div style="display:flex;gap:12px;padding:10px 12px;border-radius:10px;align-items:center;background:rgba(0,0,0,0.055)">
+              <div style="width:34px;height:34px;border-radius:9px;background:rgba(234,162,33,0.14);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#C08110">Rs</div>
+              <div><div style="font-size:13px;font-weight:600">Research Summarizer</div><div style="font-size:12px;color:#86868B">Digest papers &amp; articles</div></div>
+            </div>
+            <div style="display:flex;gap:12px;padding:10px 12px;border-radius:10px;align-items:center">
+              <div style="width:34px;height:34px;border-radius:9px;background:rgba(93,107,128,0.14);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#5D6B80">Tr</div>
+              <div><div style="font-size:13px;font-weight:600">Translator</div><div style="font-size:12px;color:#86868B">Tone-aware, bidirectional</div></div>
+            </div>
+            <div style="display:flex;gap:12px;padding:10px 12px;border-radius:10px;align-items:center">
+              <div style="width:34px;height:34px;border-radius:9px;background:rgba(107,128,93,0.14);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#6B805D">Ui</div>
+              <div><div style="font-size:13px;font-weight:600">UI Designer</div><div style="font-size:12px;color:#86868B">Prompt → mockup preview</div></div>
+            </div>
+            <div style="display:flex;gap:12px;padding:10px 12px;border-radius:10px;align-items:center">
+              <div style="width:34px;height:34px;border-radius:9px;background:rgba(128,93,107,0.14);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#805D6B">Wr</div>
+              <div><div style="font-size:13px;font-weight:600">Writing Assistant</div><div style="font-size:12px;color:#86868B">Draft, tighten, rework</div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right: app surface -->
+        <div style="flex:1;display:flex;flex-direction:column;min-width:0;background:#FFFFFF">
+          <div style="height:56px;display:flex;align-items:center;padding:0 24px;gap:12px;border-bottom:1px solid rgba(0,0,0,0.06);flex-shrink:0">
+            <div style="width:32px;height:32px;border-radius:9px;background:rgba(234,162,33,0.14);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#C08110">Rs</div>
+            <div>
+              <div style="font-size:14px;font-weight:700">Research Summarizer</div>
+              <div style="font-size:11.5px;color:#86868B">Runs under Mari · results can be saved to notes</div>
+            </div>
+            <div style="flex:1"></div>
+            <div style="font-size:12px;color:#515154;background:rgba(0,0,0,0.05);border-radius:999px;padding:4px 14px">History ⌄</div>
+          </div>
+
+          <!-- inputs -->
+          <div style="padding:18px 24px 16px 24px;display:flex;flex-direction:column;gap:12px;border-bottom:1px solid rgba(0,0,0,0.06)">
+            <div style="display:flex;gap:12px">
+              <div style="flex:1;border:1px solid rgba(0,0,0,0.10);border-radius:10px;padding:9px 12px;font-size:13px;color:#1D1D1F;font-family:'SF Mono',ui-monospace,monospace">arxiv.org/abs/2401.18059</div>
+              <div style="display:flex;background:rgba(0,0,0,0.05);border-radius:9px;padding:2px;align-self:center">
+                <div style="padding:5px 14px;border-radius:7px;font-size:12.5px;color:#515154">Skim</div>
+                <div style="padding:5px 14px;border-radius:7px;background:#FFFFFF;box-shadow:0 1px 3px rgba(0,0,0,0.12);font-size:12.5px;font-weight:600">Standard</div>
+                <div style="padding:5px 14px;border-radius:7px;font-size:12.5px;color:#515154">Deep</div>
+              </div>
+              <div style="border:1px solid rgba(0,0,0,0.10);border-radius:10px;padding:9px 14px;font-size:13px;color:#515154;align-self:center">English ⌄</div>
+              <div style="background:#EAA221;color:#2E2205;font-size:13px;font-weight:600;border-radius:10px;padding:9px 22px;align-self:center;box-shadow:0 1px 3px rgba(234,162,33,0.4)">Summarize</div>
+            </div>
+            <div style="font-size:12px;color:#B0B0B5">…or drop PDFs / paste text here</div>
+          </div>
+
+          <!-- split output -->
+          <div style="flex:1;display:flex;min-height:0">
+            <div style="width:300px;flex-shrink:0;border-right:1px solid rgba(0,0,0,0.06);padding:16px 20px;display:flex;flex-direction:column;gap:10px;background:#FCFCFB">
+              <div style="font-size:11px;font-weight:600;letter-spacing:0.06em;color:#86868B">SOURCE MAP</div>
+              <div style="display:flex;flex-direction:column;gap:7px;font-size:12.5px;color:#515154">
+                <div style="font-weight:600;color:#1D1D1F">RAPTOR: Recursive Abstractive Processing…</div>
+                <div style="padding-left:12px;border-left:2px solid rgba(234,162,33,0.5);color:#1D1D1F">1 · Introduction</div>
+                <div style="padding-left:12px">2 · Related work</div>
+                <div style="padding-left:12px">3 · Method — tree construction</div>
+                <div style="padding-left:12px">4 · Experiments</div>
+                <div style="padding-left:12px">5 · Results (QuALITY, QASPER)</div>
+                <div style="padding-left:12px">6 · Discussion</div>
+              </div>
+              <div style="margin-top:auto;font-size:11.5px;color:#B0B0B5">Click a section to jump; the summary cites back to these.</div>
+            </div>
+            <div style="flex:1;padding:16px 26px;display:flex;flex-direction:column;gap:10px;min-width:0">
+              <div style="display:flex;align-items:center;gap:10px">
+                <div style="font-size:11px;font-weight:600;letter-spacing:0.06em;color:#86868B">SUMMARY</div>
+                <div style="flex:1"></div>
+                <div style="font-size:12px;color:#515154;background:rgba(0,0,0,0.05);border-radius:999px;padding:3px 12px">Copy</div>
+                <div style="font-size:12px;color:#515154;background:rgba(0,0,0,0.05);border-radius:999px;padding:3px 12px">Export .md</div>
+                <div style="font-size:12px;color:#C08110;background:rgba(234,162,33,0.12);border-radius:999px;padding:3px 12px">Save to Mari's notes</div>
+              </div>
+              <div style="font-size:13.5px;line-height:1.6;color:#1D1D1F;display:flex;flex-direction:column;gap:8px">
+                <div><b>In one line:</b> RAPTOR builds a tree of recursive summaries over a document, so retrieval can answer both detail questions (leaves) and thematic ones (upper nodes).</div>
+                <div><b>Why it matters for you:</b> this is the closest published method to the “pre-digested knowledge base” you sketched — ingest once, query at any level of abstraction.</div>
+                <div><b>Key results:</b> +20% accuracy on QuALITY hard subset vs. flat-chunk retrieval; consistent gains on QASPER. <span style="font-size:12px;color:#C08110">§5</span></div>
+                <div style="color:#86868B;font-size:12.5px">Generated in 41s · sources cited per paragraph · saved runs appear in History</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="max-width:1320px;font-size:13px;line-height:1.6;color:#515154"><b style="color:#1D1D1F">Screen: Apps.</b> The middle pane becomes the app list; the right panel is a focused utility — inputs on top, one primary action, output below (optional source-map / result split). No chat. Apps inherit the selected profile's model, memory and permission defaults, and heavier app runs use the same approval sheet as the Agent. “Save to notes” hands results back to the profile's memory-adjacent workspace.</div>
+  </div>
+
+  <!-- ================================================================ -->
+  <!-- 1d — CONFIG -->
+  <!-- ================================================================ -->
+  <div id="1d" style="display:flex;flex-direction:column;gap:14px">
+    <a href="#1d" style="text-decoration:none;align-self:flex-start;display:flex;align-items:center;gap:10px">
+      <span style="background:#1D1D1F;color:#fff;font-size:12px;font-weight:700;padding:4px 10px;border-radius:999px">1d</span>
+      <span style="font-size:14px;font-weight:600;color:#1D1D1F">Config — profile, memory inspector, permissions</span>
+    </a>
+
+    <div data-screen-label="1d Config" style="width:1320px;height:860px;background:#FFFFFF;border-radius:14px;box-shadow:0 30px 70px rgba(0,0,0,0.20),0 0 0 1px rgba(0,0,0,0.06);overflow:hidden;display:flex;flex-direction:column">
+      <!-- Toolbar -->
+      <div style="height:52px;display:flex;align-items:center;padding:0 16px;gap:14px;background:rgba(249,249,247,0.92);border-bottom:1px solid rgba(0,0,0,0.07);flex-shrink:0">
+        <div style="display:flex;gap:8px">
+          <div style="width:12px;height:12px;border-radius:50%;background:#FF5F57"></div>
+          <div style="width:12px;height:12px;border-radius:50%;background:#FEBC2E"></div>
+          <div style="width:12px;height:12px;border-radius:50%;background:#28C840"></div>
+        </div>
+        <div style="font-size:13px;font-weight:700;margin-left:6px">Marifold</div>
+        <div style="flex:1"></div>
+        <div style="display:flex;background:rgba(0,0,0,0.05);border-radius:9px;padding:2px">
+          <div style="padding:5px 20px;border-radius:7px;font-size:13px;color:#515154">Agent</div>
+          <div style="padding:5px 20px;border-radius:7px;font-size:13px;color:#515154">Apps</div>
+          <div style="padding:5px 20px;border-radius:7px;background:#FFFFFF;box-shadow:0 1px 3px rgba(0,0,0,0.12);font-size:13px;font-weight:600">Config</div>
+        </div>
+        <div style="flex:1"></div>
+        <div style="font-size:13px;color:#515154;display:flex;gap:18px;align-items:center"><span>Share</span><span style="letter-spacing:2px">•••</span></div>
+      </div>
+
+      <div style="flex:1;display:flex;min-height:0">
+        <!-- Left: config sections -->
+        <div style="width:248px;flex-shrink:0;background:rgba(246,246,244,0.94);border-right:1px solid rgba(0,0,0,0.07);display:flex;flex-direction:column;padding:12px 10px;gap:8px">
+          <div style="font-size:11px;font-weight:600;letter-spacing:0.06em;color:#86868B;padding:2px 6px">PROFILES</div>
+          <div style="display:flex;gap:10px;padding:8px 10px;border-radius:10px;background:rgba(234,162,33,0.14);align-items:center">
+            <div style="width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#F0AF3A,#D98E08);color:#fff;font-size:13px;font-weight:600;display:flex;align-items:center;justify-content:center">M</div>
+            <div style="font-size:13px;font-weight:600">Mari</div>
+          </div>
+          <div style="display:flex;gap:10px;padding:8px 10px;border-radius:10px;align-items:center">
+            <div style="width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#8E9BAE,#5D6B80);color:#fff;font-size:13px;font-weight:600;display:flex;align-items:center;justify-content:center">W</div>
+            <div style="font-size:13px;color:#515154">Work</div>
+          </div>
+          <div style="display:flex;gap:10px;padding:8px 10px;border-radius:10px;align-items:center">
+            <div style="width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#9DAF8E,#6B805D);color:#fff;font-size:13px;font-weight:600;display:flex;align-items:center;justify-content:center">R</div>
+            <div style="font-size:13px;color:#515154">Research</div>
+          </div>
+          <div style="font-size:11px;font-weight:600;letter-spacing:0.06em;color:#86868B;padding:14px 6px 2px 6px">SYSTEM</div>
+          <div style="font-size:13px;color:#515154;padding:7px 10px;border-radius:10px">Models &amp; Providers</div>
+          <div style="font-size:13px;color:#515154;padding:7px 10px;border-radius:10px">Default Permissions</div>
+          <div style="font-size:13px;color:#515154;padding:7px 10px;border-radius:10px">Appearance</div>
+          <div style="font-size:13px;color:#515154;padding:7px 10px;border-radius:10px">About</div>
+        </div>
+
+        <!-- Middle: per-profile sections -->
+        <div style="width:274px;flex-shrink:0;border-right:1px solid rgba(0,0,0,0.07);display:flex;flex-direction:column;padding:12px 10px;gap:2px;background:#FCFCFB">
+          <div style="font-size:15px;font-weight:700;padding:0 6px 10px 6px">Mari</div>
+          <div style="font-size:13px;color:#515154;padding:9px 12px;border-radius:10px">Identity &amp; behavior</div>
+          <div style="font-size:13px;font-weight:600;padding:9px 12px;border-radius:10px;background:rgba(0,0,0,0.055);display:flex;justify-content:space-between"><span>Memory</span><span style="color:#86868B;font-weight:400">38</span></div>
+          <div style="font-size:13px;color:#515154;padding:9px 12px;border-radius:10px">Rules &amp; Custom instructions</div>
+          <div style="font-size:13px;color:#515154;padding:9px 12px;border-radius:10px">Model</div>
+          <div style="font-size:13px;color:#515154;padding:9px 12px;border-radius:10px">Permissions</div>
+        </div>
+
+        <!-- Right: settings page -->
+        <div style="flex:1;min-width:0;background:#F6F6F4;padding:22px 32px;display:flex;flex-direction:column;gap:18px;overflow:hidden">
+
+          <!-- identity header -->
+          <div style="display:flex;align-items:center;gap:14px">
+            <div style="width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,#F0AF3A,#D98E08);color:#fff;font-size:21px;font-weight:600;display:flex;align-items:center;justify-content:center">M</div>
+            <div>
+              <div style="font-size:17px;font-weight:700">Mari</div>
+              <div style="font-size:12.5px;color:#86868B">Personal profile · created May 2026 · Edit avatar &amp; name ›</div>
+            </div>
+          </div>
+
+          <!-- Memory group -->
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <div style="display:flex;align-items:baseline;gap:10px;padding:0 4px">
+              <div style="font-size:13px;font-weight:600">Memory</div>
+              <div style="font-size:12px;color:#86868B">38 things Mari has learned about you — review or remove any of them</div>
+            </div>
+            <div style="background:#FFFFFF;border-radius:12px;box-shadow:0 0 0 1px rgba(0,0,0,0.05);overflow:hidden">
+              <div style="display:flex;align-items:center;gap:12px;padding:11px 16px;border-bottom:1px solid rgba(0,0,0,0.05)">
+                <div style="flex:1;min-width:0"><div style="font-size:13px">Prefers summaries under one page</div><div style="font-size:11.5px;color:#B0B0B5">From “Learning-notes pipeline” · today</div></div>
+                <div style="font-size:14px;color:#C7C7CC">✕</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:12px;padding:11px 16px;border-bottom:1px solid rgba(0,0,0,0.05)">
+                <div style="flex:1;min-width:0"><div style="font-size:13px">Working folder is <span style="font-family:'SF Mono',ui-monospace,monospace;font-size:12px">~/notes</span>; writes there are pre-approved</div><div style="font-size:11.5px;color:#B0B0B5">From a permission you granted · Jun 30</div></div>
+                <div style="font-size:14px;color:#C7C7CC">✕</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:12px;padding:11px 16px;border-bottom:1px solid rgba(0,0,0,0.05)">
+                <div style="flex:1;min-width:0"><div style="font-size:13px">Reads research papers in English, prefers replies in Chinese for casual topics</div><div style="font-size:11.5px;color:#B0B0B5">From “RAG vs. learning memory” · Jun 30</div></div>
+                <div style="font-size:14px;color:#C7C7CC">✕</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:12px;padding:11px 16px">
+                <div style="flex:1;min-width:0"><div style="font-size:13px">Studying retrieval systems; building a personal knowledge base</div><div style="font-size:11.5px;color:#B0B0B5">From several sessions · Jun 28</div></div>
+                <div style="font-size:14px;color:#C7C7CC">✕</div>
+              </div>
+            </div>
+            <div style="font-size:12.5px;color:#C08110;padding:0 4px">Show all 38 memories ›</div>
+          </div>
+
+          <!-- Permissions group -->
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <div style="display:flex;align-items:baseline;gap:10px;padding:0 4px">
+              <div style="font-size:13px;font-weight:600">Agent permissions</div>
+              <div style="font-size:12px;color:#86868B">Defaults per action kind — the agent still narrates everything it does</div>
+            </div>
+            <div style="background:#FFFFFF;border-radius:12px;box-shadow:0 0 0 1px rgba(0,0,0,0.05);overflow:hidden">
+              <div style="display:flex;align-items:center;padding:10px 16px;border-bottom:1px solid rgba(0,0,0,0.05)">
+                <div style="flex:1;font-size:13px">Read files</div>
+                <div style="display:flex;background:rgba(0,0,0,0.05);border-radius:8px;padding:2px;font-size:12px">
+                  <div style="padding:3px 12px;border-radius:6px;background:#FFFFFF;box-shadow:0 1px 2px rgba(0,0,0,0.1);font-weight:600">Allow</div>
+                  <div style="padding:3px 12px;color:#86868B">Ask</div>
+                  <div style="padding:3px 12px;color:#86868B">Deny</div>
+                </div>
+              </div>
+              <div style="display:flex;align-items:center;padding:10px 16px;border-bottom:1px solid rgba(0,0,0,0.05)">
+                <div style="flex:1;font-size:13px">Write &amp; edit files</div>
+                <div style="display:flex;background:rgba(0,0,0,0.05);border-radius:8px;padding:2px;font-size:12px">
+                  <div style="padding:3px 12px;color:#86868B">Allow</div>
+                  <div style="padding:3px 12px;border-radius:6px;background:#FFFFFF;box-shadow:0 1px 2px rgba(0,0,0,0.1);font-weight:600">Ask</div>
+                  <div style="padding:3px 12px;color:#86868B">Deny</div>
+                </div>
+              </div>
+              <div style="display:flex;align-items:center;padding:10px 16px;border-bottom:1px solid rgba(0,0,0,0.05)">
+                <div style="flex:1;font-size:13px">Run shell commands</div>
+                <div style="display:flex;background:rgba(0,0,0,0.05);border-radius:8px;padding:2px;font-size:12px">
+                  <div style="padding:3px 12px;color:#86868B">Allow</div>
+                  <div style="padding:3px 12px;border-radius:6px;background:#FFFFFF;box-shadow:0 1px 2px rgba(0,0,0,0.1);font-weight:600">Ask</div>
+                  <div style="padding:3px 12px;color:#86868B">Deny</div>
+                </div>
+              </div>
+              <div style="display:flex;align-items:center;padding:10px 16px;border-bottom:1px solid rgba(0,0,0,0.05)">
+                <div style="flex:1;font-size:13px">Search the web</div>
+                <div style="display:flex;background:rgba(0,0,0,0.05);border-radius:8px;padding:2px;font-size:12px">
+                  <div style="padding:3px 12px;color:#86868B">Allow</div>
+                  <div style="padding:3px 12px;border-radius:6px;background:#FFFFFF;box-shadow:0 1px 2px rgba(0,0,0,0.1);font-weight:600">Ask</div>
+                  <div style="padding:3px 12px;color:#86868B">Deny</div>
+                </div>
+              </div>
+              <div style="display:flex;align-items:center;padding:10px 16px;">
+                <div style="flex:1;font-size:13px">Ask another profile</div>
+                <div style="display:flex;background:rgba(0,0,0,0.05);border-radius:8px;padding:2px;font-size:12px">
+                  <div style="padding:3px 12px;border-radius:6px;background:#FFFFFF;box-shadow:0 1px 2px rgba(0,0,0,0.1);font-weight:600">Allow</div>
+                  <div style="padding:3px 12px;color:#86868B">Ask</div>
+                  <div style="padding:3px 12px;color:#86868B">Deny</div>
+                </div>
+              </div>
+              <div style="display:flex;align-items:center;padding:10px 16px">
+                <div style="flex:1;font-size:13px">Search the web</div>
+                <div style="display:flex;background:rgba(0,0,0,0.05);border-radius:8px;padding:2px;font-size:12px">
+                  <div style="padding:3px 12px;border-radius:6px;background:#FFFFFF;box-shadow:0 1px 2px rgba(0,0,0,0.1);font-weight:600">Allow</div>
+                  <div style="padding:3px 12px;color:#86868B">Ask</div>
+                  <div style="padding:3px 12px;color:#86868B">Deny</div>
+                </div>
+              </div>
+            </div>
+            <div style="background:#FFFFFF;border-radius:12px;box-shadow:0 0 0 1px rgba(0,0,0,0.05);overflow:hidden;margin-top:6px">
+              <div style="display:flex;align-items:center;padding:10px 16px;border-bottom:1px solid rgba(0,0,0,0.05)">
+                <div style="flex:1;font-size:13px;font-family:'SF Mono',ui-monospace,monospace;font-size:12.5px">~/notes</div>
+                <div style="font-size:12px;color:#86868B">Trusted · Remove</div>
+              </div>
+              <div style="display:flex;align-items:center;padding:10px 16px">
+                <div style="flex:1;font-size:13px;font-family:'SF Mono',ui-monospace,monospace;font-size:12.5px">~/Desktop/screenshots</div>
+                <div style="font-size:12px;color:#86868B">Trusted today · Remove</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Model row -->
+          <div style="background:#FFFFFF;border-radius:12px;box-shadow:0 0 0 1px rgba(0,0,0,0.05);display:flex;align-items:center;padding:11px 16px;gap:12px">
+            <div style="flex:1"><div style="font-size:13px;font-weight:600">Model</div><div style="font-size:11.5px;color:#B0B0B5">Per-message override available in the input bar</div></div>
+            <div style="font-size:12.5px;color:#515154">Auto — picks per task ⌄</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="max-width:1320px;font-size:13px;line-height:1.6;color:#515154"><b style="color:#1D1D1F">Screen: Config.</b> Apple Settings grammar: grouped white cards on a soft field. Config is per-profile first — left pane picks the profile (or a system section), middle picks the area. The <b>memory inspector</b> shows each remembered fact with its source session and a one-tap delete; folder trusts granted mid-conversation surface here too, so nothing the agent knows or may do is hidden. Permission defaults are Allow / Ask / Deny per action kind, with the trusted-folders list beneath.</div>
+  </div>
+
+  <!-- ================================================================ -->
+  <!-- 1e — MOBILE -->
+  <!-- ================================================================ -->
+  <div id="1e" style="display:flex;flex-direction:column;gap:14px">
+    <a href="#1e" style="text-decoration:none;align-self:flex-start;display:flex;align-items:center;gap:10px">
+      <span style="background:#1D1D1F;color:#fff;font-size:12px;font-weight:700;padding:4px 10px;border-radius:999px">1e</span>
+      <span style="font-size:14px;font-weight:600;color:#1D1D1F">Mobile — navigation stack (Profiles → Sessions → Agent)</span>
+    </a>
+
+    <div style="display:flex;gap:36px;align-items:flex-start">
+
+      <!-- Screen 1: Profiles -->
+      <div data-screen-label="1e Mobile profiles" style="width:375px;height:740px;background:#FFFFFF;border-radius:34px;box-shadow:0 24px 60px rgba(0,0,0,0.20),0 0 0 1px rgba(0,0,0,0.07);overflow:hidden;display:flex;flex-direction:column">
+        <div style="height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:13px;font-weight:600;flex-shrink:0"><span>9:41</span><span style="letter-spacing:1px;color:#86868B">●●●</span></div>
+        <div style="padding:4px 20px 12px 20px;display:flex;justify-content:space-between;align-items:center">
+          <div style="font-size:30px;font-weight:700;letter-spacing:-0.02em">Marifold</div>
+          <div style="width:32px;height:32px;border-radius:50%;background:rgba(0,0,0,0.05);display:flex;align-items:center;justify-content:center;font-size:18px;color:#515154">+</div>
+        </div>
+        <div style="margin:0 20px 12px 20px;background:rgba(0,0,0,0.05);border-radius:10px;padding:8px 12px;font-size:15px;color:#86868B">Search</div>
+        <div style="display:flex;flex-direction:column;padding:0 12px">
+          <div style="display:flex;gap:12px;padding:12px;border-radius:14px;background:rgba(234,162,33,0.12);align-items:center">
+            <div style="width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,#F0AF3A,#D98E08);color:#fff;font-size:19px;font-weight:600;display:flex;align-items:center;justify-content:center">M</div>
+            <div style="flex:1;min-width:0">
+              <div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:16px;font-weight:600">Mari</span><span style="font-size:13px;color:#A05B0E">9:41</span></div>
+              <div style="font-size:14px;color:#8A6836;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Working · writing summary.md</div>
+            </div>
+            <div style="color:#C7C7CC;font-size:16px">›</div>
+          </div>
+          <div style="display:flex;gap:12px;padding:12px;align-items:center">
+            <div style="width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,#8E9BAE,#5D6B80);color:#fff;font-size:19px;font-weight:600;display:flex;align-items:center;justify-content:center">W</div>
+            <div style="flex:1;min-width:0;border-bottom:1px solid rgba(0,0,0,0.06);padding-bottom:12px">
+              <div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:16px;font-weight:600">Work</span><span style="font-size:13px;color:#86868B">Yesterday</span></div>
+              <div style="font-size:14px;color:#86868B;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Refactor plan is ready for review</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:12px;padding:12px;align-items:center">
+            <div style="width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,#9DAF8E,#6B805D);color:#fff;font-size:19px;font-weight:600;display:flex;align-items:center;justify-content:center">R</div>
+            <div style="flex:1;min-width:0">
+              <div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:16px;font-weight:600">Research</span><span style="font-size:13px;color:#86868B">Tue</span></div>
+              <div style="font-size:14px;color:#86868B;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Found 12 papers on RAPTOR…</div>
+            </div>
+          </div>
+        </div>
+        <div style="margin-top:auto;display:flex;justify-content:space-around;padding:12px 0 26px 0;border-top:1px solid rgba(0,0,0,0.06)">
+          <div style="font-size:11px;font-weight:600;color:#C08110;text-align:center">Agent</div>
+          <div style="font-size:11px;color:#86868B;text-align:center">Apps</div>
+          <div style="font-size:11px;color:#86868B;text-align:center">Config</div>
+        </div>
+      </div>
+
+      <!-- Screen 2: Sessions -->
+      <div data-screen-label="1e Mobile sessions" style="width:375px;height:740px;background:#FFFFFF;border-radius:34px;box-shadow:0 24px 60px rgba(0,0,0,0.20),0 0 0 1px rgba(0,0,0,0.07);overflow:hidden;display:flex;flex-direction:column">
+        <div style="height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:13px;font-weight:600;flex-shrink:0"><span>9:41</span><span style="letter-spacing:1px;color:#86868B">●●●</span></div>
+        <div style="padding:4px 16px 10px 16px;display:flex;align-items:center;gap:6px">
+          <div style="font-size:15px;color:#C08110">‹ Profiles</div>
+          <div style="flex:1;text-align:center;font-size:16px;font-weight:600;margin-left:-64px">Mari</div>
+          <div style="width:30px;height:30px;border-radius:50%;background:rgba(0,0,0,0.05);display:flex;align-items:center;justify-content:center;font-size:17px;color:#515154">+</div>
+        </div>
+        <div style="display:flex;flex-direction:column;padding:0 12px">
+          <div style="padding:13px 14px;border-radius:14px;background:rgba(0,0,0,0.045)">
+            <div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:15px;font-weight:600">Learning-notes pipeline</span><span style="font-size:12px;color:#86868B">now</span></div>
+            <div style="font-size:13px;color:#C08110;display:flex;align-items:center;gap:6px;margin-top:2px"><span style="width:6px;height:6px;border-radius:50%;background:#EAA221"></span>Working · writing summary.md</div>
+          </div>
+          <div style="padding:13px 14px">
+            <div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:15px;font-weight:600">RAG vs. learning memory</span><span style="font-size:12px;color:#86868B">9:12</span></div>
+            <div style="font-size:13px;color:#86868B;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px">You're right that plain RAG won't…</div>
+          </div>
+          <div style="padding:13px 14px">
+            <div style="display:flex;justify-content:space-between;align-items:baseline">
+              <span style="font-size:15px;font-weight:600;display:flex;align-items:center;gap:7px"><span style="width:7px;height:7px;border-radius:50%;background:#EAA221"></span>Jul 4, 11:02 PM</span>
+              <span style="font-size:12px;color:#86868B">Yesterday</span>
+            </div>
+            <div style="font-size:13px;color:#86868B;margin-top:2px">Finished while away · renamed 34 files</div>
+          </div>
+          <div style="padding:13px 14px">
+            <div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:15px;font-weight:600">Trip budget</span><span style="font-size:12px;color:#86868B">Tue</span></div>
+            <div style="font-size:13px;color:#86868B;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px">The spreadsheet totals now match…</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Screen 3: Agent thread -->
+      <div data-screen-label="1e Mobile agent" style="width:375px;height:740px;background:#FFFFFF;border-radius:34px;box-shadow:0 24px 60px rgba(0,0,0,0.20),0 0 0 1px rgba(0,0,0,0.07);overflow:hidden;display:flex;flex-direction:column">
+        <div style="height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:13px;font-weight:600;flex-shrink:0"><span>9:41</span><span style="letter-spacing:1px;color:#86868B">●●●</span></div>
+        <div style="padding:4px 16px 10px 16px;display:flex;align-items:center">
+          <div style="font-size:15px;color:#C08110">‹ Mari</div>
+          <div style="flex:1;text-align:center;margin-left:-38px">
+            <div style="font-size:15px;font-weight:600">Learning-notes pipeline</div>
+            <div style="font-size:11px;color:#C08110">run in progress</div>
+          </div>
+        </div>
+        <div style="flex:1;padding:10px 16px;display:flex;flex-direction:column;gap:12px;overflow:hidden">
+          <div style="align-self:flex-end;max-width:80%;background:#E9E9EB;border-radius:18px;border-bottom-right-radius:5px;padding:8px 13px;font-size:15px;line-height:1.4">Turn my highlights into one clean summary, save as summary.md.</div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div style="display:flex;align-items:center;gap:8px">
+              <div style="width:13px;height:13px;border-radius:50%;border:2px solid rgba(234,162,33,0.25);border-top-color:#EAA221"></div>
+              <div style="font-size:13px;font-weight:600;color:#C08110">Working · 1:24</div>
+              <div style="flex:1"></div>
+              <div style="font-size:12px;color:#86868B;border:1px solid rgba(0,0,0,0.12);border-radius:999px;padding:1px 10px">Cancel</div>
+            </div>
+            <div style="border-left:2px solid rgba(0,0,0,0.08);padding-left:12px;display:flex;flex-direction:column;gap:4px;font-size:12px;color:#86868B;font-family:'SF Mono',ui-monospace,monospace">
+              <div><span style="color:#28A745;font-family:-apple-system,sans-serif">✓ </span>Read docs/raptor-notes/ · 14 files</div>
+              <div><span style="color:#28A745;font-family:-apple-system,sans-serif">✓ </span>Searched the web</div>
+            </div>
+          </div>
+          <!-- mobile approval: bottom sheet -->
+          <div style="margin-top:auto;background:#FFFFFF;border-radius:20px 20px 0 0;box-shadow:0 -8px 30px rgba(0,0,0,0.14),0 0 0 1px rgba(0,0,0,0.05);padding:14px 18px 10px 18px;margin-left:-16px;margin-right:-16px;display:flex;flex-direction:column;gap:12px">
+            <div style="width:36px;height:4px;border-radius:2px;background:rgba(0,0,0,0.15);align-self:center"></div>
+            <div style="display:flex;gap:12px;align-items:flex-start">
+              <div style="width:36px;height:36px;border-radius:10px;background:rgba(234,162,33,0.14);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                <svg width="15" height="17" viewBox="0 0 16 18"><rect x="1.5" y="1.5" width="13" height="15" rx="2.5" fill="none" stroke="#C08110" stroke-width="1.6"></rect><line x1="5" y1="7" x2="11" y2="7" stroke="#C08110" stroke-width="1.6" stroke-linecap="round"></line><line x1="5" y1="10.5" x2="9" y2="10.5" stroke="#C08110" stroke-width="1.6" stroke-linecap="round"></line></svg>
+              </div>
+              <div>
+                <div style="font-size:14px;font-weight:600">Mari wants to write a file</div>
+                <div style="font-size:12.5px;font-family:'SF Mono',ui-monospace,monospace;color:#515154">docs/raptor-notes/summary.md</div>
+              </div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <div style="background:#EAA221;color:#2E2205;font-size:15px;font-weight:600;border-radius:12px;padding:11px;text-align:center">Allow once</div>
+              <div style="background:rgba(0,0,0,0.05);color:#1D1D1F;font-size:15px;border-radius:12px;padding:11px;text-align:center">Always allow file writes</div>
+              <div style="color:#86868B;font-size:15px;padding:6px;text-align:center">Deny</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="max-width:1320px;font-size:13px;line-height:1.6;color:#515154"><b style="color:#1D1D1F">Mobile.</b> Standard iOS stack: Profiles → Sessions → Thread, with the same bottom tab trio (Agent · Apps · Config). Approvals become a bottom sheet with stacked buttons, Allow once on top. Apps go full-screen; Config uses grouped Settings pages. Runs continue server-side, so the unread dot and catching-up banner do the cross-device handoff.</div>
+  </div>
+
+  </div>
+</section>
+</x-dc>
+</body>
+</html>
