@@ -16,7 +16,9 @@ the HTTP API, the schedule runner, and the Telegram bridge.
 ## Authentication
 
 Off by default (bare loopback). When a bearer token is configured, every
-route except `GET /health` and CORS preflights requires it:
+**`/v1/*`** route requires it — `GET /health`, CORS preflights, and the
+hosted Web UI shell (static files) stay reachable; the shell carries no
+secrets and every stateful route is versioned under `/v1`:
 
 ```
 Authorization: Bearer <token>
@@ -30,6 +32,7 @@ out of the file) or CLI flags (flags win):
 token_env = "MARIFOLD_SERVICE_TOKEN"   # preferred
 # token = "inline-secret"             # discouraged
 cors_origins = ["http://localhost:5173"]
+# web_dir = "/path/to/apps/web/dist"  # host the built Web UI at / (or --web-dir)
 ```
 
 Failures return `401` with error code `UNAUTHORIZED`.
@@ -47,6 +50,9 @@ Browser access is allowlist-only, exact-match against `cors_origins`:
   `OPTIONS` short-circuits to `204` with
   `Access-Control-Allow-Methods: GET,POST,PATCH,DELETE,OPTIONS`,
   `Access-Control-Allow-Headers: authorization, content-type, last-event-id`.
+- **Same-origin exception:** an `Origin` equal to the request's own loopback
+  `Host` always passes — that is the service-hosted Web UI talking to itself
+  (browsers send `Origin` on every non-GET request, same-origin included).
 - Any other `Origin` → `403 ORIGIN_FORBIDDEN`, even before auth. With no
   `cors_origins` configured, all cross-origin browser requests are rejected.
 - Requests without an `Origin` header (curl, native apps) are unaffected.
@@ -110,7 +116,7 @@ Responses are `{ "ok": true, ... }` unless noted. Bodies are JSON.
 
 | Route | Returns |
 |---|---|
-| `GET /v1/config` | Sanitized config — secrets are replaced by `hasApiKey`-style booleans |
+| `GET /v1/config` | Sanitized config — secrets are replaced by `hasApiKey`-style booleans; includes the resolved `agent` section (approval defaults, trusted folders) so clients can compute a profile's effective permissions |
 | `GET /v1/providers` | `providers: [{ name, type, baseUrl?, hasApiKey, hasOauthToken, ... }]` |
 | `GET /v1/models` | `default: { provider, model }` and saved `options: ["provider/model", ...]` |
 

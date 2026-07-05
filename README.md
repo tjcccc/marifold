@@ -91,7 +91,7 @@ For product direction and future scope, see [docs/vision.md](docs/vision.md) and
 
 ## Non-goals
 
-Marifold does not yet include semantic/vector retrieval, memory encryption, a full memory edit UI, a Web UI, SkillApp runtime/rendering, Workflow, Apple apps, external-agent aliases, provider-owned model deletion, remote (non-loopback) service binding, or service daemon packaging (schedules fire only while `marifold service` runs).
+Marifold does not yet include semantic/vector retrieval, memory encryption, memory/config editing from the Web UI (read-only there for now), SkillApp runtime/rendering, Workflow, Apple apps, external-agent aliases, provider-owned model deletion, remote (non-loopback) service binding, or service daemon packaging (schedules fire only while `marifold service` runs).
 
 Web search uses DuckDuckGo scraping by default, which requires no API key but can be blocked by DuckDuckGo's anomaly detection on some networks. Errors surface clearly in `/search` output and tool results, and the `SearchBackend` interface is pluggable for alternative engines.
 
@@ -333,7 +333,18 @@ token_env = "MARIFOLD_SERVICE_TOKEN"     # bearer token clients must send (prefe
 cors_origins = ["http://localhost:5173"] # exact-match browser origins allowed to call the API
 ```
 
-With no token resolved, auth is off (bare loopback, the historic default); with no `cors_origins`, cross-origin browser requests are rejected. `marifold service --token/--token-env/--cors-origin` override the config per start. `/health` stays auth-exempt.
+With no token resolved, auth is off (bare loopback, the historic default); with no `cors_origins`, cross-origin browser requests are rejected. `marifold service --token/--token-env/--cors-origin` override the config per start. Auth covers `/v1/*`; `/health` and hosted static files stay reachable.
+
+## Web UI
+
+`apps/web` is the browser client (Vite + React, see [apps/web/README.md](apps/web/README.md)): the Agent screen renders chat and live agent runs — plan, tool activity, the approval sheet (Allow once / Always allow / Trust folder / Deny), mid-run steering, cancel, and catch-up replay — plus a read-only Config view and light/dark marigold theming from the committed design concept.
+
+```sh
+pnpm --filter @marifold/web build
+marifold service --web-dir apps/web/dist   # serves the app at http://127.0.0.1:32140
+```
+
+For development: `marifold service --cors-origin http://localhost:5173` + `pnpm --filter @marifold/web dev`. Set `[service].web_dir` in config.toml to host it permanently.
 
 `marifold config export <file>` writes config, profile files, memory files, and optional sessions into a local JSON backup. Treat backups as sensitive if your config contains saved `api_key` or `oauth_token` values.
 
