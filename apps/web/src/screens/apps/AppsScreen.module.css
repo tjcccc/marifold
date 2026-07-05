@@ -1,0 +1,53 @@
+.layout {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+.list {
+  width: 240px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--separator-soft);
+  background: var(--surface-2);
+  padding: 0 8px 12px;
+}
+
+.header {
+  padding: 14px 8px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+.empty {
+  padding: 10px;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--text-3);
+}
+
+.surface {
+  flex: 1;
+  display: flex;
+}
+
+.placeholder {
+  margin: auto;
+  text-align: center;
+  max-width: 360px;
+  color: var(--text-3);
+}
+
+.placeholderTitle {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-2);
+}
+
+.placeholderHint {
+  margin-top: 8px;
+  font-size: 13px;
+  line-height: 1.55;
+}

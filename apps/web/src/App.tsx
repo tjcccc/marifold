@@ -4,6 +4,8 @@ import { ConnectionPopover } from './components/ConnectionPopover';
 import type { AppView } from './components/TopNav';
 import { TopNav } from './components/TopNav';
 import { AgentScreen } from './screens/agent/AgentScreen';
+import { AppsScreen } from './screens/apps/AppsScreen';
+import { ConfigScreen } from './screens/config/ConfigScreen';
 import { useHashRoute } from './screens/useHashRoute';
 import type { ConnectionSettings } from './state/connection';
 import { loadConnection, saveConnection } from './state/connection';
@@ -51,8 +53,10 @@ export function App() {
       <main className={styles.content}>
         {route.view === 'agent' ? (
           <AgentScreen client={client} route={route} navigate={navigate} onUnauthorized={onUnauthorized} />
+        ) : route.view === 'config' ? (
+          <ConfigScreen client={client} route={route} navigate={navigate} onUnauthorized={onUnauthorized} />
         ) : (
-          <Placeholder view={route.view} />
+          <AppsScreen />
         )}
       </main>
       {connectionOpen ? (
@@ -63,15 +67,6 @@ export function App() {
           onClose={() => setConnectionOpen(false)}
         />
       ) : null}
-    </div>
-  );
-}
-
-function Placeholder({ view }: { view: AppView }) {
-  return (
-    <div className={styles.placeholder}>
-      <div className={styles.placeholderTitle}>{view}</div>
-      <div className={styles.placeholderHint}>Landing in a later step of this milestone.</div>
     </div>
   );
 }
