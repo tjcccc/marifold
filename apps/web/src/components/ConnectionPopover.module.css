@@ -1,0 +1,78 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+}
+
+.popover {
+  position: absolute;
+  top: 48px;
+  right: 16px;
+  width: 300px;
+  background: var(--surface);
+  border: 1px solid var(--separator);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sheet);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.title {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.problem {
+  font-size: 12px;
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+.field input {
+  border: 1px solid var(--separator);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  padding: 6px 9px;
+  font-size: 13px;
+}
+
+.field input:focus {
+  outline: 2px solid var(--brand-tint);
+  border-color: var(--brand-fill);
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.cancel {
+  padding: 5px 14px;
+  border-radius: var(--radius-sm);
+  color: var(--text-2);
+}
+
+.cancel:hover {
+  background: var(--separator-soft);
+}
+
+.save {
+  padding: 5px 16px;
+  border-radius: var(--radius-sm);
+  background: var(--brand-fill);
+  color: var(--on-brand);
+  font-weight: 600;
+}

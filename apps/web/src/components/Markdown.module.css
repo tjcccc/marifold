@@ -1,0 +1,53 @@
+.root {
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--text);
+  overflow-wrap: break-word;
+}
+
+.root > :first-child {
+  margin-top: 0;
+}
+
+.root > :last-child {
+  margin-bottom: 0;
+}
+
+.heading {
+  margin: 14px 0 6px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.paragraph {
+  margin: 8px 0;
+}
+
+.code {
+  margin: 10px 0;
+  padding: 10px 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--separator-soft);
+  border-radius: var(--radius-md);
+  overflow-x: auto;
+}
+
+.inlineCode {
+  background: var(--surface-2);
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+
+.list {
+  margin: 8px 0;
+  padding-left: 22px;
+}
+
+.link {
+  color: var(--brand-text);
+  text-decoration: none;
+}
+
+.link:hover {
+  text-decoration: underline;
+}

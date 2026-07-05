@@ -71,6 +71,7 @@ export type ThreadAction =
   | { type: 'run_event'; runId: string; seq: number; event: AgentEvent }
   | { type: 'run_lost'; runId: string }
   | { type: 'approval_submitting'; runId: string }
+  | { type: 'approval_failed'; runId: string; message: string; gone?: boolean }
   | { type: 'toggle_run_details'; runId: string }
   | { type: 'catch_up'; runs: RunRecord[] }
   | { type: 'dismiss_catch_up' }
@@ -145,6 +146,17 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
 
     case 'approval_submitting':
       return updateRun(state, action.runId, run => ({ ...run, approvalBusy: true }));
+
+    case 'approval_failed': {
+      const cleared = updateRun(state, action.runId, run => ({
+        ...run,
+        approvalBusy: false,
+        // gone = the prompt no longer exists server-side (answered elsewhere
+        // or timed out); the sheet must come down without a decision event.
+        approval: action.gone ? undefined : run.approval,
+      }));
+      return append(cleared, { kind: 'notice', tone: 'warn', text: action.message });
+    }
 
     case 'toggle_run_details':
       return updateRun(state, action.runId, run => ({ ...run, collapsed: !run.collapsed }));

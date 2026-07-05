@@ -22,9 +22,10 @@ export interface TopNavProps {
   onViewChange: (view: AppView) => void;
   theme: ThemePreference;
   onThemeChange: (theme: ThemePreference) => void;
+  onOpenConnection?: () => void;
 }
 
-export function TopNav({ view, onViewChange, theme, onThemeChange }: TopNavProps) {
+export function TopNav({ view, onViewChange, theme, onThemeChange, onOpenConnection }: TopNavProps) {
   return (
     <header className={styles.bar}>
       <div className={styles.brand}>
@@ -33,6 +34,16 @@ export function TopNav({ view, onViewChange, theme, onThemeChange }: TopNavProps
       </div>
       <SegmentedControl options={VIEWS} value={view} onChange={onViewChange} aria-label="View" />
       <div className={styles.actions}>
+        {onOpenConnection ? (
+          <button
+            className={styles.themeButton}
+            title="Connection settings"
+            aria-label="Connection settings"
+            onClick={onOpenConnection}
+          >
+            ⌁
+          </button>
+        ) : null}
         <button
           className={styles.themeButton}
           title={`Theme: ${theme}`}

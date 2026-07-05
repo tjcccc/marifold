@@ -1,21 +1,68 @@
-import { useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
+import { createApiClient } from './api/client';
+import { ConnectionPopover } from './components/ConnectionPopover';
 import type { AppView } from './components/TopNav';
 import { TopNav } from './components/TopNav';
+import { AgentScreen } from './screens/agent/AgentScreen';
+import { useHashRoute } from './screens/useHashRoute';
+import type { ConnectionSettings } from './state/connection';
+import { loadConnection, saveConnection } from './state/connection';
 import { useTheme } from './theme/theme';
 import styles from './App.module.css';
 
-/** Root shell: toolbar + the active view. Screens land in later steps; the
- * scaffold renders placeholders so the shell/theme are verifiable early. */
+/** Root shell: toolbar, hash-routed views, and the service connection. */
 export function App() {
-  const [view, setView] = useState<AppView>('agent');
+  const [route, navigate] = useHashRoute();
   const [theme, setTheme] = useTheme();
+  const [connection, setConnection] = useState<ConnectionSettings>(() => loadConnection());
+  const [connectionOpen, setConnectionOpen] = useState(false);
+  const [connectionProblem, setConnectionProblem] = useState<string | undefined>();
+
+  const client = useMemo(() => createApiClient(connection), [connection]);
+
+  const onUnauthorized = useCallback(() => {
+    setConnectionProblem('The service rejected the request — set the bearer token it expects.');
+    setConnectionOpen(true);
+  }, []);
+
+  const onSaveConnection = useCallback((settings: ConnectionSettings) => {
+    saveConnection(settings);
+    setConnection(settings);
+    setConnectionProblem(undefined);
+  }, []);
+
+  const onViewChange = useCallback(
+    (view: AppView) => {
+      if (view === 'agent') navigate({ view: 'agent', ...(route.view === 'agent' ? route : {}) });
+      else navigate({ view });
+    },
+    [navigate, route],
+  );
 
   return (
     <div className={styles.shell}>
-      <TopNav view={view} onViewChange={setView} theme={theme} onThemeChange={setTheme} />
+      <TopNav
+        view={route.view}
+        onViewChange={onViewChange}
+        theme={theme}
+        onThemeChange={setTheme}
+        onOpenConnection={() => setConnectionOpen(true)}
+      />
       <main className={styles.content}>
-        <Placeholder view={view} />
+        {route.view === 'agent' ? (
+          <AgentScreen client={client} route={route} navigate={navigate} onUnauthorized={onUnauthorized} />
+        ) : (
+          <Placeholder view={route.view} />
+        )}
       </main>
+      {connectionOpen ? (
+        <ConnectionPopover
+          settings={connection}
+          problem={connectionProblem}
+          onSave={onSaveConnection}
+          onClose={() => setConnectionOpen(false)}
+        />
+      ) : null}
     </div>
   );
 }
@@ -24,7 +71,7 @@ function Placeholder({ view }: { view: AppView }) {
   return (
     <div className={styles.placeholder}>
       <div className={styles.placeholderTitle}>{view}</div>
-      <div className={styles.placeholderHint}>Coming together — scaffold build.</div>
+      <div className={styles.placeholderHint}>Landing in a later step of this milestone.</div>
     </div>
   );
 }

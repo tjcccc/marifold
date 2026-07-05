@@ -1,0 +1,78 @@
+.pane {
+  width: 240px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--separator-soft);
+  background: var(--surface-2);
+  overflow-y: auto;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+.newButton {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  font-size: 15px;
+  color: var(--text-2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.newButton:hover {
+  background: var(--separator-soft);
+  color: var(--text);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  padding: 0 8px 12px;
+  gap: 2px;
+}
+
+.empty {
+  padding: 10px;
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+.row,
+.rowSelected {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: var(--radius-md);
+  text-align: left;
+}
+
+.row:hover {
+  background: var(--separator-soft);
+}
+
+.rowSelected {
+  background: var(--brand-tint);
+}
+
+.title {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.sub {
+  font-size: 11.5px;
+  color: var(--text-3);
+}

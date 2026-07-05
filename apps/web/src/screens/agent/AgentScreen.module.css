@@ -1,0 +1,21 @@
+.layout {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+.threadPane {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+@media (max-width: 760px) {
+  /* Basic mobile collapse: the conversation takes over; pane navigation
+   * polish is a follow-up milestone. */
+  .layout > nav,
+  .layout > section {
+    display: none;
+  }
+}
