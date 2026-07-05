@@ -1,0 +1,47 @@
+import type { ThemePreference } from '../theme/theme';
+import { nextThemePreference } from '../theme/theme';
+import { SegmentedControl } from './SegmentedControl';
+import styles from './TopNav.module.css';
+
+export type AppView = 'agent' | 'apps' | 'config';
+
+const VIEWS = [
+  { id: 'agent', label: 'Agent' },
+  { id: 'apps', label: 'Apps' },
+  { id: 'config', label: 'Config' },
+] as const;
+
+const THEME_GLYPH: Record<ThemePreference, string> = {
+  auto: '◐',
+  light: '○',
+  dark: '●',
+};
+
+export interface TopNavProps {
+  view: AppView;
+  onViewChange: (view: AppView) => void;
+  theme: ThemePreference;
+  onThemeChange: (theme: ThemePreference) => void;
+}
+
+export function TopNav({ view, onViewChange, theme, onThemeChange }: TopNavProps) {
+  return (
+    <header className={styles.bar}>
+      <div className={styles.brand}>
+        <span className={styles.dot} aria-hidden />
+        marifold
+      </div>
+      <SegmentedControl options={VIEWS} value={view} onChange={onViewChange} aria-label="View" />
+      <div className={styles.actions}>
+        <button
+          className={styles.themeButton}
+          title={`Theme: ${theme}`}
+          aria-label={`Theme: ${theme} — switch`}
+          onClick={() => onThemeChange(nextThemePreference(theme))}
+        >
+          {THEME_GLYPH[theme]}
+        </button>
+      </div>
+    </header>
+  );
+}

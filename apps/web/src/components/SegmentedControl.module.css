@@ -1,0 +1,27 @@
+.control {
+  display: inline-flex;
+  background: var(--separator-soft);
+  border-radius: var(--radius-md);
+  padding: 2px;
+  gap: 2px;
+}
+
+.segment,
+.selected {
+  padding: 4px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--text-2);
+  transition: color 120ms ease;
+}
+
+.segment:hover {
+  color: var(--text);
+}
+
+.selected {
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 600;
+  box-shadow: var(--shadow-card);
+}

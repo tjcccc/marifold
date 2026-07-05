@@ -1,0 +1,56 @@
+/*
+ * Marifold design tokens — the marigold system from
+ * docs/design/marifold-web-concept.dc.html, matching the TUI accent #EAA221.
+ *
+ * Every value is defined once with light-dark(); the theme preference is
+ * applied by forcing color-scheme on :root (see theme.ts). `auto` follows
+ * the OS via the default `color-scheme: light dark`.
+ */
+:root {
+  color-scheme: light dark;
+
+  /* Brand — marigold. Fills keep the exact brand hex in both modes and pair
+   * with a dark warm label (Apple's black-on-yellow move, 7.2:1). */
+  --brand-fill: #eaa221;
+  --on-brand: #2e2205;
+  --brand-text: light-dark(#c08110, #f0af3a);
+  --brand-deep: #d98e08;
+  --brand-tint: light-dark(rgba(234, 162, 33, 0.14), rgba(240, 175, 58, 0.16));
+  --brand-shadow: rgba(234, 162, 33, 0.4);
+
+  /* Surfaces & text */
+  --canvas: light-dark(#e9e8e4, #131315);
+  --surface: light-dark(#ffffff, #1e1e20);
+  --surface-2: light-dark(#f6f6f4, #28282a);
+  --surface-3: light-dark(#e9e9eb, #3a3a3c);
+  --text: light-dark(#1d1d1f, #f5f5f7);
+  --text-2: light-dark(#515154, #b0b0b5);
+  --text-3: light-dark(#86868b, #98989d);
+  --separator: light-dark(rgba(0, 0, 0, 0.08), rgba(255, 255, 255, 0.1));
+  --separator-soft: light-dark(rgba(0, 0, 0, 0.05), rgba(255, 255, 255, 0.06));
+
+  /* Semantic */
+  --ok: light-dark(#28a745, #34c759);
+  --danger: light-dark(#d2402e, #ff6b5e);
+
+  /* Elevation */
+  --shadow-card: 0 1px 3px light-dark(rgba(0, 0, 0, 0.08), rgba(0, 0, 0, 0.5));
+  --shadow-sheet: 0 8px 32px light-dark(rgba(0, 0, 0, 0.14), rgba(0, 0, 0, 0.6));
+
+  /* Type */
+  --font-ui: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', 'Segoe UI', sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* Shape */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+}

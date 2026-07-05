@@ -1,0 +1,32 @@
+{
+  "name": "@marifold/web",
+  "version": "0.35.0",
+  "private": true,
+  "type": "module",
+  "description": "Marifold Web UI — browser client for the marifold service.",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7"
+  },
+  "devDependencies": {
+    "@marifold/core": "workspace:*",
+    "@marifold/service": "workspace:*",
+    "@testing-library/react": "^16.3.2",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^4.7.0",
+    "jsdom": "^29.1.1",
+    "typescript": "^5.5.4",
+    "vite": "^6.4.3",
+    "vitest": "^2.1.9"
+  }
+}
