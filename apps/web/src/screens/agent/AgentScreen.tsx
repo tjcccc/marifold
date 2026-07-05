@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import type { ApiClient } from '../../api/client';
 import type { Route } from '../../lib/hashRoute';
+import { CatchUpBanner } from './CatchUpBanner';
 import { InputBar } from './InputBar';
 import { ProfileSidebar } from './ProfileSidebar';
 import { SessionList } from './SessionList';
@@ -40,6 +41,11 @@ export function AgentScreen(props: AgentScreenProps) {
         onNew={controller.newSession}
       />
       <div className={styles.threadPane}>
+        <CatchUpBanner
+          runs={controller.thread.catchUp}
+          onShow={controller.expandCatchUp}
+          onDismiss={controller.dismissCatchUp}
+        />
         <ThreadView
           items={controller.thread.items}
           onCancelRun={runId => void controller.cancel(runId)}

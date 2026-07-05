@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { Markdown } from '../../components/Markdown';
 import type { RunApprovalAction } from '../../api/types';
 import type { ThreadItem } from '../../state/thread';
+import { RunCard } from './RunCard';
 import styles from './ThreadView.module.css';
 
 export interface ThreadViewProps {
@@ -72,32 +73,13 @@ function ThreadItemView({
     case 'notice':
       return <div className={`${styles.notice} ${styles[`notice_${item.tone}`]}`}>{item.text}</div>;
     case 'run':
-      // The full RunCard (status line, plan, tool rows, approval sheet)
-      // replaces this placeholder in the run-experience step.
       return (
-        <div className={styles.runPlaceholder}>
-          <span>
-            Run {item.run.status}
-            {item.run.summary ? ` — ${item.run.summary}` : ''}
-          </span>
-          {item.run.status === 'running' ? (
-            <button className={styles.cancelLink} onClick={() => onCancelRun(item.run.runId)}>
-              Cancel
-            </button>
-          ) : (
-            <button className={styles.cancelLink} onClick={() => onToggleRun(item.run.runId)}>
-              {item.run.collapsed ? 'Show' : 'Hide'}
-            </button>
-          )}
-          {item.run.approval ? (
-            <button
-              className={styles.cancelLink}
-              onClick={() => onAnswerApproval(item.run.runId, item.run.approval!.id, 'once')}
-            >
-              Allow once
-            </button>
-          ) : null}
-        </div>
+        <RunCard
+          run={item.run}
+          onCancel={() => onCancelRun(item.run.runId)}
+          onAnswer={(requestId, action) => onAnswerApproval(item.run.runId, requestId, action)}
+          onToggle={() => onToggleRun(item.run.runId)}
+        />
       );
   }
 }
