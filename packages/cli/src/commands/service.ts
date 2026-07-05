@@ -1,3 +1,4 @@
+import * as path from 'path';
 import { Command } from 'commander';
 import { MarifoldError } from '@marifold/core';
 import { resolveSecurityOptions, startMarifoldService } from '@marifold/service';
@@ -11,6 +12,7 @@ interface ServiceOptions {
   token?: string;
   tokenEnv?: string;
   corsOrigin?: string[];
+  webDir?: string;
 }
 
 export function registerServiceCommand(program: Command, printer: ConsolePrinter): void {
@@ -28,11 +30,13 @@ export function registerServiceCommand(program: Command, printer: ConsolePrinter
       (value: string, previous: string[]) => [...previous, value],
       [] as string[],
     )
+    .option('--web-dir <dir>', 'Host the built Web UI from this directory (overrides [service].web_dir).')
     .action(async (options: ServiceOptions) => {
       try {
         const loadedConfig = loadConfig(program);
         const token = resolveTokenFlags(options);
         const corsOrigins = options.corsOrigin && options.corsOrigin.length > 0 ? options.corsOrigin : undefined;
+        const webDir = options.webDir ? path.resolve(options.webDir) : undefined;
         const result = await startMarifoldService({
           loadedConfig,
           host: options.host,
@@ -40,14 +44,17 @@ export function registerServiceCommand(program: Command, printer: ConsolePrinter
           logger: Boolean(options.log),
           auth: { token },
           cors: { origins: corsOrigins },
+          web: { dir: webDir },
         });
 
         process.stdout.write(`Marifold service listening at ${result.address}\n`);
         if (result.telegram) {
           process.stdout.write(`Telegram bridge active (profile ${result.telegram.profile}).\n`);
         }
+        const servedWebDir = webDir ?? loadedConfig.config.service?.webDir;
+        if (servedWebDir) process.stdout.write(`Web UI: serving ${servedWebDir}\n`);
         const security = resolveSecurityOptions(loadedConfig.config.service, { token, corsOrigins });
-        if (security.token) process.stdout.write('Auth: bearer token required (exempt: /health).\n');
+        if (security.token) process.stdout.write('Auth: bearer token required on /v1 (exempt: /health, static).\n');
         if (security.corsOrigins.length > 0) {
           process.stdout.write(`CORS: allowing ${security.corsOrigins.join(', ')}\n`);
         }

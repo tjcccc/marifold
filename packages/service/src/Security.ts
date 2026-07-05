@@ -40,7 +40,7 @@ const QUERY_TOKEN_PATHS = /^\/v1\/runs\/[^/]+\/events(\?|$)/;
 export function registerSecurity(server: FastifyInstance, options: ServiceSecurityOptions): void {
   server.addHook('onRequest', async (request, reply) => {
     const origin = request.headers.origin;
-    if (typeof origin === 'string' && origin !== '') {
+    if (typeof origin === 'string' && origin !== '' && !isSameLoopbackOrigin(origin, request.headers.host)) {
       if (!options.corsOrigins.includes(origin)) throw MarifoldError.originForbidden(origin);
       reply.header('Access-Control-Allow-Origin', origin);
       reply.header('Vary', 'Origin');
@@ -61,12 +61,24 @@ export function registerSecurity(server: FastifyInstance, options: ServiceSecuri
     }
 
     if (!options.token) return;
-    if (request.url === '/health' || request.url.startsWith('/health?')) return;
+    // Only the stateful API is token-gated: the static Web UI shell (and
+    // /health) must stay reachable — the shell carries no secrets, and every
+    // data route is versioned under /v1.
+    if (!request.url.startsWith('/v1/') && request.url !== '/v1') return;
     const presented = extractToken(request);
     if (!presented || !timingSafeEqualString(presented, options.token)) {
       throw MarifoldError.unauthorized();
     }
   });
+}
+
+/** fetch sends an Origin header on every non-GET request, including
+ * same-origin ones — so the app served by this service would 403 against
+ * the allowlist without this: an Origin whose host equals the request's own
+ * loopback Host is the served app talking to itself. */
+function isSameLoopbackOrigin(origin: string, host: string | undefined): boolean {
+  if (!host || !LOOPBACK_HOST.test(host)) return false;
+  return origin === `http://${host}` || origin === `https://${host}`;
 }
 
 function extractToken(request: FastifyRequest): string | undefined {

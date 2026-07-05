@@ -2,6 +2,7 @@ import fastify, { FastifyInstance, FastifyReply } from 'fastify';
 import {
   LoadedMarifoldConfig,
   MarifoldError,
+  resolveAgentConfig,
   MarifoldProviderConfig,
   MarifoldRunRequest,
   MarifoldRuntime,
@@ -15,6 +16,7 @@ import {
 } from '@marifold/core';
 import { registerRunRoutes } from './RunRoutes';
 import { registerSecurity, resolveSecurityOptions } from './Security';
+import { registerStaticRoutes } from './StaticRoutes';
 import { SSE_HEADERS, startSseHeartbeat, writeSse } from './Sse';
 import {
   JsonObject,
@@ -37,6 +39,9 @@ export interface MarifoldServiceOptions {
   auth?: { token?: string };
   /** Allowed browser origins override; falls back to [service].cors_origins. */
   cors?: { origins?: string[] };
+  /** Built Web UI directory override; falls back to [service].web_dir.
+   * When neither resolves, the service is API-only (no static hosting). */
+  web?: { dir?: string };
 }
 
 export interface MarifoldServiceStartOptions extends MarifoldServiceOptions {
@@ -86,6 +91,9 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
 
   const runRegistry = runtime.createRunRegistry(message => server.log.info(message));
   registerRunRoutes(server, runRegistry);
+
+  const webDir = options.web?.dir ?? options.loadedConfig.config.service?.webDir;
+  if (webDir) registerStaticRoutes(server, webDir);
 
   server.addHook('onClose', async () => {
     telegramBridge?.stop();
@@ -418,6 +426,9 @@ function publicConfig(loadedConfig: LoadedMarifoldConfig): JsonObject {
     models: loadedConfig.config.models,
     memory: loadedConfig.config.memory,
     paths: loadedConfig.config.paths,
+    // Resolved (defaults merged) and secret-free — clients need the global
+    // [agent] to compute a profile's effective permissions.
+    agent: resolveAgentConfig(loadedConfig.config.agent) as unknown as JsonObject,
     providers: Object.fromEntries(
       Object.entries(loadedConfig.config.providers)
         .sort(([a], [b]) => a.localeCompare(b))
