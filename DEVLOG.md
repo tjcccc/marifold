@@ -2,6 +2,18 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-07-05 — v0.37.0 — Config editing: write routes, editable profile UI, CLI `config get`
+
+The Web UI's Config screen becomes a real editor (the v0.36.0 "read-only this milestone" promise), and config writes get one uniform surface across CLI and HTTP.
+
+- **Core write surface:** `ConfigManager.setValue` routes `service.*` (`token_env`/`token`/`web_dir`/`cors_origins` comma-separated; `""` clears) and gains `getValue` mirroring the set keys (arrays comma-joined, unset = undefined, unknown throws). `ProfileManager`: `writeProfileFile` (PROFILE/RULES/CUSTOM.md — previously uneditable after init), `removeTrustedFolder`, `setAgentApproval(…, undefined)` clears an override (inherit again), `setMemories`/`setThink`/`setSessionContextTurns`; flat-line upserts share one `upsertFlatLine`. `MemoryStore.forgetById`/`deleteById` — **exact-by-id** mutations (query `forget`/`delete` fuzzy-match text, wrong semantic for a per-row UI action). All exposed on `MarifoldRuntime`.
+- **Service:** `PATCH /v1/profiles/:name` (partial settings; `null` = clear override, absent = untouched), `PUT /v1/profiles/:name/files/:file`, trusted-folder `POST`/`DELETE` (folder in the body — slashes), `DELETE /v1/profiles/:name/memories/:id?mode=forget|delete`, and `PATCH /v1/config { key, value }` with exact CLI `config set` parity. Sanitized `[service]` view on `GET /v1/config` (`webDir?`, `tokenEnv?`, `corsOrigins`, `hasToken` — never the token). Routes guard unknown profiles up front so MemoryStore can't scaffold phantoms.
+- **Security hardening (from the v0.36 review):** `/v1` auth gating now judges the **normalized decoded pathname** (fail-closed on undecodable/`\0`/backslash/non-`/` starts; explicit leading-slash collapse — `new URL` was rejected because `//v1/x` parses protocol-relative and hides the prefix). Locked with a regression test: `//v1/config`, `/v1?x=1`, `/v1/../v1/config`, `/%761/config` all 401 under a token.
+- **CLI:** net-new `config get <key>`; `config set` help documents the `service.*` keys.
+- **Web:** `ProfileSettingsPage` is editable — real `SegmentedControl` permissions (per-kind inherited-vs-overridden tag + inherit-reset patching `null`; writes always target the profile override, never the resolved value), mode control, model select from saved options (+"Default" clears), memories/thinking toggles, trusted-folder add/remove (global ones shown as inherited, not removable), PROFILE/RULES/CUSTOM textarea editors with Save/Revert, memory rows with Forget (immediate) / Delete (confirm). Save-then-refresh: each route returns the fresh `ProfileDetail`, which replaces local state — no optimistic writes. Client transport gains `PUT`.
+- Verified: **355 tests** — core 221 (+7), service 31 (+5 route/auth-hardening/canary), tui 43, cli 4, web 56 (+9: editor interactions, writer wire shapes, real-Fastify PATCH e2e). Builds clean incl. `apps/web`. CLI round-trip verified live (`config set/get service.*` on a temp config; unknown key exits 1).
+- **Open:** v0.38.0 = the SYSTEM screens (models & providers, default permissions, appearance) on top of `PATCH /v1/config`; the per-profile `think` control is a 2-state toggle in the UI (the API supports `null` inherit); memory content authoring stays model-driven by design. Live browser pass pending user verification.
+
 ## 2026-07-05 — v0.36.0 — Web UI (apps/web): Agent screen, read-only Config, static hosting
 
 The browser client, built to the committed Claude Design concept (`docs/design/`) as a second renderer of the same contracts the TUI renders. Vite 6 + React 19, zero UI-framework deps, marigold tokens once via CSS `light-dark()` (auto/light/dark).

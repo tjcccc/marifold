@@ -1,0 +1,57 @@
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { createApiClient } from '../../src/api/client';
+import { deleteMemory, putProfileFile, removeTrustedFolder, updateProfile } from '../../src/api/profiles';
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+function stubFetch(payload: unknown): ReturnType<typeof vi.fn> {
+  const mock = vi.fn(async () => new Response(JSON.stringify(payload), {
+    status: 200,
+    headers: { 'content-type': 'application/json' },
+  }));
+  vi.stubGlobal('fetch', mock);
+  return mock;
+}
+
+describe('profile write api', () => {
+  it('updateProfile PATCHes the dotted route with the patch body', async () => {
+    const mock = stubFetch({ ok: true, profile: { name: 'writer' } });
+    const client = createApiClient({ baseUrl: 'http://x.test' });
+    const profile = await updateProfile(client, 'writer', { mode: 'chat', approval: { shell: null } });
+    expect(profile).toMatchObject({ name: 'writer' });
+
+    const [url, init] = mock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('http://x.test/v1/profiles/writer');
+    expect(init.method).toBe('PATCH');
+    expect(JSON.parse(String(init.body))).toEqual({ mode: 'chat', approval: { shell: null } });
+  });
+
+  it('putProfileFile PUTs the content; removeTrustedFolder DELETEs with a body', async () => {
+    const mock = stubFetch({ ok: true, profile: { name: 'writer' } });
+    const client = createApiClient({ baseUrl: 'http://x.test' });
+
+    await putProfileFile(client, 'writer', 'rules', '# r');
+    let [url, init] = mock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('http://x.test/v1/profiles/writer/files/rules');
+    expect(init.method).toBe('PUT');
+    expect(JSON.parse(String(init.body))).toEqual({ content: '# r' });
+
+    await removeTrustedFolder(client, 'writer', '/tmp/blog');
+    [url, init] = mock.mock.calls[1] as [string, RequestInit];
+    expect(url).toBe('http://x.test/v1/profiles/writer/trusted-folders');
+    expect(init.method).toBe('DELETE');
+    expect(JSON.parse(String(init.body))).toEqual({ folder: '/tmp/blog' });
+  });
+
+  it('deleteMemory targets the entry id with the mode query', async () => {
+    const mock = stubFetch({ ok: true, memories: [] });
+    const client = createApiClient({ baseUrl: 'http://x.test' });
+    const memories = await deleteMemory(client, 'writer', 'mem-1', 'delete');
+    expect(memories).toEqual([]);
+    const [url, init] = mock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('http://x.test/v1/profiles/writer/memories/mem-1?mode=delete');
+    expect(init.method).toBe('DELETE');
+  });
+});

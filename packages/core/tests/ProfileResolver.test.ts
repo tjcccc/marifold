@@ -230,6 +230,72 @@ describe('ProfileResolver', () => {
     expect(() => new ProfileResolver(root).loadSettings('bad')).toThrow(/non-negative integer or "all"/i);
   });
 
+  it('writes profile markdown files (creating the dir) via writeProfileFile', () => {
+    const root = tempDir();
+    const pm = new ProfileManager(root);
+
+    pm.writeProfileFile('editor-test', 'rules', '# New rules\nBe terse.');
+    pm.writeProfileFile('editor-test', 'custom', 'Extra guidance.');
+
+    expect(fs.readFileSync(path.join(root, 'editor-test', 'RULES.md'), 'utf-8')).toBe('# New rules\nBe terse.');
+    expect(fs.readFileSync(path.join(root, 'editor-test', 'CUSTOM.md'), 'utf-8')).toBe('Extra guidance.');
+    expect(() => pm.writeProfileFile('editor-test', 'nope' as never, 'x')).toThrow(/Unknown profile file/);
+  });
+
+  it('removes a trusted folder and clears the line when the list empties', () => {
+    const root = tempDir();
+    const dir = path.join(root, 'blogger');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'profile.toml'), 'provider = "ollama"\nmodel = "codellama"\n');
+
+    const pm = new ProfileManager(root);
+    pm.addTrustedFolder('blogger', '/tmp/my-blog');
+    pm.addTrustedFolder('blogger', '/tmp/other');
+
+    const removed = pm.removeTrustedFolder('blogger', '/tmp/my-blog');
+    expect(removed.removed).toBe(true);
+    expect(new ProfileResolver(root).loadSettings('blogger').agent?.trustedFolders).toEqual(['/tmp/other']);
+
+    expect(pm.removeTrustedFolder('blogger', '/tmp/absent').removed).toBe(false);
+    pm.removeTrustedFolder('blogger', '/tmp/other');
+    const settings = new ProfileResolver(root).loadSettings('blogger');
+    expect(settings.agent?.trustedFolders ?? []).toEqual([]);
+    expect(settings.provider).toBe('ollama'); // other keys preserved throughout
+  });
+
+  it('clears a per-profile approval override with mode undefined (inherit again)', () => {
+    const root = tempDir();
+    const pm = new ProfileManager(root);
+    pm.setAgentApproval('helper2', 'shell', 'allow');
+    expect(new ProfileResolver(root).loadSettings('helper2').agent?.approval?.shell).toBe('allow');
+
+    pm.setAgentApproval('helper2', 'shell', undefined);
+    expect(new ProfileResolver(root).loadSettings('helper2').agent?.approval?.shell).toBeUndefined();
+  });
+
+  it('sets and clears memories / think / session_context_turns via ProfileManager', () => {
+    const root = tempDir();
+    const dir = path.join(root, 'tuner');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'profile.toml'), 'provider = "ollama"\nmodel = "codellama"\n');
+    const pm = new ProfileManager(root);
+
+    pm.setMemories('tuner', false);
+    pm.setThink('tuner', true);
+    pm.setSessionContextTurns('tuner', 5);
+    let settings = new ProfileResolver(root).loadSettings('tuner');
+    expect(settings).toMatchObject({ memories: false, think: true, sessionContextTurns: 5, provider: 'ollama' });
+
+    pm.setThink('tuner', undefined);
+    pm.setSessionContextTurns('tuner', 'all');
+    settings = new ProfileResolver(root).loadSettings('tuner');
+    expect(settings.think).toBeUndefined();
+    expect(settings.sessionContextTurns).toBeUndefined();
+
+    expect(() => pm.setSessionContextTurns('tuner', -1)).toThrow(/non-negative integer/);
+    expect(() => pm.setSessionContextTurns('tuner', 2.5)).toThrow(/non-negative integer/);
+  });
+
   it('returns the built-in default profile when no default profile exists', () => {
     const root = tempDir();
 

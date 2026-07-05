@@ -29,6 +29,7 @@ import {
 import type { MemoryControlPayloads } from '../memory/MemoryControls';
 import { ProfileResolver } from '../profiles/ProfileResolver';
 import { ProfileManager } from '../profiles/ProfileManager';
+import type { ProfileFileKind } from '../profiles/ProfileManager';
 import { Scheduler } from '../schedule/Scheduler';
 import { RunRegistry } from '../runs/RunRegistry';
 import { TelegramBridge } from '../channels/TelegramBridge';
@@ -272,8 +273,9 @@ export class MarifoldRuntime {
   }
 
   /** Persist a per-profile approval decision into the profile's profile.toml
-   * `[agent.approval]` (e.g. the TUI's "always allow"). */
-  setProfileAgentApproval(name: string, kind: ToolKind, mode: ApprovalMode): void {
+   * `[agent.approval]` (e.g. the TUI's "always allow"). `undefined` clears the
+   * override so the kind inherits the global default again. */
+  setProfileAgentApproval(name: string, kind: ToolKind, mode: ApprovalMode | undefined): void {
     this.profileManager.setAgentApproval(name, kind, mode);
   }
 
@@ -281,6 +283,64 @@ export class MarifoldRuntime {
    * Returns the resolved absolute folder. */
   addProfileTrustedFolder(name: string, folder: string): string {
     return this.profileManager.addTrustedFolder(name, folder).folder;
+  }
+
+  /** Remove a trusted folder from a profile. Returns whether it was present. */
+  removeProfileTrustedFolder(name: string, folder: string): boolean {
+    return this.profileManager.removeTrustedFolder(name, folder).removed;
+  }
+
+  /** Set (or clear with both undefined) a profile's provider/model override. */
+  setProfileModelOverride(name: string, provider: string | undefined, model: string | undefined): void {
+    if (provider === undefined && model === undefined) {
+      this.profileManager.clearModelOverride(name);
+      return;
+    }
+    if (!provider || !model) {
+      throw MarifoldError.profileInvalid('Profile model overrides require both provider and model (or neither to clear).', name);
+    }
+    this.profileManager.setModelOverride(name, provider, model);
+  }
+
+  /** Persist (or clear) whether a profile loads its memory. */
+  setProfileMemories(name: string, memories: boolean | undefined): void {
+    this.profileManager.setMemories(name, memories);
+  }
+
+  /** Persist (or clear) a profile's thinking-mode default. */
+  setProfileThink(name: string, think: boolean | undefined): void {
+    this.profileManager.setThink(name, think);
+  }
+
+  /** Persist a profile's recent-turn window ('all'/undefined clears the key). */
+  setProfileSessionContextTurns(name: string, turns: number | 'all' | undefined): void {
+    this.profileManager.setSessionContextTurns(name, turns);
+  }
+
+  /** Overwrite one of a profile's markdown files (PROFILE/RULES/CUSTOM.md). */
+  writeProfileFile(name: string, file: ProfileFileKind, content: string): void {
+    this.profileManager.writeProfileFile(name, file, content);
+  }
+
+  /** Set a config value by dotted key and persist — the same routing and
+   * validation as the CLI's `config set` (see ConfigManager.setValue). */
+  setConfigValue(key: string, value: string): void {
+    new ConfigManager(this.options.loadedConfig).setValue(key, value);
+  }
+
+  /** Read a config value by dotted key (CLI `config get`). */
+  getConfigValue(key: string): string | undefined {
+    return new ConfigManager(this.options.loadedConfig).getValue(key);
+  }
+
+  /** Supersede exactly one memory entry by id (per-row Forget — recoverable). */
+  forgetMemoryById(profile: string, id: string): MemoryMutationResult {
+    return this.memoryStore.forgetById(profile, id);
+  }
+
+  /** Permanently remove exactly one memory entry by id (per-row Delete). */
+  deleteMemoryById(profile: string, id: string): MemoryMutationResult {
+    return this.memoryStore.deleteById(profile, id);
   }
 
   /** Manually compact a session now (the /compact command). Returns whether anything was folded. */

@@ -26,6 +26,33 @@ afterEach(() => {
   }
 });
 
+function minimalConfigToml(dir: string): string {
+  return `
+[default]
+provider = "ollama"
+model = "gemma4:e4b"
+profile = "default"
+think = false
+
+[models]
+options = [
+  "ollama/gemma4:e4b",
+]
+
+[memory]
+size_limit = 50000
+context_limit = 2400
+
+[paths]
+profiles_dir = "${dir}/profiles"
+sessions_db = "${dir}/sessions.db"
+
+[providers.ollama]
+type = "ollama"
+base_url = "http://localhost:11434"
+`;
+}
+
 describe('ConfigManager', () => {
   it('sets dotted config values and writes TOML', () => {
     const dir = tempDir();
@@ -77,6 +104,54 @@ base_url = "http://localhost:11434"
       apiKeyEnv: 'OPENAI_API_KEY',
     });
     expect(updated.config.models.options).toContain('openai/gpt-4o-mini');
+  });
+
+  it('sets service.* keys, creating the section, and round-trips through the loader', () => {
+    const dir = tempDir();
+    const configPath = path.join(dir, 'config.toml');
+    fs.writeFileSync(configPath, minimalConfigToml(dir));
+
+    // No [service] section in the file yet — first write creates it.
+    new ConfigManager(new ConfigLoader().load({ configPath })).setValue('service.web_dir', `${dir}/web`);
+    new ConfigManager(new ConfigLoader().load({ configPath })).setValue('service.token_env', 'MARIFOLD_TOKEN');
+    new ConfigManager(new ConfigLoader().load({ configPath }))
+      .setValue('service.cors_origins', 'http://localhost:5173, http://127.0.0.1:5173');
+
+    const updated = new ConfigLoader().load({ configPath });
+    expect(updated.config.service).toMatchObject({
+      webDir: `${dir}/web`,
+      tokenEnv: 'MARIFOLD_TOKEN',
+      corsOrigins: ['http://localhost:5173', 'http://127.0.0.1:5173'],
+    });
+
+    // Empty string clears optional keys / empties the origin list.
+    const manager = new ConfigManager(updated);
+    manager.setValue('service.token_env', '');
+    manager.setValue('service.cors_origins', '');
+    const cleared = new ConfigLoader().load({ configPath });
+    expect(cleared.config.service?.tokenEnv).toBeUndefined();
+    expect(cleared.config.service?.corsOrigins).toEqual([]);
+
+    expect(() => manager.setValue('service.nope', 'x')).toThrow(/Unknown config key: service\.nope/);
+  });
+
+  it('getValue mirrors setValue keys (arrays comma-joined, unset = undefined, unknown throws)', () => {
+    const dir = tempDir();
+    const configPath = path.join(dir, 'config.toml');
+    fs.writeFileSync(configPath, minimalConfigToml(dir));
+
+    const manager = new ConfigManager(new ConfigLoader().load({ configPath }));
+    expect(manager.getValue('default.model')).toBe('gemma4:e4b');
+    expect(manager.getValue('default.think')).toBe('false');
+    expect(manager.getValue('default.max_context_tokens')).toBeUndefined(); // known key, unset
+    expect(manager.getValue('providers.ollama.base_url')).toBe('http://localhost:11434');
+    expect(manager.getValue('service.web_dir')).toBeUndefined(); // section absent entirely
+
+    manager.setValue('service.cors_origins', 'http://a.test,http://b.test');
+    expect(manager.getValue('service.cors_origins')).toBe('http://a.test, http://b.test');
+
+    expect(() => manager.getValue('default.nope')).toThrow(/Unknown config key: default\.nope/);
+    expect(() => manager.getValue('nonsense')).toThrow(/Unknown config key/);
   });
 
   it('adds priests-registry provider defaults when adding known models', () => {

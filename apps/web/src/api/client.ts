@@ -15,7 +15,7 @@ export interface StreamInit {
 
 export interface ApiClient {
   readonly baseUrl: string;
-  request<T>(method: 'GET' | 'POST' | 'PATCH' | 'DELETE', path: string, body?: unknown): Promise<T>;
+  request<T>(method: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE', path: string, body?: unknown): Promise<T>;
   /** Open an SSE response; the caller consumes `response.body` via parseSse. */
   stream(path: string, init?: StreamInit): Promise<Response>;
 }
@@ -53,7 +53,7 @@ export function createApiClient(options: ApiClientOptions = {}): ApiClient {
   }
 
   async function request<T>(
-    method: 'GET' | 'POST' | 'PATCH' | 'DELETE',
+    method: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE',
     path: string,
     body?: unknown,
   ): Promise<T> {

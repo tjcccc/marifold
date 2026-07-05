@@ -42,6 +42,27 @@ describe('MarifoldService security', () => {
     }
   });
 
+  it('gates path variants of /v1 on the normalized pathname (fail closed)', async () => {
+    const loadedConfig = fixtureLoadedConfig(tempDir(), {
+      service: { token: 'sekret-token', corsOrigins: [] },
+    });
+    const server = createMarifoldService({ loadedConfig, scheduler: false });
+    try {
+      // Each of these previously missed the raw-URL prefix check and fell
+      // through unauthenticated (to a 404); they must now demand the token.
+      for (const url of ['//v1/config', '/v1?x=1', '/v1/../v1/config', '/%761/config']) {
+        const response = await server.inject({ method: 'GET', url });
+        expect(response.statusCode, url).toBe(401);
+      }
+
+      // Normalization must not gate the public shell paths.
+      const health = await server.inject({ method: 'GET', url: '/health' });
+      expect(health.statusCode).toBe(200);
+    } finally {
+      await server.close();
+    }
+  });
+
   it('prefers the explicit auth option over the config token', async () => {
     const loadedConfig = fixtureLoadedConfig(tempDir(), {
       service: { token: 'config-token', corsOrigins: [] },

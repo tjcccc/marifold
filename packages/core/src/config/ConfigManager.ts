@@ -50,6 +50,8 @@ export class ConfigManager {
       this.setPathValue(parts[1], value);
     } else if (parts[0] === 'memory' && parts.length === 2) {
       this.setMemoryValue(parts[1], value);
+    } else if (parts[0] === 'service' && parts.length === 2) {
+      this.setServiceValue(parts[1], value);
     } else if (parts[0] === 'providers' && parts.length === 3) {
       this.setProviderValue(parts[1], parts[2], value);
     } else {
@@ -58,6 +60,78 @@ export class ConfigManager {
 
     this.save();
     return { configPath: this.configPath, key, value };
+  }
+
+  /**
+   * Read a config value by the same dotted keys `setValue` accepts.
+   * Returns undefined for known-but-unset keys; throws on unknown keys.
+   * Arrays render comma-separated. Secrets return as stored — this is the
+   * CLI's `config get`; the HTTP view stays sanitized.
+   */
+  getValue(key: string): string | undefined {
+    const parts = key.split('.');
+    if (parts.length < 2) throw MarifoldError.configInvalid(`Unknown config key: ${key}`);
+    const raw = this.readValue(parts, key);
+    if (raw === undefined) return undefined;
+    return Array.isArray(raw) ? raw.join(', ') : String(raw);
+  }
+
+  private readValue(parts: string[], key: string): unknown {
+    const pick = (section: string, map: Record<string, unknown>, field: string): unknown => {
+      if (!(field in map)) throw MarifoldError.configInvalid(`Unknown config key: ${section}.${field}`);
+      return map[field];
+    };
+    if (parts[0] === 'default' && parts.length === 2) {
+      const d = this.config.default;
+      return pick('default', {
+        provider: d.provider,
+        model: d.model,
+        profile: d.profile,
+        timeout_seconds: d.timeoutSeconds,
+        max_output_tokens: d.maxOutputTokens,
+        max_system_chars: d.maxSystemChars,
+        max_context_tokens: d.maxContextTokens,
+        compaction_keep_turns: d.compactionKeepTurns,
+        session_context_turns: d.sessionContextTurns,
+        think: d.think,
+      }, parts[1]);
+    }
+    if (parts[0] === 'paths' && parts.length === 2) {
+      const p = this.config.paths;
+      return pick('paths', {
+        profiles_dir: p.profilesDir,
+        sessions_db: p.sessionsDb,
+        tasks_dir: p.tasksDir,
+        schedules_dir: p.schedulesDir,
+        skills_dir: p.skillsDir,
+      }, parts[1]);
+    }
+    if (parts[0] === 'memory' && parts.length === 2) {
+      const m = this.config.memory;
+      return pick('memory', { size_limit: m.sizeLimit, context_limit: m.contextLimit }, parts[1]);
+    }
+    if (parts[0] === 'service' && parts.length === 2) {
+      const svc = this.config.service;
+      return pick('service', {
+        token_env: svc?.tokenEnv,
+        token: svc?.token,
+        cors_origins: svc?.corsOrigins,
+        web_dir: svc?.webDir,
+      }, parts[1]);
+    }
+    if (parts[0] === 'providers' && parts.length === 3) {
+      const provider = this.config.providers[parts[1]];
+      return pick(`providers.${parts[1]}`, {
+        type: provider?.type,
+        base_url: provider?.baseUrl,
+        api_key_env: provider?.apiKeyEnv,
+        api_key: provider?.apiKey,
+        oauth_token: provider?.oauthToken,
+        api_key_expires_at: provider?.apiKeyExpiresAt,
+        account_id: provider?.accountId,
+      }, parts[2]);
+    }
+    throw MarifoldError.configInvalid(`Unknown config key: ${key}`);
   }
 
   setDefaultModel(model: string, provider?: string): ConfigSetResult {
@@ -231,6 +305,30 @@ export class ConfigManager {
         return;
       default:
         throw MarifoldError.configInvalid(`Unknown config key: memory.${key}`);
+    }
+  }
+
+  /** Write a [service] key, creating the section on first write. Empty string
+   * clears optional keys (token_env/token/web_dir) and empties cors_origins —
+   * so `config set service.token ""` revokes rather than storing "". */
+  private setServiceValue(key: string, value: string): void {
+    const service = this.config.service ?? (this.config.service = { corsOrigins: [] });
+    const cleared = value.trim() === '' ? undefined : value.trim();
+    switch (key) {
+      case 'token_env':
+        service.tokenEnv = cleared;
+        return;
+      case 'token':
+        service.token = cleared;
+        return;
+      case 'web_dir':
+        service.webDir = cleared === undefined ? undefined : resolveUserPath(cleared);
+        return;
+      case 'cors_origins':
+        service.corsOrigins = value.split(',').map(origin => origin.trim()).filter(Boolean);
+        return;
+      default:
+        throw MarifoldError.configInvalid(`Unknown config key: service.${key}`);
     }
   }
 

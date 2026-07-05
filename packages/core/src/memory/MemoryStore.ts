@@ -342,6 +342,54 @@ export class MemoryStore {
     return { profile, query: needle, count, paths };
   }
 
+  /** Supersede exactly one entry by id (a per-row Forget — no fuzzy matching,
+   * unlike `forget`'s query semantics). */
+  forgetById(profile: string, id: string): MemoryMutationResult {
+    return this.mutateById(profile, id, entry => ({
+      ...entry,
+      status: 'superseded',
+      updated_at: utcNow(),
+    }));
+  }
+
+  /** Permanently remove exactly one entry by id (a per-row Delete). */
+  deleteById(profile: string, id: string): MemoryMutationResult {
+    return this.mutateById(profile, id, () => undefined);
+  }
+
+  /** Exact-id mutation across all kinds: update returning undefined removes the line. */
+  private mutateById(
+    profile: string,
+    id: string,
+    update: (entry: MemoryEntry) => MemoryEntry | undefined,
+  ): MemoryMutationResult {
+    this.assertSafeProfileName(profile);
+    this.ensureProfile(profile);
+    let count = 0;
+    const paths: string[] = [];
+
+    for (const memoryKind of KIND_ORDER) {
+      const filePath = this.jsonlPath(profile, memoryKind);
+      if (!fs.existsSync(filePath)) continue;
+
+      let changed = false;
+      const lines = readJsonlLines(filePath, memoryKind).flatMap(line => {
+        if (line.entry?.id !== id) return [line];
+        count += 1;
+        changed = true;
+        const updated = update(line.entry);
+        return updated === undefined ? [] : [{ entry: updated, raw: line.raw }];
+      });
+
+      if (changed) {
+        writeJsonlLines(filePath, lines);
+        paths.push(filePath);
+      }
+    }
+
+    return { profile, query: id, count, paths };
+  }
+
   listEntries(profile: string): MemoryEntry[] {
     this.assertSafeProfileName(profile);
     this.ensureProfile(profile);

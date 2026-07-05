@@ -1,4 +1,5 @@
 import * as crypto from 'crypto';
+import * as path from 'path';
 import { FastifyInstance, FastifyRequest } from 'fastify';
 import { MarifoldError, MarifoldServiceConfig } from '@marifold/core';
 
@@ -63,13 +64,34 @@ export function registerSecurity(server: FastifyInstance, options: ServiceSecuri
     if (!options.token) return;
     // Only the stateful API is token-gated: the static Web UI shell (and
     // /health) must stay reachable — the shell carries no secrets, and every
-    // data route is versioned under /v1.
-    if (!request.url.startsWith('/v1/') && request.url !== '/v1') return;
+    // data route is versioned under /v1. Gate on the NORMALIZED pathname (not
+    // a raw-URL prefix) so variants like //v1/x or /v1/../v1/x can't slip past
+    // the check regardless of how strictly the router matches them.
+    if (!isApiPath(request.url)) return;
     const presented = extractToken(request);
     if (!presented || !timingSafeEqualString(presented, options.token)) {
       throw MarifoldError.unauthorized();
     }
   });
+}
+
+/** True when the request targets the token-gated /v1 API, judged on the
+ * normalized decoded pathname. Undecodable or suspicious paths are treated as
+ * API (gated) — fail closed. Note: deliberately NOT `new URL(url, base)` — a
+ * raw path like `//v1/x` would parse as protocol-relative (host `v1`), hiding
+ * the very prefix this check exists to see. */
+function isApiPath(url: string): boolean {
+  let pathname = url.split(/[?#]/, 1)[0];
+  try {
+    pathname = decodeURIComponent(pathname);
+  } catch {
+    return true;
+  }
+  if (!pathname.startsWith('/') || pathname.includes('\0') || pathname.includes('\\')) return true;
+  // posix.normalize resolves ./.. segments; a leading `//` is preserved by
+  // POSIX rules, so collapse leading slashes explicitly.
+  const normalized = path.posix.normalize(pathname).replace(/^\/+/, '/');
+  return normalized === '/v1' || normalized.startsWith('/v1/');
 }
 
 /** fetch sends an Origin header on every non-GET request, including

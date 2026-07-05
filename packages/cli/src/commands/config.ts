@@ -43,14 +43,32 @@ export function registerConfigCommand(program: Command, printer: ConsolePrinter)
 
   config
     .command('set')
-    .description('Set a config value by dotted key.')
-    .argument('<key>', 'Dotted config key, e.g. default.model.')
-    .argument('<value>', 'Value to write.')
+    .description('Set a config value by dotted key (default.*, paths.*, memory.*, service.*, providers.<name>.*).')
+    .argument('<key>', 'Dotted config key, e.g. default.model or service.web_dir.')
+    .argument('<value>', 'Value to write. service.cors_origins takes a comma-separated list; "" clears optional keys.')
     .action((key: string, value: string) => {
       try {
         const result = new ConfigManager(loadConfig(program)).setValue(key, value);
         process.stdout.write(`Set ${result.key} = ${result.value}\n`);
         process.stdout.write(`Saved ${result.configPath}\n`);
+      } catch (error) {
+        printer.printError(error);
+        process.exitCode = 1;
+      }
+    });
+
+  config
+    .command('get')
+    .description('Read a config value by dotted key (same keys as config set).')
+    .argument('<key>', 'Dotted config key, e.g. default.model or service.web_dir.')
+    .action((key: string) => {
+      try {
+        const value = new ConfigManager(loadConfig(program)).getValue(key);
+        if (value === undefined) {
+          process.stdout.write(`${key} is not set\n`);
+        } else {
+          process.stdout.write(`${value}\n`);
+        }
       } catch (error) {
         printer.printError(error);
         process.exitCode = 1;

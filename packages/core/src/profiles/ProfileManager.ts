@@ -69,6 +69,15 @@ export interface ProfileInitResult {
   files: string[];
 }
 
+/** The editable per-profile markdown files. */
+export type ProfileFileKind = 'profile' | 'rules' | 'custom';
+
+const PROFILE_FILE_NAMES: Record<ProfileFileKind, string> = {
+  profile: 'PROFILE.md',
+  rules: 'RULES.md',
+  custom: 'CUSTOM.md',
+};
+
 export interface ProfileModelOverrideResult {
   name: string;
   path: string;
@@ -163,8 +172,9 @@ export class ProfileManager {
   }
 
   /** Persist a per-profile approval decision into profile.toml as a dotted key
-   * (e.g. `agent.approval.shell = "allow"`), overriding the global `[agent]`. */
-  setAgentApproval(name: string, kind: ToolKind, mode: ApprovalMode): { name: string; path: string; kind: ToolKind; mode: ApprovalMode } {
+   * (e.g. `agent.approval.shell = "allow"`), overriding the global `[agent]`.
+   * `mode: undefined` removes the override so the kind inherits again. */
+  setAgentApproval(name: string, kind: ToolKind, mode: ApprovalMode | undefined): { name: string; path: string; kind: ToolKind; mode?: ApprovalMode } {
     assertSafeName(name);
     // Create the profile dir if absent — the built-in `default` profile is served
     // without one, and "always allow" must still persist there (mirrors setModelOverride).
@@ -172,8 +182,57 @@ export class ProfileManager {
     fs.mkdirSync(profileDir, { recursive: true });
     const profileToml = path.join(profileDir, 'profile.toml');
     const current = fs.existsSync(profileToml) ? fs.readFileSync(profileToml, 'utf-8') : PROFILE_TOML_STUB;
-    fs.writeFileSync(profileToml, upsertAgentApproval(current, kind, mode));
-    return { name, path: profileToml, kind, mode };
+    fs.writeFileSync(profileToml, upsertFlatLine(current, `agent.approval.${kind}`, mode === undefined ? undefined : tomlString(mode)));
+    return { name, path: profileToml, kind, ...(mode !== undefined ? { mode } : {}) };
+  }
+
+  /** Overwrite one of the profile's markdown files (PROFILE/RULES/CUSTOM.md). */
+  writeProfileFile(name: string, file: ProfileFileKind, content: string): { name: string; path: string; file: ProfileFileKind } {
+    assertSafeName(name);
+    const fileName = PROFILE_FILE_NAMES[file];
+    if (!fileName) {
+      throw MarifoldError.profileInvalid(`Unknown profile file '${String(file)}'. Use profile, rules, or custom.`, name);
+    }
+    const profileDir = path.join(this.profilesDir, name);
+    fs.mkdirSync(profileDir, { recursive: true });
+    const filePath = path.join(profileDir, fileName);
+    fs.writeFileSync(filePath, content);
+    return { name, path: filePath, file };
+  }
+
+  /** Persist (or clear, when undefined) whether this profile loads its memory. */
+  setMemories(name: string, memories: boolean | undefined): { name: string; path: string; memories?: boolean } {
+    return this.upsertSetting(name, 'memories', memories === undefined ? undefined : String(memories), { memories });
+  }
+
+  /** Persist (or clear, when undefined) the profile's thinking-mode default. */
+  setThink(name: string, think: boolean | undefined): { name: string; path: string; think?: boolean } {
+    return this.upsertSetting(name, 'think', think === undefined ? undefined : String(think), { think });
+  }
+
+  /** Persist the profile's recent-turn window. `undefined` or `'all'` removes the
+   * key (inherit `default.session_context_turns`); an integer ≥ 0 caps replay. */
+  setSessionContextTurns(name: string, turns: number | 'all' | undefined): { name: string; path: string; sessionContextTurns?: number } {
+    if (typeof turns === 'number' && (!Number.isInteger(turns) || turns < 0)) {
+      throw MarifoldError.profileInvalid('session_context_turns must be a non-negative integer or "all".', name);
+    }
+    const cleared = turns === undefined || turns === 'all';
+    return this.upsertSetting(
+      name,
+      'session_context_turns',
+      cleared ? undefined : String(turns),
+      cleared ? {} : { sessionContextTurns: turns as number },
+    );
+  }
+
+  private upsertSetting<T extends object>(name: string, key: string, rendered: string | undefined, result: T): { name: string; path: string } & T {
+    assertSafeName(name);
+    const profileDir = path.join(this.profilesDir, name);
+    fs.mkdirSync(profileDir, { recursive: true });
+    const profileToml = path.join(profileDir, 'profile.toml');
+    const current = fs.existsSync(profileToml) ? fs.readFileSync(profileToml, 'utf-8') : PROFILE_TOML_STUB;
+    fs.writeFileSync(profileToml, upsertFlatLine(current, key, rendered));
+    return { name, path: profileToml, ...result };
   }
 
   /** Add a trusted folder (where file writes are allowed without prompting) to
@@ -188,6 +247,20 @@ export class ProfileManager {
     const current = fs.existsSync(profileToml) ? fs.readFileSync(profileToml, 'utf-8') : PROFILE_TOML_STUB;
     fs.writeFileSync(profileToml, upsertTrustedFolder(current, resolved));
     return { name, path: profileToml, folder: resolved };
+  }
+
+  /** Remove a trusted folder from the profile's profile.toml. Compares against
+   * the resolved absolute path (same normalization addTrustedFolder applies). */
+  removeTrustedFolder(name: string, folder: string): { name: string; path: string; folder: string; removed: boolean } {
+    assertSafeName(name);
+    const resolved = path.resolve(expandHome(folder));
+    const profileDir = this.requireProfileDir(name);
+    const profileToml = path.join(profileDir, 'profile.toml');
+    const current = fs.existsSync(profileToml) ? fs.readFileSync(profileToml, 'utf-8') : PROFILE_TOML_STUB;
+    const folders = parseTrustedFolders(current);
+    const next = folders.filter(entry => entry !== resolved);
+    fs.writeFileSync(profileToml, renderTrustedFolders(current, next));
+    return { name, path: profileToml, folder: resolved, removed: next.length !== folders.length };
   }
 
   rename(from: string, to: string): ProfileRenameResult {
@@ -273,30 +346,40 @@ function upsertMode(text: string, mode: ProfileMode): string {
   return `${prefix}mode = ${tomlString(mode)}\n`;
 }
 
-function upsertAgentApproval(text: string, kind: ToolKind, mode: ApprovalMode): string {
-  // Dotted key (not an [agent.approval] table) so it stays a flat line like the
-  // other overrides — no table header that would strand later flat-key writes.
-  const dotted = `agent.approval.${kind} =`;
-  const lines = text.split(/\r?\n/).filter(line => !line.trimStart().startsWith(dotted));
+/** Replace (or, when rendered is undefined, remove) one flat `key = value` line,
+ * preserving every other line. Dotted keys (not tables) keep profile.toml a flat
+ * list — no table header that would strand later flat-key writes. */
+function upsertFlatLine(text: string, key: string, rendered: string | undefined): string {
+  const lines = text.split(/\r?\n/).filter(line => !line.trimStart().startsWith(`${key} =`));
   const cleaned = lines.join('\n').trimEnd();
+  if (rendered === undefined) return cleaned ? `${cleaned}\n` : PROFILE_TOML_STUB;
   const prefix = cleaned ? `${cleaned}\n\n` : '';
-  return `${prefix}agent.approval.${kind} = ${tomlString(mode)}\n`;
+  return `${prefix}${key} = ${rendered}\n`;
 }
 
-function upsertTrustedFolder(text: string, folder: string): string {
-  // Merge into any existing trusted_folders (dotted or table form parses the same).
-  let folders: string[] = [];
+/** Read the profile's trusted_folders (dotted or table form parses the same). */
+function parseTrustedFolders(text: string): string[] {
   try {
     const parsed = parse(text) as { agent?: { trusted_folders?: unknown } };
     const existing = parsed.agent?.trusted_folders;
-    if (Array.isArray(existing)) folders = existing.filter((v): v is string => typeof v === 'string');
+    if (Array.isArray(existing)) return existing.filter((v): v is string => typeof v === 'string');
   } catch { /* unparseable — start fresh */ }
+  return [];
+}
+
+/** Rewrite the trusted_folders line for the given list (empty list removes it). */
+function renderTrustedFolders(text: string, folders: string[]): string {
+  return upsertFlatLine(
+    text,
+    'agent.trusted_folders',
+    folders.length > 0 ? `[${folders.map(tomlString).join(', ')}]` : undefined,
+  );
+}
+
+function upsertTrustedFolder(text: string, folder: string): string {
+  const folders = parseTrustedFolders(text);
   if (!folders.includes(folder)) folders.push(folder);
-  const dotted = 'agent.trusted_folders =';
-  const lines = text.split(/\r?\n/).filter(line => !line.trimStart().startsWith(dotted));
-  const cleaned = lines.join('\n').trimEnd();
-  const prefix = cleaned ? `${cleaned}\n\n` : '';
-  return `${prefix}agent.trusted_folders = [${folders.map(tomlString).join(', ')}]\n`;
+  return renderTrustedFolders(text, folders);
 }
 
 /** Refuse trusting roots that would grant the agent far too much. */

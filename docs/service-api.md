@@ -116,7 +116,8 @@ Responses are `{ "ok": true, ... }` unless noted. Bodies are JSON.
 
 | Route | Returns |
 |---|---|
-| `GET /v1/config` | Sanitized config — secrets are replaced by `hasApiKey`-style booleans; includes the resolved `agent` section (approval defaults, trusted folders) so clients can compute a profile's effective permissions |
+| `GET /v1/config` | Sanitized config — secrets are replaced by `hasApiKey`-style booleans; includes the resolved `agent` section (approval defaults, trusted folders) and a sanitized `service` view (`webDir?`, `tokenEnv?`, `corsOrigins`, `hasToken`) |
+| `PATCH /v1/config` | Body `{ key, value }` (both strings) — sets one dotted config key with **exactly** the CLI `config set` routing and validation (`default.*`, `paths.*`, `memory.*`, `service.*`, `providers.<name>.*`; `service.cors_origins` takes a comma-separated list, `""` clears optional keys). Returns the sanitized config |
 | `GET /v1/providers` | `providers: [{ name, type, baseUrl?, hasApiKey, hasOauthToken, ... }]` |
 | `GET /v1/models` | `default: { provider, model }` and saved `options: ["provider/model", ...]` |
 
@@ -126,9 +127,14 @@ Responses are `{ "ok": true, ... }` unless noted. Bodies are JSON.
 |---|---|
 | `GET /v1/profiles` | Profile summaries |
 | `GET /v1/profiles/:name` | Profile detail (files, settings) |
+| `PATCH /v1/profiles/:name` | Update per-profile settings. Optional fields: `mode` (`"agent"\|"chat"`), `provider`+`model` (both strings, or both `null` to clear the override), `memories`/`think` (`boolean\|null`), `maxContextTokens` (`int\|null`), `sessionContextTurns` (`int ≥ 0\|"all"\|null`), `approval` (`{ read\|write\|shell\|network\|delegate: "allow"\|"ask"\|"deny"\|null }` — `null` clears the override so the kind inherits again). Absent = untouched. Returns the fresh profile detail |
+| `PUT /v1/profiles/:name/files/:file` | Overwrite `PROFILE`/`RULES`/`CUSTOM.md` (`:file` ∈ `profile\|rules\|custom`); body `{ content }`. Returns the fresh profile detail |
+| `POST /v1/profiles/:name/trusted-folders` | Body `{ folder }` — add a trusted folder (safety refusals for broad/sensitive roots are 400) |
+| `DELETE /v1/profiles/:name/trusted-folders` | Body `{ folder }` (in the body — folders contain slashes) — `{ removed: boolean }` + fresh profile detail |
 | `GET /v1/profiles/:name/memories?all=&limit=` | Structured memory records; `all=true` includes superseded |
+| `DELETE /v1/profiles/:name/memories/:id?mode=forget\|delete` | Exact-by-id: `forget` (default) supersedes the entry (recoverable); `delete` removes it permanently. Returns the fresh active list |
 
-Read-only in v1; memory editing goes through the CLI/TUI for now.
+Memory **content** authoring stays model-driven (`memory_save` blocks) — there is deliberately no memory-create route.
 
 ### Sessions
 

@@ -120,6 +120,7 @@ export type { MemoryControlPayloads, StrippedMemoryControls } from './memory/Mem
 export { ProfileManager } from './profiles/ProfileManager';
 export type {
   ProfileDeleteResult,
+  ProfileFileKind,
   ProfileInitResult,
   ProfileModelOverrideResult,
   ProfileRenameResult,

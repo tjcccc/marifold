@@ -91,7 +91,7 @@ For product direction and future scope, see [docs/vision.md](docs/vision.md) and
 
 ## Non-goals
 
-Marifold does not yet include semantic/vector retrieval, memory encryption, memory/config editing from the Web UI (read-only there for now), SkillApp runtime/rendering, Workflow, Apple apps, external-agent aliases, provider-owned model deletion, remote (non-loopback) service binding, or service daemon packaging (schedules fire only while `marifold service` runs).
+Marifold does not yet include semantic/vector retrieval, memory encryption, global-config editing screens in the Web UI (per-profile settings are editable; the SYSTEM screens — models & providers, default permissions, appearance — are the next milestone), SkillApp runtime/rendering, Workflow, Apple apps, external-agent aliases, provider-owned model deletion, remote (non-loopback) service binding, or service daemon packaging (schedules fire only while `marifold service` runs).
 
 Web search uses DuckDuckGo scraping by default, which requires no API key but can be blocked by DuckDuckGo's anomaly detection on some networks. Errors surface clearly in `/search` output and tool results, and the `SearchBackend` interface is pluggable for alternative engines.
 
@@ -179,6 +179,8 @@ pnpm marifold init --provider openai --model gpt-4o-mini
 
 pnpm marifold config show
 pnpm marifold config set default.model gemma4:e4b
+pnpm marifold config set service.web_dir ./apps/web/dist
+pnpm marifold config get service.web_dir
 pnpm marifold config export ./marifold-backup.json --include-sessions
 pnpm marifold config import ./marifold-backup.json --force
 
@@ -323,7 +325,7 @@ For `openai-compatible`, `base_url` may be the API root such as `https://api.ope
 
 `marifold init` accepts `--provider`, `--provider-type`, `--model`, `--base-url`, `--api-key-env`, `--profiles-dir`, `--sessions-db`, `--tasks-dir`, and `--force`. Non-Ollama providers require `--model`; custom OpenAI-compatible providers also require `--base-url`.
 
-`marifold service` starts a Fastify HTTP service bound to `127.0.0.1:32140` by default. It intentionally accepts loopback hosts only. The API surface is `/health` and `/v1/*` routes for app clients: sanitized config/provider/model views, profiles, memories, sessions, ask/chat, SSE streaming chat, task state, read-only schedules, and live agent runs (`POST /v1/runs`, a resumable SSE `AgentEvent` stream, and approval/steer/cancel routes). The full wire contract is documented in [docs/service-api.md](docs/service-api.md).
+`marifold service` starts a Fastify HTTP service bound to `127.0.0.1:32140` by default. It intentionally accepts loopback hosts only. The API surface is `/health` and `/v1/*` routes for app clients: sanitized config/provider/model views, profiles, memories, sessions, ask/chat, SSE streaming chat, task state, read-only schedules, live agent runs (`POST /v1/runs`, a resumable SSE `AgentEvent` stream, and approval/steer/cancel routes), and config-editing writes (`PATCH /v1/config` with CLI `config set` parity, per-profile settings/files/trusted-folders/memory-forget routes). The full wire contract is documented in [docs/service-api.md](docs/service-api.md).
 
 The optional `[service]` section configures API access for browser clients:
 
@@ -337,7 +339,7 @@ With no token resolved, auth is off (bare loopback, the historic default); with 
 
 ## Web UI
 
-`apps/web` is the browser client (Vite + React, see [apps/web/README.md](apps/web/README.md)): the Agent screen renders chat and live agent runs — plan, tool activity, the approval sheet (Allow once / Always allow / Trust folder / Deny), mid-run steering, cancel, and catch-up replay — plus a read-only Config view and light/dark marigold theming from the committed design concept.
+`apps/web` is the browser client (Vite + React, see [apps/web/README.md](apps/web/README.md)): the Agent screen renders chat and live agent runs — plan, tool activity, the approval sheet (Allow once / Always allow / Trust folder / Deny), mid-run steering, cancel, and catch-up replay — plus an editable per-profile Config screen (mode, model override, memories/thinking, permissions with inherited-vs-overridden and inherit-reset, trusted folders, PROFILE/RULES/CUSTOM editors, memory Forget/Delete) and light/dark marigold theming from the committed design concept.
 
 ```sh
 pnpm --filter @marifold/web build

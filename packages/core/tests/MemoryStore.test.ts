@@ -52,6 +52,26 @@ describe('MemoryStore', () => {
     ]);
   });
 
+  it('forgetById / deleteById mutate exactly the identified entry (no fuzzy matching)', () => {
+    const profilesDir = path.join(tempDir(), 'profiles');
+    const store = new MemoryStore(profilesDir);
+    const first = store.remember('default', 'user', 'Likes espresso.');
+    const second = store.remember('default', 'user', 'Likes espresso machines.'); // fuzzy-similar text
+    const third = store.remember('default', 'preferences', 'Prefers dark mode.');
+
+    const forgot = store.forgetById('default', first.entry.id);
+    expect(forgot.count).toBe(1);
+    const afterForget = store.listEntries('default');
+    expect(afterForget.find(e => e.id === first.entry.id)?.status).toBe('superseded');
+    expect(afterForget.find(e => e.id === second.entry.id)?.status).toBe('active'); // similar text untouched
+
+    const deleted = store.deleteById('default', third.entry.id);
+    expect(deleted.count).toBe(1);
+    expect(store.listEntries('default').some(e => e.id === third.entry.id)).toBe(false);
+
+    expect(store.forgetById('default', 'no-such-id').count).toBe(0);
+  });
+
   it('creates memory files when reading an existing profile without a memories directory', () => {
     const profilesDir = path.join(tempDir(), 'profiles');
     const profileDir = path.join(profilesDir, 'default');

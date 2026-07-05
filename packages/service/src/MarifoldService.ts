@@ -14,6 +14,7 @@ import {
   TaskStatus,
   TaskUpdateInput,
 } from '@marifold/core';
+import { registerProfileRoutes } from './ProfileRoutes';
 import { registerRunRoutes } from './RunRoutes';
 import { registerSecurity, resolveSecurityOptions } from './Security';
 import { registerStaticRoutes } from './StaticRoutes';
@@ -91,6 +92,7 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
 
   const runRegistry = runtime.createRunRegistry(message => server.log.info(message));
   registerRunRoutes(server, runRegistry);
+  registerProfileRoutes(server, runtime);
 
   const webDir = options.web?.dir ?? options.loadedConfig.config.service?.webDir;
   if (webDir) registerStaticRoutes(server, webDir);
@@ -141,6 +143,14 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
     ok: true,
     config: publicConfig(options.loadedConfig),
   }));
+
+  // Mirrors the CLI's `config set <key> <value>` exactly (same dotted-key
+  // routing and validation); returns the sanitized view, never raw secrets.
+  server.patch('/v1/config', async request => {
+    const body = objectBody(request.body);
+    runtime.setConfigValue(requiredString(body.key, 'key'), stringValue(body.value, 'value'));
+    return { ok: true, config: publicConfig(options.loadedConfig) };
+  });
 
   server.get('/v1/providers', async () => ({
     ok: true,
@@ -421,6 +431,7 @@ function parseTaskListOptions(query: { status?: string; limit?: string }): TaskL
 }
 
 function publicConfig(loadedConfig: LoadedMarifoldConfig): JsonObject {
+  const service = loadedConfig.config.service;
   return {
     default: loadedConfig.config.default,
     models: loadedConfig.config.models,
@@ -429,6 +440,13 @@ function publicConfig(loadedConfig: LoadedMarifoldConfig): JsonObject {
     // Resolved (defaults merged) and secret-free — clients need the global
     // [agent] to compute a profile's effective permissions.
     agent: resolveAgentConfig(loadedConfig.config.agent) as unknown as JsonObject,
+    // Sanitized [service] view: the token value never leaves the process.
+    service: {
+      ...(service?.webDir ? { webDir: service.webDir } : {}),
+      ...(service?.tokenEnv ? { tokenEnv: service.tokenEnv } : {}),
+      corsOrigins: service?.corsOrigins ?? [],
+      hasToken: Boolean(service?.token),
+    },
     providers: Object.fromEntries(
       Object.entries(loadedConfig.config.providers)
         .sort(([a], [b]) => a.localeCompare(b))

@@ -1,7 +1,7 @@
 {
   "version": 1,
   "projnaviVersion": "0.5.0",
-  "generatedAt": "2026-07-05T05:11:19.152Z",
+  "generatedAt": "2026-07-05T14:40:15.722Z",
   "root": ".",
   "files": {
     ".claude/skills/projnavi/SKILL.md": {
@@ -30,8 +30,8 @@
       "category": "source"
     },
     "apps/web/src/api/client.ts": {
-      "hash": "66d5a02dba04d70b970b5e74c33a2e3ea7b4d03ebaa846db081a1a8fb815191f",
-      "size": 3754,
+      "hash": "d8fbcf8dc6810f4fbe4d4db10626a6276f4d7104c3f2041760024686ac7dcbd3",
+      "size": 3770,
       "category": "source"
     },
     "apps/web/src/api/misc.ts": {
@@ -40,8 +40,8 @@
       "category": "source"
     },
     "apps/web/src/api/profiles.ts": {
-      "hash": "5d523a9d0ca7d617a169dd9eeb5b47a6b8d495963e53408925bf34319cc930c5",
-      "size": 1125,
+      "hash": "452518393f7a3eda8bfc827a3040855bab3044d07cd4d6e703ae7279dd3e1292",
+      "size": 3474,
       "category": "source"
     },
     "apps/web/src/api/runs.ts": {
@@ -165,13 +165,13 @@
       "category": "source"
     },
     "apps/web/src/screens/config/ConfigScreen.tsx": {
-      "hash": "1064ee71b4065494c98e0ad153f33fc88c7caa09512d739f8b764ad4cfcb8840",
-      "size": 4070,
+      "hash": "f4120a3cae0c4872fb95fdf2be27a4c3b00ce507b1442c2b2f369a2c4d4117af",
+      "size": 6369,
       "category": "source"
     },
     "apps/web/src/screens/config/ProfileSettingsPage.tsx": {
-      "hash": "ae8edcdc5ae018251ee5a5031c2f78d0841ed19fb4b814bfc078d811dd8d5604",
-      "size": 4928,
+      "hash": "bbd0857e05fe940556d54e920554590a44ad30648ad0069d4c1a3fe85c8f3438",
+      "size": 11697,
       "category": "source"
     },
     "apps/web/src/screens/useHashRoute.ts": {
@@ -209,14 +209,19 @@
       "size": 3764,
       "category": "test"
     },
+    "apps/web/tests/api/profiles.test.ts": {
+      "hash": "0012aec890edb25104df0b4b9e8b42d77df930bfabac07a5eb90f572e9a6e43e",
+      "size": 2599,
+      "category": "test"
+    },
     "apps/web/tests/api/sse.test.ts": {
       "hash": "3adba1b1e79b4f35b581e68c689e72a0cc1f912a4066798af87e4c3f04bdd418",
       "size": 2703,
       "category": "test"
     },
     "apps/web/tests/components/config.test.tsx": {
-      "hash": "b034f761da64d527d2216d2df7523124e2c7ca1a8f27929a4632db1bbcd2b373",
-      "size": 2156,
+      "hash": "79b53f185f65196860d2edea93027453103a9f9aaef782efb097e24090255a1d",
+      "size": 5560,
       "category": "test"
     },
     "apps/web/tests/components/run.test.tsx": {
@@ -225,8 +230,8 @@
       "category": "test"
     },
     "apps/web/tests/integration/service.e2e.test.ts": {
-      "hash": "f7b5e7e6d515f2f1ce259a78d692fe8c60314cbee725ebe502b1c8f1195b1961",
-      "size": 5790,
+      "hash": "f6349eba897e93f872524553454b2bc5e56ac8bb7e167546d13ee55ccf669040",
+      "size": 7385,
       "category": "test"
     },
     "apps/web/tests/lib/lib.test.ts": {
@@ -260,8 +265,8 @@
       "category": "docs"
     },
     "DEVLOG.md": {
-      "hash": "3e6ad5d02c2e6284f24f884f6ce9086cfafacefa4f8095f9ed2690575ede0760",
-      "size": 69760,
+      "hash": "ee5d429238b6159d50e7d4fca9c51065dec487606798fa9c3af7987cd6a04f4e",
+      "size": 73176,
       "category": "docs"
     },
     "docs/architecture.md": {
@@ -275,13 +280,13 @@
       "category": "source"
     },
     "docs/roadmap.md": {
-      "hash": "8a8ae5a43c61b8a52a6ed1252653e6d91eb9c655bbeb97194b81a34b82abaaf2",
-      "size": 6883,
+      "hash": "32553a280e156f1bb808dafb95f3beeeca8dd340d3c7bf9542717c568e803dc6",
+      "size": 5130,
       "category": "docs"
     },
     "docs/service-api.md": {
-      "hash": "e0b31a269e63681d796a374a8e95519d527c56f996b6547b8e389784d8ee905b",
-      "size": 13458,
+      "hash": "7ae0c03f08f00ece6a9c057ba6e3e1542d1a323ed250e526fe1c531f05160415",
+      "size": 15053,
       "category": "docs"
     },
     "docs/skillapp.md": {
@@ -375,8 +380,8 @@
       "category": "source"
     },
     "packages/cli/src/commands/config.ts": {
-      "hash": "dd9f8c1257d5aa3a72db83da3b63420415192248b99392c1fe5484bced121bd7",
-      "size": 9567,
+      "hash": "d91af79a018925dade5351f431c842235c499515d7b1b954919152ab5fec84fa",
+      "size": 10306,
       "category": "source"
     },
     "packages/cli/src/commands/doctor.ts": {
@@ -560,8 +565,8 @@
       "category": "source"
     },
     "packages/core/src/config/ConfigManager.ts": {
-      "hash": "7f7d476f127d06b736209a93cdf8054210018f21c71fe8c395d38f6ccf52d39e",
-      "size": 16803,
+      "hash": "cd51b80e0b9441f319cf90366c0925666f07a2b8ef1c0a8057ca1d3141804f94",
+      "size": 20685,
       "category": "source"
     },
     "packages/core/src/config/ConfigSchema.ts": {
@@ -605,8 +610,8 @@
       "category": "source"
     },
     "packages/core/src/index.ts": {
-      "hash": "9fdca5abf4d1ee5fbcd05694a91fe15f8b00f5291e5015035c2bd54ab22ef3ef",
-      "size": 7729,
+      "hash": "14010d2049784754fe9a02d43e61c95d60324404954a6426217588d8aaec891e",
+      "size": 7748,
       "category": "source"
     },
     "packages/core/src/memory/MemoryControls.ts": {
@@ -615,13 +620,13 @@
       "category": "source"
     },
     "packages/core/src/memory/MemoryStore.ts": {
-      "hash": "a5d2ae547a633514b72938f1e2c84348a9f2bfaa125755b33f79e57adc5647b3",
-      "size": 42638,
+      "hash": "f21838989c95c0a9b9d5c8c5aaeb05e2a1761ba65ae3c7f7edb25eac0a573412",
+      "size": 44176,
       "category": "source"
     },
     "packages/core/src/profiles/ProfileManager.ts": {
-      "hash": "798cd86c61c23b88a9d2ced06680c9bc992acbf97c90fd7923022b53bb3064a7",
-      "size": 14293,
+      "hash": "76c1e883dd385963213446bd7e66766257c2aebfe68f12e6e71e933295b05202",
+      "size": 18449,
       "category": "source"
     },
     "packages/core/src/profiles/ProfileResolver.ts": {
@@ -635,8 +640,8 @@
       "category": "source"
     },
     "packages/core/src/runtime/MarifoldRuntime.ts": {
-      "hash": "f324d35bf528ee2de8a30351c76ca4f65a0211e6321827ebd5d3fff1b223df41",
-      "size": 32214,
+      "hash": "0bc8fb1d86450a0c88a914fbe835d7616fdd5dadb1ab228805219d60b92cb831",
+      "size": 34896,
       "category": "source"
     },
     "packages/core/src/runtime/MarifoldTypes.ts": {
@@ -780,8 +785,8 @@
       "category": "test"
     },
     "packages/core/tests/ManagementCommands.test.ts": {
-      "hash": "96c53e0fbd15366cffa953182a94340833ab08f23bced7287bbdd52b90b59ddc",
-      "size": 10912,
+      "hash": "59dbc06ff6ffe099ba7e67d25d073c9bcea7d41bb0f08ea04484eb580993c1d4",
+      "size": 13829,
       "category": "test"
     },
     "packages/core/tests/MarifoldOpenAICompatProvider.test.ts": {
@@ -800,13 +805,13 @@
       "category": "test"
     },
     "packages/core/tests/MemoryStore.test.ts": {
-      "hash": "7a955b36eeeb2e5715bd05149d2852302aab082d585b71cc328c603a4c04b487",
-      "size": 10910,
+      "hash": "9369c8a160ed86a0ee95da79318b4cb81e510a6fd21ecb2cd682f8eb382f3854",
+      "size": 11987,
       "category": "test"
     },
     "packages/core/tests/ProfileResolver.test.ts": {
-      "hash": "85431b2d721109993512c137a19602fd4f62fad728927ea84cf32525573ac20d",
-      "size": 10977,
+      "hash": "15771abd7d47e0109440dce891768a28cb26a4a4a2b940eac5fdb61164ee9d47",
+      "size": 14196,
       "category": "test"
     },
     "packages/core/tests/ProviderInspector.test.ts": {
@@ -885,8 +890,13 @@
       "category": "source"
     },
     "packages/service/src/MarifoldService.ts": {
-      "hash": "7260ac79e4b1b7f226e1d753bb684ec4fb7ec9683df1cb21412e08be672f258b",
-      "size": 20596,
+      "hash": "207b08e4cc68d8e9f5edbd85cc03f8dbae44adf674f1d1885b6c51e5c90c60a9",
+      "size": 21471,
+      "category": "source"
+    },
+    "packages/service/src/ProfileRoutes.ts": {
+      "hash": "51d5601de1e1b03901c2c4c51929074cc71f0f543e858549093f7042eb7ad76a",
+      "size": 7798,
       "category": "source"
     },
     "packages/service/src/RunRoutes.ts": {
@@ -895,8 +905,8 @@
       "category": "source"
     },
     "packages/service/src/Security.ts": {
-      "hash": "dc98a0e2c47810442aa513d2a057a5b866bd8a7190e88b9e1675a022bee43ad3",
-      "size": 4403,
+      "hash": "e818c60447dadd3083816de92de6be1adce3a2b17506fb2c619c8c08e4974e15",
+      "size": 5493,
       "category": "source"
     },
     "packages/service/src/Sse.ts": {
@@ -924,14 +934,19 @@
       "size": 7886,
       "category": "test"
     },
+    "packages/service/tests/MarifoldServiceConfigEditing.test.ts": {
+      "hash": "626993591a2c2faf14f1faa58868fad0468d9c51232a15751dd12c4c0549ad65",
+      "size": 9680,
+      "category": "test"
+    },
     "packages/service/tests/MarifoldServiceRuns.test.ts": {
       "hash": "42aff44599a391c1f8639072bf2354b4bac3bf843edbd9bd003df832d2f33340",
       "size": 14963,
       "category": "test"
     },
     "packages/service/tests/MarifoldServiceSecurity.test.ts": {
-      "hash": "0fa281d2ff03c128489a4d90b4360d8b4b87703b51eb5dfc3f79414e19bc19a6",
-      "size": 5218,
+      "hash": "a67b6270c78c2ae537b9beb2055b895c6bf30de9ea271f5b1a9085e8fcd83467",
+      "size": 6132,
       "category": "test"
     },
     "packages/service/tests/MarifoldServiceStatic.test.ts": {
@@ -1110,8 +1125,8 @@
       "category": "config"
     },
     "README.md": {
-      "hash": "1b1d776f7cec398212564f460d67161c244a7dea05e4e5574a58fce5f0f0f347",
-      "size": 31352,
+      "hash": "b2a6b44aa8291aab4c80d646f7aabda90edcf39cdfc3b610a55a659db44bdd16",
+      "size": 31892,
       "category": "docs"
     },
     "scripts/agent-eval.mjs": {
@@ -1343,8 +1358,8 @@
       ]
     },
     "packages/core/src/config/ConfigManager.ts": {
-      "hash": "7f7d476f127d06b736209a93cdf8054210018f21c71fe8c395d38f6ccf52d39e",
-      "size": 16803,
+      "hash": "cd51b80e0b9441f319cf90366c0925666f07a2b8ef1c0a8057ca1d3141804f94",
+      "size": 20685,
       "category": "source",
       "claimIds": [
         "claim-config-sections-001"
@@ -1392,16 +1407,16 @@
       ]
     },
     "packages/core/src/memory/MemoryStore.ts": {
-      "hash": "a5d2ae547a633514b72938f1e2c84348a9f2bfaa125755b33f79e57adc5647b3",
-      "size": 42638,
+      "hash": "f21838989c95c0a9b9d5c8c5aaeb05e2a1761ba65ae3c7f7edb25eac0a573412",
+      "size": 44176,
       "category": "source",
       "claimIds": [
         "claim-memory-controls-001"
       ]
     },
     "packages/core/src/runtime/MarifoldRuntime.ts": {
-      "hash": "f324d35bf528ee2de8a30351c76ca4f65a0211e6321827ebd5d3fff1b223df41",
-      "size": 32214,
+      "hash": "0bc8fb1d86450a0c88a914fbe835d7616fdd5dadb1ab228805219d60b92cb831",
+      "size": 34896,
       "category": "source",
       "claimIds": [
         "claim-chat-tool-loop-001",
@@ -1456,8 +1471,8 @@
       ]
     },
     "packages/service/src/MarifoldService.ts": {
-      "hash": "7260ac79e4b1b7f226e1d753bb684ec4fb7ec9683df1cb21412e08be672f258b",
-      "size": 20596,
+      "hash": "207b08e4cc68d8e9f5edbd85cc03f8dbae44adf674f1d1885b6c51e5c90c60a9",
+      "size": 21471,
       "category": "source",
       "claimIds": [
         "claim-schedule-001",
@@ -1466,7 +1481,7 @@
     }
   },
   "inventory": {
-    "summary": "Detected Node package @marifold/workspace. Indexed 227 relevant files. Detected 44 test files.",
+    "summary": "Detected Node package @marifold/workspace. Indexed 230 relevant files. Detected 46 test files.",
     "packageName": "@marifold/workspace",
     "packageScripts": [
       "agent-eval",
@@ -1488,12 +1503,13 @@
     "fileCounts": {
       "docs": 20,
       "config": 15,
-      "source": 148,
-      "test": 44
+      "source": 149,
+      "test": 46
     },
     "tests": [
       "apps/web/tests/api/client.test.ts",
       "apps/web/tests/api/follow.test.ts",
+      "apps/web/tests/api/profiles.test.ts",
       "apps/web/tests/api/sse.test.ts",
       "apps/web/tests/components/config.test.tsx",
       "apps/web/tests/components/run.test.tsx",
@@ -1528,6 +1544,7 @@
       "packages/core/tests/WorkspaceInitializer.test.ts",
       "packages/service/tests/helpers.ts",
       "packages/service/tests/MarifoldService.test.ts",
+      "packages/service/tests/MarifoldServiceConfigEditing.test.ts",
       "packages/service/tests/MarifoldServiceRuns.test.ts",
       "packages/service/tests/MarifoldServiceSecurity.test.ts",
       "packages/service/tests/MarifoldServiceStatic.test.ts",

@@ -110,8 +110,22 @@
 .memoryRow {
   padding: 10px 16px;
   display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.memoryBody {
+  display: flex;
   flex-direction: column;
   gap: 3px;
+  min-width: 0;
+}
+
+.memoryActions {
+  display: inline-flex;
+  gap: 6px;
+  flex-shrink: 0;
 }
 
 .memoryRow + .memoryRow {
@@ -136,6 +150,108 @@
 .folderRow {
   padding: 6px 16px 10px;
   font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.folderAdd {
+  display: flex;
+  gap: 8px;
+  padding: 10px 16px 12px;
+  border-top: 1px solid var(--separator-soft);
+}
+
+.select,
+.input {
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--separator-soft);
+  border-radius: 8px;
+  padding: 4px 8px;
+}
+
+.input {
+  flex: 1;
+  min-width: 0;
+}
+
+.smallButton,
+.smallButtonPrimary,
+.smallButtonDanger {
+  font: inherit;
+  font-size: 11.5px;
+  padding: 3px 10px;
+  border-radius: 7px;
+  border: 1px solid var(--separator-soft);
+  background: var(--surface);
+  color: var(--text-2);
+  cursor: pointer;
+}
+
+.smallButton:disabled,
+.smallButtonPrimary:disabled,
+.smallButtonDanger:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.smallButtonPrimary {
+  background: var(--brand-fill);
+  color: var(--on-brand);
+  border-color: transparent;
+  font-weight: 600;
+}
+
+.smallButtonDanger {
+  color: var(--danger, #c33);
+}
+
+.inheritButton {
+  font: inherit;
+  font-size: 10.5px;
+  margin-left: 8px;
+  padding: 1px 7px;
+  border-radius: 6px;
+  border: 1px solid var(--separator-soft);
+  background: transparent;
+  color: var(--text-3);
+  cursor: pointer;
+}
+
+.inheritedTag,
+.dirtyTag {
+  font-size: 10.5px;
+  color: var(--text-3);
+  margin-left: 8px;
+}
+
+.fileEditor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 16px 12px;
+}
+
+.textarea {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 12px;
+  color: var(--text);
+  background: var(--surface-2, var(--surface));
+  border: 1px solid var(--separator-soft);
+  border-radius: 8px;
+  padding: 8px 10px;
+  resize: vertical;
+  white-space: pre-wrap;
+}
+
+.editorActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .fileBlock {
