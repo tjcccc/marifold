@@ -94,10 +94,12 @@ export class ConfigLoader {
   }
 
   private normalizeService(raw: TomlObject): MarifoldServiceConfig {
+    const webDir = optionalString(raw.web_dir, 'service.web_dir');
     return {
       tokenEnv: optionalString(raw.token_env, 'service.token_env'),
       token: optionalString(raw.token, 'service.token'),
       corsOrigins: optionalStringArray(raw.cors_origins, 'service.cors_origins'),
+      ...(webDir !== undefined ? { webDir: resolveUserPath(webDir) } : {}),
     };
   }
 

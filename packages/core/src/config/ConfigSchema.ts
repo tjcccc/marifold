@@ -116,6 +116,9 @@ export interface MarifoldServiceConfig {
   /** Browser origins allowed to call the API (exact match, e.g.
    * "http://localhost:5173"). Empty = no cross-origin browser access. */
   corsOrigins: string[];
+  /** Directory of built Web UI assets the service hosts at / (SPA fallback
+   * to its index.html). Unset = no static hosting, API-only. */
+  webDir?: string;
 }
 
 export interface MarifoldChannelsConfig {

@@ -355,6 +355,7 @@ export function renderMarifoldConfig(config: MarifoldConfig): string {
     optionalStringLine('token_env', svc.tokenEnv),
     optionalStringLine('token', svc.token),
     `cors_origins = [${svc.corsOrigins.map(origin => tomlString(origin)).join(', ')}]`,
+    optionalStringLine('web_dir', svc.webDir),
   ].filter(Boolean).join('\n');
 
   const providerTables = Object.entries(config.providers)

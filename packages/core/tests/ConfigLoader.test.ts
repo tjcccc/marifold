@@ -175,12 +175,14 @@ profile = "default"
 [service]
 token_env = "MARIFOLD_SERVICE_TOKEN"
 cors_origins = ["http://localhost:5173", "http://127.0.0.1:5173"]
+web_dir = "/opt/marifold/web"
 `);
     const loaded = new ConfigLoader().load({ configPath });
     expect(loaded.config.service).toEqual({
       tokenEnv: 'MARIFOLD_SERVICE_TOKEN',
       token: undefined,
       corsOrigins: ['http://localhost:5173', 'http://127.0.0.1:5173'],
+      webDir: '/opt/marifold/web',
     });
 
     // A ConfigManager rewrite must preserve the section.
