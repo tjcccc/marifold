@@ -1,113 +1,79 @@
 # Roadmap
 
-This roadmap captures the current product direction after the v0.7.0 priests migration work.
+Direction and milestone ladder. History lives in `DEVLOG.md` (newest-first); this file stays
+short: what shipped (one line each), what's next, and what's deliberately deferred.
 
-## v0.8.0 - CLI and Profile Management Polish
+## Shipped
 
-Goal: make Marifold feel complete as a local management CLI before adding larger agent surfaces.
+- **v0.8–v0.13 — pre-TUI foundation**: CLI/profile management polish; structured JSONL memory
+  system; `@marifold/service` + TaskStore; approval-aware agent loop on `@priest-ai/core` 2.4
+  (native tool calling + control-block fallback); selective chat parity (search/read/image,
+  OAuth refresh); `marifold.skillapp.v0` spec (parser/validator, no runtime); cron scheduling
+  hosted in the service with unattended approval policy.
+- **v0.14–v0.25 — the TUI era**: bare `marifold` launches the Ink/React terminal app (agent-first,
+  `/chat` mode, approval modal, `/btw` steering, session resume, profile picker); skills run as
+  agentic tools reading their own bundled files; interactive onboarding; lean skill runs;
+  adaptive planning + `/steps`.
+- **v0.26–v0.28 — context management**: conversation compaction (priest 2.5.0) + `/context-window`,
+  `/compact`, footer gauge; bounded cross-objective agent memory; per-profile
+  `session_context_turns` hard turn window (priest 2.6.0).
+- **v0.29–v0.30 — control polish**: session-DB doctor, `/retry`, per-profile `think`; per-profile
+  permissions + trusted folders.
+- **v0.31–v0.34 — channels & providers**: Telegram bridge (live, in-service; approvals, file
+  inbox/outbox); ChatGPT subscription provider (Codex backend) + proxy plumbing.
+- **v0.35–v0.36 — the Web UI era begins**: agent-run service routes (`/v1/runs`, SSE + approvals),
+  bearer auth + CORS/origin policy, RunRegistry; `apps/web` — the browser client built to the
+  committed Claude Design concept (Agent screen with run cards/approvals/steering/catch-up,
+  read-only Config, static hosting from the service).
 
-Planned scope:
+## v0.37.0 — Config editing (current)
 
-- Remove saved model options without deleting provider-owned model files.
-- Validate all saved/default/profile models.
-- Rename and delete local profiles with safe confirmations.
-- Export and import local config, profiles, memories, and optional sessions.
-- Clear sessions in bulk with profile/date/keep-last filters.
-- Expand repeatable non-network command smoke coverage.
+Goal: the Web UI's Config screen becomes a real editor; config writes get a uniform surface.
 
-## v0.9.0 - Memory System Upgrade
+- Service write routes: `PATCH /v1/profiles/:name` (settings + permission overrides with
+  inherit-reset), `PUT /v1/profiles/:name/files/:file` (PROFILE/RULES/CUSTOM), trusted-folder
+  add/remove, memory forget/delete, and a generic `PATCH /v1/config { key, value }` with CLI
+  parity.
+- Core write surface: `ConfigManager` gains `service.*` keys + `getValue`; `ProfileManager`
+  gains file editing, trusted-folder removal, approval-override clearing, and
+  memories/think/turns setters.
+- CLI: net-new `config get <key>`; `config set` covers `[service]` keys.
+- Web: editable ProfileSettingsPage (permissions via SegmentedControl with
+  inherited-vs-overridden, mode/model/toggles, instruction-file editors, memory Forget/Delete).
+- Security: auth-scope gating hardened to normalized pathnames.
 
-Goal: make memory more trustworthy, inspectable, and ready for future agent/task state without implementing the agent loop yet.
+## Next
 
-Implemented scope:
+- **v0.38.0 — Web UI SYSTEM screens**: global editing surfaces from the design concept —
+  Models & Providers, Default Permissions, Appearance — plus the v0.36 backlog: attachments on
+  `POST /v1/runs`, a `/v1/events` push channel to replace run polling, mobile nav polish,
+  session title/preview.
+- **SkillApp runtime**: give the Apps tab its runtime — render `marifold.skillapp.v0` layouts,
+  wire actions to the agent loop under the existing approval vocabulary.
+- **Workflow composition**: chain native profiles, skills, skill apps, models, and
+  external-agent aliases into multi-step flows (design doc exists outside the repo).
+- **Apple clients** and alias profiles for Codex/Claude Code and other external agents.
 
-- Structured profile memory with rich JSONL metadata.
-- Priority/relevance recall, simple-prompt gating, thinking-mode priority expansion, and context budgeting.
-- Model-driven hidden memory saves/forgets plus conservative prompt fallback extraction.
-- Conflict-key canonicalization, deduplication, supersession, prompt-driven forget, and permanent delete.
-- Short-term memory trimming through `[memory].size_limit`.
-- CLI memory inspection through `profile memory`.
-- Deterministic tests and provider-backed `scripts/memory-eval.mjs`.
+## Deferred: native (server-side) web search — a priest milestone, not marifold
 
-Deferred discussion:
+Today marifold's `web_search` is a **client-side tool** (`WebSearchTool` → Firecrawl/DuckDuckGo):
+marifold runs the search and feeds results back, so it works with **any** tool-calling model,
+local or cloud. That covers all current usage and needs no priest change.
 
-- Dedicated ephemeral task memory for future agent loops.
-- Workspace/project memory scopes beyond profile memory.
-- Memory edit UI, semantic retrieval, encryption, and used-memory tracing.
+"Native" search means the **model's hosting endpoint searches server-side** (you set a request
+flag; their servers search and return grounded/cited results). That request body is built only
+inside priest's provider adapters, so it can only live in **priest** — "talking to the model" is
+priest's domain.
 
-## v0.10.0 - Service and Task-State Foundation
+**The trigger to build it** is *not* "a local model with search" — a local model can't search
+itself (no internet path), so it always uses the client tool. The real trigger is **adopting a
+hosted endpoint that does search server-side and wanting to use it** — e.g. Anthropic's
+`web_search` server tool, OpenAI/Gemini grounding, or **Alibaba Cloud Qwen
+(`bailian`/`alibaba_cloud`) which exposes a server-side search flag** (the one we could actually
+test). Until then, leave priest alone.
 
-Goal: create a small local API surface for future Web UI, Apple clients, and agent loops without implementing a full agent yet.
-
-Implemented scope:
-
-- New `@marifold/service` package using Fastify.
-- Loopback-only `marifold service` command.
-- Health/status, sanitized config, provider, model, profile, memory, session, ask, and streaming chat endpoints.
-- Server-sent event streaming for chat chunks.
-- `paths.tasks_dir` config path, defaulting to `~/.marifold/tasks`.
-- Core `TaskStore` with task objective, status, plan, events, summary, next action, profile/session references, and JSON-file persistence.
-- Task CRUD and task-event API routes for future agent loops and app clients.
-
-Deferred discussion:
-
-- Auth, CORS/origin policy, remote binding, API versioning docs, generated clients, reconnect/resume behavior, and service daemon packaging.
-- Approval-aware agent loop and tool execution.
-- Promotion from ephemeral task state into durable profile/workspace memory.
-
-## v0.11.0 - Basic Agent Loop
-
-Goal: a narrow, approval-aware agent loop that shapes the task-state and event model before any client UI is built.
-
-Implemented scope:
-
-- `@priest-ai/core` 2.4: native tool calling, `runWithTools` loop helper, `streamEvents`, cancellation, and image input — spec synced to the priest repository.
-- `packages/core/src/agent`: AgentRunner (plan, tool loop, verification, summary), renderer-agnostic AgentEvent stream, ToolRegistry, approval policy.
-- Built-in tools: file read/write (workspace jail), shell exec, and `ask_profile` profile delegation (minimal multi-model orchestration).
-- Control-block tool fallback for models without native tool support.
-- `[agent]` config section, `marifold agent` command, and `scripts/agent-eval.mjs`.
-
-Deferred discussion:
-
-- Agent-run service routes (need a bidirectional approval channel).
-- Live streaming deltas inside agent runs (event model already supports it).
-- Subagent/delegation beyond depth-1 `ask_profile`.
-
-## v0.12.0 - Selective Chat Parity
-
-Implemented scope:
-
-- Pluggable `SearchBackend` (DuckDuckGo default) reused by the agent `web_search` tool, chat `/search`, and model-initiated chat tools behind `[web_search].enabled`.
-- Chat `/read <path>` file attachment; bounded chat tool loop with memory-payload deferral to the final response.
-- ChatGPT OAuth token refresh in core with refresh-token rotation, generalizing the Copilot refresh dispatch.
-- Image plumbing: `ask --image`, chat `/image <path>` / `/image clear`, service base64/URL images. Terminal image paste stays deferred to the TUI.
-
-## SkillApp Spec
-
-- `docs/skillapp.md` defines `marifold.skillapp.v0` (layout/variables/actions/permissions, aligned with the agent approval vocabulary) with a core TOML parser/validator. No runtime or rendering until a client UI exists.
-
-## v0.13.0 - Scheduled Task Execution
-
-Implemented scope:
-
-- File-backed `ScheduleStore` with validated cron expressions and a minute-resolution `Scheduler` hosted inside `marifold service`.
-- Unattended approval policy: `ask` degrades to deny; `[agent.unattended]` overrides can pre-approve specific tool kinds.
-- `marifold schedule` management commands, read-only `/v1/schedules` routes, `scheduled` task tags, and the `lastResultSeen` unread flag.
-- Schedules fire only while the service runs; daemon packaging stays deferred.
-
-## Later
-
-- Main `marifold` TUI as the primary entrypoint (Codex/Claude-like terminal app), then Web UI, then Apple clients.
-- Schema-defined SkillApp runtime.
-- Alias profiles for Codex, Claude Code, and other external agents.
-- Workflow composition across native profiles, skill apps, models, and external-agent aliases.
-
-### Deferred: native (server-side) web search — a priest milestone, not marifold
-
-Today marifold's `web_search` is a **client-side tool** (`WebSearchTool` → Firecrawl/DuckDuckGo): marifold runs the search and feeds results back, so it works with **any** tool-calling model, local or cloud. That covers all current usage and needs no priest change.
-
-"Native" search means the **model's hosting endpoint searches server-side** (you set a request flag; their servers search and return grounded/cited results). That request body is built only inside priest's provider adapters, so it can only live in **priest** — "talking to the model" is priest's domain.
-
-**The trigger to build it** is *not* "a local model with search" — a local model can't search itself (no internet path), so it always uses the client tool. The real trigger is **adopting a hosted endpoint that does search server-side and wanting to use it** — e.g. Anthropic's `web_search` server tool, OpenAI/Gemini grounding, or **Alibaba Cloud Qwen (`bailian`/`alibaba_cloud`) which exposes a server-side search flag** (the one we could actually test). Until then, leave priest alone.
-
-**When it's time, scope it tight (don't fan out to all SDKs first):** (1) spec design — how `PriestRequest` represents a *provider-executed* tool vs a client tool, and how citations come back via streaming events; (2) implement **one** provider and prove it end-to-end through marifold's existing `[web_search].provider = "native"` seam; (3) then sync the spec to canonical Python `priest`, with the Rust/dotnet/Swift ports trailing a milestone.
+**When it's time, scope it tight (don't fan out to all SDKs first):** (1) spec design — how
+`PriestRequest` represents a *provider-executed* tool vs a client tool, and how citations come
+back via streaming events; (2) implement **one** provider and prove it end-to-end through
+marifold's existing `[web_search].provider = "native"` seam; (3) then sync the spec to canonical
+Python `priest`, with the Rust/dotnet/Swift ports trailing a milestone.
