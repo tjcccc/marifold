@@ -2,6 +2,17 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-07-06 — v0.39.0 — Profiles & system config: avatars, creation, Config redesign, providers/models
+
+Second half of the user-review round (items 2, 4, 5, 6): profiles become first-class identities and the Config screen becomes the system control surface.
+
+- **Avatars** — stored as `avatar.(png|jpg|webp)` in the profile's own dir (the user's suggested location; ≤1 MB, replaces across extensions, works for the built-in default by scaffolding its dir). `ProfileSummary.avatar` presence flag via shared `findProfileAvatar`; runtime get/set/delete. Service: `GET /v1/profiles/:name/avatar` (raw bytes, ETag/If-None-Match 304, no-cache), `PUT` (base64 `{data, mediaType}`), `DELETE`. Web `Avatar` component fetches with auth → blob URL (`<img src>` can't carry a bearer token), falls back to the marigold initial; wired through the Agent sidebar, thread header, Config columns, and the profile page (change/remove control).
+- **Profile creation** — `runtime.initProfile` + `POST /v1/profiles` (201; duplicate/bad names 400). Web: `+` in the Agent sidebar and Config profiles column opens a light `CreateProfileSheet` (name with live validation, avatar picker, mode, model); create → patch → avatar upload → land in the new profile (Agent) or its Config page. Docs/permissions stay on the existing editor — one editing surface.
+- **Config redesign (3-column, Mail-style)** — sections (Profiles/Providers/Models/Service) → items column (profiles with avatars, providers with reachability dots) → detail. Routes `#/config/<section>[/<item>]`; legacy `#/config/<profile>` redirects. Replaces the v0.36 profiles-as-sidebar list that would sprawl with many profiles.
+- **Providers & models management** — runtime wraps `ProviderInspector` (status, live model listing) and `ConfigManager` model writes; service adds `GET /v1/providers/status`, `GET /v1/providers/:name/models`, `POST`/`DELETE /v1/models`, `PUT /v1/models/default`. Providers page edits `base_url`/`api_key_env`/`type` via the existing `PATCH /v1/config` dotted keys (which create unknown provider sections) + an add-provider form; Models page manages saved options/default with live per-provider suggestions; Service page edits `web_dir`/`cors_origins`/`token_env` against the sanitized view. **Security stance:** raw `api_key` values are not accepted or shown over the wire — env-var names only; keys stay CLI/file-only.
+- Verified: **388 tests** — core 223 (+1 avatar lifecycle), service 36 (+4: create/avatar/model-management/status-sanitization), tui 43, cli 4, web 82 (+3: route round-trips incl. legacy redirect, ModelsPage, ServicePage). **Live** (built CLI on the real config): `POST /v1/profiles` scaffolded, avatar PUT→GET round-tripped (image/png, 70 B, ETag), provider status probed the real providers (ollama reachable, 6 models; key-holding providers sanitized to booleans), live ollama model list returned.
+- **Open:** browser pass on the new Config columns/avatars pending user verification; profile rename/delete UI, raw-key editing (CLI-only by design), and `/v1/events` push remain backlog; provider add relies on dotted-key section creation (verified in ConfigManager).
+
 ## 2026-07-06 — v0.38.0 — Agent experience polish + attachments
 
 First of two user-review milestones on the Web UI MVP (items 1, 3, 7, 8, 9 of the review; v0.39.0 takes profiles/avatars/Config redesign/providers-models).
