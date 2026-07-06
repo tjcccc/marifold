@@ -1,3 +1,4 @@
+import * as fs from 'fs';
 import { FastifyInstance } from 'fastify';
 import {
   ApprovalMode,
@@ -31,6 +32,58 @@ interface ProfilePatch {
  * profile.toml preservation match the TUI's commands exactly.
  */
 export function registerProfileRoutes(server: FastifyInstance, runtime: MarifoldRuntime): void {
+  // Scaffold a new profile (same layout as `profile init`); clients follow up
+  // with PATCH / avatar PUT for the initial settings.
+  server.post('/v1/profiles', async (request, reply) => {
+    const body = objectBody(request.body);
+    const profile = runtime.initProfile(requiredString(body.name, 'name'));
+    reply.status(201);
+    return { ok: true, profile };
+  });
+
+  // Raw image bytes (not the JSON envelope): <img>-friendly apart from auth —
+  // token-bearing clients fetch with headers and render a blob URL.
+  server.get<{ Params: { name: string } }>('/v1/profiles/:name/avatar', async (request, reply) => {
+    runtime.getProfile(request.params.name);
+    const avatar = runtime.getProfileAvatar(request.params.name);
+    if (!avatar) {
+      reply.status(404);
+      return {
+        ok: false,
+        error: { code: 'AVATAR_NOT_FOUND', message: `Profile '${request.params.name}' has no avatar.` },
+      };
+    }
+    const stat = fs.statSync(avatar.path);
+    const etag = `"${Math.round(stat.mtimeMs)}-${stat.size}"`;
+    if (request.headers['if-none-match'] === etag) {
+      reply.status(304);
+      return reply.send();
+    }
+    reply.header('content-type', avatar.mediaType);
+    reply.header('etag', etag);
+    reply.header('cache-control', 'no-cache');
+    return reply.send(fs.createReadStream(avatar.path));
+  });
+
+  server.put<{ Params: { name: string } }>('/v1/profiles/:name/avatar', async request => {
+    const name = request.params.name;
+    runtime.getProfile(name);
+    const body = objectBody(request.body);
+    const data = requiredString(body.data, 'data');
+    const mediaType = requiredString(body.mediaType, 'mediaType');
+    const image = Buffer.from(data, 'base64');
+    if (image.length === 0) throw MarifoldError.configInvalid('data must be non-empty base64.');
+    runtime.setProfileAvatar(name, image, mediaType);
+    return { ok: true, profile: runtime.getProfile(name) };
+  });
+
+  server.delete<{ Params: { name: string } }>('/v1/profiles/:name/avatar', async request => {
+    const name = request.params.name;
+    runtime.getProfile(name);
+    const removed = runtime.deleteProfileAvatar(name);
+    return { ok: true, removed, profile: runtime.getProfile(name) };
+  });
+
   server.patch<{ Params: { name: string } }>('/v1/profiles/:name', async request => {
     const name = request.params.name;
     runtime.getProfile(name); // throws PROFILE_INVALID (400) for unknown names

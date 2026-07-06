@@ -220,4 +220,77 @@ describe('config editing routes', () => {
       await server.close();
     }
   });
+
+  it('POST /v1/profiles scaffolds a profile; duplicates and bad names are 400', async () => {
+    const loadedConfig = fixtureLoadedConfig(tempDir());
+    const server = createMarifoldService({ loadedConfig, scheduler: false });
+    try {
+      const created = await server.inject({ method: 'POST', url: '/v1/profiles', payload: { name: 'scribe' } });
+      expect(created.statusCode).toBe(201);
+      expect(created.json().profile).toMatchObject({ name: 'scribe', source: 'directory' });
+      expect(fs.existsSync(path.join(loadedConfig.config.paths.profilesDir, 'scribe', 'PROFILE.md'))).toBe(true);
+
+      const listed = await server.inject({ method: 'GET', url: '/v1/profiles' });
+      expect(listed.json().profiles.map((p: { name: string }) => p.name)).toContain('scribe');
+
+      const dup = await server.inject({ method: 'POST', url: '/v1/profiles', payload: { name: 'scribe' } });
+      expect(dup.statusCode).toBe(400);
+      const bad = await server.inject({ method: 'POST', url: '/v1/profiles', payload: { name: '../evil' } });
+      expect(bad.statusCode).toBe(400);
+    } finally {
+      await server.close();
+    }
+  });
+
+  it('avatar routes: PUT stores, GET serves bytes with ETag, DELETE removes', async () => {
+    const loadedConfig = fixtureLoadedConfig(tempDir());
+    scaffoldProfile(loadedConfig.config.paths.profilesDir, 'painter');
+    const server = createMarifoldService({ loadedConfig, scheduler: false });
+    try {
+      const missing = await server.inject({ method: 'GET', url: '/v1/profiles/painter/avatar' });
+      expect(missing.statusCode).toBe(404);
+      expect(missing.json().error.code).toBe('AVATAR_NOT_FOUND');
+
+      const png = Buffer.from('not-a-real-png-but-bytes');
+      const put = await server.inject({
+        method: 'PUT',
+        url: '/v1/profiles/painter/avatar',
+        payload: { data: png.toString('base64'), mediaType: 'image/png' },
+      });
+      expect(put.statusCode).toBe(200);
+      expect(put.json().profile.avatar).toEqual({ mediaType: 'image/png' });
+
+      const got = await server.inject({ method: 'GET', url: '/v1/profiles/painter/avatar' });
+      expect(got.statusCode).toBe(200);
+      expect(got.headers['content-type']).toBe('image/png');
+      expect(got.rawPayload.equals(png)).toBe(true);
+      const etag = got.headers.etag as string;
+      expect(etag).toBeTruthy();
+
+      const cached = await server.inject({
+        method: 'GET',
+        url: '/v1/profiles/painter/avatar',
+        headers: { 'if-none-match': etag },
+      });
+      expect(cached.statusCode).toBe(304);
+
+      const badType = await server.inject({
+        method: 'PUT',
+        url: '/v1/profiles/painter/avatar',
+        payload: { data: png.toString('base64'), mediaType: 'image/tiff' },
+      });
+      expect(badType.statusCode).toBe(400);
+
+      const removed = await server.inject({ method: 'DELETE', url: '/v1/profiles/painter/avatar' });
+      expect(removed.statusCode).toBe(200);
+      expect(removed.json().removed).toBe(true);
+      expect(removed.json().profile.avatar).toBeUndefined();
+      expect((await server.inject({ method: 'GET', url: '/v1/profiles/painter/avatar' })).statusCode).toBe(404);
+
+      const unknown = await server.inject({ method: 'GET', url: '/v1/profiles/ghost/avatar' });
+      expect(unknown.statusCode).toBe(400); // PROFILE_INVALID from the up-front guard
+    } finally {
+      await server.close();
+    }
+  });
 });

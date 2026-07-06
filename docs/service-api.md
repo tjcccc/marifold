@@ -127,6 +127,10 @@ Responses are `{ "ok": true, ... }` unless noted. Bodies are JSON.
 |---|---|
 | `GET /v1/profiles` | Profile summaries |
 | `GET /v1/profiles/:name` | Profile detail (files, settings) |
+| `POST /v1/profiles` → 201 | Body `{ name }` — scaffold a new profile directory (PROFILE/RULES/CUSTOM.md + profile.toml, the `profile init` layout). Duplicate or invalid names are 400. Follow up with `PATCH` / avatar `PUT` for initial settings |
+| `GET /v1/profiles/:name/avatar` | Raw avatar image bytes (`content-type` = stored media type, `ETag` + `no-cache`; honors `If-None-Match` with 304). 404 `AVATAR_NOT_FOUND` when unset. Auth'd clients fetch with headers and render a blob URL (`<img src>` can't send a bearer token) |
+| `PUT /v1/profiles/:name/avatar` | Body `{ data: <base64>, mediaType }` — store the avatar (PNG/JPEG/WebP, ≤1 MB; replaces any previous one). Returns the fresh profile detail (summaries carry `avatar?: { mediaType }`) |
+| `DELETE /v1/profiles/:name/avatar` | `{ removed: boolean }` + fresh profile detail |
 | `PATCH /v1/profiles/:name` | Update per-profile settings. Optional fields: `mode` (`"agent"\|"chat"`), `provider`+`model` (both strings, or both `null` to clear the override), `memories`/`think` (`boolean\|null`), `maxContextTokens` (`int\|null`), `sessionContextTurns` (`int ≥ 0\|"all"\|null`), `approval` (`{ read\|write\|shell\|network\|delegate: "allow"\|"ask"\|"deny"\|null }` — `null` clears the override so the kind inherits again). Absent = untouched. Returns the fresh profile detail |
 | `PUT /v1/profiles/:name/files/:file` | Overwrite `PROFILE`/`RULES`/`CUSTOM.md` (`:file` ∈ `profile\|rules\|custom`); body `{ content }`. Returns the fresh profile detail |
 | `POST /v1/profiles/:name/trusted-folders` | Body `{ folder }` — add a trusted folder (safety refusals for broad/sensitive roots are 400) |
