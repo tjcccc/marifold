@@ -1,7 +1,7 @@
 {
   "version": 1,
   "projnaviVersion": "0.5.0",
-  "generatedAt": "2026-07-05T14:40:15.722Z",
+  "generatedAt": "2026-07-06T01:23:11.625Z",
   "root": ".",
   "files": {
     ".claude/skills/projnavi/SKILL.md": {
@@ -15,7 +15,7 @@
       "category": "docs"
     },
     "apps/web/package.json": {
-      "hash": "2c07263aa5fc4236d1e56878de5341c54af513804e31ec8484014283c825ff90",
+      "hash": "51dfd3618148562ce4af5d23818f89d3e25dd5a943f3bcbd4fc551afc4d27b5d",
       "size": 764,
       "category": "config"
     },
@@ -25,8 +25,8 @@
       "category": "docs"
     },
     "apps/web/src/api/chat.ts": {
-      "hash": "14ff4386577d92828950bc5952c9f4f86fa070dbd06a4cb0f3efd7893c7c3df5",
-      "size": 1688,
+      "hash": "421df0cf7dab2e1be57c6db2ffd1b36674a9dcb4e5c9039493e22ae0935f1eca",
+      "size": 1725,
       "category": "source"
     },
     "apps/web/src/api/client.ts": {
@@ -60,8 +60,8 @@
       "category": "source"
     },
     "apps/web/src/api/types.ts": {
-      "hash": "43d3f95535f03037617916efc23ec75e280ee4c70c12f7e9d6dc345c8d6cfb28",
-      "size": 2078,
+      "hash": "4e989b240ff5c369b88380c84f64a50c83f34e7e47a987049b169310653705ef",
+      "size": 2106,
       "category": "source"
     },
     "apps/web/src/App.tsx": {
@@ -72,6 +72,11 @@
     "apps/web/src/components/ConnectionPopover.tsx": {
       "hash": "1aa98a0e0f23107bc551601b84b766472998f68cc9415c4ab402cf1065bb73a9",
       "size": 2109,
+      "category": "source"
+    },
+    "apps/web/src/components/MarigoldLogo.tsx": {
+      "hash": "78acf33f7f12bea1df494f291e48d449435fe82162ae930e183b0e3bb86538c8",
+      "size": 1353,
       "category": "source"
     },
     "apps/web/src/components/Markdown.tsx": {
@@ -85,13 +90,18 @@
       "category": "source"
     },
     "apps/web/src/components/TopNav.tsx": {
-      "hash": "508f6e3019c808175987c20d72b7097caf0d7c0e8d261f240be0cd46dbea1166",
-      "size": 1692,
+      "hash": "7ee4d4ef711bdb83f49568ee5d559eea6ab5c2bea6ee5e337ef4e930ce6bd44f",
+      "size": 1779,
+      "category": "source"
+    },
+    "apps/web/src/lib/attachments.ts": {
+      "hash": "e4ff92168a2f4c935019c6c2cb8d794297d8969e929f40e5efee91ada45d0df6",
+      "size": 5084,
       "category": "source"
     },
     "apps/web/src/lib/format.ts": {
-      "hash": "59aecf3008276dcdf44f4cb7ae48ab20ad2badb3270052b1342947ed3e2ad959",
-      "size": 1774,
+      "hash": "a782d8872952a3d4ff9284270b544ad010076df936a3a9fbc780981f51c1ea72",
+      "size": 2147,
       "category": "source"
     },
     "apps/web/src/lib/hashRoute.ts": {
@@ -115,8 +125,8 @@
       "category": "source"
     },
     "apps/web/src/screens/agent/AgentScreen.tsx": {
-      "hash": "692a6826e13964b41cbccc9558003b2b6fe0bd07300341923c98ac4136b45cf9",
-      "size": 2473,
+      "hash": "d37e3d7cb8b503bcc72b0e6a7454da117a6310cb3cece6495e5a402e1af42a80",
+      "size": 4378,
       "category": "source"
     },
     "apps/web/src/screens/agent/ApprovalSheet.tsx": {
@@ -130,8 +140,8 @@
       "category": "source"
     },
     "apps/web/src/screens/agent/InputBar.tsx": {
-      "hash": "b3a9a84760b1617994d887cef287bb75fa349e86fb68d5f65a7bb318acb2a534",
-      "size": 3229,
+      "hash": "c06565ceacd3047ebeba2eea1ac67887a48cf603f4cd71a1763e2d80df12bf39",
+      "size": 5865,
       "category": "source"
     },
     "apps/web/src/screens/agent/ProfileSidebar.tsx": {
@@ -140,23 +150,28 @@
       "category": "source"
     },
     "apps/web/src/screens/agent/RunCard.tsx": {
-      "hash": "e96b58e9de7ffe6401885153b0da2f30f9a1fb93ab3895a19ce39e091da866b4",
-      "size": 6401,
+      "hash": "96d337e4a8964ddc28a0a75a8befe62e427d23751fc1a3882bb350fe22e593f2",
+      "size": 5860,
       "category": "source"
     },
     "apps/web/src/screens/agent/SessionList.tsx": {
-      "hash": "5400efc71b01b90193f58039ce0a090ee2e175a9519ec0ae63f34ccafdb7ffe0",
-      "size": 1764,
+      "hash": "a55ee7679d494e89a97a8e57a9dfea3271332d982216ddbb0b9e542d9173237f",
+      "size": 1807,
+      "category": "source"
+    },
+    "apps/web/src/screens/agent/ThreadHeader.tsx": {
+      "hash": "f1f3521123c0ec5a0c23cd0cd7abe062d96e728543ca3808dd79dffe40e496d8",
+      "size": 1581,
       "category": "source"
     },
     "apps/web/src/screens/agent/ThreadView.tsx": {
-      "hash": "118bb08b9997df1d11048ace8a6e984a4a22f2ac7f7526f8e803d52f04264a0e",
-      "size": 2833,
+      "hash": "bf2fe2f2b0015b80b3793f93ee52f1a4a6b8ba4f7ef362587f17010f4f2913b0",
+      "size": 5905,
       "category": "source"
     },
     "apps/web/src/screens/agent/useAgentController.ts": {
-      "hash": "f7d94cb08b5ac3f577b0245995145bd658bae988373edb83eadfca18edeb5e20",
-      "size": 12942,
+      "hash": "930801368a4d88bd5762531f491327330d5ebf974a4eb86aa0dfd131c531adac",
+      "size": 15027,
       "category": "source"
     },
     "apps/web/src/screens/apps/AppsScreen.tsx": {
@@ -190,8 +205,8 @@
       "category": "source"
     },
     "apps/web/src/state/thread.ts": {
-      "hash": "f43f70d1c00ec88d30eea8881d6747a9042b13b1b5813659d06725cda158f44c",
-      "size": 13321,
+      "hash": "b66d82df4a6ffd41698084d3171c7979a24edd7ef796c6a0e80e566f6aa7fb0e",
+      "size": 14654,
       "category": "source"
     },
     "apps/web/src/theme/theme.ts": {
@@ -225,13 +240,18 @@
       "category": "test"
     },
     "apps/web/tests/components/run.test.tsx": {
-      "hash": "9c437ad72f39ab00962362700433cb736ebe932b8871aa78d574376b27aac0a9",
-      "size": 6146,
+      "hash": "4b3a90102a6114df9e02717a55d15bae47f77baaa086646f714acbdff5a40f50",
+      "size": 9831,
       "category": "test"
     },
     "apps/web/tests/integration/service.e2e.test.ts": {
       "hash": "f6349eba897e93f872524553454b2bc5e56ac8bb7e167546d13ee55ccf669040",
       "size": 7385,
+      "category": "test"
+    },
+    "apps/web/tests/lib/attachments.test.ts": {
+      "hash": "a8bf299e0ff63e2c466f3003d6b2b56266d138fa88e05fa380555ddfe475144d",
+      "size": 2619,
       "category": "test"
     },
     "apps/web/tests/lib/lib.test.ts": {
@@ -240,8 +260,8 @@
       "category": "test"
     },
     "apps/web/tests/state/thread.test.ts": {
-      "hash": "bd929616f1964fe89c46f9e1b4d7964802a4eece38240e3b091250f9faaa433c",
-      "size": 7431,
+      "hash": "0d11446165fd882947b2be772cdd986777b1821153e8c9fc25936ca9821fa8a1",
+      "size": 10097,
       "category": "test"
     },
     "apps/web/tsconfig.json": {
@@ -265,8 +285,8 @@
       "category": "docs"
     },
     "DEVLOG.md": {
-      "hash": "ee5d429238b6159d50e7d4fca9c51065dec487606798fa9c3af7987cd6a04f4e",
-      "size": 73176,
+      "hash": "b0fcfda8ffe21528acf482de56385c5021a0a7965437cd8445248bac6f2acfbb",
+      "size": 76538,
       "category": "docs"
     },
     "docs/architecture.md": {
@@ -285,8 +305,8 @@
       "category": "docs"
     },
     "docs/service-api.md": {
-      "hash": "7ae0c03f08f00ece6a9c057ba6e3e1542d1a323ed250e526fe1c531f05160415",
-      "size": 15053,
+      "hash": "3990bacaac874867d0bb969fc58d954b5e995f207e9e432c6e896fd629a7ead2",
+      "size": 15581,
       "category": "docs"
     },
     "docs/skillapp.md": {
@@ -340,12 +360,12 @@
       "category": "docs"
     },
     "package.json": {
-      "hash": "286a08e73ecf6d5a19657371e35cc5d1cfcd09166834f6262e40c023deb842b8",
+      "hash": "2721e1f9dfeeeaa89548874f4b8d7ad074c865a79c88d3ac4fa6a8acde9c240b",
       "size": 855,
       "category": "config"
     },
     "packages/cli/package.json": {
-      "hash": "cd1c44fddb7df193047f368890131fbbfaff99c171b09fe40a9a88d6979cb351",
+      "hash": "607a6f9ccecdcf021949d55aa62b4316807920f32d01456331ee8f0ac0bb0b5b",
       "size": 738,
       "category": "config"
     },
@@ -430,7 +450,7 @@
       "category": "source"
     },
     "packages/cli/src/index.ts": {
-      "hash": "d933fdf151c8db68bd28708d5c052907c35333e233ee206fbeeeb57fe5366c82",
+      "hash": "84528b6e2ebe76f2d17f2894b997fed65f304fe893702650f9281bf48984e961",
       "size": 3570,
       "category": "source"
     },
@@ -480,7 +500,7 @@
       "category": "config"
     },
     "packages/core/package.json": {
-      "hash": "a3cbeae4b693bed9188c2ed13149bdb3101d22a81bbf82b1f2378aa723b8b88f",
+      "hash": "2024b86cf47151a2838937113054b9dea9093df2c36f327164ca1338e4eeed72",
       "size": 731,
       "category": "config"
     },
@@ -570,8 +590,8 @@
       "category": "source"
     },
     "packages/core/src/config/ConfigSchema.ts": {
-      "hash": "c0002d7d131e2703b46a813dba617d025fdeb089b208cf8df60efbedc36546fe",
-      "size": 7313,
+      "hash": "2f64a434d74363b3a67237a7364a9cb4707b3712de5674e636c9ba1f2ec50b93",
+      "size": 7488,
       "category": "source"
     },
     "packages/core/src/config/GitHubCopilotAuth.ts": {
@@ -635,8 +655,8 @@
       "category": "source"
     },
     "packages/core/src/runs/RunRegistry.ts": {
-      "hash": "4e439c476224c73b18750ad4bd0938a7adf0732840ce4a481dd6b9ee846269ef",
-      "size": 15872,
+      "hash": "e12e2b55172a8dbaa1ee6da6fca31cb2b813d41927fc48dd383a4a9db96db98a",
+      "size": 16056,
       "category": "source"
     },
     "packages/core/src/runtime/MarifoldRuntime.ts": {
@@ -680,8 +700,8 @@
       "category": "source"
     },
     "packages/core/src/sessions/SessionResolver.ts": {
-      "hash": "3ede5f0288f5bfde541ddbed588bc2278e4f3399bbb322b808ab30a37ea113c0",
-      "size": 11220,
+      "hash": "2de3c1d057dad800cb846bde7c104b87d2839d3b8c20c7157ab4fddc3ad1633c",
+      "size": 11834,
       "category": "source"
     },
     "packages/core/src/skill/index.ts": {
@@ -845,8 +865,8 @@
       "category": "test"
     },
     "packages/core/tests/SessionResolver.test.ts": {
-      "hash": "3af10807e3a2782348976ef4bfe0e63b8ed5a601b0fb67d41e8dccc9e1a62293",
-      "size": 2567,
+      "hash": "c155fadfb0e07996e0a2b36923b843ae9cbbe1b537b273a0265d689b4554bd0a",
+      "size": 3992,
       "category": "test"
     },
     "packages/core/tests/Skill.test.ts": {
@@ -880,7 +900,7 @@
       "category": "config"
     },
     "packages/service/package.json": {
-      "hash": "c8167bcba0199bb5b9ff4ee4c67f512ffc94f2ed996f58065a6969fd81d0ea63",
+      "hash": "11038d1d59a4e4d28690ab1da8b4c7b3d85c1a205b45cf5a2b408b1348884167",
       "size": 563,
       "category": "config"
     },
@@ -890,8 +910,8 @@
       "category": "source"
     },
     "packages/service/src/MarifoldService.ts": {
-      "hash": "207b08e4cc68d8e9f5edbd85cc03f8dbae44adf674f1d1885b6c51e5c90c60a9",
-      "size": 21471,
+      "hash": "df2828527fa99e509e3154ab2eb2335876ab099c2375834d50a31b55b021a4b0",
+      "size": 20432,
       "category": "source"
     },
     "packages/service/src/ProfileRoutes.ts": {
@@ -900,8 +920,8 @@
       "category": "source"
     },
     "packages/service/src/RunRoutes.ts": {
-      "hash": "e2a776838115de10db9c85a5fabd72989918ae63734e9c5272ac8e3d5a0cc1a1",
-      "size": 5069,
+      "hash": "9424f3a3ac194be07154ef812cb3452eef836fb1bd4535cc47f56b71b6a125cd",
+      "size": 5133,
       "category": "source"
     },
     "packages/service/src/Security.ts": {
@@ -920,8 +940,8 @@
       "category": "source"
     },
     "packages/service/src/Validation.ts": {
-      "hash": "210c914d331ffa7fca770ea58bb0d724dbd054e5b5d5935e579e6780c0baddde",
-      "size": 1945,
+      "hash": "23754e4820f68502d4c66e246ea73923125e73e849c5f890330a9baa77e26916",
+      "size": 3220,
       "category": "source"
     },
     "packages/service/tests/helpers.ts": {
@@ -940,8 +960,8 @@
       "category": "test"
     },
     "packages/service/tests/MarifoldServiceRuns.test.ts": {
-      "hash": "42aff44599a391c1f8639072bf2354b4bac3bf843edbd9bd003df832d2f33340",
-      "size": 14963,
+      "hash": "201aa30370729bdfaee415eaf79f951c8323847055b12bfdbfbe7c4b43c7f6df",
+      "size": 16011,
       "category": "test"
     },
     "packages/service/tests/MarifoldServiceSecurity.test.ts": {
@@ -960,7 +980,7 @@
       "category": "config"
     },
     "packages/tui/package.json": {
-      "hash": "e5cc42994e54c09a46bf276fff1789a8ddf72097b5fe7abe7bba846226b41b69",
+      "hash": "6dbfc61c7814af173966ce78726af0145bcb5c8eb1d70ec467b69ae04109b14e",
       "size": 688,
       "category": "config"
     },
@@ -1366,8 +1386,8 @@
       ]
     },
     "packages/core/src/config/ConfigSchema.ts": {
-      "hash": "c0002d7d131e2703b46a813dba617d025fdeb089b208cf8df60efbedc36546fe",
-      "size": 7313,
+      "hash": "2f64a434d74363b3a67237a7364a9cb4707b3712de5674e636c9ba1f2ec50b93",
+      "size": 7488,
       "category": "source",
       "claimIds": [
         "claim-config-sections-001"
@@ -1471,8 +1491,8 @@
       ]
     },
     "packages/service/src/MarifoldService.ts": {
-      "hash": "207b08e4cc68d8e9f5edbd85cc03f8dbae44adf674f1d1885b6c51e5c90c60a9",
-      "size": 21471,
+      "hash": "df2828527fa99e509e3154ab2eb2335876ab099c2375834d50a31b55b021a4b0",
+      "size": 20432,
       "category": "source",
       "claimIds": [
         "claim-schedule-001",
@@ -1481,7 +1501,7 @@
     }
   },
   "inventory": {
-    "summary": "Detected Node package @marifold/workspace. Indexed 230 relevant files. Detected 46 test files.",
+    "summary": "Detected Node package @marifold/workspace. Indexed 234 relevant files. Detected 47 test files.",
     "packageName": "@marifold/workspace",
     "packageScripts": [
       "agent-eval",
@@ -1503,8 +1523,8 @@
     "fileCounts": {
       "docs": 20,
       "config": 15,
-      "source": 149,
-      "test": 46
+      "source": 152,
+      "test": 47
     },
     "tests": [
       "apps/web/tests/api/client.test.ts",
@@ -1514,6 +1534,7 @@
       "apps/web/tests/components/config.test.tsx",
       "apps/web/tests/components/run.test.tsx",
       "apps/web/tests/integration/service.e2e.test.ts",
+      "apps/web/tests/lib/attachments.test.ts",
       "apps/web/tests/lib/lib.test.ts",
       "apps/web/tests/state/thread.test.ts",
       "packages/cli/tests/TerminalSelect.test.ts",

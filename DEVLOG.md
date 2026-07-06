@@ -2,6 +2,18 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-07-06 — v0.38.0 — Agent experience polish + attachments
+
+First of two user-review milestones on the Web UI MVP (items 1, 3, 7, 8, 9 of the review; v0.39.0 takes profiles/avatars/Config redesign/providers-models).
+
+- **Marigold logo** — the project's petal mark (from the user's SVG) inlined as a `currentColor` React component in the top nav (per-instance `useId` so multiple logos don't collide on the shared `<defs>` id) and as the tab favicon.
+- **Inline run meta (ChatGPT-style)** — run usage/duration moved out of the card: it renders as a muted `2s · 512 tokens · $0.01` suffix at the end of the run's response prose. A completed run with no tool rows/plan/steering/denials/errors gets **no card at all**; while such a run is still silent, an inline shimmer `Thinking…` line (with Cancel) stands in and comes down when prose streams. Failed/cancelled/blocked keep the card — status must stay visible. New `hasRunActivity`/`isTrivialRun` in `state/thread.ts`.
+- **White content pane** — surfaces split into chrome vs content: nav + sidebars share `--canvas` (the warm gray), the thread/config/apps panes sit on new `--content` (white in light, one step lighter than chrome in dark). Run cards moved to the full-strength separator so white-on-white reads.
+- **Thread header + collapsible sidebars** — `ThreadHeader` above the conversation: sidebar toggle (persisted `marifold.sidebars`), session title, `profile · mode`. Core: `SessionSummary.preview` — first user turn, whitespace-collapsed, ~80 chars, via a correlated subquery in `SessionResolver.list()` — now titles the session list and header (timestamp fallback).
+- **Attachments** — `RunStartInput.images` → RunRegistry → the runner's existing first-turn attach (chat/ask already had the wire field); the images validator moved to shared `Validation.ts`; fastify `bodyLimit` raised to 25 MiB for base64 payloads. Web: `+` picker, drag-drop onto the thread pane (overlay), paste-from-clipboard; images (PNG/JPEG/WebP/GIF, ≤4, ≤5 MB total) ride `images[]` on both chat and runs; text files (≤256 KB, MIME or extension) inline into the prompt as filename-headed fenced blocks (fence stretched past inner backticks); rejects surface as warn notices; user bubbles render thumbnails + file chips. Pure rules in `lib/attachments.ts`.
+- Verified: **380 tests** — core 222 (+1 preview), service 32 (+1 image→provider e2e), tui 43, cli 4, web 79 (+18: trivial-run matrix, thinking-line up/down, header, attachment classification table, fence stretching, caps). **Live** (built CLI on the user's real config, port 32155): static shell serves the new build; real sessions list with truncated previews; `POST /v1/runs` with a base64 1×1 red PNG → ollama `gemma4:e4b` answered "Red" (708 tokens). Field notes: the `-mlx` model variants ignore images (server-side, no vision path), and the `github_copilot/gpt-5.4-mini` default rejected the request entirely (`model_not_supported`) — attachment UX depends on picking a vision-capable model.
+- **Open:** light-theme knock-ons and the new header/collapse need the user's browser pass; sending attachments with an empty message is disallowed (text required); binary non-text files rejected by design. v0.39.0 = profiles & system config (avatars, create-profile sheet, 3-column Config, providers/models management).
+
 ## 2026-07-05 — v0.37.0 — Config editing: write routes, editable profile UI, CLI `config get`
 
 The Web UI's Config screen becomes a real editor (the v0.36.0 "read-only this milestone" promise), and config writes get one uniform surface across CLI and HTTP.
