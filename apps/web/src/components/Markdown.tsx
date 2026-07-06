@@ -40,6 +40,16 @@ function Block({ block }: { block: MarkdownBlock }) {
       ));
       return block.ordered ? <ol className={styles.list}>{items}</ol> : <ul className={styles.list}>{items}</ul>;
     }
+    case 'quote':
+      return (
+        <blockquote className={styles.quote}>
+          {block.blocks.map((inner, index) => (
+            <Block key={index} block={inner} />
+          ))}
+        </blockquote>
+      );
+    case 'rule':
+      return <hr className={styles.rule} />;
     case 'paragraph':
       return (
         <p className={styles.paragraph}>

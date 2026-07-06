@@ -31,7 +31,7 @@ export function TopNav({ view, onViewChange, theme, onThemeChange, onOpenConnect
     <header className={styles.bar}>
       <div className={styles.brand}>
         <span className={styles.logo}>
-          <MarigoldLogo size={20} />
+          <MarigoldLogo size={28} />
         </span>
         marifold
       </div>

@@ -3,7 +3,8 @@
  * rolled and DOM-free: the Markdown component renders the tree with React
  * elements, so no HTML string ever reaches innerHTML. Coverage matches what
  * models actually emit in chat: headings, paragraphs, fenced code, lists,
- * inline code/bold/italic, and http(s) links (anything else stays text).
+ * blockquotes, horizontal rules, inline code/bold/italic, and http(s) links
+ * (anything else stays text).
  */
 export type InlineNode =
   | { type: 'text'; text: string }
@@ -16,7 +17,9 @@ export type MarkdownBlock =
   | { type: 'heading'; level: number; inline: InlineNode[] }
   | { type: 'paragraph'; inline: InlineNode[] }
   | { type: 'code'; lang?: string; text: string }
-  | { type: 'list'; ordered: boolean; items: InlineNode[][] };
+  | { type: 'list'; ordered: boolean; items: InlineNode[][] }
+  | { type: 'quote'; blocks: MarkdownBlock[] }
+  | { type: 'rule' };
 
 export function parseMarkdown(source: string): MarkdownBlock[] {
   const blocks: MarkdownBlock[] = [];
@@ -51,6 +54,27 @@ export function parseMarkdown(source: string): MarkdownBlock[] {
       continue;
     }
 
+    if (/^\s*(?:---+|\*\*\*+|___+)\s*$/.test(line)) {
+      blocks.push({ type: 'rule' });
+      index += 1;
+      continue;
+    }
+
+    // Blockquote: strip one `>` marker per line and parse the inside as its
+    // own document (nested quotes/lists/code work for free). Consecutive `>`
+    // lines form one quote; a lazy continuation ends it (models rarely lazy-wrap).
+    if (quoteLine(line) !== undefined) {
+      const inner: string[] = [];
+      while (index < lines.length) {
+        const stripped = quoteLine(lines[index]);
+        if (stripped === undefined) break;
+        inner.push(stripped);
+        index += 1;
+      }
+      blocks.push({ type: 'quote', blocks: parseMarkdown(inner.join('\n')) });
+      continue;
+    }
+
     const listMatch = listItem(line);
     if (listMatch) {
       const ordered = listMatch.ordered;
@@ -73,6 +97,8 @@ export function parseMarkdown(source: string): MarkdownBlock[] {
       lines[index].trim() !== '' &&
       !/^```/.test(lines[index]) &&
       !/^#{1,6}\s/.test(lines[index]) &&
+      quoteLine(lines[index]) === undefined &&
+      !/^\s*(?:---+|\*\*\*+|___+)\s*$/.test(lines[index]) &&
       !listItem(lines[index])
     ) {
       paragraph.push(lines[index]);
@@ -82,6 +108,13 @@ export function parseMarkdown(source: string): MarkdownBlock[] {
   }
 
   return blocks;
+}
+
+/** The line's content with one leading `>` marker removed, or undefined when
+ * the line is not part of a blockquote. A bare `>` is an empty quote line. */
+function quoteLine(line: string): string | undefined {
+  const match = /^\s*>\s?(.*)$/.exec(line);
+  return match ? match[1] : undefined;
 }
 
 function listItem(line: string): { ordered: boolean; text: string } | undefined {

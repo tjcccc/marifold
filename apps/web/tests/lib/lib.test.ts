@@ -108,4 +108,24 @@ describe('markdown', () => {
     const blocks = parseMarkdown('```\nunterminated');
     expect(blocks).toEqual([{ type: 'code', text: 'unterminated' }]);
   });
+
+  it('parses blockquotes as their own block, even without a preceding blank line', () => {
+    // The exact shape from translation replies: a bold label line, then quote lines.
+    const blocks = parseMarkdown('**おすすめ：**\n> *Shanghai, 1920s.*\n> *Time changes. Beauty stays.*\n\nafter');
+    expect(blocks.map(b => b.type)).toEqual(['paragraph', 'quote', 'paragraph']);
+    const quote = blocks[1];
+    if (quote.type !== 'quote') throw new Error('expected quote');
+    expect(quote.blocks).toHaveLength(1);
+    expect(quote.blocks[0]).toMatchObject({ type: 'paragraph' });
+    // No literal '>' survives anywhere in the quote's text nodes.
+    expect(JSON.stringify(quote.blocks)).not.toContain('"> ');
+  });
+
+  it('parses nested quote content and horizontal rules', () => {
+    const blocks = parseMarkdown('> # Quoted heading\n> - a\n> - b\n\n---\n\ntail');
+    expect(blocks.map(b => b.type)).toEqual(['quote', 'rule', 'paragraph']);
+    const quote = blocks[0];
+    if (quote.type !== 'quote') throw new Error('expected quote');
+    expect(quote.blocks.map(b => b.type)).toEqual(['heading', 'list']);
+  });
 });
