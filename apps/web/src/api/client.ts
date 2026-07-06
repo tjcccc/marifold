@@ -18,6 +18,9 @@ export interface ApiClient {
   request<T>(method: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE', path: string, body?: unknown): Promise<T>;
   /** Open an SSE response; the caller consumes `response.body` via parseSse. */
   stream(path: string, init?: StreamInit): Promise<Response>;
+  /** Fetch binary content with auth (`<img src>` can't send a bearer token).
+   * undefined on 404; other failures throw. */
+  blob(path: string): Promise<Blob | undefined>;
 }
 
 export class MarifoldApiError extends Error {
@@ -89,7 +92,14 @@ export function createApiClient(options: ApiClientOptions = {}): ApiClient {
     return response;
   }
 
-  return { baseUrl, request, stream };
+  async function blob(path: string): Promise<Blob | undefined> {
+    const response = await fetch(`${baseUrl}${path}`, { headers: headers() });
+    if (response.status === 404) return undefined;
+    if (!response.ok) throw toApiError(response.status, await parseJson(response));
+    return response.blob();
+  }
+
+  return { baseUrl, request, stream, blob };
 }
 
 async function parseJson(response: Response): Promise<unknown> {

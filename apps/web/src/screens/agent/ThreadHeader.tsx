@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import styles from './ThreadHeader.module.css';
 
 export interface ThreadHeaderProps {
@@ -5,6 +6,8 @@ export interface ThreadHeaderProps {
   /** 'agent' | 'chat' — the effective profile mode. */
   profileMode?: string;
   sessionTitle: string;
+  /** Rendered avatar node (the screen owns the client wiring). */
+  avatar?: ReactNode;
   sidebarsHidden: boolean;
   onToggleSidebars: () => void;
 }
@@ -15,6 +18,7 @@ export function ThreadHeader({
   profileName,
   profileMode,
   sessionTitle,
+  avatar,
   sidebarsHidden,
   onToggleSidebars,
 }: ThreadHeaderProps) {
@@ -29,6 +33,7 @@ export function ThreadHeader({
       >
         <SidebarGlyph />
       </button>
+      {avatar}
       <div className={styles.titles}>
         <div className={styles.session}>{sessionTitle}</div>
         {profileName ? (

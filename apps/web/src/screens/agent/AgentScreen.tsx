@@ -1,5 +1,9 @@
 import { useMemo, useState } from 'react';
 import type { ApiClient } from '../../api/client';
+import type { CreateProfileInput } from '../../api/profiles';
+import { createProfileWithSetup } from '../../api/profiles';
+import { Avatar } from '../../components/Avatar';
+import { CreateProfileSheet } from '../../components/CreateProfileSheet';
 import type { Route } from '../../lib/hashRoute';
 import { CatchUpBanner } from './CatchUpBanner';
 import { InputBar } from './InputBar';
@@ -26,6 +30,27 @@ export function AgentScreen(props: AgentScreenProps) {
     () => localStorage.getItem(SIDEBARS_KEY) === 'hidden',
   );
   const [dropActive, setDropActive] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createBusy, setCreateBusy] = useState(false);
+  const [createError, setCreateError] = useState<string | undefined>();
+
+  async function submitCreateProfile(input: CreateProfileInput): Promise<void> {
+    setCreateBusy(true);
+    setCreateError(undefined);
+    try {
+      await createProfileWithSetup(props.client, input);
+      await controller.refreshProfiles();
+      setCreateOpen(false);
+      controller.selectProfile(input.name); // start chatting with the new profile
+    } catch (error) {
+      // The scaffold may have landed before a follow-up failed — refresh so
+      // the sidebar reflects reality either way.
+      await controller.refreshProfiles();
+      setCreateError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setCreateBusy(false);
+    }
+  }
 
   function toggleSidebars(): void {
     setSidebarsHidden(hidden => {
@@ -61,10 +86,15 @@ export function AgentScreen(props: AgentScreenProps) {
       {sidebarsHidden ? null : (
         <>
           <ProfileSidebar
+            client={props.client}
             profiles={controller.profiles}
             selected={controller.profileName}
             workingProfiles={workingProfiles}
             onSelect={controller.selectProfile}
+            onCreate={() => {
+              setCreateError(undefined);
+              setCreateOpen(true);
+            }}
           />
           <SessionList
             sessions={controller.sessions}
@@ -89,6 +119,18 @@ export function AgentScreen(props: AgentScreenProps) {
           profileName={controller.profileName}
           profileMode={controller.profileDetail?.settings.mode ?? 'agent'}
           sessionTitle={currentSession ? sessionTitle(currentSession) : 'New session'}
+          avatar={
+            controller.profileName ? (
+              <Avatar
+                client={props.client}
+                name={controller.profileName}
+                hasAvatar={controller.profiles.some(
+                  profile => profile.name === controller.profileName && profile.avatar !== undefined,
+                )}
+                size={26}
+              />
+            ) : undefined
+          }
           sidebarsHidden={sidebarsHidden}
           onToggleSidebars={toggleSidebars}
         />
@@ -117,6 +159,16 @@ export function AgentScreen(props: AgentScreenProps) {
           onSubmit={text => void controller.send(text)}
         />
       </div>
+      {createOpen ? (
+        <CreateProfileSheet
+          existingNames={controller.profiles.map(profile => profile.name)}
+          modelOptions={controller.modelOptions}
+          busy={createBusy}
+          error={createError}
+          onSubmit={input => void submitCreateProfile(input)}
+          onClose={() => setCreateOpen(false)}
+        />
+      ) : null}
     </div>
   );
 }

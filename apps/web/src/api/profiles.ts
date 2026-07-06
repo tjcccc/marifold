@@ -87,6 +87,62 @@ export async function removeTrustedFolder(client: ApiClient, name: string, folde
   return body.profile;
 }
 
+/** Scaffold a new profile (POST /v1/profiles). Duplicate/invalid names are 400. */
+export async function createProfile(client: ApiClient, name: string): Promise<ProfileDetail> {
+  const body = await client.request<{ profile: ProfileDetail }>('POST', '/v1/profiles', { name });
+  return body.profile;
+}
+
+export async function putAvatar(
+  client: ApiClient,
+  name: string,
+  data: string,
+  mediaType: string,
+): Promise<ProfileDetail> {
+  const body = await client.request<{ profile: ProfileDetail }>(
+    'PUT',
+    `/v1/profiles/${encodeURIComponent(name)}/avatar`,
+    { data, mediaType },
+  );
+  return body.profile;
+}
+
+export async function deleteAvatar(client: ApiClient, name: string): Promise<ProfileDetail> {
+  const body = await client.request<{ profile: ProfileDetail }>(
+    'DELETE',
+    `/v1/profiles/${encodeURIComponent(name)}/avatar`,
+  );
+  return body.profile;
+}
+
+/** Avatar bytes via the authorized client; undefined when the profile has none. */
+export async function fetchAvatarBlob(client: ApiClient, name: string): Promise<Blob | undefined> {
+  return client.blob(`/v1/profiles/${encodeURIComponent(name)}/avatar`);
+}
+
+export interface CreateProfileInput {
+  name: string;
+  mode?: ProfileMode;
+  /** "provider/model" pair; both or neither. */
+  provider?: string;
+  model?: string;
+  avatar?: { data: string; mediaType: string };
+}
+
+/** The create-sheet flow: scaffold, then apply the optional initial settings
+ * and avatar. Returns the final detail. Follow-up failures throw after the
+ * profile exists — callers should refresh their lists either way. */
+export async function createProfileWithSetup(client: ApiClient, input: CreateProfileInput): Promise<ProfileDetail> {
+  let detail = await createProfile(client, input.name);
+  const patch: ProfilePatchInput = {
+    ...(input.mode ? { mode: input.mode } : {}),
+    ...(input.provider && input.model ? { provider: input.provider, model: input.model } : {}),
+  };
+  if (Object.keys(patch).length > 0) detail = await updateProfile(client, input.name, patch);
+  if (input.avatar) detail = await putAvatar(client, input.name, input.avatar.data, input.avatar.mediaType);
+  return detail;
+}
+
 /** forget = supersede (recoverable); delete = permanent. Returns the fresh active list. */
 export async function deleteMemory(
   client: ApiClient,

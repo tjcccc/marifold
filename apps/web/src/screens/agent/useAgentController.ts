@@ -50,6 +50,7 @@ export interface AgentController {
   addFiles: (files: Iterable<File>) => Promise<void>;
   removeAttachment: (index: number) => void;
   send: (text: string) => Promise<void>;
+  refreshProfiles: () => Promise<void>;
   selectProfile: (name: string) => void;
   selectSession: (id: string) => void;
   newSession: () => void;
@@ -223,6 +224,14 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
     }, RUN_POLL_INTERVAL_MS);
     return () => clearInterval(timer);
   }, [sessionId, catchUpRuns]);
+
+  const refreshProfiles = useCallback(async () => {
+    try {
+      setProfiles(await listProfiles(client));
+    } catch {
+      // List refresh is cosmetic; ignore failures.
+    }
+  }, [client]);
 
   const refreshSessions = useCallback(async () => {
     if (!profileName) return;
@@ -432,6 +441,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
     addFiles,
     removeAttachment,
     send,
+    refreshProfiles,
     selectProfile,
     selectSession,
     newSession,

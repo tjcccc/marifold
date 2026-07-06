@@ -115,7 +115,7 @@ function longestBacktickRun(content: string): number {
   return longest;
 }
 
-async function fileToBase64(file: File): Promise<string> {
+export async function fileToBase64(file: File): Promise<string> {
   const bytes = new Uint8Array(await file.arrayBuffer());
   let binary = '';
   const chunk = 0x8000;

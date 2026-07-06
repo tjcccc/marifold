@@ -23,6 +23,9 @@ function scriptedClient(script: Array<Response | MarifoldApiError>): {
     request: async () => {
       throw new Error('not used');
     },
+    blob: async () => {
+      throw new Error('not used');
+    },
     stream: async (_path, init = {}) => {
       inits.push(init);
       const next = script.shift();

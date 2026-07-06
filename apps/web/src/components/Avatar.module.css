@@ -1,0 +1,16 @@
+.image {
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.initial {
+  border-radius: 50%;
+  background: var(--brand-fill);
+  color: var(--on-brand);
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}

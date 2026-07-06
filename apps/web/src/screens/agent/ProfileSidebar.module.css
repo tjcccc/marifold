@@ -9,12 +9,31 @@
 }
 
 .header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   padding: 14px 16px 8px;
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-3);
+}
+
+.newButton {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  font-size: 15px;
+  color: var(--text-2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.newButton:hover {
+  background: var(--separator-soft);
+  color: var(--text);
 }
 
 .list {
@@ -40,20 +59,6 @@
 
 .rowSelected {
   background: var(--brand-tint);
-}
-
-.avatar {
-  width: 32px;
-  height: 32px;
-  flex-shrink: 0;
-  border-radius: 50%;
-  background: var(--brand-fill);
-  color: var(--on-brand);
-  font-weight: 700;
-  font-size: 14px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
 }
 
 .meta {
