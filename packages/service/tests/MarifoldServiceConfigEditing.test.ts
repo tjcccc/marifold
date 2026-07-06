@@ -242,6 +242,98 @@ describe('config editing routes', () => {
     }
   });
 
+  it('model management: add/remove options and set the default; secrets stay off the wire', async () => {
+    const loadedConfig = fixtureLoadedConfig(tempDir());
+    const server = createMarifoldService({ loadedConfig, scheduler: false });
+    try {
+      // Add against the existing provider.
+      const added = await server.inject({
+        method: 'POST',
+        url: '/v1/models',
+        payload: { provider: 'ollama', model: 'llama4:8b' },
+      });
+      expect(added.statusCode).toBe(201);
+      expect(added.json().options).toContain('ollama/llama4:8b');
+
+      // Add with a brand-new provider entry (no secrets accepted, only the env name).
+      const remote = await server.inject({
+        method: 'POST',
+        url: '/v1/models',
+        payload: {
+          provider: 'myremote',
+          model: 'big-model',
+          type: 'openai-compatible',
+          baseUrl: 'https://llm.example.com/v1/',
+          apiKeyEnv: 'MYREMOTE_API_KEY',
+          apiKey: 'raw-secret-must-be-ignored',
+        },
+      });
+      expect(remote.statusCode).toBe(201);
+      const providers = (await server.inject({ method: 'GET', url: '/v1/providers' })).json().providers;
+      const myremote = providers.find((p: { name: string }) => p.name === 'myremote');
+      expect(myremote).toMatchObject({ type: 'openai-compatible', baseUrl: 'https://llm.example.com/v1' });
+      expect(myremote.hasApiKey ?? false).toBe(false); // the raw key was ignored
+      expect(JSON.stringify(myremote)).not.toContain('raw-secret');
+
+      const badType = await server.inject({
+        method: 'POST',
+        url: '/v1/models',
+        payload: { provider: 'x', model: 'y', type: 'grpc' },
+      });
+      expect(badType.statusCode).toBe(400);
+
+      // Default switch registers + persists.
+      const setDefault = await server.inject({
+        method: 'PUT',
+        url: '/v1/models/default',
+        payload: { provider: 'ollama', model: 'llama4:8b' },
+      });
+      expect(setDefault.statusCode).toBe(200);
+      expect(setDefault.json().default).toEqual({ provider: 'ollama', model: 'llama4:8b' });
+
+      // Remove: reports removed + wasDefault, leaves the default untouched.
+      const removed = await server.inject({
+        method: 'DELETE',
+        url: '/v1/models',
+        payload: { provider: 'ollama', model: 'llama4:8b' },
+      });
+      expect(removed.statusCode).toBe(200);
+      expect(removed.json()).toMatchObject({ removed: true, wasDefault: true });
+      expect(removed.json().options).not.toContain('ollama/llama4:8b');
+
+      const absent = await server.inject({
+        method: 'DELETE',
+        url: '/v1/models',
+        payload: { provider: 'ollama', model: 'never-there' },
+      });
+      expect(absent.json()).toMatchObject({ removed: false });
+    } finally {
+      await server.close();
+    }
+  });
+
+  it('provider status and live model listing stay sanitized and never throw', async () => {
+    const loadedConfig = fixtureLoadedConfig(tempDir());
+    const server = createMarifoldService({ loadedConfig, scheduler: false });
+    try {
+      const status = await server.inject({ method: 'GET', url: '/v1/providers/status' });
+      expect(status.statusCode).toBe(200);
+      const entries = status.json().providers;
+      expect(Array.isArray(entries)).toBe(true);
+      for (const entry of entries) {
+        expect(typeof entry.hasApiKey).toBe('boolean');
+        expect(entry.apiKey).toBeUndefined();
+        expect(entry.oauthToken).toBeUndefined();
+      }
+
+      const unknown = await server.inject({ method: 'GET', url: '/v1/providers/ghost/models' });
+      expect(unknown.statusCode).toBe(200);
+      expect(unknown.json()).toMatchObject({ provider: 'ghost', models: [] });
+    } finally {
+      await server.close();
+    }
+  });
+
   it('avatar routes: PUT stores, GET serves bytes with ETag, DELETE removes', async () => {
     const loadedConfig = fixtureLoadedConfig(tempDir());
     scaffoldProfile(loadedConfig.config.paths.profilesDir, 'painter');

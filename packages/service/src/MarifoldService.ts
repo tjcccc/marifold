@@ -166,6 +166,19 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
       })),
   }));
 
+  // Live reachability probe for every provider (CLI `provider status`).
+  // Sanitized: key/token presence booleans and env-var *names* only.
+  server.get('/v1/providers/status', async () => ({
+    ok: true,
+    providers: await runtime.providerStatus(),
+  }));
+
+  // Models the provider actually serves right now (feeds the model picker).
+  server.get<{ Params: { name: string } }>('/v1/providers/:name/models', async request => ({
+    ok: true,
+    ...(await runtime.listProviderModels(request.params.name)),
+  }));
+
   server.get('/v1/models', async () => ({
     ok: true,
     default: {
@@ -174,6 +187,35 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
     },
     options: [...options.loadedConfig.config.models.options],
   }));
+
+  // Model management (CLI `model add`/`rm`/`default`). Provider entries may be
+  // created/updated here, but never with secrets — raw api_key values stay
+  // CLI/file-only by design; the wire accepts the env-var *name* at most.
+  server.post('/v1/models', async (request, reply) => {
+    const body = objectBody(request.body);
+    runtime.addModelOption(requiredString(body.provider, 'provider'), requiredString(body.model, 'model'), {
+      ...(body.type !== undefined ? { type: parseProviderTypeField(body.type) } : {}),
+      ...optionalStringField('baseUrl', body.baseUrl),
+      ...optionalStringField('apiKeyEnv', body.apiKeyEnv),
+    });
+    reply.status(201);
+    return modelsView(options.loadedConfig);
+  });
+
+  server.delete('/v1/models', async request => {
+    const body = objectBody(request.body);
+    const result = runtime.removeModelOption(
+      requiredString(body.provider, 'provider'),
+      requiredString(body.model, 'model'),
+    );
+    return { ...modelsView(options.loadedConfig), ...result };
+  });
+
+  server.put('/v1/models/default', async request => {
+    const body = objectBody(request.body);
+    runtime.setDefaultModel(requiredString(body.provider, 'provider'), requiredString(body.model, 'model'));
+    return modelsView(options.loadedConfig);
+  });
 
   server.get('/v1/profiles', async () => ({
     ok: true,
@@ -407,6 +449,27 @@ function parseTaskListOptions(query: { status?: string; limit?: string }): TaskL
   return {
     ...(query.status === undefined ? {} : { status: taskStatus(query.status) }),
     ...(query.limit === undefined ? {} : { limit: parseLimitQuery(query.limit) }),
+  };
+}
+
+const PROVIDER_TYPES = ['ollama', 'openai-compatible', 'anthropic'] as const;
+
+function parseProviderTypeField(value: unknown): (typeof PROVIDER_TYPES)[number] {
+  const type = stringValue(value, 'type');
+  const known = PROVIDER_TYPES.find(candidate => candidate === type);
+  if (!known) throw MarifoldError.configInvalid(`type must be one of ${PROVIDER_TYPES.join(', ')}.`);
+  return known;
+}
+
+/** The GET /v1/models payload — returned by every model write for refresh-free clients. */
+function modelsView(loadedConfig: LoadedMarifoldConfig): JsonObject {
+  return {
+    ok: true,
+    default: {
+      provider: loadedConfig.config.default.provider,
+      model: loadedConfig.config.default.model,
+    },
+    options: [...loadedConfig.config.models.options],
   };
 }
 

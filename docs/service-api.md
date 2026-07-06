@@ -119,7 +119,12 @@ Responses are `{ "ok": true, ... }` unless noted. Bodies are JSON.
 | `GET /v1/config` | Sanitized config — secrets are replaced by `hasApiKey`-style booleans; includes the resolved `agent` section (approval defaults, trusted folders) and a sanitized `service` view (`webDir?`, `tokenEnv?`, `corsOrigins`, `hasToken`) |
 | `PATCH /v1/config` | Body `{ key, value }` (both strings) — sets one dotted config key with **exactly** the CLI `config set` routing and validation (`default.*`, `paths.*`, `memory.*`, `service.*`, `providers.<name>.*`; `service.cors_origins` takes a comma-separated list, `""` clears optional keys). Returns the sanitized config |
 | `GET /v1/providers` | `providers: [{ name, type, baseUrl?, hasApiKey, hasOauthToken, ... }]` |
+| `GET /v1/providers/status` | Live reachability probe per provider (CLI `provider status`): adds `configured`, `reachable` (`null` = not probeable), `models`, `message`. Sanitized — key/token presence booleans and env-var *names* only |
+| `GET /v1/providers/:name/models` | Models the provider serves right now (feeds model pickers): `{ provider, reachable, models, message }`. Never errors — unconfigured/unreachable providers return an empty list with a message |
 | `GET /v1/models` | `default: { provider, model }` and saved `options: ["provider/model", ...]` |
+| `POST /v1/models` → 201 | Body `{ provider, model, type?, baseUrl?, apiKeyEnv? }` — add a saved option, creating/updating the provider entry (CLI `model add`). **Raw `api_key` values are not accepted over the wire** — set the env-var name and keep secrets in the environment or config file. Returns the models view |
+| `DELETE /v1/models` | Body `{ provider, model }` — remove a saved option; `{ removed, wasDefault }` (the default itself is left untouched) |
+| `PUT /v1/models/default` | Body `{ provider, model }` — set the global default (also registers the option). Returns the models view |
 
 ### Profiles and memories
 

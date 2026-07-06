@@ -10,7 +10,9 @@ import { WriteFileTool } from '../agent/tools/WriteFileTool';
 import { AgentTool, ToolRegistry } from '../agent/ToolRegistry';
 import { ChatGptRefreshedTokens, refreshChatGptAccessToken } from '../config/ChatGptTokenRefresh';
 import { ConfigManager } from '../config/ConfigManager';
-import { LoadedMarifoldConfig, ProfileDetail, ProfileMode, ProfileSummary, resolveWebSearchConfig, SessionDetail, SessionSummary } from '../config/ConfigSchema';
+import { LoadedMarifoldConfig, ProfileDetail, ProfileMode, ProfileSummary, ProviderType, resolveWebSearchConfig, SessionDetail, SessionSummary } from '../config/ConfigSchema';
+import { ProviderInspector } from '../config/ProviderInspector';
+import type { ProviderModelList, ProviderStatus } from '../config/ProviderInspector';
 import { exchangeGitHubTokenForCopilotToken } from '../config/GitHubCopilotAuth';
 import { createSearchBackend } from '../search/createSearchBackend';
 import { formatSearchResults, SearchBackend } from '../search/SearchBackend';
@@ -353,6 +355,34 @@ export class MarifoldRuntime {
   /** Read a config value by dotted key (CLI `config get`). */
   getConfigValue(key: string): string | undefined {
     return new ConfigManager(this.options.loadedConfig).getValue(key);
+  }
+
+  /** Reachability + sanitized config for every provider (CLI `provider status`). */
+  providerStatus(): Promise<ProviderStatus[]> {
+    return new ProviderInspector(this.options.loadedConfig).status();
+  }
+
+  /** Models a provider actually serves right now (CLI `model list --live`). */
+  listProviderModels(provider: string): Promise<ProviderModelList> {
+    return new ProviderInspector(this.options.loadedConfig).listModels(provider);
+  }
+
+  /** Add a saved provider/model option (creating/updating the provider entry;
+   * secrets are not part of this surface — CLI/file only). */
+  addModelOption(provider: string, model: string, options: { type?: ProviderType; baseUrl?: string; apiKeyEnv?: string } = {}): void {
+    new ConfigManager(this.options.loadedConfig).addModel(provider, model, options);
+  }
+
+  /** Remove a saved provider/model option. Returns whether it was present and
+   * whether it was the current default (left untouched either way). */
+  removeModelOption(provider: string, model: string): { removed: boolean; wasDefault: boolean } {
+    const result = new ConfigManager(this.options.loadedConfig).removeModel(provider, model);
+    return { removed: result.removed, wasDefault: result.wasDefault };
+  }
+
+  /** Set the global default provider/model (also registers the option). */
+  setDefaultModel(provider: string, model: string): void {
+    new ConfigManager(this.options.loadedConfig).setDefaultModel(model, provider);
   }
 
   /** Supersede exactly one memory entry by id (per-row Forget — recoverable). */
