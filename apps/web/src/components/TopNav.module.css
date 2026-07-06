@@ -16,11 +16,9 @@
   letter-spacing: -0.01em;
 }
 
-.dot {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: var(--brand-fill);
+.logo {
+  display: inline-flex;
+  color: var(--brand-fill);
 }
 
 .actions {

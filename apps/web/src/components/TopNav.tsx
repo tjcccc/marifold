@@ -1,5 +1,6 @@
 import type { ThemePreference } from '../theme/theme';
 import { nextThemePreference } from '../theme/theme';
+import { MarigoldLogo } from './MarigoldLogo';
 import { SegmentedControl } from './SegmentedControl';
 import styles from './TopNav.module.css';
 
@@ -29,7 +30,9 @@ export function TopNav({ view, onViewChange, theme, onThemeChange, onOpenConnect
   return (
     <header className={styles.bar}>
       <div className={styles.brand}>
-        <span className={styles.dot} aria-hidden />
+        <span className={styles.logo}>
+          <MarigoldLogo size={20} />
+        </span>
         marifold
       </div>
       <SegmentedControl options={VIEWS} value={view} onChange={onViewChange} aria-label="View" />
