@@ -8,6 +8,7 @@ import type { RunApprovalAction } from '../../src/api/types';
 import type { RunCardState } from '../../src/state/thread';
 import { InputBar } from '../../src/screens/agent/InputBar';
 import { RunCard } from '../../src/screens/agent/RunCard';
+import { ThreadHeader } from '../../src/screens/agent/ThreadHeader';
 import { ThreadView } from '../../src/screens/agent/ThreadView';
 
 function cardFixture(partial: Partial<RunCardState> = {}): RunCardState {
@@ -141,6 +142,25 @@ describe('InputBar', () => {
       />,
     );
     expect(screen.getByPlaceholderText(/guidance is picked up mid-task/)).toBeTruthy();
+  });
+});
+
+describe('ThreadHeader', () => {
+  it('shows the session title with profile · mode, and toggles the sidebars', () => {
+    const onToggle = vi.fn();
+    render(
+      <ThreadHeader
+        profileName="default"
+        profileMode="agent"
+        sessionTitle="Please summarize my notes"
+        sidebarsHidden={false}
+        onToggleSidebars={onToggle}
+      />,
+    );
+    expect(screen.getByText('Please summarize my notes')).toBeTruthy();
+    expect(screen.getByText('default · agent')).toBeTruthy();
+    fireEvent.click(screen.getByLabelText('Hide sidebars'));
+    expect(onToggle).toHaveBeenCalledOnce();
   });
 });
 

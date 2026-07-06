@@ -38,8 +38,9 @@ export function SessionList({ sessions, selected, onSelect, onNew }: SessionList
   );
 }
 
-/** Sessions have no title field yet — a readable timestamp is the default name. */
-function sessionTitle(session: SessionSummary): string {
+/** First-message preview when the server has one; timestamp otherwise. */
+export function sessionTitle(session: SessionSummary): string {
+  if (session.preview) return session.preview;
   const created = new Date(session.createdAt);
   if (Number.isNaN(created.getTime())) return session.id.slice(0, 8);
   return created.toLocaleString(undefined, {
