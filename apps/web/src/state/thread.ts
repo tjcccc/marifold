@@ -45,8 +45,17 @@ export interface RunCardState {
   collapsed: boolean;
 }
 
+/** What the user bubble shows for an attachment; the payload itself goes to
+ * the service (images) or is inlined into the prompt (text files). */
+export interface UserAttachment {
+  kind: 'image' | 'text';
+  name: string;
+  /** data: URL thumbnail for images. */
+  previewUrl?: string;
+}
+
 export type ThreadItem =
-  | { id: string; kind: 'user'; text: string }
+  | { id: string; kind: 'user'; text: string; attachments?: UserAttachment[] }
   | { id: string; kind: 'assistant'; markdown: string; streaming?: boolean; runId?: string }
   | { id: string; kind: 'run'; run: RunCardState }
   | { id: string; kind: 'notice'; tone: 'info' | 'warn' | 'error'; text: string };
@@ -62,7 +71,7 @@ export interface ThreadState {
 export type ThreadAction =
   | { type: 'reset'; sessionId?: string }
   | { type: 'session_loaded'; turns: Array<{ role: 'user' | 'assistant'; content: string }> }
-  | { type: 'user_message'; text: string }
+  | { type: 'user_message'; text: string; attachments?: UserAttachment[] }
   | { type: 'chat_started' }
   | { type: 'chat_chunk'; text: string }
   | { type: 'chat_done' }
@@ -130,7 +139,11 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
     }
 
     case 'user_message':
-      return append(state, { kind: 'user', text: action.text });
+      return append(state, {
+        kind: 'user',
+        text: action.text,
+        ...(action.attachments && action.attachments.length > 0 ? { attachments: action.attachments } : {}),
+      });
 
     case 'chat_started':
       return append(state, { kind: 'assistant', markdown: '', streaming: true });

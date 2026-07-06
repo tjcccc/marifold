@@ -1,6 +1,6 @@
 import type { ApiClient } from './client';
 import { parseSse } from './sse';
-import type { ChatStreamEvent } from './types';
+import type { ChatStreamEvent, ImageInput } from './types';
 
 export interface ChatRequest {
   prompt: string;
@@ -10,6 +10,7 @@ export interface ChatRequest {
   sessionId?: string;
   memories?: boolean;
   think?: boolean;
+  images?: ImageInput[];
 }
 
 /**

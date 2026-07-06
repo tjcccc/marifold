@@ -109,3 +109,72 @@
   opacity: 0.45;
   cursor: default;
 }
+
+.attach {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  align-self: flex-end;
+  margin-bottom: 1px;
+  border-radius: 50%;
+  font-size: 17px;
+  color: var(--text-2);
+  background: var(--surface-2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.attach:hover {
+  color: var(--text);
+  background: var(--separator-soft);
+}
+
+.fileInput {
+  display: none;
+}
+
+.chips {
+  max-width: 760px;
+  margin: 0 auto 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px 4px 4px;
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  border: 1px solid var(--separator);
+  font-size: 12px;
+  color: var(--text-2);
+  max-width: 240px;
+}
+
+.chipThumb {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+}
+
+.chipName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chipRemove {
+  color: var(--text-3);
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 2px;
+}
+
+.chipRemove:hover {
+  color: var(--danger);
+}

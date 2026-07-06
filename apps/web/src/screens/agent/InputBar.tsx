@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import type { PreparedAttachment } from '../../lib/attachments';
 import styles from './InputBar.module.css';
 
 export interface InputBarProps {
@@ -11,13 +12,22 @@ export interface InputBarProps {
   /** undefined = Auto (profile/config default). */
   modelChoice?: string;
   onSelectModel: (choice?: string) => void;
+  attachments?: PreparedAttachment[];
+  onAttachFiles?: (files: File[]) => void;
+  onRemoveAttachment?: (index: number) => void;
   onSubmit: (text: string) => void;
 }
 
-/** The composer (design 1a): textarea, Think pill, model chip, marigold send. */
+/** The composer (design 1a): attach +, textarea, Think pill, model chip,
+ * marigold send. Files arrive via the picker or paste; drops land on the
+ * whole thread pane (AgentScreen). */
 export function InputBar(props: InputBarProps) {
   const [text, setText] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const attachments = props.attachments ?? [];
+  // Steering rides an active run — attachments can't join mid-task.
+  const canAttach = props.onAttachFiles !== undefined && !props.steering;
 
   function submit(): void {
     const value = text.trim();
@@ -35,6 +45,14 @@ export function InputBar(props: InputBarProps) {
     }
   }
 
+  function onPaste(event: React.ClipboardEvent<HTMLTextAreaElement>): void {
+    if (!canAttach) return;
+    const files = [...event.clipboardData.files];
+    if (files.length === 0) return;
+    event.preventDefault();
+    props.onAttachFiles?.(files);
+  }
+
   function autosize(node: HTMLTextAreaElement): void {
     node.style.height = 'auto';
     node.style.height = `${Math.min(node.scrollHeight, 160)}px`;
@@ -42,7 +60,56 @@ export function InputBar(props: InputBarProps) {
 
   return (
     <div className={styles.wrap}>
+      {attachments.length > 0 ? (
+        <div className={styles.chips}>
+          {attachments.map((attachment, index) => (
+            <span key={`${attachment.name}_${index}`} className={styles.chip}>
+              {attachment.kind === 'image' ? (
+                <img
+                  className={styles.chipThumb}
+                  src={`data:${attachment.mediaType};base64,${attachment.data}`}
+                  alt={attachment.name}
+                />
+              ) : (
+                <span aria-hidden>📄</span>
+              )}
+              <span className={styles.chipName}>{attachment.name}</span>
+              <button
+                className={styles.chipRemove}
+                aria-label={`Remove ${attachment.name}`}
+                onClick={() => props.onRemoveAttachment?.(index)}
+              >
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+      ) : null}
       <div className={styles.bar}>
+        {canAttach ? (
+          <>
+            <button
+              className={styles.attach}
+              title="Attach files or images"
+              aria-label="Attach files or images"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              +
+            </button>
+            <input
+              ref={fileInputRef}
+              className={styles.fileInput}
+              type="file"
+              multiple
+              accept="image/png,image/jpeg,image/webp,image/gif,text/*,.md,.json,.yaml,.yml,.toml,.csv,.ts,.tsx,.js,.jsx,.py,.sh,.log,.xml,.html,.css,.sql"
+              onChange={event => {
+                const files = [...(event.target.files ?? [])];
+                if (files.length > 0) props.onAttachFiles?.(files);
+                event.target.value = '';
+              }}
+            />
+          </>
+        ) : null}
         <textarea
           ref={textareaRef}
           className={styles.input}
@@ -56,6 +123,7 @@ export function InputBar(props: InputBarProps) {
             autosize(event.target);
           }}
           onKeyDown={onKeyDown}
+          onPaste={onPaste}
         />
         <div className={styles.controls}>
           <button

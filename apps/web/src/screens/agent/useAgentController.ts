@@ -14,8 +14,10 @@ import type {
   SessionSummary,
 } from '../../api/types';
 import type { Route } from '../../lib/hashRoute';
+import type { PreparedAttachment } from '../../lib/attachments';
+import { inlineTextAttachments, prepareFiles } from '../../lib/attachments';
 import { RunFollowers } from '../../state/followers';
-import type { ThreadState } from '../../state/thread';
+import type { ThreadState, UserAttachment } from '../../state/thread';
 import { activeRun, createThreadState, threadReducer } from '../../state/thread';
 
 const RUN_POLL_INTERVAL_MS = 10_000;
@@ -43,6 +45,10 @@ export interface AgentController {
   /** "provider/model" or undefined = Auto (profile/config default). */
   modelChoice?: string;
   setModelChoice: (choice?: string) => void;
+  /** Prepared attachments for the next message (cleared on send). */
+  attachments: PreparedAttachment[];
+  addFiles: (files: Iterable<File>) => Promise<void>;
+  removeAttachment: (index: number) => void;
   send: (text: string) => Promise<void>;
   selectProfile: (name: string) => void;
   selectSession: (id: string) => void;
@@ -73,6 +79,10 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
   const [thread, dispatch] = useReducer(threadReducer, undefined, () => createThreadState(route.session));
   const threadRef = useRef(thread);
   threadRef.current = thread;
+
+  const [attachments, setAttachments] = useState<PreparedAttachment[]>([]);
+  const attachmentsRef = useRef(attachments);
+  attachmentsRef.current = attachments;
 
   const profileName = route.profile;
 
@@ -252,6 +262,18 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
     navigate({ view: 'agent', profile: profileName, session: id });
   }, [profileName, followers, navigate]);
 
+  const addFiles = useCallback(async (files: Iterable<File>) => {
+    const result = await prepareFiles(files, attachmentsRef.current);
+    for (const reason of result.rejected) {
+      dispatch({ type: 'notice', tone: 'warn', text: reason });
+    }
+    if (result.accepted.length > 0) setAttachments(prev => [...prev, ...result.accepted]);
+  }, []);
+
+  const removeAttachment = useCallback((index: number) => {
+    setAttachments(prev => prev.filter((_, i) => i !== index));
+  }, []);
+
   const send = useCallback(
     async (text: string) => {
       const trimmed = text.trim();
@@ -274,7 +296,24 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
         navigate({ view: 'agent', profile: profileName, session: sid });
       }
 
-      dispatch({ type: 'user_message', text: trimmed });
+      // Consume the pending attachments: images ride the request natively,
+      // text files are inlined into the prompt as fenced blocks.
+      const pending = attachmentsRef.current;
+      setAttachments([]);
+      const images = pending
+        .filter((item): item is Extract<PreparedAttachment, { kind: 'image' }> => item.kind === 'image')
+        .map(item => ({ data: item.data, mediaType: item.mediaType }));
+      const textFiles = pending.filter(
+        (item): item is Extract<PreparedAttachment, { kind: 'text' }> => item.kind === 'text',
+      );
+      const prompt = inlineTextAttachments(trimmed, textFiles);
+      const bubbleAttachments: UserAttachment[] = pending.map(item =>
+        item.kind === 'image'
+          ? { kind: 'image', name: item.name, previewUrl: `data:${item.mediaType};base64,${item.data}` }
+          : { kind: 'text', name: item.name },
+      );
+
+      dispatch({ type: 'user_message', text: trimmed, attachments: bubbleAttachments });
       const [provider, model] = splitModelChoice(modelChoice);
       const mode = profileDetail?.settings.mode ?? 'agent';
 
@@ -283,12 +322,13 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
         dispatch({ type: 'chat_started' });
         try {
           for await (const event of streamChat(client, {
-            prompt: trimmed,
+            prompt,
             profile: profileName,
             sessionId: sid,
             think,
             provider,
             model,
+            ...(images.length > 0 ? { images } : {}),
           })) {
             if (event.type === 'chunk') dispatch({ type: 'chat_chunk', text: event.text });
             else if (event.type === 'error') dispatch({ type: 'chat_error', message: event.message });
@@ -307,12 +347,13 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
       try {
         setSending(true);
         const run = await startRun(client, {
-          objective: trimmed,
+          objective: prompt,
           profile: profileName,
           sessionId: sid,
           think,
           provider,
           model,
+          ...(images.length > 0 ? { images } : {}),
         });
         dispatch({ type: 'run_created', run });
         followers.attach(run.id);
@@ -387,6 +428,9 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
     modelOptions,
     modelChoice,
     setModelChoice,
+    attachments,
+    addFiles,
+    removeAttachment,
     send,
     selectProfile,
     selectSession,

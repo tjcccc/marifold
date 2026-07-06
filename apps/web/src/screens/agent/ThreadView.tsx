@@ -79,7 +79,29 @@ function ThreadItemView({
 } & Pick<ThreadViewProps, 'onCancelRun' | 'onAnswerApproval' | 'onToggleRun'>) {
   switch (item.kind) {
     case 'user':
-      return <div className={styles.userBubble}>{item.text}</div>;
+      return (
+        <div className={styles.userTurn}>
+          {item.attachments && item.attachments.length > 0 ? (
+            <div className={styles.userAttachments}>
+              {item.attachments.map((attachment, index) =>
+                attachment.kind === 'image' && attachment.previewUrl ? (
+                  <img
+                    key={index}
+                    className={styles.userImage}
+                    src={attachment.previewUrl}
+                    alt={attachment.name}
+                  />
+                ) : (
+                  <span key={index} className={styles.userFile}>
+                    <span aria-hidden>📄</span> {attachment.name}
+                  </span>
+                ),
+              )}
+            </div>
+          ) : null}
+          <div className={styles.userBubble}>{item.text}</div>
+        </div>
+      );
     case 'assistant': {
       const run = item.runId ? runs.get(item.runId) : undefined;
       const meta = run && run.status !== 'running' ? runMetaText(run) : undefined;

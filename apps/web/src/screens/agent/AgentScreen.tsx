@@ -25,12 +25,27 @@ export function AgentScreen(props: AgentScreenProps) {
   const [sidebarsHidden, setSidebarsHidden] = useState(
     () => localStorage.getItem(SIDEBARS_KEY) === 'hidden',
   );
+  const [dropActive, setDropActive] = useState(false);
 
   function toggleSidebars(): void {
     setSidebarsHidden(hidden => {
       localStorage.setItem(SIDEBARS_KEY, hidden ? 'shown' : 'hidden');
       return !hidden;
     });
+  }
+
+  function onDragOver(event: React.DragEvent): void {
+    if (![...event.dataTransfer.types].includes('Files')) return;
+    event.preventDefault();
+    setDropActive(true);
+  }
+
+  function onDrop(event: React.DragEvent): void {
+    if (![...event.dataTransfer.types].includes('Files')) return;
+    event.preventDefault();
+    setDropActive(false);
+    const files = [...event.dataTransfer.files];
+    if (files.length > 0) void controller.addFiles(files);
   }
 
   const workingProfiles = useMemo(() => {
@@ -59,7 +74,17 @@ export function AgentScreen(props: AgentScreenProps) {
           />
         </>
       )}
-      <div className={styles.threadPane}>
+      <div
+        className={styles.threadPane}
+        onDragOver={onDragOver}
+        onDragLeave={() => setDropActive(false)}
+        onDrop={onDrop}
+      >
+        {dropActive ? (
+          <div className={styles.dropOverlay} aria-hidden>
+            Drop to attach
+          </div>
+        ) : null}
         <ThreadHeader
           profileName={controller.profileName}
           profileMode={controller.profileDetail?.settings.mode ?? 'agent'}
@@ -86,6 +111,9 @@ export function AgentScreen(props: AgentScreenProps) {
           modelOptions={controller.modelOptions}
           modelChoice={controller.modelChoice}
           onSelectModel={controller.setModelChoice}
+          attachments={controller.attachments}
+          onAttachFiles={files => void controller.addFiles(files)}
+          onRemoveAttachment={controller.removeAttachment}
           onSubmit={text => void controller.send(text)}
         />
       </div>

@@ -194,6 +194,22 @@ describe('threadReducer', () => {
     expect(card(state).collapsed).toBe(false);
   });
 
+  it('user messages carry attachment summaries for the bubble', () => {
+    const state = reduce(createThreadState(), {
+      type: 'user_message',
+      text: 'What is this?',
+      attachments: [{ kind: 'image', name: 'shot.png', previewUrl: 'data:image/png;base64,AAA' }],
+    });
+    expect(state.items[0]).toMatchObject({
+      kind: 'user',
+      text: 'What is this?',
+      attachments: [{ kind: 'image', name: 'shot.png' }],
+    });
+    // Empty lists stay off the item entirely.
+    const bare = reduce(createThreadState(), { type: 'user_message', text: 'hi', attachments: [] });
+    expect('attachments' in bare.items[0]).toBe(false);
+  });
+
   it('classifies trivial runs: completed without activity, never failed ones', () => {
     // A run that only produced text and finished — nothing card-worthy.
     let state = reduce(
