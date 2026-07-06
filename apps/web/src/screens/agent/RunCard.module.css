@@ -1,7 +1,8 @@
 .card,
 .cardRunning {
   background: var(--surface);
-  border: 1px solid var(--separator-soft);
+  /* Full-strength separator: the card is white on the white content pane. */
+  border: 1px solid var(--separator);
   border-radius: var(--radius-lg);
   padding: 12px 14px;
   display: flex;

@@ -18,8 +18,11 @@
   --brand-tint: light-dark(rgba(234, 162, 33, 0.14), rgba(240, 175, 58, 0.16));
   --brand-shadow: rgba(234, 162, 33, 0.4);
 
-  /* Surfaces & text */
+  /* Surfaces & text. Chrome (nav + sidebars) sits on --canvas; the working
+   * pane (thread, config detail, apps) sits on --content — white in light
+   * mode, a step lighter than the chrome in dark. */
   --canvas: light-dark(#e9e8e4, #131315);
+  --content: light-dark(#ffffff, #18181a);
   --surface: light-dark(#ffffff, #1e1e20);
   --surface-2: light-dark(#f6f6f4, #28282a);
   --surface-3: light-dark(#e9e9eb, #3a3a3c);

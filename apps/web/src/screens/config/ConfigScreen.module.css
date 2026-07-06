@@ -8,7 +8,7 @@
   width: 220px;
   flex-shrink: 0;
   border-right: 1px solid var(--separator-soft);
-  background: var(--surface-2);
+  background: var(--canvas);
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -56,6 +56,7 @@
   min-width: 0;
   overflow-y: auto;
   padding: 24px;
+  background: var(--content);
 }
 
 .problem {

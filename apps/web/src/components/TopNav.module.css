@@ -3,7 +3,7 @@
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
   padding: 10px 16px;
-  background: var(--surface-2);
+  background: var(--canvas);
   border-bottom: 1px solid var(--separator-soft);
 }
 
