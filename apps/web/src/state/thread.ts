@@ -81,6 +81,27 @@ export function createThreadState(sessionId?: string): ThreadState {
   return { sessionId, items: [], catchUp: [], seq: 0 };
 }
 
+/** True when the run produced something a card must show: tool rows, a plan,
+ * steering, denials, errors, or a pending approval. Runs without activity
+ * render inline (thinking line / bare prose with a meta suffix) instead. */
+export function hasRunActivity(run: RunCardState): boolean {
+  return (
+    run.rows.length > 0 ||
+    (run.plan?.length ?? 0) > 0 ||
+    run.steering.length > 0 ||
+    run.denials.length > 0 ||
+    run.errors.length > 0 ||
+    run.approval !== undefined
+  );
+}
+
+/** A completed run with no activity — no card at all; its usage renders as an
+ * inline suffix on the response prose. Failed/cancelled/blocked runs are never
+ * trivial: their status must stay visible even without activity. */
+export function isTrivialRun(run: RunCardState): boolean {
+  return run.status === 'completed' && !hasRunActivity(run);
+}
+
 /** The run a new submission should steer instead of starting a fresh turn. */
 export function activeRun(state: ThreadState): RunCardState | undefined {
   for (let i = state.items.length - 1; i >= 0; i -= 1) {

@@ -3,6 +3,8 @@ import type { AgentEvent, RunRecord } from '../../src/api/types';
 import {
   activeRun,
   createThreadState,
+  hasRunActivity,
+  isTrivialRun,
   threadReducer,
   type ThreadAction,
   type ThreadState,
@@ -190,5 +192,56 @@ describe('threadReducer', () => {
       { type: 'toggle_run_details', runId: 'run_1' },
     );
     expect(card(state).collapsed).toBe(false);
+  });
+
+  it('classifies trivial runs: completed without activity, never failed ones', () => {
+    // A run that only produced text and finished — nothing card-worthy.
+    let state = reduce(
+      createThreadState(),
+      { type: 'run_created', run: record },
+      ...runEvents('run_1', [
+        { type: 'text', text: 'All done.' },
+        { type: 'done', taskId: 't1', status: 'completed', usage: { totalTokens: 512 } },
+      ]),
+    );
+    expect(hasRunActivity(card(state))).toBe(false);
+    expect(isTrivialRun(card(state))).toBe(true);
+
+    // The same shape ending in failure keeps its card.
+    state = reduce(
+      createThreadState(),
+      { type: 'run_created', run: { ...record, id: 'run_2' } },
+      ...runEvents('run_2', [{ type: 'done', taskId: 't2', status: 'failed' }]),
+    );
+    expect(isTrivialRun(card(state, 'run_2'))).toBe(false);
+
+    // A tool call makes the run card-worthy even when completed.
+    state = reduce(
+      createThreadState(),
+      { type: 'run_created', run: { ...record, id: 'run_3' } },
+      ...runEvents('run_3', [
+        {
+          type: 'tool_request',
+          call: { id: 'c1', tool: 'write_file', kind: 'write', summary: 'write note.md', input: {} },
+        },
+        { type: 'tool_result', callId: 'c1', tool: 'write_file', summary: 'wrote note.md', isError: false },
+        { type: 'done', taskId: 't3', status: 'completed' },
+      ]),
+    );
+    expect(hasRunActivity(card(state, 'run_3'))).toBe(true);
+    expect(isTrivialRun(card(state, 'run_3'))).toBe(false);
+
+    // A pending approval always shows the card.
+    state = reduce(
+      createThreadState(),
+      { type: 'run_created', run: { ...record, id: 'run_4' } },
+      ...runEvents('run_4', [
+        {
+          type: 'approval_request',
+          request: { id: 'c9', tool: 'write_file', kind: 'write', summary: 'write x', input: {}, escalated: false },
+        },
+      ]),
+    );
+    expect(hasRunActivity(card(state, 'run_4'))).toBe(true);
   });
 });

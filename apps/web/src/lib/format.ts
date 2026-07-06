@@ -18,6 +18,14 @@ export function formatElapsed(ms: number): string {
   return `${minutes}:${String(seconds % 60).padStart(2, '0')}`;
 }
 
+/** A run's wall-clock duration; falls back to now while still running. */
+export function formatRunDuration(startedAt: string, finishedAt?: string): string {
+  const start = Date.parse(startedAt);
+  const end = finishedAt ? Date.parse(finishedAt) : Date.now();
+  if (!Number.isFinite(start) || !Number.isFinite(end)) return '—';
+  return formatDuration(end - start);
+}
+
 export function formatTokens(count: number): string {
   if (count < 1000) return String(count);
   const thousands = count / 1000;

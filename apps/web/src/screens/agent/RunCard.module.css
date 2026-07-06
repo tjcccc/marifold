@@ -186,8 +186,3 @@
   color: var(--danger);
   font-family: var(--font-mono);
 }
-
-.usage {
-  font-size: 12px;
-  color: var(--text-3);
-}

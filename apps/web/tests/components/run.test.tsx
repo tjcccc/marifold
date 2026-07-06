@@ -164,4 +164,103 @@ describe('ThreadView', () => {
     expect(screen.getByText('heads up')).toBeTruthy();
     expect(screen.getByText(/tool actions/)).toBeTruthy();
   });
+
+  it('renders a trivial completed run as inline meta on the prose, no card', () => {
+    const startedAt = new Date('2026-07-06T08:00:00Z').toISOString();
+    render(
+      <ThreadView
+        items={[
+          {
+            id: 'i1',
+            kind: 'run',
+            run: cardFixture({
+              status: 'completed',
+              collapsed: true,
+              plan: undefined,
+              rows: [],
+              steering: [],
+              startedAt,
+              finishedAt: new Date(Date.parse(startedAt) + 2_000).toISOString(),
+              usage: { totalTokens: 512 },
+            }),
+          },
+          { id: 'i2', kind: 'assistant', markdown: '你好', runId: 'run_1' },
+        ]}
+        onCancelRun={() => {}}
+        onAnswerApproval={() => {}}
+        onToggleRun={() => {}}
+      />,
+    );
+    expect(screen.getByText('你好')).toBeTruthy();
+    expect(screen.getByText('2s · 512 tokens')).toBeTruthy();
+    expect(screen.queryByText(/Ran /)).toBeNull();
+    expect(screen.queryByText(/Hide|Show/)).toBeNull();
+  });
+
+  it('shows an inline thinking line for a tool-less running run, cancellable', () => {
+    const onCancel = vi.fn();
+    render(
+      <ThreadView
+        items={[
+          {
+            id: 'i1',
+            kind: 'run',
+            run: cardFixture({ status: 'running', plan: undefined, rows: [], steering: [] }),
+          },
+        ]}
+        onCancelRun={onCancel}
+        onAnswerApproval={() => {}}
+        onToggleRun={() => {}}
+      />,
+    );
+    expect(screen.getByText('Thinking…')).toBeTruthy();
+    expect(screen.queryByText(/Working/)).toBeNull();
+    fireEvent.click(screen.getByText('Cancel'));
+    expect(onCancel).toHaveBeenCalledWith('run_1');
+  });
+
+  it('drops the thinking line once the run streams prose', () => {
+    render(
+      <ThreadView
+        items={[
+          {
+            id: 'i1',
+            kind: 'run',
+            run: cardFixture({ status: 'running', plan: undefined, rows: [], steering: [] }),
+          },
+          { id: 'i2', kind: 'assistant', markdown: 'Starting…', streaming: true, runId: 'run_1' },
+        ]}
+        onCancelRun={() => {}}
+        onAnswerApproval={() => {}}
+        onToggleRun={() => {}}
+      />,
+    );
+    expect(screen.queryByText('Thinking…')).toBeNull();
+    expect(screen.getByText('Starting…')).toBeTruthy();
+  });
+
+  it('keeps the card for a failed run even without tool activity', () => {
+    render(
+      <ThreadView
+        items={[
+          {
+            id: 'i1',
+            kind: 'run',
+            run: cardFixture({
+              status: 'failed',
+              collapsed: true,
+              plan: undefined,
+              rows: [],
+              steering: [],
+              finishedAt: new Date().toISOString(),
+            }),
+          },
+        ]}
+        onCancelRun={() => {}}
+        onAnswerApproval={() => {}}
+        onToggleRun={() => {}}
+      />,
+    );
+    expect(screen.getByText(/Failed after/)).toBeTruthy();
+  });
 });

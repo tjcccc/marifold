@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { RunApprovalAction } from '../../api/types';
-import { formatDuration, formatElapsed, formatTokens } from '../../lib/format';
+import { formatElapsed, formatRunDuration } from '../../lib/format';
 import type { RunCardState } from '../../state/thread';
 import { ApprovalSheet } from './ApprovalSheet';
 import styles from './RunCard.module.css';
@@ -100,13 +100,6 @@ export function RunCard({ run, onCancel, onAnswer, onToggle }: RunCardProps) {
         />
       ) : null}
 
-      {!running && !run.collapsed && run.usage ? (
-        <div className={styles.usage}>
-          {durationText(run)}
-          {run.usage.totalTokens !== undefined ? ` · ${formatTokens(run.usage.totalTokens)} tokens` : ''}
-          {run.usage.estimatedCostUSD !== undefined ? ` · $${run.usage.estimatedCostUSD.toFixed(3)}` : ''}
-        </div>
-      ) : null}
     </div>
   );
 }
@@ -175,8 +168,5 @@ function footerText(run: RunCardState): string {
 }
 
 function durationText(run: RunCardState): string {
-  const start = Date.parse(run.startedAt);
-  const end = run.finishedAt ? Date.parse(run.finishedAt) : Date.now();
-  if (!Number.isFinite(start) || !Number.isFinite(end)) return '—';
-  return formatDuration(end - start);
+  return formatRunDuration(run.startedAt, run.finishedAt);
 }
