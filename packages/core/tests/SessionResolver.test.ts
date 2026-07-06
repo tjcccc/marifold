@@ -56,6 +56,33 @@ describe('SessionResolver.checkIntegrity', () => {
   });
 });
 
+describe('SessionResolver.list previews', () => {
+  it('titles each session with its first user message, collapsed and truncated', () => {
+    const dbPath = tempDb();
+    seed(dbPath);
+    const db = new Database(dbPath);
+    // s1 already has user 'hi'. s2: assistant speaks first, long multi-line user message after.
+    db.prepare("INSERT INTO sessions VALUES ('s2','default','2026-01-02','2026-01-02','{}')").run();
+    db.prepare("INSERT INTO turns (session_id, role, content, timestamp) VALUES ('s2','assistant','welcome','2026-01-02')").run();
+    db.prepare(
+      "INSERT INTO turns (session_id, role, content, timestamp) VALUES ('s2','user',?, '2026-01-02')",
+    ).run(`Please summarize\n  my notes about ${'x'.repeat(100)}`);
+    // s3: no turns at all — no preview field.
+    db.prepare("INSERT INTO sessions VALUES ('s3','default','2026-01-03','2026-01-03','{}')").run();
+    db.close();
+
+    const sessions = new SessionResolver(dbPath).list();
+    const byId = new Map(sessions.map(session => [session.id, session]));
+    expect(byId.get('s1')?.preview).toBe('hi');
+    const long = byId.get('s2')?.preview;
+    expect(long?.startsWith('Please summarize my notes about ')).toBe(true);
+    expect(long?.endsWith('…')).toBe(true);
+    expect(long?.length).toBeLessThanOrEqual(80);
+    expect(byId.get('s3')?.preview).toBeUndefined();
+    expect('preview' in (byId.get('s3') ?? {})).toBe(false);
+  });
+});
+
 describe('SessionResolver WAL hardening', () => {
   it('switches the DB into WAL mode on a normal operation', () => {
     const dbPath = tempDb();

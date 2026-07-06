@@ -140,7 +140,7 @@ Memory **content** authoring stays model-driven (`memory_save` blocks) — there
 
 | Route | Returns |
 |---|---|
-| `GET /v1/sessions?limit=&profile=` | Recent sessions (default limit 50) |
+| `GET /v1/sessions?limit=&profile=` | Recent sessions (default limit 50). Each summary carries `preview?` — the first user message, whitespace-collapsed and truncated to ~80 chars — for use as a display title; absent when the session has no user turn |
 | `GET /v1/sessions/:id` | Session detail with turns; 404 `SESSION_NOT_FOUND` |
 | `DELETE /v1/sessions/:id` | `{ deleted: boolean }` |
 

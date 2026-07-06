@@ -197,6 +197,9 @@ export interface SessionSummary {
   createdAt: string;
   updatedAt: string;
   turnCount: number;
+  /** First user message, whitespace-collapsed and truncated — the session's
+   * display title in list UIs. Absent for sessions without a user turn. */
+  preview?: string;
 }
 
 export interface SessionTurnSummary {

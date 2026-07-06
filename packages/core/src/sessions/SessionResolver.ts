@@ -82,7 +82,13 @@ export class SessionResolver {
           s.profile_name AS profileName,
           s.created_at AS createdAt,
           s.updated_at AS updatedAt,
-          COUNT(t.id) AS turnCount
+          COUNT(t.id) AS turnCount,
+          (
+            SELECT content FROM turns
+            WHERE session_id = s.id AND role = 'user'
+            ORDER BY id ASC
+            LIMIT 1
+          ) AS preview
         FROM sessions s
         LEFT JOIN turns t ON t.session_id = s.id
         ${profileName ? 'WHERE s.profile_name = ?' : ''}
@@ -95,14 +101,19 @@ export class SessionResolver {
         createdAt: string;
         updatedAt: string;
         turnCount: number;
+        preview: string | null;
       }>;
-      return rows.map(row => ({
-        id: row.id,
-        profileName: row.profileName,
-        createdAt: row.createdAt,
-        updatedAt: row.updatedAt,
-        turnCount: Number(row.turnCount),
-      }));
+      return rows.map(row => {
+        const preview = row.preview ? sessionPreview(row.preview) : '';
+        return {
+          id: row.id,
+          profileName: row.profileName,
+          createdAt: row.createdAt,
+          updatedAt: row.updatedAt,
+          turnCount: Number(row.turnCount),
+          ...(preview ? { preview } : {}),
+        };
+      });
     } catch (error) {
       throw new MarifoldError(
         'SESSION_STORE_ERROR',
@@ -318,4 +329,12 @@ export class SessionResolver {
   private storeError(message: string): MarifoldError {
     return new MarifoldError('SESSION_STORE_ERROR', message, { sessionsDb: this.sessionsDb });
   }
+}
+
+const PREVIEW_MAX_CHARS = 80;
+
+function sessionPreview(content: string): string {
+  const flat = content.replace(/\s+/g, ' ').trim();
+  if (flat.length <= PREVIEW_MAX_CHARS) return flat;
+  return `${flat.slice(0, PREVIEW_MAX_CHARS - 1).trimEnd()}…`;
 }
