@@ -305,4 +305,37 @@ describe('ProfileResolver', () => {
     expect(profile.name).toBe('default');
     expect(list).toEqual([{ name: 'default', source: 'built-in' }]);
   });
+
+  it('stores, replaces, flags, and deletes profile avatars', () => {
+    const root = tempDir();
+    const pm = new ProfileManager(root);
+    pm.init('painter');
+
+    // Validation: type and size.
+    expect(() => pm.setAvatar('painter', Buffer.from('x'), 'image/tiff')).toThrow(/Unsupported avatar type/);
+    expect(() => pm.setAvatar('painter', Buffer.alloc(1024 * 1024 + 1), 'image/png')).toThrow(/between 1 byte/);
+
+    // Store, then replace with a different extension — old file goes away.
+    pm.setAvatar('painter', Buffer.from('png-bytes'), 'image/png');
+    expect(pm.avatar('painter')).toMatchObject({ mediaType: 'image/png' });
+    pm.setAvatar('painter', Buffer.from('webp-bytes'), 'image/webp');
+    expect(fs.existsSync(path.join(root, 'painter', 'avatar.png'))).toBe(false);
+    expect(pm.avatar('painter')).toMatchObject({ mediaType: 'image/webp' });
+
+    // Summaries carry the flag; profiles without avatars stay clean.
+    const summaries = new ProfileResolver(root).list();
+    expect(summaries.find(p => p.name === 'painter')?.avatar).toEqual({ mediaType: 'image/webp' });
+    expect(summaries.find(p => p.name === 'default')?.avatar).toBeUndefined();
+
+    // The built-in default (no md/toml files) can still hold an avatar.
+    pm.setAvatar('default', Buffer.from('d'), 'image/jpeg');
+    expect(new ProfileResolver(root).list().find(p => p.name === 'default')).toMatchObject({
+      source: 'built-in',
+      avatar: { mediaType: 'image/jpeg' },
+    });
+
+    expect(pm.deleteAvatar('painter')).toEqual({ name: 'painter', removed: true });
+    expect(pm.deleteAvatar('painter')).toEqual({ name: 'painter', removed: false });
+    expect(pm.avatar('painter')).toBeUndefined();
+  });
 });

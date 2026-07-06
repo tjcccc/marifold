@@ -5,6 +5,7 @@ import { Profile, ProfileLoader } from '@priest-ai/core';
 import { MarifoldError } from '../errors/MarifoldError';
 import { ProfileDetail, ProfileFileSummary, ProfileMode, ProfileSettings, ProfileSummary } from '../config/ConfigSchema';
 import { parsePartialAgentConfig } from '../config/ConfigLoader';
+import { findProfileAvatar } from './ProfileManager';
 
 const SAFE_PROFILE_NAME = /^[A-Za-z0-9_-]+$/;
 
@@ -86,6 +87,13 @@ export class ProfileResolver implements ProfileLoader {
 
     if (!profiles.has('default')) {
       profiles.set('default', { name: 'default', source: 'built-in' });
+    }
+
+    // Avatars live in the profile dir regardless of source — even the built-in
+    // default can carry one (setAvatar scaffolds the dir without md/toml files).
+    for (const summary of profiles.values()) {
+      const avatar = findProfileAvatar(this.profilesDir, summary.name);
+      if (avatar) summary.avatar = { mediaType: avatar.mediaType };
     }
 
     return [...profiles.values()].sort((a, b) => a.name.localeCompare(b.name));

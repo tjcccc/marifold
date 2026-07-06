@@ -322,6 +322,28 @@ export class MarifoldRuntime {
     this.profileManager.writeProfileFile(name, file, content);
   }
 
+  /** Scaffold a new profile directory (same layout as `profile init`) and
+   * return its detail. Duplicate or invalid names throw PROFILE_INVALID. */
+  initProfile(name: string): ProfileDetail {
+    this.profileManager.init(name);
+    return this.getProfile(name);
+  }
+
+  /** The profile's stored avatar image (path + media type), if any. */
+  getProfileAvatar(name: string): { path: string; mediaType: string } | undefined {
+    return this.profileManager.avatar(name);
+  }
+
+  /** Store a profile's avatar (PNG/JPEG/WebP, ≤1 MB), replacing any previous one. */
+  setProfileAvatar(name: string, image: Buffer, mediaType: string): void {
+    this.profileManager.setAvatar(name, image, mediaType);
+  }
+
+  /** Remove a profile's avatar. Returns whether one existed. */
+  deleteProfileAvatar(name: string): boolean {
+    return this.profileManager.deleteAvatar(name).removed;
+  }
+
   /** Set a config value by dotted key and persist — the same routing and
    * validation as the CLI's `config set` (see ConfigManager.setValue). */
   setConfigValue(key: string, value: string): void {

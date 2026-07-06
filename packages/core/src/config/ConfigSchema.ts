@@ -174,6 +174,9 @@ export interface ProfileSummary {
   name: string;
   source: 'directory' | 'json' | 'built-in';
   path?: string;
+  /** Present when the profile has a stored avatar image (served at
+   * GET /v1/profiles/:name/avatar). */
+  avatar?: { mediaType: string };
 }
 
 export interface ProfileFileSummary {
