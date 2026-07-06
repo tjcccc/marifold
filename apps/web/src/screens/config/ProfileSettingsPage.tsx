@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import type { ProfileFileKind, ProfilePatchInput } from '../../api/profiles';
 import type { ApprovalMode, MarifoldAgentConfig, MemoryEntry, ProfileDetail } from '../../api/types';
 import { SegmentedControl } from '../../components/SegmentedControl';
@@ -17,6 +18,10 @@ export interface ProfileSettingsPageProps {
   onAddTrustedFolder: (folder: string) => void;
   onRemoveTrustedFolder: (folder: string) => void;
   onMemoryAction: (id: string, mode: 'forget' | 'delete') => void;
+  /** Rendered avatar (the screen owns client wiring); falls back to initials. */
+  avatar?: ReactNode;
+  onAvatarPick?: (file: File) => void;
+  onAvatarDelete?: () => void;
   /** Disables the controls while a write is in flight. */
   busy?: boolean;
 }
@@ -45,13 +50,16 @@ export function ProfileSettingsPage(props: ProfileSettingsPageProps) {
     ? `${detail.settings.provider}/${detail.settings.model}`
     : '';
   const [newFolder, setNewFolder] = useState('');
+  const avatarInputRef = useRef<HTMLInputElement>(null);
 
   return (
     <div className={styles.page}>
       <header className={styles.identity}>
-        <span className={styles.avatar} aria-hidden>
-          {detail.name.slice(0, 1).toUpperCase()}
-        </span>
+        {props.avatar ?? (
+          <span className={styles.avatar} aria-hidden>
+            {detail.name.slice(0, 1).toUpperCase()}
+          </span>
+        )}
         <div>
           <div className={styles.name}>{detail.name}</div>
           <div className={styles.identitySub}>
@@ -59,6 +67,33 @@ export function ProfileSettingsPage(props: ProfileSettingsPageProps) {
             {detail.settings.think ? ' · thinking on' : ''}
           </div>
         </div>
+        {props.onAvatarPick ? (
+          <div className={styles.avatarActions}>
+            <button
+              className={styles.avatarAction}
+              disabled={busy}
+              onClick={() => avatarInputRef.current?.click()}
+            >
+              {detail.avatar ? 'Change avatar' : 'Add avatar'}
+            </button>
+            {detail.avatar && props.onAvatarDelete ? (
+              <button className={styles.avatarActionDanger} disabled={busy} onClick={props.onAvatarDelete}>
+                Remove
+              </button>
+            ) : null}
+            <input
+              ref={avatarInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              className={styles.avatarInput}
+              onChange={event => {
+                const file = event.target.files?.[0];
+                if (file) props.onAvatarPick?.(file);
+                event.target.value = '';
+              }}
+            />
+          </div>
+        ) : null}
       </header>
 
       <section className={styles.group} aria-label="Model">

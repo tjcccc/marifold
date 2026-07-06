@@ -277,3 +277,31 @@
   white-space: pre-wrap;
   overflow-wrap: break-word;
 }
+
+.avatarActions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.avatarAction,
+.avatarActionDanger {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--brand-text);
+}
+
+.avatarActionDanger {
+  color: var(--danger);
+}
+
+.avatarAction:disabled,
+.avatarActionDanger:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.avatarInput {
+  display: none;
+}

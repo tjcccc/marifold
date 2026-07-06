@@ -36,7 +36,8 @@ export function App() {
   const onViewChange = useCallback(
     (view: AppView) => {
       if (view === 'agent') navigate({ view: 'agent', ...(route.view === 'agent' ? route : {}) });
-      else navigate({ view });
+      else if (view === 'config') navigate({ view: 'config', section: 'profiles' });
+      else navigate({ view: 'apps' });
     },
     [navigate, route],
   );

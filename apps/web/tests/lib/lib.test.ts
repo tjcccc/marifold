@@ -11,8 +11,11 @@ describe('hashRoute', () => {
       { view: 'agent' as const, profile: 'default' },
       { view: 'agent' as const, profile: 'writing helper', session: 'sess/1' },
       { view: 'apps' as const },
-      { view: 'config' as const },
-      { view: 'config' as const, profile: 'default' },
+      { view: 'config' as const, section: 'profiles' as const },
+      { view: 'config' as const, section: 'profiles' as const, item: 'default' },
+      { view: 'config' as const, section: 'providers' as const, item: 'ollama' },
+      { view: 'config' as const, section: 'models' as const },
+      { view: 'config' as const, section: 'service' as const },
     ];
     for (const route of routes) {
       expect(parseHash(formatHash(route))).toEqual(route);
@@ -22,6 +25,11 @@ describe('hashRoute', () => {
   it('defaults unknown or empty hashes to the agent view', () => {
     expect(parseHash('')).toEqual({ view: 'agent' });
     expect(parseHash('#/nonsense')).toEqual({ view: 'agent' });
+  });
+
+  it('maps legacy #/config/<profile> deep links onto the profiles section', () => {
+    expect(parseHash('#/config/painter')).toEqual({ view: 'config', section: 'profiles', item: 'painter' });
+    expect(parseHash('#/config')).toEqual({ view: 'config', section: 'profiles' });
   });
 });
 

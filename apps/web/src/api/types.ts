@@ -82,6 +82,7 @@ export type ChatStreamEvent =
 export interface PublicConfig {
   default: { provider?: string; model?: string; profile: string; think?: boolean };
   models: { options: string[] };
-  providers: Record<string, { type: string; baseUrl?: string; hasApiKey?: boolean; hasOauthToken?: boolean }>;
+  providers: Record<string, { type: string; baseUrl?: string; hasApiKey?: boolean; hasOauthToken?: boolean; apiKeyEnv?: string }>;
   agent?: MarifoldAgentConfig;
+  service?: { webDir?: string; tokenEnv?: string; corsOrigins: string[]; hasToken: boolean };
 }

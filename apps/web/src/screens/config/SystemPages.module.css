@@ -1,0 +1,241 @@
+/* Shared layout for the Providers / Models / Service detail pages —
+ * the same grouped-card language as ProfileSettingsPage. */
+
+.page {
+  max-width: 620px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.empty {
+  margin-top: 20vh;
+  text-align: center;
+  color: var(--text-3);
+}
+
+.pageHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.pageTitle {
+  font-size: 19px;
+  font-weight: 700;
+}
+
+.pageSub {
+  margin-top: 2px;
+  font-size: 12.5px;
+  color: var(--text-3);
+}
+
+.pageActions {
+  display: flex;
+  gap: 14px;
+}
+
+.linkAction {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--brand-text);
+}
+
+.linkAction:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.note {
+  font-size: 12.5px;
+  color: var(--text-3);
+}
+
+.problem {
+  font-size: 12.5px;
+  color: var(--danger);
+}
+
+.card {
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 0 0 1px var(--separator-soft);
+  padding: 4px 16px;
+  display: flex;
+  flex-direction: column;
+}
+
+.cardTitle {
+  padding: 12px 0 4px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+.fieldRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--separator-soft);
+}
+
+.fieldRow:last-child {
+  border-bottom: none;
+}
+
+.fieldLabel {
+  font-size: 13px;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+.fieldEdit {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.fieldStatic {
+  font-size: 12.5px;
+  color: var(--text-2);
+  text-align: right;
+}
+
+.fieldHint {
+  color: var(--text-3);
+}
+
+.input {
+  flex: 1;
+  max-width: 340px;
+  border: 1px solid var(--separator);
+  border-radius: var(--radius-md);
+  padding: 6px 10px;
+  font-size: 12.5px;
+  background: var(--content);
+  color: var(--text);
+  outline: none;
+}
+
+.input:focus {
+  border-color: var(--brand-fill);
+}
+
+.select {
+  max-width: 260px;
+  border: 1px solid var(--separator);
+  border-radius: var(--radius-md);
+  padding: 6px 8px;
+  font-size: 12.5px;
+  background: var(--content);
+  color: var(--text);
+}
+
+.saveAction {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--brand-text);
+  flex-shrink: 0;
+}
+
+.saveAction:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.optionRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--separator-soft);
+}
+
+.optionRow:last-child {
+  border-bottom: none;
+}
+
+.optionName {
+  font-size: 13px;
+  font-family: var(--font-mono);
+}
+
+.defaultTag {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--brand-text);
+  font-family: var(--font-ui);
+}
+
+.removeAction {
+  color: var(--text-3);
+  font-size: 15px;
+  line-height: 1;
+}
+
+.removeAction:hover {
+  color: var(--danger);
+}
+
+.removeAction:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.modelList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 0 12px;
+}
+
+.modelChipStatic {
+  font-size: 11.5px;
+  font-family: var(--font-mono);
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text-2);
+}
+
+.formActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.cancelAction {
+  padding: 7px 14px;
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-weight: 600;
+  background: var(--surface-2);
+  color: var(--text-2);
+}
+
+.primaryAction {
+  padding: 7px 14px;
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-weight: 600;
+  background: var(--brand-fill);
+  color: var(--on-brand);
+  box-shadow: 0 1px 3px var(--brand-shadow);
+}
+
+.primaryAction:disabled,
+.cancelAction:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

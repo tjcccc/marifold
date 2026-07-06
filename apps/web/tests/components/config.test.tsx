@@ -135,3 +135,53 @@ describe('ProfileSettingsPage', () => {
     expect(handlers.onRemoveTrustedFolder).toHaveBeenCalledWith('/Users/me/blog');
   });
 });
+
+describe('ModelsPage', () => {
+  it('lists options with the default tag and dispatches remove/add/default', async () => {
+    const { ModelsPage } = await import('../../src/screens/config/ModelsPage');
+    const onRemove = vi.fn(async () => {});
+    const onSetDefault = vi.fn(async () => {});
+    const client = {
+      baseUrl: '',
+      request: async () => ({ provider: 'ollama', reachable: true, models: ['gemma4:e4b'], message: '' }),
+      stream: async () => { throw new Error('unused'); },
+      blob: async () => undefined,
+    };
+    render(
+      <ModelsPage
+        client={client as never}
+        models={{ default: { provider: 'ollama', model: 'gemma4:e4b' }, options: ['ollama/gemma4:e4b', 'chatgpt/gpt-5.4-mini'] }}
+        providers={['ollama', 'chatgpt']}
+        busy={false}
+        onSetDefault={onSetDefault}
+        onRemove={onRemove}
+        onAdd={async () => {}}
+      />,
+    );
+    expect(screen.getByText('default')).toBeTruthy();
+    fireEvent.click(screen.getByLabelText('Remove chatgpt/gpt-5.4-mini'));
+    expect(onRemove).toHaveBeenCalledWith('chatgpt', 'gpt-5.4-mini');
+    fireEvent.change(screen.getAllByRole('combobox')[0], { target: { value: 'chatgpt/gpt-5.4-mini' } });
+    expect(onSetDefault).toHaveBeenCalledWith('chatgpt', 'gpt-5.4-mini');
+  });
+});
+
+describe('ServicePage', () => {
+  it('shows the sanitized service view and saves edited fields', async () => {
+    const { ServicePage } = await import('../../src/screens/config/ServicePage');
+    const onSave = vi.fn();
+    render(
+      <ServicePage
+        service={{ webDir: '/srv/web', corsOrigins: ['http://localhost:5173'], hasToken: true }}
+        busy={false}
+        onSave={onSave}
+      />,
+    );
+    expect(screen.getByText('configured')).toBeTruthy();
+    const webDir = screen.getByPlaceholderText('/path/to/apps/web/dist') as HTMLInputElement;
+    expect(webDir.value).toBe('/srv/web');
+    fireEvent.change(webDir, { target: { value: '/srv/web2' } });
+    fireEvent.click(screen.getByText('Save'));
+    expect(onSave).toHaveBeenCalledWith('web_dir', '/srv/web2');
+  });
+});
