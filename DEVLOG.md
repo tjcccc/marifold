@@ -2,6 +2,10 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-07-06 — v0.39.1 — Markdown blockquotes/rules + larger nav logo
+
+First fixes from the user's browser pass on v0.38–0.39: the hand-rolled markdown parser merged `> …` lines into paragraphs as literal text (visible in translation replies) — blockquotes now parse as real blocks (inside parsed as its own document, marigold-edged rendering) and `---`/`***`/`___` become horizontal rules; the nav logo goes 20 → 28px. 388 tests (web 84, +2 parser). **Known gap:** tables still render as plain text rows — add if models emit them often.
+
 ## 2026-07-06 — v0.39.0 — Profiles & system config: avatars, creation, Config redesign, providers/models
 
 Second half of the user-review round (items 2, 4, 5, 6): profiles become first-class identities and the Config screen becomes the system control surface.
