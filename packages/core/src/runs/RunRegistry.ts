@@ -1,5 +1,6 @@
 import * as crypto from 'crypto';
 import { dirname } from 'path';
+import type { ImageInput } from '@priest-ai/core';
 import { AgentEvent, AgentUsage } from '../agent/AgentEvents';
 import { AgentRunner } from '../agent/AgentRunner';
 import { ApprovalDecision, ApprovalMode, ApprovalRequest, ToolKind } from '../agent/ApprovalPolicy';
@@ -46,6 +47,8 @@ export interface RunStartInput {
   model?: string;
   sessionId?: string;
   think?: boolean;
+  /** Attached to the objective on the first turn (AgentRunner semantics). */
+  images?: ImageInput[];
   instructions?: string[];
   maxIterations?: number;
   forcePlan?: boolean;
@@ -280,6 +283,7 @@ export class RunRegistry {
         model: input.model,
         sessionId: input.sessionId,
         think: input.think,
+        images: input.images,
         instructions: input.instructions,
         maxIterations: input.maxIterations,
         forcePlan: input.forcePlan,

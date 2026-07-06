@@ -151,6 +151,29 @@ describe('MarifoldService /v1/runs', () => {
     }
   });
 
+  it('forwards image attachments on the objective to the model request', async () => {
+    const { captured } = stubProvider(['A tiny test image.']);
+    const { server, base } = await startServer();
+    try {
+      const created = await postJson(base, '/v1/runs', {
+        objective: 'What is in this image?',
+        cwd: tempDir(),
+        images: [{ data: 'aGVsbG8td29ybGQ=', mediaType: 'image/png' }],
+      });
+      expect(created.status).toBe(201);
+      const { run } = await created.json();
+      await pullFrames(sseFrames(await fetch(`${base}/v1/runs/${run.id}/events`)), frame => frame.event === 'done');
+      // The base64 payload must reach the provider request on the first turn.
+      expect(JSON.stringify(captured)).toContain('aGVsbG8td29ybGQ=');
+
+      const invalid = await postJson(base, '/v1/runs', { objective: 'x', images: [{}] });
+      expect(invalid.status).toBe(400);
+      expect((await invalid.json()).error.message).toContain('exactly one of data or url');
+    } finally {
+      await server.close();
+    }
+  });
+
   it('parks an ask-gated write until the approval POST, then executes it', async () => {
     const workspace = tempDir();
     const target = path.join(workspace, 'note.txt');

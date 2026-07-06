@@ -4,6 +4,7 @@ import { SSE_HEADERS, startSseHeartbeat, writeSse, writeSseRetry } from './Sse';
 import {
   objectBody,
   optionalBooleanField,
+  optionalImagesField,
   optionalPositiveIntegerField,
   optionalStringField,
   requiredString,
@@ -113,6 +114,7 @@ function parseRunStartInput(value: unknown): RunStartInput {
     ...optionalBooleanField('forcePlan', body.forcePlan),
     ...optionalBooleanField('lean', body.lean),
     ...optionalPositiveIntegerField('maxIterations', body.maxIterations),
+    ...optionalImagesField(body.images),
     ...(body.instructions !== undefined ? { instructions: stringArray(body.instructions, 'instructions') } : {}),
   };
 }

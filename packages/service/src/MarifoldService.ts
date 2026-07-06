@@ -23,6 +23,7 @@ import {
   JsonObject,
   objectBody,
   optionalBooleanField,
+  optionalImagesField,
   optionalStringField,
   requiredString,
   stringArray,
@@ -68,10 +69,13 @@ const API_VERSION = 'v1';
 const DEFAULT_HOST = '127.0.0.1';
 const DEFAULT_PORT = 32140;
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '::1']);
+/** Base64 image attachments ride the JSON body; fastify's 1 MiB default
+ * would reject them. Still gated by loopback + CORS + the optional token. */
+const BODY_LIMIT_BYTES = 25 * 1024 * 1024;
 
 export function createMarifoldService(options: MarifoldServiceOptions): FastifyInstance {
   const runtime = new MarifoldRuntime({ loadedConfig: options.loadedConfig });
-  const server = fastify({ logger: options.logger ?? false });
+  const server = fastify({ logger: options.logger ?? false, bodyLimit: BODY_LIMIT_BYTES });
 
   registerSecurity(server, resolveSecurityOptions(options.loadedConfig.config.service, {
     token: options.auth?.token,
@@ -357,30 +361,6 @@ function parseRunRequest(value: unknown): MarifoldRunRequest {
     ...optionalBooleanField('think', body.think),
     ...optionalImagesField(body.images),
   };
-}
-
-// App clients send images as base64 payloads ({data, mediaType}) or URLs;
-// local file paths are not accepted over the service boundary.
-function optionalImagesField(value: unknown): { images: NonNullable<MarifoldRunRequest['images']> } | Record<string, never> {
-  if (value === undefined) return {};
-  if (!Array.isArray(value)) throw MarifoldError.configInvalid('Expected images to be an array.');
-  const images = value.map((item, index) => {
-    if (typeof item !== 'object' || item === null || Array.isArray(item)) {
-      throw MarifoldError.configInvalid(`Expected images[${index}] to be an object.`);
-    }
-    const image = item as { data?: unknown; url?: unknown; mediaType?: unknown };
-    const data = typeof image.data === 'string' && image.data ? image.data : undefined;
-    const url = typeof image.url === 'string' && image.url ? image.url : undefined;
-    if ((data === undefined) === (url === undefined)) {
-      throw MarifoldError.configInvalid(`Expected images[${index}] to set exactly one of data or url.`);
-    }
-    return {
-      ...(data !== undefined ? { data } : {}),
-      ...(url !== undefined ? { url } : {}),
-      ...(typeof image.mediaType === 'string' && image.mediaType ? { mediaType: image.mediaType } : {}),
-    };
-  });
-  return { images };
 }
 
 function parseTaskCreateInput(value: unknown): TaskCreateInput {

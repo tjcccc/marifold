@@ -1,4 +1,4 @@
-import { MarifoldError } from '@marifold/core';
+import { ImageInput, MarifoldError } from '@marifold/core';
 
 export type JsonObject = Record<string, unknown>;
 
@@ -40,4 +40,28 @@ export function optionalPositiveIntegerField<Key extends string>(key: Key, value
 export function stringArray(value: unknown, label: string): string[] {
   if (!Array.isArray(value)) throw MarifoldError.configInvalid(`${label} must be an array of strings.`);
   return value.map((item, index) => stringValue(item, `${label}[${index}]`));
+}
+
+// App clients send images as base64 payloads ({data, mediaType}) or URLs;
+// local file paths are not accepted over the service boundary.
+export function optionalImagesField(value: unknown): { images: ImageInput[] } | Record<string, never> {
+  if (value === undefined) return {};
+  if (!Array.isArray(value)) throw MarifoldError.configInvalid('Expected images to be an array.');
+  const images = value.map((item, index) => {
+    if (typeof item !== 'object' || item === null || Array.isArray(item)) {
+      throw MarifoldError.configInvalid(`Expected images[${index}] to be an object.`);
+    }
+    const image = item as { data?: unknown; url?: unknown; mediaType?: unknown };
+    const data = typeof image.data === 'string' && image.data ? image.data : undefined;
+    const url = typeof image.url === 'string' && image.url ? image.url : undefined;
+    if ((data === undefined) === (url === undefined)) {
+      throw MarifoldError.configInvalid(`Expected images[${index}] to set exactly one of data or url.`);
+    }
+    return {
+      ...(data !== undefined ? { data } : {}),
+      ...(url !== undefined ? { url } : {}),
+      ...(typeof image.mediaType === 'string' && image.mediaType ? { mediaType: image.mediaType } : {}),
+    };
+  });
+  return { images };
 }

@@ -173,11 +173,15 @@ The run itself is ephemeral in-service state; its durable record is a task
 { "objective": "Summarize ~/notes into notes.md",
   "profile": "default", "provider": "ollama", "model": "gemma4:e4b",
   "sessionId": "abc", "cwd": "/Users/me/project", "think": false,
+  "images": [{ "data": "<base64>", "mediaType": "image/png" }, { "url": "https://..." }],
   "instructions": ["Write in English."], "maxIterations": 20,
   "forcePlan": false, "lean": false }
 ```
 
-Only `objective` is required. Returns the **RunRecord**:
+Only `objective` is required. `images` follow the same shape as chat/ask
+(base64 `{data, mediaType}` or URL; exactly one of `data`/`url` per entry)
+and are attached to the objective on the first model turn. The service
+accepts JSON bodies up to 25 MiB to make room for base64 payloads. Returns the **RunRecord**:
 
 ```json
 { "ok": true, "run": {
