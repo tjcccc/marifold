@@ -27,6 +27,11 @@ interface MarifoldOpenAICompatProviderOptions {
   /** ChatGPT subscription account id, sent as `chatgpt-account-id` to the
    * Codex backend. */
   accountId?: string;
+  /** Per-provider HTTP proxy (e.g. "http://127.0.0.1:7890"). Applied to both the
+   * delegated chat-completions fetch and the Responses-API fetch; falls back to
+   * the HTTPS_PROXY env var when unset, and to a direct connection when neither
+   * is set. */
+  proxy?: string;
 }
 
 interface ResponsesOutputItem {
@@ -93,6 +98,9 @@ export class MarifoldOpenAICompatProvider implements ProviderAdapter {
     this.chatProvider = new OpenAICompatProvider(baseUrl, apiKey, {
       url: openAIChatCompletionsUrl(baseUrl, options),
       headers: this.copilotHeaders(),
+      // Node's fetch ignores HTTPS_PROXY; pass the provider's dispatcher so the
+      // delegated chat-completions request (e.g. xai behind the GFW) is proxied.
+      dispatcher: proxyDispatcher(options.proxy),
     });
   }
 
@@ -398,7 +406,7 @@ export class MarifoldOpenAICompatProvider implements ProviderAdapter {
       body: JSON.stringify(body),
       signal,
     };
-    const dispatcher = proxyDispatcher();
+    const dispatcher = proxyDispatcher(this.options.proxy);
     if (dispatcher) init.dispatcher = dispatcher;
     const response = await fetch(url, init as RequestInit);
     if (!response.ok) {

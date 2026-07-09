@@ -8,6 +8,7 @@ import {
   listProviderRegistry,
 } from '@marifold/core';
 import { authorizeChatGptWithBrowser } from '../auth/ChatGptAuth';
+import { authorizeXaiWithBrowser } from '../auth/XaiAuth';
 import {
   authorizeGitHubCopilotWithDevice,
   exchangeGitHubTokenForCopilotToken,
@@ -245,6 +246,7 @@ async function promptOAuthCredentials(
 ): Promise<Partial<MarifoldProviderConfig>> {
   if (provider.name === 'github_copilot') return promptGitHubCopilotCredentials(getPrompt, style, provider);
   if (provider.name === 'chatgpt') return promptChatGptCredentials(getPrompt, style, provider);
+  if (provider.name === 'xai') return promptXaiCredentials(getPrompt, style, provider);
 
   const token = await readRequiredSecret(getPrompt, style, 'OAuth token: ');
   return {
@@ -316,6 +318,29 @@ async function promptChatGptCredentials(
   return {
     apiKey: await readRequiredSecret(getPrompt, style, 'OpenAI API key: '),
     baseUrl: provider.defaultBaseUrl,
+  };
+}
+
+async function promptXaiCredentials(
+  getPrompt: PromptFactory,
+  style: TerminalStyle,
+  provider: ProviderRegistryEntry,
+): Promise<Partial<MarifoldProviderConfig>> {
+  // SuperGrok / X Premium+ subscription OAuth is the intended path. A raw key is
+  // still honored via the XAI_API_KEY env var (apiKeyEnv), so the picker stays
+  // OAuth-only rather than prompting for a key to store in config. The paste
+  // callback lets the user finish when xAI shows a code instead of redirecting.
+  const tokens = await authorizeXaiWithBrowser(
+    text => process.stdout.write(text),
+    async label => getPrompt().readUserMessage(style.bold(label)),
+  );
+  return {
+    // api.x.ai is plain OpenAI-compatible: the OAuth access token is the Bearer
+    // credential directly, refreshed from the stored refresh token.
+    apiKey: tokens.accessToken,
+    baseUrl: provider.defaultBaseUrl,
+    oauthToken: tokens.refreshToken,
+    apiKeyExpiresAt: tokens.expiresAt,
   };
 }
 

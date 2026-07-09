@@ -43,8 +43,8 @@ export function registerConfigCommand(program: Command, printer: ConsolePrinter)
 
   config
     .command('set')
-    .description('Set a config value by dotted key (default.*, paths.*, memory.*, service.*, providers.<name>.*).')
-    .argument('<key>', 'Dotted config key, e.g. default.model or service.web_dir.')
+    .description('Set a config value by dotted key (default.*, paths.*, memory.*, service.*, providers.<name>.*) or the top-level "proxy".')
+    .argument('<key>', 'Dotted config key, e.g. default.model, service.web_dir, or proxy.')
     .argument('<value>', 'Value to write. service.cors_origins takes a comma-separated list; "" clears optional keys.')
     .action((key: string, value: string) => {
       try {

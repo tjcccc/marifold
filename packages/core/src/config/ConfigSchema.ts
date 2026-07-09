@@ -82,6 +82,12 @@ export interface MarifoldProviderConfig {
   apiKey?: string;
   oauthToken?: string;
   apiKeyExpiresAt?: number;
+  /** Optional HTTP proxy for this provider's outbound calls (chat, token
+   * refresh), e.g. "http://127.0.0.1:7890". Set per provider so proxied
+   * providers (e.g. xai behind the GFW) route through it while local/direct
+   * providers (ollama, Chinese providers) stay direct. Falls back to the
+   * HTTPS_PROXY env var when unset. */
+  proxy?: string;
   /** ChatGPT subscription account id, sent as the `chatgpt-account-id` header
    * on Codex-backend requests. Set during ChatGPT OAuth sign-in. */
   accountId?: string;

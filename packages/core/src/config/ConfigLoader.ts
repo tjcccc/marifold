@@ -42,19 +42,11 @@ export class ConfigLoader {
 
     if (!fs.existsSync(configPath)) {
       if (explicitPath) throw MarifoldError.configFileNotFound(configPath);
-      return {
-        config: this.normalize({}),
-        configPath,
-        foundConfig: false,
-      };
+      return { config: this.normalize({}), configPath, foundConfig: false };
     }
 
     const raw = this.readToml(configPath);
-    return {
-      config: this.normalize(raw),
-      configPath,
-      foundConfig: true,
-    };
+    return { config: this.normalize(raw), configPath, foundConfig: true };
   }
 
   private resolveConfigPath(configPath?: string): string {
@@ -200,6 +192,7 @@ export class ConfigLoader {
       const oauthToken = optionalString(providerRaw.oauth_token, `providers.${name}.oauth_token`);
       const apiKeyExpiresAt = optionalNumber(providerRaw.api_key_expires_at, `providers.${name}.api_key_expires_at`);
       const accountId = optionalString(providerRaw.account_id, `providers.${name}.account_id`);
+      const proxy = optionalString(providerRaw.proxy, `providers.${name}.proxy`);
       providers[name] = {
         type,
         ...(baseUrl !== undefined ? { baseUrl } : {}),
@@ -208,6 +201,7 @@ export class ConfigLoader {
         ...(oauthToken !== undefined ? { oauthToken } : {}),
         ...(apiKeyExpiresAt !== undefined ? { apiKeyExpiresAt } : {}),
         ...(accountId !== undefined ? { accountId } : {}),
+        ...(proxy !== undefined ? { proxy } : {}),
       };
     }
 

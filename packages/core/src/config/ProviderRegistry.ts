@@ -275,6 +275,21 @@ const REGISTRY: ProviderRegistryEntry[] = [
     knownModels: ['gpt-5.5', 'gpt-5.3-codex', 'gpt-5.4-mini'],
   },
   {
+    name: 'xai',
+    label: 'xAI Grok (SuperGrok OAuth)',
+    kind: 'oauth',
+    type: 'openai-compatible',
+    // SuperGrok / X Premium+ sign-in authorizes the plain OpenAI-compatible
+    // api.x.ai surface: the OAuth access token is used as a normal Bearer
+    // credential (no special backend or account header, unlike ChatGPT).
+    defaultBaseUrl: 'https://api.x.ai/v1',
+    apiKeyEnv: 'XAI_API_KEY',
+    // Fallback list only, shown when live /v1/models can't be fetched. These are
+    // the models a SuperGrok subscription exposes (per Grok Build CLI); the
+    // picker also accepts a custom id. Live listing is authoritative.
+    knownModels: ['grok-4.5', 'grok-composer-2.5-fast'],
+  },
+  {
     name: 'custom',
     label: 'Custom OpenAI-compatible endpoint',
     kind: 'api',

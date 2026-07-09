@@ -44,6 +44,8 @@ export { formatSearchContext, formatSearchResults } from './search/SearchBackend
 export type { SearchBackend, SearchResultItem } from './search/SearchBackend';
 export { refreshChatGptAccessToken } from './config/ChatGptTokenRefresh';
 export type { ChatGptRefreshedTokens } from './config/ChatGptTokenRefresh';
+export { refreshXaiAccessToken } from './config/XaiTokenRefresh';
+export type { XaiRefreshedTokens } from './config/XaiTokenRefresh';
 export { DEFAULT_WEB_SEARCH_CONFIG, resolveWebSearchConfig } from './config/ConfigSchema';
 export type {
   LoadedMarifoldConfig,

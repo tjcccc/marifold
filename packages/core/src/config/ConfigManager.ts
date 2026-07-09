@@ -129,6 +129,7 @@ export class ConfigManager {
         oauth_token: provider?.oauthToken,
         api_key_expires_at: provider?.apiKeyExpiresAt,
         account_id: provider?.accountId,
+        proxy: provider?.proxy,
       }, parts[2]);
     }
     throw MarifoldError.configInvalid(`Unknown config key: ${key}`);
@@ -356,6 +357,10 @@ export class ConfigManager {
       case 'account_id':
         provider.accountId = value;
         return;
+      case 'proxy':
+        if (value.trim()) provider.proxy = value.trim();
+        else delete provider.proxy;
+        return;
       default:
         throw MarifoldError.configInvalid(`Unknown config key: providers.${providerName}.${key}`);
     }
@@ -484,6 +489,7 @@ function renderProvider(name: string, provider: MarifoldProviderConfig): string 
     optionalStringLine('oauth_token', provider.oauthToken),
     optionalNumberLine('api_key_expires_at', provider.apiKeyExpiresAt),
     optionalStringLine('account_id', provider.accountId),
+    optionalStringLine('proxy', provider.proxy),
   ].filter(Boolean);
   return lines.join('\n');
 }

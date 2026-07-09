@@ -1,6 +1,6 @@
 {
   "name": "@marifold/tui",
-  "version": "0.39.1",
+  "version": "0.40.0",
   "description": "Ink-based terminal UI for Marifold",
   "type": "module",
   "main": "dist/index.js",

@@ -89,8 +89,8 @@ importers:
   packages/core:
     dependencies:
       '@priest-ai/core':
-        specifier: ^2.6.1
-        version: 2.6.1
+        specifier: ^2.7.0
+        version: 2.7.0
       better-sqlite3:
         specifier: ^11.10.0
         version: 11.10.0
@@ -652,8 +652,8 @@ packages:
   '@pinojs/redact@0.4.0':
     resolution: {integrity: sha512-k2ENnmBugE/rzQfEcdWHcCY+/FM3VLzH9cYEsbdsoqrvzAKRhUZeRNhAZvB8OitQJ1TBed3yqWtdjzS6wJKBwg==}
 
-  '@priest-ai/core@2.6.1':
-    resolution: {integrity: sha512-uQPdy3ACK3F9QkrRjEb6G7rmQyL/4M0DdYz/VQbGStzKXQZSAMCZR0pbYZ7ckkH9FsJxzZs54P3xZuJJJR5VDQ==}
+  '@priest-ai/core@2.7.0':
+    resolution: {integrity: sha512-G0GYupZZGAI53cqvA7EDn+D+u+c4A+WGIJBKvBKy4mYykrZ1uajt0Vt9YA1qjRPHlTxTns6GoP2SkE64AKmnGg==}
     engines: {node: '>=18.0.0'}
 
   '@rolldown/pluginutils@1.0.0-beta.27':
@@ -2180,7 +2180,7 @@ snapshots:
 
   '@pinojs/redact@0.4.0': {}
 
-  '@priest-ai/core@2.6.1':
+  '@priest-ai/core@2.7.0':
     dependencies:
       better-sqlite3: 11.10.0
 

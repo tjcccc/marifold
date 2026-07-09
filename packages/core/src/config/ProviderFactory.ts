@@ -24,6 +24,7 @@ export class ProviderFactory {
         return new MarifoldOpenAICompatProvider(this.requireBaseUrl(providerName, provider), this.readOptionalApiKey(providerName, provider), {
           providerName,
           accountId: provider.accountId,
+          proxy: provider.proxy,
         });
       case 'anthropic':
         return new AnthropicProvider(this.readRequiredApiKey(providerName, provider));

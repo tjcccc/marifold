@@ -9,6 +9,7 @@ import { WebSearchTool } from '../agent/tools/WebSearchTool';
 import { WriteFileTool } from '../agent/tools/WriteFileTool';
 import { AgentTool, ToolRegistry } from '../agent/ToolRegistry';
 import { ChatGptRefreshedTokens, refreshChatGptAccessToken } from '../config/ChatGptTokenRefresh';
+import { XaiRefreshedTokens, refreshXaiAccessToken } from '../config/XaiTokenRefresh';
 import { ConfigManager } from '../config/ConfigManager';
 import { LoadedMarifoldConfig, ProfileDetail, ProfileMode, ProfileSummary, ProviderType, resolveWebSearchConfig, SessionDetail, SessionSummary } from '../config/ConfigSchema';
 import { ProviderInspector } from '../config/ProviderInspector';
@@ -688,7 +689,7 @@ export class MarifoldRuntime {
   }
 
   private async refreshProviderCredentialsIfNeeded(providerName: string): Promise<void> {
-    if (providerName !== 'github_copilot' && providerName !== 'chatgpt') return;
+    if (providerName !== 'github_copilot' && providerName !== 'chatgpt' && providerName !== 'xai') return;
 
     const provider = this.options.loadedConfig.config.providers[providerName];
     if (!provider?.oauthToken) return;
@@ -714,6 +715,21 @@ export class MarifoldRuntime {
       } catch (error) {
         throw MarifoldError.configInvalid(
           `GitHub Copilot authorization could not be refreshed: ${error instanceof Error ? error.message : String(error)}. Re-run marifold model add github_copilot to authorize again.`,
+        );
+      }
+      return;
+    }
+
+    if (providerName === 'xai') {
+      try {
+        const refreshed: XaiRefreshedTokens = await refreshXaiAccessToken(provider.oauthToken, provider.proxy);
+        provider.apiKey = refreshed.apiKey;
+        provider.oauthToken = refreshed.refreshToken;
+        provider.apiKeyExpiresAt = refreshed.expiresAt;
+        new ConfigManager(this.options.loadedConfig).save();
+      } catch (error) {
+        throw MarifoldError.configInvalid(
+          `xAI authorization could not be refreshed: ${error instanceof Error ? error.message : String(error)}. Re-run marifold model add xai to sign in again.`,
         );
       }
       return;
