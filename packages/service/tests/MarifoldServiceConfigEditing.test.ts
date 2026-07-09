@@ -205,6 +205,17 @@ describe('config editing routes', () => {
       expect(cors.statusCode).toBe(200);
       expect(cors.json().config.service.corsOrigins).toEqual(['http://localhost:5173']);
 
+      // providers.<name>.proxy routes and surfaces in the sanitized view (a
+      // non-secret URL exposed like base_url, unlike raw api_key).
+      const proxy = await server.inject({
+        method: 'PATCH',
+        url: '/v1/config',
+        headers: auth,
+        payload: { key: 'providers.xai.proxy', value: 'http://127.0.0.1:7890' },
+      });
+      expect(proxy.statusCode).toBe(200);
+      expect(proxy.json().config.providers.xai.proxy).toBe('http://127.0.0.1:7890');
+
       const unknown = await server.inject({
         method: 'PATCH',
         url: '/v1/config',

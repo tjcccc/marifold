@@ -10,6 +10,7 @@ export interface AddProviderInput {
   type: string;
   baseUrl?: string;
   apiKeyEnv?: string;
+  proxy?: string;
 }
 
 export interface ProvidersPageProps {
@@ -30,6 +31,7 @@ export function ProvidersPage(props: ProvidersPageProps) {
   const status = props.status?.find(entry => entry.name === props.selected);
   const [baseUrl, setBaseUrl] = useState<string | undefined>();
   const [apiKeyEnv, setApiKeyEnv] = useState<string | undefined>();
+  const [proxy, setProxy] = useState<string | undefined>();
   const [adding, setAdding] = useState(false);
 
   // Reset drafts when the selection changes (render-time state sync).
@@ -38,6 +40,7 @@ export function ProvidersPage(props: ProvidersPageProps) {
     setDraftFor(props.selected);
     setBaseUrl(undefined);
     setApiKeyEnv(undefined);
+    setProxy(undefined);
     setAdding(false);
   }
 
@@ -58,6 +61,7 @@ export function ProvidersPage(props: ProvidersPageProps) {
 
   const baseUrlValue = baseUrl ?? provider.baseUrl ?? '';
   const apiKeyEnvValue = apiKeyEnv ?? provider.apiKeyEnv ?? '';
+  const proxyValue = proxy ?? provider.proxy ?? '';
 
   return (
     <div className={styles.page}>
@@ -149,6 +153,30 @@ export function ProvidersPage(props: ProvidersPageProps) {
         </div>
 
         <div className={styles.fieldRow}>
+          <span className={styles.fieldLabel}>Proxy</span>
+          <div className={styles.fieldEdit}>
+            <input
+              className={styles.input}
+              value={proxyValue}
+              placeholder="http://127.0.0.1:7890 — blank = direct"
+              onChange={event => setProxy(event.target.value)}
+            />
+            {proxy !== undefined && proxy !== (provider.proxy ?? '') ? (
+              <button
+                className={styles.saveAction}
+                disabled={props.busy}
+                onClick={() => {
+                  props.onSaveField(props.selected!, 'proxy', proxy.trim());
+                  setProxy(undefined);
+                }}
+              >
+                Save
+              </button>
+            ) : null}
+          </div>
+        </div>
+
+        <div className={styles.fieldRow}>
           <span className={styles.fieldLabel}>Credentials</span>
           <span className={styles.fieldStatic}>
             {provider.hasApiKey ? 'API key configured' : provider.hasOauthToken ? 'OAuth token configured' : 'none stored'}
@@ -188,6 +216,7 @@ function AddProviderForm({
   const [type, setType] = useState<string>('openai-compatible');
   const [baseUrl, setBaseUrl] = useState('');
   const [apiKeyEnv, setApiKeyEnv] = useState('');
+  const [proxy, setProxy] = useState('');
 
   const trimmed = name.trim();
   const problem =
@@ -225,6 +254,10 @@ function AddProviderForm({
           <span className={styles.fieldLabel}>API key env</span>
           <input className={styles.input} value={apiKeyEnv} placeholder="MYREMOTE_API_KEY" onChange={event => setApiKeyEnv(event.target.value)} />
         </div>
+        <div className={styles.fieldRow}>
+          <span className={styles.fieldLabel}>Proxy</span>
+          <input className={styles.input} value={proxy} placeholder="http://127.0.0.1:7890 — blank = direct" onChange={event => setProxy(event.target.value)} />
+        </div>
       </section>
       {problem ? <div className={styles.problem}>{problem}</div> : null}
       <div className={styles.formActions}>
@@ -240,6 +273,7 @@ function AddProviderForm({
               type,
               ...(baseUrl.trim() ? { baseUrl: baseUrl.trim() } : {}),
               ...(apiKeyEnv.trim() ? { apiKeyEnv: apiKeyEnv.trim() } : {}),
+              ...(proxy.trim() ? { proxy: proxy.trim() } : {}),
             })
           }
         >

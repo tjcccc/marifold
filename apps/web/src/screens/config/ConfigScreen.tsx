@@ -372,6 +372,7 @@ export function ConfigScreen({ client, route, navigate, onUnauthorized }: Config
               await writeConfig(`providers.${input.name}.type`, input.type);
               if (input.baseUrl) await writeConfig(`providers.${input.name}.base_url`, input.baseUrl);
               if (input.apiKeyEnv) await writeConfig(`providers.${input.name}.api_key_env`, input.apiKeyEnv);
+              if (input.proxy) await writeConfig(`providers.${input.name}.proxy`, input.proxy);
               setProviderStatus(undefined); // re-probe with the new entry
               go('providers', input.name);
             }}

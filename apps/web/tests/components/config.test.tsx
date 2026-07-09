@@ -166,6 +166,37 @@ describe('ModelsPage', () => {
   });
 });
 
+describe('ProvidersPage', () => {
+  it('shows a per-provider proxy and saves it as the providers.<name>.proxy key', async () => {
+    const { ProvidersPage } = await import('../../src/screens/config/ProvidersPage');
+    const onSaveField = vi.fn();
+    const config = {
+      default: { profile: 'default' },
+      models: { options: [] },
+      providers: {
+        xai: { type: 'openai-compatible', baseUrl: 'https://api.x.ai/v1', proxy: 'http://127.0.0.1:7890' },
+      },
+    };
+    render(
+      <ProvidersPage
+        selected="xai"
+        config={config as never}
+        status={[]}
+        busy={false}
+        onSaveField={onSaveField}
+        onRefreshStatus={() => {}}
+        onAddProvider={async () => {}}
+      />,
+    );
+    const proxyInput = screen.getByPlaceholderText(/blank = direct/) as HTMLInputElement;
+    expect(proxyInput.value).toBe('http://127.0.0.1:7890');
+    // Editing + Save must produce the providers.<name>.proxy wire key, trimmed.
+    fireEvent.change(proxyInput, { target: { value: '  http://127.0.0.1:1080  ' } });
+    fireEvent.click(screen.getByText('Save'));
+    expect(onSaveField).toHaveBeenCalledWith('xai', 'proxy', 'http://127.0.0.1:1080');
+  });
+});
+
 describe('ServicePage', () => {
   it('shows the sanitized service view and saves edited fields', async () => {
     const { ServicePage } = await import('../../src/screens/config/ServicePage');

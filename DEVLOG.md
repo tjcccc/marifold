@@ -2,6 +2,14 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-07-10 — v0.41.0 — Web UI: per-provider proxy field
+
+Exposes the v0.40.0 per-provider `proxy` setting in the browser Config → Providers page, for parity with the CLI (`config set providers.<name>.proxy`).
+
+- **Service** — `publicProvider` (the sanitized `/v1/config` view) now includes `proxy` when set. It's a non-secret URL exposed in the clear like `base_url` (not a boolean like `hasApiKey`). **Note:** a proxy URL *can* embed credentials (`http://user:pass@host`); it is stored and shown in plaintext, same as a secret in a `base_url` query string — by design, consistent with the existing wire contract. Raw `api_key` still never crosses the wire.
+- **Web** — `PublicConfig.providers` gains `proxy?`; `ProvidersPage` adds a Proxy input to both the provider detail view (edit + Save → `onSaveField(name, 'proxy', …)` → PATCH `providers.<name>.proxy`) and the add-provider form (`AddProviderInput.proxy` → `ConfigScreen` writes `providers.<name>.proxy` on create). Placeholder documents "blank = direct".
+- Verified: full `typecheck && build && test` green. +1 web test (ProvidersPage: proxy shown + Save emits the `providers.<name>.proxy` key, trimmed), +1 service assertion (PATCH `providers.xai.proxy` surfaces in the sanitized view). Backend `setValue`/direct-vs-proxied already covered by v0.40.0's `ProviderProxy.test.ts`.
+
 ## 2026-07-10 — v0.40.0 — xAI Grok provider (SuperGrok OAuth) + per-provider proxy
 
 Adds `xai` as an OAuth provider so a SuperGrok / X Premium+ subscription drives Grok models with no separate API key — the same subscription-OAuth pattern as `chatgpt`, but simpler because `api.x.ai/v1` is a plain OpenAI-compatible surface: the OAuth access token is used as a normal `Bearer` credential with no special backend or account header.

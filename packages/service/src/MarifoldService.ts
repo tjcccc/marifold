@@ -503,6 +503,10 @@ function publicProvider(provider: MarifoldProviderConfig): JsonObject {
     type: provider.type,
     ...(provider.baseUrl ? { baseUrl: provider.baseUrl } : {}),
     ...(provider.apiKeyEnv ? { apiKeyEnv: provider.apiKeyEnv } : {}),
+    // proxy is a non-secret URL like baseUrl, so it crosses the wire in the
+    // clear (unlike api_key). A proxy URL *can* embed credentials
+    // (user:pass@host); that's the caller's choice, same as a secret in baseUrl.
+    ...(provider.proxy ? { proxy: provider.proxy } : {}),
     hasApiKey: Boolean(provider.apiKey),
     hasOauthToken: Boolean(provider.oauthToken),
     hasApiKeyExpiresAt: provider.apiKeyExpiresAt !== undefined,
