@@ -2,6 +2,16 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-07-10 — v0.43.1 — Web UI fixes from the browser pass
+
+Follow-ups to v0.42/0.43 after a real browser pass:
+
+- **Autocomplete scroll** — the `$` menu now scrolls the highlighted suggestion into view on ↑↓ (`scrollIntoView({ block: 'nearest' })`), so it no longer disappears below the fold after a few Downs.
+- **Avatar storage — clean break** — dropped the legacy root-`avatar.*` read/clean fallback; `assets/avatar.<ext>` is now the only location. Migrated the user's existing root avatars (`friend`, `x-runner`) into `assets/` and verified all avatars resolve. `findProfileAvatar`/`removeAvatarFiles` are assets-only; the migration test became an "ignores root avatars" test.
+- **Avatar bigger** — 96 → **120px** on the profile page.
+- **Remove-photo hidden** — the conspicuous red "Remove photo" link is gone from the profile header (deletion stays available via runtime/CLI; re-add later if wanted).
+- Verified: full gate green; +1 InputBar scroll test; ProfileResolver avatar tests updated. Real-data check: `friend`/`painter`/`x-runner` avatars resolve from `assets/`.
+
 ## 2026-07-10 — v0.43.0 — Web UI: $skill highlight + autocomplete
 
 Brings the TUI's `$skill` composer affordances to the browser (the `/command` half is deferred — the web has no slash-command handler yet).

@@ -340,17 +340,12 @@ describe('ProfileResolver', () => {
     expect(pm.avatar('painter')).toBeUndefined();
   });
 
-  it('discovers a legacy root-level avatar and migrates it into assets/ on re-upload', () => {
+  it('reads avatars only from assets/ (root-level avatars are not a supported location)', () => {
     const root = tempDir();
     const pm = new ProfileManager(root);
-    pm.init('legacy');
-    // A profile created before avatars moved under assets/.
-    fs.writeFileSync(path.join(root, 'legacy', 'avatar.png'), Buffer.from('old'));
-    expect(pm.avatar('legacy')).toMatchObject({ mediaType: 'image/png' });
-
-    // A new upload writes under assets/ and clears the legacy root copy.
-    pm.setAvatar('legacy', Buffer.from('new'), 'image/png');
-    expect(fs.existsSync(path.join(root, 'legacy', 'avatar.png'))).toBe(false);
-    expect(fs.existsSync(path.join(root, 'legacy', 'assets', 'avatar.png'))).toBe(true);
+    pm.init('rooted');
+    // A stray root-level avatar is ignored — assets/ is the only location.
+    fs.writeFileSync(path.join(root, 'rooted', 'avatar.png'), Buffer.from('stray'));
+    expect(pm.avatar('rooted')).toBeUndefined();
   });
 });

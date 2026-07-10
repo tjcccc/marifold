@@ -60,6 +60,17 @@ describe('InputBar $-autocomplete', () => {
     expect(textarea.value).toBe('$make-midjourney-prompt ');
   });
 
+  it('scrolls the highlighted suggestion into view as the arrows move it', () => {
+    const scrollSpy = vi.fn();
+    Element.prototype.scrollIntoView = scrollSpy; // jsdom has no layout; observe the call
+    const { textarea } = renderBar();
+    fireEvent.focus(textarea);
+    fireEvent.change(textarea, { target: { value: '$' } });
+    scrollSpy.mockClear();
+    fireEvent.keyDown(textarea, { key: 'ArrowDown' });
+    expect(scrollSpy).toHaveBeenCalled();
+  });
+
   it('Escape dismisses the menu; plain Enter then submits', () => {
     const { textarea, onSubmit } = renderBar();
     fireEvent.focus(textarea);

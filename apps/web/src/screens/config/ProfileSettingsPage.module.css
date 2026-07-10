@@ -18,8 +18,8 @@
 /* Clickable avatar with an Apple/social-style edit overlay on hover. */
 .avatarButton {
   position: relative;
-  width: 96px;
-  height: 96px;
+  width: 120px;
+  height: 120px;
   border-radius: 50%;
   overflow: hidden;
   display: inline-flex;
@@ -59,12 +59,12 @@ button.avatarButton:disabled {
 }
 
 .avatar {
-  width: 96px;
-  height: 96px;
+  width: 120px;
+  height: 120px;
   border-radius: 50%;
   background: var(--brand-fill);
   color: var(--on-brand);
-  font-size: 40px;
+  font-size: 50px;
   font-weight: 700;
   display: inline-flex;
   align-items: center;

@@ -319,7 +319,7 @@ export function ConfigScreen({ client, route, navigate, onUnauthorized }: Config
                   client={client}
                   name={detail.name}
                   hasAvatar={detail.avatar !== undefined}
-                  size={96}
+                  size={120}
                   version={avatarVersion}
                 />
               }

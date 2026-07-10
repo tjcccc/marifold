@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { SkillHint } from '../../api/misc';
 import type { PreparedAttachment } from '../../lib/attachments';
 import { skillQuery, splitLeadingSkill } from '../../lib/commandSyntax';
@@ -35,6 +35,7 @@ export function InputBar(props: InputBarProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const highlightRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const activeItemRef = useRef<HTMLLIElement>(null);
   const attachments = props.attachments ?? [];
   // Steering rides an active run — attachments can't join mid-task.
   const canAttach = props.onAttachFiles !== undefined && !props.steering;
@@ -45,6 +46,11 @@ export function InputBar(props: InputBarProps) {
     : [];
   const menuOpen = focused && !dismissed && matches.length > 0;
   const active = Math.min(activeIndex, Math.max(0, matches.length - 1));
+
+  // Keep the highlighted suggestion scrolled into view as the arrows move it.
+  useEffect(() => {
+    if (menuOpen) activeItemRef.current?.scrollIntoView?.({ block: 'nearest' });
+  }, [active, menuOpen]);
 
   function submit(): void {
     const value = text.trim();
@@ -169,6 +175,7 @@ export function InputBar(props: InputBarProps) {
               {matches.map((skill, index) => (
                 <li
                   key={skill.name}
+                  ref={index === active ? activeItemRef : undefined}
                   role="option"
                   aria-selected={index === active}
                   className={index === active ? styles.menuItemActive : styles.menuItem}

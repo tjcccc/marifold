@@ -89,11 +89,8 @@ export function ProfileSettingsPage(props: ProfileSettingsPageProps) {
             {detail.settings.think ? ' · thinking on' : ''}
           </div>
         </div>
-        {canEditAvatar && detail.avatar && props.onAvatarDelete ? (
-          <button className={styles.avatarRemove} disabled={busy} onClick={props.onAvatarDelete}>
-            Remove photo
-          </button>
-        ) : null}
+        {/* "Remove photo" hidden for now (per design); deletion stays available
+            via the runtime/CLI. Re-add a control here when wanted. */}
         {canEditAvatar ? (
           <input
             ref={avatarInputRef}
