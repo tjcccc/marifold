@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { ProfileFileKind, ProfilePatchInput } from '../../api/profiles';
 import type { ApprovalMode, MarifoldAgentConfig, MemoryEntry, ProfileDetail } from '../../api/types';
+import { AvatarCropper } from '../../components/AvatarCropper';
 import { SegmentedControl } from '../../components/SegmentedControl';
 import { formatRelativeTime } from '../../lib/format';
 import { resolveEffectivePermissions, TOOL_KIND_LABELS, TOOL_KINDS } from '../../lib/permissions';
@@ -50,51 +51,75 @@ export function ProfileSettingsPage(props: ProfileSettingsPageProps) {
     ? `${detail.settings.provider}/${detail.settings.model}`
     : '';
   const [newFolder, setNewFolder] = useState('');
+  const [cropFile, setCropFile] = useState<File | undefined>();
   const avatarInputRef = useRef<HTMLInputElement>(null);
+  const canEditAvatar = props.onAvatarPick !== undefined;
+
+  const avatarNode = props.avatar ?? (
+    <span className={styles.avatar} aria-hidden>
+      {detail.name.slice(0, 1).toUpperCase()}
+    </span>
+  );
 
   return (
     <div className={styles.page}>
       <header className={styles.identity}>
-        {props.avatar ?? (
-          <span className={styles.avatar} aria-hidden>
-            {detail.name.slice(0, 1).toUpperCase()}
-          </span>
+        {canEditAvatar ? (
+          <button
+            type="button"
+            className={styles.avatarButton}
+            disabled={busy}
+            title={detail.avatar ? 'Change avatar' : 'Add avatar'}
+            aria-label={detail.avatar ? 'Change avatar' : 'Add avatar'}
+            onClick={() => avatarInputRef.current?.click()}
+          >
+            {avatarNode}
+            <span className={styles.avatarOverlay} aria-hidden>
+              <span className={styles.avatarOverlayIcon}>⌾</span>
+              {detail.avatar ? 'Change' : 'Add'}
+            </span>
+          </button>
+        ) : (
+          <div className={styles.avatarButton}>{avatarNode}</div>
         )}
-        <div>
+        <div className={styles.identityText}>
           <div className={styles.name}>{detail.name}</div>
           <div className={styles.identitySub}>
             {detail.source} profile
             {detail.settings.think ? ' · thinking on' : ''}
           </div>
         </div>
-        {props.onAvatarPick ? (
-          <div className={styles.avatarActions}>
-            <button
-              className={styles.avatarAction}
-              disabled={busy}
-              onClick={() => avatarInputRef.current?.click()}
-            >
-              {detail.avatar ? 'Change avatar' : 'Add avatar'}
-            </button>
-            {detail.avatar && props.onAvatarDelete ? (
-              <button className={styles.avatarActionDanger} disabled={busy} onClick={props.onAvatarDelete}>
-                Remove
-              </button>
-            ) : null}
-            <input
-              ref={avatarInputRef}
-              type="file"
-              accept="image/png,image/jpeg,image/webp"
-              className={styles.avatarInput}
-              onChange={event => {
-                const file = event.target.files?.[0];
-                if (file) props.onAvatarPick?.(file);
-                event.target.value = '';
-              }}
-            />
-          </div>
+        {canEditAvatar && detail.avatar && props.onAvatarDelete ? (
+          <button className={styles.avatarRemove} disabled={busy} onClick={props.onAvatarDelete}>
+            Remove photo
+          </button>
+        ) : null}
+        {canEditAvatar ? (
+          <input
+            ref={avatarInputRef}
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            className={styles.avatarInput}
+            onChange={event => {
+              const file = event.target.files?.[0];
+              if (file) setCropFile(file);
+              event.target.value = '';
+            }}
+          />
         ) : null}
       </header>
+
+      {cropFile ? (
+        <AvatarCropper
+          file={cropFile}
+          busy={busy}
+          onCancel={() => setCropFile(undefined)}
+          onConfirm={processed => {
+            props.onAvatarPick?.(processed);
+            setCropFile(undefined);
+          }}
+        />
+      ) : null}
 
       <section className={styles.group} aria-label="Model">
         <div className={styles.groupTitle}>Model</div>

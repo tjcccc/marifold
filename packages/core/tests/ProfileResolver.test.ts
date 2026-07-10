@@ -311,15 +311,16 @@ describe('ProfileResolver', () => {
     const pm = new ProfileManager(root);
     pm.init('painter');
 
-    // Validation: type and size.
+    // Validation: type and size (ceiling is 2 MB).
     expect(() => pm.setAvatar('painter', Buffer.from('x'), 'image/tiff')).toThrow(/Unsupported avatar type/);
-    expect(() => pm.setAvatar('painter', Buffer.alloc(1024 * 1024 + 1), 'image/png')).toThrow(/between 1 byte/);
+    expect(() => pm.setAvatar('painter', Buffer.alloc(2 * 1024 * 1024 + 1), 'image/png')).toThrow(/between 1 byte/);
 
-    // Store, then replace with a different extension — old file goes away.
+    // Store under assets/, then replace with a different extension — old file goes away.
     pm.setAvatar('painter', Buffer.from('png-bytes'), 'image/png');
     expect(pm.avatar('painter')).toMatchObject({ mediaType: 'image/png' });
+    expect(fs.existsSync(path.join(root, 'painter', 'assets', 'avatar.png'))).toBe(true);
     pm.setAvatar('painter', Buffer.from('webp-bytes'), 'image/webp');
-    expect(fs.existsSync(path.join(root, 'painter', 'avatar.png'))).toBe(false);
+    expect(fs.existsSync(path.join(root, 'painter', 'assets', 'avatar.png'))).toBe(false);
     expect(pm.avatar('painter')).toMatchObject({ mediaType: 'image/webp' });
 
     // Summaries carry the flag; profiles without avatars stay clean.
@@ -337,5 +338,19 @@ describe('ProfileResolver', () => {
     expect(pm.deleteAvatar('painter')).toEqual({ name: 'painter', removed: true });
     expect(pm.deleteAvatar('painter')).toEqual({ name: 'painter', removed: false });
     expect(pm.avatar('painter')).toBeUndefined();
+  });
+
+  it('discovers a legacy root-level avatar and migrates it into assets/ on re-upload', () => {
+    const root = tempDir();
+    const pm = new ProfileManager(root);
+    pm.init('legacy');
+    // A profile created before avatars moved under assets/.
+    fs.writeFileSync(path.join(root, 'legacy', 'avatar.png'), Buffer.from('old'));
+    expect(pm.avatar('legacy')).toMatchObject({ mediaType: 'image/png' });
+
+    // A new upload writes under assets/ and clears the legacy root copy.
+    pm.setAvatar('legacy', Buffer.from('new'), 'image/png');
+    expect(fs.existsSync(path.join(root, 'legacy', 'avatar.png'))).toBe(false);
+    expect(fs.existsSync(path.join(root, 'legacy', 'assets', 'avatar.png'))).toBe(true);
   });
 });

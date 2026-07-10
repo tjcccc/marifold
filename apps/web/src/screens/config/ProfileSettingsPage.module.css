@@ -8,21 +8,84 @@
 
 .identity {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 14px;
+  text-align: center;
+  gap: 10px;
+  padding-top: 4px;
+}
+
+/* Clickable avatar with an Apple/social-style edit overlay on hover. */
+.avatarButton {
+  position: relative;
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+button.avatarButton:disabled {
+  cursor: default;
+}
+
+.avatarOverlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  background: rgba(0, 0, 0, 0.44);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.avatarButton:hover .avatarOverlay,
+.avatarButton:focus-visible .avatarOverlay {
+  opacity: 1;
+}
+
+.avatarOverlayIcon {
+  font-size: 20px;
+  line-height: 1;
 }
 
 .avatar {
-  width: 52px;
-  height: 52px;
+  width: 96px;
+  height: 96px;
   border-radius: 50%;
   background: var(--brand-fill);
   color: var(--on-brand);
-  font-size: 22px;
+  font-size: 40px;
   font-weight: 700;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+}
+
+.identityText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.avatarRemove {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--danger);
+}
+
+.avatarRemove:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 .name {
@@ -276,30 +339,6 @@
   color: var(--text-2);
   white-space: pre-wrap;
   overflow-wrap: break-word;
-}
-
-.avatarActions {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.avatarAction,
-.avatarActionDanger {
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--brand-text);
-}
-
-.avatarActionDanger {
-  color: var(--danger);
-}
-
-.avatarAction:disabled,
-.avatarActionDanger:disabled {
-  opacity: 0.5;
-  cursor: default;
 }
 
 .avatarInput {

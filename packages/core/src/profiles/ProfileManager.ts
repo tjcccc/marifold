@@ -16,7 +16,13 @@ const AVATAR_MEDIA_TYPES: Record<string, string> = {
   'image/jpeg': 'jpg',
   'image/webp': 'webp',
 };
-const MAX_AVATAR_BYTES = 1024 * 1024;
+/** Media assets (avatars, and future banners/exports) live under this subdir
+ * so binaries don't clutter the profile root next to profile.md/rules.md. */
+const ASSETS_DIR = 'assets';
+// The web client crops + downscales to 512² and re-encodes lossless PNG before
+// upload, so the stored file stays small; this ceiling guards the processed
+// output (a lossless 512² PNG can exceed 1 MB for detailed images).
+const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
 
 const PROFILE_MD_STUB = `# {name}
 
@@ -313,15 +319,17 @@ export class ProfileManager {
       || fs.existsSync(path.join(this.profilesDir, `${name}.json`));
   }
 
-  /** The profile's stored avatar image, if any (`avatar.<ext>` in its dir). */
+  /** The profile's stored avatar image, if any (`assets/avatar.<ext>`, or a
+   * legacy root-level `avatar.<ext>`). */
   avatar(name: string): { path: string; mediaType: string } | undefined {
     assertSafeName(name);
     return findProfileAvatar(this.profilesDir, name);
   }
 
-  /** Store the avatar (PNG/JPEG/WebP, ≤1 MB), replacing any previous one —
-   * including one of a different extension. Creates the profile dir if absent
-   * (the built-in default is served without one; mirrors setAgentApproval). */
+  /** Store the avatar (PNG/JPEG/WebP, ≤2 MB) under assets/, replacing any
+   * previous one — including one of a different extension or a legacy root
+   * avatar. Creates the profile dir if absent (the built-in default is served
+   * without one; mirrors setAgentApproval). */
   setAvatar(name: string, image: Buffer, mediaType: string): { name: string; path: string; mediaType: string } {
     assertSafeName(name);
     const ext = AVATAR_MEDIA_TYPES[mediaType];
@@ -335,9 +343,10 @@ export class ProfileManager {
       throw MarifoldError.profileInvalid(`Avatar images must be between 1 byte and ${MAX_AVATAR_BYTES / 1024} KB.`, name);
     }
     const profileDir = path.join(this.profilesDir, name);
-    fs.mkdirSync(profileDir, { recursive: true });
-    this.removeAvatarFiles(profileDir);
-    const filePath = path.join(profileDir, `avatar.${ext}`);
+    const assetsDir = path.join(profileDir, ASSETS_DIR);
+    fs.mkdirSync(assetsDir, { recursive: true });
+    this.removeAvatarFiles(profileDir); // clears both assets/ and any legacy root avatar
+    const filePath = path.join(assetsDir, `avatar.${ext}`);
     fs.writeFileSync(filePath, image);
     return { name, path: filePath, mediaType };
   }
@@ -351,11 +360,13 @@ export class ProfileManager {
 
   private removeAvatarFiles(profileDir: string): boolean {
     let removed = false;
-    for (const ext of Object.values(AVATAR_MEDIA_TYPES)) {
-      const filePath = path.join(profileDir, `avatar.${ext}`);
-      if (fs.existsSync(filePath)) {
-        fs.rmSync(filePath, { force: true });
-        removed = true;
+    for (const dir of [path.join(profileDir, ASSETS_DIR), profileDir]) {
+      for (const ext of Object.values(AVATAR_MEDIA_TYPES)) {
+        const filePath = path.join(dir, `avatar.${ext}`);
+        if (fs.existsSync(filePath)) {
+          fs.rmSync(filePath, { force: true });
+          removed = true;
+        }
       }
     }
     return removed;
@@ -387,9 +398,13 @@ export class ProfileManager {
 /** Locate a profile's avatar file. Shared with ProfileResolver so summaries
  * can flag avatars without duplicating the media-type mapping. */
 export function findProfileAvatar(profilesDir: string, name: string): { path: string; mediaType: string } | undefined {
-  for (const [mediaType, ext] of Object.entries(AVATAR_MEDIA_TYPES)) {
-    const filePath = path.join(profilesDir, name, `avatar.${ext}`);
-    if (fs.existsSync(filePath)) return { path: filePath, mediaType };
+  // Prefer the assets/ subfolder; fall back to a legacy root-level avatar so
+  // profiles created before the assets/ move keep their image.
+  for (const dir of [path.join(profilesDir, name, ASSETS_DIR), path.join(profilesDir, name)]) {
+    for (const [mediaType, ext] of Object.entries(AVATAR_MEDIA_TYPES)) {
+      const filePath = path.join(dir, `avatar.${ext}`);
+      if (fs.existsSync(filePath)) return { path: filePath, mediaType };
+    }
   }
   return undefined;
 }

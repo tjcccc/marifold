@@ -2,6 +2,13 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-07-10 — v0.42.0 — Web UI polish: avatar crop/compress + header logo
+
+- **Header logo** — mark 28→**32px**, brand gap 8→**4px** (`TopNav`).
+- **Avatar, Apple/social style** (`ProfileSettingsPage`) — the profile identity header is now a **centered** column with a **96px avatar** that reveals an edit overlay on hover; clicking opens the file picker. Selecting an image opens a new **`AvatarCropper`** modal (drag to reposition, zoom slider, circular preview); on save it draws the visible square to a 512² canvas and exports a **lossless PNG**, so large inputs are downscaled on save while the stored file stays small. Flows through the existing `onAvatarPick(File)` → `putAvatar` path unchanged.
+- **Avatar storage** (`ProfileManager`) — moved from the profile root to **`<profile>/assets/avatar.<ext>`** so binaries don't sit next to `profile.md`/`rules.md`; `findProfileAvatar` still reads a **legacy root-level** `avatar.*` for back-compat, and a re-upload migrates it into `assets/`. Size ceiling 1 MB → **2 MB** (guards the processed 512² PNG). Only `apps/web`'s profile page routes through the cropper; the CLI/create-sheet upload paths are unchanged.
+- Verified: full `typecheck && build && test` green. Core avatar test updated (asserts `assets/avatar.png`, 2 MB limit) + new back-compat/migration test; web + service suites pass. **Not browser-verified** — the canvas crop can't run under jsdom; needs a visual pass. (`$`/`/` input highlighting + autocomplete is the next task.)
+
 ## 2026-07-10 — v0.41.0 — Web UI: per-provider proxy field
 
 Exposes the v0.40.0 per-provider `proxy` setting in the browser Config → Providers page, for parity with the CLI (`config set providers.<name>.proxy`).
