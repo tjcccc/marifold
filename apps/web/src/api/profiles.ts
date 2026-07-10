@@ -156,3 +156,13 @@ export async function deleteMemory(
   );
   return body.memories;
 }
+
+/** Save a memory for a profile (the /remember command). */
+export async function rememberMemory(client: ApiClient, profile: string, text: string): Promise<MemoryEntry[]> {
+  const body = await client.request<{ memories: MemoryEntry[] }>(
+    'POST',
+    `/v1/profiles/${encodeURIComponent(profile)}/memories`,
+    { text },
+  );
+  return body.memories;
+}

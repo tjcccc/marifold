@@ -2,6 +2,17 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-07-10 — v0.44.0 — Web UI: /command palette (15 commands)
+
+Brings the TUI's `/command` layer to the composer, reusing the `$skill` autocomplete/highlight infra generalized over both sigils (`lib/commandSyntax`: `menuQuery`/`splitLeading`/`parseCommand` + a static `WEB_COMMANDS` list). Typing `/` opens the same keyboard-navigable menu.
+
+- **15 commands**, wired to real actions: `/help /status /copy /retry /new /agent /chat /think /model <id> /btw <text> /stop /remember <text> /forget <query> /context-window /compact`. Unknown → notice, nothing sent. Command handling runs **before** steering, so `/stop`/`/btw` act on a live run instead of steering-as-text. A path like `/a/b` is not treated as a command (word-boundary rule).
+- **Execution** lives in `useAgentController.runCommand`; the message path was extracted **verbatim** into `sendMessage` (so `/retry` re-runs the last message and `send` dispatches command-vs-message without touching the load-bearing steering/attachments/chat-vs-agent logic).
+- **2 new endpoints** (thin, mirroring existing routes): `POST /v1/profiles/:name/memories` (`/remember`) and `POST /v1/sessions/:id/compact` (`/compact`); web `rememberMemory`/`compactSession`. `/forget` reuses list + delete-by-id (substring match). `/copy` uses the clipboard; `/status` reads controller state.
+- **`/help` rendering fixed** — multi-line notices render as a left-aligned block (`white-space: pre-line`) instead of collapsing into a run-on pill.
+- **Deliberate choices:** `/context-window` is **show-only** (changing the global budget from chat would silently affect every profile — left to Config); `/agent`/`/chat` **persist to the profile** (the web has no session-only mode; same as the Config toggle).
+- Verified: full `typecheck && build && test` green. Tests: `commandSyntax` (15-command set, path/boundary parsing), `InputBar` (`/` menu + completion past the 8-item cap), `/remember` endpoint. **Not unit-tested** (need a browser/live pass): `runCommand` execution and `/compact` (needs a live provider).
+
 ## 2026-07-10 — v0.43.1 — Web UI fixes from the browser pass
 
 Follow-ups to v0.42/0.43 after a real browser pass:

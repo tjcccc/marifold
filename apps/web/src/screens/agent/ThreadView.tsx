@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { Markdown } from '../../components/Markdown';
 import type { RunApprovalAction } from '../../api/types';
-import { splitLeadingSkill } from '../../lib/commandSyntax';
+import { splitLeading } from '../../lib/commandSyntax';
 import { formatCostUSD, formatRunDuration, formatTokens } from '../../lib/format';
 import type { RunCardState, ThreadItem } from '../../state/thread';
 import { hasRunActivity, isTrivialRun } from '../../state/thread';
@@ -115,8 +115,16 @@ function ThreadItemView({
         </div>
       );
     }
-    case 'notice':
-      return <div className={`${styles.notice} ${styles[`notice_${item.tone}`]}`}>{item.text}</div>;
+    case 'notice': {
+      // Multi-line notices (e.g. /help) render as a left-aligned block instead
+      // of the centered pill so the lines don't collapse into a run-on.
+      const block = item.text.includes('\n');
+      return (
+        <div className={`${styles.notice} ${block ? styles.noticeBlock : ''} ${styles[`notice_${item.tone}`]}`}>
+          {item.text}
+        </div>
+      );
+    }
     case 'run': {
       const run = item.run;
       if (!hasRunActivity(run)) {
@@ -161,7 +169,7 @@ function runMetaText(run: RunCardState): string {
 /** A user bubble with the leading `$skill` token highlighted (mirrors the
  * composer). Non-skill messages render as plain text. */
 function renderUserText(text: string): ReactNode {
-  const { token, rest } = splitLeadingSkill(text);
+  const { token, rest } = splitLeading(text);
   if (!token) return text;
   return (
     <>

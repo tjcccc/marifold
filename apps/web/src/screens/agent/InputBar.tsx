@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import type { SkillHint } from '../../api/misc';
 import type { PreparedAttachment } from '../../lib/attachments';
-import { skillQuery, splitLeadingSkill } from '../../lib/commandSyntax';
+import { menuQuery, splitLeading, WEB_COMMANDS } from '../../lib/commandSyntax';
+import type { Suggestion } from '../../lib/commandSyntax';
 import styles from './InputBar.module.css';
 
 const MAX_SUGGESTIONS = 8;
@@ -40,12 +41,12 @@ export function InputBar(props: InputBarProps) {
   // Steering rides an active run — attachments can't join mid-task.
   const canAttach = props.onAttachFiles !== undefined && !props.steering;
 
-  const query = skillQuery(text);
-  const matches = query !== undefined
-    ? (props.skills ?? []).filter(skill => skill.name.startsWith(query)).slice(0, MAX_SUGGESTIONS)
-    : [];
+  const menu = menuQuery(text);
+  const source: Suggestion[] = menu?.sigil === '/' ? WEB_COMMANDS : (props.skills ?? []);
+  const matches = menu ? source.filter(item => item.name.startsWith(menu.query)).slice(0, MAX_SUGGESTIONS) : [];
   const menuOpen = focused && !dismissed && matches.length > 0;
   const active = Math.min(activeIndex, Math.max(0, matches.length - 1));
+  const sigil = menu?.sigil ?? '$';
 
   // Keep the highlighted suggestion scrolled into view as the arrows move it.
   useEffect(() => {
@@ -62,8 +63,8 @@ export function InputBar(props: InputBarProps) {
     if (node) node.style.height = 'auto';
   }
 
-  function complete(skill: SkillHint): void {
-    setText(`$${skill.name} `);
+  function complete(item: Suggestion): void {
+    setText(`${sigil}${item.name} `);
     setActiveIndex(0);
     setDismissed(false);
     const node = textareaRef.current;
@@ -115,7 +116,7 @@ export function InputBar(props: InputBarProps) {
     node.style.height = `${Math.min(node.scrollHeight, 160)}px`;
   }
 
-  const { token, rest } = splitLeadingSkill(text);
+  const { token, rest } = splitLeading(text);
 
   return (
     <div className={styles.wrap}>
@@ -171,22 +172,22 @@ export function InputBar(props: InputBarProps) {
         ) : null}
         <div className={styles.inputWrap}>
           {menuOpen ? (
-            <ul className={styles.menu} role="listbox" aria-label="Skills">
-              {matches.map((skill, index) => (
+            <ul className={styles.menu} role="listbox" aria-label={sigil === '/' ? 'Commands' : 'Skills'}>
+              {matches.map((item, index) => (
                 <li
-                  key={skill.name}
+                  key={item.name}
                   ref={index === active ? activeItemRef : undefined}
                   role="option"
                   aria-selected={index === active}
                   className={index === active ? styles.menuItemActive : styles.menuItem}
                   onMouseDown={event => {
                     event.preventDefault(); // keep textarea focus through the click
-                    complete(skill);
+                    complete(item);
                   }}
                   onMouseEnter={() => setActiveIndex(index)}
                 >
-                  <span className={styles.menuName}>{skill.usage}</span>
-                  {skill.description ? <span className={styles.menuDesc}>{skill.description}</span> : null}
+                  <span className={styles.menuName}>{item.usage}</span>
+                  {item.description ? <span className={styles.menuDesc}>{item.description}</span> : null}
                 </li>
               ))}
             </ul>

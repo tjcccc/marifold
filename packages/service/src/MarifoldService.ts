@@ -274,6 +274,18 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
     deleted: runtime.deleteSession(request.params.id),
   }));
 
+  // Manually compact a session now (the /compact command): summarize older turns.
+  server.post<{ Params: { id: string } }>('/v1/sessions/:id/compact', async request => {
+    const body = objectBody(request.body);
+    const result = await runtime.compactSession(request.params.id, {
+      profile: requiredString(body.profile, 'profile'),
+      ...(typeof body.provider === 'string' ? { provider: body.provider } : {}),
+      ...(typeof body.model === 'string' ? { model: body.model } : {}),
+      ...(typeof body.think === 'boolean' ? { think: body.think } : {}),
+    });
+    return { ok: true, ...result };
+  });
+
   server.post('/v1/ask', async request => ({
     ok: true,
     response: await runtime.ask(parseRunRequest(request.body)),

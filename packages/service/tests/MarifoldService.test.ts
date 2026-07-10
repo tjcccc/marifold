@@ -56,6 +56,28 @@ describe('MarifoldService', () => {
     }
   });
 
+  it('POST /v1/profiles/:name/memories saves a memory (the /remember command)', async () => {
+    const server = createMarifoldService({ loadedConfig: fixtureLoadedConfig(tempDir()), scheduler: false });
+    try {
+      const res = await server.inject({
+        method: 'POST',
+        url: '/v1/profiles/default/memories',
+        payload: { text: 'Prefers en dashes over em dashes.' },
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json().memories.some((memory: { text: string }) => memory.text.includes('en dashes'))).toBe(true);
+
+      const empty = await server.inject({
+        method: 'POST',
+        url: '/v1/profiles/default/memories',
+        payload: { text: '   ' },
+      });
+      expect(empty.statusCode).toBe(400);
+    } finally {
+      await server.close();
+    }
+  });
+
   it('creates and updates task state through the API', async () => {
     const server = createMarifoldService({ loadedConfig: fixtureLoadedConfig(tempDir()), scheduler: false });
     try {

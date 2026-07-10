@@ -78,4 +78,30 @@ describe('InputBar $-autocomplete', () => {
     fireEvent.keyDown(textarea, { key: 'Enter' });
     expect(onSubmit).toHaveBeenCalledWith('hello');
   });
+
+  it('offers /commands and completes them (submission routes to the controller)', () => {
+    const { textarea, onSubmit } = renderBar();
+    fireEvent.focus(textarea);
+    fireEvent.change(textarea, { target: { value: '/' } });
+    // The built-in command set shows (capped), not skills.
+    expect(screen.getByText('/help')).toBeTruthy();
+    expect(screen.getByText('/new')).toBeTruthy();
+    expect(screen.queryByText('$translate <text> [language]')).toBeNull();
+
+    // Filtering surfaces a command past the visible cap, then Enter completes it.
+    fireEvent.change(textarea, { target: { value: '/mod' } });
+    expect(screen.getByText('/model <id>')).toBeTruthy();
+    fireEvent.keyDown(textarea, { key: 'Enter' });
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(textarea.value).toBe('/model ');
+  });
+
+  it('submits a completed command as text (the controller interprets it)', () => {
+    const { textarea, onSubmit } = renderBar();
+    fireEvent.focus(textarea);
+    fireEvent.change(textarea, { target: { value: '/new' } });
+    fireEvent.keyDown(textarea, { key: 'Enter' }); // completes → "/new "
+    fireEvent.keyDown(textarea, { key: 'Enter' }); // menu closed → submits
+    expect(onSubmit).toHaveBeenCalledWith('/new');
+  });
 });

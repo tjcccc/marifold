@@ -159,6 +159,21 @@ export function registerProfileRoutes(server: FastifyInstance, runtime: Marifold
       memories: runtime.listMemories(name, false),
     };
   });
+
+  // Save a memory (the /remember command). Mirrors the memory-DELETE route's
+  // auth + phantom-profile guard.
+  server.post<{ Params: { name: string } }>('/v1/profiles/:name/memories', async request => {
+    const name = request.params.name;
+    runtime.getProfile(name); // avoid MemoryStore scaffolding a phantom profile
+    const text = stringValue(objectBody(request.body).text, 'text').trim();
+    if (!text) throw MarifoldError.configInvalid('Memory text cannot be empty.');
+    runtime.rememberMemory(name, 'auto_short', text);
+    return {
+      ok: true,
+      profile: name,
+      memories: runtime.listMemories(name, false),
+    };
+  });
 }
 
 function parseProfilePatch(value: unknown): ProfilePatch {

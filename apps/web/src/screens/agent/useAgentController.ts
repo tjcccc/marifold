@@ -4,9 +4,9 @@ import { MarifoldApiError } from '../../api/client';
 import { streamChat } from '../../api/chat';
 import { getModels, getSkills, getStatus } from '../../api/misc';
 import type { SkillHint } from '../../api/misc';
-import { getProfile, listProfiles } from '../../api/profiles';
+import { deleteMemory, getProfile, listMemories, listProfiles, rememberMemory, updateProfile } from '../../api/profiles';
 import { answerApproval, cancelRun, listRuns, startRun, steerRun } from '../../api/runs';
-import { getSession, listSessions } from '../../api/sessions';
+import { compactSession, getSession, listSessions } from '../../api/sessions';
 import type {
   ProfileDetail,
   ProfileSummary,
@@ -17,6 +17,7 @@ import type {
 import type { Route } from '../../lib/hashRoute';
 import type { PreparedAttachment } from '../../lib/attachments';
 import { inlineTextAttachments, prepareFiles } from '../../lib/attachments';
+import { parseCommand, WEB_COMMANDS } from '../../lib/commandSyntax';
 import { RunFollowers } from '../../state/followers';
 import type { ThreadState, UserAttachment } from '../../state/thread';
 import { activeRun, createThreadState, threadReducer } from '../../state/thread';
@@ -289,10 +290,12 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
     setAttachments(prev => prev.filter((_, i) => i !== index));
   }, []);
 
-  const send = useCallback(
-    async (text: string) => {
-      const trimmed = text.trim();
-      if (!trimmed || !profileName) return;
+  // The message send path (steering, session bootstrap, attachments, chat vs
+  // agent). Extracted so /retry can re-run a message and send() can dispatch to
+  // it after command handling. Moved verbatim — no behavior change.
+  const sendMessage = useCallback(
+    async (trimmed: string) => {
+      if (!profileName) return;
 
       const running = activeRun(threadRef.current);
       if (running) {
@@ -379,6 +382,156 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
       }
     },
     [client, profileName, sessionId, modelChoice, think, profileDetail, followers, navigate, handleError, refreshSessions],
+  );
+
+  const runCommand = useCallback(
+    async ({ name, args }: { name: string; args: string }) => {
+      const notify = (text: string, tone: 'info' | 'warn' | 'error' = 'info') =>
+        dispatch({ type: 'notice', tone, text });
+      switch (name) {
+        case 'help':
+          notify(WEB_COMMANDS.map(command => `${command.usage} — ${command.description}`).join('\n'));
+          break;
+        case 'status':
+          notify([
+            `Profile: ${profileName ?? '—'}`,
+            `Mode: ${profileDetail?.settings.mode ?? 'agent'}`,
+            `Model: ${modelChoice ?? 'Auto (profile default)'}`,
+            `Thinking: ${think ? 'on' : 'off'}`,
+            `Session: ${sessionId ?? 'new'}`,
+          ].join('\n'));
+          break;
+        case 'copy': {
+          const last = [...threadRef.current.items].reverse().find(item => item.kind === 'assistant');
+          const text = last && last.kind === 'assistant' ? last.markdown : '';
+          if (!text) { notify('Nothing to copy yet.'); break; }
+          try {
+            await navigator.clipboard.writeText(text);
+            notify('Copied the last response to the clipboard.');
+          } catch {
+            notify('Clipboard is unavailable in this browser context.', 'warn');
+          }
+          break;
+        }
+        case 'retry': {
+          const lastUser = [...threadRef.current.items].reverse().find(item => item.kind === 'user');
+          const text = lastUser && lastUser.kind === 'user' ? lastUser.text : '';
+          if (!text) { notify('No previous message to retry.'); break; }
+          await sendMessage(text);
+          break;
+        }
+        case 'new':
+          newSession();
+          break;
+        case 'agent':
+        case 'chat': {
+          if (!profileName) break;
+          try {
+            const detail = await updateProfile(client, profileName, { mode: name as 'agent' | 'chat' });
+            setProfileDetail(detail);
+            notify(`Profile mode set to ${name} (saved to the profile).`);
+          } catch (error) {
+            handleError(error);
+          }
+          break;
+        }
+        case 'think':
+          setThink(!think);
+          notify(`Thinking mode ${think ? 'off' : 'on'}.`);
+          break;
+        case 'model':
+          if (args) {
+            setModelChoice(args);
+            notify(`Model set to ${args}.`);
+          } else {
+            notify('Usage: /model <provider/model>, e.g. /model xai/grok-4.5', 'warn');
+          }
+          break;
+        case 'btw': {
+          if (!args) { notify('Usage: /btw <text>', 'warn'); break; }
+          const active = activeRun(threadRef.current);
+          if (active) await steerRun(client, active.runId, args).catch(handleError);
+          else notify('No task is running to steer.');
+          break;
+        }
+        case 'stop': {
+          const active = activeRun(threadRef.current);
+          if (active) await cancelRun(client, active.runId).catch(handleError);
+          else notify('No task is running.');
+          break;
+        }
+        case 'remember': {
+          if (!profileName || !args) { notify('Usage: /remember <text>', 'warn'); break; }
+          try {
+            await rememberMemory(client, profileName, args);
+            notify('Saved to memory.');
+          } catch (error) {
+            handleError(error);
+          }
+          break;
+        }
+        case 'forget': {
+          if (!profileName || !args) { notify('Usage: /forget <query>', 'warn'); break; }
+          try {
+            const memories = await listMemories(client, profileName);
+            const query = args.toLowerCase();
+            const matches = memories.filter(memory => memory.text.toLowerCase().includes(query));
+            if (matches.length === 0) { notify(`No memories match "${args}".`); break; }
+            for (const memory of matches) await deleteMemory(client, profileName, memory.id, 'forget');
+            notify(`Forgot ${matches.length} ${matches.length === 1 ? 'memory' : 'memories'}.`);
+          } catch (error) {
+            handleError(error);
+          }
+          break;
+        }
+        case 'context-window': {
+          const budget = profileDetail?.settings.maxContextTokens;
+          const window = profileDetail?.settings.sessionContextTurns;
+          notify([
+            `Context budget: ${budget !== undefined ? `${budget} tokens` : 'default'}`,
+            `Turn window: ${window !== undefined ? `${window} turns` : 'all'}`,
+            'Change these in Config → the profile.',
+          ].join('\n'));
+          break;
+        }
+        case 'compact': {
+          if (!sessionId) { notify('No session to compact yet.'); break; }
+          const [provider, model] = splitModelChoice(modelChoice);
+          try {
+            const result = await compactSession(client, sessionId, {
+              profile: profileName ?? 'default',
+              ...(provider ? { provider } : {}),
+              ...(model ? { model } : {}),
+              think,
+            });
+            notify(result.compacted ? 'Compacted older turns in this session.' : 'Nothing to compact yet.');
+            void refreshSessions();
+          } catch (error) {
+            handleError(error);
+          }
+          break;
+        }
+        default:
+          notify(`Unknown command: /${name}`, 'warn');
+      }
+    },
+    [client, profileName, profileDetail, modelChoice, think, sessionId, newSession, setThink, setModelChoice, setProfileDetail, sendMessage, refreshSessions, handleError],
+  );
+
+  // `/command` is a deterministic web action, handled before steering so e.g.
+  // `/stop` cancels a run instead of steering it; everything else sends.
+  const send = useCallback(
+    async (text: string) => {
+      const trimmed = text.trim();
+      if (!trimmed || !profileName) return;
+      const command = parseCommand(trimmed);
+      if (command) {
+        await runCommand(command);
+        return;
+      }
+      await sendMessage(trimmed);
+    },
+    [profileName, runCommand, sendMessage],
   );
 
   const cancel = useCallback(

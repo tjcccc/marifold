@@ -28,3 +28,17 @@ export async function deleteSession(client: ApiClient, id: string): Promise<bool
   );
   return body.deleted;
 }
+
+/** Manually compact a session now (the /compact command). */
+export async function compactSession(
+  client: ApiClient,
+  id: string,
+  request: { profile: string; provider?: string; model?: string; think?: boolean },
+): Promise<{ compacted: boolean }> {
+  const body = await client.request<{ compacted: boolean }>(
+    'POST',
+    `/v1/sessions/${encodeURIComponent(id)}/compact`,
+    request,
+  );
+  return { compacted: body.compacted };
+}
