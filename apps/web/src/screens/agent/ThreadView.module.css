@@ -76,6 +76,11 @@
   overflow-wrap: break-word;
 }
 
+.skillToken {
+  color: var(--brand-text);
+  font-weight: 600;
+}
+
 .assistant {
   align-self: stretch;
 }

@@ -6,6 +6,7 @@ import {
   MarifoldProviderConfig,
   MarifoldRunRequest,
   MarifoldRuntime,
+  MarifoldSkill,
   TaskCreateInput,
   TaskEventInput,
   TaskEventKind,
@@ -177,6 +178,13 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
   server.get<{ Params: { name: string } }>('/v1/providers/:name/models', async request => ({
     ok: true,
     ...(await runtime.listProviderModels(request.params.name)),
+  }));
+
+  // Available skills (name + usage) for the composer's $-autocomplete,
+  // profile-scoped so profile skills shadow global ones.
+  server.get<{ Querystring: { profile?: string } }>('/v1/skills', async request => ({
+    ok: true,
+    skills: runtime.listSkills(request.query.profile).map(skillHint),
   }));
 
   server.get('/v1/models', async () => ({
@@ -495,6 +503,17 @@ function publicConfig(loadedConfig: LoadedMarifoldConfig): JsonObject {
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([name, provider]) => [name, publicProvider(provider)]),
     ),
+  };
+}
+
+function skillHint(skill: MarifoldSkill): JsonObject {
+  const vars = skill.variables
+    .map(variable => (variable.required ? `<${variable.name}>` : `[${variable.name}]`))
+    .join(' ');
+  return {
+    name: skill.name,
+    description: skill.description,
+    usage: `$${skill.name}${vars ? ` ${vars}` : ''}`,
   };
 }
 

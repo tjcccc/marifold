@@ -19,20 +19,99 @@
   border-color: var(--brand-fill);
 }
 
-.input {
+/* Holds the highlight layer + transparent textarea (and the autocomplete menu). */
+.inputWrap {
+  position: relative;
   flex: 1;
+  display: flex;
+  min-width: 0;
+}
+
+/* Shares EXACTLY the textarea's box + typography so the colored $skill token
+ * sits under the caret. The textarea's own text is transparent. */
+.highlight,
+.input {
+  font-size: 13.5px;
+  line-height: 1.45;
+  padding: 3px 0;
+  letter-spacing: normal;
+  font-family: inherit;
+}
+
+.highlight {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--text);
+  pointer-events: none;
+}
+
+.input {
+  width: 100%;
   border: none;
   background: none;
   resize: none;
   outline: none;
-  font-size: 13.5px;
-  line-height: 1.45;
   max-height: 160px;
-  padding: 3px 0;
+  color: transparent;
+  caret-color: var(--text);
+  position: relative;
 }
 
 .input::placeholder {
   color: var(--text-3);
+  -webkit-text-fill-color: var(--text-3);
+}
+
+.skillToken {
+  color: var(--brand-text);
+  font-weight: 600;
+}
+
+.menu {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: -8px;
+  right: -8px;
+  max-height: 260px;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--separator);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sheet);
+  padding: 4px;
+  z-index: 20;
+}
+
+.menuItem,
+.menuItemActive {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.menuItemActive {
+  background: var(--brand-tint);
+}
+
+.menuName {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--brand-text);
+  font-family: var(--font-mono, ui-monospace, monospace);
+}
+
+.menuDesc {
+  font-size: 12px;
+  color: var(--text-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .controls {

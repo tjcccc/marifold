@@ -1,6 +1,8 @@
 import { useEffect, useRef } from 'react';
+import type { ReactNode } from 'react';
 import { Markdown } from '../../components/Markdown';
 import type { RunApprovalAction } from '../../api/types';
+import { splitLeadingSkill } from '../../lib/commandSyntax';
 import { formatCostUSD, formatRunDuration, formatTokens } from '../../lib/format';
 import type { RunCardState, ThreadItem } from '../../state/thread';
 import { hasRunActivity, isTrivialRun } from '../../state/thread';
@@ -99,7 +101,7 @@ function ThreadItemView({
               )}
             </div>
           ) : null}
-          <div className={styles.userBubble}>{item.text}</div>
+          <div className={styles.userBubble}>{renderUserText(item.text)}</div>
         </div>
       );
     case 'assistant': {
@@ -154,4 +156,17 @@ function runMetaText(run: RunCardState): string {
   if (run.usage?.totalTokens !== undefined) parts.push(`${formatTokens(run.usage.totalTokens)} tokens`);
   if (run.usage?.estimatedCostUSD !== undefined) parts.push(formatCostUSD(run.usage.estimatedCostUSD));
   return parts.join(' · ');
+}
+
+/** A user bubble with the leading `$skill` token highlighted (mirrors the
+ * composer). Non-skill messages render as plain text. */
+function renderUserText(text: string): ReactNode {
+  const { token, rest } = splitLeadingSkill(text);
+  if (!token) return text;
+  return (
+    <>
+      <span className={styles.skillToken}>{token}</span>
+      {rest}
+    </>
+  );
 }

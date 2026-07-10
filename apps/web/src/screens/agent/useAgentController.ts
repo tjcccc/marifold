@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'r
 import type { ApiClient } from '../../api/client';
 import { MarifoldApiError } from '../../api/client';
 import { streamChat } from '../../api/chat';
-import { getModels, getStatus } from '../../api/misc';
+import { getModels, getSkills, getStatus } from '../../api/misc';
+import type { SkillHint } from '../../api/misc';
 import { getProfile, listProfiles } from '../../api/profiles';
 import { answerApproval, cancelRun, listRuns, startRun, steerRun } from '../../api/runs';
 import { getSession, listSessions } from '../../api/sessions';
@@ -34,6 +35,8 @@ export interface AgentController {
   profiles: ProfileSummary[];
   profileName?: string;
   profileDetail?: ProfileDetail;
+  /** Skills for the composer's $-autocomplete (active-profile-scoped). */
+  skills: SkillHint[];
   sessions: SessionSummary[];
   sessionId?: string;
   thread: ThreadState;
@@ -70,6 +73,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
 
   const [profiles, setProfiles] = useState<ProfileSummary[]>([]);
   const [profileDetail, setProfileDetail] = useState<ProfileDetail | undefined>();
+  const [skills, setSkills] = useState<SkillHint[]>([]);
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [sessionId, setSessionId] = useState<string | undefined>(route.session);
   const [think, setThink] = useState(false);
@@ -182,13 +186,15 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
     let cancelled = false;
     (async () => {
       try {
-        const [detail, sessionList] = await Promise.all([
+        const [detail, sessionList, skillList] = await Promise.all([
           getProfile(client, profileName),
           listSessions(client, { profile: profileName, limit: 50 }),
+          getSkills(client, profileName).catch(() => [] as SkillHint[]),
         ]);
         if (cancelled) return;
         setProfileDetail(detail);
         setSessions(sessionList);
+        setSkills(skillList);
         setThink(detail.settings.think ?? false);
       } catch (error) {
         if (!cancelled) handleError(error);
@@ -427,6 +433,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
     profiles,
     profileName,
     profileDetail,
+    skills,
     sessions,
     sessionId,
     thread,

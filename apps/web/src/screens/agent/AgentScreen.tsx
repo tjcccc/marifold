@@ -156,6 +156,7 @@ export function AgentScreen(props: AgentScreenProps) {
           attachments={controller.attachments}
           onAttachFiles={files => void controller.addFiles(files)}
           onRemoveAttachment={controller.removeAttachment}
+          skills={controller.skills}
           onSubmit={text => void controller.send(text)}
         />
       </div>

@@ -2,6 +2,15 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-07-10 — v0.43.0 — Web UI: $skill highlight + autocomplete
+
+Brings the TUI's `$skill` composer affordances to the browser (the `/command` half is deferred — the web has no slash-command handler yet).
+
+- **New endpoint** `GET /v1/skills?profile=` — available skills (name, description, `usage` like `$translate <text> [language]`) from `runtime.listSkills`, profile-scoped so profile skills shadow global. Web `getSkills` + `SkillHint`; the agent controller fetches them alongside profile detail and passes them to the composer.
+- **Inline highlight** — the leading `$skill` token is colored (brand) both while typing and in submitted user bubbles. In the composer this uses the standard transparent-textarea-over-a-styled-mirror overlay (shared font metrics; scroll synced); `ThreadView` highlights the same token in user bubbles. Shared grammar in `lib/commandSyntax` (`leadingSkillToken`/`skillQuery`/`splitLeadingSkill`).
+- **Autocomplete** — typing `$` opens a keyboard-navigable menu (filters as you type, ↑↓ to move, Tab/Enter to complete the name, Esc to dismiss, click to insert), matching the TUI. Closes once a space (args) follows the name.
+- Verified: full `typecheck && build && test` green. +4 `commandSyntax` unit tests, +4 `InputBar` autocomplete tests (filter/complete/arrow-nav/plain-submit), +1 service `/v1/skills` test. **Not browser-verified** — the overlay's caret alignment is CSS-metric-dependent and needs a visual pass.
+
 ## 2026-07-10 — v0.42.0 — Web UI polish: avatar crop/compress + header logo
 
 - **Header logo** — mark 28→**32px**, brand gap 8→**4px** (`TopNav`).

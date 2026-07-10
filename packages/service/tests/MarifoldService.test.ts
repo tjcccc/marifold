@@ -35,6 +35,27 @@ describe('MarifoldService', () => {
     }
   });
 
+  it('GET /v1/skills lists available skills with usage for the composer', async () => {
+    const dir = tempDir();
+    const skillsDir = path.join(dir, 'skills');
+    fs.mkdirSync(path.join(skillsDir, 'echo'), { recursive: true });
+    fs.writeFileSync(
+      path.join(skillsDir, 'echo', 'SKILL.md'),
+      '---\nname: echo\ndescription: Echo text back.\nvariables:\n  - name: text\n    required: true\n---\n{{text}}\n',
+    );
+    const loaded = fixtureLoadedConfig(dir);
+    loaded.config.paths.skillsDir = skillsDir;
+    const server = createMarifoldService({ loadedConfig: loaded, scheduler: false });
+    try {
+      const res = await server.inject({ method: 'GET', url: '/v1/skills' });
+      expect(res.statusCode).toBe(200);
+      const echo = res.json().skills.find((skill: { name: string }) => skill.name === 'echo');
+      expect(echo).toMatchObject({ name: 'echo', description: 'Echo text back.', usage: '$echo <text>' });
+    } finally {
+      await server.close();
+    }
+  });
+
   it('creates and updates task state through the API', async () => {
     const server = createMarifoldService({ loadedConfig: fixtureLoadedConfig(tempDir()), scheduler: false });
     try {

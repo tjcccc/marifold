@@ -48,6 +48,20 @@ export async function getProviderStatus(client: ApiClient): Promise<ProviderStat
   return body.providers;
 }
 
+/** A skill for the composer's $-autocomplete (GET /v1/skills). */
+export interface SkillHint {
+  name: string;
+  description: string;
+  /** e.g. "$translate <text> [language]". */
+  usage: string;
+}
+
+export async function getSkills(client: ApiClient, profile?: string): Promise<SkillHint[]> {
+  const query = profile ? `?profile=${encodeURIComponent(profile)}` : '';
+  const body = await client.request<{ skills: SkillHint[] }>('GET', `/v1/skills${query}`);
+  return body.skills;
+}
+
 export interface ProviderModels {
   provider: string;
   reachable: boolean | null;
