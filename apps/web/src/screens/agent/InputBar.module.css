@@ -2,28 +2,38 @@
   padding: 12px 20px 16px;
 }
 
+/* Two rows: the textarea on top spanning the full width, attach + controls on
+ * a bottom row (ChatGPT-style) — inline-right controls would reserve a dead
+ * column beside a tall multi-line input. */
 .bar {
   display: flex;
-  align-items: flex-end;
-  gap: 10px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
   max-width: 760px;
   margin: 0 auto;
   background: var(--surface);
   border: 1px solid var(--separator);
   border-radius: var(--radius-lg);
-  padding: 9px 10px 9px 16px;
+  padding: 10px 12px 10px 16px;
   box-shadow: var(--shadow-card);
+}
+
+.bottomRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .bar:focus-within {
   border-color: var(--brand-fill);
 }
 
-/* Holds the highlight layer + transparent textarea (and the autocomplete menu). */
+/* Holds the highlight layer + transparent textarea (and the autocomplete menu).
+ * A plain block — the textarea must be a block child (not a flex item) so
+ * width:100% is honored and text wraps at the composer's full width. */
 .inputWrap {
   position: relative;
-  flex: 1;
-  display: flex;
   min-width: 0;
 }
 
@@ -43,12 +53,14 @@
   inset: 0;
   overflow: hidden;
   white-space: pre-wrap;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
+  word-break: break-word;
   color: var(--text);
   pointer-events: none;
 }
 
 .input {
+  display: block;
   width: 100%;
   border: none;
   background: none;
@@ -58,6 +70,16 @@
   color: transparent;
   caret-color: var(--text);
   position: relative;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  /* Hide the native scrollbar: it would shrink the text width and misalign the
+   * caret from the highlight layer. Long content still scrolls (synced). */
+  scrollbar-width: none;
+}
+
+.input::-webkit-scrollbar {
+  display: none;
 }
 
 .input::placeholder {
@@ -118,6 +140,8 @@
   display: flex;
   align-items: center;
   gap: 6px;
+  /* Pin to the right of the bottom row (with or without the attach button). */
+  margin-left: auto;
 }
 
 .pill,
@@ -193,8 +217,6 @@
   width: 28px;
   height: 28px;
   flex-shrink: 0;
-  align-self: flex-end;
-  margin-bottom: 1px;
   border-radius: 50%;
   font-size: 17px;
   color: var(--text-2);

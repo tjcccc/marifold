@@ -2,6 +2,14 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-07-10 — v0.44.1 — Composer: two-row layout (ChatGPT-style)
+
+Fixes the "big right padding" the user hit with multi-line input. Two causes, both fixed:
+
+- **Textarea width** — `.inputWrap` was `display: flex`, and a `<textarea>` flex item doesn't reliably honor `width: 100%` (falls back to intrinsic cols width). Now a plain block wrapper + `display: block; width: 100%` textarea; the native scrollbar is hidden (it shrank the text column and misaligned the caret from the v0.43.0 highlight overlay — long content still scrolls, overlay synced); wrapping rules (`pre-wrap`/`break-word`) unified across textarea and highlight so CJK/`#tokens` wrap identically.
+- **Layout** — the real dead space: Think/model/send sat inline in the same flex row, reserving a full-height right column beside a tall input. Restructured to **two rows** (the user's ChatGPT reference): textarea spans the full width; `+` attach bottom-left, controls pinned bottom-right (`.bottomRow`, `.controls { margin-left: auto }`).
+- Verified: web typecheck/tests/build green, plus **headless-Chrome screenshots** — an old-vs-new CSS repro with the user's tall CJK text (full-width flow, no dead column) and the **live served app** on the real service (new composer renders; migrated avatars visible). Diagnosis detour worth remembering: the service serves `web_dir` → repo `apps/web/dist`, so "not fixed" reports were a stale SPA tab — check the served asset hash before touching code.
+
 ## 2026-07-10 — v0.44.0 — Web UI: /command palette (15 commands)
 
 Brings the TUI's `/command` layer to the composer, reusing the `$skill` autocomplete/highlight infra generalized over both sigils (`lib/commandSyntax`: `menuQuery`/`splitLeading`/`parseCommand` + a static `WEB_COMMANDS` list). Typing `/` opens the same keyboard-navigable menu.

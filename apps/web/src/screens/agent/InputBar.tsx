@@ -145,31 +145,10 @@ export function InputBar(props: InputBarProps) {
           ))}
         </div>
       ) : null}
+      {/* Two rows (ChatGPT-style): the textarea spans the full width; attach +
+          Think/model/send sit on their own row below — so a tall input never
+          leaves a dead column above the inline controls. */}
       <div className={styles.bar}>
-        {canAttach ? (
-          <>
-            <button
-              className={styles.attach}
-              title="Attach files or images"
-              aria-label="Attach files or images"
-              onClick={() => fileInputRef.current?.click()}
-            >
-              +
-            </button>
-            <input
-              ref={fileInputRef}
-              className={styles.fileInput}
-              type="file"
-              multiple
-              accept="image/png,image/jpeg,image/webp,image/gif,text/*,.md,.json,.yaml,.yml,.toml,.csv,.ts,.tsx,.js,.jsx,.py,.sh,.log,.xml,.html,.css,.sql"
-              onChange={event => {
-                const files = [...(event.target.files ?? [])];
-                if (files.length > 0) props.onAttachFiles?.(files);
-                event.target.value = '';
-              }}
-            />
-          </>
-        ) : null}
         <div className={styles.inputWrap}>
           {menuOpen ? (
             <ul className={styles.menu} role="listbox" aria-label={sigil === '/' ? 'Commands' : 'Skills'}>
@@ -227,23 +206,49 @@ export function InputBar(props: InputBarProps) {
             onBlur={() => setFocused(false)}
           />
         </div>
-        <div className={styles.controls}>
-          <button
-            className={props.think ? styles.pillActive : styles.pill}
-            title="Thinking mode"
-            onClick={props.onToggleThink}
-          >
-            Think
-          </button>
-          <ModelChip options={props.modelOptions} choice={props.modelChoice} onSelect={props.onSelectModel} />
-          <button
-            className={styles.send}
-            disabled={props.disabled || text.trim().length === 0}
-            aria-label={props.steering ? 'Send guidance' : 'Send'}
-            onClick={submit}
-          >
-            ↑
-          </button>
+        <div className={styles.bottomRow}>
+          {canAttach ? (
+            <>
+              <button
+                className={styles.attach}
+                title="Attach files or images"
+                aria-label="Attach files or images"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                +
+              </button>
+              <input
+                ref={fileInputRef}
+                className={styles.fileInput}
+                type="file"
+                multiple
+                accept="image/png,image/jpeg,image/webp,image/gif,text/*,.md,.json,.yaml,.yml,.toml,.csv,.ts,.tsx,.js,.jsx,.py,.sh,.log,.xml,.html,.css,.sql"
+                onChange={event => {
+                  const files = [...(event.target.files ?? [])];
+                  if (files.length > 0) props.onAttachFiles?.(files);
+                  event.target.value = '';
+                }}
+              />
+            </>
+          ) : null}
+          <div className={styles.controls}>
+            <button
+              className={props.think ? styles.pillActive : styles.pill}
+              title="Thinking mode"
+              onClick={props.onToggleThink}
+            >
+              Think
+            </button>
+            <ModelChip options={props.modelOptions} choice={props.modelChoice} onSelect={props.onSelectModel} />
+            <button
+              className={styles.send}
+              disabled={props.disabled || text.trim().length === 0}
+              aria-label={props.steering ? 'Send guidance' : 'Send'}
+              onClick={submit}
+            >
+              ↑
+            </button>
+          </div>
         </div>
       </div>
     </div>
