@@ -25,31 +25,31 @@ short: what shipped (one line each), what's next, and what's deliberately deferr
   bearer auth + CORS/origin policy, RunRegistry; `apps/web` — the browser client built to the
   committed Claude Design concept (Agent screen with run cards/approvals/steering/catch-up,
   read-only Config, static hosting from the service).
-
-## v0.37.0 — Config editing (current)
-
-Goal: the Web UI's Config screen becomes a real editor; config writes get a uniform surface.
-
-- Service write routes: `PATCH /v1/profiles/:name` (settings + permission overrides with
-  inherit-reset), `PUT /v1/profiles/:name/files/:file` (PROFILE/RULES/CUSTOM), trusted-folder
-  add/remove, memory forget/delete, and a generic `PATCH /v1/config { key, value }` with CLI
-  parity.
-- Core write surface: `ConfigManager` gains `service.*` keys + `getValue`; `ProfileManager`
-  gains file editing, trusted-folder removal, approval-override clearing, and
-  memories/think/turns setters.
-- CLI: net-new `config get <key>`; `config set` covers `[service]` keys.
-- Web: editable ProfileSettingsPage (permissions via SegmentedControl with
-  inherited-vs-overridden, mode/model/toggles, instruction-file editors, memory Forget/Delete).
-- Security: auth-scope gating hardened to normalized pathnames.
+- **v0.37 — Config editing**: service write routes (`PATCH /v1/profiles/:name`, instruction-file
+  `PUT`, trusted folders, memory forget/delete, generic `PATCH /v1/config`), editable
+  ProfileSettingsPage, CLI `config get`, auth-scope path-normalization hardening.
+- **v0.38–v0.39 — Web UI review round**: marigold logo, inline run meta (no card for trivial
+  runs), white content pane, collapsible sidebars + session previews, attachments
+  (picker/drag-drop/paste, images on `POST /v1/runs`); profile avatars + creation, 3-column
+  Config redesign, provider status / live model listing / model management routes, markdown
+  blockquotes + horizontal rules.
+- **v0.40–v0.41 — xAI + proxy**: `xai` provider (SuperGrok subscription OAuth, PKCE, paste-code
+  fallback, `api.x.ai/v1`); uniform per-provider `proxy` key threaded through chat and token
+  refresh (priest 2.7.0 dispatcher hook), exposed in web Config → Providers.
+- **v0.42–v0.44 — Web composer parity**: avatar crop/compress modal + `assets/` storage;
+  `$skill` inline highlight + TUI-parity autocomplete; 15-command `/command` palette (+
+  memory-add and session-compact routes); two-row ChatGPT-style composer.
 
 ## Next
 
-- **v0.38.0 — Web UI SYSTEM screens**: global editing surfaces from the design concept —
-  Models & Providers, Default Permissions, Appearance — plus the v0.36 backlog: attachments on
-  `POST /v1/runs`, a `/v1/events` push channel to replace run polling, mobile nav polish,
-  session title/preview.
+- **Browser verification pass on v0.42–v0.44** (jsdom couldn't cover these): `$`/`/` overlay
+  caret alignment, the avatar cropper canvas flow, `/command` execution paths (`/compact`
+  needs a live provider).
 - **SkillApp runtime**: give the Apps tab its runtime — render `marifold.skillapp.v0` layouts,
-  wire actions to the agent loop under the existing approval vocabulary.
+  wire actions to the agent loop under the existing approval vocabulary. The spec + validator
+  (`docs/skillapp.md`, `packages/core/src/skillapp`) have been waiting for this since pre-TUI.
+- **Web UI backlog**: `/v1/events` push channel to replace 10s run polling, mobile nav polish,
+  profile rename/delete UI, markdown tables.
 - **Workflow composition**: chain native profiles, skills, skill apps, models, and
   external-agent aliases into multi-step flows (design doc exists outside the repo).
 - **Apple clients** and alias profiles for Codex/Claude Code and other external agents.

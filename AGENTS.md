@@ -8,6 +8,8 @@ v0.35.x implements the TypeScript CLI + TUI foundation, priests-style structured
 
 v0.36–v0.39.x add the browser Web UI (`apps/web`, served statically by the service): agent chat with image/text-file attachments, session previews, collapsible sidebars, profile avatars and creation, and a three-column Config screen with provider/model management routes.
 
+v0.40–v0.44.x add the `xai` provider (SuperGrok subscription OAuth against `api.x.ai/v1`) and a uniform per-provider `proxy` config key (requires `@priest-ai/core` >= 2.7.0, which added the fetch dispatcher hook), plus Web UI composer parity with the TUI: avatar crop/compress (stored under `<profile>/assets/`), `$skill` inline highlight + autocomplete, a 15-command `/command` palette with two new service routes (profile memory add, session compact), and a two-row ChatGPT-style composer layout.
+
 ## Stack
 
 - TypeScript
