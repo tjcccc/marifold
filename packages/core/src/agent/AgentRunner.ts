@@ -113,6 +113,9 @@ export interface AgentRunnerDeps {
   /** Load the session's clean turns (objective → answer pairs) for bounded
    * cross-objective memory on NON-lean runs. Lean/skill runs stay stateless. */
   loadRecentTurns?: (sessionId: string) => HistoryTurn[];
+  /** Lazily attach app-owned instructions selected from the objective (for
+   * example the built-in skill-manager guide). */
+  resolveBuiltInInstructions?: (objective: string, profile: string) => string[];
 }
 
 /** Char budget for the injected history window when no profile budget is set. */
@@ -148,6 +151,14 @@ export class AgentRunner {
   async *run(options: AgentRunOptions): AsyncGenerator<AgentEvent, void, unknown> {
     const agentConfig = this.deps.agentConfig;
     const settings = this.deps.resolveSettings(options);
+    // A skill invocation already supplies its own authoritative instructions;
+    // only ordinary agent objectives receive lazily selected built-in guides.
+    const builtInInstructions = options.lean
+      ? []
+      : (this.deps.resolveBuiltInInstructions?.(options.objective, settings.profile) ?? []);
+    const runOptions: AgentRunOptions = builtInInstructions.length > 0
+      ? { ...options, instructions: [...builtInInstructions, ...(options.instructions ?? [])] }
+      : options;
     const { engine: rawEngine, config } = await this.deps.prepareEngine(settings);
     // Tally token usage across every model call (plan, loop turns, verify).
     const usage: AgentUsage = {};
@@ -201,7 +212,7 @@ export class AgentRunner {
       // config). Adaptive by default: a separate planning call is overhead for
       // the common single-step task, so the model just reasons inline.
       if (options.forcePlan) {
-        const plan = await this.buildPlan(engine, config, settings.profile, options);
+        const plan = await this.buildPlan(engine, config, settings.profile, runOptions);
         const planned = this.deps.taskStore.update(task.id, {
           title: plan.title,
           plan: plan.steps.map((text, index) => ({
@@ -223,7 +234,7 @@ export class AgentRunner {
           yield { type: 'steering', taskId: task.id, text: note };
         }
 
-        const response = await engine.run(this.loopRequest(config, settings.profile, options, state), {
+        const response = await engine.run(this.loopRequest(config, settings.profile, runOptions, state), {
           signal: options.signal,
         });
 

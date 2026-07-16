@@ -154,6 +154,46 @@ describe('AgentRunner', () => {
     expect(ctx).not.toContain('SECRET-PRIOR-OUTPUT');
   });
 
+  it('injects lazily selected built-in instructions into ordinary agent runs', async () => {
+    const engine = new ScriptedEngine([response({ text: 'Done.' })]);
+    const registry = new ToolRegistry();
+    registry.register(fakeTool());
+    const runner = new AgentRunner({
+      taskStore: new TaskStore(tempDir()),
+      registry,
+      agentConfig: resolveAgentConfig({}),
+      resolveSettings: () => ({ profile: 'writer', provider: 'mock', model: 'test-model', think: false, mode: 'agent' }),
+      prepareEngine: async () => ({ engine, config: { provider: 'mock', model: 'test-model' } }),
+      resolveBuiltInInstructions: (objective, profile) => [`guide for ${profile}: ${objective}`],
+    });
+
+    await collect(runner.run({ objective: 'update my skill', instructions: ['caller instruction'] }));
+
+    const context = (engine.requests[0].context ?? []).join('\n');
+    expect(context).toContain('guide for writer: update my skill');
+    expect(context).toContain('caller instruction');
+  });
+
+  it('does not inject built-in manager guidance into an invoked skill run', async () => {
+    const engine = new ScriptedEngine([response({ text: 'Output.' })]);
+    const registry = new ToolRegistry();
+    registry.register(fakeTool());
+    const runner = new AgentRunner({
+      taskStore: new TaskStore(tempDir()),
+      registry,
+      agentConfig: resolveAgentConfig({}),
+      resolveSettings: () => ({ profile: 'default', provider: 'mock', model: 'test-model', think: false, mode: 'agent' }),
+      prepareEngine: async () => ({ engine, config: { provider: 'mock', model: 'test-model' } }),
+      resolveBuiltInInstructions: () => ['SHOULD-NOT-APPEAR'],
+    });
+
+    await collect(runner.run({ objective: 'generate skill text', lean: true, instructions: ['skill body'] }));
+
+    const context = (engine.requests[0].context ?? []).join('\n');
+    expect(context).toContain('skill body');
+    expect(context).not.toContain('SHOULD-NOT-APPEAR');
+  });
+
   it('caps NON-lean history to the last N turns when session_context_turns is set', async () => {
     const engine = new ScriptedEngine([response({ text: 'Saved.' })]);
     const registry = new ToolRegistry();

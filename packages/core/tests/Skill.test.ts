@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
+import { buildSkillManagerGuide, mentionsSkills } from '../src/skill/BuiltInSkillManager';
 import { parseSkill } from '../src/skill/SkillValidator';
 import { renderSkillPrompt, resolveSkillValues } from '../src/skill/SkillTemplater';
 import { SkillStore } from '../src/skill/SkillStore';
@@ -151,5 +152,38 @@ describe('SkillStore', () => {
     fs.writeFileSync(path.join(dir, 'broken', 'SKILL.md'), 'no frontmatter here');
     const store = new SkillStore({ globalDir: dir });
     expect(store.list()).toHaveLength(0);
+  });
+});
+
+describe('built-in skill manager guide', () => {
+  it.each([
+    'install this skill',
+    'Update my skills',
+    '请更新这个技能',
+    'このスキルを削除して',
+    '스킬을 설치해 줘',
+    'instalar esta habilidad',
+    'mettre à jour cette compétence',
+    'diese Fähigkeit entfernen',
+    'удалить навык',
+  ])('detects a skill-related prompt: %s', prompt => {
+    expect(mentionsSkills(prompt)).toBe(true);
+  });
+
+  it('does not match skill as part of a larger word', () => {
+    expect(mentionsSkills('a skillful response')).toBe(false);
+    expect(mentionsSkills('just say hello')).toBe(false);
+  });
+
+  it('renders resolved profile and global paths', () => {
+    const guide = buildSkillManagerGuide({
+      profile: 'writer',
+      profilesDir: '/tmp/marifold/profiles',
+      globalSkillsDir: '/tmp/marifold/shared-skills',
+    });
+    expect(guide).toContain('Internal $skill-manager guide');
+    expect(guide).toContain('/tmp/marifold/profiles/writer/skills');
+    expect(guide).toContain('/tmp/marifold/shared-skills');
+    expect(guide).toContain('Never create .claude/skills');
   });
 });

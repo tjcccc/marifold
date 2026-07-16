@@ -106,6 +106,16 @@ with:
 /install-skill --global examples/skills/summarize-file.md
 ```
 
+Installing the same skill name again updates its `SKILL.md`; installing from a
+folder replaces that skill's whole folder. `/install-skill` does not uninstall:
+use `/skills` (or `/skills --global`) and press Del to remove the selected skill
+from that scope.
+
+For ordinary agent prompts that mention skills, Marifold lazily attaches its
+built-in `$skill-manager` guide. The guide supplies the active profile and
+configured global skill paths so the agent manages Marifold skills instead of
+creating another tool's skill directory in the working folder.
+
 There is intentionally no `$new`/`$run`/`$remove` verb. Creating or editing a
 skill is either a direct file edit or done by asking the agent in normal input
 ("make a skill that translates to Japanese") — that is model work, not a command.

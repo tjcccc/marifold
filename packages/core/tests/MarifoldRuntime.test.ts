@@ -625,6 +625,48 @@ describe('MarifoldRuntime', () => {
       runtime.close();
     }
   });
+
+  it('injects the path-aware skill-manager guide for skill-related agent objectives', async () => {
+    const dir = tempDir();
+    const profilesDir = path.join(dir, 'profiles');
+    const skillsDir = path.join(dir, 'shared-skills');
+    fs.mkdirSync(path.join(profilesDir, 'writer'), { recursive: true });
+    fs.writeFileSync(path.join(profilesDir, 'writer', 'PROFILE.md'), 'You are a writer.');
+    const config: MarifoldConfig = {
+      default: { provider: 'ollama', model: 'gemma4:e4b', profile: 'writer', think: false },
+      models: { options: ['ollama/gemma4:e4b'] },
+      memory: { sizeLimit: 50000, contextLimit: 2400 },
+      paths: {
+        profilesDir,
+        skillsDir,
+        sessionsDb: path.join(dir, 'sessions.db'),
+        tasksDir: path.join(dir, 'tasks'),
+      },
+      providers: { ollama: { type: 'ollama', baseUrl: 'http://localhost:11434' } },
+    };
+    let requestBody: { messages?: Array<{ role: string; content: string }> } | undefined;
+    vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      requestBody = JSON.parse(String(init?.body));
+      return ollamaStreamResponse(['Done.']);
+    }));
+
+    const runtime = new MarifoldRuntime({
+      loadedConfig: { config, configPath: path.join(dir, 'config.toml'), foundConfig: true },
+    });
+
+    try {
+      const runner = runtime.createAgentRunner('writer');
+      for await (const _event of runner.run({ objective: 'Update my skills', profile: 'writer' })) {
+        // Consume the run so the provider request completes.
+      }
+      const system = requestBody?.messages?.find(message => message.role === 'system')?.content ?? '';
+      expect(system).toContain('Internal $skill-manager guide');
+      expect(system).toContain(path.join(profilesDir, 'writer', 'skills'));
+      expect(system).toContain(skillsDir);
+    } finally {
+      runtime.close();
+    }
+  });
 });
 
 // ask() uses the SDK's non-streaming complete() since @priest-ai/core 2.4,

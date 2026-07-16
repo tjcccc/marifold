@@ -2,6 +2,12 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-07-16 — v0.45.0 — Lazy built-in skill-manager guide
+
+- Ordinary non-lean agent objectives that mention `skill`/`skills` or common Chinese, Japanese, Korean, Spanish, French, German, Portuguese, or Russian equivalents now receive a concise built-in `$skill-manager` guide. It includes the resolved active-profile and configured global skill directories, defaults changes to profile scope, explains shadowing, and explicitly prevents `.claude/skills`, `.agents/skills`, or working-directory skill installs.
+- The guide stays out of explicit `$skill` runs so it cannot pollute a skill's authoritative instructions. `/install-skill` behavior is now documented precisely: reinstall updates, a folder source replaces the folder, and uninstall remains `/skills` + Del at the selected scope.
+- Full `typecheck && build && test` gate green. Tests cover multilingual detection and boundaries, rendered paths, normal-vs-lean agent injection, and runtime-to-Priest system-context wiring.
+
 ## 2026-07-10 — v0.44.1 — Composer: two-row layout (ChatGPT-style)
 
 Fixes the "big right padding" the user hit with multi-line input. Two causes, both fixed:

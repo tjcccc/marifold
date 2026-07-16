@@ -10,6 +10,8 @@ v0.36–v0.39.x add the browser Web UI (`apps/web`, served statically by the ser
 
 v0.40–v0.44.x add the `xai` provider (SuperGrok subscription OAuth against `api.x.ai/v1`) and a uniform per-provider `proxy` config key (requires `@priest-ai/core` >= 2.7.0, which added the fetch dispatcher hook), plus Web UI composer parity with the TUI: avatar crop/compress (stored under `<profile>/assets/`), `$skill` inline highlight + autocomplete, a 15-command `/command` palette with two new service routes (profile memory add, session compact), and a two-row ChatGPT-style composer layout.
 
+v0.45.x adds lazy built-in `$skill-manager` guidance for ordinary agent prompts that mention skills, with multilingual detection and resolved profile/global paths shared across TUI, CLI, service, channels, and Web UI agent runs.
+
 ## Stack
 
 - TypeScript

@@ -41,6 +41,7 @@ import { SessionResolver, SessionDbHealth } from '../sessions/SessionResolver';
 import { SkillStore } from '../skill/SkillStore';
 import { MarifoldSkill } from '../skill/SkillSchema';
 import { SkillScope } from '../skill/SkillStore';
+import { buildSkillManagerGuide, mentionsSkills } from '../skill/BuiltInSkillManager';
 import { TaskStore } from '../tasks/TaskStore';
 import { defaultSchedulesDir, defaultSkillsDir } from '../workspace/WorkspacePaths';
 import type { TaskCreateInput, TaskEventInput, TaskListOptions, TaskState, TaskSummary, TaskUpdateInput } from '../tasks/TaskStore';
@@ -495,6 +496,15 @@ export class MarifoldRuntime {
         (this.sessionResolver.get(sessionId)?.turns ?? [])
           .filter(t => t.role === 'user' || t.role === 'assistant')
           .map(t => ({ role: t.role as 'user' | 'assistant', content: t.content })),
+      resolveBuiltInInstructions: (objective, resolvedProfile) => {
+        if (!mentionsSkills(objective)) return [];
+        const { config } = this.options.loadedConfig;
+        return [buildSkillManagerGuide({
+          profile: resolvedProfile,
+          profilesDir: config.paths.profilesDir,
+          globalSkillsDir: config.paths.skillsDir ?? defaultSkillsDir(),
+        })];
+      },
     });
   }
 
