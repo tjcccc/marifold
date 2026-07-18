@@ -3,7 +3,7 @@ import type { AgentEvent, MarifoldSkill } from '@marifold/core';
 import { parseInput, tokenizeArgs } from '../src/core/inputGrammar.js';
 import { agentEventToItems } from '../src/core/eventView.js';
 import { appReducer, createInitialState } from '../src/core/appState.js';
-import { runCommand, type CommandContext } from '../src/core/commands.js';
+import { listCommandCompletions, runCommand, type CommandContext } from '../src/core/commands.js';
 import { bindSkillArgs, skillUsage } from '../src/core/skills.js';
 
 function initial() {
@@ -155,7 +155,17 @@ describe('commands', () => {
     expect(calls.steer).toEqual(['focus here']);
     expect(runCommand(ctx, 'quit', '')).toBe(true); // alias of exit
     expect(calls.exit).toBeDefined();
+    expect(runCommand(ctx, 'resume', '')).toBe(true);
+    expect(calls.showSessions).toBeDefined();
+    expect(runCommand(ctx, 'session', '')).toBe(true); // compatibility alias
     expect(runCommand(ctx, 'nope', '')).toBe(false);
+  });
+
+  it('includes compatibility aliases in command completion', () => {
+    expect(listCommandCompletions()).toContainEqual({
+      name: 'session',
+      hint: 'Alias for /resume. Resume a recent session from an interactive picker.',
+    });
   });
 
   it('routes mode commands: bare = session, "default" = persist', () => {

@@ -16,11 +16,12 @@ import type {
   LoadedMarifoldConfig,
   MarifoldRuntime,
   MarifoldSkill,
+  SessionSummary,
   ToolKind,
 } from '@marifold/core';
 import { appReducer, createInitialState, type Mode, type NoticeTone, type TranscriptItem, type TranscriptItemData } from '../core/appState.js';
 import { parseInput } from '../core/inputGrammar.js';
-import { listCommands, runCommand, type CommandContext } from '../core/commands.js';
+import { listCommandCompletions, listCommands, runCommand, type CommandContext } from '../core/commands.js';
 import { bindSkillArgs, skillUsage } from '../core/skills.js';
 import { Header } from './Header.js';
 import { TranscriptRow, topGap } from './Transcript.js';
@@ -97,7 +98,7 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
     }
   });
   const commandItems = useMemo<CompletionItem[]>(
-    () => listCommands().map(spec => ({ name: spec.name, hint: spec.summary })),
+    () => listCommandCompletions(),
     [],
   );
   // Used to cap overlay (picker) height between the latest content and the input.
@@ -523,13 +524,14 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
   }, [runtime]);
 
   const showSessions = useCallback(() => {
-    const items = runtime.listSessions(20, stateRef.current.profile).map(session => ({
-      label: session.id,
-      value: session.id,
-      hint: `${session.turnCount} turns`,
-    }));
+    if (stateRef.current.running) {
+      notify('Stop the running task before switching sessions.', 'warn');
+      return;
+    }
+    const currentSessionId = stateRef.current.sessionId;
+    const items = runtime.listSessions(20, stateRef.current.profile).map(sessionItem.bind(null, currentSessionId));
     setOverlay({ type: 'sessions', items });
-  }, [runtime]);
+  }, [runtime, notify]);
 
   const showHelp = useCallback(() => {
     const lines = [
@@ -909,19 +911,24 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
     if (overlay.type === 'sessions') {
       return (
         <SelectList
-          title="Recent sessions"
+          title="Resume session"
           maxRows={overlayMaxRows}
           items={overlay.items}
           onSelect={value => {
             setOverlay(null);
-            dispatch({ type: 'new_session', sessionId: value });
             const detail = runtime.getSession(value);
-            for (const turn of detail?.turns ?? []) {
+            if (!detail) {
+              notify(`Session not found: ${value}`, 'error');
+              return;
+            }
+            dispatch({ type: 'new_session', sessionId: detail.id });
+            for (const turn of detail.turns) {
               dispatch({ type: 'add_item', item: { kind: turn.role === 'user' ? 'user' : 'assistant', text: turn.content } });
             }
-            notify(`Resumed session ${value}`, 'info');
+            notify(`Resumed session ${detail.id.slice(0, 8)} — your next message continues it.`, 'info');
           }}
           onCancel={() => setOverlay(null)}
+          emptyHint={['No saved sessions for this profile yet.']}
         />
       );
     }
@@ -1015,3 +1022,27 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
 
 const BANNER_ID = '__banner__';
 type StaticEntry = { id: typeof BANNER_ID } | TranscriptItem;
+
+function sessionItem(currentSessionId: string | undefined, session: SessionSummary): SelectItem {
+  const current = session.id === currentSessionId ? 'current · ' : '';
+  const turns = `${session.turnCount} ${session.turnCount === 1 ? 'turn' : 'turns'}`;
+  return {
+    label: session.preview ?? session.id.slice(0, 8),
+    value: session.id,
+    hint: `${current}${turns} · ${relativeTime(session.updatedAt)} · ${session.id.slice(0, 8)}`,
+  };
+}
+
+function relativeTime(value: string, now = Date.now()): string {
+  const timestamp = Date.parse(value);
+  if (!Number.isFinite(timestamp)) return value;
+  const seconds = Math.max(0, Math.floor((now - timestamp) / 1000));
+  if (seconds < 60) return 'just now';
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days}d ago`;
+  return new Date(timestamp).toLocaleDateString();
+}

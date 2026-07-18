@@ -195,9 +195,17 @@ export function InputBox({
       return setCursor(target.start + Math.min(column, target.text.length));
     }
 
-    if (key.backspace || key.delete || input === '\x7f' || input === '\b') {
+    if (key.backspace || input === '\x7f' || input === '\b') {
       if (cursor === 0) return;
       set(value.slice(0, cursor - 1) + value.slice(cursor), cursor - 1);
+      return;
+    }
+    // Forward Delete is distinct from Backspace. Fedora terminals commonly
+    // send ESC[3~ for Del, which Ink exposes as key.delete; remove the
+    // character under the cursor and leave the cursor in place.
+    if (key.delete) {
+      if (cursor >= value.length) return;
+      set(value.slice(0, cursor) + value.slice(cursor + 1), cursor);
       return;
     }
 

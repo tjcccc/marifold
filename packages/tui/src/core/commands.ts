@@ -57,6 +57,11 @@ export interface CommandSpec {
   run(ctx: CommandContext, args: string): void;
 }
 
+export interface CommandCompletion {
+  name: string;
+  hint: string;
+}
+
 const COMMANDS: CommandSpec[] = [
   { name: 'help', summary: 'List commands and input syntax.', run: ctx => ctx.showHelp() },
   { name: 'status', summary: 'Show profile, mode, model, thinking, and session.', run: ctx => ctx.showStatus() },
@@ -96,7 +101,12 @@ const COMMANDS: CommandSpec[] = [
       else ctx.openProfilePicker();
     },
   },
-  { name: 'session', summary: 'List recent sessions.', run: ctx => ctx.showSessions() },
+  {
+    name: 'resume',
+    aliases: ['session'],
+    summary: 'Resume a recent session from an interactive picker.',
+    run: ctx => ctx.showSessions(),
+  },
   {
     name: 'think',
     summary: 'Toggle thinking: /think on|off.',
@@ -217,6 +227,17 @@ for (const spec of COMMANDS) {
 
 export function listCommands(): CommandSpec[] {
   return COMMANDS;
+}
+
+/** Canonical command names plus discoverable aliases for the input menu. */
+export function listCommandCompletions(): CommandCompletion[] {
+  return COMMANDS.flatMap(spec => [
+    { name: spec.name, hint: spec.summary },
+    ...(spec.aliases ?? []).map(alias => ({
+      name: alias,
+      hint: `Alias for /${spec.name}. ${spec.summary}`,
+    })),
+  ]);
 }
 
 export function findCommand(name: string): CommandSpec | undefined {

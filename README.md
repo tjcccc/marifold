@@ -11,12 +11,12 @@ For product direction and future scope, see [docs/vision.md](docs/vision.md) and
 ## What Marifold Supports
 
 - Onboarding: `marifold init` writes config and interactively picks a provider/model (so a first run never points at a model you don't have); `marifold provider add` configures a provider (including pointing Ollama at a remote/Tailscale server); running `marifold` before `init` prints a clear hint instead of failing.
-- Session resume: `marifold --resume` (most recent) or `--resume <id>` replays the conversation; the in-TUI `/session` picker resumes too. Agent/skill runs persist one clean turn (your invocation → the final answer).
+- Session resume: `marifold --resume` (most recent) or `--resume <id>` replays the conversation; the in-TUI `/resume` picker resumes too (`/session` remains an alias). Agent/skill runs persist one clean turn (your invocation → the final answer).
 - Skills as agentic tools: `$name [args]` runs a skill; the skill body is authoritative instructions and, in agent mode, the model reads the skill's bundled files (e.g. `vars.toml` for `#name` fragments) via `read_file`. A skill's run mode follows the session unless it declares `mode:`.
 - Built-in skill-management guidance: ordinary agent prompts that mention skills receive the active profile and configured global skill paths, so TUI, CLI, service, and Web UI agent runs update Marifold skills instead of creating another tool's skill directory in the workspace.
 - The TUI: launch with bare `marifold` (or `marifold --profile <name>`); agent mode by default, `/chat` for chat.
 - Input grammar: plain text → agent/chat, `/command` → code-executed command, `$skill [args]` → model-backed skill.
-- `/` commands: `/help` `/exit` `/new` `/agent` `/chat` `/model` `/profile` `/session` `/think` `/clear` `/stop` `/btw` `/permissions` `/skills` `/install-skill` `/doctor`, plus `/search` `/read` `/image` `/remember` `/forget` `/delete-memory`.
+- `/` commands: `/help` `/exit` `/new` `/agent` `/chat` `/model` `/profile` `/resume` `/think` `/clear` `/stop` `/btw` `/permissions` `/skills` `/install-skill` `/doctor`, plus `/read` `/image` `/remember` `/forget` `/delete-memory`.
 - Approval modal that previews the tool's input (file content / shell command), with allow-once / session-grant / persist-to-config / deny; escalated (out-of-cwd) calls always prompt; `/permissions` shows modes and grants.
 - `/btw <text>` steers a running task without cancelling it; Esc / Ctrl+C cancels a run, and a second Ctrl+C when idle exits.
 - Input editing: history (Up/Down), multi-line via trailing `\`, readline keys (Ctrl+A/E/U/W), and Tab completion for `/commands` and `$skills`.

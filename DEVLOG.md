@@ -2,6 +2,13 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-07-18 — v0.45.1 — TUI Delete semantics + interactive `/resume`
+
+- Fixed Fedora's Del (`ESC[3~`) in the TUI composer so it forward-deletes the character under the cursor; Backspace continues to delete the character before it, including the macOS `0x7f` byte.
+- Added canonical `/resume` with a recent-session picker showing conversation preview, recency, turn count, and the current session. The existing `/session` form remains a compatibility alias, and command aliases are now discoverable in autocomplete.
+- Copy-on-select remains terminal-owned by design: native terminal scrollback does not expose selection text or selection events to an inline Ink application, so Marifold keeps the deterministic `/copy` command rather than adding a non-portable toggle.
+- Verified: full workspace `typecheck && build && test` gate green (439 tests: core 246, service 38, TUI 47, CLI 10, web 98). Real Fedora terminal smoke remains recommended for the Del escape sequence.
+
 ## 2026-07-16 — v0.45.0 — Lazy built-in skill-manager guide
 
 - Ordinary non-lean agent objectives that mention `skill`/`skills` or common Chinese, Japanese, Korean, Spanish, French, German, Portuguese, or Russian equivalents now receive a concise built-in `$skill-manager` guide. It includes the resolved active-profile and configured global skill directories, defaults changes to profile scope, explains shadowing, and explicitly prevents `.claude/skills`, `.agents/skills`, or working-directory skill installs.

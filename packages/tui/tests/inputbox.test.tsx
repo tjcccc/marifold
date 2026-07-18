@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { render } from 'ink-testing-library';
 import { InputBox } from '../src/ui/InputBox.js';
+import { listCommandCompletions } from '../src/core/commands.js';
 
 const delay = () => new Promise(resolve => setTimeout(resolve, 20));
 const noop = () => {};
@@ -29,6 +30,19 @@ describe('InputBox', () => {
     const frame = lastFrame() ?? '';
     expect(frame).toContain('ab');
     expect(frame).not.toMatch(/abc/);
+  });
+
+  it('forward-deletes the character under the cursor with Fedora Del (ESC[3~)', async () => {
+    const { stdin, lastFrame } = renderInput();
+    stdin.write('abc');
+    await delay();
+    stdin.write('\x1b[D'); // cursor between b and c
+    await delay();
+    stdin.write('\x1b[3~'); // Del removes c, not b
+    await delay();
+    const frame = lastFrame() ?? '';
+    expect(frame).toContain('ab');
+    expect(frame).not.toMatch(/ac|abc/);
   });
 
   it('submits on Enter', async () => {
@@ -105,6 +119,21 @@ describe('InputBox', () => {
     stdin.write('\t');
     await delay();
     expect(lastFrame()).toContain('/chat');
+  });
+
+  it('offers both canonical /resume and its discoverable /session compatibility alias', async () => {
+    const commands = listCommandCompletions();
+    const { stdin, lastFrame, unmount } = renderInput({ commands });
+    stdin.write('/s');
+    await delay();
+    expect(lastFrame()).toContain('/session');
+    expect(lastFrame()).toContain('Alias for /resume');
+    stdin.write('\x15'); // Ctrl+U clears the prefix
+    await delay();
+    stdin.write('/res');
+    await delay();
+    expect(lastFrame()).toContain('resume');
+    unmount();
   });
 
   it('inserts a newline (not garbage) for modified Enter escape sequences', async () => {

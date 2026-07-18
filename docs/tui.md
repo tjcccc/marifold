@@ -39,15 +39,16 @@ prompt.
 - **Multi-line**: end a line with `\` to continue onto the next line; Enter on a
   line that does not end with `\` submits.
 - **Cursor & readline keys**: Left/Right move; Ctrl+A/Ctrl+E jump to start/end;
-  Ctrl+U deletes to start; Ctrl+W deletes the previous word; Backspace works
-  (including the macOS DEL the terminal sends).
+  Ctrl+U deletes to start; Ctrl+W deletes the previous word; Backspace removes
+  the character before the cursor (including the macOS DEL byte), while Del
+  removes the character under the cursor.
 - **Tab completion** completes `/command` and `$skill` names.
 - **Cancel/exit**: Esc or Ctrl+C cancels a running task; when idle, press Ctrl+C
   twice to exit.
 
 ## Commands
 
-`/help` `/exit` (`/quit`) `/new` `/agent` `/chat` `/model` `/profile` `/session`
+`/help` `/exit` (`/quit`) `/new` `/agent` `/chat` `/model` `/profile` `/resume`
 `/think on|off` `/clear` `/stop` `/btw <text>` `/permissions` `/skills`
 `/install-skill [--global] <path|url>` `/doctor`, plus chat carry-overs `/read`
 `/image` `/remember` `/forget` `/delete-memory`.
@@ -56,6 +57,8 @@ prompt.
   queued and handed to the model on its next turn. With no run active, it is sent
   as a normal message.
 - `/stop` (or Esc / Ctrl+C while running) cancels the current run.
+- `/resume` opens a recent-session picker for the current profile; choose with
+  Up/Down and Enter. `/session` remains as a compatibility alias.
 - `/skills` opens an arrow-key list: Enter runs the selected skill, Del removes it.
 - `/agent` / `/chat` switch the **current session's** mode. `/agent default` /
   `/chat default` additionally persist it as the active profile's default mode

@@ -1,6 +1,6 @@
 import { render } from 'ink-testing-library';
 import { describe, expect, it, vi } from 'vitest';
-import type { LoadedMarifoldConfig, MarifoldRuntime } from '@marifold/core';
+import type { LoadedMarifoldConfig, MarifoldRuntime, SessionDetail, SessionSummary } from '@marifold/core';
 import { App } from '../src/ui/App.js';
 import type { Mode } from '../src/core/appState.js';
 
@@ -17,7 +17,11 @@ interface RunnerCall {
   [key: string]: unknown;
 }
 
-function makeRuntime(opts: { agentRun?: (call: RunnerCall) => AsyncGenerator<unknown> } = {}) {
+function makeRuntime(opts: {
+  agentRun?: (call: RunnerCall) => AsyncGenerator<unknown>;
+  sessions?: SessionSummary[];
+  sessionDetail?: SessionDetail;
+} = {}) {
   const runSpy = vi.fn();
   const streamSpy = vi.fn();
 
@@ -28,7 +32,8 @@ function makeRuntime(opts: { agentRun?: (call: RunnerCall) => AsyncGenerator<unk
   const runtime = {
     listSkills: () => [],
     listProfiles: () => [{ name: 'default' }],
-    listSessions: () => [],
+    listSessions: () => opts.sessions ?? [],
+    getSession: (id: string) => opts.sessionDetail?.id === id ? opts.sessionDetail : undefined,
     resolveSettings: ({ profile }: { profile: string }) => ({ profile, provider: 'p', model: 'm', mode: 'agent' as Mode, think: false }),
     createAgentRunner: () => ({
       run: (call: RunnerCall) => {
@@ -135,6 +140,35 @@ describe('App run routing', () => {
     await vi.waitFor(() => expect(streamSpy).toHaveBeenCalledTimes(2));
     // The re-run replays the prior prompt, not the command echo.
     expect(streamSpy.mock.calls[1][0]).toMatchObject({ prompt: 'hello' });
+    unmount();
+  });
+
+  it('/resume opens recent sessions by preview and continues the selected transcript', async () => {
+    const summary: SessionSummary = {
+      id: 'session-12345678', profileName: 'default', turnCount: 2,
+      createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+      preview: 'Earlier question about Fedora',
+    };
+    const detail: SessionDetail = {
+      ...summary,
+      turns: [
+        { role: 'user', content: 'Earlier question about Fedora', timestamp: summary.createdAt },
+        { role: 'assistant', content: 'Earlier answer', timestamp: summary.updatedAt },
+      ],
+    };
+    const { runtime } = makeRuntime({ sessions: [summary], sessionDetail: detail });
+    const { stdin, lastFrame, unmount } = render(<App runtime={runtime} loadedConfig={config} initial={initial('agent')} />);
+    await delay();
+    stdin.write('/resume');
+    await delay();
+    stdin.write('\r');
+    await delay();
+    expect(lastFrame()).toContain('Resume session');
+    expect(lastFrame()).toContain('Earlier question about Fedo');
+    stdin.write('\r');
+    await delay();
+    expect(lastFrame()).toContain('Earlier answer');
+    expect(lastFrame()).toContain('Resumed session session-');
     unmount();
   });
 
