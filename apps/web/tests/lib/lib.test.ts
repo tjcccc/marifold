@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { formatDuration, formatElapsed, formatRelativeTime, formatTokens } from '../../src/lib/format';
 import { formatHash, parseHash } from '../../src/lib/hashRoute';
 import { parseInline, parseMarkdown } from '../../src/lib/markdown';
+import { withPendingSession } from '../../src/lib/sessionSummaries';
 import { resolveEffectivePermissions } from '../../src/lib/permissions';
 
 describe('hashRoute', () => {
@@ -127,5 +128,80 @@ describe('markdown', () => {
     const quote = blocks[0];
     if (quote.type !== 'quote') throw new Error('expected quote');
     expect(quote.blocks.map(b => b.type)).toEqual(['heading', 'list']);
+  });
+
+  it('parses pipe tables with alignment and mixed-language inline markup', () => {
+    const blocks = parseMarkdown([
+      'Options:',
+      '| 选项 | 感觉 | Link |',
+      '| :--- | :---: | ---: |',
+      '| **Just some portraits.** | 干净、低调 | [site](https://x.dev) |',
+      '| Portraits. | 更冷 | |',
+    ].join('\n'));
+
+    expect(blocks.map(block => block.type)).toEqual(['paragraph', 'table']);
+    const table = blocks[1];
+    if (table.type !== 'table') throw new Error('expected table');
+    expect(table.alignments).toEqual(['left', 'center', 'right']);
+    expect(table.header).toHaveLength(3);
+    expect(table.rows).toHaveLength(2);
+    expect(table.rows[0][0]).toEqual([
+      { type: 'strong', children: [{ type: 'text', text: 'Just some portraits.' }] },
+    ]);
+    expect(table.rows[1][2]).toEqual([]);
+  });
+
+  it('keeps escaped and inline-code pipes inside table cells', () => {
+    const blocks = parseMarkdown('| value | code |\n| --- | --- |\n| a \\| b | `x|y` |');
+    const table = blocks[0];
+    if (table.type !== 'table') throw new Error('expected table');
+    expect(table.rows[0]).toEqual([
+      [{ type: 'text', text: 'a | b' }],
+      [{ type: 'code', text: 'x|y' }],
+    ]);
+  });
+
+  it('keeps malformed table syntax as ordinary paragraph text', () => {
+    const blocks = parseMarkdown('| one | two |\n| -- | nope |\n| a | b |');
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0].type).toBe('paragraph');
+  });
+});
+
+describe('session summaries', () => {
+  it('adds one pending first-turn session with a server-compatible preview', () => {
+    const sessions = withPendingSession([], {
+      id: 'session_new',
+      profileName: 'prompt-maker',
+      prompt: `  Make a prompt\nabout ${'portraits '.repeat(20)}`,
+      now: '2026-07-22T00:00:00.000Z',
+    });
+
+    expect(sessions[0]).toMatchObject({
+      id: 'session_new',
+      profileName: 'prompt-maker',
+      createdAt: '2026-07-22T00:00:00.000Z',
+      updatedAt: '2026-07-22T00:00:00.000Z',
+      turnCount: 1,
+    });
+    expect(sessions[0].preview?.startsWith('Make a prompt about portraits')).toBe(true);
+    expect(sessions[0].preview?.endsWith('…')).toBe(true);
+    expect(sessions[0].preview?.length).toBeLessThanOrEqual(80);
+  });
+
+  it('does not duplicate an existing durable or pending session', () => {
+    const existing = [{
+      id: 'session_1',
+      profileName: 'default',
+      createdAt: '2026-07-22T00:00:00.000Z',
+      updatedAt: '2026-07-22T00:00:00.000Z',
+      turnCount: 2,
+      preview: 'Existing',
+    }];
+    expect(withPendingSession(existing, {
+      id: 'session_1',
+      profileName: 'default',
+      prompt: 'Replacement',
+    })).toBe(existing);
   });
 });

@@ -48,6 +48,33 @@ function Block({ block }: { block: MarkdownBlock }) {
           ))}
         </blockquote>
       );
+    case 'table':
+      return (
+        <div className={styles.tableWrap}>
+          <table className={styles.table}>
+            <thead>
+              <tr>
+                {block.header.map((cell, index) => (
+                  <th key={index} scope="col" style={{ textAlign: block.alignments[index] }}>
+                    <Inline nodes={cell} />
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {block.rows.map((row, rowIndex) => (
+                <tr key={rowIndex}>
+                  {row.map((cell, cellIndex) => (
+                    <td key={cellIndex} style={{ textAlign: block.alignments[cellIndex] }}>
+                      <Inline nodes={cell} />
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      );
     case 'rule':
       return <hr className={styles.rule} />;
     case 'paragraph':

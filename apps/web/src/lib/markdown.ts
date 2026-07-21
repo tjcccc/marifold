@@ -3,8 +3,8 @@
  * rolled and DOM-free: the Markdown component renders the tree with React
  * elements, so no HTML string ever reaches innerHTML. Coverage matches what
  * models actually emit in chat: headings, paragraphs, fenced code, lists,
- * blockquotes, horizontal rules, inline code/bold/italic, and http(s) links
- * (anything else stays text).
+ * blockquotes, horizontal rules, pipe tables, inline code/bold/italic, and
+ * http(s) links (anything else stays text).
  */
 export type InlineNode =
   | { type: 'text'; text: string }
@@ -13,12 +13,15 @@ export type InlineNode =
   | { type: 'em'; children: InlineNode[] }
   | { type: 'link'; href: string; children: InlineNode[] };
 
+export type TableAlignment = 'left' | 'center' | 'right' | undefined;
+
 export type MarkdownBlock =
   | { type: 'heading'; level: number; inline: InlineNode[] }
   | { type: 'paragraph'; inline: InlineNode[] }
   | { type: 'code'; lang?: string; text: string }
   | { type: 'list'; ordered: boolean; items: InlineNode[][] }
   | { type: 'quote'; blocks: MarkdownBlock[] }
+  | { type: 'table'; header: InlineNode[][]; alignments: TableAlignment[]; rows: InlineNode[][][] }
   | { type: 'rule' };
 
 export function parseMarkdown(source: string): MarkdownBlock[] {
@@ -89,6 +92,13 @@ export function parseMarkdown(source: string): MarkdownBlock[] {
       continue;
     }
 
+    const table = tableAt(lines, index);
+    if (table) {
+      blocks.push(table.block);
+      index = table.nextIndex;
+      continue;
+    }
+
     // Paragraph: consume until a blank line or another block opener.
     const paragraph: string[] = [line];
     index += 1;
@@ -99,7 +109,8 @@ export function parseMarkdown(source: string): MarkdownBlock[] {
       !/^#{1,6}\s/.test(lines[index]) &&
       quoteLine(lines[index]) === undefined &&
       !/^\s*(?:---+|\*\*\*+|___+)\s*$/.test(lines[index]) &&
-      !listItem(lines[index])
+      !listItem(lines[index]) &&
+      !tableAt(lines, index)
     ) {
       paragraph.push(lines[index]);
       index += 1;
@@ -108,6 +119,81 @@ export function parseMarkdown(source: string): MarkdownBlock[] {
   }
 
   return blocks;
+}
+
+function tableAt(
+  lines: string[],
+  index: number,
+): { block: Extract<MarkdownBlock, { type: 'table' }>; nextIndex: number } | undefined {
+  if (index + 1 >= lines.length || !lines[index].includes('|')) return undefined;
+
+  const headerCells = splitTableRow(lines[index]);
+  const delimiterCells = splitTableRow(lines[index + 1]);
+  if (headerCells.length === 0 || delimiterCells.length !== headerCells.length) return undefined;
+  if (!delimiterCells.every(cell => /^:?-{3,}:?$/.test(cell))) return undefined;
+
+  const alignments = delimiterCells.map<TableAlignment>(cell => {
+    if (cell.startsWith(':') && cell.endsWith(':')) return 'center';
+    if (cell.endsWith(':')) return 'right';
+    return 'left';
+  });
+  const rows: InlineNode[][][] = [];
+  let nextIndex = index + 2;
+  while (nextIndex < lines.length && lines[nextIndex].trim() !== '' && lines[nextIndex].includes('|')) {
+    const cells = splitTableRow(lines[nextIndex]);
+    if (cells.length === 0) break;
+    rows.push(normalizeTableCells(cells, headerCells.length).map(parseInline));
+    nextIndex += 1;
+  }
+
+  return {
+    block: {
+      type: 'table',
+      header: headerCells.map(parseInline),
+      alignments,
+      rows,
+    },
+    nextIndex,
+  };
+}
+
+/** Split a GFM-style pipe row without treating escaped pipes or pipes inside
+ * inline-code spans as cell boundaries. Leading/trailing pipes are optional. */
+function splitTableRow(line: string): string[] {
+  let text = line.trim();
+  if (text.startsWith('|')) text = text.slice(1);
+  if (text.endsWith('|') && !isEscaped(text, text.length - 1)) text = text.slice(0, -1);
+
+  const cells: string[] = [];
+  let cell = '';
+  let inCode = false;
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    if (char === '\\' && text[index + 1] === '|') {
+      cell += '|';
+      index += 1;
+      continue;
+    }
+    if (char === '`') inCode = !inCode;
+    if (char === '|' && !inCode) {
+      cells.push(cell.trim());
+      cell = '';
+    } else {
+      cell += char;
+    }
+  }
+  cells.push(cell.trim());
+  return cells;
+}
+
+function isEscaped(text: string, index: number): boolean {
+  let slashes = 0;
+  for (let cursor = index - 1; cursor >= 0 && text[cursor] === '\\'; cursor -= 1) slashes += 1;
+  return slashes % 2 === 1;
+}
+
+function normalizeTableCells(cells: string[], width: number): string[] {
+  return Array.from({ length: width }, (_, index) => cells[index] ?? '');
 }
 
 /** The line's content with one leading `>` marker removed, or undefined when

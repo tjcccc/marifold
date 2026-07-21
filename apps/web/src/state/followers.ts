@@ -15,6 +15,8 @@ export class RunFollowers {
   constructor(
     private readonly client: ApiClient,
     private readonly dispatch: (action: ThreadAction) => void,
+    /** Runs after the terminal event has been folded into the thread. */
+    private readonly onDone?: (runId: string) => void,
   ) {}
 
   /** Idempotent: attaching an already-followed run is a no-op. */
@@ -45,6 +47,7 @@ export class RunFollowers {
     try {
       for await (const { seq, event } of followRun(this.client, runId, { afterSeq, signal })) {
         this.dispatch({ type: 'run_event', runId, seq, event });
+        if (event.type === 'done') this.onDone?.(runId);
       }
     } catch (error) {
       if (signal.aborted) return;

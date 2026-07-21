@@ -89,7 +89,10 @@
 
 .skillToken {
   color: var(--brand-text);
-  font-weight: 600;
+  /* Keep the mirror's glyph metrics identical to the transparent textarea.
+   * A heavier token is wider and makes the real caret appear inside the
+   * visible text, especially for long skill names. */
+  font-weight: inherit;
 }
 
 .menu {

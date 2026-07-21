@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { SkillHint } from '../../api/misc';
 import type { PreparedAttachment } from '../../lib/attachments';
 import { menuQuery, splitLeading, WEB_COMMANDS } from '../../lib/commandSyntax';
@@ -37,6 +37,7 @@ export function InputBar(props: InputBarProps) {
   const highlightRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const activeItemRef = useRef<HTMLLIElement>(null);
+  const completionCaretRef = useRef<number | undefined>(undefined);
   const attachments = props.attachments ?? [];
   // Steering rides an active run — attachments can't join mid-task.
   const canAttach = props.onAttachFiles !== undefined && !props.steering;
@@ -53,6 +54,20 @@ export function InputBar(props: InputBarProps) {
     if (menuOpen) activeItemRef.current?.scrollIntoView?.({ block: 'nearest' });
   }, [active, menuOpen]);
 
+  // A controlled textarea may preserve its old selection offset when React
+  // replaces a short query with a longer completion. Place the caret after the
+  // completed token once that value has reached the DOM.
+  useLayoutEffect(() => {
+    const caret = completionCaretRef.current;
+    if (caret === undefined) return;
+    completionCaretRef.current = undefined;
+    const node = textareaRef.current;
+    if (!node) return;
+    node.focus();
+    node.setSelectionRange(caret, caret);
+    autosize(node);
+  }, [text]);
+
   function submit(): void {
     const value = text.trim();
     if (!value || props.disabled) return;
@@ -64,14 +79,11 @@ export function InputBar(props: InputBarProps) {
   }
 
   function complete(item: Suggestion): void {
-    setText(`${sigil}${item.name} `);
+    const completed = `${sigil}${item.name} `;
+    completionCaretRef.current = completed.length;
+    setText(completed);
     setActiveIndex(0);
     setDismissed(false);
-    const node = textareaRef.current;
-    if (node) {
-      node.focus();
-      requestAnimationFrame(() => autosize(node));
-    }
   }
 
   function onKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>): void {

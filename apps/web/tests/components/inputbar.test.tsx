@@ -51,6 +51,20 @@ describe('InputBar $-autocomplete', () => {
     expect(screen.queryByRole('listbox')).toBeNull();
   });
 
+  it('Tab places the caret after the completed skill token', () => {
+    const { textarea, onSubmit } = renderBar();
+    fireEvent.focus(textarea);
+    fireEvent.change(textarea, { target: { value: '$make' } });
+    textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+
+    fireEvent.keyDown(textarea, { key: 'Tab' });
+
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(textarea.value).toBe('$make-midjourney-prompt ');
+    expect(textarea.selectionStart).toBe(textarea.value.length);
+    expect(textarea.selectionEnd).toBe(textarea.value.length);
+  });
+
   it('arrow keys move the selection before completing', () => {
     const { textarea } = renderBar();
     fireEvent.focus(textarea);

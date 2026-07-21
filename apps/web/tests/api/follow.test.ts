@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { ApiClient, StreamInit } from '../../src/api/client';
 import { MarifoldApiError } from '../../src/api/client';
 import { followRun } from '../../src/api/runs';
+import { RunFollowers } from '../../src/state/followers';
 import type { AgentEvent } from '../../src/api/types';
 
 function sseBody(frames: Array<{ id: number; event: AgentEvent }>): Response {
@@ -100,5 +101,32 @@ describe('followRun', () => {
       controller.abort(); // abort while the generator is mid-loop
     }
     expect(seen).toEqual([1]);
+  });
+});
+
+describe('RunFollowers', () => {
+  it('notifies the controller when a followed run reaches done', async () => {
+    const { client } = scriptedClient([
+      sseBody([{ id: 1, event: status }, { id: 2, event: done }]),
+    ]);
+    const actions: unknown[] = [];
+    let resolveDone!: () => void;
+    const reachedDone = new Promise<void>(resolve => { resolveDone = resolve; });
+    const followers = new RunFollowers(
+      client,
+      action => actions.push(action),
+      runId => {
+        expect(runId).toBe('run_1');
+        resolveDone();
+      },
+    );
+
+    followers.attach('run_1');
+    await reachedDone;
+
+    expect(actions).toEqual([
+      { type: 'run_event', runId: 'run_1', seq: 1, event: status },
+      { type: 'run_event', runId: 'run_1', seq: 2, event: done },
+    ]);
   });
 });

@@ -2,6 +2,13 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-07-22 — v0.46.1 — Web UI rendering and session fixes
+
+- The dependency-free Web Markdown renderer now recognizes GFM-style pipe tables, including column alignment markers, inline formatting, escaped pipes, and code spans containing pipes. Tables render as semantic HTML with bounded horizontal scrolling instead of collapsing into a single paragraph.
+- Tab/Enter autocomplete now places the textarea caret explicitly after the completed `$skill ` or `/command ` token. The live highlight mirror also keeps the textarea's font weight, eliminating the width mismatch that made an end-positioned caret appear before the last character; submitted bubbles retain their bold highlight.
+- A first message now adds its newly generated session to the sidebar immediately with a one-turn prompt preview. Agent-run followers refresh from the authoritative server session list on `done`, fixing completed agent sessions remaining invisible until a reload or profile switch; failed run starts also discard pending rows through the same refresh path.
+- Full workspace `typecheck && build && test` gate green (459 tests: core 252, service 38, TUI 49, CLI 10, web 110).
+
 ## 2026-07-21 — v0.46.0 — Image request optimization
 
 - TUI, CLI, service chat, and live agent runs now share a core image-preparation boundary: validate/decode, correct MIME types, cap requests at four images and 16 MiB of local/base64 source data, auto-orient, resize to a 1600 px long edge, strip metadata, and retain the optimized output only when smaller. Lossless sources and transparency use lossless WebP; JPEG and oversized static WebP use conservative high-quality fallbacks only when needed; animated images and remote URLs remain untouched.

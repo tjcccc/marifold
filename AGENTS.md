@@ -12,7 +12,7 @@ v0.40–v0.44.x add the `xai` provider (SuperGrok subscription OAuth against `ap
 
 v0.45.x adds lazy built-in `$skill-manager` guidance for ordinary agent prompts that mention skills, with multilingual detection and resolved profile/global paths shared across TUI, CLI, service, channels, and Web UI agent runs.
 
-v0.46.x adds shared image validation and request optimization across TUI, CLI, service, and Web UI paths, including conservative resizing/encoding, attachment limits, browser-side preprocessing, and the one-turn `/attach-original` bypass.
+v0.46.x adds shared image validation and request optimization across TUI, CLI, service, and Web UI paths, including conservative resizing/encoding, attachment limits, browser-side preprocessing, and the one-turn `/attach-original` bypass. v0.46.1 also fixes Web UI Markdown tables, composer autocomplete caret alignment, and immediate/durable new-session sidebar updates.
 
 ## Stack
 

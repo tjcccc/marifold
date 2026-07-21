@@ -185,6 +185,24 @@ describe('ThreadView', () => {
     expect(screen.getByText(/tool actions/)).toBeTruthy();
   });
 
+  it('renders assistant pipe tables as semantic HTML tables', () => {
+    render(
+      <ThreadView
+        items={[{
+          id: 'i1',
+          kind: 'assistant',
+          markdown: '| 选项 | 感觉 |\n| --- | ---: |\n| Just some portraits. | 干净、低调 |',
+        }]}
+        onCancelRun={() => {}}
+        onAnswerApproval={() => {}}
+        onToggleRun={() => {}}
+      />,
+    );
+    expect(screen.getByRole('table')).toBeTruthy();
+    expect(screen.getAllByRole('columnheader')).toHaveLength(2);
+    expect(screen.getByRole('cell', { name: '干净、低调' })).toBeTruthy();
+  });
+
   it('renders a trivial completed run as inline meta on the prose, no card', () => {
     const startedAt = new Date('2026-07-06T08:00:00Z').toISOString();
     render(

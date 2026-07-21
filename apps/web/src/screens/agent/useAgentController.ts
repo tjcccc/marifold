@@ -18,6 +18,7 @@ import type { Route } from '../../lib/hashRoute';
 import type { PreparedAttachment } from '../../lib/attachments';
 import { fileToBase64, inlineTextAttachments, MAX_TOTAL_BYTES, prepareFiles } from '../../lib/attachments';
 import { parseCommand, WEB_COMMANDS } from '../../lib/commandSyntax';
+import { withPendingSession } from '../../lib/sessionSummaries';
 import { RunFollowers } from '../../state/followers';
 import type { ThreadState, UserAttachment } from '../../state/thread';
 import { activeRun, createThreadState, threadReducer } from '../../state/thread';
@@ -92,7 +93,11 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
 
   const profileName = route.profile;
 
-  const followers = useMemo(() => new RunFollowers(client, dispatch), [client]);
+  const refreshSessionsRef = useRef<() => void>(() => undefined);
+  const followers = useMemo(
+    () => new RunFollowers(client, dispatch, () => refreshSessionsRef.current()),
+    [client],
+  );
   useEffect(() => () => followers.stopAll(), [followers]);
 
   const handleError = useCallback(
@@ -248,6 +253,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
       // List refresh is cosmetic; ignore failures.
     }
   }, [client, profileName]);
+  refreshSessionsRef.current = () => { void refreshSessions(); };
 
   const selectProfile = useCallback(
     (name: string) => {
@@ -351,6 +357,11 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
       );
 
       dispatch({ type: 'user_message', text: trimmed, attachments: bubbleAttachments });
+      setSessions(current => withPendingSession(current, {
+        id: sid,
+        profileName,
+        prompt: trimmed,
+      }));
       const [provider, model] = splitModelChoice(modelChoice);
       const mode = profileDetail?.settings.mode ?? 'agent';
 
@@ -398,6 +409,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
         followers.attach(run.id);
       } catch (error) {
         handleError(error);
+        void refreshSessions();
       } finally {
         setSending(false);
       }
