@@ -263,7 +263,7 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
   }, [runtime, notify]);
 
   // --- Runs ----------------------------------------------------------------
-  const runAgent = useCallback(async (objective: string, options: { instructions?: string[]; userTurn?: string; lean?: boolean; forcePlan?: boolean } = {}) => {
+  const runAgent = useCallback(async (objective: string, options: { instructions?: string[]; userTurn?: string; lean?: boolean; forcePlan?: boolean; originalImages?: boolean } = {}) => {
     const controller = new AbortController();
     abortRef.current = controller;
     steeringRef.current = [];
@@ -293,6 +293,7 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
         ...(options.userTurn ? { userTurn: options.userTurn } : {}),
         ...(options.lean ? { lean: true } : {}),
         ...(options.forcePlan ? { forcePlan: true } : {}),
+        ...(options.originalImages ? { originalImages: true } : {}),
         ...(images.length > 0 ? { images } : {}),
         signal: controller.signal,
         approvalHandler,
@@ -324,7 +325,7 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
     }
   }, [runtime, approvalHandler, notify]);
 
-  const runChat = useCallback(async (prompt: string, extraContext: string[] = [], options: { instructions?: string[] } = {}) => {
+  const runChat = useCallback(async (prompt: string, extraContext: string[] = [], options: { instructions?: string[]; originalImages?: boolean } = {}) => {
     const controller = new AbortController();
     abortRef.current = controller;
     const current = stateRef.current;
@@ -350,6 +351,7 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
           ...(current.maxContextTokens != null ? { maxContextTokens: current.maxContextTokens } : {}),
           userContext: userContext.length > 0 ? userContext : undefined,
           ...(options.instructions ? { instructions: options.instructions } : {}),
+          ...(options.originalImages ? { originalImages: true } : {}),
           images: images.length > 0 ? images : undefined,
           signal: controller.signal,
         },
@@ -370,7 +372,7 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
     }
   }, [runtime, notify]);
 
-  const startTextRun = useCallback((text: string) => {
+  const startTextRun = useCallback((text: string, options: { originalImages?: boolean } = {}) => {
     // Remember the last plain-text prompt so `/retry` can re-run it. Captured
     // here (the sole text-run entry) rather than read from the transcript, which
     // also records `/command` and `$skill` echoes as user items.
@@ -380,11 +382,11 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
     // concept), then auto-disarm.
     if (planNextRef.current) {
       setPlanNext(false);
-      void runAgent(text, { forcePlan: true });
+      void runAgent(text, { ...options, forcePlan: true });
       return;
     }
-    if (stateRef.current.mode === 'chat') void runChat(text);
-    else void runAgent(text);
+    if (stateRef.current.mode === 'chat') void runChat(text, [], options);
+    else void runAgent(text, options);
   }, [runAgent, runChat]);
 
   // Re-run the last plain-text message through the current profile/model/mode —
@@ -764,6 +766,13 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
     showStatus,
     copyLast,
     retryLast,
+    sendOriginal: (text: string) => {
+      if (stateRef.current.running) {
+        notify('A task is running. Use /btw to steer or /stop to cancel.', 'warn');
+        return;
+      }
+      startTextRun(text, { originalImages: true });
+    },
     showSessions,
     runDoctor,
     installSkill,
@@ -812,7 +821,7 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
   }), [
     notify, stop, steer, exit, openModelPicker, openProfilePicker, selectProfile, openSkills,
     showPermissions, showHelp, showStatus, copyLast, retryLast, showSessions, runDoctor, installSkill,
-    readFileCmd, setImage, remember, forget, deleteMemory, repaint, runtime, trustFolderForProfile,
+    readFileCmd, setImage, remember, forget, deleteMemory, repaint, runtime, trustFolderForProfile, startTextRun,
   ]);
 
   // --- Input routing -------------------------------------------------------
@@ -828,7 +837,7 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
     // Both the chat path (runChat) and the agent path (runAgent) consume
     // pendingImagesRef, so this works in either mode for a text/skill turn.
     if (attachedImages.length > 0) {
-      if (parsed.kind === 'text' || parsed.kind === 'skill') {
+      if (parsed.kind === 'text' || parsed.kind === 'skill' || (parsed.kind === 'command' && parsed.name === 'attach-original')) {
         for (const file of attachedImages) pendingImagesRef.current.push({ path: file });
       } else {
         notify(`Images attach to a message, not /${parsed.kind === 'command' ? 'commands' : 'input'}. Ignored ${attachedImages.length} image(s).`, 'warn');
@@ -839,6 +848,12 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
       case 'empty':
         return;
       case 'command':
+        // `/attach-original <prompt>` is a one-turn send action. Show the
+        // actual prompt once, not an extra command-echo row before it.
+        if (parsed.name === 'attach-original') {
+          runCommand(commandContext, parsed.name, parsed.args);
+          return;
+        }
         // Echo the command as a transcript divider (like a sent message) so its
         // result is clearly separated from the previous turn.
         dispatch({ type: 'add_user', text: trimmed });

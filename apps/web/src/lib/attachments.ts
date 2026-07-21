@@ -5,8 +5,12 @@
  */
 
 export const MAX_IMAGES_PER_MESSAGE = 4;
-export const MAX_TOTAL_BYTES = 5 * 1024 * 1024;
+/** The service's 25 MiB body limit still has room for base64 expansion. */
+export const MAX_TOTAL_BYTES = 16 * 1024 * 1024;
 export const MAX_TEXT_FILE_BYTES = 256 * 1024;
+export const IMAGE_OPTIMIZE_MIN_BYTES = 300 * 1024;
+export const IMAGE_MAX_LONG_EDGE = 1600;
+export const IMAGE_OUTPUT_QUALITY = 0.85;
 
 /** Image types core forwards to the model natively. */
 const IMAGE_MEDIA_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif']);
@@ -41,7 +45,18 @@ export function classifyFile(name: string, mediaType: string, size: number): Att
 }
 
 export type PreparedAttachment =
-  | { kind: 'image'; name: string; size: number; data: string; mediaType: string }
+  | {
+      kind: 'image';
+      name: string;
+      size: number;
+      originalSize?: number;
+      /** Kept as a Blob-backed File so /attach-original can bypass preprocessing
+       * without retaining a second base64 copy in React state. */
+      originalFile?: File;
+      optimized?: boolean;
+      data: string;
+      mediaType: string;
+    }
   | { kind: 'text'; name: string; size: number; content: string };
 
 /** Enforce the per-message caps over already-accepted attachments. Returns the
@@ -84,20 +99,28 @@ export async function prepareFiles(files: Iterable<File>, existing: PreparedAtta
       rejected.push(cls.reason);
       continue;
     }
-    const violation = capViolation([...existing, ...accepted], file.size, cls.kind);
-    if (violation) {
-      rejected.push(`${file.name}: ${violation}`);
-      continue;
-    }
     if (cls.kind === 'image') {
-      accepted.push({
-        kind: 'image',
-        name: file.name,
-        size: file.size,
-        data: await fileToBase64(file),
-        mediaType: file.type,
-      });
+      if (file.size > MAX_TOTAL_BYTES) {
+        rejected.push(`${file.name}: source images are limited to ${MAX_TOTAL_BYTES / (1024 * 1024)} MiB each.`);
+        continue;
+      }
+      try {
+        const image = await optimizeBrowserImage(file);
+        const violation = capViolation([...existing, ...accepted], image.size, 'image');
+        if (violation) {
+          rejected.push(`${file.name}: ${violation}`);
+          continue;
+        }
+        accepted.push({ kind: 'image', name: file.name, originalFile: file, ...image });
+      } catch (error) {
+        rejected.push(`${file.name}: could not decode or optimize image (${errorMessage(error)}).`);
+      }
     } else {
+      const violation = capViolation([...existing, ...accepted], file.size, 'text');
+      if (violation) {
+        rejected.push(`${file.name}: ${violation}`);
+        continue;
+      }
       accepted.push({ kind: 'text', name: file.name, size: file.size, content: await file.text() });
     }
   }
@@ -115,7 +138,7 @@ function longestBacktickRun(content: string): number {
   return longest;
 }
 
-export async function fileToBase64(file: File): Promise<string> {
+export async function fileToBase64(file: Blob): Promise<string> {
   const bytes = new Uint8Array(await file.arrayBuffer());
   let binary = '';
   const chunk = 0x8000;
@@ -123,4 +146,82 @@ export async function fileToBase64(file: File): Promise<string> {
     binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
   }
   return btoa(binary);
+}
+
+export interface BrowserOptimizedImage {
+  size: number;
+  originalSize: number;
+  optimized: boolean;
+  data: string;
+  mediaType: string;
+}
+
+/**
+ * Reduce an image before it enters React state or the service JSON body.
+ * PNG remains lossless for crisp UI text/transparency; JPEG uses a high-quality
+ * encoder. GIF/WebP remain untouched so animation is never flattened.
+ * Core repeats validation and optimization as the authoritative boundary.
+ */
+export async function optimizeBrowserImage(file: File): Promise<BrowserOptimizedImage> {
+  if (
+    file.size < IMAGE_OPTIMIZE_MIN_BYTES
+    || file.type === 'image/gif'
+    || file.type === 'image/webp'
+    || typeof createImageBitmap !== 'function'
+    || typeof document === 'undefined'
+  ) {
+    return originalBrowserImage(file);
+  }
+
+  const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+  try {
+    const scale = Math.min(1, IMAGE_MAX_LONG_EDGE / Math.max(bitmap.width, bitmap.height));
+    const width = Math.max(1, Math.round(bitmap.width * scale));
+    const height = Math.max(1, Math.round(bitmap.height * scale));
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext('2d');
+    if (!context) return originalBrowserImage(file);
+    context.drawImage(bitmap, 0, 0, width, height);
+
+    // Keep PNG lossless. JPEG uses a high-quality re-encode after resizing.
+    // WebP is left to core because Canvas cannot reliably tell static and
+    // animated WebP apart and must never flatten animation accidentally.
+    const outputType = file.type === 'image/png' ? 'image/png' : file.type;
+    const candidate = await canvasToBlob(canvas, outputType, IMAGE_OUTPUT_QUALITY);
+    if (candidate.size >= file.size) return originalBrowserImage(file);
+    return {
+      size: candidate.size,
+      originalSize: file.size,
+      optimized: true,
+      data: await fileToBase64(candidate),
+      mediaType: candidate.type || outputType,
+    };
+  } finally {
+    bitmap.close();
+  }
+}
+
+async function originalBrowserImage(file: File): Promise<BrowserOptimizedImage> {
+  return {
+    size: file.size,
+    originalSize: file.size,
+    optimized: false,
+    data: await fileToBase64(file),
+    mediaType: file.type,
+  };
+}
+
+function canvasToBlob(canvas: HTMLCanvasElement, type: string, quality: number): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(blob => {
+      if (blob) resolve(blob);
+      else reject(new Error(`browser could not encode ${type}`));
+    }, type, quality);
+  });
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }

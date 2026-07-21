@@ -2,6 +2,12 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-07-21 — v0.46.0 — Image request optimization
+
+- TUI, CLI, service chat, and live agent runs now share a core image-preparation boundary: validate/decode, correct MIME types, cap requests at four images and 16 MiB of local/base64 source data, auto-orient, resize to a 1600 px long edge, strip metadata, and retain the optimized output only when smaller. Lossless sources and transparency use lossless WebP; JPEG and oversized static WebP use conservative high-quality fallbacks only when needed; animated images and remote URLs remain untouched.
+- Web UI preprocesses large JPEG/PNG attachments before base64/state/service transport, retains the source as a Blob-backed `File` for a one-turn bypass, and shows original → optimized size on the attachment tooltip. `/attach-original <prompt>` in both TUI and Web UI bypasses encoding/resizing for that message only while retaining validation and caps.
+- Added `sharp` 0.34.x (the newest line compatible with the Node 18 project floor) plus core/browser/command/service coverage. Full workspace `typecheck && build && test` gate green (450 tests: core 252, service 38, TUI 49, CLI 10, web 101).
+
 ## 2026-07-18 — v0.45.1 — TUI Delete semantics + interactive `/resume`
 
 - Fixed Fedora's Del (`ESC[3~`) in the TUI composer so it forward-deletes the character under the cursor; Backspace continues to delete the character before it, including the macOS `0x7f` byte.

@@ -170,11 +170,11 @@ describe('image plumbing', () => {
       const response = await runtime.ask({
         prompt: 'What is in this image?',
         memories: false,
-        images: [{ data: 'BASE64CAT', mediaType: 'image/png' }],
+        images: [{ data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl2nGQAAAAASUVORK5CYII=', mediaType: 'image/png' }],
       });
       expect(response.ok).toBe(true);
       const userMessage = body?.messages?.find(m => m.role === 'user');
-      expect(userMessage?.images).toEqual(['BASE64CAT']);
+      expect(userMessage?.images).toEqual(['iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl2nGQAAAAASUVORK5CYII=']);
     } finally {
       runtime.close();
     }

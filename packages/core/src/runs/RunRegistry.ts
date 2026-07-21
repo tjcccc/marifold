@@ -49,6 +49,8 @@ export interface RunStartInput {
   think?: boolean;
   /** Attached to the objective on the first turn (AgentRunner semantics). */
   images?: ImageInput[];
+  /** Preserve attached images' original encoded bytes for this run. */
+  originalImages?: boolean;
   instructions?: string[];
   maxIterations?: number;
   forcePlan?: boolean;
@@ -284,6 +286,7 @@ export class RunRegistry {
         sessionId: input.sessionId,
         think: input.think,
         images: input.images,
+        originalImages: input.originalImages,
         instructions: input.instructions,
         maxIterations: input.maxIterations,
         forcePlan: input.forcePlan,

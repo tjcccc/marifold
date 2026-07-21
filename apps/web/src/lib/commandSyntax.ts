@@ -55,6 +55,7 @@ export const WEB_COMMANDS: Suggestion[] = [
   { name: 'status', usage: '/status', description: 'Show profile, mode, model, thinking, and session.' },
   { name: 'copy', usage: '/copy', description: "Copy the last response to the clipboard." },
   { name: 'retry', usage: '/retry', description: 'Re-run your last message.' },
+  { name: 'attach-original', usage: '/attach-original <prompt>', description: 'Send this message’s attached images without optimization.' },
   { name: 'new', usage: '/new', description: 'Start a fresh session.' },
   { name: 'agent', usage: '/agent', description: 'Set the profile to agent mode.' },
   { name: 'chat', usage: '/chat', description: 'Set the profile to chat mode.' },

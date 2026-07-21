@@ -152,19 +152,21 @@ describe('MarifoldService /v1/runs', () => {
   });
 
   it('forwards image attachments on the objective to the model request', async () => {
+    const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl2nGQAAAAASUVORK5CYII=';
     const { captured } = stubProvider(['A tiny test image.']);
     const { server, base } = await startServer();
     try {
       const created = await postJson(base, '/v1/runs', {
         objective: 'What is in this image?',
         cwd: tempDir(),
-        images: [{ data: 'aGVsbG8td29ybGQ=', mediaType: 'image/png' }],
+        originalImages: true,
+        images: [{ data: png, mediaType: 'image/png' }],
       });
       expect(created.status).toBe(201);
       const { run } = await created.json();
       await pullFrames(sseFrames(await fetch(`${base}/v1/runs/${run.id}/events`)), frame => frame.event === 'done');
       // The base64 payload must reach the provider request on the first turn.
-      expect(JSON.stringify(captured)).toContain('aGVsbG8td29ybGQ=');
+      expect(JSON.stringify(captured)).toContain(png);
 
       const invalid = await postJson(base, '/v1/runs', { objective: 'x', images: [{}] });
       expect(invalid.status).toBe(400);

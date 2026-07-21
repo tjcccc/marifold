@@ -11,6 +11,8 @@ export interface MarifoldRunRequest {
   think?: boolean;
   /** Images attached to the user turn. Passed through to the provider; not persisted in sessions. */
   images?: ImageInput[];
+  /** Preserve the attached images' original encoded bytes for this turn. */
+  originalImages?: boolean;
   /** Per-turn ephemeral strings appended to the user message (e.g. /search results, /read file content). */
   userContext?: string[];
   /** Authoritative instructions injected at the top of the system prompt (e.g. a

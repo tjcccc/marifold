@@ -160,6 +160,7 @@ Memory **content** authoring stays model-driven (`memory_save` blocks) — there
 ```json
 { "prompt": "Hello", "profile": "default", "provider": "ollama", "model": "gemma4:e4b",
   "sessionId": "abc", "memories": false, "think": false,
+  "originalImages": false,
   "images": [{ "data": "<base64>", "mediaType": "image/png" }, { "url": "https://..." }] }
 ```
 
@@ -182,6 +183,7 @@ The run itself is ephemeral in-service state; its durable record is a task
 { "objective": "Summarize ~/notes into notes.md",
   "profile": "default", "provider": "ollama", "model": "gemma4:e4b",
   "sessionId": "abc", "cwd": "/Users/me/project", "think": false,
+  "originalImages": false,
   "images": [{ "data": "<base64>", "mediaType": "image/png" }, { "url": "https://..." }],
   "instructions": ["Write in English."], "maxIterations": 20,
   "forcePlan": false, "lean": false }
@@ -191,6 +193,13 @@ Only `objective` is required. `images` follow the same shape as chat/ask
 (base64 `{data, mediaType}` or URL; exactly one of `data`/`url` per entry)
 and are attached to the objective on the first model turn. The service
 accepts JSON bodies up to 25 MiB to make room for base64 payloads. Returns the **RunRecord**:
+
+Local and base64 images are decoded and validated in core, limited to four and
+16 MiB aggregate source bytes, MIME-corrected, and optimized before the provider
+request. URL images remain remote references. Set `originalImages: true` for a
+single request to preserve supported JPEG/PNG/WebP/GIF encoded bytes; validation
+and safety limits still apply. The TUI/Web UI expose this as
+`/attach-original <prompt>`.
 
 ```json
 { "ok": true, "run": {

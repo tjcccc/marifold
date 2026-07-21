@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+// @vitest-environment jsdom
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   MAX_IMAGES_PER_MESSAGE,
   MAX_TEXT_FILE_BYTES,
@@ -6,8 +7,14 @@ import {
   capViolation,
   classifyFile,
   inlineTextAttachments,
+  optimizeBrowserImage,
   type PreparedAttachment,
 } from '../../src/lib/attachments';
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
 
 describe('classifyFile', () => {
   it.each([
@@ -61,5 +68,69 @@ describe('inlineTextAttachments', () => {
 
   it('returns the prompt untouched without text files', () => {
     expect(inlineTextAttachments('Just this.', [])).toBe('Just this.');
+  });
+});
+
+describe('optimizeBrowserImage', () => {
+  it('resizes and re-encodes a large JPEG before base64 conversion', async () => {
+    const close = vi.fn();
+    vi.stubGlobal('createImageBitmap', vi.fn(async () => ({ width: 3200, height: 1600, close })));
+    const drawImage = vi.fn();
+    const canvas = {
+      width: 0,
+      height: 0,
+      getContext: vi.fn(() => ({ drawImage })),
+      toBlob: vi.fn((callback: (blob: Blob | null) => void, type: string) => {
+        callback(new Blob([new Uint8Array(1200)], { type }));
+      }),
+    };
+    vi.spyOn(document, 'createElement').mockReturnValue(canvas as unknown as HTMLCanvasElement);
+    const source = new File([new Uint8Array(400 * 1024)], 'photo.jpg', { type: 'image/jpeg' });
+
+    const result = await optimizeBrowserImage(source);
+
+    expect(result).toMatchObject({ optimized: true, originalSize: source.size, size: 1200, mediaType: 'image/jpeg' });
+    expect(canvas.width).toBe(1600);
+    expect(canvas.height).toBe(800);
+    expect(drawImage).toHaveBeenCalled();
+    expect(close).toHaveBeenCalled();
+  });
+
+  it('keeps PNG browser output lossless and preserves GIF/WebP originals', async () => {
+    const createImageBitmap = vi.fn(async () => ({ width: 2000, height: 1000, close: vi.fn() }));
+    vi.stubGlobal('createImageBitmap', createImageBitmap);
+    const canvas = {
+      width: 0,
+      height: 0,
+      getContext: vi.fn(() => ({ drawImage: vi.fn() })),
+      toBlob: vi.fn((callback: (blob: Blob | null) => void, type: string) => {
+        callback(new Blob([new Uint8Array(1000)], { type }));
+      }),
+    };
+    vi.spyOn(document, 'createElement').mockReturnValue(canvas as unknown as HTMLCanvasElement);
+
+    const png = await optimizeBrowserImage(new File([new Uint8Array(400 * 1024)], 'ui.png', { type: 'image/png' }));
+    expect(png).toMatchObject({ optimized: true, mediaType: 'image/png' });
+
+    const gif = await optimizeBrowserImage(new File([new Uint8Array(400 * 1024)], 'anim.gif', { type: 'image/gif' }));
+    const webp = await optimizeBrowserImage(new File([new Uint8Array(400 * 1024)], 'anim.webp', { type: 'image/webp' }));
+    expect(gif.optimized).toBe(false);
+    expect(webp.optimized).toBe(false);
+    expect(createImageBitmap).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the original when browser encoding is not smaller', async () => {
+    vi.stubGlobal('createImageBitmap', vi.fn(async () => ({ width: 1000, height: 1000, close: vi.fn() })));
+    const canvas = {
+      width: 0,
+      height: 0,
+      getContext: vi.fn(() => ({ drawImage: vi.fn() })),
+      toBlob: vi.fn((callback: (blob: Blob | null) => void, type: string) => {
+        callback(new Blob([new Uint8Array(500 * 1024)], { type }));
+      }),
+    };
+    vi.spyOn(document, 'createElement').mockReturnValue(canvas as unknown as HTMLCanvasElement);
+    const source = new File([new Uint8Array(400 * 1024)], 'photo.jpg', { type: 'image/jpeg' });
+    expect((await optimizeBrowserImage(source)).optimized).toBe(false);
   });
 });

@@ -19,6 +19,7 @@ import { createSearchBackend } from '../search/createSearchBackend';
 import { formatSearchResults, SearchBackend } from '../search/SearchBackend';
 import { ProviderFactory } from '../config/ProviderFactory';
 import { MarifoldError } from '../errors/MarifoldError';
+import { prepareImageInputs } from '../images/ImageOptimizer';
 import { MemoryStore } from '../memory/MemoryStore';
 import type { MemoryEntry, MemoryKind, MemoryMutationResult, MemoryRememberResult, MemoryScaffoldFile } from '../memory/MemoryStore';
 import {
@@ -100,6 +101,7 @@ export class MarifoldRuntime {
 
   async ask(request: MarifoldRunRequest): Promise<MarifoldAskResponse> {
     const settings = this.resolveSettings(request);
+    const preparedImages = await prepareImageInputs(request.images, { optimize: request.originalImages !== true });
     await this.refreshProviderCredentialsIfNeeded(settings.provider);
     const engine = this.createEngine(settings.provider, Boolean(request.sessionId));
     const memoryOn = this.memoryEnabled(settings.profile, request.memories);
@@ -111,7 +113,7 @@ export class MarifoldRuntime {
       session: request.sessionId ? { id: request.sessionId, createIfMissing: true } : undefined,
       context: [...this.runtimeContext(memory, request.prompt, memoryOn), ...(request.instructions ?? [])],
       memory,
-      images: request.images,
+      images: preparedImages.images.length > 0 ? preparedImages.images : undefined,
       userContext: request.userContext,
     });
     const stripped = stripMemoryControls(response.text ?? '');
@@ -137,6 +139,7 @@ export class MarifoldRuntime {
     onComplete?: (summary: { usage?: UsageInfo; latencyMs?: number }) => void,
   ): AsyncGenerator<string, void, unknown> {
     const settings = this.resolveSettings(request);
+    const preparedImages = await prepareImageInputs(request.images, { optimize: request.originalImages !== true });
     await this.refreshProviderCredentialsIfNeeded(settings.provider);
     let aggregateUsage: UsageInfo | undefined;
     const engine = this.createEngine(settings.provider, Boolean(request.sessionId));
@@ -151,7 +154,7 @@ export class MarifoldRuntime {
       session: request.sessionId ? { id: request.sessionId, createIfMissing: true } : undefined,
       context: [...this.runtimeContext(memory, request.prompt, memoryOn), ...(request.instructions ?? [])],
       memory,
-      images: request.images,
+      images: preparedImages.images.length > 0 ? preparedImages.images : undefined,
       userContext: request.userContext,
     };
 
@@ -486,6 +489,7 @@ export class MarifoldRuntime {
           config: this.toPriestConfig(settings),
         };
       },
+      prepareImages: async (images, optimize) => (await prepareImageInputs(images, { optimize })).images,
       // Record the run as a single tidy user→assistant exchange so resuming the
       // session shows the result, not the agent's internal framing.
       persistTurn: (sessionId, profile, userText, assistantText) =>

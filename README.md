@@ -15,8 +15,8 @@ For product direction and future scope, see [docs/vision.md](docs/vision.md) and
 - Skills as agentic tools: `$name [args]` runs a skill; the skill body is authoritative instructions and, in agent mode, the model reads the skill's bundled files (e.g. `vars.toml` for `#name` fragments) via `read_file`. A skill's run mode follows the session unless it declares `mode:`.
 - Built-in skill-management guidance: ordinary agent prompts that mention skills receive the active profile and configured global skill paths, so TUI, CLI, service, and Web UI agent runs update Marifold skills instead of creating another tool's skill directory in the workspace.
 - The TUI: launch with bare `marifold` (or `marifold --profile <name>`); agent mode by default, `/chat` for chat.
-- Input grammar: plain text → agent/chat, `/command` → code-executed command, `$skill [args]` → model-backed skill.
-- `/` commands: `/help` `/exit` `/new` `/agent` `/chat` `/model` `/profile` `/resume` `/think` `/clear` `/stop` `/btw` `/permissions` `/skills` `/install-skill` `/doctor`, plus `/read` `/image` `/remember` `/forget` `/delete-memory`.
+- Input grammar: plain text → agent/chat, `/command` → app-executed action, `$skill [args]` → model-backed skill.
+- `/` commands: `/help` `/exit` `/new` `/agent` `/chat` `/model` `/profile` `/resume` `/think` `/clear` `/stop` `/btw` `/permissions` `/skills` `/install-skill` `/doctor`, plus `/read` `/image` `/attach-original` `/remember` `/forget` `/delete-memory`.
 - Approval modal that previews the tool's input (file content / shell command), with allow-once / session-grant / persist-to-config / deny; escalated (out-of-cwd) calls always prompt; `/permissions` shows modes and grants.
 - `/btw <text>` steers a running task without cancelling it; Esc / Ctrl+C cancels a run, and a second Ctrl+C when idle exits.
 - Input editing: history (Up/Down), multi-line via trailing `\`, readline keys (Ctrl+A/E/U/W), and Tab completion for `/commands` and `$skills`.
@@ -34,7 +34,7 @@ For product direction and future scope, see [docs/vision.md](docs/vision.md) and
 - The `marifold.skillapp.v0` SkillApp schema spec ([docs/skillapp.md](docs/skillapp.md)) with a TOML parser/validator in core (spec only — no runtime yet).
 - Web search through the chat `/search <query>` command (DuckDuckGo by default, pluggable backend) with results injected as turn-local context.
 - Model-initiated `web_search` and `read_file` tools on chat turns when `[web_search].enabled = true`, using a bounded tool loop.
-- File attachment through chat `/read <path>` (100k-char truncation) and image attachment through `/image <path>` / `/image clear` and `ask --image <path>`.
+- File attachment through chat `/read <path>` (100k-char truncation) and image attachment through `/image <path>` / `/image clear` and `ask --image <path>`. Local/base64 images are validated, MIME-corrected, metadata-stripped, and optimized before provider requests (1600 px maximum long edge; lossless WebP for PNG/transparent inputs; conservative high-quality encoding for JPEG and oversized static WebP inputs; animated images preserved). The candidate is used only when smaller. TUI and Web UI support one-turn `/attach-original <prompt>` to preserve original encoded bytes.
 - Base64/URL image payloads on the service `/v1/ask` route.
 - ChatGPT OAuth token refresh before provider requests, mirroring the GitHub Copilot refresh flow.
 - Approval-aware basic agent loop through `marifold agent "<objective>"`.
@@ -245,6 +245,7 @@ Memory commands available inside chat:
 /read <path>           Attach a local file's content to your next message.
 /image <path>          Attach an image to your next message. Repeatable.
 /image clear           Drop pending image attachments.
+/attach-original <q>   Send attached images unchanged for this message only (TUI/Web UI).
 /remember <text>       Save short-term memory.
 /remember user <text>  Save durable user memory.
 /remember pref <text>  Save durable preference memory.

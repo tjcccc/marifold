@@ -143,6 +143,18 @@ describe('App run routing', () => {
     unmount();
   });
 
+  it('/attach-original sends its prompt with the one-turn image bypass', async () => {
+    const { runtime, runSpy } = makeRuntime();
+    const { stdin, unmount } = render(<App runtime={runtime} loadedConfig={config} initial={initial('agent')} />);
+    await delay();
+    stdin.write('/attach-original inspect this');
+    await delay();
+    stdin.write('\r');
+    await vi.waitFor(() => expect(runSpy).toHaveBeenCalled());
+    expect(runSpy.mock.calls[0][0]).toMatchObject({ objective: 'inspect this', originalImages: true });
+    unmount();
+  });
+
   it('/resume opens recent sessions by preview and continues the selected transcript', async () => {
     const summary: SessionSummary = {
       id: 'session-12345678', profileName: 'default', turnCount: 2,

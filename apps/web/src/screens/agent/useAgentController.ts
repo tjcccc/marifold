@@ -16,7 +16,7 @@ import type {
 } from '../../api/types';
 import type { Route } from '../../lib/hashRoute';
 import type { PreparedAttachment } from '../../lib/attachments';
-import { inlineTextAttachments, prepareFiles } from '../../lib/attachments';
+import { fileToBase64, inlineTextAttachments, MAX_TOTAL_BYTES, prepareFiles } from '../../lib/attachments';
 import { parseCommand, WEB_COMMANDS } from '../../lib/commandSyntax';
 import { RunFollowers } from '../../state/followers';
 import type { ThreadState, UserAttachment } from '../../state/thread';
@@ -294,7 +294,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
   // agent). Extracted so /retry can re-run a message and send() can dispatch to
   // it after command handling. Moved verbatim — no behavior change.
   const sendMessage = useCallback(
-    async (trimmed: string) => {
+    async (trimmed: string, options: { originalImages?: boolean } = {}) => {
       if (!profileName) return;
 
       const running = activeRun(threadRef.current);
@@ -317,10 +317,29 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
       // Consume the pending attachments: images ride the request natively,
       // text files are inlined into the prompt as fenced blocks.
       const pending = attachmentsRef.current;
+      if (options.originalImages) {
+        const originalBytes = pending.reduce(
+          (sum, item) => sum + (item.kind === 'image' ? (item.originalSize ?? item.size) : item.size),
+          0,
+        );
+        if (originalBytes > MAX_TOTAL_BYTES) {
+          dispatch({
+            type: 'notice',
+            tone: 'warn',
+            text: `/attach-original attachments exceed the ${MAX_TOTAL_BYTES / (1024 * 1024)} MiB request limit.`,
+          });
+          return;
+        }
+      }
       setAttachments([]);
-      const images = pending
-        .filter((item): item is Extract<PreparedAttachment, { kind: 'image' }> => item.kind === 'image')
-        .map(item => ({ data: item.data, mediaType: item.mediaType }));
+      const imageAttachments = pending.filter(
+        (item): item is Extract<PreparedAttachment, { kind: 'image' }> => item.kind === 'image',
+      );
+      const images = await Promise.all(imageAttachments.map(async item => (
+        options.originalImages && item.originalFile
+          ? { data: await fileToBase64(item.originalFile), mediaType: item.originalFile.type || item.mediaType }
+          : { data: item.data, mediaType: item.mediaType }
+      )));
       const textFiles = pending.filter(
         (item): item is Extract<PreparedAttachment, { kind: 'text' }> => item.kind === 'text',
       );
@@ -347,6 +366,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
             provider,
             model,
             ...(images.length > 0 ? { images } : {}),
+            ...(options.originalImages ? { originalImages: true } : {}),
           })) {
             if (event.type === 'chunk') dispatch({ type: 'chat_chunk', text: event.text });
             else if (event.type === 'error') dispatch({ type: 'chat_error', message: event.message });
@@ -372,6 +392,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
           provider,
           model,
           ...(images.length > 0 ? { images } : {}),
+          ...(options.originalImages ? { originalImages: true } : {}),
         });
         dispatch({ type: 'run_created', run });
         followers.attach(run.id);
@@ -420,6 +441,11 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
           await sendMessage(text);
           break;
         }
+        case 'attach-original':
+          if (!args) notify('Usage: /attach-original <prompt>', 'warn');
+          else if (activeRun(threadRef.current)) notify('A task is running. Stop it before sending attached images.', 'warn');
+          else await sendMessage(args, { originalImages: true });
+          break;
         case 'new':
           newSession();
           break;

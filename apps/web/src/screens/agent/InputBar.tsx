@@ -123,7 +123,13 @@ export function InputBar(props: InputBarProps) {
       {attachments.length > 0 ? (
         <div className={styles.chips}>
           {attachments.map((attachment, index) => (
-            <span key={`${attachment.name}_${index}`} className={styles.chip}>
+            <span
+              key={`${attachment.name}_${index}`}
+              className={styles.chip}
+              title={attachment.kind === 'image' && attachment.optimized
+                ? `${formatBytes(attachment.originalSize ?? attachment.size)} → ${formatBytes(attachment.size)}`
+                : undefined}
+            >
               {attachment.kind === 'image' ? (
                 <img
                   className={styles.chipThumb}
@@ -133,7 +139,9 @@ export function InputBar(props: InputBarProps) {
               ) : (
                 <span aria-hidden>📄</span>
               )}
-              <span className={styles.chipName}>{attachment.name}</span>
+              <span className={styles.chipName}>
+                {attachment.name}{attachment.kind === 'image' && attachment.optimized ? ` · ${formatBytes(attachment.size)}` : ''}
+              </span>
               <button
                 className={styles.chipRemove}
                 aria-label={`Remove ${attachment.name}`}
@@ -253,6 +261,12 @@ export function InputBar(props: InputBarProps) {
       </div>
     </div>
   );
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KiB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MiB`;
 }
 
 function ModelChip({

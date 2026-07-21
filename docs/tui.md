@@ -29,8 +29,8 @@ prompt.
 ## Input grammar
 
 - **plain text** → talk to the agent (or the model in `/chat` mode).
-- **`/command [args]`** → a deterministic, code-executed command. Commands never
-  call the model.
+- **`/command [args]`** → an app-executed action. Most commands are local;
+  `/retry` and `/attach-original <prompt>` start a model turn intentionally.
 - **`$skill [args]`** → run a model-backed skill. `$<name>` *is* the run.
 
 ## Input editing
@@ -51,12 +51,17 @@ prompt.
 `/help` `/exit` (`/quit`) `/new` `/agent` `/chat` `/model` `/profile` `/resume`
 `/think on|off` `/clear` `/stop` `/btw <text>` `/permissions` `/skills`
 `/install-skill [--global] <path|url>` `/doctor`, plus chat carry-overs `/read`
-`/image` `/remember` `/forget` `/delete-memory`.
+`/image` `/attach-original <prompt>` `/remember` `/forget` `/delete-memory`.
 
 - `/btw <text>` steers a **running** task without cancelling it: the text is
   queued and handed to the model on its next turn. With no run active, it is sent
   as a normal message.
 - `/stop` (or Esc / Ctrl+C while running) cancels the current run.
+- `/attach-original <prompt>` sends every image attached to that message with
+  its original encoded bytes, then returns to default optimization for the next
+  message. Validation, the four-image count limit, and the 16 MiB aggregate
+  source limit still apply. Normal sends resize large images and choose a
+  smaller high-fidelity encoding while preserving transparency and animation.
 - `/resume` opens a recent-session picker for the current profile; choose with
   Up/Down and Enter. `/session` remains as a compatibility alias.
 - `/skills` opens an arrow-key list: Enter runs the selected skill, Del removes it.

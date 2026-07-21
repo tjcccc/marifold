@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { PriestRequest, PriestResponse } from '@priest-ai/core';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AgentEngine, AgentRunner } from '../src/agent/AgentRunner';
 import { AgentEvent } from '../src/agent/AgentEvents';
 import { resolveAgentConfig } from '../src/agent/ApprovalPolicy';
@@ -233,6 +233,30 @@ describe('AgentRunner', () => {
 
     expect(engine.requests[0].images).toBeUndefined(); // plan turn
     expect(engine.requests[1].images).toEqual(images); // first loop turn
+  });
+
+  it('prepares images once and honors the one-turn original bypass', async () => {
+    const engine = new ScriptedEngine([response({ text: 'I can see it.' })]);
+    const registry = new ToolRegistry();
+    registry.register(fakeTool());
+    const prepareImages = vi.fn(async () => [{ data: 'prepared', mediaType: 'image/png' }]);
+    const runner = new AgentRunner({
+      taskStore: new TaskStore(tempDir()),
+      registry,
+      agentConfig: resolveAgentConfig({}),
+      resolveSettings: () => ({ profile: 'default', provider: 'mock', model: 'test-model', think: false, mode: 'agent' }),
+      prepareEngine: async () => ({ engine, config: { provider: 'mock', model: 'test-model' } }),
+      prepareImages,
+    });
+
+    await collect(runner.run({
+      objective: 'Describe it.',
+      images: [{ data: 'source', mediaType: 'image/png' }],
+      originalImages: true,
+    }));
+
+    expect(prepareImages).toHaveBeenCalledWith([{ data: 'source', mediaType: 'image/png' }], false);
+    expect(engine.requests[0].images).toEqual([{ data: 'prepared', mediaType: 'image/png' }]);
   });
 
   it('runs plan, tool loop, and summary with native tool calls', async () => {

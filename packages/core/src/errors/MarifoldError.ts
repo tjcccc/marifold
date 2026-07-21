@@ -2,6 +2,7 @@ export type MarifoldErrorCode =
   | 'CONFIG_INVALID'
   | 'CONFIG_FILE_NOT_FOUND'
   | 'CONFIG_MISSING_PROVIDER_MODEL'
+  | 'IMAGE_INVALID'
   | 'PROFILE_INVALID'
   | 'PROVIDER_NOT_CONFIGURED'
   | 'API_KEY_MISSING'
@@ -35,6 +36,10 @@ export class MarifoldError extends Error {
 
   static configInvalid(message: string, details: Record<string, string> = {}): MarifoldError {
     return new MarifoldError('CONFIG_INVALID', message, details);
+  }
+
+  static imageInvalid(message: string, details: Record<string, string> = {}): MarifoldError {
+    return new MarifoldError('IMAGE_INVALID', message, details);
   }
 
   static configFileNotFound(path: string): MarifoldError {

@@ -111,6 +111,7 @@ function parseRunStartInput(value: unknown): RunStartInput {
     ...optionalStringField('sessionId', body.sessionId),
     ...optionalStringField('cwd', body.cwd),
     ...optionalBooleanField('think', body.think),
+    ...optionalBooleanField('originalImages', body.originalImages),
     ...optionalBooleanField('forcePlan', body.forcePlan),
     ...optionalBooleanField('lean', body.lean),
     ...optionalPositiveIntegerField('maxIterations', body.maxIterations),

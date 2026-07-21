@@ -138,6 +138,7 @@ function fakeCtx(): { ctx: CommandContext; calls: Record<string, unknown[]> } {
     setThink: record('setThink'), openModelPicker: record('openModelPicker'), openProfilePicker: record('openProfilePicker'),
     openSkills: record('openSkills'), showPermissions: record('showPermissions'), showHelp: record('showHelp'),
     showSessions: record('showSessions'), runDoctor: record('runDoctor'), installSkill: record('installSkill'),
+    sendOriginal: record('sendOriginal'),
     readFile: record('readFile'), setImage: record('setImage'),
     remember: record('remember'), forget: record('forget'), deleteMemory: record('deleteMemory'),
     showContextWindow: record('showContextWindow'), setContextWindow: record('setContextWindow'),
@@ -158,6 +159,8 @@ describe('commands', () => {
     expect(runCommand(ctx, 'resume', '')).toBe(true);
     expect(calls.showSessions).toBeDefined();
     expect(runCommand(ctx, 'session', '')).toBe(true); // compatibility alias
+    expect(runCommand(ctx, 'attach-original', 'inspect this')).toBe(true);
+    expect(calls.sendOriginal).toEqual(['inspect this']);
     expect(runCommand(ctx, 'nope', '')).toBe(false);
   });
 
@@ -217,6 +220,13 @@ describe('commands', () => {
     const { ctx, calls } = fakeCtx();
     expect(runCommand(ctx, 'compact', '')).toBe(true);
     expect(calls.compactNow).toBeDefined();
+  });
+
+  it('/attach-original requires a prompt', () => {
+    const { ctx, calls } = fakeCtx();
+    runCommand(ctx, 'attach-original', '');
+    expect(calls.notify).toEqual(['Usage: /attach-original <prompt>', 'warn']);
+    expect(calls.sendOriginal).toBeUndefined();
   });
 });
 

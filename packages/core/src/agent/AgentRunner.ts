@@ -47,6 +47,8 @@ export interface AgentRunOptions {
   /** Images attached to the objective. Sent to the model on the first turn
    * (priest carries them through the request, exactly like the chat path). */
   images?: ImageInput[];
+  /** Preserve the attached images' original encoded bytes for this turn. */
+  originalImages?: boolean;
   /** Conversation session id. When set, a single clean turn pair (the user's
    * text + the final answer) is persisted so the session can be resumed. */
   sessionId?: string;
@@ -107,6 +109,8 @@ export interface AgentRunnerDeps {
   agentConfig: MarifoldAgentConfig;
   resolveSettings: (request: Pick<MarifoldRunRequest, 'profile' | 'provider' | 'model'>) => MarifoldResolvedSettings;
   prepareEngine: (settings: MarifoldResolvedSettings) => Promise<AgentEngineContext>;
+  /** Normalize and optimize image inputs before the first provider request. */
+  prepareImages?: (images: ImageInput[], optimize: boolean) => Promise<ImageInput[]>;
   /** Persist one clean conversation turn (objective → final answer) to the
    * session, so resuming shows the result without the raw agent framing. */
   persistTurn?: (sessionId: string, profile: string, userText: string, assistantText: string) => Promise<void>;
@@ -156,9 +160,15 @@ export class AgentRunner {
     const builtInInstructions = options.lean
       ? []
       : (this.deps.resolveBuiltInInstructions?.(options.objective, settings.profile) ?? []);
-    const runOptions: AgentRunOptions = builtInInstructions.length > 0
+    let runOptions: AgentRunOptions = builtInInstructions.length > 0
       ? { ...options, instructions: [...builtInInstructions, ...(options.instructions ?? [])] }
       : options;
+    if (runOptions.images && this.deps.prepareImages) {
+      runOptions = {
+        ...runOptions,
+        images: await this.deps.prepareImages(runOptions.images, runOptions.originalImages !== true),
+      };
+    }
     const { engine: rawEngine, config } = await this.deps.prepareEngine(settings);
     // Tally token usage across every model call (plan, loop turns, verify).
     const usage: AgentUsage = {};

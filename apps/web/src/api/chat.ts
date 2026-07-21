@@ -11,6 +11,7 @@ export interface ChatRequest {
   memories?: boolean;
   think?: boolean;
   images?: ImageInput[];
+  originalImages?: boolean;
 }
 
 /**

@@ -421,6 +421,7 @@ function parseRunRequest(value: unknown): MarifoldRunRequest {
     ...optionalStringField('sessionId', body.sessionId),
     ...optionalBooleanField('memories', body.memories),
     ...optionalBooleanField('think', body.think),
+    ...optionalBooleanField('originalImages', body.originalImages),
     ...optionalImagesField(body.images),
   };
 }
@@ -584,6 +585,7 @@ function statusCodeForError(error: MarifoldError): number {
   }
   if (
     error.code === 'CONFIG_INVALID'
+    || error.code === 'IMAGE_INVALID'
     || error.code === 'PROFILE_INVALID'
     || error.code === 'MEMORY_INVALID'
     || error.code === 'TASK_INVALID'

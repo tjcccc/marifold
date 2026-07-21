@@ -94,6 +94,16 @@ export {
 export type { ProviderRegistryEntry, ProviderRegistryKind } from './config/ProviderRegistry';
 export { MarifoldError } from './errors/MarifoldError';
 export type { MarifoldErrorCode } from './errors/MarifoldError';
+export {
+  IMAGE_JPEG_QUALITY,
+  IMAGE_MAX_INPUT_PIXELS,
+  IMAGE_MAX_LONG_EDGE,
+  IMAGE_OPTIMIZE_MIN_BYTES,
+  MAX_IMAGES_PER_REQUEST,
+  MAX_TOTAL_SOURCE_IMAGE_BYTES,
+  prepareImageInputs,
+} from './images/ImageOptimizer';
+export type { PreparedImages, PreparedImageSummary, PrepareImageOptions } from './images/ImageOptimizer';
 export { ensureProfileMemoryFiles, MemoryStore } from './memory/MemoryStore';
 export type {
   MemoryEntry,
