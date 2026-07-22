@@ -2,6 +2,12 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-07-22 — v0.47.1 — Web conversation rendering and follow behavior
+
+- Web Markdown now honors explicit hard breaks (`two trailing spaces` or `\\` before a newline) without converting ordinary soft line wraps into `<br>` elements.
+- Submitting from the middle of a conversation explicitly repins the transcript to the bottom; manually scrolling up afterward still pauses auto-follow during streamed/background updates.
+- Verified with Web typecheck/build and 123 tests, plus a real-browser pass on the reported Japanese session and a local `/status` submission from exact mid-scroll (no model request).
+
 ## 2026-07-22 — v0.47.0 — macOS-style Web application shell
 
 - Replaced the full-width management-style header with a desktop application frame: one primary sidebar and a contextual toolbar owned by the right workspace. The sidebar starts at 256 px, is pointer- and keyboard-resizable from 200 px to 40% of the workspace, and persists the user's width across Agent, Apps, and Settings. Agent/Apps switches only the right content and preserves the active profile/session context.

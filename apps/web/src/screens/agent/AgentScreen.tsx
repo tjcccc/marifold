@@ -44,6 +44,7 @@ export function AgentScreen(props: AgentScreenProps) {
   const [createOpen, setCreateOpen] = useState(false);
   const [createBusy, setCreateBusy] = useState(false);
   const [createError, setCreateError] = useState<string | undefined>();
+  const [scrollToBottomRequest, setScrollToBottomRequest] = useState(0);
 
   async function submitCreateProfile(input: CreateProfileInput): Promise<void> {
     setCreateBusy(true);
@@ -185,6 +186,7 @@ export function AgentScreen(props: AgentScreenProps) {
             />
             <ThreadView
               items={controller.thread.items}
+              scrollToBottomRequest={scrollToBottomRequest}
               onCancelRun={runId => void controller.cancel(runId)}
               onAnswerApproval={(runId, requestId, action) => void controller.answer(runId, requestId, action)}
               onToggleRun={controller.toggleRun}
@@ -201,7 +203,10 @@ export function AgentScreen(props: AgentScreenProps) {
               onAttachFiles={files => void controller.addFiles(files)}
               onRemoveAttachment={controller.removeAttachment}
               skills={controller.skills}
-              onSubmit={text => void controller.send(text)}
+              onSubmit={text => {
+                setScrollToBottomRequest(request => request + 1);
+                void controller.send(text);
+              }}
             />
           </>
         ) : (

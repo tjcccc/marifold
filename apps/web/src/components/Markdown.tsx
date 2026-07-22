@@ -93,6 +93,8 @@ function Inline({ nodes }: { nodes: InlineNode[] }) {
         switch (node.type) {
           case 'text':
             return <span key={index}>{node.text}</span>;
+          case 'break':
+            return <br key={index} />;
           case 'code':
             return (
               <code key={index} className={styles.inlineCode}>

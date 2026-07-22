@@ -311,6 +311,82 @@ describe('ThreadView', () => {
     expect(screen.getByRole('cell', { name: '干净、低调' })).toBeTruthy();
   });
 
+  it('renders explicit Markdown hard breaks as br elements', () => {
+    render(
+      <ThreadView
+        items={[{
+          id: 'i1',
+          kind: 'assistant',
+          markdown: 'おっ、即決ありがとう笑  \nいいよ、結婚しよ♡',
+        }]}
+        onCancelRun={() => {}}
+        onAnswerApproval={() => {}}
+        onToggleRun={() => {}}
+      />,
+    );
+    const paragraph = screen.getByText('おっ、即決ありがとう笑').closest('p');
+    expect(paragraph?.querySelectorAll('br')).toHaveLength(1);
+  });
+
+  it('repins the conversation for a submission but respects later manual scrolling', () => {
+    const props = {
+      onCancelRun: () => {},
+      onAnswerApproval: () => {},
+      onToggleRun: () => {},
+    };
+    const { rerender } = render(
+      <ThreadView
+        {...props}
+        items={[{ id: 'i1', kind: 'user', text: 'First' }]}
+        scrollToBottomRequest={0}
+      />,
+    );
+    const scroll = screen.getByRole('log', { name: 'Conversation' });
+    Object.defineProperty(scroll, 'scrollHeight', { configurable: true, value: 1_000 });
+    Object.defineProperty(scroll, 'clientHeight', { configurable: true, value: 200 });
+    scroll.scrollTop = 300;
+    fireEvent.scroll(scroll);
+
+    rerender(
+      <ThreadView
+        {...props}
+        items={[
+          { id: 'i1', kind: 'user', text: 'First' },
+          { id: 'i2', kind: 'assistant', markdown: 'Background update' },
+        ]}
+        scrollToBottomRequest={0}
+      />,
+    );
+    expect(scroll.scrollTop).toBe(300);
+
+    rerender(
+      <ThreadView
+        {...props}
+        items={[
+          { id: 'i1', kind: 'user', text: 'First' },
+          { id: 'i2', kind: 'assistant', markdown: 'Background update' },
+        ]}
+        scrollToBottomRequest={1}
+      />,
+    );
+    expect(scroll.scrollTop).toBe(1_000);
+
+    scroll.scrollTop = 400;
+    fireEvent.scroll(scroll);
+    rerender(
+      <ThreadView
+        {...props}
+        items={[
+          { id: 'i1', kind: 'user', text: 'First' },
+          { id: 'i2', kind: 'assistant', markdown: 'Background update' },
+          { id: 'i3', kind: 'assistant', markdown: 'Streaming update' },
+        ]}
+        scrollToBottomRequest={1}
+      />,
+    );
+    expect(scroll.scrollTop).toBe(400);
+  });
+
   it('renders a trivial completed run as inline meta on the prose, no card', () => {
     const startedAt = new Date('2026-07-06T08:00:00Z').toISOString();
     render(

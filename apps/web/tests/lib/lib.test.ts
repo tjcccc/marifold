@@ -113,6 +113,18 @@ describe('markdown', () => {
     ]);
   });
 
+  it('parses Markdown hard breaks without promoting ordinary soft breaks', () => {
+    const blocks = parseMarkdown('おっ、即決ありがとう笑  \nいいよ、結婚しよ♡\nでも冗談だよ');
+    expect(blocks).toHaveLength(1);
+    const paragraph = blocks[0];
+    if (paragraph.type !== 'paragraph') throw new Error('expected paragraph');
+    expect(paragraph.inline).toEqual([
+      { type: 'text', text: 'おっ、即決ありがとう笑' },
+      { type: 'break' },
+      { type: 'text', text: 'いいよ、結婚しよ♡\nでも冗談だよ' },
+    ]);
+  });
+
   it('keeps an unclosed fence as code to the end of input', () => {
     const blocks = parseMarkdown('```\nunterminated');
     expect(blocks).toEqual([{ type: 'code', text: 'unterminated' }]);

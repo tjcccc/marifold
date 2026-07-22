@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useLayoutEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { Markdown } from '../../components/Markdown';
 import type { RunApprovalAction } from '../../api/types';
@@ -14,18 +14,29 @@ export interface ThreadViewProps {
   onCancelRun: (runId: string) => void;
   onAnswerApproval: (runId: string, requestId: string, action: RunApprovalAction) => void;
   onToggleRun: (runId: string) => void;
+  /** Increment for an explicit user submission, which always repins the tail. */
+  scrollToBottomRequest?: number;
 }
 
 /** The conversation: user bubbles right, assistant markdown blocks, notices,
  * and run cards. Auto-follows the tail unless the user scrolled up. */
-export function ThreadView({ items, onCancelRun, onAnswerApproval, onToggleRun }: ThreadViewProps) {
+export function ThreadView({
+  items,
+  onCancelRun,
+  onAnswerApproval,
+  onToggleRun,
+  scrollToBottomRequest = 0,
+}: ThreadViewProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const pinnedRef = useRef(true);
+  const scrollRequestRef = useRef(scrollToBottomRequest);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const node = scrollRef.current;
+    if (scrollRequestRef.current !== scrollToBottomRequest) pinnedRef.current = true;
     if (node && pinnedRef.current) node.scrollTop = node.scrollHeight;
-  }, [items]);
+    scrollRequestRef.current = scrollToBottomRequest;
+  }, [items, scrollToBottomRequest]);
 
   function onScroll(): void {
     const node = scrollRef.current;
@@ -43,7 +54,7 @@ export function ThreadView({ items, onCancelRun, onAnswerApproval, onToggleRun }
   }
 
   return (
-    <div ref={scrollRef} className={styles.scroll} onScroll={onScroll}>
+    <div ref={scrollRef} className={styles.scroll} onScroll={onScroll} role="log" aria-label="Conversation">
       <div className={styles.thread}>
         {items.length === 0 ? (
           <div className={styles.empty}>

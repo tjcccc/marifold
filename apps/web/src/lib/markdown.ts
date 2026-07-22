@@ -8,6 +8,7 @@
  */
 export type InlineNode =
   | { type: 'text'; text: string }
+  | { type: 'break' }
   | { type: 'code'; text: string }
   | { type: 'strong'; children: InlineNode[] }
   | { type: 'em'; children: InlineNode[] }
@@ -212,7 +213,7 @@ function listItem(line: string): { ordered: boolean; text: string } | undefined 
 }
 
 const INLINE_PATTERN =
-  /(`[^`]+`)|(\*\*[^*]+\*\*)|(\*[^*\s][^*]*\*)|(\[[^\]]+\]\((https?:\/\/[^\s)]+)\))/;
+  /((?: {2,}|\\)\n)|(`[^`]+`)|(\*\*[^*]+\*\*)|(\*[^*\s][^*]*\*)|(\[[^\]]+\]\((https?:\/\/[^\s)]+)\))/;
 
 export function parseInline(text: string): InlineNode[] {
   const nodes: InlineNode[] = [];
@@ -225,7 +226,9 @@ export function parseInline(text: string): InlineNode[] {
     }
     if (match.index > 0) nodes.push({ type: 'text', text: rest.slice(0, match.index) });
     const token = match[0];
-    if (token.startsWith('`')) {
+    if (match[1]) {
+      nodes.push({ type: 'break' });
+    } else if (token.startsWith('`')) {
       nodes.push({ type: 'code', text: token.slice(1, -1) });
     } else if (token.startsWith('**')) {
       nodes.push({ type: 'strong', children: parseInline(token.slice(2, -2)) });
@@ -234,7 +237,7 @@ export function parseInline(text: string): InlineNode[] {
     } else {
       // [label](https://…) — only http(s) becomes a link; the pattern enforces it.
       const label = token.slice(1, token.indexOf(']'));
-      const href = match[5];
+      const href = match[6];
       nodes.push({ type: 'link', href, children: parseInline(label) });
     }
     rest = rest.slice(match.index + token.length);
