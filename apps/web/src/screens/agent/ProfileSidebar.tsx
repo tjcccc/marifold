@@ -1,6 +1,8 @@
+import type { ReactNode } from 'react';
 import type { ApiClient } from '../../api/client';
 import type { ProfileSummary } from '../../api/types';
 import { Avatar } from '../../components/Avatar';
+import { SidebarBrand } from '../../components/SidebarChrome';
 import styles from './ProfileSidebar.module.css';
 
 export interface ProfileSidebarProps {
@@ -11,12 +13,14 @@ export interface ProfileSidebarProps {
   workingProfiles?: ReadonlySet<string>;
   onSelect: (name: string) => void;
   onCreate?: () => void;
+  footer?: ReactNode;
 }
 
-/** Contacts-style profile list (design 1a left pane). */
-export function ProfileSidebar({ client, profiles, selected, workingProfiles, onSelect, onCreate }: ProfileSidebarProps) {
+/** Root of the primary sidebar navigation stack: Marifold → profiles. */
+export function ProfileSidebar({ client, profiles, selected, workingProfiles, onSelect, onCreate, footer }: ProfileSidebarProps) {
   return (
     <nav className={styles.pane} aria-label="Profiles">
+      <SidebarBrand prominent />
       <div className={styles.header}>
         <span>Profiles</span>
         {onCreate ? (
@@ -45,6 +49,7 @@ export function ProfileSidebar({ client, profiles, selected, workingProfiles, on
           );
         })}
       </div>
+      {footer}
     </nav>
   );
 }

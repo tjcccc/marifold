@@ -65,6 +65,21 @@ describe('InputBar $-autocomplete', () => {
     expect(textarea.selectionEnd).toBe(textarea.value.length);
   });
 
+  it('reopens skill suggestions while editing the head token with existing arguments', () => {
+    const { textarea } = renderBar();
+    fireEvent.focus(textarea);
+    fireEvent.change(textarea, { target: { value: '$make #anime1' } });
+    expect(screen.queryByRole('listbox')).toBeNull(); // caret is in the args
+
+    textarea.setSelectionRange('$make'.length, '$make'.length);
+    fireEvent.select(textarea);
+    expect(screen.getByText('$make-midjourney-prompt <idea>')).toBeTruthy();
+
+    fireEvent.keyDown(textarea, { key: 'Tab' });
+    expect(textarea.value).toBe('$make-midjourney-prompt #anime1');
+    expect(textarea.selectionStart).toBe('$make-midjourney-prompt '.length);
+  });
+
   it('arrow keys move the selection before completing', () => {
     const { textarea } = renderBar();
     fireEvent.focus(textarea);

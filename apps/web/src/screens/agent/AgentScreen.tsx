@@ -4,7 +4,12 @@ import type { CreateProfileInput } from '../../api/profiles';
 import { createProfileWithSetup } from '../../api/profiles';
 import { Avatar } from '../../components/Avatar';
 import { CreateProfileSheet } from '../../components/CreateProfileSheet';
-import type { Route } from '../../lib/hashRoute';
+import { ResizableSidebar } from '../../components/ResizableSidebar';
+import { SidebarSystemFooter } from '../../components/SidebarChrome';
+import type { WorkspaceView } from '../../components/WorkspaceTabs';
+import type { Route } from '../../lib/route';
+import type { ThemePreference } from '../../theme/theme';
+import { AppsScreen } from '../apps/AppsScreen';
 import { CatchUpBanner } from './CatchUpBanner';
 import { InputBar } from './InputBar';
 import { ProfileSidebar } from './ProfileSidebar';
@@ -19,11 +24,17 @@ const SIDEBARS_KEY = 'marifold.sidebars';
 export interface AgentScreenProps {
   client: ApiClient;
   route: Extract<Route, { view: 'agent' }>;
+  workspaceView: WorkspaceView;
   navigate: (route: Route) => void;
   onUnauthorized: () => void;
+  theme: ThemePreference;
+  onThemeChange: (theme: ThemePreference) => void;
+  onOpenConnection: () => void;
+  onOpenSettings: () => void;
+  onWorkspaceViewChange: (view: WorkspaceView) => void;
 }
 
-/** The 3-pane Agent view: profiles → sessions → conversation (design 1a). */
+/** Desktop Agent workspace: one navigation-stack sidebar plus conversation. */
 export function AgentScreen(props: AgentScreenProps) {
   const controller = useAgentController(props);
   const [sidebarsHidden, setSidebarsHidden] = useState(
@@ -80,35 +91,60 @@ export function AgentScreen(props: AgentScreenProps) {
   }, [controller.steeringRun, controller.profileName]);
 
   const currentSession = controller.sessions.find(session => session.id === controller.sessionId);
+  const sidebarFooter = (
+    <SidebarSystemFooter
+      theme={props.theme}
+      onThemeChange={props.onThemeChange}
+      onOpenConnection={props.onOpenConnection}
+      onOpenSettings={props.onOpenSettings}
+    />
+  );
 
   return (
     <div className={styles.layout}>
       {sidebarsHidden ? null : (
-        <>
-          <ProfileSidebar
-            client={props.client}
-            profiles={controller.profiles}
-            selected={controller.profileName}
-            workingProfiles={workingProfiles}
-            onSelect={controller.selectProfile}
-            onCreate={() => {
-              setCreateError(undefined);
-              setCreateOpen(true);
-            }}
-          />
-          <SessionList
-            sessions={controller.sessions}
-            selected={controller.sessionId}
-            onSelect={controller.selectSession}
-            onNew={controller.newSession}
-          />
-        </>
+        <ResizableSidebar>
+          {controller.profileName ? (
+            <SessionList
+              sessions={controller.sessions}
+              selected={controller.sessionId}
+              profileName={controller.profileName}
+              profileAvatar={(
+                <Avatar
+                  client={props.client}
+                  name={controller.profileName}
+                  hasAvatar={controller.profiles.some(
+                    profile => profile.name === controller.profileName && profile.avatar !== undefined,
+                  )}
+                  size={64}
+                />
+              )}
+              onSelect={controller.selectSession}
+              onNew={controller.newSession}
+              onBack={controller.showProfiles}
+              footer={sidebarFooter}
+            />
+          ) : (
+            <ProfileSidebar
+              client={props.client}
+              profiles={controller.profiles}
+              selected={controller.profileName}
+              workingProfiles={workingProfiles}
+              onSelect={controller.selectProfile}
+              onCreate={() => {
+                setCreateError(undefined);
+                setCreateOpen(true);
+              }}
+              footer={sidebarFooter}
+            />
+          )}
+        </ResizableSidebar>
       )}
       <div
         className={styles.threadPane}
-        onDragOver={onDragOver}
-        onDragLeave={() => setDropActive(false)}
-        onDrop={onDrop}
+        onDragOver={props.workspaceView === 'agent' ? onDragOver : undefined}
+        onDragLeave={props.workspaceView === 'agent' ? () => setDropActive(false) : undefined}
+        onDrop={props.workspaceView === 'agent' ? onDrop : undefined}
       >
         {dropActive ? (
           <div className={styles.dropOverlay} aria-hidden>
@@ -116,9 +152,11 @@ export function AgentScreen(props: AgentScreenProps) {
           </div>
         ) : null}
         <ThreadHeader
-          profileName={controller.profileName}
-          profileMode={controller.profileDetail?.settings.mode ?? 'agent'}
-          sessionTitle={currentSession ? sessionTitle(currentSession) : 'New session'}
+          sessionTitle={props.workspaceView === 'apps'
+            ? 'Apps'
+            : controller.profileName
+              ? (currentSession ? sessionTitle(currentSession) : 'New session')
+              : 'Profiles'}
           avatar={
             controller.profileName ? (
               <Avatar
@@ -133,32 +171,45 @@ export function AgentScreen(props: AgentScreenProps) {
           }
           sidebarsHidden={sidebarsHidden}
           onToggleSidebars={toggleSidebars}
+          view={props.workspaceView}
+          onViewChange={props.onWorkspaceViewChange}
         />
-        <CatchUpBanner
-          runs={controller.thread.catchUp}
-          onShow={controller.expandCatchUp}
-          onDismiss={controller.dismissCatchUp}
-        />
-        <ThreadView
-          items={controller.thread.items}
-          onCancelRun={runId => void controller.cancel(runId)}
-          onAnswerApproval={(runId, requestId, action) => void controller.answer(runId, requestId, action)}
-          onToggleRun={controller.toggleRun}
-        />
-        <InputBar
-          steering={controller.steeringRun !== undefined}
-          disabled={controller.sending}
-          think={controller.think}
-          onToggleThink={() => controller.setThink(!controller.think)}
-          modelOptions={controller.modelOptions}
-          modelChoice={controller.modelChoice}
-          onSelectModel={controller.setModelChoice}
-          attachments={controller.attachments}
-          onAttachFiles={files => void controller.addFiles(files)}
-          onRemoveAttachment={controller.removeAttachment}
-          skills={controller.skills}
-          onSubmit={text => void controller.send(text)}
-        />
+        {props.workspaceView === 'apps' ? (
+          <AppsScreen profileName={controller.profileName} />
+        ) : controller.profileName ? (
+          <>
+            <CatchUpBanner
+              runs={controller.thread.catchUp}
+              onShow={controller.expandCatchUp}
+              onDismiss={controller.dismissCatchUp}
+            />
+            <ThreadView
+              items={controller.thread.items}
+              onCancelRun={runId => void controller.cancel(runId)}
+              onAnswerApproval={(runId, requestId, action) => void controller.answer(runId, requestId, action)}
+              onToggleRun={controller.toggleRun}
+            />
+            <InputBar
+              steering={controller.steeringRun !== undefined}
+              disabled={controller.sending}
+              think={controller.think}
+              onToggleThink={() => controller.setThink(!controller.think)}
+              modelOptions={controller.modelOptions}
+              modelChoice={controller.modelChoice}
+              onSelectModel={controller.setModelChoice}
+              attachments={controller.attachments}
+              onAttachFiles={files => void controller.addFiles(files)}
+              onRemoveAttachment={controller.removeAttachment}
+              skills={controller.skills}
+              onSubmit={text => void controller.send(text)}
+            />
+          </>
+        ) : (
+          <div className={styles.chooseProfile}>
+            <div className={styles.chooseTitle}>Choose a profile</div>
+            <div className={styles.chooseHint}>Profiles keep their own instructions, sessions, skills, and memories.</div>
+          </div>
+        )}
       </div>
       {createOpen ? (
         <CreateProfileSheet

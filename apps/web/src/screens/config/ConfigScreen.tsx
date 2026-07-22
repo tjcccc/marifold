@@ -28,8 +28,11 @@ import type { CreateProfileInput, ProfileFileKind, ProfilePatchInput } from '../
 import type { MemoryEntry, ProfileDetail, ProfileSummary, PublicConfig } from '../../api/types';
 import { Avatar } from '../../components/Avatar';
 import { CreateProfileSheet } from '../../components/CreateProfileSheet';
+import { ResizableSidebar } from '../../components/ResizableSidebar';
+import { SidebarBrand, SidebarSystemFooter } from '../../components/SidebarChrome';
 import { fileToBase64 } from '../../lib/attachments';
-import type { ConfigSection, Route } from '../../lib/hashRoute';
+import type { ConfigSection, Route } from '../../lib/route';
+import type { ThemePreference } from '../../theme/theme';
 import { ModelsPage } from './ModelsPage';
 import { ProfileSettingsPage } from './ProfileSettingsPage';
 import { ProvidersPage } from './ProvidersPage';
@@ -48,12 +51,27 @@ export interface ConfigScreenProps {
   route: Extract<Route, { view: 'config' }>;
   navigate: (route: Route) => void;
   onUnauthorized: () => void;
+  theme: ThemePreference;
+  onThemeChange: (theme: ThemePreference) => void;
+  onOpenConnection: () => void;
+  onOpenSettings: () => void;
+  onDone: () => void;
 }
 
 /** Config — Mail-style columns: sections → the section's items (profiles,
  * providers) → detail. Writes go through the service routes; each response's
  * fresh state replaces local state (no optimistic writes). */
-export function ConfigScreen({ client, route, navigate, onUnauthorized }: ConfigScreenProps) {
+export function ConfigScreen({
+  client,
+  route,
+  navigate,
+  onUnauthorized,
+  theme,
+  onThemeChange,
+  onOpenConnection,
+  onOpenSettings,
+  onDone,
+}: ConfigScreenProps) {
   const { section, item } = route;
 
   const [profiles, setProfiles] = useState<ProfileSummary[]>([]);
@@ -223,18 +241,33 @@ export function ConfigScreen({ client, route, navigate, onUnauthorized }: Config
 
   return (
     <div className={styles.layout}>
-      <nav className={styles.sections} aria-label="Config sections">
-        <div className={styles.header}>Config</div>
-        {SECTIONS.map(entry => (
-          <button
-            key={entry.id}
-            className={entry.id === section ? styles.rowSelected : styles.row}
-            onClick={() => go(entry.id)}
-          >
-            {entry.label}
-          </button>
-        ))}
-      </nav>
+      <ResizableSidebar>
+        <nav className={styles.sections} aria-label="Config sections">
+          <SidebarBrand />
+          <div className={styles.settingsHeader}>
+            <button className={styles.doneButton} onClick={onDone}>‹ Agent</button>
+            <span>Settings</span>
+          </div>
+          <div className={styles.sectionRows}>
+            {SECTIONS.map(entry => (
+              <button
+                key={entry.id}
+                className={entry.id === section ? styles.rowSelected : styles.row}
+                onClick={() => go(entry.id)}
+              >
+                {entry.label}
+              </button>
+            ))}
+          </div>
+          <SidebarSystemFooter
+            theme={theme}
+            onThemeChange={onThemeChange}
+            onOpenConnection={onOpenConnection}
+            onOpenSettings={onOpenSettings}
+            settingsActive
+          />
+        </nav>
+      </ResizableSidebar>
 
       {section === 'profiles' ? (
         <nav className={styles.items} aria-label="Profiles">

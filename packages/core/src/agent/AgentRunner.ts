@@ -277,7 +277,7 @@ export class AgentRunner {
         }
 
         const { text, calls } = this.extractTurn(response, state);
-        if (text) yield { type: 'text', text };
+        if (text) yield { type: 'text', text, phase: calls.length > 0 ? 'progress' : 'final' };
 
         if (calls.length === 0) {
           finalText = text;

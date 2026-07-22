@@ -95,10 +95,13 @@ export function InputBox({
     setMenuIndex(0);
   }, [value, cursor]);
 
-  // Completion menu: only on the head token `/x` or `$x` (no space/newline yet).
-  const headMatch = value.match(/^([/$])(\S*)$/);
-  const sigil = headMatch?.[1] ?? '';
-  const partial = headMatch?.[2] ?? '';
+  // Completion menu follows the leading `/x` or `$x` while the caret is
+  // editing it. Existing arguments may remain after the token.
+  const headMatch = value.match(/^([/$])([\w-]*)(?=\s|$)/);
+  const headEnd = headMatch?.[0].length ?? 0;
+  const editingHead = headMatch !== null && cursor >= 1 && cursor <= headEnd;
+  const sigil = editingHead ? headMatch[1] : '';
+  const partial = editingHead ? headMatch[2] : '';
   const pool = sigil === '/' ? commands : sigil === '$' ? skills : [];
   const suggestions = sigil
     ? pool.filter(item => item.name.startsWith(partial)).slice(0, MENU_LIMIT)
@@ -117,7 +120,12 @@ export function InputBox({
   };
 
   const insertNewline = () => set(`${value.slice(0, cursor)}\n${value.slice(cursor)}`, cursor + 1);
-  const acceptSuggestion = (name: string) => set(`${sigil}${name} `);
+  const acceptSuggestion = (name: string) => {
+    const head = `${sigil}${name}`;
+    const suffix = value.slice(headEnd);
+    const separator = suffix.length === 0 ? ' ' : '';
+    set(`${head}${separator}${suffix}`, head.length + 1);
+  };
 
   // The cursor's visual (wrapped) line/column, using the same width as the
   // renderer, so ↑/↓ can move between lines and detect the first/last line.

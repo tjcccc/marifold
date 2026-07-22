@@ -5,6 +5,12 @@
   overflow-wrap: break-word;
 }
 
+/* Model commentary emitted before a tool call is useful context, but visually
+ * secondary to the completed answer that follows it. */
+.muted {
+  color: var(--text-3);
+}
+
 .root > :first-child {
   margin-top: 0;
 }

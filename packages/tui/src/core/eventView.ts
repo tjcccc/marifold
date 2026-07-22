@@ -15,7 +15,9 @@ export function agentEventToItems(event: AgentEvent): TranscriptItemData[] {
         steps: event.plan.map(step => ({ id: step.id, text: step.text, status: step.status })),
       }];
     case 'text':
-      return event.text.trim().length > 0 ? [{ kind: 'assistant', text: event.text }] : [];
+      return event.text.trim().length > 0
+        ? [{ kind: 'assistant', text: event.text, ...(event.phase === 'progress' ? { muted: true } : {}) }]
+        : [];
     case 'steering':
       // Queued guidance the runner just picked up for the next model turn.
       return [{ kind: 'notice', tone: 'info', text: `Steering applied: ${event.text}` }];

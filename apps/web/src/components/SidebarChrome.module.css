@@ -1,0 +1,81 @@
+.brand,
+.brandProminent {
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px 6px;
+}
+
+.logo {
+  display: inline-flex;
+  color: var(--brand-fill);
+}
+
+.wordmark {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.brandProminent {
+  min-height: 68px;
+  gap: 10px;
+  padding: 12px 16px 8px;
+}
+
+.brandProminent .wordmark {
+  font-size: 18px;
+  letter-spacing: -0.02em;
+}
+
+.footer {
+  margin-top: auto;
+  flex-shrink: 0;
+  padding: 8px;
+  border-top: 1px solid var(--separator-soft);
+}
+
+.row,
+.rowSelected {
+  width: 100%;
+  min-height: 30px;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: var(--radius-sm);
+  color: var(--text-2);
+  text-align: left;
+}
+
+.row:hover {
+  background: var(--separator-soft);
+  color: var(--text);
+}
+
+.rowSelected {
+  background: var(--brand-tint);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.rowSelected:disabled {
+  cursor: default;
+}
+
+.icon {
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.value {
+  color: var(--text-3);
+  font-size: 11.5px;
+  font-weight: 400;
+  text-transform: capitalize;
+}

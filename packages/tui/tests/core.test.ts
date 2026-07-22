@@ -33,6 +33,10 @@ describe('eventView', () => {
     const plan = agentEventToItems({ type: 'plan', taskId: 't', plan: [{ id: 's1', text: 'step', status: 'pending' }] } as AgentEvent);
     expect(plan[0]).toMatchObject({ kind: 'plan' });
     expect(agentEventToItems({ type: 'text', text: 'hi' })[0]).toMatchObject({ kind: 'assistant', text: 'hi' });
+    expect(agentEventToItems({ type: 'text', text: 'checking', phase: 'progress' })[0])
+      .toMatchObject({ kind: 'assistant', text: 'checking', muted: true });
+    expect(agentEventToItems({ type: 'text', text: 'answer', phase: 'final' })[0])
+      .toEqual({ kind: 'assistant', text: 'answer' });
     expect(agentEventToItems({ type: 'text', text: '   ' })).toEqual([]);
     expect(agentEventToItems({ type: 'tool_request', call: { id: 'c', tool: 'read_file', kind: 'read', input: {}, summary: 's' } })[0])
       .toMatchObject({ kind: 'tool', phase: 'request', toolKind: 'read' });

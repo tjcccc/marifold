@@ -37,6 +37,24 @@ cors_origins = ["http://localhost:5173"]
 
 Failures return `401` with error code `UNAUTHORIZED`.
 
+The bearer token is a user-chosen shared secret, not a credential Marifold
+issues or exposes through the API. Generate and store it on the service host,
+preferably through `token_env`, then enter the same value in the client. The
+sanitized Config screen intentionally reports only whether a token is present.
+
+A token authenticates requests; it does not make the service remotely
+reachable. This release still binds to and accepts loopback hosts only. To use
+the home service from another machine, keep it on loopback and forward it over
+an authenticated tunnel, for example from the client machine:
+
+```sh
+ssh -L 32140:127.0.0.1:32140 user@home-host
+```
+
+Then open `http://127.0.0.1:32140`; if host-side token authentication is
+enabled, enter that same secret in the Web UI Connection sheet. Do not expose
+the service port directly to the public internet.
+
 **SSE exception:** native `EventSource` cannot set headers, so
 `GET /v1/runs/:id/events` also accepts `?access_token=<token>`. Prefer
 fetch-based SSE with the header; the query form exists only for
@@ -234,7 +252,8 @@ core — the same contract the TUI renders):
 { "type": "status",  "taskId": "task_x", "status": "running" }            // first event; also on terminal transitions
 { "type": "plan",    "taskId": "task_x", "plan": [{ "id": "s1", "text": "...", "status": "pending", ... }] }
 { "type": "step",    "taskId": "task_x", "stepId": "s1", "text": "...", "status": "completed" }
-{ "type": "text",    "text": "model output for this turn" }
+{ "type": "text",    "text": "checking the referenced files", "phase": "progress" }
+{ "type": "text",    "text": "the completed answer", "phase": "final" }
 { "type": "steering","taskId": "task_x", "text": "user guidance just applied" }
 { "type": "tool_request",  "call": { "id": "call_0", "tool": "write_file", "kind": "write",
                                       "input": { "path": "...", "content": "..." },
@@ -252,7 +271,10 @@ core — the same contract the TUI renders):
 ```
 
 Tool `kind` is `read | write | shell | network | delegate`. Render unknown
-event types as no-ops — the union may grow within v1.
+event types as no-ops — the union may grow within v1. A `text.phase` of
+`progress` identifies model commentary emitted before a tool call; `final`
+identifies the completed answer. Treat an omitted phase as `final` for
+compatibility with older streams.
 
 #### The approval sequence
 

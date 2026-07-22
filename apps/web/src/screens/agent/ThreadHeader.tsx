@@ -1,49 +1,47 @@
 import type { ReactNode } from 'react';
+import type { WorkspaceView } from '../../components/WorkspaceTabs';
+import { WorkspaceToolbar } from '../../components/WorkspaceToolbar';
 import styles from './ThreadHeader.module.css';
 
 export interface ThreadHeaderProps {
-  profileName?: string;
-  /** 'agent' | 'chat' — the effective profile mode. */
-  profileMode?: string;
   sessionTitle: string;
   /** Rendered avatar node (the screen owns the client wiring). */
   avatar?: ReactNode;
   sidebarsHidden: boolean;
   onToggleSidebars: () => void;
+  view: WorkspaceView;
+  onViewChange: (view: WorkspaceView) => void;
 }
 
-/** Bar above the conversation: sidebar toggle + where-am-I (session title,
- * profile · mode). The only orientation left once the sidebars are hidden. */
+/** Right-workspace toolbar: sidebar toggle, location, and Agent/Apps switch. */
 export function ThreadHeader({
-  profileName,
-  profileMode,
   sessionTitle,
   avatar,
   sidebarsHidden,
   onToggleSidebars,
+  view,
+  onViewChange,
 }: ThreadHeaderProps) {
   return (
-    <div className={styles.bar}>
-      <button
-        className={styles.toggle}
-        title={sidebarsHidden ? 'Show sidebars' : 'Hide sidebars'}
-        aria-label={sidebarsHidden ? 'Show sidebars' : 'Hide sidebars'}
-        aria-pressed={sidebarsHidden}
-        onClick={onToggleSidebars}
-      >
-        <SidebarGlyph />
-      </button>
-      {avatar}
-      <div className={styles.titles}>
-        <div className={styles.session}>{sessionTitle}</div>
-        {profileName ? (
-          <div className={styles.profile}>
-            {profileName}
-            {profileMode ? ` · ${profileMode}` : ''}
-          </div>
-        ) : null}
-      </div>
-    </div>
+    <WorkspaceToolbar
+      view={view}
+      onViewChange={onViewChange}
+      leading={(
+        <>
+          <button
+            className={styles.toggle}
+            title={sidebarsHidden ? 'Show sidebar' : 'Hide sidebar'}
+            aria-label={sidebarsHidden ? 'Show sidebar' : 'Hide sidebar'}
+            aria-pressed={sidebarsHidden}
+            onClick={onToggleSidebars}
+          >
+            <SidebarGlyph />
+          </button>
+          {avatar}
+          <div className={styles.session}>{sessionTitle}</div>
+        </>
+      )}
+    />
   );
 }
 

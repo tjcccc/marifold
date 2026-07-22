@@ -1,11 +1,11 @@
 .pane {
-  width: 220px;
-  flex-shrink: 0;
+  width: 100%;
+  height: 100%;
   display: flex;
   flex-direction: column;
-  border-right: 1px solid var(--separator-soft);
   background: var(--canvas);
-  overflow-y: auto;
+  overflow: hidden;
+  animation: sidebarPopIn 160ms ease-out;
 }
 
 .header {
@@ -37,6 +37,9 @@
 }
 
 .list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   padding: 0 8px 12px;
@@ -83,4 +86,17 @@
 
 .working {
   color: var(--brand-text);
+}
+
+@keyframes sidebarPopIn {
+  from {
+    opacity: 0.7;
+    transform: translateX(-12px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pane {
+    animation: none;
+  }
 }

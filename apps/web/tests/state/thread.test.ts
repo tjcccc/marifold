@@ -70,10 +70,11 @@ describe('threadReducer', () => {
       ...runEvents('run_1', [
         { type: 'status', taskId: 'task_9', status: 'running' },
         { type: 'plan', taskId: 'task_9', plan: [{ id: 's1', text: 'Read', status: 'in_progress', createdAt: '', updatedAt: '' }] },
+        { type: 'text', text: 'I’ll check the notes first.', phase: 'progress' },
         { type: 'tool_request', call: { id: 'c1', tool: 'read_file', kind: 'read', input: {}, summary: 'read notes.md' } },
         { type: 'tool_result', callId: 'c1', tool: 'read_file', summary: 'read 1.2KB', isError: false },
         { type: 'step', taskId: 'task_9', stepId: 's1', text: 'Read', status: 'completed' },
-        { type: 'text', text: 'All done.' },
+        { type: 'text', text: 'All done.', phase: 'final' },
         { type: 'done', taskId: 'task_9', status: 'completed', summary: 'Done', usage: { inputTokens: 10, outputTokens: 5 } },
       ]),
     );
@@ -83,15 +84,18 @@ describe('threadReducer', () => {
       status: 'completed',
       summary: 'Done',
       collapsed: true,
-      lastSeq: 7,
+      lastSeq: 8,
     });
     expect(run.rows).toEqual([
       { callId: 'c1', tool: 'read_file', kind: 'read', summary: 'read 1.2KB', phase: 'done', isError: false },
     ]);
     expect(run.plan?.[0].status).toBe('completed');
-    // The run's prose is a normal assistant item bound to the run.
-    const prose = state.items.find(i => i.kind === 'assistant');
-    expect(prose).toMatchObject({ markdown: 'All done.', runId: 'run_1', streaming: false });
+    // Progress commentary and the final answer stay distinct so renderers can
+    // mute only the former. The previous progress cursor closes immediately.
+    const prose = state.items.filter(i => i.kind === 'assistant');
+    expect(prose).toHaveLength(2);
+    expect(prose[0]).toMatchObject({ markdown: 'I’ll check the notes first.', runId: 'run_1', runPhase: 'progress', streaming: false });
+    expect(prose[1]).toMatchObject({ markdown: 'All done.', runId: 'run_1', runPhase: 'final', streaming: false });
   });
 
   it('drops replayed events with seq <= lastSeq', () => {

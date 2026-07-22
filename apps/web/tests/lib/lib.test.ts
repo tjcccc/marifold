@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { formatDuration, formatElapsed, formatRelativeTime, formatTokens } from '../../src/lib/format';
-import { formatHash, parseHash } from '../../src/lib/hashRoute';
+import { formatPath, parseLegacyHash, parsePath } from '../../src/lib/route';
 import { parseInline, parseMarkdown } from '../../src/lib/markdown';
 import { withPendingSession } from '../../src/lib/sessionSummaries';
 import { resolveEffectivePermissions } from '../../src/lib/permissions';
 
-describe('hashRoute', () => {
+describe('route', () => {
   it('round-trips every route shape', () => {
     const routes = [
       { view: 'agent' as const },
@@ -19,18 +19,26 @@ describe('hashRoute', () => {
       { view: 'config' as const, section: 'service' as const },
     ];
     for (const route of routes) {
-      expect(parseHash(formatHash(route))).toEqual(route);
+      expect(parsePath(formatPath(route))).toEqual(route);
     }
   });
 
-  it('defaults unknown or empty hashes to the agent view', () => {
-    expect(parseHash('')).toEqual({ view: 'agent' });
-    expect(parseHash('#/nonsense')).toEqual({ view: 'agent' });
+  it('formats clean paths and defaults unknown or empty paths to the agent view', () => {
+    expect(formatPath({ view: 'agent' })).toBe('/agent');
+    expect(formatPath({ view: 'apps' })).toBe('/apps');
+    expect(formatPath({ view: 'config', section: 'profiles', item: 'writing helper' }))
+      .toBe('/config/profiles/writing%20helper');
+    expect(parsePath('')).toEqual({ view: 'agent' });
+    expect(parsePath('/nonsense')).toEqual({ view: 'agent' });
   });
 
-  it('maps legacy #/config/<profile> deep links onto the profiles section', () => {
-    expect(parseHash('#/config/painter')).toEqual({ view: 'config', section: 'profiles', item: 'painter' });
-    expect(parseHash('#/config')).toEqual({ view: 'config', section: 'profiles' });
+  it('maps old clean and hash bookmarks onto current route shapes', () => {
+    expect(parsePath('/config/painter')).toEqual({ view: 'config', section: 'profiles', item: 'painter' });
+    expect(parseLegacyHash('#/agent/writer/session_1'))
+      .toEqual({ view: 'agent', profile: 'writer', session: 'session_1' });
+    expect(parseLegacyHash('#/config/painter'))
+      .toEqual({ view: 'config', section: 'profiles', item: 'painter' });
+    expect(parseLegacyHash('#section')).toBeUndefined();
   });
 });
 

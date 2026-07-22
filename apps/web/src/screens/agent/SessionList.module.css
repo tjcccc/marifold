@@ -1,11 +1,50 @@
 .pane {
-  width: 240px;
-  flex-shrink: 0;
+  width: 100%;
+  height: 100%;
   display: flex;
   flex-direction: column;
-  border-right: 1px solid var(--separator-soft);
   background: var(--canvas);
-  overflow-y: auto;
+  overflow: hidden;
+  animation: sidebarPushIn 160ms ease-out;
+}
+
+.profileHeader {
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px 6px 8px;
+}
+
+.profileHero {
+  display: flex;
+  justify-content: center;
+  padding: 10px 16px 12px;
+}
+
+.backButton {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  color: var(--text-2);
+}
+
+.backButton:hover {
+  background: var(--separator-soft);
+  color: var(--text);
+}
+
+.profileName {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 650;
 }
 
 .header {
@@ -37,6 +76,9 @@
 }
 
 .list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   padding: 0 8px 12px;
@@ -78,4 +120,17 @@
 .sub {
   font-size: 11.5px;
   color: var(--text-3);
+}
+
+@keyframes sidebarPushIn {
+  from {
+    opacity: 0.7;
+    transform: translateX(12px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pane {
+    animation: none;
+  }
 }

@@ -14,11 +14,13 @@ describe('commandSyntax', () => {
     expect(leadingToken('$')).toBeUndefined();
   });
 
-  it('menuQuery yields sigil + partial name only while typing the first token', () => {
-    expect(menuQuery('$mak')).toEqual({ sigil: '$', query: 'mak' });
-    expect(menuQuery('/mo')).toEqual({ sigil: '/', query: 'mo' });
-    expect(menuQuery('/')).toEqual({ sigil: '/', query: '' });
-    expect(menuQuery('/model ')).toBeUndefined(); // space → typing args
+  it('menuQuery follows the leading token while its caret is being edited', () => {
+    expect(menuQuery('$mak')).toEqual({ sigil: '$', query: 'mak', end: 4 });
+    expect(menuQuery('/mo')).toEqual({ sigil: '/', query: 'mo', end: 3 });
+    expect(menuQuery('/')).toEqual({ sigil: '/', query: '', end: 1 });
+    expect(menuQuery('/mod existing args', 4)).toEqual({ sigil: '/', query: 'mod', end: 4 });
+    expect(menuQuery('/mod existing args')).toBeUndefined(); // caret is in the args
+    expect(menuQuery('/model ')).toBeUndefined();
     expect(menuQuery('hello')).toBeUndefined();
   });
 

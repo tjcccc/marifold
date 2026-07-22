@@ -55,7 +55,7 @@ export function TranscriptRow({ item }: { item: TranscriptItem }): React.ReactEl
       );
     }
     case 'assistant':
-      return <Markdown text={item.text} />;
+      return <Markdown text={item.text} muted={item.muted} />;
     case 'notice':
       return <Text color={NOTICE_COLOR[item.tone]}>{item.text}</Text>;
     case 'plan':

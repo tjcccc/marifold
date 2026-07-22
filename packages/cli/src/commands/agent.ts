@@ -95,7 +95,7 @@ function renderAgentEvent(event: AgentEvent, style: TerminalStyle): void {
       process.stdout.write(`${style.dim(`step ${event.stepId}: ${event.status}`)}\n`);
       break;
     case 'text':
-      process.stdout.write(`${event.text}\n`);
+      process.stdout.write(`${event.phase === 'progress' ? style.dim(event.text) : event.text}\n`);
       break;
     case 'tool_request':
       process.stdout.write(`${style.dim(`tool> ${event.call.summary}`)}\n`);

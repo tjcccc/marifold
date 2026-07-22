@@ -56,7 +56,15 @@ export interface UserAttachment {
 
 export type ThreadItem =
   | { id: string; kind: 'user'; text: string; attachments?: UserAttachment[] }
-  | { id: string; kind: 'assistant'; markdown: string; streaming?: boolean; runId?: string }
+  | {
+      id: string;
+      kind: 'assistant';
+      markdown: string;
+      streaming?: boolean;
+      runId?: string;
+      /** Model commentary before a tool call vs the run's completed answer. */
+      runPhase?: 'progress' | 'final';
+    }
   | { id: string; kind: 'run'; run: RunCardState }
   | { id: string; kind: 'notice'; tone: 'info' | 'warn' | 'error'; text: string };
 
@@ -254,7 +262,9 @@ function applyRunEvent(state: ThreadState, runId: string, seq: number, event: Ag
 
     case 'text': {
       next = updateRun(next, runId, run => ({ ...run, lastSeq: seq }));
-      if (event.text.trim().length > 0) next = appendRunText(next, runId, event.text);
+      if (event.text.trim().length > 0) {
+        next = appendRunText(next, runId, event.text, event.phase ?? 'final');
+      }
       break;
     }
 
@@ -354,21 +364,16 @@ function applyRunEvent(state: ThreadState, runId: string, seq: number, event: Ag
   return next;
 }
 
-/** The run's prose lands as a normal assistant message after its card. */
-function appendRunText(state: ThreadState, runId: string, text: string): ThreadState {
-  const existing = state.items.findLast(
-    (item): item is Extract<ThreadItem, { kind: 'assistant' }> =>
-      item.kind === 'assistant' && item.runId === runId,
-  );
-  if (existing) {
-    return {
-      ...state,
-      items: state.items.map(item =>
-        item === existing ? { ...existing, markdown: `${existing.markdown}\n\n${text}` } : item,
-      ),
-    };
-  }
-  return append(state, { kind: 'assistant', markdown: text, streaming: true, runId });
+/** Each model turn lands after the run card as its own assistant item so
+ * progress commentary can be muted without muting the final answer. */
+function appendRunText(
+  state: ThreadState,
+  runId: string,
+  text: string,
+  runPhase: 'progress' | 'final',
+): ThreadState {
+  const closed = updateStreamingRunText(state, runId);
+  return append(closed, { kind: 'assistant', markdown: text, streaming: true, runId, runPhase });
 }
 
 function updateStreamingRunText(state: ThreadState, runId: string): ThreadState {

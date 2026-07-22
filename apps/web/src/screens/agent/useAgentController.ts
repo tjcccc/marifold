@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'r
 import type { ApiClient } from '../../api/client';
 import { MarifoldApiError } from '../../api/client';
 import { streamChat } from '../../api/chat';
-import { getModels, getSkills, getStatus } from '../../api/misc';
+import { getModels, getSkills } from '../../api/misc';
 import type { SkillHint } from '../../api/misc';
 import { deleteMemory, getProfile, listMemories, listProfiles, rememberMemory, updateProfile } from '../../api/profiles';
 import { answerApproval, cancelRun, listRuns, startRun, steerRun } from '../../api/runs';
@@ -14,7 +14,7 @@ import type {
   RunRecord,
   SessionSummary,
 } from '../../api/types';
-import type { Route } from '../../lib/hashRoute';
+import type { Route } from '../../lib/route';
 import type { PreparedAttachment } from '../../lib/attachments';
 import { fileToBase64, inlineTextAttachments, MAX_TOTAL_BYTES, prepareFiles } from '../../lib/attachments';
 import { parseCommand, WEB_COMMANDS } from '../../lib/commandSyntax';
@@ -56,6 +56,7 @@ export interface AgentController {
   removeAttachment: (index: number) => void;
   send: (text: string) => Promise<void>;
   refreshProfiles: () => Promise<void>;
+  showProfiles: () => void;
   selectProfile: (name: string) => void;
   selectSession: (id: string) => void;
   newSession: () => void;
@@ -159,22 +160,19 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
     [client, followers, catchUpRuns, handleError],
   );
 
-  // Bootstrap: profiles, default profile, model options.
+  // Bootstrap the profile list and model options. The root Agent route stays
+  // on the profile picker; only an explicit route selects a profile.
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const [profileList, status, models] = await Promise.all([
+        const [profileList, models] = await Promise.all([
           listProfiles(client),
-          getStatus(client),
           getModels(client),
         ]);
         if (cancelled) return;
         setProfiles(profileList);
         setModelOptions(models.options);
-        if (!route.profile) {
-          navigate({ view: 'agent', profile: status.default.profile });
-        }
       } catch (error) {
         if (!cancelled) handleError(error);
       }
@@ -182,9 +180,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
     return () => {
       cancelled = true;
     };
-    // Bootstraps once per client; route.profile is read but must not re-trigger.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [client]);
+  }, [client, handleError]);
 
   // Profile selection → detail + sessions + think default.
   useEffect(() => {
@@ -264,6 +260,17 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
     },
     [followers, navigate],
   );
+
+  const showProfiles = useCallback(() => {
+    followers.stopAll();
+    setSessionId(undefined);
+    setProfileDetail(undefined);
+    setSessions([]);
+    setSkills([]);
+    setAttachments([]);
+    dispatch({ type: 'reset' });
+    navigate({ view: 'agent' });
+  }, [followers, navigate]);
 
   const selectSession = useCallback(
     (id: string) => {
@@ -640,6 +647,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
     removeAttachment,
     send,
     refreshProfiles,
+    showProfiles,
     selectProfile,
     selectSession,
     newSession,

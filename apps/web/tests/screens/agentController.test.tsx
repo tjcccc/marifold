@@ -21,6 +21,30 @@ const profile: ProfileDetail = {
 };
 
 describe('useAgentController session lifecycle', () => {
+  it('keeps the root Agent route on the profile picker', async () => {
+    const client: ApiClient = {
+      baseUrl: '',
+      request: async (method, path) => {
+        if (method === 'GET' && path === '/v1/profiles') return { profiles: [profile] } as never;
+        if (method === 'GET' && path === '/v1/models') return { default: {}, options: [] } as never;
+        throw new Error(`Unexpected request: ${method} ${path}`);
+      },
+      stream: async () => new Response(),
+      blob: async () => undefined,
+    };
+    const navigate = vi.fn();
+    const { result } = renderHook(() => useAgentController({
+      client,
+      route: { view: 'agent' },
+      navigate,
+      onUnauthorized: vi.fn(),
+    }));
+
+    await waitFor(() => expect(result.current.profiles).toHaveLength(1));
+    expect(result.current.profileName).toBeUndefined();
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
   it('shows a pending new session, then replaces it from the server when the run completes', async () => {
     let releaseStream!: () => void;
     const streamReleased = new Promise<void>(resolve => { releaseStream = resolve; });

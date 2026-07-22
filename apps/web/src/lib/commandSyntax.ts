@@ -10,8 +10,8 @@ export type Sigil = '$' | '/';
 /** A leading token: sigil + name at a word boundary (space or end), so a path
  * like `/a/b` is NOT mistaken for a command. */
 const LEADING = /^([$/])([a-zA-Z0-9][\w-]*)(?=\s|$)/;
-/** The whole input is a bare sigil + partial name (still typing the token). */
-const QUERY = /^([$/])([\w-]*)$/;
+/** A leading sigil + partial name, optionally followed by existing arguments. */
+const QUERY = /^([$/])([\w-]*)(?=\s|$)/;
 /** A full `/command [args]` line (name is the whole first word). */
 const COMMAND_LINE = /^\/([a-zA-Z0-9][\w-]*)(?:\s+([\s\S]*))?$/;
 
@@ -21,11 +21,18 @@ export function leadingToken(text: string): { sigil: Sigil; token: string } | un
   return match ? { sigil: match[1] as Sigil, token: match[0] } : undefined;
 }
 
-/** The sigil + partial name to autocomplete while still typing the first token;
- * undefined once a space (args) or non-token text appears. */
-export function menuQuery(text: string): { sigil: Sigil; query: string } | undefined {
+/** The leading sigil + partial name while the caret is editing that token.
+ * Existing arguments may remain after it; moving the caret into those args
+ * closes the menu. `end` is the replacement boundary for completion. */
+export function menuQuery(
+  text: string,
+  caret = text.length,
+): { sigil: Sigil; query: string; end: number } | undefined {
   const match = QUERY.exec(text);
-  return match ? { sigil: match[1] as Sigil, query: match[2] } : undefined;
+  if (!match) return undefined;
+  const end = match[0].length;
+  if (caret < 1 || caret > end) return undefined;
+  return { sigil: match[1] as Sigil, query: match[2], end };
 }
 
 /** Split a message into its leading token and the remainder, for highlighting. */

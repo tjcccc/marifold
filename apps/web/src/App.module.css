@@ -10,6 +10,10 @@
   display: flex;
 }
 
+.narrowWindow {
+  display: none;
+}
+
 .placeholder {
   margin: auto;
   text-align: center;
@@ -26,4 +30,37 @@
 .placeholderHint {
   margin-top: 6px;
   font-size: 13px;
+}
+
+@media (max-width: 899px) {
+  .content {
+    display: none;
+  }
+
+  .narrowWindow {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 32px;
+    text-align: center;
+    background: var(--content);
+  }
+
+  .narrowLogo {
+    display: inline-flex;
+    margin-bottom: 14px;
+    color: var(--brand-fill);
+  }
+
+  .narrowTitle {
+    font-size: 18px;
+    font-weight: 650;
+  }
+
+  .narrowHint {
+    margin-top: 6px;
+    color: var(--text-3);
+  }
 }

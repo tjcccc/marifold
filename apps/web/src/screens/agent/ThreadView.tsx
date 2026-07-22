@@ -106,10 +106,11 @@ function ThreadItemView({
       );
     case 'assistant': {
       const run = item.runId ? runs.get(item.runId) : undefined;
-      const meta = run && run.status !== 'running' ? runMetaText(run) : undefined;
+      const progress = item.runPhase === 'progress';
+      const meta = run && run.status !== 'running' && !progress ? runMetaText(run) : undefined;
       return (
-        <div className={styles.assistant}>
-          <Markdown source={item.markdown} />
+        <div className={styles.assistant} data-run-phase={item.runPhase}>
+          <Markdown source={item.markdown} muted={progress} />
           {item.streaming ? <span className={styles.cursor} aria-hidden /> : null}
           {meta ? <div className={styles.meta}>{meta}</div> : null}
         </div>

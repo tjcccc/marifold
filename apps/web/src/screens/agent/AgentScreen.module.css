@@ -29,11 +29,22 @@
   pointer-events: none;
 }
 
-@media (max-width: 760px) {
-  /* Basic mobile collapse: the conversation takes over; pane navigation
-   * polish is a follow-up milestone. */
-  .layout > nav,
-  .layout > section {
-    display: none;
-  }
+.chooseProfile {
+  margin: auto;
+  max-width: 380px;
+  padding: 24px;
+  text-align: center;
+  color: var(--text-3);
+}
+
+.chooseTitle {
+  color: var(--text-2);
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.chooseHint {
+  margin-top: 6px;
+  font-size: 13px;
+  line-height: 1.55;
 }

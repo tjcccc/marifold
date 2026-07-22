@@ -5,10 +5,10 @@ import styles from './Markdown.module.css';
 
 /** Renders assistant markdown from the lib/markdown token tree — React
  * elements only, no innerHTML anywhere. */
-export function Markdown({ source }: { source: string }) {
+export function Markdown({ source, muted = false }: { source: string; muted?: boolean }) {
   const blocks = useMemo(() => parseMarkdown(source), [source]);
   return (
-    <div className={styles.root}>
+    <div className={`${styles.root}${muted ? ` ${styles.muted}` : ''}`}>
       {blocks.map((block, index) => (
         <Block key={index} block={block} />
       ))}

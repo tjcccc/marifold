@@ -33,6 +33,7 @@ export function InputBar(props: InputBarProps) {
   const [focused, setFocused] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
+  const [caret, setCaret] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const highlightRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -42,7 +43,7 @@ export function InputBar(props: InputBarProps) {
   // Steering rides an active run — attachments can't join mid-task.
   const canAttach = props.onAttachFiles !== undefined && !props.steering;
 
-  const menu = menuQuery(text);
+  const menu = menuQuery(text, caret);
   const source: Suggestion[] = menu?.sigil === '/' ? WEB_COMMANDS : (props.skills ?? []);
   const matches = menu ? source.filter(item => item.name.startsWith(menu.query)).slice(0, MAX_SUGGESTIONS) : [];
   const menuOpen = focused && !dismissed && matches.length > 0;
@@ -73,15 +74,21 @@ export function InputBar(props: InputBarProps) {
     if (!value || props.disabled) return;
     props.onSubmit(value);
     setText('');
+    setCaret(0);
     setDismissed(false);
     const node = textareaRef.current;
     if (node) node.style.height = 'auto';
   }
 
   function complete(item: Suggestion): void {
-    const completed = `${sigil}${item.name} `;
-    completionCaretRef.current = completed.length;
+    const head = `${sigil}${item.name}`;
+    const suffix = menu ? text.slice(menu.end) : '';
+    const separator = suffix.length === 0 ? ' ' : '';
+    const completed = `${head}${separator}${suffix}`;
+    const completedCaret = head.length + (separator.length > 0 || suffix.length > 0 ? 1 : 0);
+    completionCaretRef.current = completedCaret;
     setText(completed);
+    setCaret(completedCaret);
     setActiveIndex(0);
     setDismissed(false);
   }
@@ -212,7 +219,9 @@ export function InputBar(props: InputBarProps) {
               props.steering ? 'Reply — the run keeps going; guidance is picked up mid-task' : 'Message the agent…'
             }
             onChange={event => {
-              setText(event.target.value);
+              const next = event.target.value;
+              setText(next);
+              setCaret(event.target.selectionStart ?? next.length);
               setDismissed(false);
               setActiveIndex(0);
               autosize(event.target);
@@ -222,7 +231,11 @@ export function InputBar(props: InputBarProps) {
             }}
             onKeyDown={onKeyDown}
             onPaste={onPaste}
-            onFocus={() => setFocused(true)}
+            onFocus={event => {
+              setFocused(true);
+              setCaret(event.currentTarget.selectionStart ?? text.length);
+            }}
+            onSelect={event => setCaret(event.currentTarget.selectionStart ?? text.length)}
             onBlur={() => setFocused(false)}
           />
         </div>

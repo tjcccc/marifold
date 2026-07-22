@@ -29,7 +29,7 @@ const CONTENT_TYPES: Record<string, string> = {
  * - `/v1/*` and `/health` fall through to the JSON 404 handler untouched.
  * - Real files stream with their content type; Vite's content-hashed
  *   `/assets/*` get immutable caching, everything else no-cache.
- * - Extensionless misses serve index.html (SPA fallback for hash/deep links).
+ * - Extensionless misses serve index.html (SPA fallback for clean deep links).
  * - Paths resolving outside `webDir` are rejected (traversal guard).
  */
 export function registerStaticRoutes(server: FastifyInstance, webDir: string): void {

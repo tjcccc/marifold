@@ -18,7 +18,7 @@ screens/ ──► components/ ──► state/ ──► api/ ──► theme
 |---|---|---|
 | `src/api/` | Talking to the service: fetch wrapper, SSE parser, typed route wrappers, the `followRun` reconnect loop. The only layer that knows URLs. | Import React. |
 | `src/state/` | The domain model: `threadReducer` (session turns + chat streams + run cards in one thread) and `RunFollowers`. Pure and unit-tested. | Import React or fetch directly. |
-| `src/lib/` | Pure utilities: markdown token tree, formatting, permission resolution, hash routing. | Import React, api, or state. |
+| `src/lib/` | Pure utilities: markdown token tree, formatting, permission resolution, clean-path routing. | Import React, api, or state. |
 | `src/components/` | Shared presentational React (SegmentedControl, Markdown, ConnectionPopover…). Props in, callbacks out. | Fetch data or hold business rules. |
 | `src/screens/` | Composition per view (`agent/`, `apps/`, `config/`): hooks, controllers, dispatch. The only layer that wires api + state + components together. | — |
 | `src/theme/` | `palette.css` (design tokens once, via `light-dark()`), `base.css`, `useTheme`. | — |
@@ -39,7 +39,7 @@ pnpm --filter @marifold/web dev
 ```
 
 `VITE_MARIFOLD_URL` overrides the dev service URL. If the service runs with a
-token, set it in the app via the toolbar connection popover (⌁).
+token, set it in the app through the sidebar's Connection sheet.
 
 ## Production
 

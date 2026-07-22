@@ -39,8 +39,9 @@ describe('MarifoldService static hosting', () => {
       expect(asset.headers['content-type']).toContain('text/javascript');
       expect(asset.headers['cache-control']).toContain('immutable');
 
-      // Extensionless deep link → the app shell (hash routing handles it).
-      const deepLink = await server.inject({ method: 'GET', url: '/some/app/view' });
+      // A clean extensionless UI route → the app shell; the browser router
+      // reads the path after index.html loads.
+      const deepLink = await server.inject({ method: 'GET', url: '/agent/default/session_1' });
       expect(deepLink.statusCode).toBe(200);
       expect(deepLink.payload).toContain('marifold');
 

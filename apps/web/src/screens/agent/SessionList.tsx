@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import type { SessionSummary } from '../../api/types';
 import { formatRelativeTime } from '../../lib/format';
 import styles from './SessionList.module.css';
@@ -5,14 +6,25 @@ import styles from './SessionList.module.css';
 export interface SessionListProps {
   sessions: SessionSummary[];
   selected?: string;
+  profileName: string;
+  profileAvatar?: ReactNode;
   onSelect: (id: string) => void;
   onNew: () => void;
+  onBack: () => void;
+  footer?: ReactNode;
 }
 
-/** Middle column: the selected profile's sessions, newest first. */
-export function SessionList({ sessions, selected, onSelect, onNew }: SessionListProps) {
+/** Second level of the primary sidebar stack: selected profile → sessions. */
+export function SessionList({ sessions, selected, profileName, profileAvatar, onSelect, onNew, onBack, footer }: SessionListProps) {
   return (
     <section className={styles.pane} aria-label="Sessions">
+      <div className={styles.profileHeader}>
+        <button className={styles.backButton} onClick={onBack} title="Back to profiles" aria-label="Back to profiles">
+          <BackGlyph />
+        </button>
+        <span className={styles.profileName}>{profileName}</span>
+      </div>
+      {profileAvatar ? <div className={styles.profileHero}>{profileAvatar}</div> : null}
       <div className={styles.header}>
         <span>Sessions</span>
         <button className={styles.newButton} onClick={onNew} title="New session">
@@ -34,7 +46,16 @@ export function SessionList({ sessions, selected, onSelect, onNew }: SessionList
           </button>
         ))}
       </div>
+      {footer}
     </section>
+  );
+}
+
+function BackGlyph() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden>
+      <path d="m9.8 3.4-4.6 4.6 4.6 4.6" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   );
 }
 

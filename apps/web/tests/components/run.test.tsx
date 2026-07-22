@@ -5,9 +5,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 // Auto-cleanup hooks into vitest globals, which this workspace doesn't enable.
 afterEach(cleanup);
 import type { RunApprovalAction } from '../../src/api/types';
+import { ResizableSidebar } from '../../src/components/ResizableSidebar';
+import { SidebarSystemFooter } from '../../src/components/SidebarChrome';
 import type { RunCardState } from '../../src/state/thread';
 import { InputBar } from '../../src/screens/agent/InputBar';
 import { RunCard } from '../../src/screens/agent/RunCard';
+import { SessionList } from '../../src/screens/agent/SessionList';
 import { ThreadHeader } from '../../src/screens/agent/ThreadHeader';
 import { ThreadView } from '../../src/screens/agent/ThreadView';
 
@@ -146,21 +149,97 @@ describe('InputBar', () => {
 });
 
 describe('ThreadHeader', () => {
-  it('shows the session title with profile · mode, and toggles the sidebars', () => {
+  it('shows only the session title, keeps workspace tabs at the trailing edge, and toggles the sidebar', () => {
     const onToggle = vi.fn();
+    const onViewChange = vi.fn();
     render(
       <ThreadHeader
-        profileName="default"
-        profileMode="agent"
         sessionTitle="Please summarize my notes"
         sidebarsHidden={false}
         onToggleSidebars={onToggle}
+        view="agent"
+        onViewChange={onViewChange}
       />,
     );
     expect(screen.getByText('Please summarize my notes')).toBeTruthy();
-    expect(screen.getByText('default · agent')).toBeTruthy();
-    fireEvent.click(screen.getByLabelText('Hide sidebars'));
+    expect(screen.queryByText('default · agent')).toBeNull();
+    expect(screen.getByRole('tablist', { name: 'Workspace' }).parentElement?.className).toContain('trailing');
+    fireEvent.click(screen.getByLabelText('Hide sidebar'));
     expect(onToggle).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByRole('tab', { name: 'Apps' }));
+    expect(onViewChange).toHaveBeenCalledWith('apps');
+  });
+});
+
+describe('Desktop workspace sidebar', () => {
+  it('navigates back from a profile session list and dispatches session actions', () => {
+    const onBack = vi.fn();
+    const onNew = vi.fn();
+    const onSelect = vi.fn();
+    render(
+      <SessionList
+        profileName="prompt-maker"
+        profileAvatar={<span>Profile portrait</span>}
+        sessions={[{
+          id: 'session_1',
+          profileName: 'prompt-maker',
+          createdAt: '2026-07-22T00:00:00.000Z',
+          updatedAt: '2026-07-22T01:00:00.000Z',
+          turnCount: 4,
+          preview: 'Portrait prompt',
+        }]}
+        onBack={onBack}
+        onNew={onNew}
+        onSelect={onSelect}
+      />,
+    );
+    fireEvent.click(screen.getByLabelText('Back to profiles'));
+    fireEvent.click(screen.getByTitle('New session'));
+    fireEvent.click(screen.getByText('Portrait prompt'));
+    expect(onBack).toHaveBeenCalledOnce();
+    expect(onNew).toHaveBeenCalledOnce();
+    expect(onSelect).toHaveBeenCalledWith('session_1');
+    const backRow = screen.getByLabelText('Back to profiles').parentElement;
+    expect(backRow?.textContent).not.toContain('Profile portrait');
+    const portrait = screen.getByText('Profile portrait');
+    const sessionsHeading = screen.getByText('Sessions');
+    expect(portrait.compareDocumentPosition(sessionsHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('starts at 256px and resizes within the shared sidebar bounds', () => {
+    window.localStorage.removeItem('marifold.sidebarWidth');
+    render(<ResizableSidebar><nav>Profiles</nav></ResizableSidebar>);
+    const separator = screen.getByRole('separator', { name: 'Resize sidebar' });
+    const frame = separator.parentElement as HTMLDivElement;
+    expect(frame.style.width).toBe('256px');
+
+    fireEvent.keyDown(separator, { key: 'ArrowRight' });
+    expect(frame.style.width).toBe('264px');
+    expect(window.localStorage.getItem('marifold.sidebarWidth')).toBe('264');
+
+    fireEvent.keyDown(separator, { key: 'Home' });
+    expect(frame.style.width).toBe('200px');
+    window.localStorage.removeItem('marifold.sidebarWidth');
+  });
+
+  it('keeps connection, appearance, and settings actions in the sidebar footer', () => {
+    const onThemeChange = vi.fn();
+    const onOpenConnection = vi.fn();
+    const onOpenSettings = vi.fn();
+    render(
+      <SidebarSystemFooter
+        theme="auto"
+        onThemeChange={onThemeChange}
+        onOpenConnection={onOpenConnection}
+        onOpenSettings={onOpenSettings}
+      />,
+    );
+    fireEvent.click(screen.getByText('Connection'));
+    fireEvent.click(screen.getByText('Appearance'));
+    fireEvent.click(screen.getByText('Settings'));
+    expect(onOpenConnection).toHaveBeenCalledOnce();
+    expect(onThemeChange).toHaveBeenCalledWith('light');
+    expect(onOpenSettings).toHaveBeenCalledOnce();
   });
 });
 
@@ -183,6 +262,35 @@ describe('ThreadView', () => {
     expect(screen.getByText('summary')).toBeTruthy();
     expect(screen.getByText('heads up')).toBeTruthy();
     expect(screen.getByText(/tool actions/)).toBeTruthy();
+  });
+
+  it('marks run commentary as progress while keeping the final answer primary', () => {
+    const startedAt = new Date('2026-07-06T08:00:00Z').toISOString();
+    render(
+      <ThreadView
+        items={[
+          {
+            id: 'i1',
+            kind: 'run',
+            run: cardFixture({
+              status: 'completed',
+              collapsed: true,
+              startedAt,
+              finishedAt: new Date(Date.parse(startedAt) + 2_000).toISOString(),
+              usage: { totalTokens: 512 },
+            }),
+          },
+          { id: 'i2', kind: 'assistant', markdown: 'Checking the skill files.', runId: 'run_1', runPhase: 'progress' },
+          { id: 'i3', kind: 'assistant', markdown: 'The final prompt.', runId: 'run_1', runPhase: 'final' },
+        ]}
+        onCancelRun={() => {}}
+        onAnswerApproval={() => {}}
+        onToggleRun={() => {}}
+      />,
+    );
+    expect(screen.getByText('Checking the skill files.').closest('[data-run-phase="progress"]')).toBeTruthy();
+    expect(screen.getByText('The final prompt.').closest('[data-run-phase="final"]')).toBeTruthy();
+    expect(screen.getAllByText('2s · 512 tokens')).toHaveLength(1);
   });
 
   it('renders assistant pipe tables as semantic HTML tables', () => {

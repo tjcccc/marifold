@@ -10,9 +10,11 @@ const CODE_COLOR = '#56B6C2';
  * blockquotes, and inline `code` / **bold** / *italic*. Not a full parser; it
  * degrades to plain text on anything it doesn't recognize.
  */
-export function Markdown({ text }: { text: string }): React.ReactElement {
+export function Markdown({ text, muted = false }: { text: string; muted?: boolean }): React.ReactElement {
   const lines = text.split('\n');
   const blocks: React.ReactNode[] = [];
+  const defaultColor = muted ? DIM : undefined;
+  const codeColor = muted ? DIM : CODE_COLOR;
   let i = 0;
   let key = 0;
 
@@ -30,7 +32,7 @@ export function Markdown({ text }: { text: string }): React.ReactElement {
       blocks.push(
         <Box key={key++} flexDirection="column" borderStyle="round" borderColor="gray" paddingX={1}>
           {(code.length ? code : ['']).map((c, j) => (
-            <Text key={j} color={CODE_COLOR}>{c.length ? c : ' '}</Text>
+            <Text key={j} color={codeColor}>{c.length ? c : ' '}</Text>
           ))}
         </Box>,
       );
@@ -39,33 +41,33 @@ export function Markdown({ text }: { text: string }): React.ReactElement {
 
     const heading = line.match(/^(#{1,6})\s+(.*)$/);
     if (heading) {
-      blocks.push(<Text key={key++} bold color="white">{heading[2]}</Text>);
+      blocks.push(<Text key={key++} bold color={muted ? DIM : 'white'}>{heading[2]}</Text>);
       i += 1;
       continue;
     }
 
     const quote = line.match(/^>\s?(.*)$/);
     if (quote) {
-      blocks.push(<Text key={key++} color={DIM}>│ {renderInline(quote[1])}</Text>);
+      blocks.push(<Text key={key++} color={DIM}>│ {renderInline(quote[1], muted)}</Text>);
       i += 1;
       continue;
     }
 
     const bullet = line.match(/^(\s*)[-*+]\s+(.*)$/);
     if (bullet) {
-      blocks.push(<Text key={key++}>{bullet[1]}• {renderInline(bullet[2])}</Text>);
+      blocks.push(<Text key={key++} color={defaultColor}>{bullet[1]}• {renderInline(bullet[2], muted)}</Text>);
       i += 1;
       continue;
     }
 
     const numbered = line.match(/^(\s*)(\d+)\.\s+(.*)$/);
     if (numbered) {
-      blocks.push(<Text key={key++}>{numbered[1]}{numbered[2]}. {renderInline(numbered[3])}</Text>);
+      blocks.push(<Text key={key++} color={defaultColor}>{numbered[1]}{numbered[2]}. {renderInline(numbered[3], muted)}</Text>);
       i += 1;
       continue;
     }
 
-    blocks.push(<Text key={key++}>{line.length ? renderInline(line) : ' '}</Text>);
+    blocks.push(<Text key={key++} color={defaultColor}>{line.length ? renderInline(line, muted) : ' '}</Text>);
     i += 1;
   }
 
@@ -75,7 +77,7 @@ export function Markdown({ text }: { text: string }): React.ReactElement {
 const INLINE = /(`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*|_[^_]+_)/g;
 
 /** Split a line into inline-styled segments (code / bold / italic). */
-function renderInline(input: string): React.ReactNode {
+function renderInline(input: string, muted = false): React.ReactNode {
   const text = normalizeMath(input);
   const parts: React.ReactNode[] = [];
   let last = 0;
@@ -86,7 +88,7 @@ function renderInline(input: string): React.ReactNode {
     if (match.index > last) parts.push(text.slice(last, match.index));
     const token = match[0];
     if (token.startsWith('`')) {
-      parts.push(<Text key={key++} color={CODE_COLOR}>{token.slice(1, -1)}</Text>);
+      parts.push(<Text key={key++} color={muted ? DIM : CODE_COLOR}>{token.slice(1, -1)}</Text>);
     } else if (token.startsWith('**')) {
       parts.push(<Text key={key++} bold>{token.slice(2, -2)}</Text>);
     } else {

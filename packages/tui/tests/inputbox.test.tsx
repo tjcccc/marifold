@@ -13,7 +13,7 @@ function renderInput(overrides: Partial<Parameters<typeof InputBox>[0]> = {}) {
     onInterrupt: noop,
     history: [] as string[],
     commands: [{ name: 'help' }, { name: 'chat' }, { name: 'clear' }],
-    skills: [{ name: 'translate' }],
+    skills: [{ name: 'translate' }, { name: 'make-midjourney-prompt' }],
     ...overrides,
   };
   return { onSubmit, ...render(<InputBox {...props} />) };
@@ -119,6 +119,23 @@ describe('InputBox', () => {
     stdin.write('\t');
     await delay();
     expect(lastFrame()).toContain('/chat');
+  });
+
+  it('reopens skill suggestions while editing the head token with existing arguments', async () => {
+    const { stdin, lastFrame } = renderInput();
+    stdin.write('$ #anime1');
+    await delay();
+    stdin.write('\x01'); // Ctrl+A → start
+    await delay();
+    stdin.write('\x1b[C'); // caret immediately after $
+    await delay();
+    stdin.write('make');
+    await delay();
+    expect(lastFrame()).toContain('$make-midjourney-prompt');
+
+    stdin.write('\t');
+    await delay();
+    expect(lastFrame()).toContain('$make-midjourney-prompt #anime1');
   });
 
   it('offers both canonical /resume and its discoverable /session compatibility alias', async () => {

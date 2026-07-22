@@ -263,7 +263,7 @@ describe('AgentRunner', () => {
     const engine = new ScriptedEngine([
       planResponse,
       response({
-        text: '',
+        text: 'I’ll read the file first.',
         toolCalls: [{ id: 'call_0', name: 'read_file', arguments: { path: 'a.txt' } }],
         execution: { provider: 'mock', model: 'test-model', profile: 'default', finishedReason: 'tool_calls' },
       }),
@@ -275,8 +275,15 @@ describe('AgentRunner', () => {
     const types = events.map(e => e.type);
     expect(types).toEqual([
       'status', 'plan',
+      'text',
       'tool_request', 'approval_decision', 'tool_result',
       'text', 'status', 'done',
+    ]);
+
+    const textEvents = events.filter((event): event is Extract<AgentEvent, { type: 'text' }> => event.type === 'text');
+    expect(textEvents).toEqual([
+      { type: 'text', text: 'I’ll read the file first.', phase: 'progress' },
+      { type: 'text', text: 'The file says hello.', phase: 'final' },
     ]);
 
     const done = events[events.length - 1] as Extract<AgentEvent, { type: 'done' }>;

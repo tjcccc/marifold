@@ -23,7 +23,13 @@ export type AgentEvent =
   | { type: 'status'; taskId: string; status: TaskStatus }
   | { type: 'plan'; taskId: string; plan: TaskPlanItem[] }
   | { type: 'step'; taskId: string; stepId: string; text: string; status: TaskStepStatus }
-  | { type: 'text'; text: string }
+  | {
+      type: 'text';
+      text: string;
+      /** `progress` is model commentary before a tool call; `final` is the
+       * completed answer. Omitted events from older clients are final. */
+      phase?: 'progress' | 'final';
+    }
   /** User guidance queued mid-run (`/btw` or a service steer call), emitted
    * when the runner drains it — so every attached client sees it in context. */
   | { type: 'steering'; taskId: string; text: string }

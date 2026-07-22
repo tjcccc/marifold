@@ -8,7 +8,7 @@ export type NoticeTone = 'info' | 'warn' | 'error';
 /** A renderable transcript entry without its assigned id. */
 export type TranscriptItemData =
   | { kind: 'user'; text: string }
-  | { kind: 'assistant'; text: string }
+  | { kind: 'assistant'; text: string; muted?: boolean }
   | { kind: 'notice'; tone: NoticeTone; text: string }
   | { kind: 'plan'; steps: Array<{ id: string; text: string; status: string }> }
   | { kind: 'tool'; tool: string; toolKind?: ToolKind; summary: string; phase: 'request' | 'result'; isError?: boolean; callId?: string }

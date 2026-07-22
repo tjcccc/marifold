@@ -339,6 +339,43 @@ cors_origins = ["http://localhost:5173"] # exact-match browser origins allowed t
 
 With no token resolved, auth is off (bare loopback, the historic default); with no `cors_origins`, cross-origin browser requests are rejected. `marifold service --token/--token-env/--cors-origin` override the config per start. Auth covers `/v1/*`; `/health` and hosted static files stay reachable.
 
+### Service token workflow
+
+The bearer token is an optional, user-chosen shared secret for Marifold's
+`/v1/*` API. It is not a model-provider token, Marifold does not issue one,
+and the API intentionally never reveals its value.
+
+On the machine that runs the service, generate a strong token and keep it in
+the environment used to start Marifold:
+
+```sh
+openssl rand -hex 32
+export MARIFOLD_SERVICE_TOKEN='paste-the-generated-value'
+marifold config set service.token_env MARIFOLD_SERVICE_TOKEN
+marifold service
+```
+
+The `export` above lasts only for that shell. For a persistent service, define
+the variable in its service manager or another appropriate local secret store.
+In the Web UI, open **Connection** from the sidebar and enter the same value in
+**Bearer token**. Leave **Service URL** empty when the Web UI is served by that
+service; the token is stored in that browser's local storage and sent as the
+`Authorization: Bearer …` header.
+
+The token authenticates requests but does not make Marifold remotely
+reachable. The service remains loopback-only. For office-to-home access, keep
+the home service on loopback and create an authenticated tunnel from the office
+machine:
+
+```sh
+ssh -L 32140:127.0.0.1:32140 user@home-host
+```
+
+Then open `http://127.0.0.1:32140` locally and enter the host's token if one is
+configured. Do not expose port 32140 directly to the public internet. See
+[Service API authentication](docs/service-api.md#authentication) for the full
+security behavior.
+
 ## Web UI
 
 `apps/web` is the browser client (Vite + React, see [apps/web/README.md](apps/web/README.md)): the Agent screen renders chat and live agent runs — plan, tool activity, the approval sheet (Allow once / Always allow / Trust folder / Deny), mid-run steering, cancel, and catch-up replay — plus an editable per-profile Config screen (mode, model override, memories/thinking, permissions with inherited-vs-overridden and inherit-reset, trusted folders, PROFILE/RULES/CUSTOM editors, memory Forget/Delete) and light/dark marigold theming from the committed design concept.
