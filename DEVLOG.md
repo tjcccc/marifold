@@ -2,7 +2,7 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
-## 2026-07-22 — v0.46.2 — macOS-style Web application shell
+## 2026-07-22 — v0.47.0 — macOS-style Web application shell
 
 - Replaced the full-width management-style header with a desktop application frame: one primary sidebar and a contextual toolbar owned by the right workspace. The sidebar starts at 256 px, is pointer- and keyboard-resizable from 200 px to 40% of the workspace, and persists the user's width across Agent, Apps, and Settings. Agent/Apps switches only the right content and preserves the active profile/session context.
 - Refined that desktop frame after visual review: the thread toolbar is now a single title row with Agent/Apps at the trailing edge, the root Marifold identity is larger, and Connection opens as a centered modal sheet instead of an unrelated top-right popover.
