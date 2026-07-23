@@ -1,6 +1,9 @@
-import { useLayoutEffect, useRef } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Markdown } from '../../components/Markdown';
+import { CopyButton } from '../../components/CopyButton';
+import { ImagePreviewDialog } from '../../components/ImagePreviewDialog';
+import type { PreviewImage } from '../../components/ImagePreviewDialog';
 import type { RunApprovalAction } from '../../api/types';
 import { splitLeading } from '../../lib/commandSyntax';
 import { formatCostUSD, formatRunDuration, formatTokens } from '../../lib/format';
@@ -14,6 +17,10 @@ export interface ThreadViewProps {
   onCancelRun: (runId: string) => void;
   onAnswerApproval: (runId: string, requestId: string, action: RunApprovalAction) => void;
   onToggleRun: (runId: string) => void;
+  /** Regenerate one user→assistant exchange in place from an inline editor. */
+  onEditUserMessage?: (itemId: string, text: string) => Promise<boolean>;
+  /** Hide new edit affordances while another request is active. */
+  editingDisabled?: boolean;
   /** Increment for an explicit user submission, which always repins the tail. */
   scrollToBottomRequest?: number;
 }
@@ -25,11 +32,15 @@ export function ThreadView({
   onCancelRun,
   onAnswerApproval,
   onToggleRun,
+  onEditUserMessage,
+  editingDisabled = false,
   scrollToBottomRequest = 0,
 }: ThreadViewProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const pinnedRef = useRef(true);
   const scrollRequestRef = useRef(scrollToBottomRequest);
+  const [preview, setPreview] = useState<{ images: PreviewImage[]; index: number }>();
+  const [editingItemId, setEditingItemId] = useState<string>();
 
   useLayoutEffect(() => {
     const node = scrollRef.current;
@@ -71,9 +82,22 @@ export function ThreadView({
             onCancelRun={onCancelRun}
             onAnswerApproval={onAnswerApproval}
             onToggleRun={onToggleRun}
+            onEditUserMessage={onEditUserMessage}
+            editingDisabled={editingDisabled}
+            editing={editingItemId === item.id}
+            onStartEditing={() => setEditingItemId(item.id)}
+            onCancelEditing={() => setEditingItemId(undefined)}
+            onPreviewImages={(images, index) => setPreview({ images, index })}
           />
         ))}
       </div>
+      {preview ? (
+        <ImagePreviewDialog
+          images={preview.images}
+          initialIndex={preview.index}
+          onClose={() => setPreview(undefined)}
+        />
+      ) : null}
     </div>
   );
 }
@@ -85,25 +109,53 @@ function ThreadItemView({
   onCancelRun,
   onAnswerApproval,
   onToggleRun,
+  onEditUserMessage,
+  editingDisabled,
+  editing,
+  onStartEditing,
+  onCancelEditing,
+  onPreviewImages,
 }: {
   item: ThreadItem;
   runs: Map<string, RunCardState>;
   proseRuns: Set<string>;
-} & Pick<ThreadViewProps, 'onCancelRun' | 'onAnswerApproval' | 'onToggleRun'>) {
+  editing: boolean;
+  onStartEditing: () => void;
+  onCancelEditing: () => void;
+  onPreviewImages: (images: PreviewImage[], index: number) => void;
+} & Pick<ThreadViewProps, 'onCancelRun' | 'onAnswerApproval' | 'onToggleRun' | 'onEditUserMessage' | 'editingDisabled'>) {
   switch (item.kind) {
-    case 'user':
+    case 'user': {
+      const previewImages = (item.attachments ?? []).flatMap(attachment =>
+        attachment.kind === 'image' && attachment.previewUrl
+          ? [{ src: attachment.previewUrl, alt: attachment.name }]
+          : [],
+      );
       return (
-        <div className={styles.userTurn}>
+        <div className={`${styles.userTurn} ${editing ? styles.userTurnEditing : ''}`}>
           {item.attachments && item.attachments.length > 0 ? (
             <div className={styles.userAttachments}>
               {item.attachments.map((attachment, index) =>
                 attachment.kind === 'image' && attachment.previewUrl ? (
-                  <img
+                  <button
                     key={index}
-                    className={styles.userImage}
-                    src={attachment.previewUrl}
-                    alt={attachment.name}
-                  />
+                    className={styles.userImageButton}
+                    type="button"
+                    aria-label={`Preview ${attachment.name}`}
+                    onClick={() => onPreviewImages(
+                      previewImages,
+                      item.attachments!
+                        .slice(0, index + 1)
+                        .filter(candidate => candidate.kind === 'image' && candidate.previewUrl)
+                        .length - 1,
+                    )}
+                  >
+                    <img
+                      className={styles.userImage}
+                      src={attachment.previewUrl}
+                      alt={attachment.name}
+                    />
+                  </button>
                 ) : (
                   <span key={index} className={styles.userFile}>
                     <span aria-hidden>📄</span> {attachment.name}
@@ -112,18 +164,63 @@ function ThreadItemView({
               )}
             </div>
           ) : null}
-          <div className={styles.userBubble}>{renderUserText(item.text)}</div>
+          {editing && onEditUserMessage ? (
+            <UserMessageEditor
+              initialText={item.text}
+              onCancel={onCancelEditing}
+              onSubmit={async text => {
+                const replaced = await onEditUserMessage(item.id, text);
+                if (replaced) onCancelEditing();
+                return replaced;
+              }}
+            />
+          ) : (
+            <>
+              <div className={styles.userBubble}>{renderUserText(item.text)}</div>
+              <div className={styles.userActions} role="group" aria-label="Message actions">
+                <CopyButton
+                  text={item.text}
+                  label="Copy prompt"
+                  className={styles.userActionButton}
+                />
+                {onEditUserMessage && !editingDisabled ? (
+                  <button
+                    type="button"
+                    className={styles.userActionButton}
+                    aria-label="Edit and resend message"
+                    title="Edit and resend"
+                    onClick={onStartEditing}
+                  >
+                    <EditGlyph />
+                  </button>
+                ) : null}
+              </div>
+            </>
+          )}
         </div>
       );
+    }
     case 'assistant': {
       const run = item.runId ? runs.get(item.runId) : undefined;
       const progress = item.runPhase === 'progress';
       const meta = run && run.status !== 'running' && !progress ? runMetaText(run) : undefined;
+      const copyable = !progress && !item.streaming && item.markdown.trim().length > 0;
       return (
         <div className={styles.assistant} data-run-phase={item.runPhase}>
           <Markdown source={item.markdown} muted={progress} />
           {item.streaming ? <span className={styles.cursor} aria-hidden /> : null}
-          {meta ? <div className={styles.meta}>{meta}</div> : null}
+          {meta || copyable ? (
+            <div className={styles.responseFooter}>
+              {copyable ? (
+                <CopyButton
+                  text={item.markdown}
+                  label="Copy response"
+                  className={styles.responseCopyButton}
+                />
+              ) : null}
+              {meta ? <div className={styles.meta}>{meta}</div> : null}
+            </div>
+          ) : null}
         </div>
       );
     }
@@ -168,6 +265,93 @@ function ThreadItemView({
       );
     }
   }
+}
+
+function UserMessageEditor({
+  initialText,
+  onCancel,
+  onSubmit,
+}: {
+  initialText: string;
+  onCancel: () => void;
+  onSubmit: (text: string) => Promise<boolean>;
+}) {
+  const [text, setText] = useState(initialText);
+  const [busy, setBusy] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const composingRef = useRef(false);
+
+  useLayoutEffect(() => {
+    const node = textareaRef.current;
+    if (!node) return;
+    node.focus();
+    node.setSelectionRange(node.value.length, node.value.length);
+    autosizeEditor(node);
+  }, []);
+
+  async function submit(): Promise<void> {
+    const value = text.trim();
+    if (!value || busy) return;
+    setBusy(true);
+    const replaced = await onSubmit(value);
+    if (!replaced) setBusy(false);
+  }
+
+  return (
+    <div className={styles.userEditor}>
+      <textarea
+        ref={textareaRef}
+        className={styles.userEditorInput}
+        aria-label="Edit message"
+        value={text}
+        rows={1}
+        disabled={busy}
+        onChange={event => {
+          setText(event.target.value);
+          autosizeEditor(event.currentTarget);
+        }}
+        onCompositionStart={() => { composingRef.current = true; }}
+        onCompositionEnd={() => { composingRef.current = false; }}
+        onKeyDown={event => {
+          if (composingRef.current || event.nativeEvent.isComposing || event.keyCode === 229) return;
+          if (event.key === 'Escape') {
+            event.preventDefault();
+            onCancel();
+          } else if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+            event.preventDefault();
+            void submit();
+          }
+        }}
+      />
+      <div className={styles.userEditorActions}>
+        <button type="button" className={styles.editorCancel} disabled={busy} onClick={onCancel}>
+          Cancel
+        </button>
+        <button
+          type="button"
+          className={styles.editorSend}
+          disabled={busy || text.trim().length === 0}
+          onClick={() => void submit()}
+        >
+          {busy ? 'Sending…' : 'Send'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function autosizeEditor(node: HTMLTextAreaElement): void {
+  node.style.height = 'auto';
+  node.style.height = `${Math.min(node.scrollHeight, 320)}px`;
+}
+
+function EditGlyph() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden focusable="false">
+      <path d="m3 11.8.45-2.25 6.8-6.8a1.35 1.35 0 0 1 1.9 0l1.1 1.1a1.35 1.35 0 0 1 0 1.9l-6.8 6.8L4.2 13 3 11.8Z" stroke="currentColor" strokeWidth="1.25" strokeLinejoin="round" />
+      <path d="m9.5 3.5 3 3M3.5 12.5h9" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
+    </svg>
+  );
 }
 
 /** ChatGPT-style suffix under the run's response: `2s · 512 tokens · $0.01`. */

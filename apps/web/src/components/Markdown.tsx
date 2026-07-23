@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import type { InlineNode, MarkdownBlock } from '../lib/markdown';
 import { parseMarkdown } from '../lib/markdown';
+import { CopyButton } from './CopyButton';
 import styles from './Markdown.module.css';
 
 /** Renders assistant markdown from the lib/markdown token tree — React
@@ -28,9 +29,15 @@ function Block({ block }: { block: MarkdownBlock }) {
     }
     case 'code':
       return (
-        <pre className={styles.code}>
-          <code>{block.text}</code>
-        </pre>
+        <div className={styles.codeBlock}>
+          <div className={styles.codeHeader}>
+            <span>{codeLanguageLabel(block.lang)}</span>
+            <CopyButton text={block.text} label="Copy code" className={styles.copyButton} />
+          </div>
+          <pre className={styles.code}>
+            <code>{block.text}</code>
+          </pre>
+        </div>
       );
     case 'list': {
       const items = block.items.map((item, index) => (
@@ -84,6 +91,34 @@ function Block({ block }: { block: MarkdownBlock }) {
         </p>
       );
   }
+}
+
+const CODE_LANGUAGE_LABELS: Record<string, string> = {
+  bash: 'Bash',
+  css: 'CSS',
+  html: 'HTML',
+  javascript: 'JavaScript',
+  js: 'JavaScript',
+  json: 'JSON',
+  jsx: 'JSX',
+  markdown: 'Markdown',
+  md: 'Markdown',
+  python: 'Python',
+  py: 'Python',
+  shell: 'Shell',
+  sh: 'Shell',
+  sql: 'SQL',
+  ts: 'TypeScript',
+  tsx: 'TSX',
+  typescript: 'TypeScript',
+  xml: 'XML',
+  yaml: 'YAML',
+  yml: 'YAML',
+};
+
+function codeLanguageLabel(language?: string): string {
+  if (!language) return 'Code';
+  return CODE_LANGUAGE_LABELS[language.toLowerCase()] ?? language;
 }
 
 function Inline({ nodes }: { nodes: InlineNode[] }) {

@@ -2,10 +2,11 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { MarifoldRuntime } from '../src';
+import { MarifoldRuntime, SessionResolver } from '../src';
 import { MarifoldConfig } from '../src/config/ConfigSchema';
 
 const tempDirs: string[] = [];
+const TINY_PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl2nGQAAAAASUVORK5CYII=';
 
 function tempDir(): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'marifold-runtime-'));
@@ -69,6 +70,8 @@ describe('MarifoldRuntime', () => {
       const response = await runtime.ask({
         prompt: 'Which editor do I like?',
         sessionId: 'test-session',
+        images: [{ data: TINY_PNG, mediaType: 'image/png' }],
+        originalImages: true,
       });
 
       expect(response.ok).toBe(true);
@@ -83,6 +86,71 @@ describe('MarifoldRuntime', () => {
           profileName: 'default',
           turnCount: 2,
         },
+      ]);
+      expect(runtime.getSession('test-session')?.turns[0]?.attachments).toEqual([
+        { kind: 'image', mediaType: 'image/png', data: TINY_PNG },
+      ]);
+    } finally {
+      runtime.close();
+    }
+  });
+
+  it('regenerates one historical exchange with prefix-only context and preserves the suffix', async () => {
+    const dir = tempDir();
+    const config: MarifoldConfig = {
+      default: {
+        provider: 'ollama',
+        model: 'gemma4:e4b',
+        profile: 'default',
+        think: false,
+      },
+      models: { options: ['ollama/gemma4:e4b'] },
+      memory: { sizeLimit: 50000, contextLimit: 2400 },
+      paths: {
+        profilesDir: path.join(dir, 'profiles'),
+        sessionsDb: path.join(dir, 'sessions.db'),
+        tasksDir: path.join(dir, 'tasks'),
+      },
+      providers: {
+        ollama: { type: 'ollama', baseUrl: 'http://localhost:11434' },
+      },
+    };
+    const sessions = new SessionResolver(config.paths.sessionsDb);
+    await sessions.appendExchange('edit-session', 'default', 'Conversation 1', 'Answer 1');
+    await sessions.appendExchange('edit-session', 'default', 'Conversation 2', 'Answer 2');
+    await sessions.appendExchange('edit-session', 'default', 'Conversation 3', 'Answer 3');
+    sessions.close();
+
+    let requestBody: { messages?: Array<{ role: string; content: string }> } | undefined;
+    vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      requestBody = JSON.parse(String(init?.body));
+      return ollamaStreamResponse(['Updated answer 2']);
+    }));
+    const runtime = new MarifoldRuntime({
+      loadedConfig: {
+        config,
+        configPath: path.join(dir, 'config.toml'),
+        foundConfig: true,
+      },
+    });
+
+    try {
+      const response = await runtime.ask({
+        prompt: 'Updated conversation 2',
+        sessionId: 'edit-session',
+        replaceUserTurnIndex: 1,
+      });
+      expect(response.ok).toBe(true);
+      const modelInput = JSON.stringify(requestBody?.messages ?? []);
+      expect(modelInput).toContain('Conversation 1');
+      expect(modelInput).not.toContain('Conversation 3');
+      expect(runtime.getSession('edit-session')?.turns.map(turn => turn.content)).toEqual([
+        'Conversation 1',
+        'Answer 1',
+        'Updated conversation 2',
+        'Updated answer 2',
+        'Conversation 3',
+        'Answer 3',
       ]);
     } finally {
       runtime.close();

@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { SessionResolver } from '@marifold/core';
 import { createMarifoldService } from '../src';
 import { cleanupTempDirs, fixtureLoadedConfig, ollamaStreamResponse, tempDir } from './helpers';
 
@@ -233,6 +234,88 @@ describe('MarifoldService', () => {
         ok: true,
         text: 'service response',
       });
+    } finally {
+      await server.close();
+    }
+  });
+
+  it('truncates a session from an edited user turn', async () => {
+    const dir = tempDir();
+    const loaded = fixtureLoadedConfig(dir);
+    const sessions = new SessionResolver(loaded.config.paths.sessionsDb);
+    await sessions.appendExchange('session_edit', 'default', 'Conversation 1', 'Answer 1');
+    await sessions.appendExchange('session_edit', 'default', 'Conversation 2', 'Answer 2');
+    await sessions.appendExchange('session_edit', 'default', 'Conversation 3', 'Answer 3');
+    sessions.close();
+
+    const server = createMarifoldService({ loadedConfig: loaded, scheduler: false });
+    try {
+      const response = await server.inject({
+        method: 'POST',
+        url: '/v1/sessions/session_edit/truncate',
+        payload: { fromUserTurnIndex: 1 },
+      });
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({ truncated: true, removedTurns: 4 });
+
+      const detail = await server.inject({ method: 'GET', url: '/v1/sessions/session_edit' });
+      expect(detail.json().session.turns.map((turn: { content: string }) => turn.content)).toEqual([
+        'Conversation 1',
+        'Answer 1',
+      ]);
+
+      const invalid = await server.inject({
+        method: 'POST',
+        url: '/v1/sessions/session_edit/truncate',
+        payload: { fromUserTurnIndex: -1 },
+      });
+      expect(invalid.statusCode).toBe(400);
+    } finally {
+      await server.close();
+    }
+  });
+
+  it('updates durable session display metadata without changing the transcript', async () => {
+    const dir = tempDir();
+    const loaded = fixtureLoadedConfig(dir);
+    const sessions = new SessionResolver(loaded.config.paths.sessionsDb);
+    await sessions.appendExchange('session_display', 'default', 'Original prompt', 'Original answer');
+    sessions.close();
+
+    const server = createMarifoldService({ loadedConfig: loaded, scheduler: false });
+    try {
+      const response = await server.inject({
+        method: 'PATCH',
+        url: '/v1/sessions/session_display',
+        payload: { title: 'Renamed chat', pinned: true },
+      });
+      expect(response.statusCode).toBe(200);
+      expect(response.json().session).toMatchObject({
+        id: 'session_display',
+        title: 'Renamed chat',
+        pinned: true,
+        preview: 'Original prompt',
+      });
+
+      const detail = await server.inject({ method: 'GET', url: '/v1/sessions/session_display' });
+      expect(detail.json().session.turns.map((turn: { content: string }) => turn.content)).toEqual([
+        'Original prompt',
+        'Original answer',
+      ]);
+
+      const missing = await server.inject({
+        method: 'PATCH',
+        url: '/v1/sessions/session_missing',
+        payload: { pinned: true },
+      });
+      expect(missing.statusCode).toBe(404);
+
+      const invalid = await server.inject({
+        method: 'PATCH',
+        url: '/v1/sessions/session_display',
+        payload: { title: '' },
+      });
+      expect(invalid.statusCode).toBe(400);
     } finally {
       await server.close();
     }

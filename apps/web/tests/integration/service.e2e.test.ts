@@ -9,6 +9,7 @@ import { streamChat } from '../../src/api/chat';
 import { createApiClient } from '../../src/api/client';
 import { putProfileFile, updateProfile } from '../../src/api/profiles';
 import { answerApproval, followRun, startRun } from '../../src/api/runs';
+import { getSession } from '../../src/api/sessions';
 import type { AgentEvent } from '../../src/api/types';
 
 /**
@@ -19,6 +20,7 @@ import type { AgentEvent } from '../../src/api/types';
  */
 
 const tempDirs: string[] = [];
+const TINY_PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl2nGQAAAAASUVORK5CYII=';
 
 function tempDir(): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'marifold-web-e2e-'));
@@ -92,13 +94,22 @@ describe('web client ↔ real service', () => {
       const client = createApiClient({ baseUrl: base });
       const chunks: string[] = [];
       let done = false;
-      for await (const event of streamChat(client, { prompt: 'Hi', memories: false })) {
+      for await (const event of streamChat(client, {
+        prompt: 'Hi',
+        memories: false,
+        sessionId: 'image-chat',
+        images: [{ data: TINY_PNG, mediaType: 'image/png' }],
+        originalImages: true,
+      })) {
         if (event.type === 'chunk') chunks.push(event.text);
         if (event.type === 'done') done = true;
         expect(event.type).not.toBe('error');
       }
       expect(chunks.join('')).toBe('Hello from marifold');
       expect(done).toBe(true);
+      expect((await getSession(client, 'image-chat')).turns[0]?.attachments).toEqual([
+        { kind: 'image', mediaType: 'image/png', data: TINY_PNG },
+      ]);
     } finally {
       await server.close();
     }

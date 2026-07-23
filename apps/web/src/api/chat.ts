@@ -8,6 +8,7 @@ export interface ChatRequest {
   provider?: string;
   model?: string;
   sessionId?: string;
+  replaceUserTurnIndex?: number;
   memories?: boolean;
   think?: boolean;
   images?: ImageInput[];

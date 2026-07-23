@@ -206,8 +206,12 @@ export interface SessionSummary {
   createdAt: string;
   updatedAt: string;
   turnCount: number;
+  /** User-assigned display title. This never changes the session id or turns. */
+  title?: string;
+  /** Pinned sessions sort ahead of ordinary sessions in list UIs. */
+  pinned?: boolean;
   /** First user message, whitespace-collapsed and truncated — the session's
-   * display title in list UIs. Absent for sessions without a user turn. */
+   * fallback display title in list UIs. Absent for sessions without a user turn. */
   preview?: string;
 }
 
@@ -215,6 +219,18 @@ export interface SessionTurnSummary {
   role: 'user' | 'assistant';
   content: string;
   timestamp: string;
+  /** Display-only images attached to this user turn. These are returned to
+   * clients on replay but are never injected into later model context. */
+  attachments?: SessionImageAttachment[];
+}
+
+export interface SessionImageAttachment {
+  kind: 'image';
+  mediaType: string;
+  /** Base64-encoded image bytes for local/embedded attachments. */
+  data?: string;
+  /** Original URL for remote image attachments. */
+  url?: string;
 }
 
 export interface SessionDetail extends SessionSummary {

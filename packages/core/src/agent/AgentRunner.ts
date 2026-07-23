@@ -52,6 +52,9 @@ export interface AgentRunOptions {
   /** Conversation session id. When set, a single clean turn pair (the user's
    * text + the final answer) is persisted so the session can be resumed. */
   sessionId?: string;
+  /** Replace this persisted user→assistant exchange in place. Later turns are
+   * preserved and excluded from this run's history context. */
+  replaceUserTurnIndex?: number;
   /** Text to store as the user turn on resume (e.g. the full `$skill …`
    * invocation). Defaults to `objective` when omitted. */
   userTurn?: string;
@@ -113,10 +116,17 @@ export interface AgentRunnerDeps {
   prepareImages?: (images: ImageInput[], optimize: boolean) => Promise<ImageInput[]>;
   /** Persist one clean conversation turn (objective → final answer) to the
    * session, so resuming shows the result without the raw agent framing. */
-  persistTurn?: (sessionId: string, profile: string, userText: string, assistantText: string) => Promise<void>;
+  persistTurn?: (
+    sessionId: string,
+    profile: string,
+    userText: string,
+    assistantText: string,
+    images?: ImageInput[],
+    replaceUserTurnIndex?: number,
+  ) => Promise<void>;
   /** Load the session's clean turns (objective → answer pairs) for bounded
    * cross-objective memory on NON-lean runs. Lean/skill runs stay stateless. */
-  loadRecentTurns?: (sessionId: string) => HistoryTurn[];
+  loadRecentTurns?: (sessionId: string, beforeUserTurnIndex?: number) => HistoryTurn[];
   /** Lazily attach app-owned instructions selected from the objective (for
    * example the built-in skill-manager guide). */
   resolveBuiltInInstructions?: (objective: string, profile: string) => string[];
@@ -194,7 +204,7 @@ export class AgentRunner {
     // session pairs so a NON-lean task can reference prior turns ("save the
     // above prompt"). Lean/skill runs stay stateless (isolated).
     const recentTurns = !options.lean && options.sessionId && this.deps.loadRecentTurns
-      ? this.deps.loadRecentTurns(options.sessionId)
+      ? this.deps.loadRecentTurns(options.sessionId, options.replaceUserTurnIndex)
       : [];
     // Cap to the last N turns when the profile sets session_context_turns — the
     // same turn window chat uses, so the knob means the same thing in both modes.
@@ -308,7 +318,18 @@ export class AgentRunner {
       // Persist a single clean turn pair (objective → final answer) so resuming
       // the session shows the result, not the raw `Objective:`/tool framing.
       if (options.sessionId && this.deps.persistTurn) {
-        await this.deps.persistTurn(options.sessionId, settings.profile, options.userTurn ?? options.objective, finalText);
+        const args = [
+          options.sessionId,
+          settings.profile,
+          options.userTurn ?? options.objective,
+          finalText,
+          runOptions.images,
+        ] as const;
+        if (options.replaceUserTurnIndex === undefined) {
+          await this.deps.persistTurn(...args);
+        } else {
+          await this.deps.persistTurn(...args, options.replaceUserTurnIndex);
+        }
       }
 
       // Complete. No verification phase: a separate self-grading model call was

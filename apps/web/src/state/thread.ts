@@ -55,7 +55,17 @@ export interface UserAttachment {
 }
 
 export type ThreadItem =
-  | { id: string; kind: 'user'; text: string; attachments?: UserAttachment[] }
+  | {
+      id: string;
+      kind: 'user';
+      text: string;
+      attachments?: UserAttachment[];
+      /** Zero-based ordinal among durable session user turns. Live attempts
+       * receive it only after their response is successfully persisted. */
+      sessionUserTurnIndex?: number;
+      /** An earlier persisted exchange is being regenerated in place. */
+      replacing?: boolean;
+    }
   | {
       id: string;
       kind: 'assistant';
@@ -73,13 +83,20 @@ export interface ThreadState {
   items: ThreadItem[];
   /** Finished-while-away runs surfaced by the catch-up banner. */
   catchUp: RunRecord[];
+  /** Finished run records removed by a retry/edit must not reappear in the
+   * catch-up banner while the service still retains them. */
+  discardedRunIds: string[];
   seq: number;
 }
 
 export type ThreadAction =
   | { type: 'reset'; sessionId?: string }
-  | { type: 'session_loaded'; turns: Array<{ role: 'user' | 'assistant'; content: string }> }
+  | {
+      type: 'session_loaded';
+      turns: Array<{ role: 'user' | 'assistant'; content: string; attachments?: UserAttachment[] }>;
+    }
   | { type: 'user_message'; text: string; attachments?: UserAttachment[] }
+  | { type: 'edit_user_message'; itemId: string; text: string; attachments?: UserAttachment[] }
   | { type: 'chat_started' }
   | { type: 'chat_chunk'; text: string }
   | { type: 'chat_done' }
@@ -92,10 +109,11 @@ export type ThreadAction =
   | { type: 'toggle_run_details'; runId: string }
   | { type: 'catch_up'; runs: RunRecord[] }
   | { type: 'dismiss_catch_up' }
+  | { type: 'discard_from'; itemId: string }
   | { type: 'notice'; tone: 'info' | 'warn' | 'error'; text: string };
 
 export function createThreadState(sessionId?: string): ThreadState {
-  return { sessionId, items: [], catchUp: [], seq: 0 };
+  return { sessionId, items: [], catchUp: [], discardedRunIds: [], seq: 0 };
 }
 
 /** True when the run produced something a card must show: tool rows, a plan,
@@ -135,11 +153,17 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
 
     case 'session_loaded': {
       let next = { ...state, items: [] as ThreadItem[] };
+      let userTurnIndex = 0;
       for (const turn of action.turns) {
         next = append(
           next,
           turn.role === 'user'
-            ? { kind: 'user', text: turn.content }
+            ? {
+                kind: 'user',
+                text: turn.content,
+                sessionUserTurnIndex: userTurnIndex++,
+                ...(turn.attachments && turn.attachments.length > 0 ? { attachments: turn.attachments } : {}),
+              }
             : { kind: 'assistant', markdown: turn.content },
         );
       }
@@ -153,14 +177,41 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
         ...(action.attachments && action.attachments.length > 0 ? { attachments: action.attachments } : {}),
       });
 
-    case 'chat_started':
-      return append(state, { kind: 'assistant', markdown: '', streaming: true });
+    case 'edit_user_message': {
+      const index = state.items.findIndex(item => item.id === action.itemId && item.kind === 'user');
+      if (index === -1) return state;
+      const target = state.items[index] as Extract<ThreadItem, { kind: 'user' }>;
+      const nextUserOffset = state.items.slice(index + 1).findIndex(item => item.kind === 'user');
+      const suffixIndex = nextUserOffset === -1 ? state.items.length : index + 1 + nextUserOffset;
+      const replacedItems = state.items.slice(index + 1, suffixIndex);
+      const discardedRunIds = replacedItems.flatMap(item => item.kind === 'run' ? [item.run.runId] : []);
+      const edited: Extract<ThreadItem, { kind: 'user' }> = {
+        ...target,
+        text: action.text,
+        replacing: true,
+        ...(action.attachments !== undefined ? { attachments: action.attachments } : {}),
+      };
+      return {
+        ...state,
+        items: [...state.items.slice(0, index), edited, ...state.items.slice(suffixIndex)],
+        discardedRunIds: [...new Set([...state.discardedRunIds, ...discardedRunIds])],
+      };
+    }
+
+    case 'chat_started': {
+      const replacingIndex = state.items.findIndex(item => item.kind === 'user' && item.replacing);
+      return replacingIndex === -1
+        ? append(state, { kind: 'assistant', markdown: '', streaming: true })
+        : insert(state, replacingIndex + 1, { kind: 'assistant', markdown: '', streaming: true });
+    }
 
     case 'chat_chunk':
       return updateStreamingAssistant(state, item => ({ ...item, markdown: item.markdown + action.text }));
 
     case 'chat_done':
-      return updateStreamingAssistant(state, item => ({ ...item, streaming: false }));
+      return markLatestPendingUserPersisted(
+        updateStreamingAssistant(state, item => ({ ...item, streaming: false })),
+      );
 
     case 'chat_error': {
       const cleared = updateStreamingAssistant(state, item => ({ ...item, streaming: false }));
@@ -169,7 +220,7 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
 
     case 'run_created': {
       if (findRunItem(state, action.run.id)) return state;
-      return append(state, { kind: 'run', run: cardFromRecord(action.run) });
+      return insertRunCard(state, { kind: 'run', run: cardFromRecord(action.run) });
     }
 
     case 'run_event':
@@ -205,7 +256,9 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
 
     case 'catch_up': {
       const unseen = action.runs.filter(
-        run => !findRunItem(state, run.id) && !state.catchUp.some(existing => existing.id === run.id),
+        run => !findRunItem(state, run.id)
+          && !state.discardedRunIds.includes(run.id)
+          && !state.catchUp.some(existing => existing.id === run.id),
       );
       if (unseen.length === 0) return state;
       return { ...state, catchUp: [...state.catchUp, ...unseen] };
@@ -213,6 +266,19 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
 
     case 'dismiss_catch_up':
       return { ...state, catchUp: [] };
+
+    case 'discard_from': {
+      const index = state.items.findIndex(item => item.id === action.itemId);
+      if (index === -1) return state;
+      const discardedRunIds = state.items
+        .slice(index)
+        .flatMap(item => item.kind === 'run' ? [item.run.runId] : []);
+      return {
+        ...state,
+        items: state.items.slice(0, index),
+        discardedRunIds: [...new Set([...state.discardedRunIds, ...discardedRunIds])],
+      };
+    }
 
     case 'notice':
       return append(state, { kind: 'notice', tone: action.tone, text: action.text });
@@ -229,7 +295,7 @@ function applyRunEvent(state: ThreadState, runId: string, seq: number, event: Ag
   // runs started from another client).
   let next = findRunItem(state, runId)
     ? state
-    : append(state, { kind: 'run', run: emptyCard(runId) });
+    : insertRunCard(state, { kind: 'run', run: emptyCard(runId) });
 
   const card = findRunItem(next, runId)!.run;
   if (seq <= card.lastSeq) return state; // replay overlap — drop
@@ -354,6 +420,7 @@ function applyRunEvent(state: ThreadState, runId: string, seq: number, event: Ag
         collapsed: true,
       }));
       next = updateStreamingRunText(next, runId);
+      if (event.status === 'completed') next = markRunUserPersisted(next, runId);
       break;
 
     default:
@@ -373,7 +440,12 @@ function appendRunText(
   runPhase: 'progress' | 'final',
 ): ThreadState {
   const closed = updateStreamingRunText(state, runId);
-  return append(closed, { kind: 'assistant', markdown: text, streaming: true, runId, runPhase });
+  const lastRunItem = closed.items.findLastIndex(
+    item => (item.kind === 'run' && item.run.runId === runId)
+      || (item.kind === 'assistant' && item.runId === runId),
+  );
+  const assistant = { kind: 'assistant' as const, markdown: text, streaming: true, runId, runPhase };
+  return lastRunItem === -1 ? append(closed, assistant) : insert(closed, lastRunItem + 1, assistant);
 }
 
 function updateStreamingRunText(state: ThreadState, runId: string): ThreadState {
@@ -384,6 +456,52 @@ function updateStreamingRunText(state: ThreadState, runId: string): ThreadState 
         ? { ...item, streaming: false }
         : item,
     ),
+  };
+}
+
+function markRunUserPersisted(state: ThreadState, runId: string): ThreadState {
+  const runIndex = state.items.findIndex(item => item.kind === 'run' && item.run.runId === runId);
+  if (runIndex === -1) return state;
+  for (let index = runIndex - 1; index >= 0; index -= 1) {
+    const item = state.items[index];
+    if (item.kind === 'user') return markUserPersisted(state, item.id);
+  }
+  return state;
+}
+
+function markLatestPendingUserPersisted(state: ThreadState): ThreadState {
+  for (let index = state.items.length - 1; index >= 0; index -= 1) {
+    const item = state.items[index];
+    if (item.kind === 'user' && (item.replacing || item.sessionUserTurnIndex === undefined)) {
+      return markUserPersisted(state, item.id);
+    }
+  }
+  return state;
+}
+
+function markUserPersisted(state: ThreadState, itemId: string): ThreadState {
+  const item = state.items.find(candidate => candidate.id === itemId);
+  if (!item || item.kind !== 'user') return state;
+  if (item.sessionUserTurnIndex !== undefined) {
+    if (!item.replacing) return state;
+    return {
+      ...state,
+      items: state.items.map(candidate => candidate.id === itemId
+        ? { ...item, replacing: undefined }
+        : candidate),
+    };
+  }
+  const nextIndex = state.items.reduce(
+    (highest, candidate) => candidate.kind === 'user' && candidate.sessionUserTurnIndex !== undefined
+      ? Math.max(highest, candidate.sessionUserTurnIndex)
+      : highest,
+    -1,
+  ) + 1;
+  return {
+    ...state,
+    items: state.items.map(candidate => candidate.id === itemId
+      ? { ...item, sessionUserTurnIndex: nextIndex }
+      : candidate),
   };
 }
 
@@ -399,6 +517,27 @@ function append(state: ThreadState, item: NewThreadItem): ThreadState {
     seq,
     items: [...state.items, { ...item, id: `item_${seq}` } as ThreadItem],
   };
+}
+
+function insert(state: ThreadState, index: number, item: NewThreadItem): ThreadState {
+  const seq = state.seq + 1;
+  return {
+    ...state,
+    seq,
+    items: [
+      ...state.items.slice(0, index),
+      { ...item, id: `item_${seq}` } as ThreadItem,
+      ...state.items.slice(index),
+    ],
+  };
+}
+
+function insertRunCard(
+  state: ThreadState,
+  item: Extract<NewThreadItem, { kind: 'run' }>,
+): ThreadState {
+  const replacingIndex = state.items.findIndex(candidate => candidate.kind === 'user' && candidate.replacing);
+  return replacingIndex === -1 ? append(state, item) : insert(state, replacingIndex + 1, item);
 }
 
 function findRunItem(state: ThreadState, runId: string): Extract<ThreadItem, { kind: 'run' }> | undefined {

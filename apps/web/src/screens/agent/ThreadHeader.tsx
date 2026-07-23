@@ -1,12 +1,9 @@
-import type { ReactNode } from 'react';
 import type { WorkspaceView } from '../../components/WorkspaceTabs';
 import { WorkspaceToolbar } from '../../components/WorkspaceToolbar';
 import styles from './ThreadHeader.module.css';
 
 export interface ThreadHeaderProps {
   sessionTitle: string;
-  /** Rendered avatar node (the screen owns the client wiring). */
-  avatar?: ReactNode;
   sidebarsHidden: boolean;
   onToggleSidebars: () => void;
   view: WorkspaceView;
@@ -16,7 +13,6 @@ export interface ThreadHeaderProps {
 /** Right-workspace toolbar: sidebar toggle, location, and Agent/Apps switch. */
 export function ThreadHeader({
   sessionTitle,
-  avatar,
   sidebarsHidden,
   onToggleSidebars,
   view,
@@ -37,7 +33,6 @@ export function ThreadHeader({
           >
             <SidebarGlyph />
           </button>
-          {avatar}
           <div className={styles.session}>{sessionTitle}</div>
         </>
       )}

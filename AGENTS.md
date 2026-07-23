@@ -12,7 +12,9 @@ v0.40–v0.44.x add the `xai` provider (SuperGrok subscription OAuth against `ap
 
 v0.45.x adds lazy built-in `$skill-manager` guidance for ordinary agent prompts that mention skills, with multilingual detection and resolved profile/global paths shared across TUI, CLI, service, channels, and Web UI agent runs.
 
-v0.46.x adds shared image validation and request optimization across TUI, CLI, service, and Web UI paths, including conservative resizing/encoding, attachment limits, browser-side preprocessing, and the one-turn `/attach-original` bypass. v0.46.1 fixes Web UI Markdown tables, composer autocomplete caret alignment, and immediate/durable new-session sidebar updates. v0.47.0 adds the macOS-style desktop shell, clean routes, progress/final response emphasis, and caret-aware completion with existing arguments; v0.47.1 fixes explicit Markdown hard breaks and submit-time transcript following.
+v0.46.x adds shared image validation and request optimization across TUI, CLI, service, and Web UI paths, including conservative resizing/encoding, attachment limits, browser-side preprocessing, and the one-turn `/attach-original` bypass. v0.46.1 fixes Web UI Markdown tables, composer autocomplete caret alignment, and immediate/durable new-session sidebar updates. v0.47.x adds the macOS-style desktop shell, clean routes, progress/final response emphasis, caret-aware completion with existing arguments, explicit Markdown hard breaks, and submit-time transcript following.
+
+v0.48.x adds durable transcript image replay and galleries, response/code copying, IME-safe composer behavior, in-place historical prompt regeneration that preserves later exchanges, and persistent session rename/pin/delete controls.
 
 ## Stack
 

@@ -50,6 +50,67 @@ describe('threadReducer', () => {
 
     state = reduce(state, { type: 'chat_done' });
     expect(state.items[3]).toMatchObject({ streaming: false });
+    expect(state.items[2]).toMatchObject({ kind: 'user', sessionUserTurnIndex: 1 });
+  });
+
+  it('replays durable image thumbnails with their user turn', () => {
+    const state = reduce(createThreadState('sess-1'), {
+      type: 'session_loaded',
+      turns: [{
+        role: 'user',
+        content: 'What is this?',
+        attachments: [{ kind: 'image', name: 'Image 1', previewUrl: 'data:image/png;base64,AAA' }],
+      }],
+    });
+    expect(state.items[0]).toMatchObject({
+      kind: 'user',
+      sessionUserTurnIndex: 0,
+      attachments: [{ kind: 'image', name: 'Image 1', previewUrl: 'data:image/png;base64,AAA' }],
+    });
+  });
+
+  it('regenerates an edited exchange in place while preserving later turns', () => {
+    let state = reduce(createThreadState('sess-1'), {
+      type: 'session_loaded',
+      turns: [
+        { role: 'user', content: 'Conversation 1' },
+        { role: 'assistant', content: 'Answer 1' },
+        { role: 'user', content: 'Conversation 2' },
+        { role: 'assistant', content: 'Answer 2' },
+        { role: 'user', content: 'Conversation 3' },
+        { role: 'assistant', content: 'Answer 3' },
+      ],
+    });
+    const target = state.items.find(item => item.kind === 'user' && item.text === 'Conversation 2');
+    if (!target) throw new Error('missing editable turn');
+
+    state = reduce(
+      state,
+      { type: 'edit_user_message', itemId: target.id, text: 'Updated conversation 2' },
+      { type: 'run_created', run: { ...record, objective: 'Updated conversation 2' } },
+      ...runEvents('run_1', [
+        { type: 'text', text: 'Updated answer 2', phase: 'final' },
+        { type: 'done', taskId: 'task_edit', status: 'completed' },
+      ]),
+    );
+
+    expect(state.items.flatMap(item => {
+      if (item.kind === 'user') return [`user:${item.text}`];
+      if (item.kind === 'assistant') return [`assistant:${item.markdown}`];
+      return [];
+    })).toEqual([
+      'user:Conversation 1',
+      'assistant:Answer 1',
+      'user:Updated conversation 2',
+      'assistant:Updated answer 2',
+      'user:Conversation 3',
+      'assistant:Answer 3',
+    ]);
+    expect(state.items.find(item => item.id === target.id)).toMatchObject({
+      kind: 'user',
+      sessionUserTurnIndex: 1,
+      replacing: undefined,
+    });
   });
 
   it('chat errors close the streaming turn and add a notice', () => {
@@ -212,6 +273,47 @@ describe('threadReducer', () => {
     // Empty lists stay off the item entirely.
     const bare = reduce(createThreadState(), { type: 'user_message', text: 'hi', attachments: [] });
     expect('attachments' in bare.items[0]).toBe(false);
+  });
+
+  it('discards a cancelled UI branch before an edited prompt is resent', () => {
+    const state = reduce(
+      createThreadState(),
+      { type: 'user_message', text: 'Earlier prompt' },
+      { type: 'run_created', run: { ...record, status: 'completed' } },
+      { type: 'user_message', text: 'Mistyped prompt' },
+      { type: 'run_created', run: { ...record, id: 'run_2', status: 'cancelled' } },
+      { type: 'notice', tone: 'info', text: 'cancelled' },
+    );
+    const editedItem = state.items.find(item => item.kind === 'user' && item.text === 'Mistyped prompt');
+    if (!editedItem) throw new Error('missing edited user item');
+
+    const discarded = reduce(state, { type: 'discard_from', itemId: editedItem.id });
+
+    expect(discarded.items.map(item => item.kind)).toEqual(['user', 'run']);
+    expect(discarded.items.some(item => item.kind === 'user' && item.text === 'Mistyped prompt')).toBe(false);
+    expect(discarded.discardedRunIds).toEqual(['run_2']);
+    const caughtUp = reduce(discarded, {
+      type: 'catch_up',
+      runs: [{ ...record, id: 'run_2', status: 'cancelled' }],
+    });
+    expect(caughtUp.catchUp).toEqual([]);
+  });
+
+  it('assigns durable user-turn ordinals only to successfully completed attempts', () => {
+    let state = reduce(
+      createThreadState(),
+      { type: 'user_message', text: 'Cancelled prompt' },
+      { type: 'run_created', run: record },
+      ...runEvents('run_1', [{ type: 'done', taskId: 't1', status: 'cancelled' }]),
+      { type: 'user_message', text: 'Completed prompt' },
+      { type: 'run_created', run: { ...record, id: 'run_2' } },
+      ...runEvents('run_2', [{ type: 'done', taskId: 't2', status: 'completed' }]),
+    );
+    const users = state.items.filter(
+      (item): item is Extract<ThreadState['items'][number], { kind: 'user' }> => item.kind === 'user',
+    );
+    expect(users[0].sessionUserTurnIndex).toBeUndefined();
+    expect(users[1].sessionUserTurnIndex).toBe(0);
   });
 
   it('classifies trivial runs: completed without activity, never failed ones', () => {

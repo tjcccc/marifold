@@ -43,7 +43,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 650;
 }
 
@@ -93,12 +93,10 @@
 
 .row,
 .rowSelected {
+  position: relative;
   display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 8px 10px;
+  align-items: center;
   border-radius: var(--radius-md);
-  text-align: left;
 }
 
 .row:hover {
@@ -109,17 +107,205 @@
   background: var(--brand-tint);
 }
 
+.rowMain {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 34px 8px 10px;
+  text-align: left;
+}
+
+.titleLine {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .title {
-  font-size: 13px;
+  min-width: 0;
+  font-size: 14px;
   font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
+.pinIndicator {
+  flex: 0 0 auto;
+  width: 15px;
+  height: 15px;
+  color: var(--text-3);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .sub {
   font-size: 11.5px;
   color: var(--text-3);
+}
+
+.moreButton {
+  position: absolute;
+  top: 50%;
+  right: 7px;
+  width: 26px;
+  height: 26px;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 7px;
+  color: var(--text-2);
+  opacity: 0;
+}
+
+.row:hover .moreButton,
+.rowSelected .moreButton,
+.moreButton:focus-visible,
+.moreButton[aria-expanded='true'] {
+  opacity: 1;
+}
+
+.moreButton:hover {
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+  color: var(--text);
+}
+
+.actionMenu {
+  position: fixed;
+  z-index: 80;
+  width: 184px;
+  padding: 5px;
+  background: var(--surface);
+  border: 1px solid var(--separator);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sheet);
+}
+
+.menuItem,
+.menuItemDanger {
+  width: 100%;
+  min-height: 34px;
+  padding: 6px 8px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  border-radius: 7px;
+  text-align: left;
+  font-size: 13px;
+}
+
+.menuItem:hover {
+  background: var(--separator-soft);
+}
+
+.menuItemDanger {
+  color: var(--danger);
+}
+
+.menuItemDanger:hover {
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+}
+
+.menuItem:disabled,
+.menuItemDanger:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.menuSeparator {
+  height: 1px;
+  margin: 4px 3px;
+  background: var(--separator);
+}
+
+.dialogBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: color-mix(in srgb, #000 36%, transparent);
+  backdrop-filter: blur(1px);
+}
+
+.dialog {
+  width: min(380px, 100%);
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  background: var(--surface);
+  border: 1px solid var(--separator);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sheet);
+}
+
+.dialogTitle {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.dialogDescription {
+  color: var(--text-2);
+  font-size: 13px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.renameInput {
+  width: 100%;
+  padding: 8px 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--separator);
+  border-radius: var(--radius-sm);
+}
+
+.renameInput:focus {
+  outline: 2px solid var(--brand-tint);
+  border-color: var(--brand-fill);
+}
+
+.dialogActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.dialogCancel,
+.dialogPrimary,
+.dialogDelete {
+  min-width: 76px;
+  padding: 7px 13px;
+  border-radius: 8px;
+  font-weight: 600;
+}
+
+.dialogCancel {
+  color: var(--text-2);
+  background: var(--surface-2);
+}
+
+.dialogPrimary {
+  color: var(--on-brand);
+  background: var(--brand-fill);
+}
+
+.dialogDelete {
+  color: white;
+  background: var(--danger);
+}
+
+.dialogCancel:disabled,
+.dialogPrimary:disabled,
+.dialogDelete:disabled {
+  opacity: 0.55;
+  cursor: default;
 }
 
 @keyframes sidebarPushIn {

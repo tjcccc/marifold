@@ -2,6 +2,15 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-07-23 — v0.48.0 — Durable Web transcript and session controls
+
+- Web transcript images now survive session reloads as display-only attachments, open in a large dimmed preview, and support previous/next navigation for multi-image messages. Composer attachment thumbnails use the same preview before submission; none of these display assets are injected into later model context.
+- Historical user prompts now expose hover-only copy/edit actions. Editing regenerates the selected user→assistant exchange from only its preceding context and replaces it in place, preserving all later exchanges and stable transcript order instead of truncating the session or appending a misleading new turn.
+- Added ChatGPT-style response and fenced-code copying, code-block language headers, 16 px transcript text, 14 px sidebar text, and a title-only thread header. Composer fixes prevent Enter during CJK IME composition from submitting and keep the caret/typed closing fence visible after pasting long JSON/code.
+- Session rows now expose Rename, Pin/Unpin, and confirmed Delete actions. Custom titles and pin state persist in a Marifold-owned companion table so a later Priest model save cannot overwrite them; pinned rows sort first without changing transcript recency or `--resume last`.
+- Extended the service/core contract for display-only image replay, in-place historical exchange replacement, and sidebar display metadata. Updated the API documentation and added regression coverage across core, service, Web state, controller, input, transcript, and component flows.
+- Verified with the full workspace `typecheck && build && test` gate (496 tests: core 258, service 40, TUI 50, CLI 10, Web 138). The rebuilt loopback service passed `/health`; live visual browser automation was unavailable in this environment, while the interaction-level component tests passed.
+
 ## 2026-07-22 — v0.47.1 — Web conversation rendering and follow behavior
 
 - Web Markdown now honors explicit hard breaks (`two trailing spaces` or `\\` before a newline) without converting ordinary soft line wraps into `<br>` elements.

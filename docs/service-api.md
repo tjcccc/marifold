@@ -167,9 +167,11 @@ Memory **content** authoring stays model-driven (`memory_save` blocks) — there
 
 | Route | Returns |
 |---|---|
-| `GET /v1/sessions?limit=&profile=` | Recent sessions (default limit 50). Each summary carries `preview?` — the first user message, whitespace-collapsed and truncated to ~80 chars — for use as a display title; absent when the session has no user turn |
-| `GET /v1/sessions/:id` | Session detail with turns; 404 `SESSION_NOT_FOUND` |
+| `GET /v1/sessions?limit=&profile=` | Recent sessions (default limit 50), with pinned sessions first. Each summary may carry sidebar-only `title?` and `pinned?`, plus `preview?` — the first user message, whitespace-collapsed and truncated to ~80 chars — as the fallback display title |
+| `GET /v1/sessions/:id` | Session detail with the same display metadata and all turns. User turns may include display-only `attachments?: [{ kind: "image", mediaType, data?, url? }]`; embedded `data` is base64 and exactly one of `data`/`url` is present. These attachments are not replayed into later model context. 404 `SESSION_NOT_FOUND` |
+| `PATCH /v1/sessions/:id` | Update sidebar-only metadata with `{ title?: string \| null, pinned?: boolean }`. `null` clears a custom title. Does not change the session id, transcript, model context, or conversation recency. Returns the updated session; 404 `SESSION_NOT_FOUND` |
 | `DELETE /v1/sessions/:id` | `{ deleted: boolean }` |
+| `POST /v1/sessions/:id/truncate` | Low-level destructive operation: body `{ fromUserTurnIndex }` deletes that user turn and everything after it. The Web UI does **not** use this for prompt editing. Returns `{ truncated, removedTurns }`; 404 `SESSION_NOT_FOUND` |
 
 ### Chat
 
@@ -186,6 +188,12 @@ Only `prompt` is required. Returns `{ response: { ok, text, settings, latencyMs?
 
 **`POST /v1/chat/stream`** — same body; SSE response (see conventions above).
 Pass `sessionId` to continue a conversation; sessions are created on demand.
+To regenerate a historical exchange, also pass `replaceUserTurnIndex` (zero
+based among persisted user turns). The model receives only the earlier prefix;
+the selected user/assistant pair is replaced in place and later turns remain.
+Embedded/URL image sources are retained beside their user turn so clients can
+restore transcript thumbnails after navigation or reload; local filesystem
+paths are never exposed through this API.
 
 ### Agent runs (live layer)
 
@@ -200,7 +208,8 @@ The run itself is ephemeral in-service state; its durable record is a task
 ```json
 { "objective": "Summarize ~/notes into notes.md",
   "profile": "default", "provider": "ollama", "model": "gemma4:e4b",
-  "sessionId": "abc", "cwd": "/Users/me/project", "think": false,
+  "sessionId": "abc", "replaceUserTurnIndex": 1,
+  "cwd": "/Users/me/project", "think": false,
   "originalImages": false,
   "images": [{ "data": "<base64>", "mediaType": "image/png" }, { "url": "https://..." }],
   "instructions": ["Write in English."], "maxIterations": 20,
@@ -211,6 +220,10 @@ Only `objective` is required. `images` follow the same shape as chat/ask
 (base64 `{data, mediaType}` or URL; exactly one of `data`/`url` per entry)
 and are attached to the objective on the first model turn. The service
 accepts JSON bodies up to 25 MiB to make room for base64 payloads. Returns the **RunRecord**:
+
+With `sessionId`, optional `replaceUserTurnIndex` regenerates that historical
+exchange using only its earlier prefix as context, then replaces it in place;
+later exchanges retain their original order.
 
 Local and base64 images are decoded and validated in core, limited to four and
 16 MiB aggregate source bytes, MIME-corrected, and optimized before the provider

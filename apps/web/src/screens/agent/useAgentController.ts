@@ -6,12 +6,19 @@ import { getModels, getSkills } from '../../api/misc';
 import type { SkillHint } from '../../api/misc';
 import { deleteMemory, getProfile, listMemories, listProfiles, rememberMemory, updateProfile } from '../../api/profiles';
 import { answerApproval, cancelRun, listRuns, startRun, steerRun } from '../../api/runs';
-import { compactSession, getSession, listSessions } from '../../api/sessions';
+import {
+  compactSession,
+  deleteSession as deleteSessionRequest,
+  getSession,
+  listSessions,
+  updateSession,
+} from '../../api/sessions';
 import type {
   ProfileDetail,
   ProfileSummary,
   RunApprovalAction,
   RunRecord,
+  SessionImageAttachment,
   SessionSummary,
 } from '../../api/types';
 import type { Route } from '../../lib/route';
@@ -55,11 +62,15 @@ export interface AgentController {
   addFiles: (files: Iterable<File>) => Promise<void>;
   removeAttachment: (index: number) => void;
   send: (text: string) => Promise<void>;
+  resendEdited: (userItemId: string, text: string) => Promise<boolean>;
   refreshProfiles: () => Promise<void>;
   showProfiles: () => void;
   selectProfile: (name: string) => void;
   selectSession: (id: string) => void;
   newSession: () => void;
+  renameSession: (id: string, title: string) => Promise<boolean>;
+  setSessionPinned: (id: string, pinned: boolean) => Promise<boolean>;
+  deleteSession: (id: string) => Promise<boolean>;
   cancel: (runId: string) => Promise<void>;
   answer: (runId: string, requestId: string, action: RunApprovalAction) => Promise<void>;
   toggleRun: (runId: string) => void;
@@ -95,8 +106,17 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
   const profileName = route.profile;
 
   const refreshSessionsRef = useRef<() => void>(() => undefined);
+  const reloadSessionRef = useRef<() => void>(() => undefined);
+  const editedRunIdsRef = useRef(new Set<string>());
+  const ignoredFinishedRunIdsRef = useRef(new Set<string>());
   const followers = useMemo(
-    () => new RunFollowers(client, dispatch, () => refreshSessionsRef.current()),
+    () => new RunFollowers(client, dispatch, runId => {
+      refreshSessionsRef.current();
+      if (editedRunIdsRef.current.delete(runId)) {
+        ignoredFinishedRunIdsRef.current.add(runId);
+        reloadSessionRef.current();
+      }
+    }),
     [client],
   );
   useEffect(() => () => followers.stopAll(), [followers]);
@@ -120,7 +140,9 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
   const catchUpRuns = useCallback(
     async (forSession: string) => {
       const runs = await listRuns(client);
-      const mine = runs.filter(run => run.sessionId === forSession);
+      const mine = runs.filter(
+        run => run.sessionId === forSession && !ignoredFinishedRunIdsRef.current.has(run.id),
+      );
       const finished: RunRecord[] = [];
       for (const run of mine) {
         if (run.status === 'running') followers.attach(run.id);
@@ -142,7 +164,13 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
         const detail = await getSession(client, id);
         dispatch({
           type: 'session_loaded',
-          turns: detail.turns.map(turn => ({ role: turn.role, content: turn.content })),
+          turns: detail.turns.map(turn => ({
+            role: turn.role,
+            content: turn.content,
+            ...(turn.attachments && turn.attachments.length > 0
+              ? { attachments: toUserAttachments(turn.attachments) }
+              : {}),
+          })),
         });
       } catch (error) {
         // A freshly minted id has no server session yet — that's expected.
@@ -250,6 +278,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
     }
   }, [client, profileName]);
   refreshSessionsRef.current = () => { void refreshSessions(); };
+  reloadSessionRef.current = () => { if (sessionId) void loadSession(sessionId); };
 
   const selectProfile = useCallback(
     (name: string) => {
@@ -291,6 +320,51 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
     navigate({ view: 'agent', profile: profileName, session: id });
   }, [profileName, followers, navigate]);
 
+  const replaceSessionSummary = useCallback((updated: SessionSummary) => {
+    setSessions(current => current
+      .map(session => session.id === updated.id ? updated : session)
+      .sort((a, b) => Number(Boolean(b.pinned)) - Number(Boolean(a.pinned))
+        || b.updatedAt.localeCompare(a.updatedAt)));
+  }, []);
+
+  const renameSession = useCallback(async (id: string, title: string): Promise<boolean> => {
+    try {
+      replaceSessionSummary(await updateSession(client, id, { title }));
+      return true;
+    } catch (error) {
+      handleError(error);
+      return false;
+    }
+  }, [client, handleError, replaceSessionSummary]);
+
+  const setSessionPinned = useCallback(async (id: string, pinned: boolean): Promise<boolean> => {
+    try {
+      replaceSessionSummary(await updateSession(client, id, { pinned }));
+      return true;
+    } catch (error) {
+      handleError(error);
+      return false;
+    }
+  }, [client, handleError, replaceSessionSummary]);
+
+  const deleteSession = useCallback(async (id: string): Promise<boolean> => {
+    try {
+      if (!await deleteSessionRequest(client, id)) return false;
+      setSessions(current => current.filter(session => session.id !== id));
+      if (id === sessionId && profileName) {
+        followers.stopAll();
+        setSessionId(undefined);
+        setAttachments([]);
+        dispatch({ type: 'reset' });
+        navigate({ view: 'agent', profile: profileName });
+      }
+      return true;
+    } catch (error) {
+      handleError(error);
+      return false;
+    }
+  }, [client, followers, handleError, navigate, profileName, sessionId]);
+
   const addFiles = useCallback(async (files: Iterable<File>) => {
     const result = await prepareFiles(files, attachmentsRef.current);
     for (const reason of result.rejected) {
@@ -307,17 +381,26 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
   // agent). Extracted so /retry can re-run a message and send() can dispatch to
   // it after command handling. Moved verbatim — no behavior change.
   const sendMessage = useCallback(
-    async (trimmed: string, options: { originalImages?: boolean } = {}) => {
-      if (!profileName) return;
+    async (
+      trimmed: string,
+      options: {
+        originalImages?: boolean;
+        attachments?: PreparedAttachment[];
+        replaceUserTurnIndex?: number;
+        replaceItemId?: string;
+      } = {},
+    ): Promise<boolean> => {
+      if (!profileName) return false;
 
       const running = activeRun(threadRef.current);
       if (running) {
         try {
           await steerRun(client, running.runId, trimmed);
+          return true;
         } catch (error) {
           handleError(error);
+          return false;
         }
-        return;
       }
 
       let sid = sessionId;
@@ -329,7 +412,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
 
       // Consume the pending attachments: images ride the request natively,
       // text files are inlined into the prompt as fenced blocks.
-      const pending = attachmentsRef.current;
+      const pending = options.attachments ?? attachmentsRef.current;
       if (options.originalImages) {
         const originalBytes = pending.reduce(
           (sum, item) => sum + (item.kind === 'image' ? (item.originalSize ?? item.size) : item.size),
@@ -341,10 +424,10 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
             tone: 'warn',
             text: `/attach-original attachments exceed the ${MAX_TOTAL_BYTES / (1024 * 1024)} MiB request limit.`,
           });
-          return;
+          return false;
         }
       }
-      setAttachments([]);
+      if (options.attachments === undefined) setAttachments([]);
       const imageAttachments = pending.filter(
         (item): item is Extract<PreparedAttachment, { kind: 'image' }> => item.kind === 'image',
       );
@@ -363,23 +446,34 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
           : { kind: 'text', name: item.name },
       );
 
-      dispatch({ type: 'user_message', text: trimmed, attachments: bubbleAttachments });
-      setSessions(current => withPendingSession(current, {
-        id: sid,
-        profileName,
-        prompt: trimmed,
-      }));
+      if (options.replaceItemId) {
+        dispatch({
+          type: 'edit_user_message',
+          itemId: options.replaceItemId,
+          text: trimmed,
+          attachments: bubbleAttachments,
+        });
+      } else {
+        dispatch({ type: 'user_message', text: trimmed, attachments: bubbleAttachments });
+        setSessions(current => withPendingSession(current, {
+          id: sid,
+          profileName,
+          prompt: trimmed,
+        }));
+      }
       const [provider, model] = splitModelChoice(modelChoice);
       const mode = profileDetail?.settings.mode ?? 'agent';
 
       if (mode === 'chat') {
         setSending(true);
         dispatch({ type: 'chat_started' });
+        let completed = true;
         try {
           for await (const event of streamChat(client, {
             prompt,
             profile: profileName,
             sessionId: sid,
+            replaceUserTurnIndex: options.replaceUserTurnIndex,
             think,
             provider,
             model,
@@ -387,17 +481,22 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
             ...(options.originalImages ? { originalImages: true } : {}),
           })) {
             if (event.type === 'chunk') dispatch({ type: 'chat_chunk', text: event.text });
-            else if (event.type === 'error') dispatch({ type: 'chat_error', message: event.message });
+            else if (event.type === 'error') {
+              completed = false;
+              dispatch({ type: 'chat_error', message: event.message });
+            }
             else dispatch({ type: 'chat_done' });
           }
+          return completed;
         } catch (error) {
           dispatch({ type: 'chat_done' });
           handleError(error);
+          return false;
         } finally {
           setSending(false);
           void refreshSessions();
+          if (options.replaceUserTurnIndex !== undefined) void loadSession(sid);
         }
-        return;
       }
 
       try {
@@ -406,6 +505,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
           objective: prompt,
           profile: profileName,
           sessionId: sid,
+          replaceUserTurnIndex: options.replaceUserTurnIndex,
           think,
           provider,
           model,
@@ -413,15 +513,19 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
           ...(options.originalImages ? { originalImages: true } : {}),
         });
         dispatch({ type: 'run_created', run });
+        if (options.replaceUserTurnIndex !== undefined) editedRunIdsRef.current.add(run.id);
         followers.attach(run.id);
+        return true;
       } catch (error) {
         handleError(error);
         void refreshSessions();
+        if (options.replaceUserTurnIndex !== undefined) void loadSession(sid);
+        return false;
       } finally {
         setSending(false);
       }
     },
-    [client, profileName, sessionId, modelChoice, think, profileDetail, followers, navigate, handleError, refreshSessions],
+    [client, profileName, sessionId, modelChoice, think, profileDetail, followers, navigate, handleError, refreshSessions, loadSession],
   );
 
   const runCommand = useCallback(
@@ -579,6 +683,52 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
     [profileName, runCommand, sendMessage],
   );
 
+  const resendEdited = useCallback(
+    async (userItemId: string, text: string) => {
+      const trimmed = text.trim();
+      if (!trimmed) return false;
+      const items = threadRef.current.items;
+      const itemIndex = items.findIndex(item => item.id === userItemId);
+      const target = items[itemIndex];
+      if (itemIndex === -1 || !target || target.kind !== 'user') {
+        dispatch({ type: 'notice', tone: 'warn', text: 'That message is no longer available to edit.' });
+        return false;
+      }
+
+      const priorPersistedUsers = items.slice(0, itemIndex).filter(
+        item => item.kind === 'user' && item.sessionUserTurnIndex !== undefined,
+      ).length;
+      const fromUserTurnIndex = target.sessionUserTurnIndex ?? priorPersistedUsers;
+      const durable = target.sessionUserTurnIndex !== undefined;
+      const restoredAttachments = preparedAttachmentsFromUser(target.attachments);
+
+      setSending(true);
+      try {
+        if (durable && !sessionId) throw new Error('Cannot edit durable history without a session.');
+        if ((target.attachments?.length ?? 0) > restoredAttachments.length) {
+          dispatch({
+            type: 'notice',
+            tone: 'warn',
+            text: 'Only retained image attachments could be included with the edited message.',
+          });
+        }
+        if (!durable) dispatch({ type: 'discard_from', itemId: userItemId });
+        const sent = await sendMessage(trimmed, {
+          attachments: restoredAttachments,
+          ...(durable ? { replaceUserTurnIndex: fromUserTurnIndex, replaceItemId: userItemId } : {}),
+        });
+        if (!sent && durable && sessionId) await loadSession(sessionId);
+        return sent;
+      } catch (error) {
+        handleError(error);
+        return false;
+      } finally {
+        setSending(false);
+      }
+    },
+    [sessionId, sendMessage, loadSession, handleError],
+  );
+
   const cancel = useCallback(
     async (runId: string) => {
       try {
@@ -646,17 +796,60 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
     addFiles,
     removeAttachment,
     send,
+    resendEdited,
     refreshProfiles,
     showProfiles,
     selectProfile,
     selectSession,
     newSession,
+    renameSession,
+    setSessionPinned,
+    deleteSession,
     cancel,
     answer,
     toggleRun,
     expandCatchUp,
     dismissCatchUp,
   };
+}
+
+function parseImageDataUrl(url: string): { mediaType: string; data: string } | undefined {
+  const match = /^data:(image\/(?:png|jpeg|webp|gif));base64,(.*)$/s.exec(url);
+  return match ? { mediaType: match[1], data: match[2] } : undefined;
+}
+
+function base64ByteLength(data: string): number {
+  const padding = data.endsWith('==') ? 2 : data.endsWith('=') ? 1 : 0;
+  return Math.max(0, Math.floor(data.length * 3 / 4) - padding);
+}
+
+function preparedAttachmentsFromUser(items?: UserAttachment[]): PreparedAttachment[] {
+  return (items ?? []).flatMap(attachment => {
+    if (attachment.kind !== 'image' || !attachment.previewUrl) return [];
+    const parsed = parseImageDataUrl(attachment.previewUrl);
+    if (!parsed) return [];
+    const size = base64ByteLength(parsed.data);
+    return [{
+      kind: 'image' as const,
+      name: attachment.name,
+      size,
+      originalSize: size,
+      optimized: false,
+      data: parsed.data,
+      mediaType: parsed.mediaType,
+    }];
+  });
+}
+
+function toUserAttachments(attachments: SessionImageAttachment[]): UserAttachment[] {
+  return attachments.flatMap((attachment, index) => {
+    const previewUrl = attachment.data
+      ? `data:${attachment.mediaType};base64,${attachment.data}`
+      : attachment.url;
+    return previewUrl
+      ? [{ kind: 'image' as const, name: `Image ${index + 1}`, previewUrl }]
+      : [];
+  });
 }
 
 function splitModelChoice(choice?: string): [string | undefined, string | undefined] {

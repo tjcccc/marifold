@@ -121,4 +121,236 @@ describe('useAgentController session lifecycle', () => {
     act(() => releaseStream());
     await waitFor(() => expect(result.current.sessions[0]).toEqual(durable));
   });
+
+  it('rehydrates persisted image thumbnails when a session is reopened', async () => {
+    const summary: SessionSummary = {
+      id: 'session_image',
+      profileName: 'prompt-maker',
+      createdAt: '2026-07-22T00:00:00.000Z',
+      updatedAt: '2026-07-22T00:00:01.000Z',
+      turnCount: 2,
+      preview: 'Describe this',
+    };
+    const client: ApiClient = {
+      baseUrl: '',
+      request: async (method, path) => {
+        if (method === 'GET' && path === '/v1/profiles') return { profiles: [profile] } as never;
+        if (method === 'GET' && path === '/v1/models') return { default: {}, options: [] } as never;
+        if (method === 'GET' && path === '/v1/profiles/prompt-maker') return { profile } as never;
+        if (method === 'GET' && path === '/v1/skills?profile=prompt-maker') return { skills: [] } as never;
+        if (method === 'GET' && path === '/v1/sessions?limit=50&profile=prompt-maker') {
+          return { sessions: [summary] } as never;
+        }
+        if (method === 'GET' && path === '/v1/sessions/session_image') {
+          return {
+            session: {
+              ...summary,
+              turns: [
+                {
+                  role: 'user',
+                  content: 'Describe this',
+                  timestamp: '2026-07-22T00:00:00.000Z',
+                  attachments: [{ kind: 'image', mediaType: 'image/png', data: 'AAA' }],
+                },
+                { role: 'assistant', content: 'A portrait.', timestamp: '2026-07-22T00:00:01.000Z' },
+              ],
+            },
+          } as never;
+        }
+        if (method === 'GET' && path === '/v1/runs') return { runs: [] } as never;
+        throw new Error(`Unexpected request: ${method} ${path}`);
+      },
+      stream: async () => new Response(),
+      blob: async () => undefined,
+    };
+
+    const { result } = renderHook(() => useAgentController({
+      client,
+      route: { view: 'agent', profile: 'prompt-maker', session: 'session_image' },
+      navigate: vi.fn(),
+      onUnauthorized: vi.fn(),
+    }));
+
+    await waitFor(() => expect(result.current.thread.items).toHaveLength(2));
+    expect(result.current.thread.items[0]).toMatchObject({
+      kind: 'user',
+      attachments: [{ kind: 'image', name: 'Image 1', previewUrl: 'data:image/png;base64,AAA' }],
+    });
+  });
+
+  it('updates session actions and leaves a deleted selected session safely', async () => {
+    const summary: SessionSummary = {
+      id: 'session_actions',
+      profileName: 'prompt-maker',
+      createdAt: '2026-07-22T00:00:00.000Z',
+      updatedAt: '2026-07-22T00:00:01.000Z',
+      turnCount: 2,
+      preview: 'Original prompt',
+    };
+    let current = summary;
+    let deleted = false;
+    const client: ApiClient = {
+      baseUrl: '',
+      request: async (method, path, body) => {
+        if (method === 'GET' && path === '/v1/profiles') return { profiles: [profile] } as never;
+        if (method === 'GET' && path === '/v1/models') return { default: {}, options: [] } as never;
+        if (method === 'GET' && path === '/v1/profiles/prompt-maker') return { profile } as never;
+        if (method === 'GET' && path === '/v1/skills?profile=prompt-maker') return { skills: [] } as never;
+        if (method === 'GET' && path === '/v1/sessions?limit=50&profile=prompt-maker') {
+          return { sessions: deleted ? [] : [current] } as never;
+        }
+        if (method === 'GET' && path === '/v1/sessions/session_actions') {
+          return {
+            session: {
+              ...current,
+              turns: [
+                { role: 'user', content: 'Original prompt', timestamp: current.createdAt },
+                { role: 'assistant', content: 'Original answer', timestamp: current.updatedAt },
+              ],
+            },
+          } as never;
+        }
+        if (method === 'GET' && path === '/v1/runs') return { runs: [] } as never;
+        if (method === 'PATCH' && path === '/v1/sessions/session_actions') {
+          current = { ...current, ...(body as Partial<SessionSummary>) };
+          return { session: { ...current, turns: [] } } as never;
+        }
+        if (method === 'DELETE' && path === '/v1/sessions/session_actions') {
+          deleted = true;
+          return { deleted: true } as never;
+        }
+        throw new Error(`Unexpected request: ${method} ${path}`);
+      },
+      stream: async () => new Response(),
+      blob: async () => undefined,
+    };
+    const navigate = vi.fn();
+    const { result } = renderHook(() => useAgentController({
+      client,
+      route: { view: 'agent', profile: 'prompt-maker', session: 'session_actions' },
+      navigate,
+      onUnauthorized: vi.fn(),
+    }));
+
+    await waitFor(() => expect(result.current.sessions).toHaveLength(1));
+    let rename!: Promise<boolean>;
+    act(() => { rename = result.current.renameSession('session_actions', 'Renamed session'); });
+    expect(await rename).toBe(true);
+    await waitFor(() => expect(result.current.sessions[0]?.title).toBe('Renamed session'));
+
+    let pin!: Promise<boolean>;
+    act(() => { pin = result.current.setSessionPinned('session_actions', true); });
+    expect(await pin).toBe(true);
+    await waitFor(() => expect(result.current.sessions[0]?.pinned).toBe(true));
+
+    let remove!: Promise<boolean>;
+    act(() => { remove = result.current.deleteSession('session_actions'); });
+    expect(await remove).toBe(true);
+    await waitFor(() => expect(result.current.sessions).toEqual([]));
+    expect(result.current.sessionId).toBeUndefined();
+    expect(result.current.thread.items).toEqual([]);
+    expect(navigate).toHaveBeenLastCalledWith({ view: 'agent', profile: 'prompt-maker' });
+  });
+
+  it('replaces a durable exchange without dropping later turns', async () => {
+    const summary: SessionSummary = {
+      id: 'session_edit',
+      profileName: 'prompt-maker',
+      createdAt: '2026-07-22T00:00:00.000Z',
+      updatedAt: '2026-07-22T00:00:06.000Z',
+      turnCount: 6,
+      preview: 'Conversation 1',
+    };
+    const run: RunRecord = {
+      id: 'run_edit',
+      objective: 'Updated conversation 2',
+      profile: 'prompt-maker',
+      sessionId: 'session_edit',
+      status: 'running',
+      createdAt: '2026-07-22T00:01:00.000Z',
+      eventCount: 0,
+      pendingApprovals: [],
+    };
+    let edited = false;
+    const client: ApiClient = {
+      baseUrl: '',
+      request: async (method, path, body) => {
+        if (method === 'GET' && path === '/v1/profiles') return { profiles: [profile] } as never;
+        if (method === 'GET' && path === '/v1/models') return { default: {}, options: [] } as never;
+        if (method === 'GET' && path === '/v1/profiles/prompt-maker') return { profile } as never;
+        if (method === 'GET' && path === '/v1/skills?profile=prompt-maker') return { skills: [] } as never;
+        if (method === 'GET' && path === '/v1/sessions?limit=50&profile=prompt-maker') {
+          return { sessions: [summary] } as never;
+        }
+        if (method === 'GET' && path === '/v1/sessions/session_edit') {
+          return {
+            session: {
+              ...summary,
+              turns: [
+                { role: 'user', content: 'Conversation 1', timestamp: '2026-07-22T00:00:00.000Z' },
+                { role: 'assistant', content: 'Answer 1', timestamp: '2026-07-22T00:00:01.000Z' },
+                {
+                  role: 'user',
+                  content: edited ? 'Updated conversation 2' : 'Conversation 2',
+                  timestamp: '2026-07-22T00:00:02.000Z',
+                  attachments: [{ kind: 'image', mediaType: 'image/png', data: 'AAA' }],
+                },
+                {
+                  role: 'assistant',
+                  content: edited ? 'Updated answer 2' : 'Answer 2',
+                  timestamp: '2026-07-22T00:00:03.000Z',
+                },
+                { role: 'user', content: 'Conversation 3', timestamp: '2026-07-22T00:00:04.000Z' },
+                { role: 'assistant', content: 'Answer 3', timestamp: '2026-07-22T00:00:05.000Z' },
+              ],
+            },
+          } as never;
+        }
+        if (method === 'GET' && path === '/v1/runs') return { runs: [] } as never;
+        if (method === 'POST' && path === '/v1/runs') {
+          expect(body).toMatchObject({
+            objective: 'Updated conversation 2',
+            sessionId: 'session_edit',
+            replaceUserTurnIndex: 1,
+            images: [{ data: 'AAA', mediaType: 'image/png' }],
+          });
+          return { run } as never;
+        }
+        throw new Error(`Unexpected request: ${method} ${path}`);
+      },
+      stream: async path => {
+        expect(path).toBe('/v1/runs/run_edit/events');
+        edited = true;
+        const done = { type: 'done', taskId: 'task_edit', status: 'completed' };
+        return new Response(`id: 1\nevent: done\ndata: ${JSON.stringify(done)}\n\n`, { status: 200 });
+      },
+      blob: async () => undefined,
+    };
+
+    const { result } = renderHook(() => useAgentController({
+      client,
+      route: { view: 'agent', profile: 'prompt-maker', session: 'session_edit' },
+      navigate: vi.fn(),
+      onUnauthorized: vi.fn(),
+    }));
+    await waitFor(() => expect(result.current.thread.items).toHaveLength(6));
+    const target = result.current.thread.items.find(
+      item => item.kind === 'user' && item.text === 'Conversation 2',
+    );
+    if (!target) throw new Error('missing editable turn');
+
+    let replacement!: Promise<boolean>;
+    act(() => { replacement = result.current.resendEdited(target.id, 'Updated conversation 2'); });
+    const replaced = await replacement;
+
+    expect(replaced).toBe(true);
+    await waitFor(() => {
+      const userTexts = result.current.thread.items.flatMap(item => item.kind === 'user' ? [item.text] : []);
+      expect(userTexts).toEqual(['Conversation 1', 'Updated conversation 2', 'Conversation 3']);
+      const assistantTexts = result.current.thread.items.flatMap(
+        item => item.kind === 'assistant' ? [item.markdown] : [],
+      );
+      expect(assistantTexts).toEqual(['Answer 1', 'Updated answer 2', 'Answer 3']);
+    });
+  });
 });

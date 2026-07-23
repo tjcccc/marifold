@@ -333,6 +333,13 @@ describe('MarifoldService /v1/runs', () => {
 
       const badAction = await postJson(base, '/v1/runs', { objective: 'ok', maxIterations: -2 });
       expect(badAction.status).toBe(400);
+
+      const badEdit = await postJson(base, '/v1/runs', {
+        objective: 'ok',
+        sessionId: 'session_1',
+        replaceUserTurnIndex: -1,
+      });
+      expect(badEdit.status).toBe(400);
     } finally {
       await server.close();
     }

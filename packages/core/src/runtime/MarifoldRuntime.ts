@@ -1,6 +1,7 @@
-import { JSONValue, PriestConfig, PriestEngine, PriestRequest, PriestResponse, ToolDefinition, ToolExchangeTurn, UsageInfo } from '@priest-ai/core';
+import { ImageInput, JSONValue, PriestConfig, PriestEngine, PriestRequest, PriestResponse, ToolDefinition, ToolExchangeTurn, UsageInfo } from '@priest-ai/core';
 import * as path from 'path';
 import { AgentRunner } from '../agent/AgentRunner';
+import { buildHistoryContext } from '../agent/AgentHistory';
 import { ApprovalMode, MarifoldAgentConfig, ToolKind, resolveAgentConfig } from '../agent/ApprovalPolicy';
 import { DelegateTool } from '../agent/tools/DelegateTool';
 import { ReadFileTool } from '../agent/tools/ReadFileTool';
@@ -38,7 +39,12 @@ import { Scheduler } from '../schedule/Scheduler';
 import { RunRegistry } from '../runs/RunRegistry';
 import { TelegramBridge } from '../channels/TelegramBridge';
 import { ScheduleCreateInput, ScheduleState, ScheduleStore, ScheduleUpdateInput } from '../schedule/ScheduleStore';
-import { SessionResolver, SessionDbHealth } from '../sessions/SessionResolver';
+import {
+  SessionResolver,
+  SessionDbHealth,
+  SessionDisplayUpdate,
+  SessionTruncateResult,
+} from '../sessions/SessionResolver';
 import { SkillStore } from '../skill/SkillStore';
 import { MarifoldSkill } from '../skill/SkillSchema';
 import { SkillScope } from '../skill/SkillStore';
@@ -53,6 +59,7 @@ import { MarifoldAskResponse, MarifoldResolvedSettings, MarifoldRunRequest } fro
 // `reasoning: {effort}` param inside MarifoldOpenAICompatProvider.
 const THINK_PROVIDER_NAMES = new Set(['bailian', 'alibaba_cloud', 'chatgpt']);
 const CHAT_TOOL_MAX_ITERATIONS = 3;
+const EDIT_HISTORY_BUDGET_DEFAULT_CHARS = 16_000;
 
 export interface MarifoldRuntimeOptions {
   loadedConfig: LoadedMarifoldConfig;
@@ -103,22 +110,32 @@ export class MarifoldRuntime {
     const settings = this.resolveSettings(request);
     const preparedImages = await prepareImageInputs(request.images, { optimize: request.originalImages !== true });
     await this.refreshProviderCredentialsIfNeeded(settings.provider);
-    const engine = this.createEngine(settings.provider, Boolean(request.sessionId));
+    const replacing = request.replaceUserTurnIndex !== undefined;
+    const engine = this.createEngine(settings.provider, Boolean(request.sessionId) && !replacing);
     const memoryOn = this.memoryEnabled(settings.profile, request.memories);
     const memory = this.memoryForRequest(settings.profile, request.memories, request.prompt, settings.think);
     const response = await engine.run({
       config: this.toPriestConfig(settings),
       profile: settings.profile,
       prompt: request.prompt,
-      session: request.sessionId ? { id: request.sessionId, createIfMissing: true } : undefined,
-      context: [...this.runtimeContext(memory, request.prompt, memoryOn), ...(request.instructions ?? [])],
+      session: request.sessionId && !replacing ? { id: request.sessionId, createIfMissing: true } : undefined,
+      context: [
+        ...this.runtimeContext(memory, request.prompt, memoryOn),
+        ...this.editHistoryContext(request, settings),
+        ...(request.instructions ?? []),
+      ],
       memory,
       images: preparedImages.images.length > 0 ? preparedImages.images : undefined,
       userContext: request.userContext,
     });
     const stripped = stripMemoryControls(response.text ?? '');
     if (response.ok && request.sessionId) {
-      this.sessionResolver.replaceLastAssistantTurn(request.sessionId, stripped.text);
+      if (request.replaceUserTurnIndex !== undefined) {
+        this.replaceEditedExchange(request.sessionId, request.replaceUserTurnIndex, request.prompt, stripped.text, preparedImages.images);
+      } else {
+        this.sessionResolver.replaceLastAssistantTurn(request.sessionId, stripped.text);
+        this.sessionResolver.saveLastUserTurnAttachments(request.sessionId, preparedImages.images);
+      }
     }
     if (response.ok && memoryOn) {
       this.applyTurnMemory(settings.profile, request.prompt, stripped, request.sessionId);
@@ -142,7 +159,8 @@ export class MarifoldRuntime {
     const preparedImages = await prepareImageInputs(request.images, { optimize: request.originalImages !== true });
     await this.refreshProviderCredentialsIfNeeded(settings.provider);
     let aggregateUsage: UsageInfo | undefined;
-    const engine = this.createEngine(settings.provider, Boolean(request.sessionId));
+    const replacing = request.replaceUserTurnIndex !== undefined;
+    const engine = this.createEngine(settings.provider, Boolean(request.sessionId) && !replacing);
     const memoryOn = this.memoryEnabled(settings.profile, request.memories);
     const memory = this.memoryForRequest(settings.profile, request.memories, request.prompt, settings.think);
     const chatTools = this.chatTools(request);
@@ -151,8 +169,12 @@ export class MarifoldRuntime {
       config: this.toPriestConfig(settings),
       profile: settings.profile,
       prompt: request.prompt,
-      session: request.sessionId ? { id: request.sessionId, createIfMissing: true } : undefined,
-      context: [...this.runtimeContext(memory, request.prompt, memoryOn), ...(request.instructions ?? [])],
+      session: request.sessionId && !replacing ? { id: request.sessionId, createIfMissing: true } : undefined,
+      context: [
+        ...this.runtimeContext(memory, request.prompt, memoryOn),
+        ...this.editHistoryContext(request, settings),
+        ...(request.instructions ?? []),
+      ],
       memory,
       images: preparedImages.images.length > 0 ? preparedImages.images : undefined,
       userContext: request.userContext,
@@ -199,7 +221,18 @@ export class MarifoldRuntime {
       const toolCalls = done?.toolCalls ?? [];
       if (!chatTools || toolCalls.length === 0) {
         if (request.sessionId) {
-          this.sessionResolver.replaceLastAssistantTurn(request.sessionId, visibleParts.join(''));
+          if (request.replaceUserTurnIndex !== undefined) {
+            this.replaceEditedExchange(
+              request.sessionId,
+              request.replaceUserTurnIndex,
+              request.prompt,
+              visibleParts.join(''),
+              preparedImages.images,
+            );
+          } else {
+            this.sessionResolver.replaceLastAssistantTurn(request.sessionId, visibleParts.join(''));
+            this.sessionResolver.saveLastUserTurnAttachments(request.sessionId, preparedImages.images);
+          }
         }
         if (memoryOn) {
           this.applyTurnMemory(settings.profile, request.prompt, stripper, request.sessionId);
@@ -438,6 +471,14 @@ export class MarifoldRuntime {
     return this.sessionResolver.delete(sessionId);
   }
 
+  updateSessionDisplay(sessionId: string, update: SessionDisplayUpdate): boolean {
+    return this.sessionResolver.updateDisplay(sessionId, update);
+  }
+
+  truncateSessionFromUserTurn(sessionId: string, userTurnIndex: number): SessionTruncateResult {
+    return this.sessionResolver.truncateFromUserTurn(sessionId, userTurnIndex);
+  }
+
   clearSessions(options: { profileName?: string; before?: string; keepLast?: number } = {}): { count: number; ids: string[] } {
     return this.sessionResolver.clear(options);
   }
@@ -492,12 +533,20 @@ export class MarifoldRuntime {
       prepareImages: async (images, optimize) => (await prepareImageInputs(images, { optimize })).images,
       // Record the run as a single tidy user→assistant exchange so resuming the
       // session shows the result, not the agent's internal framing.
-      persistTurn: (sessionId, profile, userText, assistantText) =>
-        this.sessionResolver.appendExchange(sessionId, profile, userText, assistantText),
+      persistTurn: async (sessionId, profile, userText, assistantText, images, replaceUserTurnIndex) => {
+        if (replaceUserTurnIndex !== undefined) {
+          this.replaceEditedExchange(sessionId, replaceUserTurnIndex, userText, assistantText, images);
+          return;
+        }
+        await this.sessionResolver.appendExchange(sessionId, profile, userText, assistantText, images);
+      },
       // Bounded cross-objective memory for non-lean tasks: replay the clean
       // pairs (objective → answer) that persistTurn wrote, never raw framing.
-      loadRecentTurns: sessionId =>
-        (this.sessionResolver.get(sessionId)?.turns ?? [])
+      loadRecentTurns: (sessionId, beforeUserTurnIndex) =>
+        (beforeUserTurnIndex === undefined
+          ? (this.sessionResolver.get(sessionId)?.turns ?? [])
+          : (this.sessionResolver.turnsBeforeUserTurn(sessionId, beforeUserTurnIndex)
+            ?? this.missingEditedTurn(sessionId, beforeUserTurnIndex)))
           .filter(t => t.role === 'user' || t.role === 'assistant')
           .map(t => ({ role: t.role as 'user' | 'assistant', content: t.content })),
       resolveBuiltInInstructions: (objective, resolvedProfile) => {
@@ -849,6 +898,46 @@ export class MarifoldRuntime {
       context.push('Profile memory is app-owned context. Current user messages and profile rules outrank memory.');
     }
     return context;
+  }
+
+  private editHistoryContext(
+    request: MarifoldRunRequest,
+    settings: MarifoldResolvedSettings,
+  ): string[] {
+    if (request.replaceUserTurnIndex === undefined) return [];
+    if (!request.sessionId) {
+      throw MarifoldError.configInvalid('replaceUserTurnIndex requires sessionId.');
+    }
+    const turns = this.sessionResolver.turnsBeforeUserTurn(request.sessionId, request.replaceUserTurnIndex)
+      ?? this.missingEditedTurn(request.sessionId, request.replaceUserTurnIndex);
+    const history = buildHistoryContext(
+      turns.map(turn => ({ role: turn.role, content: turn.content })),
+      settings.maxContextTokens ?? EDIT_HISTORY_BUDGET_DEFAULT_CHARS,
+    );
+    return history ? [history] : [];
+  }
+
+  private replaceEditedExchange(
+    sessionId: string,
+    userTurnIndex: number,
+    userText: string,
+    assistantText: string,
+    images?: ImageInput[],
+  ): void {
+    const result = this.sessionResolver.replaceExchange(
+      sessionId,
+      userTurnIndex,
+      userText,
+      assistantText,
+      images,
+    );
+    if (!result.replaced) this.missingEditedTurn(sessionId, userTurnIndex);
+  }
+
+  private missingEditedTurn(sessionId: string, userTurnIndex: number): never {
+    throw MarifoldError.configInvalid(
+      `Cannot edit user turn ${userTurnIndex} because it is missing from session '${sessionId}'.`,
+    );
   }
 
   private applyTurnMemory(

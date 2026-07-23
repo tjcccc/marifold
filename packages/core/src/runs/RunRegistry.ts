@@ -46,6 +46,8 @@ export interface RunStartInput {
   provider?: string;
   model?: string;
   sessionId?: string;
+  /** Replace a persisted exchange instead of appending a new one. */
+  replaceUserTurnIndex?: number;
   think?: boolean;
   /** Attached to the objective on the first turn (AgentRunner semantics). */
   images?: ImageInput[];
@@ -284,6 +286,7 @@ export class RunRegistry {
         provider: input.provider,
         model: input.model,
         sessionId: input.sessionId,
+        replaceUserTurnIndex: input.replaceUserTurnIndex,
         think: input.think,
         images: input.images,
         originalImages: input.originalImages,

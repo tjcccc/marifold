@@ -34,7 +34,7 @@ For product direction and future scope, see [docs/vision.md](docs/vision.md) and
 - The `marifold.skillapp.v0` SkillApp schema spec ([docs/skillapp.md](docs/skillapp.md)) with a TOML parser/validator in core (spec only — no runtime yet).
 - Web search through the chat `/search <query>` command (DuckDuckGo by default, pluggable backend) with results injected as turn-local context.
 - Model-initiated `web_search` and `read_file` tools on chat turns when `[web_search].enabled = true`, using a bounded tool loop.
-- File attachment through chat `/read <path>` (100k-char truncation) and image attachment through `/image <path>` / `/image clear` and `ask --image <path>`. Local/base64 images are validated, MIME-corrected, metadata-stripped, and optimized before provider requests (1600 px maximum long edge; lossless WebP for PNG/transparent inputs; conservative high-quality encoding for JPEG and oversized static WebP inputs; animated images preserved). The candidate is used only when smaller. TUI and Web UI support one-turn `/attach-original <prompt>` to preserve original encoded bytes.
+- File attachment through chat `/read <path>` (100k-char truncation) and image attachment through `/image <path>` / `/image clear` and `ask --image <path>`. Local/base64 images are validated, MIME-corrected, metadata-stripped, and optimized before provider requests (1600 px maximum long edge; lossless WebP for PNG/transparent inputs; conservative high-quality encoding for JPEG and oversized static WebP inputs; animated images preserved). The candidate is used only when smaller. TUI and Web UI support one-turn `/attach-original <prompt>` to preserve original encoded bytes. Embedded/URL images are retained as display-only session attachments so the Web UI can restore transcript thumbnails without adding them to later model context.
 - Base64/URL image payloads on the service `/v1/ask` route.
 - ChatGPT OAuth token refresh before provider requests, mirroring the GitHub Copilot refresh flow.
 - Approval-aware basic agent loop through `marifold agent "<objective>"`.
@@ -378,7 +378,7 @@ security behavior.
 
 ## Web UI
 
-`apps/web` is the browser client (Vite + React, see [apps/web/README.md](apps/web/README.md)): the Agent screen renders chat and live agent runs — plan, tool activity, the approval sheet (Allow once / Always allow / Trust folder / Deny), mid-run steering, cancel, and catch-up replay — plus an editable per-profile Config screen (mode, model override, memories/thinking, permissions with inherited-vs-overridden and inherit-reset, trusted folders, PROFILE/RULES/CUSTOM editors, memory Forget/Delete) and light/dark marigold theming from the committed design concept.
+`apps/web` is the browser client (Vite + React, see [apps/web/README.md](apps/web/README.md)): the Agent screen renders chat and live agent runs — plan, tool activity, the approval sheet (Allow once / Always allow / Trust folder / Deny), mid-run steering, cancel, catch-up replay, response/code copying, image galleries, durable session rename/pin/delete actions, and history-aware prompt editing that regenerates the selected exchange in place without deleting later turns — plus an editable per-profile Config screen (mode, model override, memories/thinking, permissions with inherited-vs-overridden and inherit-reset, trusted folders, PROFILE/RULES/CUSTOM editors, memory Forget/Delete) and light/dark marigold theming from the committed design concept.
 
 ```sh
 pnpm --filter @marifold/web build

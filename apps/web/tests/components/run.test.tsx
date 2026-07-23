@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Auto-cleanup hooks into vitest globals, which this workspace doesn't enable.
@@ -176,6 +176,9 @@ describe('Desktop workspace sidebar', () => {
     const onBack = vi.fn();
     const onNew = vi.fn();
     const onSelect = vi.fn();
+    const onRename = vi.fn(async () => true);
+    const onSetPinned = vi.fn(async () => true);
+    const onDelete = vi.fn(async () => true);
     render(
       <SessionList
         profileName="prompt-maker"
@@ -191,6 +194,9 @@ describe('Desktop workspace sidebar', () => {
         onBack={onBack}
         onNew={onNew}
         onSelect={onSelect}
+        onRename={onRename}
+        onSetPinned={onSetPinned}
+        onDelete={onDelete}
       />,
     );
     fireEvent.click(screen.getByLabelText('Back to profiles'));
@@ -204,6 +210,48 @@ describe('Desktop workspace sidebar', () => {
     const portrait = screen.getByText('Profile portrait');
     const sessionsHeading = screen.getByText('Sessions');
     expect(portrait.compareDocumentPosition(sessionsHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('renames, pins, and confirms deletion from the session action menu', async () => {
+    const onRename = vi.fn(async () => true);
+    const onSetPinned = vi.fn(async () => true);
+    const onDelete = vi.fn(async () => true);
+    render(
+      <SessionList
+        profileName="prompt-maker"
+        sessions={[{
+          id: 'session_1',
+          profileName: 'prompt-maker',
+          createdAt: '2026-07-22T00:00:00.000Z',
+          updatedAt: '2026-07-22T01:00:00.000Z',
+          turnCount: 4,
+          preview: 'Portrait prompt',
+        }]}
+        onBack={vi.fn()}
+        onNew={vi.fn()}
+        onSelect={vi.fn()}
+        onRename={onRename}
+        onSetPinned={onSetPinned}
+        onDelete={onDelete}
+      />,
+    );
+
+    fireEvent.click(screen.getByLabelText('Session actions for Portrait prompt'));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Rename' }));
+    const input = screen.getByRole('textbox', { name: 'Session name' });
+    fireEvent.change(input, { target: { value: 'Image prompt ideas' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Rename' }));
+    await waitFor(() => expect(onRename).toHaveBeenCalledWith('session_1', 'Image prompt ideas'));
+
+    fireEvent.click(screen.getByLabelText('Session actions for Portrait prompt'));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Pin' }));
+    await waitFor(() => expect(onSetPinned).toHaveBeenCalledWith('session_1', true));
+
+    fireEvent.click(screen.getByLabelText('Session actions for Portrait prompt'));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Delete' }));
+    expect(screen.getByRole('alertdialog')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    await waitFor(() => expect(onDelete).toHaveBeenCalledWith('session_1'));
   });
 
   it('starts at 256px and resizes within the shared sidebar bounds', () => {
@@ -244,6 +292,143 @@ describe('Desktop workspace sidebar', () => {
 });
 
 describe('ThreadView', () => {
+  it('copies a complete response and exact fenced code from their own actions', async () => {
+    const writeText = vi.fn(async () => undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    });
+    const markdown = 'Run this query:\n\n```sql\nSELECT 1;\n```';
+    render(
+      <ThreadView
+        items={[{ id: 'i1', kind: 'assistant', markdown }]}
+        onCancelRun={() => {}}
+        onAnswerApproval={() => {}}
+        onToggleRun={() => {}}
+      />,
+    );
+
+    expect(screen.getByText('SQL')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Copy code' }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith('SELECT 1;'));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Copy response' }));
+    await waitFor(() => expect(writeText).toHaveBeenLastCalledWith(markdown));
+  });
+
+  it('opens transcript images in a dismissible large preview', () => {
+    render(
+      <ThreadView
+        items={[{
+          id: 'i1',
+          kind: 'user',
+          text: 'What is this?',
+          attachments: [
+            { kind: 'image', name: 'portrait.png', previewUrl: 'data:image/png;base64,AAA' },
+            { kind: 'image', name: 'landscape.png', previewUrl: 'data:image/png;base64,BBB' },
+          ],
+        }]}
+        onCancelRun={() => {}}
+        onAnswerApproval={() => {}}
+        onToggleRun={() => {}}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Preview portrait.png' }));
+    const dialog = screen.getByRole('dialog', { name: 'portrait.png preview' });
+    expect(dialog.querySelector('img')?.getAttribute('src')).toBe('data:image/png;base64,AAA');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Next image' }));
+    expect(screen.getByRole('dialog', { name: 'landscape.png preview' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Previous image' }));
+    expect(screen.getByRole('dialog', { name: 'portrait.png preview' })).toBeTruthy();
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByRole('dialog', { name: 'portrait.png preview' })).toBeNull();
+  });
+
+  it('edits a cancelled prompt inline and keeps its attachments in the turn', async () => {
+    const onEditUserMessage = vi.fn(async () => true);
+    const attachments = [
+      { kind: 'image' as const, name: 'portrait.png', previewUrl: 'data:image/png;base64,AAA' },
+    ];
+    render(
+      <ThreadView
+        items={[
+          { id: 'i1', kind: 'user', text: 'Fix this phto', attachments },
+          {
+            id: 'i2',
+            kind: 'run',
+            run: cardFixture({
+              status: 'cancelled',
+              collapsed: true,
+              finishedAt: new Date().toISOString(),
+              plan: undefined,
+              rows: [],
+              steering: [],
+            }),
+          },
+        ]}
+        onCancelRun={() => {}}
+        onAnswerApproval={() => {}}
+        onToggleRun={() => {}}
+        onEditUserMessage={onEditUserMessage}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit and resend message' }));
+    const editor = screen.getByRole('textbox', { name: 'Edit message' }) as HTMLTextAreaElement;
+    expect(editor.value).toBe('Fix this phto');
+    expect(screen.getByRole('button', { name: 'Preview portrait.png' })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('textbox', { name: 'Edit message' })).toBeNull();
+    expect(onEditUserMessage).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit and resend message' }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Edit message' }), {
+      target: { value: 'Fix this photo' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(onEditUserMessage).toHaveBeenCalledWith('i1', 'Fix this photo'));
+  });
+
+  it('gives completed prompts their own copy and inline edit actions', async () => {
+    const writeText = vi.fn(async () => undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    });
+    const onEditUserMessage = vi.fn(async () => false);
+    render(
+      <ThreadView
+        items={[
+          { id: 'i1', kind: 'user', text: 'Give me three captions', sessionUserTurnIndex: 0 },
+          { id: 'i2', kind: 'assistant', markdown: '1. First\n2. Second\n3. Third' },
+        ]}
+        onCancelRun={() => {}}
+        onAnswerApproval={() => {}}
+        onToggleRun={() => {}}
+        onEditUserMessage={onEditUserMessage}
+      />,
+    );
+
+    const bubble = screen.getByText('Give me three captions');
+    const actions = screen.getByRole('group', { name: 'Message actions' });
+    expect(bubble.compareDocumentPosition(actions) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Copy prompt' }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith('Give me three captions'));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit and resend message' }));
+    const editor = screen.getByRole('textbox', { name: 'Edit message' }) as HTMLTextAreaElement;
+    expect(editor.value).toBe('Give me three captions');
+    fireEvent.change(editor, { target: { value: 'Give me four captions' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(onEditUserMessage).toHaveBeenCalledWith('i1', 'Give me four captions'));
+    expect((screen.getByRole('textbox', { name: 'Edit message' }) as HTMLTextAreaElement).value)
+      .toBe('Give me four captions');
+  });
+
   it('renders a mixed thread: bubbles, markdown, notices, run cards', () => {
     render(
       <ThreadView

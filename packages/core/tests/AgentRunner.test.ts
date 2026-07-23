@@ -142,6 +142,42 @@ describe('AgentRunner', () => {
     expect(ctx).toContain('A colossal spacecraft glides past Jupiter.');
   });
 
+  it('loads only the edit prefix and persists back to the selected exchange', async () => {
+    const engine = new ScriptedEngine([response({ text: 'Updated answer.' })]);
+    const registry = new ToolRegistry();
+    registry.register(fakeTool());
+    const loadRecentTurns = vi.fn(() => [
+      { role: 'user' as const, content: 'Conversation 1' },
+      { role: 'assistant' as const, content: 'Answer 1' },
+    ]);
+    const persistTurn = vi.fn(async () => undefined);
+    const runner = new AgentRunner({
+      taskStore: new TaskStore(tempDir()),
+      registry,
+      agentConfig: resolveAgentConfig({}),
+      resolveSettings: () => ({ profile: 'default', provider: 'mock', model: 'test-model', think: false, mode: 'agent' }),
+      prepareEngine: async () => ({ engine, config: { provider: 'mock', model: 'test-model' } }),
+      loadRecentTurns,
+      persistTurn,
+    });
+
+    await collect(runner.run({
+      objective: 'Updated conversation 2',
+      sessionId: 'sess-1',
+      replaceUserTurnIndex: 1,
+    }));
+
+    expect(loadRecentTurns).toHaveBeenCalledWith('sess-1', 1);
+    expect(persistTurn).toHaveBeenCalledWith(
+      'sess-1',
+      'default',
+      'Updated conversation 2',
+      'Updated answer.',
+      undefined,
+      1,
+    );
+  });
+
   it('keeps lean (skill) runs stateless — no prior conversation injected', async () => {
     const engine = new ScriptedEngine([response({ text: 'Output.' })]);
     const runner = runnerWithHistory(engine, [
@@ -240,6 +276,7 @@ describe('AgentRunner', () => {
     const registry = new ToolRegistry();
     registry.register(fakeTool());
     const prepareImages = vi.fn(async () => [{ data: 'prepared', mediaType: 'image/png' }]);
+    const persistTurn = vi.fn(async () => undefined);
     const runner = new AgentRunner({
       taskStore: new TaskStore(tempDir()),
       registry,
@@ -247,16 +284,25 @@ describe('AgentRunner', () => {
       resolveSettings: () => ({ profile: 'default', provider: 'mock', model: 'test-model', think: false, mode: 'agent' }),
       prepareEngine: async () => ({ engine, config: { provider: 'mock', model: 'test-model' } }),
       prepareImages,
+      persistTurn,
     });
 
     await collect(runner.run({
       objective: 'Describe it.',
       images: [{ data: 'source', mediaType: 'image/png' }],
       originalImages: true,
+      sessionId: 'image-session',
     }));
 
     expect(prepareImages).toHaveBeenCalledWith([{ data: 'source', mediaType: 'image/png' }], false);
     expect(engine.requests[0].images).toEqual([{ data: 'prepared', mediaType: 'image/png' }]);
+    expect(persistTurn).toHaveBeenCalledWith(
+      'image-session',
+      'default',
+      'Describe it.',
+      'I can see it.',
+      [{ data: 'prepared', mediaType: 'image/png' }],
+    );
   });
 
   it('runs plan, tool loop, and summary with native tool calls', async () => {

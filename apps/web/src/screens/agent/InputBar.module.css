@@ -41,10 +41,17 @@
  * sits under the caret. The textarea's own text is transparent. */
 .highlight,
 .input {
-  font-size: 13.5px;
-  line-height: 1.45;
+  /* Use integral pixel metrics. Fractional line boxes accumulate different
+   * rounding in a div and a native textarea, making the real caret drift a
+   * few pixels below the highlight mirror in long multiline drafts. */
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 400;
   padding: 3px 0;
+  margin: 0;
   letter-spacing: normal;
+  word-spacing: normal;
+  tab-size: 4;
   font-family: inherit;
 }
 
@@ -63,6 +70,7 @@
   display: block;
   width: 100%;
   border: none;
+  appearance: none;
   background: none;
   resize: none;
   outline: none;
@@ -264,6 +272,17 @@
   height: 28px;
   border-radius: var(--radius-sm);
   object-fit: cover;
+}
+
+.chipPreviewButton {
+  flex-shrink: 0;
+  border-radius: var(--radius-sm);
+  cursor: zoom-in;
+}
+
+.chipPreviewButton:focus-visible {
+  outline: 2px solid var(--brand-fill);
+  outline-offset: 2px;
 }
 
 .chipName {

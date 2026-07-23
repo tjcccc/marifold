@@ -63,6 +63,7 @@ export type {
   ProfileSettings,
   ProfileSummary,
   SessionDetail,
+  SessionImageAttachment,
   ProviderType,
   SessionSummary,
   SessionTurnSummary,
@@ -165,7 +166,13 @@ export { SCHEDULE_SCHEMA, ScheduleStore } from './schedule/ScheduleStore';
 export type { ScheduleCreateInput, ScheduleState, ScheduleUpdateInput } from './schedule/ScheduleStore';
 export { Scheduler } from './schedule/Scheduler';
 export type { ScheduleRunResult, SchedulerDeps } from './schedule/Scheduler';
-export { SessionResolver, type SessionDbHealth } from './sessions/SessionResolver';
+export {
+  SessionResolver,
+  type SessionDbHealth,
+  type SessionDisplayUpdate,
+  type SessionReplaceResult,
+  type SessionTruncateResult,
+} from './sessions/SessionResolver';
 export {
   SKILL_SCHEMA_ID,
   extractTemplateVariables,

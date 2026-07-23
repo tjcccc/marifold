@@ -25,6 +25,7 @@ import {
   objectBody,
   optionalBooleanField,
   optionalImagesField,
+  optionalNonNegativeIntegerField,
   optionalStringField,
   requiredString,
   stringArray,
@@ -269,10 +270,63 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
     return { ok: true, session };
   });
 
+  server.patch<{ Params: { id: string } }>('/v1/sessions/:id', async (request, reply) => {
+    const body = objectBody(request.body);
+    const hasTitle = Object.prototype.hasOwnProperty.call(body, 'title');
+    const hasPinned = Object.prototype.hasOwnProperty.call(body, 'pinned');
+    if (!hasTitle && !hasPinned) {
+      throw MarifoldError.configInvalid('At least one of title or pinned is required.');
+    }
+    if (hasTitle && body.title !== null && typeof body.title !== 'string') {
+      throw MarifoldError.configInvalid('title must be a string or null.');
+    }
+    if (hasPinned && typeof body.pinned !== 'boolean') {
+      throw MarifoldError.configInvalid('pinned must be a boolean.');
+    }
+    const updated = runtime.updateSessionDisplay(request.params.id, {
+      ...(hasTitle ? { title: body.title as string | null } : {}),
+      ...(hasPinned ? { pinned: body.pinned as boolean } : {}),
+    });
+    if (!updated) {
+      reply.status(404);
+      return {
+        ok: false,
+        error: {
+          code: 'SESSION_NOT_FOUND',
+          message: `Session not found: ${request.params.id}`,
+        },
+      };
+    }
+    return { ok: true, session: runtime.getSession(request.params.id) };
+  });
+
   server.delete<{ Params: { id: string } }>('/v1/sessions/:id', async request => ({
     ok: true,
     deleted: runtime.deleteSession(request.params.id),
   }));
+
+  server.post<{ Params: { id: string } }>('/v1/sessions/:id/truncate', async (request, reply) => {
+    const body = objectBody(request.body);
+    const userTurnIndex = body.fromUserTurnIndex;
+    if (typeof userTurnIndex !== 'number' || !Number.isInteger(userTurnIndex) || userTurnIndex < 0) {
+      throw MarifoldError.configInvalid('fromUserTurnIndex must be a non-negative integer.');
+    }
+    if (runRegistry.list().some(run => run.sessionId === request.params.id && run.status === 'running')) {
+      throw MarifoldError.agentRunInvalid('Cancel the active run before editing this session history.');
+    }
+    const result = runtime.truncateSessionFromUserTurn(request.params.id, userTurnIndex);
+    if (!result.found) {
+      reply.status(404);
+      return {
+        ok: false,
+        error: {
+          code: 'SESSION_NOT_FOUND',
+          message: `Session not found: ${request.params.id}`,
+        },
+      };
+    }
+    return { ok: true, truncated: result.removedTurns > 0, removedTurns: result.removedTurns };
+  });
 
   // Manually compact a session now (the /compact command): summarize older turns.
   server.post<{ Params: { id: string } }>('/v1/sessions/:id/compact', async request => {
@@ -419,6 +473,7 @@ function parseRunRequest(value: unknown): MarifoldRunRequest {
     ...optionalStringField('provider', body.provider),
     ...optionalStringField('model', body.model),
     ...optionalStringField('sessionId', body.sessionId),
+    ...optionalNonNegativeIntegerField('replaceUserTurnIndex', body.replaceUserTurnIndex),
     ...optionalBooleanField('memories', body.memories),
     ...optionalBooleanField('think', body.think),
     ...optionalBooleanField('originalImages', body.originalImages),

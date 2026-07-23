@@ -37,6 +37,14 @@ export function optionalPositiveIntegerField<Key extends string>(key: Key, value
   return { [key]: value } as Record<Key, number>;
 }
 
+export function optionalNonNegativeIntegerField<Key extends string>(key: Key, value: unknown): Record<Key, number> | Record<string, never> {
+  if (value === undefined) return {};
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) {
+    throw MarifoldError.configInvalid(`${key} must be a non-negative integer.`);
+  }
+  return { [key]: value } as Record<Key, number>;
+}
+
 export function stringArray(value: unknown, label: string): string[] {
   if (!Array.isArray(value)) throw MarifoldError.configInvalid(`${label} must be an array of strings.`);
   return value.map((item, index) => stringValue(item, `${label}[${index}]`));

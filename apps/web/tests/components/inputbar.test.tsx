@@ -134,3 +134,58 @@ describe('InputBar $-autocomplete', () => {
     expect(onSubmit).toHaveBeenCalledWith('/new');
   });
 });
+
+describe('InputBar composer interactions', () => {
+  it('lets Enter commit an IME composition without submitting it', () => {
+    const { textarea, onSubmit } = renderBar();
+    fireEvent.focus(textarea);
+    fireEvent.change(textarea, { target: { value: "p'ho'to" } });
+    fireEvent.compositionStart(textarea);
+    fireEvent.keyDown(textarea, { key: 'Enter' });
+    expect(onSubmit).not.toHaveBeenCalled();
+
+    fireEvent.compositionEnd(textarea);
+    fireEvent.change(textarea, { target: { value: 'photo' } });
+    fireEvent.keyDown(textarea, { key: 'Enter' });
+    expect(onSubmit).toHaveBeenCalledWith('photo');
+  });
+
+  it('previews pending images and navigates between multiple uploads', () => {
+    render(
+      <InputBar
+        steering={false}
+        think={false}
+        onToggleThink={() => {}}
+        modelOptions={[]}
+        onSelectModel={() => {}}
+        onSubmit={() => {}}
+        attachments={[
+          { kind: 'image', name: 'first.png', size: 3, data: 'AAA', mediaType: 'image/png' },
+          { kind: 'text', name: 'notes.txt', size: 4, content: 'note' },
+          { kind: 'image', name: 'second.jpg', size: 3, data: 'BBB', mediaType: 'image/jpeg' },
+        ]}
+        onAttachFiles={() => {}}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Preview first.png' }));
+    expect(screen.getByRole('dialog', { name: 'first.png preview' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Next image' }));
+    expect(screen.getByRole('dialog', { name: 'second.jpg preview' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Previous image' }));
+    expect(screen.getByRole('dialog', { name: 'first.png preview' })).toBeTruthy();
+  });
+
+  it('keeps the visible mirror at the pasted textarea caret', () => {
+    const { textarea } = renderBar();
+    const mirror = textarea.previousElementSibling as HTMLDivElement;
+    Object.defineProperty(textarea, 'scrollHeight', { configurable: true, value: 400 });
+    textarea.scrollTop = 240;
+    const json = '```json\n{\n  "style": "tasteful"\n}\n```';
+
+    fireEvent.change(textarea, { target: { value: json, selectionStart: json.length } });
+
+    expect(mirror.textContent).toBe(json);
+    expect(mirror.scrollTop).toBe(240);
+  });
+});

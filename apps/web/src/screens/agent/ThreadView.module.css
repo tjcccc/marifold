@@ -11,6 +11,7 @@
   display: flex;
   flex-direction: column;
   gap: 14px;
+  font-size: 16px;
 }
 
 .empty {
@@ -40,6 +41,12 @@
   gap: 6px;
 }
 
+.userTurnEditing {
+  align-self: stretch;
+  max-width: none;
+  width: 100%;
+}
+
 .userAttachments {
   display: flex;
   flex-wrap: wrap;
@@ -48,11 +55,22 @@
 }
 
 .userImage {
+  display: block;
   max-width: 220px;
   max-height: 160px;
   border-radius: var(--radius-md);
   border: 1px solid var(--separator-soft);
   object-fit: cover;
+}
+
+.userImageButton {
+  border-radius: var(--radius-md);
+  cursor: zoom-in;
+}
+
+.userImageButton:focus-visible {
+  outline: 2px solid var(--brand-fill);
+  outline-offset: 2px;
 }
 
 .userFile {
@@ -71,9 +89,118 @@
   background: var(--surface-3);
   border-radius: var(--radius-lg);
   padding: 9px 14px;
-  font-size: 13.5px;
+  font-size: 16px;
   white-space: pre-wrap;
   overflow-wrap: break-word;
+}
+
+.userActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+  min-height: 28px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+
+.userTurn:hover .userActions,
+.userTurn:focus-within .userActions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.userActionButton {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  color: var(--text-3);
+}
+
+.userActionButton:hover,
+.userActionButton:focus-visible {
+  background: var(--separator-soft);
+  color: var(--text);
+}
+
+@media (hover: none) {
+  .userActions {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+.userEditor {
+  width: 100%;
+  padding: 16px 16px 12px;
+  border-radius: var(--radius-lg);
+  background: var(--surface-3);
+}
+
+.userEditorInput {
+  display: block;
+  width: 100%;
+  min-height: 24px;
+  max-height: 320px;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  resize: none;
+  overflow-y: auto;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 16px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+
+.userEditorActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.editorCancel,
+.editorSend {
+  min-height: 34px;
+  padding: 6px 16px;
+  border-radius: 999px;
+  border: 1px solid var(--separator);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.editorCancel {
+  background: var(--surface);
+  color: var(--text);
+}
+
+.editorSend {
+  border-color: var(--text);
+  background: var(--text);
+  color: var(--surface);
+}
+
+.editorCancel:hover:not(:disabled) {
+  background: var(--separator-soft);
+}
+
+.editorSend:hover:not(:disabled) {
+  opacity: 0.82;
+}
+
+.editorCancel:disabled,
+.editorSend:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 
 .skillToken {
@@ -136,11 +263,36 @@
   color: var(--text-2);
 }
 
-/* Muted usage suffix under a run's response prose (ChatGPT-style). */
-.meta {
+/* Usage + response actions under completed prose (ChatGPT-style). */
+.responseFooter {
+  min-height: 28px;
   margin-top: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+}
+
+.meta {
   font-size: 12px;
   color: var(--text-3);
+}
+
+.responseCopyButton {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  color: var(--text-3);
+}
+
+.responseCopyButton:hover,
+.responseCopyButton:focus-visible {
+  background: var(--separator-soft);
+  color: var(--text);
 }
 
 /* Inline "Thinking…" for a tool-less run — no card chrome, shimmer text. */

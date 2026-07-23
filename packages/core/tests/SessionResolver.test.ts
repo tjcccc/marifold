@@ -83,6 +83,49 @@ describe('SessionResolver.list previews', () => {
   });
 });
 
+describe('SessionResolver display metadata', () => {
+  it('renames and pins without changing turns, recency, or compaction metadata', async () => {
+    const dbPath = tempDb();
+    seed(dbPath);
+    const db = new Database(dbPath);
+    db.prepare('UPDATE sessions SET metadata = ? WHERE id = ?')
+      .run(JSON.stringify({ __compaction: { summary: 'keep me' } }), 's1');
+    db.prepare("INSERT INTO sessions VALUES ('s2','default','2026-01-02','2026-01-02','{}')").run();
+    db.prepare("INSERT INTO turns (session_id, role, content, timestamp) VALUES ('s2','user','newer','2026-01-02')").run();
+    db.close();
+
+    const resolver = new SessionResolver(dbPath);
+    const store = resolver.openStore();
+    const staleModelSession = await store.get('s1');
+    expect(resolver.updateDisplay('s1', { title: 'Important chat', pinned: true })).toBe(true);
+    expect(resolver.list().map(session => session.id)).toEqual(['s1', 's2']);
+    expect(resolver.latest()?.id).toBe('s2');
+    expect(resolver.get('s1')).toMatchObject({
+      title: 'Important chat',
+      pinned: true,
+      updatedAt: '2026-01-01',
+      turns: [{ content: 'hi' }],
+    });
+
+    const probe = new Database(dbPath, { fileMustExist: true });
+    const row = probe.prepare('SELECT metadata FROM sessions WHERE id = ?').get('s1') as { metadata: string };
+    expect(JSON.parse(row.metadata)).toEqual({ __compaction: { summary: 'keep me' } });
+    expect(probe.prepare('SELECT title, pinned FROM marifold_session_display WHERE session_id = ?').get('s1'))
+      .toEqual({ title: 'Important chat', pinned: 1 });
+    probe.close();
+
+    // A provider turn may have loaded the Priest session before the sidebar
+    // action. Its later save replaces Priest's metadata blob, but must not
+    // overwrite Marifold's separate display row.
+    if (staleModelSession) await store.save(staleModelSession);
+    expect(resolver.get('s1')).toMatchObject({ title: 'Important chat', pinned: true });
+
+    expect(resolver.updateDisplay('s1', { title: null, pinned: false })).toBe(true);
+    expect(resolver.get('s1')).not.toHaveProperty('title');
+    expect(resolver.get('s1')).not.toHaveProperty('pinned');
+  });
+});
+
 describe('SessionResolver WAL hardening', () => {
   it('switches the DB into WAL mode on a normal operation', () => {
     const dbPath = tempDb();
@@ -93,5 +136,108 @@ describe('SessionResolver WAL hardening', () => {
     const probe = new Database(dbPath);
     expect(probe.pragma('journal_mode', { simple: true })).toBe('wal');
     probe.close();
+  });
+});
+
+describe('SessionResolver turn attachments', () => {
+  it('persists embedded images beside the user turn and removes them with the session', async () => {
+    const dbPath = tempDb();
+    const resolver = new SessionResolver(dbPath);
+    await resolver.appendExchange(
+      'with-image',
+      'default',
+      'Describe this image.',
+      'It is a small test image.',
+      [{ data: 'aW1hZ2UtYnl0ZXM=', mediaType: 'image/png' }],
+    );
+
+    expect(resolver.get('with-image')?.turns).toMatchObject([
+      {
+        role: 'user',
+        content: 'Describe this image.',
+        attachments: [{ kind: 'image', mediaType: 'image/png', data: 'aW1hZ2UtYnl0ZXM=' }],
+      },
+      { role: 'assistant', content: 'It is a small test image.' },
+    ]);
+
+    // Priest rewrites all turn rows on save; the attachment must remain tied
+    // to the first user turn after another exchange changes every SQLite id.
+    await resolver.appendExchange('with-image', 'default', 'One more question.', 'One more answer.');
+    expect(resolver.get('with-image')?.turns[0]?.attachments).toMatchObject([
+      { kind: 'image', mediaType: 'image/png', data: 'aW1hZ2UtYnl0ZXM=' },
+    ]);
+
+    expect(resolver.delete('with-image')).toBe(true);
+    const db = new Database(dbPath, { fileMustExist: true });
+    const count = db.prepare('SELECT count(*) AS count FROM marifold_turn_attachments').get() as { count: number };
+    expect(count.count).toBe(0);
+    db.close();
+    resolver.close();
+  });
+
+  it('truncates an edited branch by stable user-turn ordinal', async () => {
+    const dbPath = tempDb();
+    const resolver = new SessionResolver(dbPath);
+    await resolver.appendExchange('branch', 'default', 'Conversation 1', 'Answer 1', [
+      { data: 'Zmlyc3Q=', mediaType: 'image/png' },
+    ]);
+    await resolver.appendExchange('branch', 'default', 'Conversation 2', 'Answer 2', [
+      { data: 'c2Vjb25k', mediaType: 'image/jpeg' },
+    ]);
+    await resolver.appendExchange('branch', 'default', 'Conversation 3', 'Answer 3');
+
+    expect(resolver.truncateFromUserTurn('branch', 1)).toEqual({ found: true, removedTurns: 4 });
+    expect(resolver.get('branch')?.turns).toMatchObject([
+      {
+        role: 'user',
+        content: 'Conversation 1',
+        attachments: [{ data: 'Zmlyc3Q=', mediaType: 'image/png' }],
+      },
+      { role: 'assistant', content: 'Answer 1' },
+    ]);
+
+    await resolver.appendExchange('branch', 'default', 'Updated conversation 2', 'Updated answer 2');
+    expect(resolver.get('branch')?.turns.map(turn => turn.content)).toEqual([
+      'Conversation 1',
+      'Answer 1',
+      'Updated conversation 2',
+      'Updated answer 2',
+    ]);
+    resolver.close();
+  });
+
+  it('replaces one exchange in place without deleting later turns', async () => {
+    const dbPath = tempDb();
+    const resolver = new SessionResolver(dbPath);
+    await resolver.appendExchange('replace', 'default', 'Conversation 1', 'Answer 1');
+    await resolver.appendExchange('replace', 'default', 'Conversation 2', 'Answer 2', [
+      { data: 'b2xk', mediaType: 'image/png' },
+    ]);
+    await resolver.appendExchange('replace', 'default', 'Conversation 3', 'Answer 3');
+
+    expect(resolver.turnsBeforeUserTurn('replace', 1)?.map(turn => turn.content)).toEqual([
+      'Conversation 1',
+      'Answer 1',
+    ]);
+    expect(resolver.replaceExchange(
+      'replace',
+      1,
+      'Updated conversation 2',
+      'Updated answer 2',
+      [{ data: 'bmV3', mediaType: 'image/jpeg' }],
+    )).toEqual({ found: true, replaced: true });
+    expect(resolver.get('replace')?.turns).toMatchObject([
+      { role: 'user', content: 'Conversation 1' },
+      { role: 'assistant', content: 'Answer 1' },
+      {
+        role: 'user',
+        content: 'Updated conversation 2',
+        attachments: [{ data: 'bmV3', mediaType: 'image/jpeg' }],
+      },
+      { role: 'assistant', content: 'Updated answer 2' },
+      { role: 'user', content: 'Conversation 3' },
+      { role: 'assistant', content: 'Answer 3' },
+    ]);
+    resolver.close();
   });
 });

@@ -1,5 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { SkillHint } from '../../api/misc';
+import { ImagePreviewDialog } from '../../components/ImagePreviewDialog';
+import type { PreviewImage } from '../../components/ImagePreviewDialog';
 import type { PreparedAttachment } from '../../lib/attachments';
 import { menuQuery, splitLeading, WEB_COMMANDS } from '../../lib/commandSyntax';
 import type { Suggestion } from '../../lib/commandSyntax';
@@ -34,12 +36,19 @@ export function InputBar(props: InputBarProps) {
   const [dismissed, setDismissed] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
   const [caret, setCaret] = useState(0);
+  const [previewIndex, setPreviewIndex] = useState<number>();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const highlightRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const activeItemRef = useRef<HTMLLIElement>(null);
   const completionCaretRef = useRef<number | undefined>(undefined);
+  const composingRef = useRef(false);
   const attachments = props.attachments ?? [];
+  const previewImages: PreviewImage[] = attachments.flatMap(attachment =>
+    attachment.kind === 'image'
+      ? [{ src: `data:${attachment.mediaType};base64,${attachment.data}`, alt: attachment.name }]
+      : [],
+  );
   // Steering rides an active run — attachments can't join mid-task.
   const canAttach = props.onAttachFiles !== undefined && !props.steering;
 
@@ -55,6 +64,17 @@ export function InputBar(props: InputBarProps) {
     if (menuOpen) activeItemRef.current?.scrollIntoView?.({ block: 'nearest' });
   }, [active, menuOpen]);
 
+  // Pasting a long block can make the native textarea scroll to the caret
+  // before React has committed the same text into the visible mirror. Sync
+  // again after that commit (and once on the next frame for WebKit's delayed
+  // caret scrolling), otherwise newly typed tail characters look invisible.
+  useLayoutEffect(() => {
+    const node = textareaRef.current;
+    if (!node) return;
+    autosize(node);
+    return syncHighlightAfterLayout(node);
+  }, [text]);
+
   // A controlled textarea may preserve its old selection offset when React
   // replaces a short query with a longer completion. Place the caret after the
   // completed token once that value has reached the DOM.
@@ -67,6 +87,7 @@ export function InputBar(props: InputBarProps) {
     node.focus();
     node.setSelectionRange(caret, caret);
     autosize(node);
+    return syncHighlightAfterLayout(node);
   }, [text]);
 
   function submit(): void {
@@ -94,6 +115,9 @@ export function InputBar(props: InputBarProps) {
   }
 
   function onKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>): void {
+    // Enter commits an active IME composition. It must never also submit the
+    // half-composed text (keyCode 229 covers older WebKit behavior).
+    if (composingRef.current || event.nativeEvent.isComposing || event.keyCode === 229) return;
     if (menuOpen) {
       if (event.key === 'ArrowDown') {
         event.preventDefault();
@@ -135,7 +159,24 @@ export function InputBar(props: InputBarProps) {
     node.style.height = `${Math.min(node.scrollHeight, 160)}px`;
   }
 
+  function syncHighlightScroll(node: HTMLTextAreaElement): void {
+    const highlight = highlightRef.current;
+    if (!highlight) return;
+    highlight.scrollTop = node.scrollTop;
+    highlight.scrollLeft = node.scrollLeft;
+  }
+
+  function syncHighlightAfterLayout(node: HTMLTextAreaElement): (() => void) | undefined {
+    syncHighlightScroll(node);
+    if (typeof window.requestAnimationFrame !== 'function') return undefined;
+    const frame = window.requestAnimationFrame(() => syncHighlightScroll(node));
+    return () => window.cancelAnimationFrame(frame);
+  }
+
   const { token, rest } = splitLeading(text);
+  // A div does not allocate the textarea's final empty line for a trailing
+  // newline. The zero-width sentinel keeps both scroll heights identical.
+  const trailingLineSentinel = text.endsWith('\n') ? '\u200b' : null;
 
   return (
     <div className={styles.wrap}>
@@ -150,11 +191,23 @@ export function InputBar(props: InputBarProps) {
                 : undefined}
             >
               {attachment.kind === 'image' ? (
-                <img
-                  className={styles.chipThumb}
-                  src={`data:${attachment.mediaType};base64,${attachment.data}`}
-                  alt={attachment.name}
-                />
+                <button
+                  type="button"
+                  className={styles.chipPreviewButton}
+                  aria-label={`Preview ${attachment.name}`}
+                  onClick={() => setPreviewIndex(
+                    attachments
+                      .slice(0, index + 1)
+                      .filter(candidate => candidate.kind === 'image')
+                      .length - 1,
+                  )}
+                >
+                  <img
+                    className={styles.chipThumb}
+                    src={`data:${attachment.mediaType};base64,${attachment.data}`}
+                    alt={attachment.name}
+                  />
+                </button>
               ) : (
                 <span aria-hidden>📄</span>
               )}
@@ -205,9 +258,10 @@ export function InputBar(props: InputBarProps) {
               <>
                 <span className={styles.skillToken}>{token}</span>
                 {rest}
+                {trailingLineSentinel}
               </>
             ) : (
-              text
+              <>{text}{trailingLineSentinel}</>
             )}
           </div>
           <textarea
@@ -224,12 +278,13 @@ export function InputBar(props: InputBarProps) {
               setCaret(event.target.selectionStart ?? next.length);
               setDismissed(false);
               setActiveIndex(0);
-              autosize(event.target);
             }}
             onScroll={event => {
-              if (highlightRef.current) highlightRef.current.scrollTop = event.currentTarget.scrollTop;
+              syncHighlightScroll(event.currentTarget);
             }}
             onKeyDown={onKeyDown}
+            onCompositionStart={() => { composingRef.current = true; }}
+            onCompositionEnd={() => { composingRef.current = false; }}
             onPaste={onPaste}
             onFocus={event => {
               setFocused(true);
@@ -284,6 +339,13 @@ export function InputBar(props: InputBarProps) {
           </div>
         </div>
       </div>
+      {previewIndex !== undefined ? (
+        <ImagePreviewDialog
+          images={previewImages}
+          initialIndex={previewIndex}
+          onClose={() => setPreviewIndex(undefined)}
+        />
+      ) : null}
     </div>
   );
 }

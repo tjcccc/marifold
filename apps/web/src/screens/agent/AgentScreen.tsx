@@ -123,6 +123,9 @@ export function AgentScreen(props: AgentScreenProps) {
               onSelect={controller.selectSession}
               onNew={controller.newSession}
               onBack={controller.showProfiles}
+              onRename={controller.renameSession}
+              onSetPinned={controller.setSessionPinned}
+              onDelete={controller.deleteSession}
               footer={sidebarFooter}
             />
           ) : (
@@ -158,18 +161,6 @@ export function AgentScreen(props: AgentScreenProps) {
             : controller.profileName
               ? (currentSession ? sessionTitle(currentSession) : 'New session')
               : 'Profiles'}
-          avatar={
-            controller.profileName ? (
-              <Avatar
-                client={props.client}
-                name={controller.profileName}
-                hasAvatar={controller.profiles.some(
-                  profile => profile.name === controller.profileName && profile.avatar !== undefined,
-                )}
-                size={26}
-              />
-            ) : undefined
-          }
           sidebarsHidden={sidebarsHidden}
           onToggleSidebars={toggleSidebars}
           view={props.workspaceView}
@@ -185,11 +176,14 @@ export function AgentScreen(props: AgentScreenProps) {
               onDismiss={controller.dismissCatchUp}
             />
             <ThreadView
+              key={controller.sessionId ?? 'new-session'}
               items={controller.thread.items}
               scrollToBottomRequest={scrollToBottomRequest}
               onCancelRun={runId => void controller.cancel(runId)}
               onAnswerApproval={(runId, requestId, action) => void controller.answer(runId, requestId, action)}
               onToggleRun={controller.toggleRun}
+              onEditUserMessage={controller.resendEdited}
+              editingDisabled={controller.steeringRun !== undefined || controller.sending}
             />
             <InputBar
               steering={controller.steeringRun !== undefined}

@@ -7,9 +7,13 @@ export interface MarifoldRunRequest {
   provider?: string;
   model?: string;
   sessionId?: string;
+  /** Replace this zero-based persisted user exchange instead of appending a
+   * new one. Only turns before it are supplied as model context. */
+  replaceUserTurnIndex?: number;
   memories?: boolean;
   think?: boolean;
-  /** Images attached to the user turn. Passed through to the provider; not persisted in sessions. */
+  /** Images attached to the user turn. Passed through to the provider; embedded
+   * data/URLs are also retained as display-only session attachments. */
   images?: ImageInput[];
   /** Preserve the attached images' original encoded bytes for this turn. */
   originalImages?: boolean;
