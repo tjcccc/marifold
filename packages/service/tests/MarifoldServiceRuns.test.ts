@@ -1,4 +1,5 @@
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import { AddressInfo } from 'net';
 import { FastifyInstance } from 'fastify';
@@ -172,6 +173,43 @@ describe('MarifoldService /v1/runs', () => {
       expect(invalid.status).toBe(400);
       expect((await invalid.json()).error.message).toContain('exactly one of data or url');
     } finally {
+      await server.close();
+    }
+  });
+
+  it('stages binary files read-only and tells the model their run input path', async () => {
+    const { captured } = stubProvider(['I found the workbook.']);
+    const { server, base } = await startServer();
+    let runDir: string | undefined;
+    try {
+      const data = Buffer.from('test-workbook-bytes').toString('base64');
+      const created = await postJson(base, '/v1/runs', {
+        objective: 'Inspect the workbook.',
+        cwd: tempDir(),
+        files: [{
+          name: '../budget.xlsx',
+          mediaType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          data,
+        }],
+      });
+      expect(created.status).toBe(201);
+      const { run } = await created.json();
+      runDir = path.join(os.homedir(), '.marifold', 'runs', run.id);
+      await pullFrames(sseFrames(await fetch(`${base}/v1/runs/${run.id}/events`)), frame => frame.event === 'done');
+
+      const staged = path.join(runDir, 'input', 'budget.xlsx');
+      expect(fs.readFileSync(staged, 'utf8')).toBe('test-workbook-bytes');
+      expect(fs.statSync(staged).mode & 0o222).toBe(0);
+      expect(JSON.stringify(captured)).toContain(staged);
+
+      const invalid = await postJson(base, '/v1/runs', {
+        objective: 'x',
+        files: [{ name: 'x.xlsx', mediaType: 'application/octet-stream', data: 'not base64!' }],
+      });
+      expect(invalid.status).toBe(400);
+      expect((await invalid.json()).error.message).toContain('must be base64');
+    } finally {
+      if (runDir) fs.rmSync(runDir, { recursive: true, force: true });
       await server.close();
     }
   });

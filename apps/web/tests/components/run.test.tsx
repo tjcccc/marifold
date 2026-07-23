@@ -96,6 +96,26 @@ describe('RunCard', () => {
     expect(onAnswer).not.toHaveBeenCalled();
   });
 
+  it('does not offer Always or Trust for a one-call-only external capability', () => {
+    const run = cardFixture({
+      approval: {
+        id: 'call_external',
+        tool: 'shell_exec',
+        kind: 'shell',
+        summary: 'run command in /Volumes/work',
+        input: {},
+        escalated: true,
+        escalatedPath: '/Volumes/work',
+        persistable: false,
+      },
+    });
+    render(<RunCard run={run} onCancel={() => {}} onAnswer={() => {}} onToggle={() => {}} />);
+    expect(screen.queryByText(/Always allow/)).toBeNull();
+    expect(screen.queryByText('Trust this folder')).toBeNull();
+    expect(screen.getByText(/Allow once/)).toBeTruthy();
+    expect(screen.getByText('Deny')).toBeTruthy();
+  });
+
   it('collapses a finished run to the footer and toggles details', () => {
     const onToggle = vi.fn();
     const run = cardFixture({

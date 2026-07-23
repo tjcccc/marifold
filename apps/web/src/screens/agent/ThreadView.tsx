@@ -8,7 +8,7 @@ import type { PreviewImage } from '../../components/ImagePreviewDialog';
 import type { RunApprovalAction } from '../../api/types';
 import { splitLeading } from '../../lib/commandSyntax';
 import { formatCostUSD, formatRunDuration, formatTokens } from '../../lib/format';
-import type { RunCardState, ThreadItem } from '../../state/thread';
+import type { RunCardState, ThreadItem, UserAttachment } from '../../state/thread';
 import { hasRunActivity, isTrivialRun } from '../../state/thread';
 import { RunCard } from './RunCard';
 import styles from './ThreadView.module.css';
@@ -170,7 +170,7 @@ function ThreadItemView({
                   </button>
                 ) : (
                   <span key={index} className={styles.userFile}>
-                    <span aria-hidden>📄</span> {attachment.name}
+                    <span aria-hidden>{officeAttachmentGlyph(attachment.officeKind)}</span> {attachment.name}
                   </span>
                 ),
               )}
@@ -277,6 +277,13 @@ function ThreadItemView({
       );
     }
   }
+}
+
+function officeAttachmentGlyph(kind: UserAttachment['officeKind']): string {
+  if (kind === 'word') return 'W';
+  if (kind === 'spreadsheet') return 'X';
+  if (kind === 'presentation') return 'P';
+  return '📄';
 }
 
 function LazyTranscriptImage({

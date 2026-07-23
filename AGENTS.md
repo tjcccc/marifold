@@ -18,6 +18,8 @@ v0.48.x adds durable transcript image replay and galleries, response/code copyin
 
 v0.49.x completes the desktop Web workspace with profile/session search, archive views, per-session drafts, authenticated lazy transcript images, global agent/web-search/appearance settings, accessible keyboard/dialog behavior, safe active-request deletion, and isolated Chromium regression coverage.
 
+v0.50.x adds local Web extraction for modern Word/Excel/PowerPoint attachments, bounded read-only original-file staging for agent runs, capability-scoped per-run workspaces, fail-closed macOS shell sandboxing, one-time approved `uv` package installation into disposable Python environments, and deterministic service shutdown/listen-failure cleanup.
+
 ## Stack
 
 - TypeScript

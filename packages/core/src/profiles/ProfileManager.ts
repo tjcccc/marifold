@@ -249,8 +249,8 @@ export class ProfileManager {
     return { name, path: profileToml, ...result };
   }
 
-  /** Add a trusted folder (where file writes are allowed without prompting) to
-   * the profile's profile.toml. Refuses overly broad / sensitive roots. */
+  /** Add a trusted folder capability to profile.toml. In-home writes may be
+   * silent; external folders still prompt. Refuses broad/sensitive roots. */
   addTrustedFolder(name: string, folder: string): { name: string; path: string; folder: string } {
     assertSafeName(name);
     const resolved = path.resolve(expandHome(folder));

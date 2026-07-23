@@ -17,7 +17,7 @@ export interface RespondRequest {
   approvalHandler?: ApprovalHandler;
   /** Working directory for agent file/shell tools (e.g. a channel's outbox). */
   cwd?: string;
-  /** Extra trusted folders for this run (writes there are auto-approved). */
+  /** Extra run filesystem capabilities; external folders still prompt. */
   trustedFolders?: string[];
   /** Authoritative instructions injected atop the system prompt (e.g. telling
    * the agent that files it writes are delivered to the user). */

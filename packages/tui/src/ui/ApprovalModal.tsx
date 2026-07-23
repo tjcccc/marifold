@@ -7,7 +7,9 @@ import { ACCENT, ATTACHMENT, DIM } from './theme.js';
 
 /** The folder a "trust" action would add, for an escalated file write. */
 export function trustTargetFolder(request: ApprovalRequest): string | undefined {
-  return request.escalated && request.escalatedPath ? path.dirname(request.escalatedPath) : undefined;
+  return request.persistable !== false && request.escalated && request.escalatedPath
+    ? path.dirname(request.escalatedPath)
+    : undefined;
 }
 
 function tildify(p: string): string {
@@ -58,7 +60,7 @@ export function ApprovalModal({
     // Enter = allow once (safe default) — never persists/trusts on a stray keypress.
     if (key.escape || ch === 'd') onResolve('no');
     else if (key.return || ch === 'a' || ch === 'y') onResolve('once');
-    else if (ch === 't') onResolve('always');
+    else if (ch === 't' && request.persistable !== false) onResolve('always');
   });
 
   // The "always" action: trust this folder (escalated write), else allow this kind.
@@ -84,8 +86,12 @@ export function ApprovalModal({
       <Box marginTop={1}>
         <Text>
           <Text color={ATTACHMENT} bold>[a]</Text><Text color={DIM}>llow once</Text>
-          <Text color={DIM}> · </Text>
-          <Text color={ACCENT} bold>[t]</Text><Text color={DIM}>{alwaysLabel}</Text>
+          {request.persistable !== false ? (
+            <>
+              <Text color={DIM}> · </Text>
+              <Text color={ACCENT} bold>[t]</Text><Text color={DIM}>{alwaysLabel}</Text>
+            </>
+          ) : null}
           <Text color={DIM}> · </Text>
           <Text color="red" bold>[d]</Text><Text color={DIM}>eny (this time)</Text>
         </Text>

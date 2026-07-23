@@ -43,6 +43,10 @@ short: what shipped (one line each), what's next, and what's deliberately deferr
   optimization; clean desktop routes and transcript rendering; durable image replay and
   in-place historical edits; profile search; session rename/pin/archive/delete/search, per-session drafts,
   global agent/web-search/appearance settings, and authenticated lazy transcript images.
+- **v0.50 — safe agent files and execution**: local Word/Excel/PowerPoint extraction;
+  bounded read-only original-file staging; capability-scoped per-run workspaces; fail-closed
+  macOS shell sandboxing; one-time external-path/package approvals; disposable `uv` Python
+  environments; and deterministic service shutdown/listen-failure cleanup.
 
 ## Next
 

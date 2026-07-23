@@ -7,6 +7,7 @@ import {
   optionalImagesField,
   optionalNonNegativeIntegerField,
   optionalPositiveIntegerField,
+  optionalRunFilesField,
   optionalStringField,
   requiredString,
   stringArray,
@@ -118,6 +119,7 @@ function parseRunStartInput(value: unknown): RunStartInput {
     ...optionalBooleanField('lean', body.lean),
     ...optionalPositiveIntegerField('maxIterations', body.maxIterations),
     ...optionalImagesField(body.images),
+    ...optionalRunFilesField(body.files),
     ...(body.instructions !== undefined ? { instructions: stringArray(body.instructions, 'instructions') } : {}),
   };
 }

@@ -201,6 +201,36 @@ describe('InputBar composer interactions', () => {
     expect(screen.getByRole('dialog', { name: 'first.png preview' })).toBeTruthy();
   });
 
+  it('offers modern Office files and identifies extracted workbook attachments', () => {
+    const { container } = render(
+      <InputBar
+        steering={false}
+        think={false}
+        onToggleThink={() => {}}
+        modelOptions={[]}
+        onSelectModel={() => {}}
+        onSubmit={() => {}}
+        attachments={[
+          {
+            kind: 'text',
+            name: 'budget.xlsx',
+            size: 2048,
+            content: 'Sheet: Budget',
+            officeKind: 'spreadsheet',
+          },
+        ]}
+        onAttachFiles={() => {}}
+      />,
+    );
+
+    expect(screen.getByText('X')).toBeTruthy();
+    expect(screen.getByTitle(/Excel workbook · 2 KiB extracted text/)).toBeTruthy();
+    const picker = container.querySelector<HTMLInputElement>('input[type="file"]');
+    expect(picker?.accept).toContain('.docx');
+    expect(picker?.accept).toContain('.xlsx');
+    expect(picker?.accept).toContain('.pptx');
+  });
+
   it('keeps the visible mirror at the pasted textarea caret', () => {
     const { textarea } = renderBar();
     const mirror = textarea.previousElementSibling as HTMLDivElement;

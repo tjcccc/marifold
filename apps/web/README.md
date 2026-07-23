@@ -51,6 +51,22 @@ pnpm marifold service --web-dir apps/web/dist        # or [service].web_dir in c
 Served same-origin, no CORS configuration needed; with a token configured,
 auth covers `/v1/*` while the shell stays reachable.
 
+## Attachments
+
+The composer accepts images, plain-text/code files, and modern Microsoft Office
+files: Word `.docx`, Excel `.xlsx`, and PowerPoint `.pptx`. Office files are
+OOXML ZIP archives; Marifold opens them locally in the browser, extracts text
+with useful paragraph/slide/sheet structure, and inlines that text into the model
+prompt. In chat mode the original binary stays in the browser. In agent mode it
+is additionally staged by the local service as a read-only file in the private
+run workspace so file tools can inspect it; raw Office bytes are not sent to the
+model.
+
+Office source files are limited to 16 MiB, selected expanded XML to 8 MiB, and
+extracted prompt text to 256 KiB. Embedded images, charts, complex formatting,
+macros, password-protected/encrypted files, and legacy `.doc`/`.xls`/`.ppt`
+binaries are not interpreted.
+
 ## Tests
 
 `pnpm --filter @marifold/web test` — unit (SSE parser, thread reducer,
@@ -60,6 +76,6 @@ integration suite that drives the real `ApiClient` against a real
 
 `pnpm --filter @marifold/web test:e2e` builds the relevant packages, starts a
 real service over disposable profile/session storage, and runs the desktop
-workspace flows in Chromium, including profile/session search, archive/drafts,
-image galleries, accessible dialogs, and global settings. Browser artifacts stay under
+workspace flows in Chromium, including profile/session search, Office uploads,
+archive/drafts, image galleries, accessible dialogs, and global settings. Browser artifacts stay under
 `output/playwright/`.

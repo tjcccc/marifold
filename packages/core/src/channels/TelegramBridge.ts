@@ -396,7 +396,10 @@ export class TelegramBridge {
    * session (no re-prompt this run). */
   private async requestApproval(chatId: number, request: ApprovalRequest): Promise<ApprovalDecision> {
     if (!request.escalated && this.grantedKinds.has(request.kind)) return { approved: true };
-    if (request.escalated && request.escalatedPath && isInsideAny(request.escalatedPath, this.trustedFolders)) {
+    if (request.persistable !== false
+        && request.escalated
+        && request.escalatedPath
+        && isInsideAny(request.escalatedPath, this.trustedFolders)) {
       return { approved: true };
     }
 
@@ -407,7 +410,7 @@ export class TelegramBridge {
     const keyboard: InlineKeyboard = {
       inline_keyboard: [
         [{ text: '✅ Allow once', callback_data: `appr:${token}:once` }],
-        [alwaysButton],
+        ...(request.persistable === false ? [] : [[alwaysButton]]),
         [{ text: '❌ Deny', callback_data: `appr:${token}:deny` }],
       ],
     };
@@ -426,6 +429,7 @@ export class TelegramBridge {
       case 'timeout':
         return { approved: false, reason: 'no response to the approval prompt' };
       case 'trust': {
+        if (request.persistable === false) return { approved: false, reason: 'this capability cannot be trusted persistently' };
         const folder = dirname(request.escalatedPath as string);
         if (!this.trustedFolders.includes(folder)) this.trustedFolders.push(folder);
         try {
@@ -436,6 +440,7 @@ export class TelegramBridge {
         return { approved: true };
       }
       case 'always':
+        if (request.persistable === false) return { approved: false, reason: 'this capability cannot be allowed persistently' };
         this.grantedKinds.add(request.kind);
         try {
           this.runtime.setProfileAgentApproval(this.profile, request.kind, 'allow');

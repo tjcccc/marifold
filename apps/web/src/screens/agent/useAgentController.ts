@@ -17,13 +17,21 @@ import type {
   ProfileDetail,
   ProfileSummary,
   RunApprovalAction,
+  RunFileInput,
   RunRecord,
   SessionImageAttachment,
   SessionSummary,
 } from '../../api/types';
 import type { Route } from '../../lib/route';
 import type { PreparedAttachment } from '../../lib/attachments';
-import { fileToBase64, inlineTextAttachments, MAX_TOTAL_BYTES, prepareFiles } from '../../lib/attachments';
+import {
+  fileToBase64,
+  inlineTextAttachments,
+  MAX_TOTAL_BYTES,
+  officeKindForFile,
+  prepareFiles,
+  splitInlineTextAttachments,
+} from '../../lib/attachments';
 import { parseCommand, WEB_COMMANDS } from '../../lib/commandSyntax';
 import { withPendingSession } from '../../lib/sessionSummaries';
 import { RunFollowers } from '../../state/followers';
@@ -185,13 +193,30 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
         const detail = await getSession(client, id);
         dispatch({
           type: 'session_loaded',
-          turns: detail.turns.map(turn => ({
-            role: turn.role,
-            content: turn.content,
-            ...(turn.attachments && turn.attachments.length > 0
-              ? { attachments: toUserAttachments(id, turn.attachments) }
-              : {}),
-          })),
+          turns: detail.turns.map(turn => {
+            if (turn.role === 'assistant') return { role: turn.role, content: turn.content };
+            const restored = splitInlineTextAttachments(turn.content);
+            const attachments: UserAttachment[] = [
+              ...toUserAttachments(id, turn.attachments ?? []),
+              ...restored.files.map(file => {
+                const officeKind = officeKindForFile(file.name);
+                return {
+                  kind: 'text' as const,
+                  name: file.name,
+                  content: file.content,
+                  ...(officeKind ? { officeKind } : {}),
+                  ...(file.content.includes('[Office extraction truncated to fit the attachment text limit.]')
+                    ? { truncated: true }
+                    : {}),
+                };
+              }),
+            ];
+            return {
+              role: turn.role,
+              content: restored.prompt,
+              ...(attachments.length > 0 ? { attachments } : {}),
+            };
+          }),
         });
       } catch (error) {
         // A freshly minted id has no server session yet — that's expected.
@@ -542,11 +567,26 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
       const textFiles = pending.filter(
         (item): item is Extract<PreparedAttachment, { kind: 'text' }> => item.kind === 'text',
       );
+      const files: RunFileInput[] = await Promise.all(textFiles.flatMap(item => {
+        if (item.officeKind && !item.originalFile) return [];
+        const source = item.originalFile ?? new Blob([item.content], { type: item.mediaType || 'text/plain' });
+        return [fileToBase64(source).then(data => ({
+          name: item.name,
+          mediaType: item.mediaType || source.type || 'text/plain',
+          data,
+        }))];
+      }));
       const prompt = inlineTextAttachments(trimmed, textFiles);
       const bubbleAttachments: UserAttachment[] = pending.map(item =>
         item.kind === 'image'
           ? { kind: 'image', name: item.name, previewUrl: `data:${item.mediaType};base64,${item.data}` }
-          : { kind: 'text', name: item.name },
+          : {
+              kind: 'text',
+              name: item.name,
+              content: item.content,
+              ...(item.officeKind ? { officeKind: item.officeKind } : {}),
+              ...(item.truncated ? { truncated: true } : {}),
+            },
       );
 
       if (options.replaceItemId) {
@@ -617,6 +657,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
           provider,
           model,
           ...(images.length > 0 ? { images } : {}),
+          ...(files.length > 0 ? { files } : {}),
           ...(options.originalImages ? { originalImages: true } : {}),
         });
         dispatch({ type: 'run_created', run });
@@ -971,7 +1012,18 @@ async function preparedAttachmentsFromUser(
 ): Promise<PreparedAttachment[]> {
   const prepared: PreparedAttachment[] = [];
   for (const attachment of items ?? []) {
-    if (attachment.kind !== 'image') continue;
+    if (attachment.kind === 'text') {
+      if (attachment.content === undefined) continue;
+      prepared.push({
+        kind: 'text',
+        name: attachment.name,
+        size: new TextEncoder().encode(attachment.content).length,
+        content: attachment.content,
+        ...(attachment.officeKind ? { officeKind: attachment.officeKind } : {}),
+        ...(attachment.truncated ? { truncated: true } : {}),
+      });
+      continue;
+    }
     let parsed = attachment.previewUrl ? parseImageDataUrl(attachment.previewUrl) : undefined;
     if (!parsed && attachment.sourcePath) {
       const blob = await client.blob(attachment.sourcePath);

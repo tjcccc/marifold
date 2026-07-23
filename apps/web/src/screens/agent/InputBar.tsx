@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { SkillHint } from '../../api/misc';
 import { ImagePreviewDialog } from '../../components/ImagePreviewDialog';
 import type { PreviewImage } from '../../components/ImagePreviewDialog';
-import type { PreparedAttachment } from '../../lib/attachments';
+import type { OfficeFileKind, PreparedAttachment } from '../../lib/attachments';
 import { menuQuery, splitLeading, WEB_COMMANDS } from '../../lib/commandSyntax';
 import type { Suggestion } from '../../lib/commandSyntax';
 import styles from './InputBar.module.css';
@@ -199,7 +199,9 @@ export function InputBar(props: InputBarProps) {
               className={styles.chip}
               title={attachment.kind === 'image' && attachment.optimized
                 ? `${formatBytes(attachment.originalSize ?? attachment.size)} → ${formatBytes(attachment.size)}`
-                : undefined}
+                : attachment.kind === 'text' && attachment.officeKind
+                  ? `${officeKindLabel(attachment.officeKind)} · ${formatBytes(attachment.size)} extracted text${attachment.truncated ? ' · truncated' : ''}`
+                  : undefined}
             >
               {attachment.kind === 'image' ? (
                 <button
@@ -220,7 +222,12 @@ export function InputBar(props: InputBarProps) {
                   />
                 </button>
               ) : (
-                <span aria-hidden>📄</span>
+                <span
+                  className={attachment.officeKind ? styles.officeFileIcon : undefined}
+                  aria-hidden
+                >
+                  {officeKindGlyph(attachment.officeKind)}
+                </span>
               )}
               <span className={styles.chipName}>
                 {attachment.name}{attachment.kind === 'image' && attachment.optimized ? ` · ${formatBytes(attachment.size)}` : ''}
@@ -311,8 +318,8 @@ export function InputBar(props: InputBarProps) {
             <>
               <button
                 className={styles.attach}
-                title="Attach files or images"
-                aria-label="Attach files or images"
+                title="Attach images, text, or Office files"
+                aria-label="Attach images, text, or Office files"
                 onClick={() => fileInputRef.current?.click()}
               >
                 +
@@ -322,7 +329,7 @@ export function InputBar(props: InputBarProps) {
                 className={styles.fileInput}
                 type="file"
                 multiple
-                accept="image/png,image/jpeg,image/webp,image/gif,text/*,.md,.json,.yaml,.yml,.toml,.csv,.ts,.tsx,.js,.jsx,.py,.sh,.log,.xml,.html,.css,.sql"
+                accept="image/png,image/jpeg,image/webp,image/gif,text/*,.md,.json,.yaml,.yml,.toml,.csv,.ts,.tsx,.js,.jsx,.py,.sh,.log,.xml,.html,.css,.sql,.docx,.xlsx,.pptx,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.openxmlformats-officedocument.presentationml.presentation"
                 onChange={event => {
                   const files = [...(event.target.files ?? [])];
                   if (files.length > 0) props.onAttachFiles?.(files);
@@ -392,6 +399,19 @@ function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KiB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MiB`;
+}
+
+function officeKindGlyph(kind: OfficeFileKind | undefined): string {
+  if (kind === 'word') return 'W';
+  if (kind === 'spreadsheet') return 'X';
+  if (kind === 'presentation') return 'P';
+  return '📄';
+}
+
+function officeKindLabel(kind: OfficeFileKind): string {
+  if (kind === 'word') return 'Word document';
+  if (kind === 'spreadsheet') return 'Excel workbook';
+  return 'PowerPoint presentation';
 }
 
 function ModelChip({

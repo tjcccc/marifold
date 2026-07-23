@@ -225,7 +225,7 @@ describe('RunRegistry', () => {
     expect(results).toHaveLength(2);
   });
 
-  it('"trust" persists the escalated folder and silences later writes inside it', async () => {
+  it('refuses persistent trust outside home and requires each external write once', async () => {
     const workspace = tempDir();
     const outside = tempDir();
     const { registry, folders } = makeRegistry([
@@ -240,9 +240,17 @@ describe('RunRegistry', () => {
     const request = (matched!.event as Extract<AgentEvent, { type: 'approval_request' }>).request;
     expect(request.escalated).toBe(true);
     expect(request.escalatedPath).toBe(path.join(outside, 'a.txt'));
+    expect(request.persistable).toBe(false);
 
-    registry.answerApproval(record.id, request.id, 'trust');
-    expect(folders).toEqual([{ profile: 'default', folder: outside }]);
+    expect(() => registry.answerApproval(record.id, request.id, 'trust')).toThrow(/one call at a time/);
+    registry.answerApproval(record.id, request.id, 'once');
+    expect(folders).toEqual([]);
+
+    const { matched: second } = await pullUntil(stream, e => e.type === 'approval_request');
+    const secondRequest = (second!.event as Extract<AgentEvent, { type: 'approval_request' }>).request;
+    expect(secondRequest.id).toBe('call_1');
+    expect(secondRequest.persistable).toBe(false);
+    registry.answerApproval(record.id, secondRequest.id, 'once');
 
     const { matched: done } = await pullUntil(stream, doneEvent);
     expect(done!.event).toMatchObject({ type: 'done', status: 'completed' });

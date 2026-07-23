@@ -17,9 +17,8 @@ export interface MarifoldAgentConfig {
    * approval; 'ask' still degrades to deny when no handler is present, so
    * only explicit 'allow' entries widen unattended capability. */
   unattended?: Partial<AgentApprovalConfig>;
-  /** Folders (outside the workspace) where file writes are allowed without
-   * prompting — a flat allowlist, not a per-folder permission. A write inside
-   * one is non-escalated and auto-approved. */
+  /** Extra filesystem capabilities outside the working directory. In-home
+   * entries are auto-approved; entries outside $HOME still prompt per action. */
   trustedFolders: string[];
   maxIterations: number;
   toolOutputLimit: number;
@@ -84,6 +83,9 @@ export interface ApprovalRequest {
   /** Absolute target path of an escalated file write, so a client can offer to
    * trust its containing folder. */
   escalatedPath?: string;
+  /** False means the capability must be approved one call at a time. Clients
+   * must not offer or accept persistent "always"/"trust" actions. */
+  persistable?: boolean;
 }
 
 export interface ApprovalDecision {

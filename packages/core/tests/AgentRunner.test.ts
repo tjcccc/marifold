@@ -355,9 +355,9 @@ describe('AgentRunner', () => {
     expect(task.events.some(e => e.kind === 'observation')).toBe(true);
   });
 
-  it('auto-approves an out-of-workspace write inside a trusted folder on an unattended run', async () => {
-    // The blog-automation case: a scheduled (no approvalHandler) run writes to a
-    // trusted folder outside the workspace — it must execute, not be denied.
+  it('does not let a trusted-folder grant bypass confirmation outside the user home', async () => {
+    // Temp directories are outside this account's home. The new hard boundary
+    // wins over a saved trusted-folder entry, and unattended runs cannot answer.
     const cwd = tempDir();
     const trusted = tempDir();
     const target = path.join(trusted, 'blog.md');
@@ -371,11 +371,11 @@ describe('AgentRunner', () => {
     const events = await collect(runner.run({ objective: 'write the daily blog', cwd, forcePlan: true }));
 
     const decision = events.find(e => e.type === 'approval_decision') as Extract<AgentEvent, { type: 'approval_decision' }>;
-    expect(decision.approved).toBe(true);
-    expect(decision.source).toBe('policy'); // trusted-folder auto-approval, not a handler
+    expect(decision.approved).toBe(false);
+    expect(decision.source).toBe('policy');
     const result = events.find(e => e.type === 'tool_result') as Extract<AgentEvent, { type: 'tool_result' }>;
-    expect(result.isError).toBeFalsy();
-    expect(fs.readFileSync(target, 'utf-8')).toBe('hello blog'); // actually written, no prompt
+    expect(result.isError).toBe(true);
+    expect(fs.existsSync(target)).toBe(false);
   });
 
   it('denies ask-mode tools on unattended runs without executing', async () => {

@@ -32,10 +32,18 @@ export type {
 } from './agent/ToolRegistry';
 export { DelegateTool } from './agent/tools/DelegateTool';
 export type { DelegateAskRequest, DelegateAskResult, DelegateToolDeps } from './agent/tools/DelegateTool';
+export { PythonPackageTool } from './agent/tools/PythonPackageTool';
 export { ReadFileTool } from './agent/tools/ReadFileTool';
 export { ShellExecTool } from './agent/tools/ShellExecTool';
 export { WebSearchTool } from './agent/tools/WebSearchTool';
 export { isInsideWorkspace, isInsideAny, WriteFileTool } from './agent/tools/WriteFileTool';
+export {
+  MAX_RUN_INPUT_BYTES,
+  RUN_WORKSPACE_RETENTION_MS,
+  createRunWorkspace,
+  isInsideAnyRoot,
+} from './agent/RunWorkspace';
+export type { RunFileInput, RunWorkspace, StagedRunFile } from './agent/RunWorkspace';
 export { DuckDuckGoBackend } from './search/DuckDuckGoBackend';
 export { FirecrawlBackend } from './search/FirecrawlBackend';
 export type { FirecrawlBackendOptions } from './search/FirecrawlBackend';

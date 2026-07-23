@@ -6,7 +6,7 @@ const KIND_ACTION_LABEL: Record<ToolKind, string> = {
   read: 'file reads',
   write: 'file writes',
   shell: 'shell commands',
-  network: 'web search',
+  network: 'network access',
   delegate: 'profile delegation',
 };
 
@@ -33,7 +33,8 @@ export function ApprovalSheet({ request, busy, onAnswer }: ApprovalSheetProps) {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [busy, onAnswer]);
 
-  const trustFolder = request.escalatedPath !== undefined;
+  const canPersist = request.persistable !== false;
+  const trustFolder = canPersist && request.escalatedPath !== undefined;
 
   return (
     <div className={styles.sheet} role="alertdialog" aria-label="Approval required">
@@ -55,13 +56,15 @@ export function ApprovalSheet({ request, busy, onAnswer }: ApprovalSheetProps) {
         <button className={styles.deny} disabled={busy} onClick={() => onAnswer('deny')}>
           Deny
         </button>
-        <button
-          className={styles.persist}
-          disabled={busy}
-          onClick={() => onAnswer(trustFolder ? 'trust' : 'always')}
-        >
-          {trustFolder ? 'Trust this folder' : `Always allow ${KIND_ACTION_LABEL[request.kind]}`}
-        </button>
+        {canPersist ? (
+          <button
+            className={styles.persist}
+            disabled={busy}
+            onClick={() => onAnswer(trustFolder ? 'trust' : 'always')}
+          >
+            {trustFolder ? 'Trust this folder' : `Always allow ${KIND_ACTION_LABEL[request.kind]}`}
+          </button>
+        ) : null}
         <button className={styles.allow} disabled={busy} onClick={() => onAnswer('once')}>
           Allow once <span className={styles.kbd}>⌘⏎</span>
         </button>
@@ -79,7 +82,7 @@ function verbFor(kind: ToolKind): string {
     case 'shell':
       return 'run a command';
     case 'network':
-      return 'search the web';
+      return 'use the network';
     case 'delegate':
       return 'ask another profile';
   }

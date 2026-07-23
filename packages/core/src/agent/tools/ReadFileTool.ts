@@ -1,8 +1,19 @@
 import * as fs from 'fs';
-import * as path from 'path';
 import { JSONValue } from '@priest-ai/core';
-import { expandHome } from '../../workspace/WorkspacePaths';
-import { AgentTool, capToolOutput, requireStringInput, ToolExecutionContext, ToolExecutionResult } from '../ToolRegistry';
+import {
+  isInsideAnyRoot,
+  isOutsideUserHome,
+  isSensitiveHostPath,
+  resolveToolPath,
+} from '../RunWorkspace';
+import {
+  AgentTool,
+  capToolOutput,
+  requireStringInput,
+  ToolExecutionContext,
+  ToolExecutionResult,
+  ToolRiskAssessment,
+} from '../ToolRegistry';
 
 export class ReadFileTool implements AgentTool {
   readonly kind = 'read' as const;
@@ -22,8 +33,27 @@ export class ReadFileTool implements AgentTool {
     return `read ${typeof input.path === 'string' ? input.path : '<missing path>'}`;
   }
 
+  assessRisk(input: Record<string, JSONValue>, ctx: ToolExecutionContext): ToolRiskAssessment {
+    if (typeof input.path !== 'string' || !ctx.workspace) return { escalate: false };
+    const target = resolveToolPath(input.path, ctx.workspace, ctx.cwd);
+    if (isInsideAnyRoot(target, ctx.workspace.readRoots)) return { escalate: false };
+    const nonPersistable = isOutsideUserHome(target, ctx.workspace) || isSensitiveHostPath(target, ctx.workspace);
+    return {
+      escalate: true,
+      persistable: !nonPersistable,
+      reason: nonPersistable
+        ? `reading ${target} is outside this run's persistent filesystem scope`
+        : `reading ${target} is outside this run's working and trusted folders`,
+      targetPath: target,
+    };
+  }
+
   async execute(input: Record<string, JSONValue>, ctx: ToolExecutionContext): Promise<ToolExecutionResult> {
-    const target = path.resolve(ctx.cwd, expandHome(requireStringInput(input, 'path', 'read_file')));
+    const target = resolveToolPath(
+      requireStringInput(input, 'path', 'read_file'),
+      ctx.workspace,
+      ctx.cwd,
+    );
     let content: string;
     try {
       const stat = fs.statSync(target);

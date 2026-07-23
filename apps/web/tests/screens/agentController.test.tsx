@@ -122,7 +122,7 @@ describe('useAgentController session lifecycle', () => {
     await waitFor(() => expect(result.current.sessions[0]).toEqual(durable));
   });
 
-  it('rehydrates persisted image thumbnails when a session is reopened', async () => {
+  it('rehydrates persisted image and inlined file attachments when a session is reopened', async () => {
     const summary: SessionSummary = {
       id: 'session_image',
       profileName: 'prompt-maker',
@@ -148,7 +148,7 @@ describe('useAgentController session lifecycle', () => {
               turns: [
                 {
                   role: 'user',
-                  content: 'Describe this',
+                  content: 'Describe this\n\nAttached file: brief.docx\n```\nProject brief\n```',
                   timestamp: '2026-07-22T00:00:00.000Z',
                   attachments: [{
                     kind: 'image',
@@ -180,11 +180,20 @@ describe('useAgentController session lifecycle', () => {
     await waitFor(() => expect(result.current.thread.items).toHaveLength(2));
     expect(result.current.thread.items[0]).toMatchObject({
       kind: 'user',
-      attachments: [{
-        kind: 'image',
-        name: 'Image 1',
-        sourcePath: '/v1/sessions/session_image/attachments/0/0',
-      }],
+      text: 'Describe this',
+      attachments: [
+        {
+          kind: 'image',
+          name: 'Image 1',
+          sourcePath: '/v1/sessions/session_image/attachments/0/0',
+        },
+        {
+          kind: 'text',
+          name: 'brief.docx',
+          content: 'Project brief',
+          officeKind: 'word',
+        },
+      ],
     });
   });
 

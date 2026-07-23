@@ -1,4 +1,4 @@
-import { ImageInput, MarifoldError } from '@marifold/core';
+import { ImageInput, MarifoldError, MAX_RUN_INPUT_BYTES, RunFileInput } from '@marifold/core';
 
 export type JsonObject = Record<string, unknown>;
 
@@ -72,4 +72,32 @@ export function optionalImagesField(value: unknown): { images: ImageInput[] } | 
     };
   });
   return { images };
+}
+
+/** Binary run inputs are base64 JSON because the service remains a compact
+ * loopback API. Core stages them into the run's read-only input directory. */
+export function optionalRunFilesField(value: unknown): { files: RunFileInput[] } | Record<string, never> {
+  if (value === undefined) return {};
+  if (!Array.isArray(value)) throw MarifoldError.configInvalid('Expected files to be an array.');
+  let total = 0;
+  const files = value.map((item, index) => {
+    if (typeof item !== 'object' || item === null || Array.isArray(item)) {
+      throw MarifoldError.configInvalid(`Expected files[${index}] to be an object.`);
+    }
+    const file = item as { name?: unknown; mediaType?: unknown; data?: unknown };
+    const name = requiredString(file.name, `files[${index}].name`);
+    const mediaType = requiredString(file.mediaType, `files[${index}].mediaType`);
+    const data = requiredString(file.data, `files[${index}].data`);
+    if (!/^[A-Za-z0-9+/]*={0,2}$/.test(data) || data.length % 4 === 1) {
+      throw MarifoldError.configInvalid(`files[${index}].data must be base64.`);
+    }
+    const size = Buffer.from(data, 'base64').length;
+    if (size === 0) throw MarifoldError.configInvalid(`files[${index}].data cannot be empty.`);
+    total += size;
+    if (total > MAX_RUN_INPUT_BYTES) {
+      throw MarifoldError.configInvalid(`Run files exceed ${MAX_RUN_INPUT_BYTES / (1024 * 1024)} MiB.`);
+    }
+    return { name, mediaType, data };
+  });
+  return { files };
 }

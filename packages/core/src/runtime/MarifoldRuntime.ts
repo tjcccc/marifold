@@ -4,6 +4,7 @@ import { AgentRunner } from '../agent/AgentRunner';
 import { buildHistoryContext } from '../agent/AgentHistory';
 import { ApprovalMode, MarifoldAgentConfig, ToolKind, resolveAgentConfig } from '../agent/ApprovalPolicy';
 import { DelegateTool } from '../agent/tools/DelegateTool';
+import { PythonPackageTool } from '../agent/tools/PythonPackageTool';
 import { ReadFileTool } from '../agent/tools/ReadFileTool';
 import { ShellExecTool } from '../agent/tools/ShellExecTool';
 import { WebSearchTool } from '../agent/tools/WebSearchTool';
@@ -320,8 +321,8 @@ export class MarifoldRuntime {
     this.profileManager.setAgentApproval(name, kind, mode);
   }
 
-  /** Add a trusted folder (writes allowed without prompting) to a profile.
-   * Returns the resolved absolute folder. */
+  /** Add a trusted folder capability to a profile. External folders still
+   * require approval per action. Returns the resolved absolute folder. */
   addProfileTrustedFolder(name: string, folder: string): string {
     return this.profileManager.addTrustedFolder(name, folder).folder;
   }
@@ -575,6 +576,7 @@ export class MarifoldRuntime {
     registry.register(new ReadFileTool());
     registry.register(new WriteFileTool());
     registry.register(new ShellExecTool());
+    registry.register(new PythonPackageTool());
     // web_search joins the agent's toolset when search is enabled and the
     // network isn't denied — so the model can look things up on its own.
     const webSearch = resolveWebSearchConfig(this.options.loadedConfig.config.webSearch);

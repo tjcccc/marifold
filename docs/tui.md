@@ -150,8 +150,16 @@ is happening, then offers:
 
 Escalated calls (e.g. a write outside the working directory) always prompt,
 regardless of any grant. `/permissions` shows current modes and active session
-grants. This is the simple, kind-level model — per-command/per-path allowlists and
-a sandbox are deferred to the future high-stakes-tools milestone.
+grants. Requests involving external/sensitive filesystem paths and package
+installation cannot be persisted, so their modal offers only **allow once** and
+**deny**.
+
+Every agent run has a private workspace under `~/.marifold/runs/<run-id>/`.
+On macOS, shell commands run through the system sandbox with network disabled and
+writes limited to that run, the selected working folder, and configured in-home
+trusted folders. Python uses the run's `.venv`; network package installation is a
+separate one-time-approved `uv` tool. Approval never disables these hard limits,
+and shell execution fails closed when no supported sandbox backend is available.
 
 ## Architecture
 

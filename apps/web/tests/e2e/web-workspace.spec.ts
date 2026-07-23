@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { strToU8, zipSync } from 'fflate';
 
 test('profile search filters the project-style profile list', async ({ page }) => {
   await page.goto('/agent');
@@ -11,6 +12,24 @@ test('profile search filters the project-style profile list', async ({ page }) =
   await expect(page.getByRole('button', { name: /research-lab/i })).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(page).toHaveURL(/\/agent\/research-lab$/);
+});
+
+test('modern Office files are extracted locally into composer attachments', async ({ page }) => {
+  await page.goto('/agent/default/session-gallery');
+  const docx = zipSync({
+    'word/document.xml': strToU8(`
+      <w:document xmlns:w="urn:word"><w:body>
+        <w:p><w:r><w:t>Browser Office fixture</w:t></w:r></w:p>
+      </w:body></w:document>`),
+  });
+  await page.locator('input[type="file"]').setInputFiles({
+    name: 'brief.docx',
+    mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    buffer: Buffer.from(docx),
+  });
+
+  await expect(page.getByText('brief.docx')).toBeVisible();
+  await expect(page.getByTitle(/Word document · .* extracted text/)).toBeVisible();
 });
 
 test('session search, archive, drafts, and image gallery work together', async ({ page }) => {

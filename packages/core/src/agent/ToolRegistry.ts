@@ -1,14 +1,18 @@
 import { JSONValue, ToolDefinition } from '@priest-ai/core';
 import { MarifoldError } from '../errors/MarifoldError';
 import { ToolKind } from './ApprovalPolicy';
+import type { RunWorkspace } from './RunWorkspace';
 
 export interface ToolExecutionContext {
   /** Working directory the run was started from. Filesystem tools resolve
    * relative paths against it and treat it as the workspace boundary. */
   cwd: string;
   /** Extra absolute folders trusted for file writes (outside the workspace).
-   * A write inside one is non-escalated and auto-approved. */
+   * In-home entries auto-approve writes; external entries still prompt. */
   trustedFolders?: string[];
+  /** Per-run filesystem/process capability set. Shell execution fails closed
+   * when this is absent instead of falling back to unrestricted host access. */
+  workspace?: RunWorkspace;
   signal?: AbortSignal;
   /** Cap applied to tool output before it is returned to the model. */
   outputLimit: number;
@@ -23,15 +27,20 @@ export interface ToolExecutionResult {
 }
 
 export interface ToolRiskAssessment {
+  /** Hard policy denial. Unlike escalation, the user cannot approve this call. */
+  blocked?: boolean;
   /** True forces interactive approval even when policy says allow. */
   escalate: boolean;
   reason?: string;
-  /** True when the call is in a trusted folder — auto-approved regardless of
-   * the tool kind's approval mode. */
+  /** True when the call is in an eligible in-home trusted folder —
+   * auto-approved regardless of the tool kind's approval mode. */
   trusted?: boolean;
   /** Absolute target path of an escalated file call, so a client can offer to
    * trust its folder. */
   targetPath?: string;
+  /** False hides/rejects persistent "always"/"trust" actions. Used for host
+   * paths outside $HOME and other capabilities that must be approved afresh. */
+  persistable?: boolean;
 }
 
 export interface AgentTool {

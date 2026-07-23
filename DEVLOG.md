@@ -2,6 +2,18 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-07-23 — v0.50.0 — Safe agent files and execution
+
+- Added Web composer support for modern Word (`.docx`), Excel (`.xlsx`), and PowerPoint (`.pptx`) files. Browser-local OOXML extraction preserves useful paragraph/slide/sheet structure with bounded archive, expanded-XML, and prompt-text limits; malformed, encrypted, empty, oversized, and legacy files fail clearly.
+- Text/Office attachment chips reconstruct from durable prompts for historical edit/resend. Chat sends extracted text only; agent mode additionally stages original text/Office files read-only under a private run input directory.
+- Every agent run now owns `~/.marifold/runs/<run-id>/` with a synthetic home, input/work/output/temp/cache directories, and a disposable `.venv`.
+- Replaced direct host shell execution with a fail-closed macOS Seatbelt boundary: network and host writes outside explicit capabilities are denied, along with broad/sensitive roots, unrelated signals, Apple Events, clipboard/Launch Services mutation, and keychain IPC.
+- Added `python_package_install`: one-time-approved, registry-only `uv` installs into the run environment. Package build hooks cannot read uploads, the repository, or trusted host folders; global Python installs remain blocked.
+- External filesystem actions require fresh approval regardless of saved kind grants and cannot become persistent “Always allow” or “Trust” decisions. CLI `--yes`, TUI, Web, service, and Telegram honor the non-persistable contract.
+- `marifold service` now cleans up and exits deterministically on SIGINT/SIGTERM, forces stuck shutdowns after five seconds or a second signal, and tears down newly created runtime owners after bind failures instead of leaving ghost processes.
+- Extended the service/Web run contract for bounded original-file staging, updated the security/API/TUI documentation, and preserved the intentionally deferred SkillApp runtime boundary.
+- Verified with the full workspace typecheck/build/test gate (532 tests), four isolated Chromium workflows, actual macOS sandbox/`uv` integration checks, and a spawned service lifecycle regression covering duplicate bind, SIGINT exit, and port release.
+
 ## 2026-07-23 — v0.49.0 — Web workspace completion
 
 - Hardened session lifecycle behavior: optimistic first-turn rows no longer offer premature durable actions, deleting an active agent/chat session cancels and waits for its request, and the service refuses destructive history changes while a run or plain chat request is active so late persistence cannot recreate deleted history.

@@ -50,6 +50,11 @@ export interface RunCardState {
 export interface UserAttachment {
   kind: 'image' | 'text';
   name: string;
+  officeKind?: 'word' | 'spreadsheet' | 'presentation';
+  /** Retained locally/recovered from the durable inlined prompt so text and
+   * Office attachments survive historical edit/resend. Never rendered raw. */
+  content?: string;
+  truncated?: boolean;
   /** data: URL thumbnail for images. */
   previewUrl?: string;
   /** Authenticated service path for a lazily loaded persisted image. */

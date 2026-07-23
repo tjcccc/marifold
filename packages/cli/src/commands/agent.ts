@@ -36,7 +36,11 @@ export function registerAgentCommand(program: Command, printer: ConsolePrinter):
       try {
         const runner = runtime.createAgentRunner(options.profile);
         const approvalHandler = options.yes
-          ? (async () => ({ approved: true }))
+          // --yes may satisfy ordinary kind-level prompts, but it must never
+          // silently cross the non-persistable host/network boundary.
+          ? ((request: ApprovalRequest) => request.persistable === false
+            ? promptForApproval(prompt, style, request)
+            : Promise.resolve({ approved: true }))
           : ((request: ApprovalRequest) => promptForApproval(prompt, style, request));
         const events = runner.run({
           objective: objectiveParts.join(' '),

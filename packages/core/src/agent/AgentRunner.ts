@@ -28,6 +28,7 @@ import {
   formatControlBlockResult,
   parseControlBlockCalls,
 } from './ControlBlockTools';
+import { createRunWorkspace, RunFileInput, RunWorkspace } from './RunWorkspace';
 import { AgentTool, ToolExecutionContext, ToolRegistry } from './ToolRegistry';
 
 const PLAN_SCHEMA = {
@@ -68,9 +69,14 @@ export interface AgentRunOptions {
   forcePlan?: boolean;
   /** Working directory for filesystem/shell tools. Defaults to process.cwd(). */
   cwd?: string;
-  /** Extra trusted folders for this run only (writes there are auto-approved),
-   * merged over the profile's. Used by channels to make a scratch dir (e.g. a
-   * Telegram outbox) writable without prompting, without touching config. */
+  /** Stable id used for ~/.marifold/runs/<id>. Service runs pass their public
+   * run id; direct runs fall back to the task id. */
+  executionId?: string;
+  /** Binary files staged read-only under this run's input directory. */
+  files?: RunFileInput[];
+  /** Extra trusted folders for this run only, merged over the profile's.
+   * In-home writes are auto-approved; external folders remain per-call
+   * approval-gated. Used by channels for scratch/outbox capabilities. */
   trustedFolders?: string[];
   /** Per-run thinking-mode override (honored by think-capable providers). */
   think?: boolean;
@@ -194,9 +200,16 @@ export class AgentRunner {
     });
     yield { type: 'status', taskId: task.id, status: 'running' };
 
-    const toolContext: ToolExecutionContext = {
+    const workspace = createRunWorkspace({
+      id: options.executionId ?? task.id,
       cwd,
       trustedFolders: [...agentConfig.trustedFolders, ...(options.trustedFolders ?? [])],
+      files: options.files,
+    });
+    const toolContext: ToolExecutionContext = {
+      cwd: workspace.cwd,
+      trustedFolders: [...agentConfig.trustedFolders, ...(options.trustedFolders ?? [])],
+      workspace,
       signal: options.signal,
       outputLimit: agentConfig.toolOutputLimit,
     };
@@ -254,7 +267,7 @@ export class AgentRunner {
           yield { type: 'steering', taskId: task.id, text: note };
         }
 
-        const response = await engine.run(this.loopRequest(config, settings.profile, runOptions, state), {
+        const response = await engine.run(this.loopRequest(config, settings.profile, runOptions, state, workspace), {
           signal: options.signal,
         });
 
@@ -406,7 +419,12 @@ export class AgentRunner {
     toolContext: ToolExecutionContext,
   ): AsyncGenerator<AgentEvent, { approved: boolean; reason?: string }, unknown> {
     const risk = tool.assessRisk?.(call.arguments, toolContext) ?? { escalate: false };
-    // A call inside a trusted folder is auto-approved regardless of kind policy.
+    if (risk.blocked) {
+      const reason = risk.reason ?? 'blocked by the run security policy';
+      yield { type: 'approval_decision', requestId: call.id, approved: false, source: 'policy', reason };
+      return { approved: false, reason };
+    }
+    // Tools only set `trusted` for eligible in-home capabilities.
     if (risk.trusted) {
       yield { type: 'approval_decision', requestId: call.id, approved: true, source: 'policy' };
       return { approved: true };
@@ -441,6 +459,7 @@ export class AgentRunner {
       escalated: risk.escalate,
       ...(risk.reason ? { escalationReason: risk.reason } : {}),
       ...(risk.targetPath ? { escalatedPath: risk.targetPath } : {}),
+      ...(risk.persistable === false ? { persistable: false } : {}),
     };
     yield { type: 'approval_request', request };
     const decision = await options.approvalHandler(request);
@@ -521,6 +540,7 @@ export class AgentRunner {
     profile: string,
     options: AgentRunOptions,
     state: LoopState,
+    workspace: RunWorkspace,
   ): PriestRequest {
     // Attach the objective's images on the first turn only (before any tool
     // exchange/transcript accrues), so the model sees them without re-uploading
@@ -532,7 +552,7 @@ export class AgentRunner {
       prompt: options.lean
         ? options.objective
         : `Objective: ${options.objective}\n\nUse tools only when the objective genuinely requires reading or writing files, running commands, searching the web, or delegating. Many objectives — greetings, questions, explanations, drafting text — need no tools at all; for those, answer directly from your own knowledge. Do not invent tool calls. When the objective is complete, reply with a short final answer describing the outcome.`,
-      context: this.agentContext(state, options.cwd ?? process.cwd(), options.instructions, options.lean),
+      context: this.agentContext(state, workspace, options.instructions, options.lean),
       ...(options.sessionId ? { session: { id: options.sessionId, createIfMissing: true } } : {}),
       ...(firstTurn && options.images && options.images.length > 0 ? { images: options.images } : {}),
     };
@@ -553,13 +573,22 @@ export class AgentRunner {
     };
   }
 
-  private agentContext(state: LoopState, cwd: string, instructions?: string[], lean = false): string[] {
+  private agentContext(state: LoopState, workspace: RunWorkspace, instructions?: string[], lean = false): string[] {
+    const files = workspace.files.length > 0
+      ? `Read-only input files:\n${workspace.files.map(file => `- ${file.name}: ${file.path}`).join('\n')}`
+      : 'No binary input files were staged for this run.';
+    const workspaceContext = [
+      `Working directory: ${workspace.cwd}. Relative tool paths resolve against it.`,
+      `Isolated run directory: ${workspace.rootDir}. ~ is the isolated run home (${workspace.homeDir}), not the user's real home.`,
+      `${files}\nWrite files intended for the user to ${workspace.outputDir}. Temporary scripts and environments belong in ${workspace.workDir}.`,
+      'shell_exec has no network access and cannot mutate host system/global package directories. Use python_package_install for approved Python dependencies; it installs only into this run’s disposable uv environment.',
+    ].join('\n');
     // Lean run (skills): minimal framing — the instructions are authoritative,
     // and we ask for only the final output to avoid plan/preamble/reasoning prose.
     if (lean) {
       const context = [...(instructions ?? [])];
       context.push(
-        `Working directory: ${cwd}. Use read_file only if the instructions reference a bundled file (e.g. vars.toml); resolve it, then reply with ONLY the final output the instructions define — no plan, preamble, reasoning, or commentary.`,
+        `${workspaceContext}\nUse read_file only if the instructions reference a bundled file (e.g. vars.toml); resolve it, then reply with ONLY the final output the instructions define — no plan, preamble, reasoning, or commentary.`,
       );
       if (state.mode === 'control-block') {
         context.push(buildControlBlockInstructions(this.deps.registry.definitions()));
@@ -569,7 +598,7 @@ export class AgentRunner {
     const context = [
       'You are running as the Marifold agent. Stay focused on the stated objective and keep replies concise.',
       'Prefer answering directly. Reach for a tool only when the objective cannot be completed from your own knowledge — never use a tool just to demonstrate one.',
-      `Working directory: ${cwd}. Relative tool paths resolve against it; ~ means the user's home directory.`,
+      workspaceContext,
     ];
     // Skill instructions are authoritative for this run — lead with them.
     if (instructions?.length) context.unshift(...instructions);

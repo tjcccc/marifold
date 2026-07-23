@@ -499,8 +499,22 @@ export async function startMarifoldService(options: MarifoldServiceStartOptions)
   const port = options.port ?? DEFAULT_PORT;
   assertLoopbackHost(host);
   const server = createMarifoldService(options);
-  const address = await server.listen({ host, port });
-  return { server, address, host, port, telegram: (server as ServiceWithBridge).marifoldTelegram };
+  try {
+    const address = await server.listen({ host, port });
+    return { server, address, host, port, telegram: (server as ServiceWithBridge).marifoldTelegram };
+  } catch (error) {
+    // createMarifoldService starts the scheduler/runtime before listen().
+    // Always run Fastify's onClose hooks when binding fails, otherwise an
+    // EADDRINUSE attempt leaves a ghost process alive on those background
+    // handles even though it never served a request.
+    try {
+      await server.close();
+    } catch {
+      // Preserve the actionable listen error. Close is best-effort here, and
+      // individual lifecycle owners also stop from the onClose hook.
+    }
+    throw error;
+  }
 }
 
 function assertLoopbackHost(host: string): void {

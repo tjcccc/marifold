@@ -3,10 +3,18 @@ import * as os from 'os';
 import * as path from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { DelegateTool } from '../src/agent/tools/DelegateTool';
+import { PythonPackageTool } from '../src/agent/tools/PythonPackageTool';
 import { ReadFileTool } from '../src/agent/tools/ReadFileTool';
 import { ShellExecTool } from '../src/agent/tools/ShellExecTool';
 import { isInsideWorkspace, WriteFileTool } from '../src/agent/tools/WriteFileTool';
+import { createRunWorkspace } from '../src/agent/RunWorkspace';
 import { capToolOutput, ToolExecutionContext, ToolRegistry } from '../src/agent/ToolRegistry';
+import {
+  ensurePythonEnvironment,
+  findExecutable,
+  pythonInVenv,
+  runScopedProcess,
+} from '../src/agent/ScopedProcess';
 
 const tempDirs: string[] = [];
 
@@ -24,6 +32,20 @@ afterEach(() => {
 
 function context(cwd: string, outputLimit = 100000): ToolExecutionContext {
   return { cwd, outputLimit };
+}
+
+function scopedContext(cwd: string, outputLimit = 100000): ToolExecutionContext {
+  const container = path.dirname(cwd);
+  return {
+    cwd,
+    outputLimit,
+    workspace: createRunWorkspace({
+      id: 'tool_test',
+      cwd,
+      runsDir: path.join(container, '.marifold-test', 'runs'),
+      userHome: container,
+    }),
+  };
 }
 
 describe('ToolRegistry', () => {
@@ -55,7 +77,7 @@ describe('ReadFileTool', () => {
     fs.writeFileSync(path.join(dir, 'a.txt'), 'hello agent');
     const result = await new ReadFileTool().execute({ path: 'a.txt' }, context(dir));
     expect(result.content).toBe('hello agent');
-    expect(result.isError).toBeFalsy();
+    expect(result.isError, result.content).toBeFalsy();
   });
 
   it('returns an error result for missing files', async () => {
@@ -140,18 +162,107 @@ describe('WriteFileTool', () => {
 });
 
 describe('ShellExecTool', () => {
-  it('runs commands in cwd and captures output', async () => {
+  it.skipIf(process.platform !== 'darwin')('runs commands in cwd with a synthetic home and captures output', async () => {
     const dir = tempDir();
     fs.writeFileSync(path.join(dir, 'c.txt'), 'x');
-    const result = await new ShellExecTool().execute({ command: 'ls' }, context(dir));
+    const ctx = scopedContext(dir);
+    const result = await new ShellExecTool().execute({ command: 'ls; printf "\\nhome=$HOME"' }, ctx);
     expect(result.content).toContain('c.txt');
+    expect(result.content).toContain(`home=${ctx.workspace!.homeDir}`);
     expect(result.isError).toBeFalsy();
   });
 
-  it('flags failing commands as errors', async () => {
-    const result = await new ShellExecTool().execute({ command: 'exit 3' }, context(tempDir()));
+  it.skipIf(process.platform !== 'darwin')('flags failing commands as errors', async () => {
+    const dir = tempDir();
+    const result = await new ShellExecTool().execute({ command: 'exit 3' }, scopedContext(dir));
     expect(result.isError).toBe(true);
     expect(result.content).toContain('3');
+  });
+
+  it.skipIf(process.platform !== 'darwin')('allows signals only within the sandboxed process tree', async () => {
+    const dir = tempDir();
+    const result = await new ShellExecTool().execute(
+      { command: "sh -c 'sleep 5' & child=$!; kill \"$child\"; wait \"$child\" 2>/dev/null || true; printf ok" },
+      scopedContext(dir),
+    );
+    expect(result.isError).toBeFalsy();
+    expect(result.content).toContain('ok');
+  });
+
+  it.skipIf(process.platform !== 'darwin' || !findExecutable('uv'))('creates and uses the disposable Python environment', async () => {
+    const dir = tempDir();
+    const ctx = scopedContext(dir);
+    const result = await new ShellExecTool().execute({ command: 'python --version' }, ctx);
+    expect(result.isError, result.content).toBeFalsy();
+    expect(result.content).toMatch(/Python \d/);
+    expect(fs.existsSync(path.join(ctx.workspace!.venvDir, 'bin', 'python'))).toBe(true);
+  });
+
+  it.skipIf(process.platform !== 'darwin')('blocks host writes outside the workspace even after execution is approved', async () => {
+    const parent = tempDir();
+    const dir = path.join(parent, 'workspace');
+    fs.mkdirSync(dir);
+    const outside = path.join(parent, 'outside.txt');
+    const result = await new ShellExecTool().execute(
+      { command: `printf unsafe > ${JSON.stringify(outside)}` },
+      scopedContext(dir),
+    );
+    expect(result.isError).toBe(true);
+    expect(fs.existsSync(outside)).toBe(false);
+  });
+
+  it('fails closed without an isolated run workspace', async () => {
+    const result = await new ShellExecTool().execute({ command: 'printf unsafe' }, context(tempDir()));
+    expect(result.isError).toBe(true);
+    expect(result.content).toContain('without an isolated run workspace');
+  });
+});
+
+describe('PythonPackageTool', () => {
+  it('always escalates without allowing a persistent grant', () => {
+    const risk = new PythonPackageTool().assessRisk({ packages: ['openpyxl'] }, context(tempDir()));
+    expect(risk).toMatchObject({ escalate: true, persistable: false });
+  });
+
+  it('refuses URL and flag requirements before invoking uv', async () => {
+    const dir = tempDir();
+    const result = await new PythonPackageTool().execute(
+      { packages: ['--system', 'https://example.test/pkg.whl'] },
+      scopedContext(dir),
+    );
+    expect(result.isError).toBe(true);
+    expect(result.content).toContain('Refused unsafe Python requirement');
+  });
+
+  it.skipIf(process.platform !== 'darwin' || !findExecutable('uv'))('hides run inputs from network-enabled package build hooks', async () => {
+    const dir = tempDir();
+    const ctx = scopedContext(dir);
+    const workspace = ctx.workspace!;
+    const secret = path.join(workspace.inputDir, 'private.txt');
+    fs.writeFileSync(secret, 'must-not-leak');
+    const environmentError = await ensurePythonEnvironment(workspace, ctx.outputLimit);
+    expect(environmentError).toBeUndefined();
+    const installerRoots = [
+      workspace.workDir,
+      workspace.homeDir,
+      workspace.tempDir,
+      workspace.cacheDir,
+      workspace.venvDir,
+    ];
+    const result = await runScopedProcess({
+      executable: pythonInVenv(workspace),
+      args: ['-c', `print(open(${JSON.stringify(secret)}).read())`],
+      workspace,
+      cwd: workspace.workDir,
+      readRoots: installerRoots,
+      writeRoots: installerRoots,
+      network: true,
+      outputLimit: ctx.outputLimit,
+      successSummary: 'unexpectedly read private input',
+      failureSummary: 'private input stayed hidden',
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content).not.toContain('must-not-leak');
   });
 });
 

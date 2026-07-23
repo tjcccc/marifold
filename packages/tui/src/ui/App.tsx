@@ -209,7 +209,7 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
     if (!request.escalated && sessionGrantsRef.current.has(request.kind)) {
       return Promise.resolve({ approved: true });
     }
-    if (request.escalated && request.escalatedPath
+    if (request.persistable !== false && request.escalated && request.escalatedPath
         && isInsideAny(request.escalatedPath, [...sessionTrustedFoldersRef.current])) {
       return Promise.resolve({ approved: true });
     }
@@ -229,7 +229,7 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
       resolve({ approved: false, reason: 'denied by user' });
       return;
     }
-    if (choice === 'always') {
+    if (choice === 'always' && request.persistable !== false) {
       const folder = trustTargetFolder(request);
       if (folder) trustFolderForProfile(folder);   // escalated write → trust the folder
       else persistApprovalKind(request.kind);       // ordinary call → allow this kind
@@ -587,7 +587,7 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
       `Session grants: ${grants.length ? grants.join(', ') : '(none)'}`,
       ...(sessionTrusted.length ? [`Trusted this session: ${sessionTrusted.join(', ')}`] : []),
       '',
-      'Writes outside the working dir and trusted folders prompt (Once / Always / No).',
+      'Writes outside the working dir and in-home trusted folders prompt; external paths always ask once.',
     ];
     dispatch({ type: 'add_item', item: { kind: 'info', title: 'Permissions', lines } });
   }, [runtime]);

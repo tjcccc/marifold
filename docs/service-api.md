@@ -213,6 +213,9 @@ The run itself is ephemeral in-service state; its durable record is a task
   "cwd": "/Users/me/project", "think": false,
   "originalImages": false,
   "images": [{ "data": "<base64>", "mediaType": "image/png" }, { "url": "https://..." }],
+  "files": [{ "name": "v23.xlsx",
+              "mediaType": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+              "data": "<base64>" }],
   "instructions": ["Write in English."], "maxIterations": 20,
   "forcePlan": false, "lean": false }
 ```
@@ -221,6 +224,11 @@ Only `objective` is required. `images` follow the same shape as chat/ask
 (base64 `{data, mediaType}` or URL; exactly one of `data`/`url` per entry)
 and are attached to the objective on the first model turn. The service
 accepts JSON bodies up to 25 MiB to make room for base64 payloads. Returns the **RunRecord**:
+
+`files` contains original file bytes for agent tools, limited to 16 MiB
+aggregate. Files are name-sanitized and staged read-only under the private run's
+`input/` directory; the model receives their paths and any separately extracted
+prompt text, not the raw bytes.
 
 With `sessionId`, optional `replaceUserTurnIndex` regenerates that historical
 exchange using only its earlier prefix as context, then replaces it in place;
@@ -243,10 +251,13 @@ and safety limits still apply. The TUI/Web UI expose this as
 
 `status` is `running | blocked | completed | failed | cancelled`. Unset
 fields are omitted, not null: `taskId` appears once the first event lands,
-and `finishedAt` / `summary` / `usage` arrive with the terminal `done`. **Trust model:** `cwd` scopes where file
-writes are silent; everything else asks per the profile's `[agent]` approval
-policy. Auth + loopback is the access boundary — give tokens only to
-clients you'd let run the agent.
+and `finishedAt` / `summary` / `usage` arrive with the terminal `done`. **Trust model:**
+`cwd`, configured in-home trusted folders, and the private run directories form
+the shell capability set. On macOS, shell network is denied and all other host
+writes remain blocked even after approval. External paths always require
+one-time approval; global/system runtime writes are refused. Auth + loopback is
+still an important access boundary — give tokens only to clients you'd let run
+the agent within those capabilities.
 
 | Route | Returns |
 |---|---|
@@ -275,7 +286,7 @@ core — the same contract the TUI renders):
 { "type": "approval_request", "request": { "id": "call_0", "tool": "write_file", "kind": "write",
                                             "summary": "write 12B to /tmp/x", "input": { },
                                             "escalated": true, "escalationReason": "outside the working directory",
-                                            "escalatedPath": "/tmp/x" } }
+                                            "escalatedPath": "/tmp/x", "persistable": false } }
 { "type": "approval_decision", "requestId": "call_0", "approved": true, "source": "user", "reason": "..." }
 { "type": "tool_result", "callId": "call_0", "tool": "write_file", "summary": "wrote 12B to /tmp/x", "isError": false }
 { "type": "error", "code": "...", "message": "..." }
@@ -298,9 +309,9 @@ compatibility with older streams.
 
    `POST /v1/runs/:id/approvals/:requestId` with `{ "action": "..." }`
    - `once` — approve this call only.
-   - `always` — approve and persist "always allow `<kind>`" to the profile
+   - `always` — when `request.persistable !== false`, approve and persist "always allow `<kind>`" to the profile
      (future runs inherit it); later same-kind calls in this run stop asking.
-   - `trust` — only when the request has an `escalatedPath` (an
+   - `trust` — only when the request is persistable and has an `escalatedPath` (an
      out-of-workspace file write): approve and persist the target's folder
      as trusted. Otherwise `400 AGENT_RUN_INVALID`.
    - `deny` — reject; the model sees an error tool result and continues.
@@ -312,7 +323,7 @@ compatibility with older streams.
 
 UX note for approval dialogs: mirror the TUI/Telegram wording — **Allow
 once** (safe default) / **Always allow \<kind\>** or **Trust folder** (when
-`escalatedPath` is present) / **Deny**.
+`escalatedPath` is present and `persistable !== false`) / **Deny**.
 
 ### Tasks (durable layer)
 

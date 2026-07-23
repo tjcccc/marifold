@@ -15,6 +15,8 @@ interface ServiceOptions {
   webDir?: string;
 }
 
+const SHUTDOWN_GRACE_MS = 5_000;
+
 export function registerServiceCommand(program: Command, printer: ConsolePrinter): void {
   program
     .command('service')
@@ -59,7 +61,13 @@ export function registerServiceCommand(program: Command, printer: ConsolePrinter
           process.stdout.write(`CORS: allowing ${security.corsOrigins.join(', ')}\n`);
         }
         process.stdout.write('Press Ctrl+C to stop.\n');
-        await waitForShutdown(result.server.close.bind(result.server));
+        await waitForShutdown({
+          close: result.server.close.bind(result.server),
+          forceClose: () => {
+            result.server.server.closeIdleConnections?.();
+            result.server.server.closeAllConnections?.();
+          },
+        });
       } catch (error) {
         printer.printError(error);
         process.exitCode = 1;
@@ -85,19 +93,62 @@ function parsePort(value?: string): number {
   return port;
 }
 
-function waitForShutdown(close: () => Promise<void>): Promise<void> {
+interface ShutdownOptions {
+  close: () => Promise<void>;
+  forceClose?: () => void;
+  graceMs?: number;
+  /** Test seam. Production deliberately exits after cleanup so a stray SDK
+   * handle cannot keep `pnpm marifold service` alive after Ctrl+C. */
+  terminate?: (code: number) => void;
+}
+
+export function waitForShutdown(options: ShutdownOptions): Promise<void> {
   return new Promise(resolve => {
     let shuttingDown = false;
-    const shutdown = async () => {
-      if (shuttingDown) return;
-      shuttingDown = true;
-      process.off('SIGINT', shutdown);
-      process.off('SIGTERM', shutdown);
-      await close();
-      resolve();
+    let finished = false;
+    let forceTimer: NodeJS.Timeout | undefined;
+    const terminate = options.terminate ?? (code => process.exit(code));
+    const cleanup = (): void => {
+      process.off('SIGINT', onSigint);
+      process.off('SIGTERM', onSigterm);
+      if (forceTimer) clearTimeout(forceTimer);
     };
-
-    process.once('SIGINT', shutdown);
-    process.once('SIGTERM', shutdown);
+    const finish = (code: number): void => {
+      if (finished) return;
+      finished = true;
+      cleanup();
+      resolve();
+      terminate(code);
+    };
+    const force = (message: string, code: number): void => {
+      if (finished) return;
+      process.stderr.write(`${message}\n`);
+      try {
+        options.forceClose?.();
+      } finally {
+        finish(code);
+      }
+    };
+    const shutdown = async (signal: 'SIGINT' | 'SIGTERM'): Promise<void> => {
+      if (shuttingDown) {
+        force('Second shutdown signal received; forcing service termination.', 130);
+        return;
+      }
+      shuttingDown = true;
+      process.stdout.write(`Stopping Marifold service (${signal})...\n`);
+      forceTimer = setTimeout(() => {
+        force(`Service did not stop within ${options.graceMs ?? SHUTDOWN_GRACE_MS}ms; forcing termination.`, 1);
+      }, options.graceMs ?? SHUTDOWN_GRACE_MS);
+      try {
+        await options.close();
+        finish(0);
+      } catch (error) {
+        force(`Service cleanup failed: ${error instanceof Error ? error.message : String(error)}`, 1);
+      }
+    };
+    const onSigint = (): void => { void shutdown('SIGINT'); };
+    const onSigterm = (): void => { void shutdown('SIGTERM'); };
+    process.on('SIGINT', onSigint);
+    process.on('SIGTERM', onSigterm);
   });
 }

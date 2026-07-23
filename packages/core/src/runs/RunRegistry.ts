@@ -4,6 +4,7 @@ import type { ImageInput } from '@priest-ai/core';
 import { AgentEvent, AgentUsage } from '../agent/AgentEvents';
 import { AgentRunner } from '../agent/AgentRunner';
 import { ApprovalDecision, ApprovalMode, ApprovalRequest, ToolKind } from '../agent/ApprovalPolicy';
+import type { RunFileInput } from '../agent/RunWorkspace';
 import { isInsideAny } from '../agent/tools/WriteFileTool';
 import { MarifoldError } from '../errors/MarifoldError';
 import { TaskStatus } from '../tasks/TaskStore';
@@ -53,6 +54,8 @@ export interface RunStartInput {
   images?: ImageInput[];
   /** Preserve attached images' original encoded bytes for this run. */
   originalImages?: boolean;
+  /** Binary files staged read-only inside this run's isolated input folder. */
+  files?: RunFileInput[];
   instructions?: string[];
   maxIterations?: number;
   forcePlan?: boolean;
@@ -222,6 +225,9 @@ export class RunRegistry {
         entry.settle({ approved: false, reason: 'denied via service' });
         return { requestId, approved: false };
       case 'trust': {
+        if (entry.request.persistable === false) {
+          throw MarifoldError.agentRunInvalid('This capability must be approved one call at a time and cannot be trusted persistently.');
+        }
         const escalatedPath = entry.request.escalatedPath;
         if (!escalatedPath) {
           throw MarifoldError.agentRunInvalid('This approval has no escalated path to trust; use "once", "always", or "deny".');
@@ -237,6 +243,9 @@ export class RunRegistry {
         return { requestId, approved: true };
       }
       case 'always':
+        if (entry.request.persistable === false) {
+          throw MarifoldError.agentRunInvalid('This capability must be approved one call at a time and cannot be allowed persistently.');
+        }
         run.grantedKinds.add(entry.request.kind);
         try {
           this.runtime.setProfileAgentApproval(run.profile, entry.request.kind, 'allow');
@@ -290,11 +299,13 @@ export class RunRegistry {
         think: input.think,
         images: input.images,
         originalImages: input.originalImages,
+        files: input.files,
         instructions: input.instructions,
         maxIterations: input.maxIterations,
         forcePlan: input.forcePlan,
         lean: input.lean,
         cwd: input.cwd,
+        executionId: run.id,
         tags: ['service'],
         signal: run.abort.signal,
         steering: () => run.steeringQueue.splice(0),
@@ -356,7 +367,10 @@ export class RunRegistry {
    * the run is cancelled. Mirrors TelegramBridge.requestApproval. */
   private handleApproval(run: ActiveRun, request: ApprovalRequest): Promise<ApprovalDecision> {
     if (!request.escalated && run.grantedKinds.has(request.kind)) return Promise.resolve({ approved: true });
-    if (request.escalated && request.escalatedPath && isInsideAny(request.escalatedPath, run.trustedFolders)) {
+    if (request.persistable !== false
+        && request.escalated
+        && request.escalatedPath
+        && isInsideAny(request.escalatedPath, run.trustedFolders)) {
       return Promise.resolve({ approved: true });
     }
 

@@ -8,6 +8,7 @@ export const MAX_IMAGES_PER_MESSAGE = 4;
 /** The service's 25 MiB body limit still has room for base64 expansion. */
 export const MAX_TOTAL_BYTES = 16 * 1024 * 1024;
 export const MAX_TEXT_FILE_BYTES = 256 * 1024;
+export const MAX_OFFICE_FILE_BYTES = 16 * 1024 * 1024;
 export const IMAGE_OPTIMIZE_MIN_BYTES = 300 * 1024;
 export const IMAGE_MAX_LONG_EDGE = 1600;
 export const IMAGE_OUTPUT_QUALITY = 0.85;
@@ -24,9 +25,34 @@ const TEXT_EXTENSIONS = new Set([
   'sql', 'log', 'env.example', 'gitignore', 'diff', 'patch',
 ]);
 
+export type OfficeFileKind = 'word' | 'spreadsheet' | 'presentation';
+
+const OFFICE_EXTENSIONS: Record<string, OfficeFileKind> = {
+  docx: 'word',
+  xlsx: 'spreadsheet',
+  pptx: 'presentation',
+};
+
+const OFFICE_MEDIA_TYPES: Record<string, OfficeFileKind> = {
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'word',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'spreadsheet',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'presentation',
+};
+
+const LEGACY_OFFICE_EXTENSIONS: Record<string, string> = {
+  doc: 'DOCX',
+  xls: 'XLSX',
+  ppt: 'PPTX',
+};
+
+export function officeKindForFile(name: string, mediaType = ''): OfficeFileKind | undefined {
+  return OFFICE_EXTENSIONS[extension(name)] ?? OFFICE_MEDIA_TYPES[mediaType];
+}
+
 export type AttachmentClass =
   | { kind: 'image' }
   | { kind: 'text' }
+  | { kind: 'office'; officeKind: OfficeFileKind }
   | { kind: 'rejected'; reason: string };
 
 export function classifyFile(name: string, mediaType: string, size: number): AttachmentClass {
@@ -41,7 +67,28 @@ export function classifyFile(name: string, mediaType: string, size: number): Att
     }
     return { kind: 'text' };
   }
-  return { kind: 'rejected', reason: `${name}: only images and text files can be attached.` };
+  const suffix = extension(name);
+  const officeKind = officeKindForFile(name, mediaType);
+  if (officeKind) {
+    if (size > MAX_OFFICE_FILE_BYTES) {
+      return {
+        kind: 'rejected',
+        reason: `${name}: Office files up to ${MAX_OFFICE_FILE_BYTES / (1024 * 1024)} MiB can be read.`,
+      };
+    }
+    return { kind: 'office', officeKind };
+  }
+  const modernFormat = LEGACY_OFFICE_EXTENSIONS[suffix];
+  if (modernFormat) {
+    return {
+      kind: 'rejected',
+      reason: `${name}: legacy Office files are not supported; save it as ${modernFormat} first.`,
+    };
+  }
+  return {
+    kind: 'rejected',
+    reason: `${name}: attach PNG/JPEG/WebP/GIF, text, DOCX, XLSX, or PPTX files.`,
+  };
 }
 
 export type PreparedAttachment =
@@ -57,7 +104,19 @@ export type PreparedAttachment =
       data: string;
       mediaType: string;
     }
-  | { kind: 'text'; name: string; size: number; content: string };
+  | {
+      kind: 'text';
+      name: string;
+      size: number;
+      content: string;
+      officeKind?: OfficeFileKind;
+      truncated?: boolean;
+      /** Original browser file retained only for the pending submission so an
+       * agent run can stage the real binary read-only. */
+      originalFile?: File;
+      originalSize?: number;
+      mediaType?: string;
+    };
 
 /** Enforce the per-message caps over already-accepted attachments. Returns the
  * reason the next file must be refused, or undefined when it fits. */
@@ -65,7 +124,7 @@ export function capViolation(existing: PreparedAttachment[], nextSize: number, n
   if (nextKind === 'image' && existing.filter(a => a.kind === 'image').length >= MAX_IMAGES_PER_MESSAGE) {
     return `Up to ${MAX_IMAGES_PER_MESSAGE} images per message.`;
   }
-  const total = existing.reduce((sum, item) => sum + item.size, 0) + nextSize;
+  const total = existing.reduce((sum, item) => sum + (item.originalSize ?? item.size), 0) + nextSize;
   if (total > MAX_TOTAL_BYTES) {
     return `Attachments are limited to ${Math.round(MAX_TOTAL_BYTES / (1024 * 1024))} MB per message.`;
   }
@@ -81,6 +140,41 @@ export function inlineTextAttachments(prompt: string, files: Array<{ name: strin
     return `Attached file: ${file.name}\n${fence}\n${file.content}\n${fence}`;
   });
   return [prompt, ...blocks].join('\n\n');
+}
+
+export interface SplitInlineAttachments {
+  prompt: string;
+  files: Array<{ name: string; content: string }>;
+}
+
+/** Inverse of inlineTextAttachments for transcript display. The stretched
+ * fence guarantees the closing marker cannot occur inside extracted content.
+ * If the suffix is not entirely well-formed, leave the user text untouched. */
+export function splitInlineTextAttachments(value: string): SplitInlineAttachments {
+  const marker = '\n\nAttached file: ';
+  const firstMarker = value.indexOf(marker);
+  if (firstMarker === -1) return { prompt: value, files: [] };
+
+  const files: Array<{ name: string; content: string }> = [];
+  let cursor = firstMarker;
+  while (cursor < value.length) {
+    if (!value.startsWith(marker, cursor)) return { prompt: value, files: [] };
+    const nameStart = cursor + marker.length;
+    const nameEnd = value.indexOf('\n', nameStart);
+    if (nameEnd === -1) return { prompt: value, files: [] };
+    const name = value.slice(nameStart, nameEnd);
+    const fenceEnd = value.indexOf('\n', nameEnd + 1);
+    if (fenceEnd === -1) return { prompt: value, files: [] };
+    const fence = value.slice(nameEnd + 1, fenceEnd);
+    if (!/^`{3,}$/.test(fence)) return { prompt: value, files: [] };
+    const closing = `\n${fence}`;
+    const contentEnd = value.indexOf(closing, fenceEnd + 1);
+    if (contentEnd === -1) return { prompt: value, files: [] };
+    files.push({ name, content: value.slice(fenceEnd + 1, contentEnd) });
+    cursor = contentEnd + closing.length;
+    if (cursor === value.length) break;
+  }
+  return { prompt: value.slice(0, firstMarker), files };
 }
 
 export interface PrepareResult {
@@ -115,16 +209,45 @@ export async function prepareFiles(files: Iterable<File>, existing: PreparedAtta
       } catch (error) {
         rejected.push(`${file.name}: could not decode or optimize image (${errorMessage(error)}).`);
       }
-    } else {
+    } else if (cls.kind === 'text') {
       const violation = capViolation([...existing, ...accepted], file.size, 'text');
       if (violation) {
         rejected.push(`${file.name}: ${violation}`);
         continue;
       }
       accepted.push({ kind: 'text', name: file.name, size: file.size, content: await file.text() });
+    } else {
+      try {
+        const { extractOfficeText } = await import('./officeAttachments');
+        const extracted = await extractOfficeText(file, cls.officeKind, MAX_TEXT_FILE_BYTES);
+        const violation = capViolation([...existing, ...accepted], file.size, 'text');
+        if (violation) {
+          rejected.push(`${file.name}: ${violation}`);
+          continue;
+        }
+        accepted.push({
+          kind: 'text',
+          name: file.name,
+          size: extracted.size,
+          content: extracted.content,
+          officeKind: cls.officeKind,
+          originalFile: file,
+          originalSize: file.size,
+          mediaType: file.type || officeMediaType(cls.officeKind),
+          ...(extracted.truncated ? { truncated: true } : {}),
+        });
+      } catch (error) {
+        rejected.push(`${file.name}: could not extract Office text (${errorMessage(error)}).`);
+      }
     }
   }
   return { accepted, rejected };
+}
+
+function officeMediaType(kind: OfficeFileKind): string {
+  if (kind === 'word') return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+  if (kind === 'spreadsheet') return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+  return 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
 }
 
 function extension(name: string): string {

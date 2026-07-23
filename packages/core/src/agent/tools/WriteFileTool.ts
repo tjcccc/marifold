@@ -2,6 +2,13 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { JSONValue } from '@priest-ai/core';
 import { expandHome } from '../../workspace/WorkspacePaths';
+import {
+  isInsideAnyRoot,
+  isOutsideUserHome,
+  isProtectedSystemWrite,
+  isSensitiveHostPath,
+  resolveToolPath,
+} from '../RunWorkspace';
 import { AgentTool, requireStringInput, ToolExecutionContext, ToolExecutionResult, ToolRiskAssessment } from '../ToolRegistry';
 import { formatBytes } from './ReadFileTool';
 
@@ -28,7 +35,44 @@ export class WriteFileTool implements AgentTool {
 
   assessRisk(input: Record<string, JSONValue>, ctx: ToolExecutionContext): ToolRiskAssessment {
     if (typeof input.path !== 'string') return { escalate: false };
-    const target = path.resolve(ctx.cwd, expandHome(input.path));
+    const target = resolveToolPath(input.path, ctx.workspace, ctx.cwd);
+    if (ctx.workspace) {
+      if (isProtectedSystemWrite(target, ctx.workspace)) {
+        return {
+          blocked: true,
+          escalate: false,
+          persistable: false,
+          reason: `system path ${target} is read-only for agent runs`,
+          targetPath: target,
+        };
+      }
+      if (isInsideAnyRoot(target, ctx.workspace.writeRoots)) {
+        // A configured trusted folder remains auto-approved only inside the
+        // user's home. External roots must be approved for every action.
+        const trusted = isInsideAny(target, ctx.trustedFolders);
+        if (trusted && !isOutsideUserHome(target, ctx.workspace)) {
+          return { escalate: false, trusted: true };
+        }
+        if (isOutsideUserHome(target, ctx.workspace)) {
+          return {
+            escalate: true,
+            persistable: false,
+            reason: `writing ${target} is outside the user's home directory`,
+            targetPath: target,
+          };
+        }
+        return { escalate: false };
+      }
+      const nonPersistable = isOutsideUserHome(target, ctx.workspace) || isSensitiveHostPath(target, ctx.workspace);
+      return {
+        escalate: true,
+        persistable: !nonPersistable,
+        reason: nonPersistable
+          ? `writing ${target} is outside this run's persistent filesystem scope`
+          : `target ${target} is outside the working directory and trusted folders`,
+        targetPath: target,
+      };
+    }
     // A write inside a trusted folder is auto-approved — checked before the
     // workspace so a trusted folder set as cwd (e.g. a channel's outbox) is
     // silent, not merely non-escalated (which still asks under write=ask).
@@ -38,7 +82,18 @@ export class WriteFileTool implements AgentTool {
   }
 
   async execute(input: Record<string, JSONValue>, ctx: ToolExecutionContext): Promise<ToolExecutionResult> {
-    const target = path.resolve(ctx.cwd, expandHome(requireStringInput(input, 'path', 'write_file')));
+    const target = resolveToolPath(
+      requireStringInput(input, 'path', 'write_file'),
+      ctx.workspace,
+      ctx.cwd,
+    );
+    if (ctx.workspace && isProtectedSystemWrite(target, ctx.workspace)) {
+      return {
+        content: `Refused to write protected system path ${target}.`,
+        summary: `refused protected write to ${target}`,
+        isError: true,
+      };
+    }
     const content = typeof input.content === 'string' ? input.content : '';
     try {
       fs.mkdirSync(path.dirname(target), { recursive: true });
