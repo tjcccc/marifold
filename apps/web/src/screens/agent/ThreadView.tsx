@@ -1,5 +1,6 @@
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
+import type { ApiClient } from '../../api/client';
 import { Markdown } from '../../components/Markdown';
 import { CopyButton } from '../../components/CopyButton';
 import { ImagePreviewDialog } from '../../components/ImagePreviewDialog';
@@ -13,6 +14,7 @@ import { RunCard } from './RunCard';
 import styles from './ThreadView.module.css';
 
 export interface ThreadViewProps {
+  client?: ApiClient;
   items: ThreadItem[];
   onCancelRun: (runId: string) => void;
   onAnswerApproval: (runId: string, requestId: string, action: RunApprovalAction) => void;
@@ -28,6 +30,7 @@ export interface ThreadViewProps {
 /** The conversation: user bubbles right, assistant markdown blocks, notices,
  * and run cards. Auto-follows the tail unless the user scrolled up. */
 export function ThreadView({
+  client,
   items,
   onCancelRun,
   onAnswerApproval,
@@ -88,6 +91,7 @@ export function ThreadView({
             onStartEditing={() => setEditingItemId(item.id)}
             onCancelEditing={() => setEditingItemId(undefined)}
             onPreviewImages={(images, index) => setPreview({ images, index })}
+            client={client}
           />
         ))}
       </div>
@@ -95,6 +99,7 @@ export function ThreadView({
         <ImagePreviewDialog
           images={preview.images}
           initialIndex={preview.index}
+          loadImage={client ? path => client.blob(path) : undefined}
           onClose={() => setPreview(undefined)}
         />
       ) : null}
@@ -115,6 +120,7 @@ function ThreadItemView({
   onStartEditing,
   onCancelEditing,
   onPreviewImages,
+  client,
 }: {
   item: ThreadItem;
   runs: Map<string, RunCardState>;
@@ -123,12 +129,17 @@ function ThreadItemView({
   onStartEditing: () => void;
   onCancelEditing: () => void;
   onPreviewImages: (images: PreviewImage[], index: number) => void;
+  client?: ApiClient;
 } & Pick<ThreadViewProps, 'onCancelRun' | 'onAnswerApproval' | 'onToggleRun' | 'onEditUserMessage' | 'editingDisabled'>) {
   switch (item.kind) {
     case 'user': {
       const previewImages = (item.attachments ?? []).flatMap(attachment =>
-        attachment.kind === 'image' && attachment.previewUrl
-          ? [{ src: attachment.previewUrl, alt: attachment.name }]
+        attachment.kind === 'image' && (attachment.previewUrl || attachment.sourcePath)
+          ? [{
+              ...(attachment.previewUrl ? { src: attachment.previewUrl } : {}),
+              ...(attachment.sourcePath ? { sourcePath: attachment.sourcePath } : {}),
+              alt: attachment.name,
+            }]
           : [],
       );
       return (
@@ -136,7 +147,7 @@ function ThreadItemView({
           {item.attachments && item.attachments.length > 0 ? (
             <div className={styles.userAttachments}>
               {item.attachments.map((attachment, index) =>
-                attachment.kind === 'image' && attachment.previewUrl ? (
+                attachment.kind === 'image' && (attachment.previewUrl || attachment.sourcePath) ? (
                   <button
                     key={index}
                     className={styles.userImageButton}
@@ -146,13 +157,14 @@ function ThreadItemView({
                       previewImages,
                       item.attachments!
                         .slice(0, index + 1)
-                        .filter(candidate => candidate.kind === 'image' && candidate.previewUrl)
+                        .filter(candidate => candidate.kind === 'image' && (candidate.previewUrl || candidate.sourcePath))
                         .length - 1,
                     )}
                   >
-                    <img
-                      className={styles.userImage}
-                      src={attachment.previewUrl}
+                    <LazyTranscriptImage
+                      client={client}
+                      previewUrl={attachment.previewUrl}
+                      sourcePath={attachment.sourcePath}
                       alt={attachment.name}
                     />
                   </button>
@@ -265,6 +277,63 @@ function ThreadItemView({
       );
     }
   }
+}
+
+function LazyTranscriptImage({
+  client,
+  previewUrl,
+  sourcePath,
+  alt,
+}: {
+  client?: ApiClient;
+  previewUrl?: string;
+  sourcePath?: string;
+  alt: string;
+}) {
+  const hostRef = useRef<HTMLSpanElement>(null);
+  const [src, setSrc] = useState(previewUrl);
+
+  useEffect(() => {
+    setSrc(previewUrl);
+    if (previewUrl || !sourcePath || !client) return;
+    const host = hostRef.current;
+    let cancelled = false;
+    let objectUrl: string | undefined;
+    const load = () => {
+      client.blob(sourcePath).then(blob => {
+        if (cancelled || !blob) return;
+        objectUrl = URL.createObjectURL(blob);
+        setSrc(objectUrl);
+      }).catch(() => undefined);
+    };
+    if (!host || typeof IntersectionObserver === 'undefined') {
+      load();
+    } else {
+      const observer = new IntersectionObserver(entries => {
+        if (!entries.some(entry => entry.isIntersecting)) return;
+        observer.disconnect();
+        load();
+      }, { rootMargin: '240px' });
+      observer.observe(host);
+      return () => {
+        cancelled = true;
+        observer.disconnect();
+        if (objectUrl) URL.revokeObjectURL(objectUrl);
+      };
+    }
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [client, previewUrl, sourcePath]);
+
+  return (
+    <span ref={hostRef}>
+      {src ? <img className={styles.userImage} src={src} alt={alt} loading="lazy" /> : (
+        <span className={styles.userImagePlaceholder} aria-label={`${alt} loading`} />
+      )}
+    </span>
+  );
 }
 
 function UserMessageEditor({

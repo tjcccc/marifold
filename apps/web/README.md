@@ -57,3 +57,9 @@ auth covers `/v1/*` while the shell stays reachable.
 follower reconnect, libs), component smoke (jsdom + testing-library), and an
 integration suite that drives the real `ApiClient` against a real
 `createMarifoldService` instance.
+
+`pnpm --filter @marifold/web test:e2e` builds the relevant packages, starts a
+real service over disposable profile/session storage, and runs the desktop
+workspace flows in Chromium, including profile/session search, archive/drafts,
+image galleries, accessible dialogs, and global settings. Browser artifacts stay under
+`output/playwright/`.

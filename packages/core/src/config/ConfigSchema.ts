@@ -210,6 +210,10 @@ export interface SessionSummary {
   title?: string;
   /** Pinned sessions sort ahead of ordinary sessions in list UIs. */
   pinned?: boolean;
+  /** Archived sessions are hidden from the default session list. */
+  archived?: boolean;
+  /** Client-only optimistic marker while the first exchange is not durable. */
+  pending?: boolean;
   /** First user message, whitespace-collapsed and truncated — the session's
    * fallback display title in list UIs. Absent for sessions without a user turn. */
   preview?: string;
@@ -231,6 +235,11 @@ export interface SessionImageAttachment {
   data?: string;
   /** Original URL for remote image attachments. */
   url?: string;
+  /** Stable attachment coordinates for authenticated, lazy byte delivery. */
+  ref?: {
+    userTurnIndex: number;
+    attachmentIndex: number;
+  };
 }
 
 export interface SessionDetail extends SessionSummary {

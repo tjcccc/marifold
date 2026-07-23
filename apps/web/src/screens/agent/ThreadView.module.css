@@ -63,6 +63,15 @@
   object-fit: cover;
 }
 
+.userImagePlaceholder {
+  display: block;
+  width: 160px;
+  height: 120px;
+  border: 1px solid var(--separator-soft);
+  border-radius: var(--radius-md);
+  background: var(--separator-soft);
+}
+
 .userImageButton {
   border-radius: var(--radius-md);
   cursor: zoom-in;

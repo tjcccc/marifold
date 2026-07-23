@@ -52,6 +52,8 @@ export interface UserAttachment {
   name: string;
   /** data: URL thumbnail for images. */
   previewUrl?: string;
+  /** Authenticated service path for a lazily loaded persisted image. */
+  sourcePath?: string;
 }
 
 export type ThreadItem =

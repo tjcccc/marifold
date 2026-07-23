@@ -12,11 +12,17 @@ export interface SessionListProps {
   selected?: string;
   profileName: string;
   profileAvatar?: ReactNode;
+  search: string;
+  onSearchChange: (value: string) => void;
+  showArchived: boolean;
+  onShowArchivedChange: (value: boolean) => void;
+  runningSessionIds: ReadonlySet<string>;
   onSelect: (id: string) => void;
   onNew: () => void;
   onBack: () => void;
   onRename: (id: string, title: string) => Promise<boolean>;
   onSetPinned: (id: string, pinned: boolean) => Promise<boolean>;
+  onSetArchived: (id: string, archived: boolean) => Promise<boolean>;
   onDelete: (id: string) => Promise<boolean>;
   footer?: ReactNode;
 }
@@ -34,11 +40,17 @@ export function SessionList({
   selected,
   profileName,
   profileAvatar,
+  search,
+  onSearchChange,
+  showArchived,
+  onShowArchivedChange,
+  runningSessionIds,
   onSelect,
   onNew,
   onBack,
   onRename,
   onSetPinned,
+  onSetArchived,
   onDelete,
   footer,
 }: SessionListProps) {
@@ -49,9 +61,15 @@ export function SessionList({
   const [busy, setBusy] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
+  const dialogRef = useRef<HTMLElement | null>(null);
+  const dialogReturnFocusRef = useRef<HTMLElement | null>(null);
+  const busyRef = useRef(busy);
+  busyRef.current = busy;
 
   useEffect(() => {
     if (!menu) return;
+    const firstItem = menuRef.current?.querySelector<HTMLButtonElement>('button:not(:disabled)');
+    firstItem?.focus();
     function onPointerDown(event: PointerEvent): void {
       const target = event.target;
       if (!(target instanceof Node)) return;
@@ -59,7 +77,24 @@ export function SessionList({
       setMenu(undefined);
     }
     function onKeyDown(event: KeyboardEvent): void {
-      if (event.key === 'Escape') setMenu(undefined);
+      if (event.key === 'Escape') {
+        setMenu(undefined);
+        menu?.trigger.focus();
+        return;
+      }
+      if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+      const items = [...(menuRef.current?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)') ?? [])];
+      if (items.length === 0) return;
+      event.preventDefault();
+      const current = items.indexOf(document.activeElement as HTMLButtonElement);
+      const next = event.key === 'Home'
+        ? 0
+        : event.key === 'End'
+          ? items.length - 1
+          : event.key === 'ArrowDown'
+            ? (current + 1 + items.length) % items.length
+            : (current - 1 + items.length) % items.length;
+      items[next]?.focus();
     }
     function onScroll(): void {
       setMenu(undefined);
@@ -82,14 +117,33 @@ export function SessionList({
 
   useEffect(() => {
     if (!renaming && !deleting) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
     function onKeyDown(event: KeyboardEvent): void {
-      if (event.key !== 'Escape' || busy) return;
-      setRenaming(undefined);
-      setDeleting(undefined);
+      if (event.key === 'Escape' && !busyRef.current) {
+        setRenaming(undefined);
+        setDeleting(undefined);
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const controls = [...(dialogRef.current?.querySelectorAll<HTMLElement>(
+        'button:not(:disabled), input:not(:disabled), [tabindex]:not([tabindex="-1"])',
+      ) ?? [])];
+      if (controls.length === 0) return;
+      const current = controls.indexOf(document.activeElement as HTMLElement);
+      const next = event.shiftKey
+        ? (current - 1 + controls.length) % controls.length
+        : (current + 1) % controls.length;
+      event.preventDefault();
+      controls[next]?.focus();
     }
     document.addEventListener('keydown', onKeyDown);
-    return () => document.removeEventListener('keydown', onKeyDown);
-  }, [busy, deleting, renaming]);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener('keydown', onKeyDown);
+      dialogReturnFocusRef.current?.focus();
+    };
+  }, [deleting?.id, renaming?.id]);
 
   function toggleMenu(session: SessionSummary, trigger: HTMLButtonElement): void {
     if (menu?.session.id === session.id) {
@@ -118,6 +172,14 @@ export function SessionList({
     if (saved) setMenu(undefined);
   }
 
+  async function toggleArchived(session: SessionSummary): Promise<void> {
+    if (busy) return;
+    setBusy(true);
+    const saved = await onSetArchived(session.id, !session.archived);
+    setBusy(false);
+    if (saved) setMenu(undefined);
+  }
+
   async function confirmDelete(): Promise<void> {
     if (!deleting || busy) return;
     setBusy(true);
@@ -136,15 +198,39 @@ export function SessionList({
       </div>
       {profileAvatar ? <div className={styles.profileHero}>{profileAvatar}</div> : null}
       <div className={styles.header}>
-        <span>Sessions</span>
+        <button
+          className={showArchived ? styles.archiveFilterActive : styles.archiveFilter}
+          type="button"
+          aria-pressed={showArchived}
+          title={showArchived ? 'Show active sessions' : 'Show archived sessions'}
+          onClick={() => onShowArchivedChange(!showArchived)}
+        >
+          {showArchived ? 'Archived' : 'Sessions'}
+        </button>
         <button className={styles.newButton} onClick={onNew} title="New session">
           +
         </button>
       </div>
+      <div className={styles.searchWrap}>
+        <SearchGlyph />
+        <input
+          className={styles.searchInput}
+          type="search"
+          placeholder={showArchived ? 'Search archived sessions' : 'Search sessions'}
+          aria-label={showArchived ? 'Search archived sessions' : 'Search sessions'}
+          value={search}
+          onChange={event => onSearchChange(event.target.value)}
+        />
+      </div>
       <div className={styles.list}>
-        {sessions.length === 0 ? <div className={styles.empty}>No sessions yet.</div> : null}
+        {sessions.length === 0 ? (
+          <div className={styles.empty}>
+            {search ? 'No matching sessions.' : showArchived ? 'No archived sessions.' : 'No sessions yet.'}
+          </div>
+        ) : null}
         {sessions.map(session => {
           const title = sessionTitle(session);
+          const running = runningSessionIds.has(session.id);
           return (
             <div
               key={session.id}
@@ -156,7 +242,7 @@ export function SessionList({
                   {session.pinned ? <span className={styles.pinIndicator} title="Pinned"><PinGlyph /></span> : null}
                 </span>
                 <span className={styles.sub}>
-                  {formatRelativeTime(session.updatedAt)} · {session.turnCount} turns
+                  {session.pending ? 'Saving…' : running ? 'Running…' : `${formatRelativeTime(session.updatedAt)} · ${session.turnCount} turns`}
                 </span>
               </button>
               <button
@@ -186,7 +272,10 @@ export function SessionList({
           <button
             className={styles.menuItem}
             role="menuitem"
+            disabled={menu.session.pending}
+            title={menu.session.pending ? 'Available after the first response is saved' : undefined}
             onClick={() => {
+              dialogReturnFocusRef.current = menu.trigger;
               setTitleDraft(sessionTitle(menu.session));
               setRenaming(menu.session);
               setMenu(undefined);
@@ -198,17 +287,28 @@ export function SessionList({
           <button
             className={styles.menuItem}
             role="menuitem"
-            disabled={busy}
+            disabled={busy || menu.session.pending}
             onClick={() => void togglePinned(menu.session)}
           >
             <PinGlyph />
             <span>{menu.session.pinned ? 'Unpin' : 'Pin'}</span>
+          </button>
+          <button
+            className={styles.menuItem}
+            role="menuitem"
+            disabled={busy || menu.session.pending}
+            title={menu.session.pending ? 'Available after the first response is saved' : undefined}
+            onClick={() => void toggleArchived(menu.session)}
+          >
+            <ArchiveGlyph />
+            <span>{menu.session.archived ? 'Unarchive' : 'Archive'}</span>
           </button>
           <div className={styles.menuSeparator} />
           <button
             className={styles.menuItemDanger}
             role="menuitem"
             onClick={() => {
+              dialogReturnFocusRef.current = menu.trigger;
               setDeleting(menu.session);
               setMenu(undefined);
             }}
@@ -223,6 +323,7 @@ export function SessionList({
       {renaming ? createPortal(
         <div className={styles.dialogBackdrop} onClick={() => { if (!busy) setRenaming(undefined); }}>
           <form
+            ref={node => { dialogRef.current = node; }}
             className={styles.dialog}
             role="dialog"
             aria-modal="true"
@@ -258,6 +359,7 @@ export function SessionList({
       {deleting ? createPortal(
         <div className={styles.dialogBackdrop} onClick={() => { if (!busy) setDeleting(undefined); }}>
           <div
+            ref={node => { dialogRef.current = node; }}
             className={styles.dialog}
             role="alertdialog"
             aria-modal="true"
@@ -268,6 +370,7 @@ export function SessionList({
             <div id="delete-session-title" className={styles.dialogTitle}>Delete session?</div>
             <div id="delete-session-description" className={styles.dialogDescription}>
               “{sessionTitle(deleting)}” and its full transcript will be permanently deleted.
+              {runningSessionIds.has(deleting.id) ? ' Its active request will be cancelled first.' : ''}
             </div>
             <div className={styles.dialogActions}>
               <button type="button" className={styles.dialogCancel} disabled={busy} onClick={() => setDeleting(undefined)}>
@@ -303,6 +406,15 @@ function MoreGlyph() {
   );
 }
 
+function SearchGlyph() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden>
+      <circle cx="7" cy="7" r="4.2" fill="none" stroke="currentColor" strokeWidth="1.4" />
+      <path d="m10.2 10.2 3 3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 function RenameGlyph() {
   return (
     <svg width="17" height="17" viewBox="0 0 18 18" aria-hidden>
@@ -324,6 +436,14 @@ function TrashGlyph() {
   return (
     <svg width="17" height="17" viewBox="0 0 18 18" aria-hidden>
       <path d="M4.5 5.5h9M7 3.5h4M6 5.5l.5 9h5l.5-9M8 8v4.2M10 8v4.2" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function ArchiveGlyph() {
+  return (
+    <svg width="17" height="17" viewBox="0 0 18 18" aria-hidden>
+      <path d="M3.5 5.5h11v9h-11zM3 3.5h12v2H3zM7 8.5h4" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }

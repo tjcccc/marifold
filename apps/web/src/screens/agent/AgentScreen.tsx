@@ -120,11 +120,17 @@ export function AgentScreen(props: AgentScreenProps) {
                   size={64}
                 />
               )}
+              search={controller.sessionSearch}
+              onSearchChange={controller.setSessionSearch}
+              showArchived={controller.showArchivedSessions}
+              onShowArchivedChange={controller.setShowArchivedSessions}
+              runningSessionIds={controller.runningSessionIds}
               onSelect={controller.selectSession}
               onNew={controller.newSession}
               onBack={controller.showProfiles}
               onRename={controller.renameSession}
               onSetPinned={controller.setSessionPinned}
+              onSetArchived={controller.setSessionArchived}
               onDelete={controller.deleteSession}
               footer={sidebarFooter}
             />
@@ -176,6 +182,7 @@ export function AgentScreen(props: AgentScreenProps) {
               onDismiss={controller.dismissCatchUp}
             />
             <ThreadView
+              client={props.client}
               key={controller.sessionId ?? 'new-session'}
               items={controller.thread.items}
               scrollToBottomRequest={scrollToBottomRequest}
@@ -186,6 +193,7 @@ export function AgentScreen(props: AgentScreenProps) {
               editingDisabled={controller.steeringRun !== undefined || controller.sending}
             />
             <InputBar
+              draftKey={`${controller.profileName}:${controller.sessionId ?? 'new'}`}
               steering={controller.steeringRun !== undefined}
               disabled={controller.sending}
               think={controller.think}

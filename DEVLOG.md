@@ -2,6 +2,15 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-07-23 — v0.49.0 — Web workspace completion
+
+- Hardened session lifecycle behavior: optimistic first-turn rows no longer offer premature durable actions, deleting an active agent/chat session cancels and waits for its request, and the service refuses destructive history changes while a run or plain chat request is active so late persistence cannot recreate deleted history.
+- Added server-backed active/archived session views and title/first-prompt search. Archive state migrates the v0.48 display table in place and remains separate from transcript/model context.
+- Added a Messages-style profile filter for users who organize many projects as profiles. Matching is instant, case-insensitive, Unicode-normalized, and keyboard-accessible.
+- Replaced base64-heavy session-detail responses with stable attachment references and authenticated binary delivery. Transcript thumbnails load near the viewport, full-screen previews load the selected image on demand, and historical resend can recover the referenced bytes.
+- Added per-session composer text persistence and attachment isolation, keyboard navigation for session menus, focus trapping/restoration and scroll locking for dialogs, plus Config pages for global agent defaults, web search, and appearance.
+- Added isolated real-browser regression coverage and refreshed the Web/API/roadmap documentation. The full workspace gate passes 506 tests, with three additional Chromium workflows covering the completed surface. SkillApp remains intentionally deferred for its own design pass.
+
 ## 2026-07-23 — v0.48.0 — Durable Web transcript and session controls
 
 - Web transcript images now survive session reloads as display-only attachments, open in a large dimmed preview, and support previous/next navigation for multi-image messages. Composer attachment thumbnails use the same preview before submission; none of these display assets are injected into later model context.

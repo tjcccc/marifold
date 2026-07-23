@@ -78,7 +78,7 @@ describe('useAgentController session lifecycle', () => {
         if (method === 'GET' && path === '/v1/models') return { default: {}, options: [] } as never;
         if (method === 'GET' && path === '/v1/profiles/prompt-maker') return { profile } as never;
         if (method === 'GET' && path === '/v1/skills?profile=prompt-maker') return { skills: [] } as never;
-        if (method === 'GET' && path === '/v1/sessions?limit=50&profile=prompt-maker') {
+        if (method === 'GET' && path === '/v1/sessions?limit=100&profile=prompt-maker&archived=false') {
           return { sessions: serverHasSession ? [durable] : [] } as never;
         }
         if (method === 'GET' && path === '/v1/sessions/session_new') {
@@ -138,7 +138,7 @@ describe('useAgentController session lifecycle', () => {
         if (method === 'GET' && path === '/v1/models') return { default: {}, options: [] } as never;
         if (method === 'GET' && path === '/v1/profiles/prompt-maker') return { profile } as never;
         if (method === 'GET' && path === '/v1/skills?profile=prompt-maker') return { skills: [] } as never;
-        if (method === 'GET' && path === '/v1/sessions?limit=50&profile=prompt-maker') {
+        if (method === 'GET' && path === '/v1/sessions?limit=100&profile=prompt-maker&archived=false') {
           return { sessions: [summary] } as never;
         }
         if (method === 'GET' && path === '/v1/sessions/session_image') {
@@ -150,7 +150,11 @@ describe('useAgentController session lifecycle', () => {
                   role: 'user',
                   content: 'Describe this',
                   timestamp: '2026-07-22T00:00:00.000Z',
-                  attachments: [{ kind: 'image', mediaType: 'image/png', data: 'AAA' }],
+                  attachments: [{
+                    kind: 'image',
+                    mediaType: 'image/png',
+                    ref: { userTurnIndex: 0, attachmentIndex: 0 },
+                  }],
                 },
                 { role: 'assistant', content: 'A portrait.', timestamp: '2026-07-22T00:00:01.000Z' },
               ],
@@ -161,7 +165,9 @@ describe('useAgentController session lifecycle', () => {
         throw new Error(`Unexpected request: ${method} ${path}`);
       },
       stream: async () => new Response(),
-      blob: async () => undefined,
+      blob: async path => path.endsWith('/attachments/0/0')
+        ? new Blob(['image-bytes'], { type: 'image/png' })
+        : undefined,
     };
 
     const { result } = renderHook(() => useAgentController({
@@ -174,7 +180,11 @@ describe('useAgentController session lifecycle', () => {
     await waitFor(() => expect(result.current.thread.items).toHaveLength(2));
     expect(result.current.thread.items[0]).toMatchObject({
       kind: 'user',
-      attachments: [{ kind: 'image', name: 'Image 1', previewUrl: 'data:image/png;base64,AAA' }],
+      attachments: [{
+        kind: 'image',
+        name: 'Image 1',
+        sourcePath: '/v1/sessions/session_image/attachments/0/0',
+      }],
     });
   });
 
@@ -196,7 +206,7 @@ describe('useAgentController session lifecycle', () => {
         if (method === 'GET' && path === '/v1/models') return { default: {}, options: [] } as never;
         if (method === 'GET' && path === '/v1/profiles/prompt-maker') return { profile } as never;
         if (method === 'GET' && path === '/v1/skills?profile=prompt-maker') return { skills: [] } as never;
-        if (method === 'GET' && path === '/v1/sessions?limit=50&profile=prompt-maker') {
+        if (method === 'GET' && path === '/v1/sessions?limit=100&profile=prompt-maker&archived=false') {
           return { sessions: deleted ? [] : [current] } as never;
         }
         if (method === 'GET' && path === '/v1/sessions/session_actions') {
@@ -279,7 +289,7 @@ describe('useAgentController session lifecycle', () => {
         if (method === 'GET' && path === '/v1/models') return { default: {}, options: [] } as never;
         if (method === 'GET' && path === '/v1/profiles/prompt-maker') return { profile } as never;
         if (method === 'GET' && path === '/v1/skills?profile=prompt-maker') return { skills: [] } as never;
-        if (method === 'GET' && path === '/v1/sessions?limit=50&profile=prompt-maker') {
+        if (method === 'GET' && path === '/v1/sessions?limit=100&profile=prompt-maker&archived=false') {
           return { sessions: [summary] } as never;
         }
         if (method === 'GET' && path === '/v1/sessions/session_edit') {

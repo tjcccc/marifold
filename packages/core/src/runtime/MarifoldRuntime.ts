@@ -43,6 +43,7 @@ import {
   SessionResolver,
   SessionDbHealth,
   SessionDisplayUpdate,
+  SessionListOptions,
   SessionTruncateResult,
 } from '../sessions/SessionResolver';
 import { SkillStore } from '../skill/SkillStore';
@@ -445,8 +446,8 @@ export class MarifoldRuntime {
     return { compacted: result.compacted };
   }
 
-  listSessions(limit?: number, profileName?: string): SessionSummary[] {
-    return this.sessionResolver.list(limit, profileName);
+  listSessions(limit?: number, profileName?: string, options?: SessionListOptions): SessionSummary[] {
+    return this.sessionResolver.list(limit, profileName, options);
   }
 
   /** Read-only integrity check of the session DB (for `marifold doctor`). Never throws. */
@@ -465,6 +466,14 @@ export class MarifoldRuntime {
 
   getSession(sessionId: string): SessionDetail | undefined {
     return this.sessionResolver.get(sessionId);
+  }
+
+  getSessionAttachment(
+    sessionId: string,
+    userTurnIndex: number,
+    attachmentIndex: number,
+  ): { mediaType: string; data?: string; url?: string } | undefined {
+    return this.sessionResolver.getAttachment(sessionId, userTurnIndex, attachmentIndex);
   }
 
   deleteSession(sessionId: string): boolean {

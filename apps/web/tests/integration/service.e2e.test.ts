@@ -108,8 +108,15 @@ describe('web client ↔ real service', () => {
       expect(chunks.join('')).toBe('Hello from marifold');
       expect(done).toBe(true);
       expect((await getSession(client, 'image-chat')).turns[0]?.attachments).toEqual([
-        { kind: 'image', mediaType: 'image/png', data: TINY_PNG },
+        {
+          kind: 'image',
+          mediaType: 'image/png',
+          ref: { userTurnIndex: 0, attachmentIndex: 0 },
+        },
       ]);
+      const attachment = await client.blob('/v1/sessions/image-chat/attachments/0/0');
+      expect(attachment?.type).toBe('image/png');
+      expect(Buffer.from(await attachment!.arrayBuffer()).toString('base64')).toBe(TINY_PNG);
     } finally {
       await server.close();
     }

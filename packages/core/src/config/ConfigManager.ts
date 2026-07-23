@@ -9,6 +9,8 @@ import {
   resolveWebSearchConfig,
 } from './ConfigSchema';
 import { MarifoldError } from '../errors/MarifoldError';
+import { resolveAgentConfig } from '../agent/ApprovalPolicy';
+import type { AgentToolMode, ApprovalMode, ToolKind } from '../agent/ApprovalPolicy';
 import { resolveUserPath } from '../workspace/WorkspacePaths';
 import { getProviderRegistryEntry, providerConfigFromRegistry } from './ProviderRegistry';
 
@@ -52,6 +54,12 @@ export class ConfigManager {
       this.setMemoryValue(parts[1], value);
     } else if (parts[0] === 'service' && parts.length === 2) {
       this.setServiceValue(parts[1], value);
+    } else if (parts[0] === 'agent' && parts.length === 2) {
+      this.setAgentValue(parts[1], value);
+    } else if (parts[0] === 'agent' && parts[1] === 'approval' && parts.length === 3) {
+      this.setAgentApprovalValue(parts[2], value);
+    } else if (parts[0] === 'web_search' && parts.length === 2) {
+      this.setWebSearchValue(parts[1], value);
     } else if (parts[0] === 'providers' && parts.length === 3) {
       this.setProviderValue(parts[1], parts[2], value);
     } else {
@@ -117,6 +125,37 @@ export class ConfigManager {
         token: svc?.token,
         cors_origins: svc?.corsOrigins,
         web_dir: svc?.webDir,
+      }, parts[1]);
+    }
+    if (parts[0] === 'agent' && parts.length === 2) {
+      const agent = resolveAgentConfig(this.config.agent);
+      return pick('agent', {
+        max_iterations: agent.maxIterations,
+        tool_output_limit: agent.toolOutputLimit,
+        tool_mode: agent.toolMode,
+        trusted_folders: agent.trustedFolders,
+      }, parts[1]);
+    }
+    if (parts[0] === 'agent' && parts[1] === 'approval' && parts.length === 3) {
+      const approval = resolveAgentConfig(this.config.agent).approval;
+      return pick('agent.approval', {
+        read: approval.read,
+        write: approval.write,
+        shell: approval.shell,
+        network: approval.network,
+        delegate: approval.delegate,
+      }, parts[2]);
+    }
+    if (parts[0] === 'web_search' && parts.length === 2) {
+      const search = resolveWebSearchConfig(this.config.webSearch);
+      return pick('web_search', {
+        enabled: search.enabled,
+        max_results: search.maxResults,
+        provider: search.provider,
+        api_key_env: search.apiKeyEnv,
+        api_key: search.apiKey,
+        scrape: search.scrape,
+        proxy: search.proxy,
       }, parts[1]);
     }
     if (parts[0] === 'providers' && parts.length === 3) {
@@ -333,6 +372,65 @@ export class ConfigManager {
     }
   }
 
+  private setAgentValue(key: string, value: string): void {
+    const agent = this.config.agent ?? (this.config.agent = resolveAgentConfig());
+    switch (key) {
+      case 'max_iterations':
+        agent.maxIterations = parsePositiveInteger(value, 'agent.max_iterations');
+        return;
+      case 'tool_output_limit':
+        agent.toolOutputLimit = parsePositiveInteger(value, 'agent.tool_output_limit');
+        return;
+      case 'tool_mode':
+        agent.toolMode = parseAgentToolMode(value);
+        return;
+      case 'trusted_folders':
+        agent.trustedFolders = value.split(',').map(folder => folder.trim()).filter(Boolean).map(resolveUserPath);
+        return;
+      default:
+        throw MarifoldError.configInvalid(`Unknown config key: agent.${key}`);
+    }
+  }
+
+  private setAgentApprovalValue(key: string, value: string): void {
+    const kind = parseToolKind(key);
+    const agent = this.config.agent ?? (this.config.agent = resolveAgentConfig());
+    agent.approval[kind] = parseApprovalMode(value);
+  }
+
+  private setWebSearchValue(key: string, value: string): void {
+    const search = this.config.webSearch ?? (this.config.webSearch = resolveWebSearchConfig());
+    const cleared = value.trim() === '' ? undefined : value.trim();
+    switch (key) {
+      case 'enabled':
+        search.enabled = parseBoolean(value, 'web_search.enabled');
+        return;
+      case 'max_results':
+        search.maxResults = parsePositiveInteger(value, 'web_search.max_results');
+        return;
+      case 'provider':
+        if (value !== 'duckduckgo' && value !== 'firecrawl') {
+          throw MarifoldError.configInvalid('Expected web_search.provider to be duckduckgo or firecrawl.');
+        }
+        search.provider = value;
+        return;
+      case 'api_key_env':
+        search.apiKeyEnv = cleared;
+        return;
+      case 'api_key':
+        search.apiKey = cleared;
+        return;
+      case 'scrape':
+        search.scrape = parseBoolean(value, 'web_search.scrape');
+        return;
+      case 'proxy':
+        search.proxy = cleared;
+        return;
+      default:
+        throw MarifoldError.configInvalid(`Unknown config key: web_search.${key}`);
+    }
+  }
+
   private setProviderValue(providerName: string, key: string, value: string): void {
     const provider = this.config.providers[providerName] ?? this.createProvider(providerName);
     switch (key) {
@@ -512,6 +610,31 @@ function parseNonNegativeNumber(value: string, label: string): number {
   const parsed = parseNumber(value, label);
   if (parsed < 0) throw MarifoldError.configInvalid(`Expected ${label} to be a non-negative number.`);
   return parsed;
+}
+
+function parsePositiveInteger(value: string, label: string): number {
+  const parsed = parseNumber(value, label);
+  if (!Number.isInteger(parsed) || parsed < 1) {
+    throw MarifoldError.configInvalid(`Expected ${label} to be a positive integer.`);
+  }
+  return parsed;
+}
+
+function parseAgentToolMode(value: string): AgentToolMode {
+  if (value === 'auto' || value === 'native' || value === 'control-block') return value;
+  throw MarifoldError.configInvalid('Expected agent.tool_mode to be auto, native, or control-block.');
+}
+
+function parseApprovalMode(value: string): ApprovalMode {
+  if (value === 'allow' || value === 'ask' || value === 'deny') return value;
+  throw MarifoldError.configInvalid('Expected an approval mode of allow, ask, or deny.');
+}
+
+function parseToolKind(value: string): ToolKind {
+  if (value === 'read' || value === 'write' || value === 'shell' || value === 'network' || value === 'delegate') {
+    return value;
+  }
+  throw MarifoldError.configInvalid(`Unknown agent approval kind: ${value}.`);
 }
 
 function parseProviderType(value: string): ProviderType {

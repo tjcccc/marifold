@@ -1,6 +1,6 @@
 {
   "name": "@marifold/web",
-  "version": "0.48.0",
+  "version": "0.49.0",
   "private": true,
   "type": "module",
   "description": "Marifold Web UI — browser client for the marifold service.",
@@ -11,7 +11,8 @@
     "dev": "vite",
     "build": "vite build",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:e2e": "pnpm --filter @marifold/core build && pnpm --filter @marifold/service build && pnpm build && playwright test"
   },
   "dependencies": {
     "react": "^19.2.7",
@@ -20,6 +21,7 @@
   "devDependencies": {
     "@marifold/core": "workspace:*",
     "@marifold/service": "workspace:*",
+    "@playwright/test": "^1.61.1",
     "@testing-library/react": "^16.3.2",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",

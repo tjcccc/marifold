@@ -3,11 +3,13 @@ import type { SessionDetail, SessionSummary } from './types';
 
 export async function listSessions(
   client: ApiClient,
-  options: { limit?: number; profile?: string } = {},
+  options: { limit?: number; profile?: string; archived?: boolean; search?: string } = {},
 ): Promise<SessionSummary[]> {
   const query = new URLSearchParams();
   if (options.limit !== undefined) query.set('limit', String(options.limit));
   if (options.profile !== undefined) query.set('profile', options.profile);
+  if (options.archived !== undefined) query.set('archived', String(options.archived));
+  if (options.search?.trim()) query.set('q', options.search.trim());
   const suffix = query.size > 0 ? `?${query.toString()}` : '';
   const body = await client.request<{ sessions: SessionSummary[] }>('GET', `/v1/sessions${suffix}`);
   return body.sessions;
@@ -32,7 +34,7 @@ export async function deleteSession(client: ApiClient, id: string): Promise<bool
 export async function updateSession(
   client: ApiClient,
   id: string,
-  update: { title?: string | null; pinned?: boolean },
+  update: { title?: string | null; pinned?: boolean; archived?: boolean },
 ): Promise<SessionDetail> {
   const body = await client.request<{ session: SessionDetail }>(
     'PATCH',

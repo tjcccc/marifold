@@ -86,5 +86,14 @@ export interface PublicConfig {
   models: { options: string[] };
   providers: Record<string, { type: string; baseUrl?: string; hasApiKey?: boolean; hasOauthToken?: boolean; apiKeyEnv?: string; proxy?: string }>;
   agent?: MarifoldAgentConfig;
+  webSearch?: {
+    enabled: boolean;
+    maxResults: number;
+    provider: 'duckduckgo' | 'firecrawl';
+    apiKeyEnv?: string;
+    scrape?: boolean;
+    proxy?: string;
+    hasApiKey: boolean;
+  };
   service?: { webDir?: string; tokenEnv?: string; corsOrigins: string[]; hasToken: boolean };
 }

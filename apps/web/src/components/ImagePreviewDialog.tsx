@@ -1,42 +1,86 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import styles from './ImagePreviewDialog.module.css';
 
 export interface PreviewImage {
-  src: string;
+  src?: string;
+  sourcePath?: string;
   alt: string;
 }
 
 export interface ImagePreviewDialogProps {
   images: PreviewImage[];
   initialIndex: number;
+  loadImage?: (path: string) => Promise<Blob | undefined>;
   onClose: () => void;
 }
 
 /** Full-window image preview shared by pending attachments and transcript images. */
-export function ImagePreviewDialog({ images, initialIndex, onClose }: ImagePreviewDialogProps) {
+export function ImagePreviewDialog({ images, initialIndex, loadImage, onClose }: ImagePreviewDialogProps) {
   const [index, setIndex] = useState(() => clampIndex(initialIndex, images.length));
+  const [resolvedSrc, setResolvedSrc] = useState<string>();
+  const closeRef = useRef<HTMLButtonElement>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
   const multiple = images.length > 1;
 
   useEffect(() => {
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : undefined;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    closeRef.current?.focus();
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      previousFocus?.focus();
+    };
+  }, []);
+
+  useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
+      if (event.key === 'Escape') onCloseRef.current();
       else if (event.key === 'ArrowLeft' && multiple) {
         event.preventDefault();
         setIndex(current => wrapIndex(current - 1, images.length));
       } else if (event.key === 'ArrowRight' && multiple) {
         event.preventDefault();
         setIndex(current => wrapIndex(current + 1, images.length));
+      } else if (event.key === 'Tab') {
+        const controls = [
+          closeRef.current,
+          ...document.querySelectorAll<HTMLButtonElement>(`.${styles.arrow}`),
+        ].filter((item): item is HTMLButtonElement => Boolean(item));
+        if (controls.length === 0) return;
+        const current = controls.indexOf(document.activeElement as HTMLButtonElement);
+        const next = event.shiftKey
+          ? (current - 1 + controls.length) % controls.length
+          : (current + 1) % controls.length;
+        event.preventDefault();
+        controls[next]?.focus();
       }
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [images.length, multiple, onClose]);
+  }, [images.length, multiple]);
 
   useEffect(() => {
     setIndex(current => clampIndex(current, images.length));
   }, [images.length]);
 
   const current = images[index];
+  useEffect(() => {
+    setResolvedSrc(current?.src);
+    if (current?.src || !current?.sourcePath || !loadImage) return;
+    let cancelled = false;
+    let objectUrl: string | undefined;
+    loadImage(current.sourcePath).then(blob => {
+      if (cancelled || !blob) return;
+      objectUrl = URL.createObjectURL(blob);
+      setResolvedSrc(objectUrl);
+    }).catch(() => undefined);
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [current?.sourcePath, current?.src, loadImage]);
   if (!current) return null;
 
   function move(delta: number): void {
@@ -52,11 +96,11 @@ export function ImagePreviewDialog({ images, initialIndex, onClose }: ImagePrevi
       onClick={onClose}
     >
       <button
+        ref={closeRef}
         className={styles.close}
         type="button"
         aria-label="Close image preview"
         onClick={onClose}
-        autoFocus
       >
         ×
       </button>
@@ -74,7 +118,11 @@ export function ImagePreviewDialog({ images, initialIndex, onClose }: ImagePrevi
         </button>
       ) : null}
       <div className={styles.stage} onClick={event => event.stopPropagation()}>
-        <img className={styles.image} src={current.src} alt={current.alt} />
+        {resolvedSrc ? (
+          <img className={styles.image} src={resolvedSrc} alt={current.alt} />
+        ) : (
+          <div className={styles.loading} role="status">Loading image…</div>
+        )}
         {multiple ? <div className={styles.counter}>{index + 1} / {images.length}</div> : null}
       </div>
       {multiple ? (

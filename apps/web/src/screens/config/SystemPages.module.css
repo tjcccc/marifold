@@ -153,6 +153,34 @@
   cursor: default;
 }
 
+.segmented {
+  display: inline-flex;
+  padding: 2px;
+  border-radius: 9px;
+  background: var(--surface-2);
+}
+
+.segment,
+.segmentActive {
+  min-width: 54px;
+  padding: 5px 9px;
+  border-radius: 7px;
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+.segmentActive {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 10%);
+}
+
+.segment:disabled,
+.segmentActive:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 .optionRow {
   display: flex;
   align-items: center;

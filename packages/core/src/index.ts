@@ -170,6 +170,7 @@ export {
   SessionResolver,
   type SessionDbHealth,
   type SessionDisplayUpdate,
+  type SessionListOptions,
   type SessionReplaceResult,
   type SessionTruncateResult,
 } from './sessions/SessionResolver';

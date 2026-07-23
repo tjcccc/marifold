@@ -15,6 +15,14 @@ export interface SessionDisplayUpdate {
   /** `null` clears a custom title and restores the first-message preview. */
   title?: string | null;
   pinned?: boolean;
+  archived?: boolean;
+}
+
+export interface SessionListOptions {
+  /** Default is active sessions only. */
+  archived?: boolean;
+  /** Case-insensitive search across custom titles and first-message previews. */
+  search?: string;
 }
 
 /** Result of a session-DB integrity check (used by `marifold doctor`). */
@@ -93,20 +101,41 @@ export class SessionResolver {
     return this.store;
   }
 
-  list(limit = 50, profileName?: string): SessionSummary[] {
+  list(limit = 50, profileName?: string, options: SessionListOptions = {}): SessionSummary[] {
     if (!fs.existsSync(this.sessionsDb)) return [];
 
     const db = this.open();
     try {
-      const hasDisplay = this.hasSessionDisplayTable(db);
+      this.ensureSessionDisplayTable(db);
+      const search = options.search?.trim().toLowerCase() ?? '';
+      const filters = [
+        ...(profileName ? ['s.profile_name = ?'] : []),
+        ['COALESCE(d.archived, 0) = ?'],
+        ...(search ? [`(
+          LOWER(COALESCE(d.title, '')) LIKE ?
+          OR LOWER(COALESCE((
+            SELECT content FROM turns
+            WHERE session_id = s.id AND role = 'user'
+            ORDER BY id ASC
+            LIMIT 1
+          ), '')) LIKE ?
+        )`] : []),
+      ].flat();
+      const params: Array<string | number> = [
+        ...(profileName ? [profileName] : []),
+        options.archived ? 1 : 0,
+        ...(search ? [`%${search}%`, `%${search}%`] : []),
+        limit,
+      ];
       const rows = db.prepare(`
         SELECT
           s.id AS id,
           s.profile_name AS profileName,
           s.created_at AS createdAt,
           s.updated_at AS updatedAt,
-          ${hasDisplay ? 'd.title' : 'NULL'} AS title,
-          ${hasDisplay ? 'd.pinned' : '0'} AS pinned,
+          d.title AS title,
+          d.pinned AS pinned,
+          d.archived AS archived,
           COUNT(t.id) AS turnCount,
           (
             SELECT content FROM turns
@@ -116,20 +145,21 @@ export class SessionResolver {
           ) AS preview
         FROM sessions s
         LEFT JOIN turns t ON t.session_id = s.id
-        ${hasDisplay ? `LEFT JOIN ${SESSION_DISPLAY_TABLE} d ON d.session_id = s.id` : ''}
-        ${profileName ? 'WHERE s.profile_name = ?' : ''}
+        LEFT JOIN ${SESSION_DISPLAY_TABLE} d ON d.session_id = s.id
+        WHERE ${filters.join(' AND ')}
         GROUP BY s.id
         ORDER BY
-          ${hasDisplay ? 'COALESCE(d.pinned, 0)' : 'CAST(0 AS INTEGER)'} DESC,
+          COALESCE(d.pinned, 0) DESC,
           s.updated_at DESC
         LIMIT ?
-      `).all(...(profileName ? [profileName, limit] : [limit])) as Array<{
+      `).all(...params) as Array<{
         id: string;
         profileName: string;
         createdAt: string;
         updatedAt: string;
         title: string | null;
         pinned: number;
+        archived: number;
         turnCount: number;
         preview: string | null;
       }>;
@@ -144,6 +174,7 @@ export class SessionResolver {
           ...(preview ? { preview } : {}),
           ...(row.title ? { title: row.title } : {}),
           ...(row.pinned === 1 ? { pinned: true } : {}),
+          ...(row.archived === 1 ? { archived: true } : {}),
         };
       });
     } catch (error) {
@@ -185,15 +216,16 @@ export class SessionResolver {
 
     const db = this.open();
     try {
-      const hasDisplay = this.hasSessionDisplayTable(db);
+      this.ensureSessionDisplayTable(db);
       const row = db.prepare(`
         SELECT
           s.id AS id,
           s.profile_name AS profileName,
           s.created_at AS createdAt,
           s.updated_at AS updatedAt,
-          ${hasDisplay ? 'd.title' : 'NULL'} AS title,
-          ${hasDisplay ? 'd.pinned' : '0'} AS pinned,
+          d.title AS title,
+          d.pinned AS pinned,
+          d.archived AS archived,
           COUNT(t.id) AS turnCount,
           (
             SELECT content FROM turns
@@ -203,7 +235,7 @@ export class SessionResolver {
           ) AS preview
         FROM sessions s
         LEFT JOIN turns t ON t.session_id = s.id
-        ${hasDisplay ? `LEFT JOIN ${SESSION_DISPLAY_TABLE} d ON d.session_id = s.id` : ''}
+        LEFT JOIN ${SESSION_DISPLAY_TABLE} d ON d.session_id = s.id
         WHERE s.id = ?
         GROUP BY s.id
       `).get(sessionId) as {
@@ -213,6 +245,7 @@ export class SessionResolver {
         updatedAt: string;
         title: string | null;
         pinned: number;
+        archived: number;
         turnCount: number;
         preview: string | null;
       } | undefined;
@@ -228,10 +261,50 @@ export class SessionResolver {
         ...(preview ? { preview } : {}),
         ...(row.title ? { title: row.title } : {}),
         ...(row.pinned === 1 ? { pinned: true } : {}),
+        ...(row.archived === 1 ? { archived: true } : {}),
         turns: this.listTurns(db, row.id),
       };
     } catch (error) {
       throw this.storeError(`Could not read session '${sessionId}' from ${this.sessionsDb}: ${String(error)}`);
+    } finally {
+      db.close();
+    }
+  }
+
+  /** Read one persisted image without including its bytes in the session
+   * transcript payload. The service exposes this through an authenticated
+   * binary route so clients can fetch only visible/previewed images. */
+  getAttachment(
+    sessionId: string,
+    userTurnIndex: number,
+    attachmentIndex: number,
+  ): { mediaType: string; data?: string; url?: string } | undefined {
+    if (!Number.isInteger(userTurnIndex) || userTurnIndex < 0
+      || !Number.isInteger(attachmentIndex) || attachmentIndex < 0) {
+      throw MarifoldError.configInvalid('Attachment coordinates must be non-negative integers.');
+    }
+    if (!fs.existsSync(this.sessionsDb)) return undefined;
+    const db = this.open();
+    try {
+      if (!this.hasAttachmentsTable(db)) return undefined;
+      const row = db.prepare(`
+        SELECT media_type AS mediaType, data, url
+        FROM ${ATTACHMENTS_TABLE}
+        WHERE session_id = ? AND user_turn_index = ? AND attachment_index = ?
+      `).get(sessionId, userTurnIndex, attachmentIndex) as {
+        mediaType: string;
+        data: string | null;
+        url: string | null;
+      } | undefined;
+      if (!row) return undefined;
+      return {
+        mediaType: row.mediaType,
+        ...(row.data !== null ? { data: row.data } : {}),
+        ...(row.url !== null ? { url: row.url } : {}),
+      };
+    } catch (error) {
+      if (error instanceof MarifoldError) throw error;
+      throw this.storeError(`Could not read an attachment for session '${sessionId}' from ${this.sessionsDb}: ${String(error)}`);
     } finally {
       db.close();
     }
@@ -261,8 +334,8 @@ export class SessionResolver {
    * finishes later from overwriting a rename/pin made during the run. */
   updateDisplay(sessionId: string, update: SessionDisplayUpdate): boolean {
     if (!fs.existsSync(this.sessionsDb)) return false;
-    if (update.title === undefined && update.pinned === undefined) {
-      throw MarifoldError.configInvalid('At least one of title or pinned is required.');
+    if (update.title === undefined && update.pinned === undefined && update.archived === undefined) {
+      throw MarifoldError.configInvalid('At least one of title, pinned, or archived is required.');
     }
     const title = update.title === null ? null : update.title?.trim();
     if (title !== undefined && title !== null && title.length === 0) {
@@ -277,20 +350,24 @@ export class SessionResolver {
       if (!db.prepare('SELECT id FROM sessions WHERE id = ?').get(sessionId)) return false;
       this.ensureSessionDisplayTable(db);
       const current = db.prepare(`
-        SELECT title, pinned
+        SELECT title, pinned, archived
         FROM ${SESSION_DISPLAY_TABLE}
         WHERE session_id = ?
-      `).get(sessionId) as { title: string | null; pinned: number } | undefined;
+      `).get(sessionId) as { title: string | null; pinned: number; archived: number } | undefined;
       const nextTitle = title === undefined ? current?.title ?? null : title;
       const nextPinned = update.pinned === undefined ? current?.pinned === 1 : update.pinned;
-      if (nextTitle === null && !nextPinned) {
+      const nextArchived = update.archived === undefined ? current?.archived === 1 : update.archived;
+      if (nextTitle === null && !nextPinned && !nextArchived) {
         db.prepare(`DELETE FROM ${SESSION_DISPLAY_TABLE} WHERE session_id = ?`).run(sessionId);
       } else {
         db.prepare(`
-          INSERT INTO ${SESSION_DISPLAY_TABLE} (session_id, title, pinned)
-          VALUES (?, ?, ?)
-          ON CONFLICT(session_id) DO UPDATE SET title = excluded.title, pinned = excluded.pinned
-        `).run(sessionId, nextTitle, nextPinned ? 1 : 0);
+          INSERT INTO ${SESSION_DISPLAY_TABLE} (session_id, title, pinned, archived)
+          VALUES (?, ?, ?, ?)
+          ON CONFLICT(session_id) DO UPDATE SET
+            title = excluded.title,
+            pinned = excluded.pinned,
+            archived = excluded.archived
+        `).run(sessionId, nextTitle, nextPinned ? 1 : 0, nextArchived ? 1 : 0);
       }
       return true;
     } catch (error) {
@@ -696,16 +773,18 @@ export class SessionResolver {
     const rows = db.prepare(`
       SELECT
         a.user_turn_index AS userTurnIndex,
+        a.attachment_index AS attachmentIndex,
         a.media_type AS mediaType,
-        a.data AS data,
+        a.data IS NOT NULL AS embedded,
         a.url AS url
       FROM ${ATTACHMENTS_TABLE} a
       WHERE a.session_id = ?
       ORDER BY a.user_turn_index ASC, a.attachment_index ASC
     `).all(sessionId) as Array<{
       userTurnIndex: number;
+      attachmentIndex: number;
       mediaType: string;
-      data: string | null;
+      embedded: number;
       url: string | null;
     }>;
     for (const row of rows) {
@@ -713,7 +792,12 @@ export class SessionResolver {
       current.push({
         kind: 'image',
         mediaType: row.mediaType,
-        ...(row.data !== null ? { data: row.data } : {}),
+        ...(row.embedded === 1 ? {
+          ref: {
+            userTurnIndex: row.userTurnIndex,
+            attachmentIndex: row.attachmentIndex,
+          },
+        } : {}),
         ...(row.url !== null ? { url: row.url } : {}),
       });
       byTurn.set(row.userTurnIndex, current);
@@ -764,9 +848,14 @@ export class SessionResolver {
       CREATE TABLE IF NOT EXISTS ${SESSION_DISPLAY_TABLE} (
         session_id TEXT PRIMARY KEY,
         title TEXT,
-        pinned INTEGER NOT NULL DEFAULT 0 CHECK (pinned IN (0, 1))
+        pinned INTEGER NOT NULL DEFAULT 0 CHECK (pinned IN (0, 1)),
+        archived INTEGER NOT NULL DEFAULT 0 CHECK (archived IN (0, 1))
       )
     `);
+    const columns = db.prepare(`PRAGMA table_info(${SESSION_DISPLAY_TABLE})`).all() as Array<{ name: string }>;
+    if (!columns.some(column => column.name === 'archived')) {
+      db.exec(`ALTER TABLE ${SESSION_DISPLAY_TABLE} ADD COLUMN archived INTEGER NOT NULL DEFAULT 0 CHECK (archived IN (0, 1))`);
+    }
   }
 
   private hasSessionDisplayTable(db: Database.Database): boolean {

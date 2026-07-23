@@ -31,6 +31,8 @@ import type { ThreadState, UserAttachment } from '../../state/thread';
 import { activeRun, createThreadState, threadReducer } from '../../state/thread';
 
 const RUN_POLL_INTERVAL_MS = 10_000;
+const RUN_SETTLE_POLL_MS = 75;
+const RUN_SETTLE_TIMEOUT_MS = 15_000;
 
 export interface AgentControllerOptions {
   client: ApiClient;
@@ -47,6 +49,11 @@ export interface AgentController {
   /** Skills for the composer's $-autocomplete (active-profile-scoped). */
   skills: SkillHint[];
   sessions: SessionSummary[];
+  sessionSearch: string;
+  setSessionSearch: (value: string) => void;
+  showArchivedSessions: boolean;
+  setShowArchivedSessions: (value: boolean) => void;
+  runningSessionIds: ReadonlySet<string>;
   sessionId?: string;
   thread: ThreadState;
   steeringRun?: string;
@@ -70,6 +77,7 @@ export interface AgentController {
   newSession: () => void;
   renameSession: (id: string, title: string) => Promise<boolean>;
   setSessionPinned: (id: string, pinned: boolean) => Promise<boolean>;
+  setSessionArchived: (id: string, archived: boolean) => Promise<boolean>;
   deleteSession: (id: string) => Promise<boolean>;
   cancel: (runId: string) => Promise<void>;
   answer: (runId: string, requestId: string, action: RunApprovalAction) => Promise<void>;
@@ -89,6 +97,9 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
   const [profileDetail, setProfileDetail] = useState<ProfileDetail | undefined>();
   const [skills, setSkills] = useState<SkillHint[]>([]);
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
+  const [sessionSearch, setSessionSearch] = useState('');
+  const [showArchivedSessions, setShowArchivedSessions] = useState(false);
+  const [runs, setRuns] = useState<RunRecord[]>([]);
   const [sessionId, setSessionId] = useState<string | undefined>(route.session);
   const [think, setThink] = useState(false);
   const [modelOptions, setModelOptions] = useState<string[]>([]);
@@ -99,19 +110,27 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
   const threadRef = useRef(thread);
   threadRef.current = thread;
 
-  const [attachments, setAttachments] = useState<PreparedAttachment[]>([]);
+  const profileName = route.profile;
+  const [attachmentDrafts, setAttachmentDrafts] = useState<Record<string, PreparedAttachment[]>>({});
+  const attachmentDraftKey = `${profileName ?? '_'}:${sessionId ?? 'new'}`;
+  const attachments = attachmentDrafts[attachmentDraftKey] ?? [];
   const attachmentsRef = useRef(attachments);
   attachmentsRef.current = attachments;
 
-  const profileName = route.profile;
-
   const refreshSessionsRef = useRef<() => void>(() => undefined);
+  const refreshRunsRef = useRef<() => void>(() => undefined);
   const reloadSessionRef = useRef<() => void>(() => undefined);
   const editedRunIdsRef = useRef(new Set<string>());
   const ignoredFinishedRunIdsRef = useRef(new Set<string>());
+  const activeChatRef = useRef<{ sessionId: string; controller: AbortController } | undefined>(undefined);
+  const abortActiveChat = useCallback(() => {
+    activeChatRef.current?.controller.abort();
+    activeChatRef.current = undefined;
+  }, []);
   const followers = useMemo(
     () => new RunFollowers(client, dispatch, runId => {
       refreshSessionsRef.current();
+      refreshRunsRef.current();
       if (editedRunIdsRef.current.delete(runId)) {
         ignoredFinishedRunIdsRef.current.add(runId);
         reloadSessionRef.current();
@@ -120,6 +139,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
     [client],
   );
   useEffect(() => () => followers.stopAll(), [followers]);
+  useEffect(() => () => abortActiveChat(), [abortActiveChat]);
 
   const handleError = useCallback(
     (error: unknown) => {
@@ -140,6 +160,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
   const catchUpRuns = useCallback(
     async (forSession: string) => {
       const runs = await listRuns(client);
+      setRuns(runs);
       const mine = runs.filter(
         run => run.sessionId === forSession && !ignoredFinishedRunIdsRef.current.has(run.id),
       );
@@ -168,7 +189,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
             role: turn.role,
             content: turn.content,
             ...(turn.attachments && turn.attachments.length > 0
-              ? { attachments: toUserAttachments(turn.attachments) }
+              ? { attachments: toUserAttachments(id, turn.attachments) }
               : {}),
           })),
         });
@@ -210,20 +231,18 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
     };
   }, [client, handleError]);
 
-  // Profile selection → detail + sessions + think default.
+  // Profile selection → detail + think default.
   useEffect(() => {
     if (!profileName) return;
     let cancelled = false;
     (async () => {
       try {
-        const [detail, sessionList, skillList] = await Promise.all([
+        const [detail, skillList] = await Promise.all([
           getProfile(client, profileName),
-          listSessions(client, { profile: profileName, limit: 50 }),
           getSkills(client, profileName).catch(() => [] as SkillHint[]),
         ]);
         if (cancelled) return;
         setProfileDetail(detail);
-        setSessions(sessionList);
         setSkills(skillList);
         setThink(detail.settings.think ?? false);
       } catch (error) {
@@ -235,9 +254,33 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
     };
   }, [client, profileName, handleError]);
 
+  // Session search/archive filters are server-backed so results are not
+  // limited to whichever 50 rows happened to load first.
+  useEffect(() => {
+    if (!profileName) return;
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      listSessions(client, {
+        profile: profileName,
+        limit: 100,
+        archived: showArchivedSessions,
+        search: sessionSearch,
+      }).then(result => {
+        if (!cancelled) setSessions(result);
+      }).catch(error => {
+        if (!cancelled) handleError(error);
+      });
+    }, sessionSearch ? 180 : 0);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [client, handleError, profileName, sessionSearch, showArchivedSessions]);
+
   // External navigation (back/forward, deep link) → adopt the route's session.
   useEffect(() => {
     if (route.session !== sessionId) {
+      abortActiveChat();
       setSessionId(route.session);
       void loadSession(route.session);
     }
@@ -272,53 +315,69 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
   const refreshSessions = useCallback(async () => {
     if (!profileName) return;
     try {
-      setSessions(await listSessions(client, { profile: profileName, limit: 50 }));
+      setSessions(await listSessions(client, {
+        profile: profileName,
+        limit: 100,
+        archived: showArchivedSessions,
+        search: sessionSearch,
+      }));
     } catch {
       // List refresh is cosmetic; ignore failures.
     }
-  }, [client, profileName]);
+  }, [client, profileName, sessionSearch, showArchivedSessions]);
   refreshSessionsRef.current = () => { void refreshSessions(); };
+  const refreshRuns = useCallback(async () => {
+    try {
+      setRuns(await listRuns(client));
+    } catch {
+      // Run status is advisory UI state; the service remains authoritative.
+    }
+  }, [client]);
+  refreshRunsRef.current = () => { void refreshRuns(); };
   reloadSessionRef.current = () => { if (sessionId) void loadSession(sessionId); };
 
   const selectProfile = useCallback(
     (name: string) => {
+      abortActiveChat();
       followers.stopAll();
       setSessionId(undefined);
       dispatch({ type: 'reset' });
       navigate({ view: 'agent', profile: name });
     },
-    [followers, navigate],
+    [abortActiveChat, followers, navigate],
   );
 
   const showProfiles = useCallback(() => {
+    abortActiveChat();
     followers.stopAll();
     setSessionId(undefined);
     setProfileDetail(undefined);
     setSessions([]);
     setSkills([]);
-    setAttachments([]);
     dispatch({ type: 'reset' });
     navigate({ view: 'agent' });
-  }, [followers, navigate]);
+  }, [abortActiveChat, followers, navigate]);
 
   const selectSession = useCallback(
     (id: string) => {
       if (!profileName || id === sessionId) return;
+      abortActiveChat();
       setSessionId(id);
       navigate({ view: 'agent', profile: profileName, session: id });
       void loadSession(id);
     },
-    [profileName, sessionId, navigate, loadSession],
+    [abortActiveChat, profileName, sessionId, navigate, loadSession],
   );
 
   const newSession = useCallback(() => {
     if (!profileName) return;
     const id = crypto.randomUUID();
+    abortActiveChat();
     followers.stopAll();
     setSessionId(id);
     dispatch({ type: 'reset', sessionId: id });
     navigate({ view: 'agent', profile: profileName, session: id });
-  }, [profileName, followers, navigate]);
+  }, [abortActiveChat, profileName, followers, navigate]);
 
   const replaceSessionSummary = useCallback((updated: SessionSummary) => {
     setSessions(current => current
@@ -347,14 +406,14 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
     }
   }, [client, handleError, replaceSessionSummary]);
 
-  const deleteSession = useCallback(async (id: string): Promise<boolean> => {
+  const setSessionArchived = useCallback(async (id: string, archived: boolean): Promise<boolean> => {
     try {
-      if (!await deleteSessionRequest(client, id)) return false;
+      await updateSession(client, id, { archived });
       setSessions(current => current.filter(session => session.id !== id));
-      if (id === sessionId && profileName) {
+      if (archived && id === sessionId && profileName) {
+        abortActiveChat();
         followers.stopAll();
         setSessionId(undefined);
-        setAttachments([]);
         dispatch({ type: 'reset' });
         navigate({ view: 'agent', profile: profileName });
       }
@@ -363,19 +422,57 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
       handleError(error);
       return false;
     }
-  }, [client, followers, handleError, navigate, profileName, sessionId]);
+  }, [abortActiveChat, client, followers, handleError, navigate, profileName, sessionId]);
+
+  const deleteSession = useCallback(async (id: string): Promise<boolean> => {
+    try {
+      const active = (await listRuns(client)).filter(run => run.sessionId === id && run.status === 'running');
+      for (const run of active) await cancelRun(client, run.id);
+      if (active.length > 0) await waitForSessionRunsToSettle(client, id);
+      if (activeChatRef.current?.sessionId === id) abortActiveChat();
+      const pending = sessions.some(session => session.id === id && session.pending);
+      if (!await deleteSessionWhenIdle(client, id) && !pending) return false;
+      setSessions(current => current.filter(session => session.id !== id));
+      setRuns(current => current.filter(run => run.sessionId !== id));
+      if (profileName) {
+        setAttachmentDrafts(current => {
+          const next = { ...current };
+          delete next[`${profileName}:${id}`];
+          return next;
+        });
+      }
+      if (id === sessionId && profileName) {
+        followers.stopAll();
+        setSessionId(undefined);
+        dispatch({ type: 'reset' });
+        navigate({ view: 'agent', profile: profileName });
+      }
+      return true;
+    } catch (error) {
+      handleError(error);
+      return false;
+    }
+  }, [abortActiveChat, client, followers, handleError, navigate, profileName, sessionId, sessions]);
 
   const addFiles = useCallback(async (files: Iterable<File>) => {
     const result = await prepareFiles(files, attachmentsRef.current);
     for (const reason of result.rejected) {
       dispatch({ type: 'notice', tone: 'warn', text: reason });
     }
-    if (result.accepted.length > 0) setAttachments(prev => [...prev, ...result.accepted]);
-  }, []);
+    if (result.accepted.length > 0) {
+      setAttachmentDrafts(current => ({
+        ...current,
+        [attachmentDraftKey]: [...(current[attachmentDraftKey] ?? []), ...result.accepted],
+      }));
+    }
+  }, [attachmentDraftKey]);
 
   const removeAttachment = useCallback((index: number) => {
-    setAttachments(prev => prev.filter((_, i) => i !== index));
-  }, []);
+    setAttachmentDrafts(current => ({
+      ...current,
+      [attachmentDraftKey]: (current[attachmentDraftKey] ?? []).filter((_, i) => i !== index),
+    }));
+  }, [attachmentDraftKey]);
 
   // The message send path (steering, session bootstrap, attachments, chat vs
   // agent). Extracted so /retry can re-run a message and send() can dispatch to
@@ -427,7 +524,13 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
           return false;
         }
       }
-      if (options.attachments === undefined) setAttachments([]);
+      if (options.attachments === undefined) {
+        setAttachmentDrafts(current => {
+          const next = { ...current };
+          delete next[attachmentDraftKey];
+          return next;
+        });
+      }
       const imageAttachments = pending.filter(
         (item): item is Extract<PreparedAttachment, { kind: 'image' }> => item.kind === 'image',
       );
@@ -468,6 +571,8 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
         setSending(true);
         dispatch({ type: 'chat_started' });
         let completed = true;
+        const controller = new AbortController();
+        activeChatRef.current = { sessionId: sid, controller };
         try {
           for await (const event of streamChat(client, {
             prompt,
@@ -479,7 +584,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
             model,
             ...(images.length > 0 ? { images } : {}),
             ...(options.originalImages ? { originalImages: true } : {}),
-          })) {
+          }, controller.signal)) {
             if (event.type === 'chunk') dispatch({ type: 'chat_chunk', text: event.text });
             else if (event.type === 'error') {
               completed = false;
@@ -487,12 +592,14 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
             }
             else dispatch({ type: 'chat_done' });
           }
+          if (controller.signal.aborted) completed = false;
           return completed;
         } catch (error) {
           dispatch({ type: 'chat_done' });
-          handleError(error);
+          if (!controller.signal.aborted) handleError(error);
           return false;
         } finally {
+          if (activeChatRef.current?.controller === controller) activeChatRef.current = undefined;
           setSending(false);
           void refreshSessions();
           if (options.replaceUserTurnIndex !== undefined) void loadSession(sid);
@@ -513,6 +620,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
           ...(options.originalImages ? { originalImages: true } : {}),
         });
         dispatch({ type: 'run_created', run });
+        setRuns(current => [run, ...current.filter(item => item.id !== run.id)]);
         if (options.replaceUserTurnIndex !== undefined) editedRunIdsRef.current.add(run.id);
         followers.attach(run.id);
         return true;
@@ -525,7 +633,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
         setSending(false);
       }
     },
-    [client, profileName, sessionId, modelChoice, think, profileDetail, followers, navigate, handleError, refreshSessions, loadSession],
+    [client, profileName, sessionId, modelChoice, think, profileDetail, followers, navigate, handleError, refreshSessions, loadSession, attachmentDraftKey],
   );
 
   const runCommand = useCallback(
@@ -700,7 +808,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
       ).length;
       const fromUserTurnIndex = target.sessionUserTurnIndex ?? priorPersistedUsers;
       const durable = target.sessionUserTurnIndex !== undefined;
-      const restoredAttachments = preparedAttachmentsFromUser(target.attachments);
+      const restoredAttachments = await preparedAttachmentsFromUser(target.attachments, client);
 
       setSending(true);
       try {
@@ -783,6 +891,14 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
     profileDetail,
     skills,
     sessions,
+    sessionSearch,
+    setSessionSearch,
+    showArchivedSessions,
+    setShowArchivedSessions,
+    runningSessionIds: new Set([
+      ...runs.filter(run => run.status === 'running' && run.sessionId).map(run => run.sessionId!),
+      ...(sending && sessionId ? [sessionId] : []),
+    ]),
     sessionId,
     thread,
     steeringRun: activeRun(thread)?.runId,
@@ -804,6 +920,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
     newSession,
     renameSession,
     setSessionPinned,
+    setSessionArchived,
     deleteSession,
     cancel,
     answer,
@@ -818,18 +935,51 @@ function parseImageDataUrl(url: string): { mediaType: string; data: string } | u
   return match ? { mediaType: match[1], data: match[2] } : undefined;
 }
 
+async function waitForSessionRunsToSettle(client: ApiClient, sessionId: string): Promise<void> {
+  const deadline = Date.now() + RUN_SETTLE_TIMEOUT_MS;
+  while (Date.now() < deadline) {
+    const active = (await listRuns(client)).some(
+      run => run.sessionId === sessionId && run.status === 'running',
+    );
+    if (!active) return;
+    await new Promise(resolve => window.setTimeout(resolve, RUN_SETTLE_POLL_MS));
+  }
+  throw new Error('The active run did not stop in time. The session was not deleted.');
+}
+
+async function deleteSessionWhenIdle(client: ApiClient, sessionId: string): Promise<boolean> {
+  const deadline = Date.now() + RUN_SETTLE_TIMEOUT_MS;
+  while (Date.now() < deadline) {
+    try {
+      return await deleteSessionRequest(client, sessionId);
+    } catch (error) {
+      if (!(error instanceof MarifoldApiError && error.code === 'AGENT_RUN_INVALID')) throw error;
+      await new Promise(resolve => window.setTimeout(resolve, RUN_SETTLE_POLL_MS));
+    }
+  }
+  throw new Error('The active request did not stop in time. The session was not deleted.');
+}
+
 function base64ByteLength(data: string): number {
   const padding = data.endsWith('==') ? 2 : data.endsWith('=') ? 1 : 0;
   return Math.max(0, Math.floor(data.length * 3 / 4) - padding);
 }
 
-function preparedAttachmentsFromUser(items?: UserAttachment[]): PreparedAttachment[] {
-  return (items ?? []).flatMap(attachment => {
-    if (attachment.kind !== 'image' || !attachment.previewUrl) return [];
-    const parsed = parseImageDataUrl(attachment.previewUrl);
-    if (!parsed) return [];
+async function preparedAttachmentsFromUser(
+  items: UserAttachment[] | undefined,
+  client: ApiClient,
+): Promise<PreparedAttachment[]> {
+  const prepared: PreparedAttachment[] = [];
+  for (const attachment of items ?? []) {
+    if (attachment.kind !== 'image') continue;
+    let parsed = attachment.previewUrl ? parseImageDataUrl(attachment.previewUrl) : undefined;
+    if (!parsed && attachment.sourcePath) {
+      const blob = await client.blob(attachment.sourcePath);
+      if (blob) parsed = { mediaType: blob.type || 'image/jpeg', data: await blobToBase64(blob) };
+    }
+    if (!parsed) continue;
     const size = base64ByteLength(parsed.data);
-    return [{
+    prepared.push({
       kind: 'image' as const,
       name: attachment.name,
       size,
@@ -837,19 +987,38 @@ function preparedAttachmentsFromUser(items?: UserAttachment[]): PreparedAttachme
       optimized: false,
       data: parsed.data,
       mediaType: parsed.mediaType,
-    }];
-  });
+    });
+  }
+  return prepared;
 }
 
-function toUserAttachments(attachments: SessionImageAttachment[]): UserAttachment[] {
+function toUserAttachments(sessionId: string, attachments: SessionImageAttachment[]): UserAttachment[] {
   return attachments.flatMap((attachment, index) => {
     const previewUrl = attachment.data
       ? `data:${attachment.mediaType};base64,${attachment.data}`
       : attachment.url;
-    return previewUrl
-      ? [{ kind: 'image' as const, name: `Image ${index + 1}`, previewUrl }]
+    const sourcePath = attachment.ref
+      ? `/v1/sessions/${encodeURIComponent(sessionId)}/attachments/${attachment.ref.userTurnIndex}/${attachment.ref.attachmentIndex}`
+      : undefined;
+    return previewUrl || sourcePath
+      ? [{
+          kind: 'image' as const,
+          name: `Image ${index + 1}`,
+          ...(previewUrl ? { previewUrl } : {}),
+          ...(sourcePath ? { sourcePath } : {}),
+        }]
       : [];
   });
+}
+
+async function blobToBase64(blob: Blob): Promise<string> {
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  let binary = '';
+  const chunkSize = 0x8000;
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
+  }
+  return btoa(binary);
 }
 
 function splitModelChoice(choice?: string): [string | undefined, string | undefined] {

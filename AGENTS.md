@@ -16,6 +16,8 @@ v0.46.x adds shared image validation and request optimization across TUI, CLI, s
 
 v0.48.x adds durable transcript image replay and galleries, response/code copying, IME-safe composer behavior, in-place historical prompt regeneration that preserves later exchanges, and persistent session rename/pin/delete controls.
 
+v0.49.x completes the desktop Web workspace with profile/session search, archive views, per-session drafts, authenticated lazy transcript images, global agent/web-search/appearance settings, accessible keyboard/dialog behavior, safe active-request deletion, and isolated Chromium regression coverage.
+
 ## Stack
 
 - TypeScript

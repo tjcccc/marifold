@@ -10,6 +10,8 @@ import styles from './InputBar.module.css';
 const MAX_SUGGESTIONS = 8;
 
 export interface InputBarProps {
+  /** Stable profile/session key used to restore unsent text after navigation. */
+  draftKey?: string;
   /** True while a run is active: submissions steer instead of starting a turn. */
   steering: boolean;
   disabled?: boolean;
@@ -31,7 +33,7 @@ export interface InputBarProps {
  * marigold send. `$skill` is highlighted inline and autocompleted from a
  * keyboard-navigable menu; files arrive via the picker or paste. */
 export function InputBar(props: InputBarProps) {
-  const [text, setText] = useState('');
+  const [text, setText] = useState(() => readDraft(props.draftKey));
   const [focused, setFocused] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -51,6 +53,13 @@ export function InputBar(props: InputBarProps) {
   );
   // Steering rides an active run — attachments can't join mid-task.
   const canAttach = props.onAttachFiles !== undefined && !props.steering;
+
+  useEffect(() => {
+    const restored = readDraft(props.draftKey);
+    setText(restored);
+    setCaret(restored.length);
+    setDismissed(false);
+  }, [props.draftKey]);
 
   const menu = menuQuery(text, caret);
   const source: Suggestion[] = menu?.sigil === '/' ? WEB_COMMANDS : (props.skills ?? []);
@@ -95,6 +104,7 @@ export function InputBar(props: InputBarProps) {
     if (!value || props.disabled) return;
     props.onSubmit(value);
     setText('');
+    removeDraft(props.draftKey);
     setCaret(0);
     setDismissed(false);
     const node = textareaRef.current;
@@ -109,6 +119,7 @@ export function InputBar(props: InputBarProps) {
     const completedCaret = head.length + (separator.length > 0 || suffix.length > 0 ? 1 : 0);
     completionCaretRef.current = completedCaret;
     setText(completed);
+    writeDraft(props.draftKey, completed);
     setCaret(completedCaret);
     setActiveIndex(0);
     setDismissed(false);
@@ -275,6 +286,7 @@ export function InputBar(props: InputBarProps) {
             onChange={event => {
               const next = event.target.value;
               setText(next);
+              writeDraft(props.draftKey, next);
               setCaret(event.target.selectionStart ?? next.length);
               setDismissed(false);
               setActiveIndex(0);
@@ -348,6 +360,32 @@ export function InputBar(props: InputBarProps) {
       ) : null}
     </div>
   );
+}
+
+const DRAFT_PREFIX = 'marifold.composer-draft.';
+
+function readDraft(key?: string): string {
+  if (!key) return '';
+  try {
+    return localStorage.getItem(`${DRAFT_PREFIX}${key}`) ?? '';
+  } catch {
+    return '';
+  }
+}
+
+function writeDraft(key: string | undefined, value: string): void {
+  if (!key) return;
+  try {
+    if (value) localStorage.setItem(`${DRAFT_PREFIX}${key}`, value);
+    else localStorage.removeItem(`${DRAFT_PREFIX}${key}`);
+  } catch {
+    // Browsers may deny storage in private/embedded contexts; drafts then stay
+    // available for the lifetime of the mounted composer.
+  }
+}
+
+function removeDraft(key?: string): void {
+  writeDraft(key, '');
 }
 
 function formatBytes(bytes: number): string {

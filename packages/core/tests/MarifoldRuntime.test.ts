@@ -88,8 +88,16 @@ describe('MarifoldRuntime', () => {
         },
       ]);
       expect(runtime.getSession('test-session')?.turns[0]?.attachments).toEqual([
-        { kind: 'image', mediaType: 'image/png', data: TINY_PNG },
+        {
+          kind: 'image',
+          mediaType: 'image/png',
+          ref: { userTurnIndex: 0, attachmentIndex: 0 },
+        },
       ]);
+      expect(runtime.getSessionAttachment('test-session', 0, 0)).toEqual({
+        mediaType: 'image/png',
+        data: TINY_PNG,
+      });
     } finally {
       runtime.close();
     }

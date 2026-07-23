@@ -34,15 +34,21 @@ import { fileToBase64 } from '../../lib/attachments';
 import type { ConfigSection, Route } from '../../lib/route';
 import type { ThemePreference } from '../../theme/theme';
 import { ModelsPage } from './ModelsPage';
+import { AgentDefaultsPage } from './AgentDefaultsPage';
+import { AppearancePage } from './AppearancePage';
 import { ProfileSettingsPage } from './ProfileSettingsPage';
 import { ProvidersPage } from './ProvidersPage';
 import { ServicePage } from './ServicePage';
+import { WebSearchPage } from './WebSearchPage';
 import styles from './ConfigScreen.module.css';
 
 const SECTIONS: Array<{ id: ConfigSection; label: string }> = [
   { id: 'profiles', label: 'Profiles' },
+  { id: 'agent', label: 'Agent defaults' },
   { id: 'providers', label: 'Providers' },
   { id: 'models', label: 'Models' },
+  { id: 'web-search', label: 'Web search' },
+  { id: 'appearance', label: 'Appearance' },
   { id: 'service', label: 'Service' },
 ];
 
@@ -412,6 +418,14 @@ export function ConfigScreen({
           />
         ) : null}
 
+        {section === 'agent' ? (
+          <AgentDefaultsPage
+            agent={config?.agent}
+            busy={busy}
+            onSave={(key, value) => void writeConfig(`agent.${key}`, value)}
+          />
+        ) : null}
+
         {section === 'models' ? (
           <ModelsPage
             client={client}
@@ -460,6 +474,18 @@ export function ConfigScreen({
             busy={busy}
             onSave={(key, value) => void writeConfig(`service.${key}`, value)}
           />
+        ) : null}
+
+        {section === 'web-search' ? (
+          <WebSearchPage
+            search={config?.webSearch}
+            busy={busy}
+            onSave={(key, value) => void writeConfig(`web_search.${key}`, value)}
+          />
+        ) : null}
+
+        {section === 'appearance' ? (
+          <AppearancePage theme={theme} onThemeChange={onThemeChange} />
         ) : null}
       </div>
 

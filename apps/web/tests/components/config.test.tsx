@@ -197,6 +197,51 @@ describe('ProvidersPage', () => {
   });
 });
 
+describe('Global settings pages', () => {
+  it('updates agent approval defaults and execution mode', async () => {
+    const { AgentDefaultsPage } = await import('../../src/screens/config/AgentDefaultsPage');
+    const onSave = vi.fn();
+    render(
+      <AgentDefaultsPage
+        agent={{
+          approval: { read: 'allow', write: 'ask', shell: 'ask', network: 'ask', delegate: 'allow' },
+          trustedFolders: [],
+          maxIterations: 20,
+          toolOutputLimit: 100000,
+          toolMode: 'auto',
+        }}
+        busy={false}
+        onSave={onSave}
+      />,
+    );
+    const readApproval = screen.getByLabelText('Read files approval');
+    fireEvent.click([...readApproval.querySelectorAll('button')].find(button => button.textContent === 'Deny')!);
+    expect(onSave).toHaveBeenCalledWith('approval.read', 'deny');
+    fireEvent.change(screen.getByLabelText('Tool-call mode'), { target: { value: 'native' } });
+    expect(onSave).toHaveBeenCalledWith('tool_mode', 'native');
+  });
+
+  it('updates web-search provider and keeps inline keys secret-only', async () => {
+    const { WebSearchPage } = await import('../../src/screens/config/WebSearchPage');
+    const onSave = vi.fn();
+    render(
+      <WebSearchPage
+        search={{
+          enabled: false,
+          maxResults: 5,
+          provider: 'duckduckgo',
+          hasApiKey: true,
+        }}
+        busy={false}
+        onSave={onSave}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText('Provider'), { target: { value: 'firecrawl' } });
+    expect(onSave).toHaveBeenCalledWith('provider', 'firecrawl');
+    expect(screen.getByText(/configured/).textContent).not.toContain('test-secret');
+  });
+});
+
 describe('ServicePage', () => {
   it('shows the sanitized service view and saves edited fields', async () => {
     const { ServicePage } = await import('../../src/screens/config/ServicePage');

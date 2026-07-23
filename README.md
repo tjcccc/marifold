@@ -92,7 +92,7 @@ For product direction and future scope, see [docs/vision.md](docs/vision.md) and
 
 ## Non-goals
 
-Marifold does not yet include semantic/vector retrieval, memory encryption, global-config editing screens in the Web UI (per-profile settings are editable; the SYSTEM screens — models & providers, default permissions, appearance — are the next milestone), SkillApp runtime/rendering, Workflow, Apple apps, external-agent aliases, provider-owned model deletion, remote (non-loopback) service binding, or service daemon packaging (schedules fire only while `marifold service` runs).
+Marifold does not yet include semantic/vector retrieval, memory encryption, SkillApp runtime/rendering, Workflow, Apple apps, external-agent aliases, provider-owned model deletion, remote (non-loopback) service binding, or service daemon packaging (schedules fire only while `marifold service` runs).
 
 Web search uses DuckDuckGo scraping by default, which requires no API key but can be blocked by DuckDuckGo's anomaly detection on some networks. Errors surface clearly in `/search` output and tool results, and the `SearchBackend` interface is pluggable for alternative engines.
 
@@ -378,7 +378,7 @@ security behavior.
 
 ## Web UI
 
-`apps/web` is the browser client (Vite + React, see [apps/web/README.md](apps/web/README.md)): the Agent screen renders chat and live agent runs — plan, tool activity, the approval sheet (Allow once / Always allow / Trust folder / Deny), mid-run steering, cancel, catch-up replay, response/code copying, image galleries, durable session rename/pin/delete actions, and history-aware prompt editing that regenerates the selected exchange in place without deleting later turns — plus an editable per-profile Config screen (mode, model override, memories/thinking, permissions with inherited-vs-overridden and inherit-reset, trusted folders, PROFILE/RULES/CUSTOM editors, memory Forget/Delete) and light/dark marigold theming from the committed design concept.
+`apps/web` is the browser client (Vite + React, see [apps/web/README.md](apps/web/README.md)): the Agent screen renders chat and live agent runs — plan, tool activity, the approval sheet (Allow once / Always allow / Trust folder / Deny), mid-run steering, cancel, catch-up replay, response/code copying, lazily loaded authenticated image galleries, scalable profile search, durable session rename/pin/archive/delete actions, server-backed session search, per-session drafts, and history-aware prompt editing that regenerates the selected exchange in place without deleting later turns. Config edits profiles, providers, models, global agent defaults, web search, appearance, and the local service. The current browser shell intentionally targets desktop widths (900 px and above); a dedicated mobile navigation design remains future work.
 
 ```sh
 pnpm --filter @marifold/web build

@@ -135,6 +135,39 @@ base_url = "http://localhost:11434"
     expect(() => manager.setValue('service.nope', 'x')).toThrow(/Unknown config key: service\.nope/);
   });
 
+  it('sets global agent approvals and web-search fields through dotted keys', () => {
+    const dir = tempDir();
+    const configPath = path.join(dir, 'config.toml');
+    fs.writeFileSync(configPath, minimalConfigToml(dir));
+    const manager = new ConfigManager(new ConfigLoader().load({ configPath }));
+
+    manager.setValue('agent.approval.shell', 'deny');
+    manager.setValue('agent.tool_mode', 'native');
+    manager.setValue('agent.max_iterations', '12');
+    manager.setValue('web_search.enabled', 'true');
+    manager.setValue('web_search.provider', 'firecrawl');
+    manager.setValue('web_search.max_results', '8');
+    manager.setValue('web_search.scrape', 'true');
+    manager.setValue('web_search.api_key_env', 'FIRECRAWL_API_KEY');
+
+    const updated = new ConfigLoader().load({ configPath });
+    expect(updated.config.agent).toMatchObject({
+      approval: { shell: 'deny' },
+      toolMode: 'native',
+      maxIterations: 12,
+    });
+    expect(updated.config.webSearch).toMatchObject({
+      enabled: true,
+      provider: 'firecrawl',
+      maxResults: 8,
+      scrape: true,
+      apiKeyEnv: 'FIRECRAWL_API_KEY',
+    });
+    const readback = new ConfigManager(updated);
+    expect(readback.getValue('agent.approval.shell')).toBe('deny');
+    expect(readback.getValue('web_search.provider')).toBe('firecrawl');
+  });
+
   it('getValue mirrors setValue keys (arrays comma-joined, unset = undefined, unknown throws)', () => {
     const dir = tempDir();
     const configPath = path.join(dir, 'config.toml');

@@ -18,6 +18,7 @@ export function withPendingSession(
     updatedAt: now,
     turnCount: 1,
     preview: sessionPreview(input.prompt),
+    pending: true,
   }, ...sessions];
 }
 

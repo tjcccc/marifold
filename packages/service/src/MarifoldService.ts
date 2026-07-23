@@ -3,6 +3,7 @@ import {
   LoadedMarifoldConfig,
   MarifoldError,
   resolveAgentConfig,
+  resolveWebSearchConfig,
   MarifoldProviderConfig,
   MarifoldRunRequest,
   MarifoldRuntime,
@@ -97,6 +98,22 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
   (server as ServiceWithBridge).marifoldTelegram = telegramBridge ? { profile: telegramBridge.profile } : undefined;
 
   const runRegistry = runtime.createRunRegistry(message => server.log.info(message));
+  // Plain /ask and /chat/stream requests are not RunRegistry entries, but they
+  // can still persist a final exchange. Keep session-scoped requests visible
+  // to destructive history routes so a late completion cannot recreate a
+  // session that was just deleted or truncated.
+  const activeSessionRequests = new Map<string, number>();
+  const beginSessionRequest = (sessionId?: string): (() => void) => {
+    if (!sessionId) return () => undefined;
+    activeSessionRequests.set(sessionId, (activeSessionRequests.get(sessionId) ?? 0) + 1);
+    return () => {
+      const remaining = (activeSessionRequests.get(sessionId) ?? 1) - 1;
+      if (remaining > 0) activeSessionRequests.set(sessionId, remaining);
+      else activeSessionRequests.delete(sessionId);
+    };
+  };
+  const hasActiveSessionRequest = (sessionId: string): boolean =>
+    (activeSessionRequests.get(sessionId) ?? 0) > 0;
   registerRunRoutes(server, runRegistry);
   registerProfileRoutes(server, runtime);
 
@@ -250,9 +267,16 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
     };
   });
 
-  server.get<{ Querystring: { limit?: string; profile?: string } }>('/v1/sessions', async request => ({
+  server.get<{ Querystring: { limit?: string; profile?: string; archived?: string; q?: string } }>('/v1/sessions', async request => ({
     ok: true,
-    sessions: runtime.listSessions(parseLimitQuery(request.query.limit) ?? 50, request.query.profile),
+    sessions: runtime.listSessions(
+      parseLimitQuery(request.query.limit) ?? 50,
+      request.query.profile,
+      {
+        archived: parseBooleanQuery(request.query.archived),
+        ...(request.query.q?.trim() ? { search: request.query.q } : {}),
+      },
+    ),
   }));
 
   server.get<{ Params: { id: string } }>('/v1/sessions/:id', async (request, reply) => {
@@ -270,12 +294,36 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
     return { ok: true, session };
   });
 
+  server.get<{
+    Params: { id: string; userTurnIndex: string; attachmentIndex: string };
+  }>('/v1/sessions/:id/attachments/:userTurnIndex/:attachmentIndex', async (request, reply) => {
+    const userTurnIndex = nonNegativeIntegerPath(request.params.userTurnIndex, 'userTurnIndex');
+    const attachmentIndex = nonNegativeIntegerPath(request.params.attachmentIndex, 'attachmentIndex');
+    const attachment = runtime.getSessionAttachment(request.params.id, userTurnIndex, attachmentIndex);
+    if (!attachment?.data) {
+      reply.status(404);
+      return {
+        ok: false,
+        error: {
+          code: 'SESSION_ATTACHMENT_NOT_FOUND',
+          message: 'Session attachment not found.',
+        },
+      };
+    }
+    reply
+      .type(attachment.mediaType)
+      .header('cache-control', 'private, max-age=60')
+      .header('x-content-type-options', 'nosniff');
+    return reply.send(Buffer.from(attachment.data, 'base64'));
+  });
+
   server.patch<{ Params: { id: string } }>('/v1/sessions/:id', async (request, reply) => {
     const body = objectBody(request.body);
     const hasTitle = Object.prototype.hasOwnProperty.call(body, 'title');
     const hasPinned = Object.prototype.hasOwnProperty.call(body, 'pinned');
-    if (!hasTitle && !hasPinned) {
-      throw MarifoldError.configInvalid('At least one of title or pinned is required.');
+    const hasArchived = Object.prototype.hasOwnProperty.call(body, 'archived');
+    if (!hasTitle && !hasPinned && !hasArchived) {
+      throw MarifoldError.configInvalid('At least one of title, pinned, or archived is required.');
     }
     if (hasTitle && body.title !== null && typeof body.title !== 'string') {
       throw MarifoldError.configInvalid('title must be a string or null.');
@@ -283,9 +331,13 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
     if (hasPinned && typeof body.pinned !== 'boolean') {
       throw MarifoldError.configInvalid('pinned must be a boolean.');
     }
+    if (hasArchived && typeof body.archived !== 'boolean') {
+      throw MarifoldError.configInvalid('archived must be a boolean.');
+    }
     const updated = runtime.updateSessionDisplay(request.params.id, {
       ...(hasTitle ? { title: body.title as string | null } : {}),
       ...(hasPinned ? { pinned: body.pinned as boolean } : {}),
+      ...(hasArchived ? { archived: body.archived as boolean } : {}),
     });
     if (!updated) {
       reply.status(404);
@@ -300,10 +352,20 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
     return { ok: true, session: runtime.getSession(request.params.id) };
   });
 
-  server.delete<{ Params: { id: string } }>('/v1/sessions/:id', async request => ({
-    ok: true,
-    deleted: runtime.deleteSession(request.params.id),
-  }));
+  server.delete<{ Params: { id: string } }>('/v1/sessions/:id', async request => {
+    if (
+      hasActiveSessionRequest(request.params.id)
+      || runRegistry.list().some(run => run.sessionId === request.params.id && run.status === 'running')
+    ) {
+      throw MarifoldError.agentRunInvalid(
+        'Cancel the active request and wait for it to finish before deleting this session.',
+      );
+    }
+    return {
+      ok: true,
+      deleted: runtime.deleteSession(request.params.id),
+    };
+  });
 
   server.post<{ Params: { id: string } }>('/v1/sessions/:id/truncate', async (request, reply) => {
     const body = objectBody(request.body);
@@ -311,8 +373,11 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
     if (typeof userTurnIndex !== 'number' || !Number.isInteger(userTurnIndex) || userTurnIndex < 0) {
       throw MarifoldError.configInvalid('fromUserTurnIndex must be a non-negative integer.');
     }
-    if (runRegistry.list().some(run => run.sessionId === request.params.id && run.status === 'running')) {
-      throw MarifoldError.agentRunInvalid('Cancel the active run before editing this session history.');
+    if (
+      hasActiveSessionRequest(request.params.id)
+      || runRegistry.list().some(run => run.sessionId === request.params.id && run.status === 'running')
+    ) {
+      throw MarifoldError.agentRunInvalid('Cancel the active request before editing this session history.');
     }
     const result = runtime.truncateSessionFromUserTurn(request.params.id, userTurnIndex);
     if (!result.found) {
@@ -340,13 +405,27 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
     return { ok: true, ...result };
   });
 
-  server.post('/v1/ask', async request => ({
-    ok: true,
-    response: await runtime.ask(parseRunRequest(request.body)),
-  }));
+  server.post('/v1/ask', async request => {
+    const input = parseRunRequest(request.body);
+    const endRequest = beginSessionRequest(input.sessionId);
+    try {
+      return {
+        ok: true,
+        response: await runtime.ask(input),
+      };
+    } finally {
+      endRequest();
+    }
+  });
 
   server.post('/v1/chat/stream', async (request, reply) => {
-    await streamChat(reply, runtime, parseRunRequest(request.body));
+    const input = parseRunRequest(request.body);
+    const endRequest = beginSessionRequest(input.sessionId);
+    try {
+      await streamChat(reply, runtime, input);
+    } finally {
+      endRequest();
+    }
   });
 
   server.get('/v1/schedules', async () => ({
@@ -559,6 +638,18 @@ function publicConfig(loadedConfig: LoadedMarifoldConfig): JsonObject {
     // Resolved (defaults merged) and secret-free — clients need the global
     // [agent] to compute a profile's effective permissions.
     agent: resolveAgentConfig(loadedConfig.config.agent) as unknown as JsonObject,
+    webSearch: (() => {
+      const search = resolveWebSearchConfig(loadedConfig.config.webSearch);
+      return {
+        enabled: search.enabled,
+        maxResults: search.maxResults,
+        provider: search.provider,
+        ...(search.apiKeyEnv ? { apiKeyEnv: search.apiKeyEnv } : {}),
+        ...(search.scrape !== undefined ? { scrape: search.scrape } : {}),
+        ...(search.proxy ? { proxy: search.proxy } : {}),
+        hasApiKey: Boolean(search.apiKey),
+      };
+    })(),
     // Sanitized [service] view: the token value never leaves the process.
     service: {
       ...(service?.webDir ? { webDir: service.webDir } : {}),
@@ -713,6 +804,14 @@ function parseLimitQuery(value: string | undefined): number | undefined {
   const parsed = Number.parseInt(value, 10);
   if (!Number.isInteger(parsed) || parsed < 1) {
     throw MarifoldError.configInvalid('limit must be a positive integer.');
+  }
+  return parsed;
+}
+
+function nonNegativeIntegerPath(value: string, name: string): number {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    throw MarifoldError.configInvalid(`${name} must be a non-negative integer.`);
   }
   return parsed;
 }

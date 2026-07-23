@@ -39,17 +39,18 @@ short: what shipped (one line each), what's next, and what's deliberately deferr
 - **v0.42–v0.44 — Web composer parity**: avatar crop/compress modal + `assets/` storage;
   `$skill` inline highlight + TUI-parity autocomplete; 15-command `/command` palette (+
   memory-add and session-compact routes); two-row ChatGPT-style composer.
+- **v0.45–v0.49 — durable Web workspace**: built-in skill-management guidance; shared image
+  optimization; clean desktop routes and transcript rendering; durable image replay and
+  in-place historical edits; profile search; session rename/pin/archive/delete/search, per-session drafts,
+  global agent/web-search/appearance settings, and authenticated lazy transcript images.
 
 ## Next
 
-- **Browser verification pass on v0.42–v0.44** (jsdom couldn't cover these): `$`/`/` overlay
-  caret alignment, the avatar cropper canvas flow, `/command` execution paths (`/compact`
-  needs a live provider).
 - **SkillApp runtime**: give the Apps tab its runtime — render `marifold.skillapp.v0` layouts,
   wire actions to the agent loop under the existing approval vocabulary. The spec + validator
   (`docs/skillapp.md`, `packages/core/src/skillapp`) have been waiting for this since pre-TUI.
-- **Web UI backlog**: `/v1/events` push channel to replace 10s run polling, mobile nav polish,
-  profile rename/delete UI, markdown tables.
+- **Web UI backlog**: `/v1/events` push channel to replace 10s run polling, a deliberate mobile
+  navigation design, and profile rename/delete UI.
 - **Workflow composition**: chain native profiles, skills, skill apps, models, and
   external-agent aliases into multi-step flows (design doc exists outside the repo).
 - **Apple clients** and alias profiles for Codex/Claude Code and other external agents.

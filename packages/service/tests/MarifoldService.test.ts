@@ -216,6 +216,66 @@ describe('MarifoldService', () => {
     }
   });
 
+  it('blocks session deletion until an active chat stream disconnects', async () => {
+    const realFetch = globalThis.fetch;
+    let providerSignal: AbortSignal | undefined;
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).includes('localhost:11434')) {
+        providerSignal = init?.signal ?? undefined;
+        return stallingOllamaResponse(providerSignal);
+      }
+      return realFetch(input, init);
+    }));
+
+    const dir = tempDir();
+    const loaded = fixtureLoadedConfig(dir);
+    const sessions = new SessionResolver(loaded.config.paths.sessionsDb);
+    await sessions.appendExchange('session_chatting', 'default', 'Earlier question', 'Earlier answer');
+    sessions.close();
+
+    const server = createMarifoldService({ loadedConfig: loaded, scheduler: false });
+    try {
+      await server.listen({ host: '127.0.0.1', port: 0 });
+      const address = server.server.address();
+      if (typeof address !== 'object' || address === null) throw new Error('service did not report a listen address');
+      const base = `http://127.0.0.1:${address.port}`;
+
+      const clientAbort = new AbortController();
+      const response = await realFetch(`${base}/v1/chat/stream`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: 'Keep chatting.',
+          profile: 'default',
+          sessionId: 'session_chatting',
+          memories: false,
+        }),
+        signal: clientAbort.signal,
+      });
+      const reader = response.body!.getReader();
+      expect(new TextDecoder().decode((await reader.read()).value)).toContain('event: chunk');
+
+      const blocked = await realFetch(`${base}/v1/sessions/session_chatting`, { method: 'DELETE' });
+      expect(blocked.status).toBe(400);
+      expect((await blocked.json()).error.code).toBe('AGENT_RUN_INVALID');
+
+      clientAbort.abort();
+      await vi.waitFor(() => {
+        expect(providerSignal?.aborted).toBe(true);
+      }, { timeout: 2000, interval: 10 });
+
+      let deletedBody: { deleted?: boolean } | undefined;
+      await vi.waitFor(async () => {
+        const deleted = await realFetch(`${base}/v1/sessions/session_chatting`, { method: 'DELETE' });
+        expect(deleted.status).toBe(200);
+        deletedBody = await deleted.json() as { deleted?: boolean };
+      }, { timeout: 2000, interval: 20 });
+      expect(deletedBody?.deleted).toBe(true);
+    } finally {
+      await server.close();
+    }
+  });
+
   it('routes ask through the core runtime', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => ollamaStreamResponse(['service ', 'response'])));
     const server = createMarifoldService({ loadedConfig: fixtureLoadedConfig(tempDir()), scheduler: false });
@@ -316,6 +376,60 @@ describe('MarifoldService', () => {
         payload: { title: '' },
       });
       expect(invalid.statusCode).toBe(400);
+
+      const archived = await server.inject({
+        method: 'PATCH',
+        url: '/v1/sessions/session_display',
+        payload: { archived: true },
+      });
+      expect(archived.statusCode).toBe(200);
+      expect(archived.json().session.archived).toBe(true);
+      expect((await server.inject({ method: 'GET', url: '/v1/sessions?profile=default' })).json().sessions)
+        .toEqual([]);
+      expect((await server.inject({
+        method: 'GET',
+        url: '/v1/sessions?profile=default&archived=true&q=renamed',
+      })).json().sessions).toMatchObject([{ id: 'session_display', archived: true }]);
+    } finally {
+      await server.close();
+    }
+  });
+
+  it('refuses to delete a session while its run is active', async () => {
+    const realFetch = globalThis.fetch;
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).includes('localhost:11434')) return stallingOllamaResponse(init?.signal ?? undefined);
+      return realFetch(input, init);
+    }));
+    const dir = tempDir();
+    const loaded = fixtureLoadedConfig(dir);
+    const sessions = new SessionResolver(loaded.config.paths.sessionsDb);
+    await sessions.appendExchange('session_running', 'default', 'Earlier question', 'Earlier answer');
+    sessions.close();
+    const server = createMarifoldService({ loadedConfig: loaded, scheduler: false });
+    try {
+      const started = await server.inject({
+        method: 'POST',
+        url: '/v1/runs',
+        payload: {
+          objective: 'Keep working.',
+          profile: 'default',
+          sessionId: 'session_running',
+        },
+      });
+      const runId = started.json().run.id as string;
+      const blocked = await server.inject({ method: 'DELETE', url: '/v1/sessions/session_running' });
+      expect(blocked.statusCode).toBe(400);
+      expect(blocked.json().error.code).toBe('AGENT_RUN_INVALID');
+
+      await server.inject({ method: 'POST', url: `/v1/runs/${runId}/cancel`, payload: {} });
+      await vi.waitFor(async () => {
+        const listed = await server.inject({ method: 'GET', url: '/v1/runs' });
+        expect(listed.json().runs.find((run: { id: string }) => run.id === runId)?.status).not.toBe('running');
+      }, { timeout: 2000, interval: 20 });
+      const deleted = await server.inject({ method: 'DELETE', url: '/v1/sessions/session_running' });
+      expect(deleted.statusCode).toBe(200);
+      expect(deleted.json().deleted).toBe(true);
     } finally {
       await server.close();
     }

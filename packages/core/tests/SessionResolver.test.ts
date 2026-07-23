@@ -124,6 +124,47 @@ describe('SessionResolver display metadata', () => {
     expect(resolver.get('s1')).not.toHaveProperty('title');
     expect(resolver.get('s1')).not.toHaveProperty('pinned');
   });
+
+  it('archives sessions and searches titles or first-message previews server-side', () => {
+    const dbPath = tempDb();
+    seed(dbPath);
+    const db = new Database(dbPath);
+    db.prepare("INSERT INTO sessions VALUES ('s2','default','2026-01-02','2026-01-02','{}')").run();
+    db.prepare("INSERT INTO turns (session_id, role, content, timestamp) VALUES ('s2','user','Trip planning notes','2026-01-02')").run();
+    db.close();
+
+    const resolver = new SessionResolver(dbPath);
+    expect(resolver.updateDisplay('s1', { title: 'Pinned research', archived: true })).toBe(true);
+    expect(resolver.list().map(session => session.id)).toEqual(['s2']);
+    expect(resolver.list(50, 'default', { archived: true })).toMatchObject([
+      { id: 's1', title: 'Pinned research', archived: true },
+    ]);
+    expect(resolver.list(50, 'default', { search: 'trip' }).map(session => session.id)).toEqual(['s2']);
+    expect(resolver.list(50, 'default', { archived: true, search: 'research' }).map(session => session.id))
+      .toEqual(['s1']);
+  });
+
+  it('migrates the v0.48 display table before reading archive state', () => {
+    const dbPath = tempDb();
+    seed(dbPath);
+    const db = new Database(dbPath);
+    db.exec(`
+      CREATE TABLE marifold_session_display (
+        session_id TEXT PRIMARY KEY,
+        title TEXT,
+        pinned INTEGER NOT NULL DEFAULT 0 CHECK (pinned IN (0, 1))
+      )
+    `);
+    db.prepare("INSERT INTO marifold_session_display VALUES ('s1', 'Legacy title', 1)").run();
+    db.close();
+
+    const resolver = new SessionResolver(dbPath);
+    expect(resolver.list()).toMatchObject([{ id: 's1', title: 'Legacy title', pinned: true }]);
+    const probe = new Database(dbPath, { fileMustExist: true });
+    const columns = probe.prepare('PRAGMA table_info(marifold_session_display)').all() as Array<{ name: string }>;
+    expect(columns.map(column => column.name)).toContain('archived');
+    probe.close();
+  });
 });
 
 describe('SessionResolver WAL hardening', () => {
@@ -155,7 +196,11 @@ describe('SessionResolver turn attachments', () => {
       {
         role: 'user',
         content: 'Describe this image.',
-        attachments: [{ kind: 'image', mediaType: 'image/png', data: 'aW1hZ2UtYnl0ZXM=' }],
+        attachments: [{
+          kind: 'image',
+          mediaType: 'image/png',
+          ref: { userTurnIndex: 0, attachmentIndex: 0 },
+        }],
       },
       { role: 'assistant', content: 'It is a small test image.' },
     ]);
@@ -164,8 +209,12 @@ describe('SessionResolver turn attachments', () => {
     // to the first user turn after another exchange changes every SQLite id.
     await resolver.appendExchange('with-image', 'default', 'One more question.', 'One more answer.');
     expect(resolver.get('with-image')?.turns[0]?.attachments).toMatchObject([
-      { kind: 'image', mediaType: 'image/png', data: 'aW1hZ2UtYnl0ZXM=' },
+      { kind: 'image', mediaType: 'image/png', ref: { userTurnIndex: 0, attachmentIndex: 0 } },
     ]);
+    expect(resolver.getAttachment('with-image', 0, 0)).toEqual({
+      mediaType: 'image/png',
+      data: 'aW1hZ2UtYnl0ZXM=',
+    });
 
     expect(resolver.delete('with-image')).toBe(true);
     const db = new Database(dbPath, { fileMustExist: true });
@@ -191,7 +240,7 @@ describe('SessionResolver turn attachments', () => {
       {
         role: 'user',
         content: 'Conversation 1',
-        attachments: [{ data: 'Zmlyc3Q=', mediaType: 'image/png' }],
+        attachments: [{ mediaType: 'image/png', ref: { userTurnIndex: 0, attachmentIndex: 0 } }],
       },
       { role: 'assistant', content: 'Answer 1' },
     ]);
@@ -232,7 +281,7 @@ describe('SessionResolver turn attachments', () => {
       {
         role: 'user',
         content: 'Updated conversation 2',
-        attachments: [{ data: 'bmV3', mediaType: 'image/jpeg' }],
+        attachments: [{ mediaType: 'image/jpeg', ref: { userTurnIndex: 1, attachmentIndex: 0 } }],
       },
       { role: 'assistant', content: 'Updated answer 2' },
       { role: 'user', content: 'Conversation 3' },

@@ -20,6 +20,38 @@
   color: var(--text-3);
 }
 
+.searchWrap {
+  margin: 10px 10px 2px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  color: var(--text-3);
+  background: var(--separator-soft);
+  border: 1px solid transparent;
+  border-radius: 8px;
+}
+
+.searchWrap:focus-within {
+  border-color: var(--brand);
+  background: var(--surface);
+}
+
+.searchInput {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  color: var(--text);
+  background: transparent;
+  font-size: 13px;
+}
+
+.searchInput::placeholder {
+  color: var(--text-3);
+}
+
 .newButton {
   width: 22px;
   height: 22px;
@@ -44,6 +76,12 @@
   flex-direction: column;
   padding: 0 8px 12px;
   gap: 2px;
+}
+
+.empty {
+  padding: 10px;
+  font-size: 12px;
+  color: var(--text-3);
 }
 
 .row,

@@ -4,7 +4,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { InputBar } from '../../src/screens/agent/InputBar';
 import type { SkillHint } from '../../src/api/misc';
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  localStorage.clear();
+});
 
 const skills: SkillHint[] = [
   { name: 'translate', description: 'Translate text', usage: '$translate <text> [language]' },
@@ -27,6 +30,28 @@ function renderBar(onSubmit = vi.fn()) {
 }
 
 describe('InputBar $-autocomplete', () => {
+  it('restores unsent text independently for each session key', () => {
+    const base = {
+      steering: false,
+      think: false,
+      onToggleThink: vi.fn(),
+      modelOptions: [] as string[],
+      onSelectModel: vi.fn(),
+      onSubmit: vi.fn(),
+    };
+    const view = render(<InputBar {...base} draftKey="writer:one" />);
+    let textarea = screen.getByPlaceholderText('Message the agent…') as HTMLTextAreaElement;
+    fireEvent.change(textarea, { target: { value: 'draft one' } });
+
+    view.rerender(<InputBar {...base} draftKey="writer:two" />);
+    textarea = screen.getByPlaceholderText('Message the agent…') as HTMLTextAreaElement;
+    expect(textarea.value).toBe('');
+    fireEvent.change(textarea, { target: { value: 'draft two' } });
+
+    view.rerender(<InputBar {...base} draftKey="writer:one" />);
+    expect((screen.getByPlaceholderText('Message the agent…') as HTMLTextAreaElement).value).toBe('draft one');
+  });
+
   it('shows all skills on "$" and filters as the name is typed', () => {
     const { textarea } = renderBar();
     fireEvent.focus(textarea);

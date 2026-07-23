@@ -191,11 +191,17 @@ describe('Desktop workspace sidebar', () => {
           turnCount: 4,
           preview: 'Portrait prompt',
         }]}
+        search=""
+        onSearchChange={vi.fn()}
+        showArchived={false}
+        onShowArchivedChange={vi.fn()}
+        runningSessionIds={new Set()}
         onBack={onBack}
         onNew={onNew}
         onSelect={onSelect}
         onRename={onRename}
         onSetPinned={onSetPinned}
+        onSetArchived={vi.fn(async () => true)}
         onDelete={onDelete}
       />,
     );
@@ -227,11 +233,17 @@ describe('Desktop workspace sidebar', () => {
           turnCount: 4,
           preview: 'Portrait prompt',
         }]}
+        search=""
+        onSearchChange={vi.fn()}
+        showArchived={false}
+        onShowArchivedChange={vi.fn()}
+        runningSessionIds={new Set()}
         onBack={vi.fn()}
         onNew={vi.fn()}
         onSelect={vi.fn()}
         onRename={onRename}
         onSetPinned={onSetPinned}
+        onSetArchived={vi.fn(async () => true)}
         onDelete={onDelete}
       />,
     );
