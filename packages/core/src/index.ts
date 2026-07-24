@@ -189,6 +189,11 @@ export {
   validateSkill,
   renderSkillPrompt,
   resolveSkillValues,
+  bindSkillArgs,
+  parseSkillInvocation,
+  resolveSkillInvocation,
+  skillUsage,
+  tokenizeSkillArgs,
   SkillStore,
 } from './skill';
 export type {
@@ -196,6 +201,8 @@ export type {
   SkillMode,
   SkillVariable,
   SkillRenderResult,
+  ParsedSkillInvocation,
+  ResolvedSkillInvocation,
   SkillScope,
   SkillStoreOptions,
 } from './skill';

@@ -3,15 +3,43 @@ import { strToU8, zipSync } from 'fflate';
 
 test('profile search filters the project-style profile list', async ({ page }) => {
   await page.goto('/agent');
+  await expect(page.getByText('Research reply preview.')).toBeVisible();
+  await expect(page.locator('[data-profile-row] time').first()).toBeVisible();
+  const avatar = page.locator('[data-profile-row]').first().locator('[aria-hidden="true"]').first();
+  await expect(avatar).toHaveCSS('width', '40px');
+  await expect(avatar).toHaveCSS('height', '40px');
+
   const search = page.getByLabel('Search profiles');
   await search.fill('RESEARCH');
-  await expect(page.getByRole('button', { name: /research-lab/i })).toBeVisible();
-  await expect(page.getByRole('button', { name: /^default/i })).toHaveCount(0);
+  const researchRow = page.locator('[data-profile-row]').filter({ hasText: 'research-lab' });
+  await expect(researchRow).toBeVisible();
+  await expect(page.locator('[data-profile-row]').filter({ hasText: 'default' })).toHaveCount(0);
 
   await search.press('ArrowDown');
-  await expect(page.getByRole('button', { name: /research-lab/i })).toBeFocused();
+  await expect(researchRow).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(page).toHaveURL(/\/agent\/research-lab$/);
+});
+
+test('profile actions pin contacts, open Config, and double-confirm removal', async ({ page }) => {
+  await page.goto('/agent');
+  await page.getByLabel('Profile actions for research-lab').click();
+  await page.getByRole('menuitem', { name: 'Pin' }).click();
+  await expect(page.getByTitle('Pinned').first()).toBeVisible();
+
+  await page.getByLabel('Profile actions for research-lab').click();
+  await page.getByRole('menuitem', { name: 'Config' }).click();
+  await expect(page).toHaveURL(/\/config\/profiles\/research-lab$/);
+
+  await page.getByRole('button', { name: 'Remove profile' }).click();
+  const dialog = page.getByRole('alertdialog', { name: 'Remove “research-lab”?' });
+  await expect(dialog).toBeVisible();
+  const finalRemove = dialog.getByRole('button', { name: 'Remove profile' });
+  await expect(finalRemove).toBeDisabled();
+  await dialog.getByLabel('Profile name confirmation').fill('research-lab');
+  await expect(finalRemove).toBeEnabled();
+  await dialog.getByRole('button', { name: 'Cancel' }).click();
+  await expect(dialog).toHaveCount(0);
 });
 
 test('modern Office files are extracted locally into composer attachments', async ({ page }) => {

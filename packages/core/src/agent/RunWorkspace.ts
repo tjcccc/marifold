@@ -38,6 +38,9 @@ export interface RunWorkspace {
   venvDir: string;
   cwd: string;
   userHome: string;
+  /** App-owned inputs, such as the active profile's skills, that tools may
+   * inspect but never modify through the process sandbox. */
+  readOnlyRoots: string[];
   readRoots: string[];
   writeRoots: string[];
   /** Roots outside the user's home. Shell calls touching this capability set
@@ -50,6 +53,9 @@ export interface CreateRunWorkspaceOptions {
   id: string;
   cwd?: string;
   trustedFolders?: string[];
+  /** Narrow app-owned folders exposed read-only to this run. Entries outside
+   * the user's home remain approval-gated. */
+  readOnlyFolders?: string[];
   files?: RunFileInput[];
   /** Test/embedding overrides. Product runs use ~/.marifold/runs and the real
    * account home. */
@@ -86,9 +92,12 @@ export function createRunWorkspace(options: CreateRunWorkspaceOptions): RunWorks
     : requestedCwd;
   const trusted = uniqueExistingDirectories(options.trustedFolders ?? [])
     .filter(folder => !isUnsafeBroadRoot(folder, userHome, appHome));
+  const readOnlyRoots = uniqueExistingDirectories(options.readOnlyFolders ?? [])
+    .filter(folder => isInside(folder, userHome))
+    .filter(folder => !isUnsafeBroadReadRoot(folder, userHome, appHome));
   const runWriteRoots = [homeDir, workDir, outputDir, tempDir, cacheDir].map(canonicalExistingPath);
   const writeRoots = uniquePaths([cwd, ...trusted, ...runWriteRoots]);
-  const readRoots = uniquePaths([...writeRoots, canonicalExistingPath(inputDir)]);
+  const readRoots = uniquePaths([...writeRoots, canonicalExistingPath(inputDir), ...readOnlyRoots]);
   const externalRoots = writeRoots.filter(root => !isInside(root, userHome));
 
   const workspace: RunWorkspace = {
@@ -103,6 +112,7 @@ export function createRunWorkspace(options: CreateRunWorkspaceOptions): RunWorks
     venvDir: path.join(canonicalExistingPath(workDir), '.venv'),
     cwd,
     userHome,
+    readOnlyRoots,
     readRoots,
     writeRoots,
     externalRoots,
@@ -224,6 +234,14 @@ function isUnsafeBroadRoot(target: string, userHome: string, appHome: string): b
     || resolved === appHome
     || isInside(appHome, resolved)
     || isInside(resolved, appHome);
+}
+
+function isUnsafeBroadReadRoot(target: string, userHome: string, appHome: string): boolean {
+  const resolved = canonicalExistingPath(target);
+  return resolved === path.parse(resolved).root
+    || resolved === userHome
+    || resolved === appHome
+    || isInside(appHome, resolved);
 }
 
 function safeRunId(value: string): string {

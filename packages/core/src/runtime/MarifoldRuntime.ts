@@ -50,6 +50,11 @@ import {
 import { SkillStore } from '../skill/SkillStore';
 import { MarifoldSkill } from '../skill/SkillSchema';
 import { SkillScope } from '../skill/SkillStore';
+import {
+  parseSkillInvocation,
+  resolveSkillInvocation as resolveSkillInvocationDefinition,
+} from '../skill/SkillInvocation';
+import type { ResolvedSkillInvocation } from '../skill/SkillInvocation';
 import { buildSkillManagerGuide, mentionsSkills } from '../skill/BuiltInSkillManager';
 import { TaskStore } from '../tasks/TaskStore';
 import { defaultSchedulesDir, defaultSkillsDir } from '../workspace/WorkspacePaths';
@@ -113,14 +118,20 @@ export class MarifoldRuntime {
     const preparedImages = await prepareImageInputs(request.images, { optimize: request.originalImages !== true });
     await this.refreshProviderCredentialsIfNeeded(settings.provider);
     const replacing = request.replaceUserTurnIndex !== undefined;
-    const engine = this.createEngine(settings.provider, Boolean(request.sessionId) && !replacing);
+    const isolated = request.isolated === true;
+    const engine = this.createEngine(
+      settings.provider,
+      Boolean(request.sessionId) && !replacing && !isolated,
+    );
     const memoryOn = this.memoryEnabled(settings.profile, request.memories);
     const memory = this.memoryForRequest(settings.profile, request.memories, request.prompt, settings.think);
     const response = await engine.run({
       config: this.toPriestConfig(settings),
       profile: settings.profile,
       prompt: request.prompt,
-      session: request.sessionId && !replacing ? { id: request.sessionId, createIfMissing: true } : undefined,
+      session: request.sessionId && !replacing && !isolated
+        ? { id: request.sessionId, createIfMissing: true }
+        : undefined,
       context: [
         ...this.runtimeContext(memory, request.prompt, memoryOn),
         ...this.editHistoryContext(request, settings),
@@ -131,10 +142,20 @@ export class MarifoldRuntime {
       userContext: request.userContext,
     });
     const stripped = stripMemoryControls(response.text ?? '');
+    const userTurn = request.userTurn ?? request.prompt;
     if (response.ok && request.sessionId) {
       if (request.replaceUserTurnIndex !== undefined) {
-        this.replaceEditedExchange(request.sessionId, request.replaceUserTurnIndex, request.prompt, stripped.text, preparedImages.images);
+        this.replaceEditedExchange(request.sessionId, request.replaceUserTurnIndex, userTurn, stripped.text, preparedImages.images);
+      } else if (isolated) {
+        await this.sessionResolver.appendExchange(
+          request.sessionId,
+          settings.profile,
+          userTurn,
+          stripped.text,
+          preparedImages.images,
+        );
       } else {
+        if (request.userTurn) this.sessionResolver.replaceLastUserTurn(request.sessionId, request.userTurn);
         this.sessionResolver.replaceLastAssistantTurn(request.sessionId, stripped.text);
         this.sessionResolver.saveLastUserTurnAttachments(request.sessionId, preparedImages.images);
       }
@@ -162,7 +183,11 @@ export class MarifoldRuntime {
     await this.refreshProviderCredentialsIfNeeded(settings.provider);
     let aggregateUsage: UsageInfo | undefined;
     const replacing = request.replaceUserTurnIndex !== undefined;
-    const engine = this.createEngine(settings.provider, Boolean(request.sessionId) && !replacing);
+    const isolated = request.isolated === true;
+    const engine = this.createEngine(
+      settings.provider,
+      Boolean(request.sessionId) && !replacing && !isolated,
+    );
     const memoryOn = this.memoryEnabled(settings.profile, request.memories);
     const memory = this.memoryForRequest(settings.profile, request.memories, request.prompt, settings.think);
     const chatTools = this.chatTools(request);
@@ -171,7 +196,9 @@ export class MarifoldRuntime {
       config: this.toPriestConfig(settings),
       profile: settings.profile,
       prompt: request.prompt,
-      session: request.sessionId && !replacing ? { id: request.sessionId, createIfMissing: true } : undefined,
+      session: request.sessionId && !replacing && !isolated
+        ? { id: request.sessionId, createIfMissing: true }
+        : undefined,
       context: [
         ...this.runtimeContext(memory, request.prompt, memoryOn),
         ...this.editHistoryContext(request, settings),
@@ -222,22 +249,43 @@ export class MarifoldRuntime {
       aggregateUsage = sumUsage(aggregateUsage, done?.usage);
       const toolCalls = done?.toolCalls ?? [];
       if (!chatTools || toolCalls.length === 0) {
+        const streamedText = visibleParts.join('');
+        const fallbackControls = streamedText.length === 0
+          ? stripMemoryControls(done?.text ?? '')
+          : undefined;
+        const finalText = streamedText || fallbackControls?.text || '';
+        if (streamedText.length === 0 && finalText) yield finalText;
+        const userTurn = request.userTurn ?? request.prompt;
         if (request.sessionId) {
           if (request.replaceUserTurnIndex !== undefined) {
             this.replaceEditedExchange(
               request.sessionId,
               request.replaceUserTurnIndex,
-              request.prompt,
-              visibleParts.join(''),
+              userTurn,
+              finalText,
+              preparedImages.images,
+            );
+          } else if (isolated) {
+            await this.sessionResolver.appendExchange(
+              request.sessionId,
+              settings.profile,
+              userTurn,
+              finalText,
               preparedImages.images,
             );
           } else {
-            this.sessionResolver.replaceLastAssistantTurn(request.sessionId, visibleParts.join(''));
+            if (request.userTurn) this.sessionResolver.replaceLastUserTurn(request.sessionId, request.userTurn);
+            this.sessionResolver.replaceLastAssistantTurn(request.sessionId, finalText);
             this.sessionResolver.saveLastUserTurnAttachments(request.sessionId, preparedImages.images);
           }
         }
         if (memoryOn) {
-          this.applyTurnMemory(settings.profile, request.prompt, stripper, request.sessionId);
+          this.applyTurnMemory(
+            settings.profile,
+            request.prompt,
+            fallbackControls ?? stripper,
+            request.sessionId,
+          );
         }
         onComplete?.({ usage: aggregateUsage, latencyMs: done?.execution?.latencyMs });
         return;
@@ -296,11 +344,35 @@ export class MarifoldRuntime {
   }
 
   listProfiles(): ProfileSummary[] {
-    return this.profileResolver.list();
+    const activity = new Map(
+      this.sessionResolver.profileActivity().map(item => [item.profileName, item]),
+    );
+    return this.profileResolver.list()
+      .map(profile => {
+        const recent = activity.get(profile.name);
+        return recent ? {
+          ...profile,
+          ...(recent.pinned ? { pinned: true } : {}),
+          ...(recent.updatedAt ? { updatedAt: recent.updatedAt } : {}),
+          ...(recent.preview ? { preview: recent.preview } : {}),
+        } : profile;
+      })
+      .sort((a, b) => {
+        const pinOrder = Number(Boolean(b.pinned)) - Number(Boolean(a.pinned));
+        if (pinOrder !== 0) return pinOrder;
+        const activityOrder = (b.updatedAt ?? '').localeCompare(a.updatedAt ?? '');
+        return activityOrder !== 0 ? activityOrder : a.name.localeCompare(b.name);
+      });
   }
 
   getProfile(name: string): ProfileDetail {
     return this.profileResolver.detail(name);
+  }
+
+  setProfilePinned(name: string, pinned: boolean): ProfileSummary[] {
+    this.getProfile(name);
+    this.sessionResolver.setProfilePinned(name, pinned);
+    return this.listProfiles();
   }
 
   /** Persist a profile's default TUI mode to its profile.toml. Returns the
@@ -369,6 +441,19 @@ export class MarifoldRuntime {
   initProfile(name: string): ProfileDetail {
     this.profileManager.init(name);
     return this.getProfile(name);
+  }
+
+  /** Delete stored profile files while retaining session history. The current
+   * configured default must be changed first, matching the CLI guard. */
+  deleteProfile(name: string): void {
+    if (this.options.loadedConfig.config.default.profile === name) {
+      throw MarifoldError.profileInvalid(
+        `Cannot delete the current default profile '${name}'. Set another default profile first.`,
+        name,
+      );
+    }
+    this.profileManager.delete(name);
+    this.sessionResolver.deleteProfileDisplay(name);
   }
 
   /** The profile's stored avatar image (path + media type), if any. */
@@ -568,6 +653,13 @@ export class MarifoldRuntime {
           globalSkillsDir: config.paths.skillsDir ?? defaultSkillsDir(),
         })];
       },
+      resolveReadOnlyFolders: resolvedProfile => {
+        const { config } = this.options.loadedConfig;
+        return [
+          path.join(config.paths.profilesDir, resolvedProfile, 'skills'),
+          config.paths.skillsDir ?? defaultSkillsDir(),
+        ];
+      },
     });
   }
 
@@ -614,6 +706,15 @@ export class MarifoldRuntime {
 
   getSkill(name: string, profile?: string): MarifoldSkill | undefined {
     return this.createSkillStore(profile).get(name);
+  }
+
+  resolveSkillInvocation(input: string, profile?: string): ResolvedSkillInvocation {
+    const parsed = parseSkillInvocation(input);
+    if (!parsed) throw MarifoldError.skillInvalid('Expected an invocation beginning with $.');
+    const resolvedProfile = profile ?? this.options.loadedConfig.config.default.profile;
+    this.profileResolver.loadSettings(resolvedProfile);
+    const skill = this.createSkillStore(resolvedProfile).require(parsed.name);
+    return resolveSkillInvocationDefinition(skill, parsed);
   }
 
   installSkillFromText(text: string, scope: SkillScope = 'global', profile?: string): MarifoldSkill {

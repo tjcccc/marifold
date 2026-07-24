@@ -62,6 +62,26 @@ is additionally staged by the local service as a read-only file in the private
 run workspace so file tools can inspect it; raw Office bytes are not sent to the
 model.
 
+Submitted `$skill [args]` turns are resolved by `/v1/skills/resolve` before a
+model run starts. The service expands the selected profile/global skill once;
+the Web UI runs those instructions without prior skill-turn history and keeps
+the original `$skill …` text in the transcript.
+
+## Profile navigation
+
+The primary sidebar treats profiles like contacts: 40 px avatars, one-line
+previews from the latest assistant response, a relative activity time, and
+recent-session ordering. Pinned profiles remain above the activity-sorted list
+and use the same glyph as pinned sessions. Each row's hover/focus menu can
+pin/unpin the profile or open its Config page.
+
+Profile Config includes confirmed removal for stored profiles. The configured
+default profile must be changed first, active requests must finish or be
+cancelled, and the built-in `default` profile cannot be removed. The user must
+type the exact profile name in the destructive dialog before its final action
+enables. Removal deletes the profile directory (instructions, memories, skills,
+and avatar) but preserves its SQLite conversation history.
+
 Office source files are limited to 16 MiB, selected expanded XML to 8 MiB, and
 extracted prompt text to 256 KiB. Embedded images, charts, complex formatting,
 macros, password-protected/encrypted files, and legacy `.doc`/`.xls`/`.ppt`

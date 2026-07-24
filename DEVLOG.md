@@ -2,6 +2,18 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-07-24 — v0.51.0 — Direct skills and contact-style profiles
+
+- Web/service `$skill [args]` turns now resolve the selected profile/global skill in core before model execution instead of asking the agent to search filesystem paths. Expanded instructions and the exact bundled-file directory are request-scoped, while the original invocation remains in durable transcript history.
+- Direct skills are history-isolated in both agent and declared-chat modes, preventing one prompt skill's output style from leaking into the next. Agent skills use the lean path; chat skills append a clean visible exchange without replaying the session to the provider.
+- Active profile and configured global skill directories are narrow read-only run roots. A skill can read its own `SKILL.md`/bundled files without approval, while other `~/.marifold` state, external configured paths, and all writes remain protected.
+- Reworked the Web profile sidebar into a compact contact list with 40 px avatars, the latest response's first-line preview and relative activity time, recent-session ordering, and persistent profile pinning. Profile/session pins now share one glyph.
+- Added an accessible hover/focus profile menu with Pin/Unpin and Config actions. Returning to the profile list refreshes activity metadata so completed conversations move immediately.
+- Added double-confirmed profile removal to Config and the service API. The popup requires the exact profile name before enabling the final destructive action. Removal deletes the stored profile's instructions, memories, skills, and avatar while preserving session history; the built-in/current-default profile and profiles with active requests are protected.
+- Tightened the marigold mark's SVG viewBox and brand padding so the artwork fills its slot without oversized internal whitespace.
+- Added core, service, Web-controller, session-persistence, sandbox, Web API/component, and destructive-action regression coverage.
+- Verified with the full workspace typecheck/build/test gate (547 tests) and five isolated Chromium workflows.
+
 ## 2026-07-23 — v0.50.0 — Safe agent files and execution
 
 - Added Web composer support for modern Word (`.docx`), Excel (`.xlsx`), and PowerPoint (`.pptx`) files. Browser-local OOXML extraction preserves useful paragraph/slide/sheet structure with bounded archive, expanded-XML, and prompt-text limits; malformed, encrypted, empty, oversized, and legacy files fail clearly.

@@ -1,5 +1,6 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import type { ProfileFileKind, ProfilePatchInput } from '../../api/profiles';
 import type { ApprovalMode, MarifoldAgentConfig, MemoryEntry, ProfileDetail } from '../../api/types';
 import { AvatarCropper } from '../../components/AvatarCropper';
@@ -19,6 +20,8 @@ export interface ProfileSettingsPageProps {
   onAddTrustedFolder: (folder: string) => void;
   onRemoveTrustedFolder: (folder: string) => void;
   onMemoryAction: (id: string, mode: 'forget' | 'delete') => void;
+  onDelete?: () => void;
+  deleteDisabledReason?: string;
   /** Rendered avatar (the screen owns client wiring); falls back to initials. */
   avatar?: ReactNode;
   onAvatarPick?: (file: File) => void;
@@ -52,8 +55,60 @@ export function ProfileSettingsPage(props: ProfileSettingsPageProps) {
     : '';
   const [newFolder, setNewFolder] = useState('');
   const [cropFile, setCropFile] = useState<File | undefined>();
+  const [removeOpen, setRemoveOpen] = useState(false);
+  const [removeName, setRemoveName] = useState('');
   const avatarInputRef = useRef<HTMLInputElement>(null);
+  const removeTriggerRef = useRef<HTMLButtonElement>(null);
+  const removeDialogRef = useRef<HTMLFormElement>(null);
+  const removeInputRef = useRef<HTMLInputElement>(null);
+  const busyRef = useRef(busy);
+  busyRef.current = busy;
   const canEditAvatar = props.onAvatarPick !== undefined;
+  const removeConfirmed = removeName === detail.name;
+
+  useEffect(() => {
+    setRemoveOpen(false);
+    setRemoveName('');
+  }, [detail.name]);
+
+  useEffect(() => {
+    if (!removeOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    removeInputRef.current?.focus();
+
+    function onKeyDown(event: KeyboardEvent): void {
+      if (event.key === 'Escape' && !busyRef.current) {
+        setRemoveOpen(false);
+        setRemoveName('');
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const controls = [...(removeDialogRef.current?.querySelectorAll<HTMLElement>(
+        'button:not(:disabled), input:not(:disabled)',
+      ) ?? [])];
+      if (controls.length === 0) return;
+      const current = controls.indexOf(document.activeElement as HTMLElement);
+      const next = event.shiftKey
+        ? (current - 1 + controls.length) % controls.length
+        : (current + 1) % controls.length;
+      event.preventDefault();
+      controls[next]?.focus();
+    }
+
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener('keydown', onKeyDown);
+      removeTriggerRef.current?.focus();
+    };
+  }, [removeOpen]);
+
+  function closeRemoveDialog(): void {
+    if (busy) return;
+    setRemoveOpen(false);
+    setRemoveName('');
+  }
 
   const avatarNode = props.avatar ?? (
     <span className={styles.avatar} aria-hidden>
@@ -310,6 +365,93 @@ export function ProfileSettingsPage(props: ProfileSettingsPageProps) {
           />
         ))}
       </section>
+
+      {props.onDelete ? (
+        <section className={styles.group} aria-label="Remove profile">
+          <div className={styles.groupTitle}>Profile</div>
+          <div className={styles.dangerCard}>
+            <div>
+              <div className={styles.dangerTitle}>Remove this profile</div>
+              <div className={styles.dangerDescription}>
+                Deletes its instructions, memories, skills, and avatar. Conversation history remains stored.
+              </div>
+            </div>
+            <button
+              ref={removeTriggerRef}
+              className={styles.removeProfileButton}
+              aria-label="Remove profile"
+              disabled={busy || Boolean(props.deleteDisabledReason)}
+              title={props.deleteDisabledReason}
+              onClick={() => {
+                setRemoveName('');
+                setRemoveOpen(true);
+              }}
+            >
+              Remove
+            </button>
+          </div>
+          {props.deleteDisabledReason ? (
+            <div className={styles.groupHint}>{props.deleteDisabledReason}</div>
+          ) : null}
+        </section>
+      ) : null}
+
+      {removeOpen ? createPortal(
+        <div className={styles.removeBackdrop} onClick={closeRemoveDialog}>
+          <form
+            ref={removeDialogRef}
+            className={styles.removeDialog}
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="remove-profile-title"
+            aria-describedby="remove-profile-description"
+            onClick={event => event.stopPropagation()}
+            onSubmit={event => {
+              event.preventDefault();
+              if (removeConfirmed && !busy) props.onDelete?.();
+            }}
+          >
+            <div id="remove-profile-title" className={styles.removeDialogTitle}>
+              Remove “{detail.name}”?
+            </div>
+            <div id="remove-profile-description" className={styles.removeDialogDescription}>
+              Its instructions, memories, skills, and avatar will be permanently deleted.
+              Conversation history will remain stored.
+            </div>
+            <label className={styles.removeConfirmLabel}>
+              Type <strong>{detail.name}</strong> to confirm
+              <input
+                ref={removeInputRef}
+                className={styles.removeConfirmInput}
+                aria-label="Profile name confirmation"
+                autoComplete="off"
+                spellCheck={false}
+                value={removeName}
+                disabled={busy}
+                onChange={event => setRemoveName(event.target.value)}
+              />
+            </label>
+            <div className={styles.removeDialogActions}>
+              <button
+                type="button"
+                className={styles.removeDialogCancel}
+                disabled={busy}
+                onClick={closeRemoveDialog}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className={styles.removeDialogDelete}
+                disabled={busy || !removeConfirmed}
+              >
+                {busy ? 'Removing…' : 'Remove profile'}
+              </button>
+            </div>
+          </form>
+        </div>,
+        document.body,
+      ) : null}
     </div>
   );
 }

@@ -111,6 +111,7 @@ function parseRunStartInput(value: unknown): RunStartInput {
     ...optionalStringField('provider', body.provider),
     ...optionalStringField('model', body.model),
     ...optionalStringField('sessionId', body.sessionId),
+    ...optionalStringField('userTurn', body.userTurn),
     ...optionalNonNegativeIntegerField('replaceUserTurnIndex', body.replaceUserTurnIndex),
     ...optionalStringField('cwd', body.cwd),
     ...optionalBooleanField('think', body.think),

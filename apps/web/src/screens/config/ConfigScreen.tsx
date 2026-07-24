@@ -16,6 +16,7 @@ import {
   createProfileWithSetup,
   deleteAvatar,
   deleteMemory,
+  deleteProfile,
   getProfile,
   listMemories,
   listProfiles,
@@ -227,6 +228,23 @@ export function ConfigScreen({
     }
   }
 
+  const removeSelectedProfile = useCallback(async () => {
+    if (!item) return;
+    setBusy(true);
+    try {
+      await deleteProfile(client, item);
+      setProfiles(current => current.filter(profile => profile.name !== item));
+      setDetail(undefined);
+      setMemories([]);
+      setProblem(undefined);
+      go('profiles');
+    } catch (error) {
+      handleError(error);
+    } finally {
+      setBusy(false);
+    }
+  }, [client, go, handleError, item]);
+
   /** setConfigValue with the shared busy/problem handling; refreshes config. */
   const writeConfig = useCallback(
     async (key: string, value: string) => {
@@ -393,6 +411,14 @@ export function ConfigScreen({
                   .catch(handleError)
                   .finally(() => setBusy(false));
               }}
+              onDelete={() => void removeSelectedProfile()}
+              deleteDisabledReason={
+                detail.name === config?.default.profile
+                  ? 'Choose another default profile before removing this one.'
+                  : detail.name === 'default'
+                    ? 'The built-in default profile cannot be removed.'
+                    : undefined
+              }
             />
           ) : (
             <div className={styles.empty}>Select a profile.</div>

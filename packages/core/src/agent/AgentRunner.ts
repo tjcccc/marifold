@@ -136,6 +136,9 @@ export interface AgentRunnerDeps {
   /** Lazily attach app-owned instructions selected from the objective (for
    * example the built-in skill-manager guide). */
   resolveBuiltInInstructions?: (objective: string, profile: string) => string[];
+  /** Narrow app-owned folders that the resolved profile may inspect read-only
+   * during a run, such as profile and global skill directories. */
+  resolveReadOnlyFolders?: (profile: string) => string[];
 }
 
 /** Char budget for the injected history window when no profile budget is set. */
@@ -204,6 +207,7 @@ export class AgentRunner {
       id: options.executionId ?? task.id,
       cwd,
       trustedFolders: [...agentConfig.trustedFolders, ...(options.trustedFolders ?? [])],
+      readOnlyFolders: this.deps.resolveReadOnlyFolders?.(settings.profile),
       files: options.files,
     });
     const toolContext: ToolExecutionContext = {

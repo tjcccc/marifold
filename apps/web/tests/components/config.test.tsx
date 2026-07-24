@@ -1,12 +1,15 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ProfilePatchInput } from '../../src/api/profiles';
 import type { MemoryEntry, ProfileDetail } from '../../src/api/types';
 import { ProfileSettingsPage } from '../../src/screens/config/ProfileSettingsPage';
 import type { ProfileSettingsPageProps } from '../../src/screens/config/ProfileSettingsPage';
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 const detail: ProfileDetail = {
   name: 'writer',
@@ -133,6 +136,51 @@ describe('ProfileSettingsPage', () => {
 
     fireEvent.click(screen.getByText('Remove'));
     expect(handlers.onRemoveTrustedFolder).toHaveBeenCalledWith('/Users/me/blog');
+  });
+
+  it('requires the profile name in a second confirmation dialog before removal', () => {
+    const onDelete = vi.fn();
+    const { unmount } = render(
+      <ProfileSettingsPage
+        detail={detail}
+        memories={[]}
+        modelOptions={[]}
+        onPatch={() => {}}
+        onSaveFile={() => {}}
+        onAddTrustedFolder={() => {}}
+        onRemoveTrustedFolder={() => {}}
+        onMemoryAction={() => {}}
+        onDelete={onDelete}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Remove profile' }));
+    const dialog = screen.getByRole('alertdialog', { name: 'Remove “writer”?' });
+    const finalRemove = within(dialog).getByRole('button', { name: 'Remove profile' }) as HTMLButtonElement;
+    expect(finalRemove.disabled).toBe(true);
+    fireEvent.change(within(dialog).getByLabelText('Profile name confirmation'), {
+      target: { value: 'writer' },
+    });
+    expect(finalRemove.disabled).toBe(false);
+    fireEvent.click(finalRemove);
+    expect(onDelete).toHaveBeenCalled();
+    unmount();
+
+    render(
+      <ProfileSettingsPage
+        detail={detail}
+        memories={[]}
+        modelOptions={[]}
+        onPatch={() => {}}
+        onSaveFile={() => {}}
+        onAddTrustedFolder={() => {}}
+        onRemoveTrustedFolder={() => {}}
+        onMemoryAction={() => {}}
+        onDelete={() => {}}
+        deleteDisabledReason="Choose another default profile first."
+      />,
+    );
+    expect((screen.getByRole('button', { name: 'Remove profile' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText('Choose another default profile first.')).toBeTruthy();
   });
 });
 

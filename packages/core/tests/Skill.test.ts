@@ -5,6 +5,11 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { buildSkillManagerGuide, mentionsSkills } from '../src/skill/BuiltInSkillManager';
 import { parseSkill } from '../src/skill/SkillValidator';
 import { renderSkillPrompt, resolveSkillValues } from '../src/skill/SkillTemplater';
+import {
+  bindSkillArgs,
+  parseSkillInvocation,
+  resolveSkillInvocation,
+} from '../src/skill/SkillInvocation';
 import { SkillStore } from '../src/skill/SkillStore';
 
 const tempDirs: string[] = [];
@@ -89,6 +94,37 @@ describe('renderSkillPrompt', () => {
     const { values, missing } = resolveSkillValues(skill, { text: 'hi' });
     expect(values).toEqual({ text: 'hi', language: 'English' });
     expect(missing).toEqual([]);
+  });
+});
+
+describe('skill invocation', () => {
+  it('parses quoted arguments and resolves a skill without filesystem discovery', () => {
+    const source = path.join(tempDir(), 'translate', 'SKILL.md');
+    const skill = { ...parseSkill(TRANSLATE, source), source };
+    const parsed = parseSkillInvocation('$translate "good morning" Japanese');
+    expect(parsed).toMatchObject({
+      name: 'translate',
+      argv: ['good morning', 'Japanese'],
+    });
+    expect(bindSkillArgs(skill, parsed!.argv)).toEqual({
+      text: 'good morning',
+      language: 'Japanese',
+    });
+
+    const resolved = resolveSkillInvocation(skill, parsed!);
+    expect(resolved.userTurn).toBe('$translate "good morning" Japanese');
+    expect(resolved.prompt).toBe('good morning Japanese');
+    expect(resolved.instructions[0]).toContain('Translate into Japanese');
+    expect(resolved.instructions[0]).toContain('good morning');
+    expect(resolved.instructions[1]).toContain(path.dirname(source));
+    expect(resolved.mode).toBe('chat');
+    expect(resolved.missing).toEqual([]);
+  });
+
+  it('reports missing required values before starting a model run', () => {
+    const skill = parseSkill(TRANSLATE);
+    const parsed = parseSkillInvocation('$translate')!;
+    expect(resolveSkillInvocation(skill, parsed).missing).toEqual(['text']);
   });
 });
 

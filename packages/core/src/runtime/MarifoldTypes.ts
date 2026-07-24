@@ -7,6 +7,12 @@ export interface MarifoldRunRequest {
   provider?: string;
   model?: string;
   sessionId?: string;
+  /** Display text persisted for this turn when the model-facing prompt is an
+   * expanded skill invocation. Defaults to `prompt`. */
+  userTurn?: string;
+  /** Run this chat turn without replaying the session into model context, then
+   * append the clean display turn to the same durable session. */
+  isolated?: boolean;
   /** Replace this zero-based persisted user exchange instead of appending a
    * new one. Only turns before it are supplied as model context. */
   replaceUserTurnIndex?: number;

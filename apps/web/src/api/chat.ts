@@ -8,11 +8,14 @@ export interface ChatRequest {
   provider?: string;
   model?: string;
   sessionId?: string;
+  userTurn?: string;
+  isolated?: boolean;
   replaceUserTurnIndex?: number;
   memories?: boolean;
   think?: boolean;
   images?: ImageInput[];
   originalImages?: boolean;
+  instructions?: string[];
 }
 
 /**

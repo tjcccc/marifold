@@ -1,10 +1,13 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ApiClient } from '../../src/api/client';
 import { ProfileSidebar } from '../../src/screens/agent/ProfileSidebar';
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 const client: ApiClient = {
   baseUrl: '',
@@ -17,7 +20,12 @@ const client: ApiClient = {
 
 const profiles = [
   { name: 'default', source: 'directory' as const },
-  { name: 'Research Lab', source: 'directory' as const },
+  {
+    name: 'Research Lab',
+    source: 'directory' as const,
+    preview: 'The latest research response',
+    updatedAt: '2026-07-24T08:00:00.000Z',
+  },
   { name: 'travel-project', source: 'directory' as const },
 ];
 
@@ -50,5 +58,32 @@ describe('ProfileSidebar search', () => {
     fireEvent.keyDown(search, { key: 'Escape' });
     expect(search.value).toBe('');
     expect(screen.getByRole('button', { name: /default/ })).toBeTruthy();
+  });
+
+  it('shows recent response previews and exposes Pin and Config actions', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-24T10:00:00.000Z'));
+    const onSetPinned = vi.fn(async () => true);
+    const onConfigure = vi.fn();
+    render(
+      <ProfileSidebar
+        client={client}
+        profiles={profiles}
+        onSelect={() => {}}
+        onSetPinned={onSetPinned}
+        onConfigure={onConfigure}
+      />,
+    );
+    expect(screen.getByText('The latest research response')).toBeTruthy();
+    const activityTime = screen.getByText('2h ago');
+    expect(activityTime.getAttribute('datetime')).toBe('2026-07-24T08:00:00.000Z');
+    expect(screen.getAllByText('No recent response')).toHaveLength(2);
+
+    fireEvent.click(screen.getByLabelText('Profile actions for Research Lab'));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Pin' }));
+    await waitFor(() => expect(onSetPinned).toHaveBeenCalledWith('Research Lab', true));
+
+    fireEvent.click(screen.getByLabelText('Profile actions for Research Lab'));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Config' }));
+    expect(onConfigure).toHaveBeenCalledWith('Research Lab');
   });
 });

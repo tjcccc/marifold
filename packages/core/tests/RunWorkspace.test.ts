@@ -79,15 +79,21 @@ describe('RunWorkspace', () => {
   it('treats global runtime directories as protected writes and renders them read-only in the mac profile', () => {
     const home = tempDir();
     const cwd = path.join(home, 'repo');
+    const profileSkills = path.join(home, '.marifold', 'profiles', 'painter', 'skills');
     fs.mkdirSync(cwd);
+    fs.mkdirSync(profileSkills, { recursive: true });
     const workspace = createRunWorkspace({
       id: 'run_policy',
       cwd,
       runsDir: path.join(home, '.marifold', 'runs'),
       userHome: home,
+      readOnlyFolders: [profileSkills],
     });
     expect(isProtectedSystemWrite('/Library/Frameworks/Python.framework/site-packages/x.py', workspace)).toBe(true);
     expect(isProtectedSystemWrite(path.join(cwd, 'x.py'), workspace)).toBe(false);
+    expect(workspace.readOnlyRoots).toContain(fs.realpathSync(profileSkills));
+    expect(workspace.readRoots).toContain(fs.realpathSync(profileSkills));
+    expect(workspace.writeRoots).not.toContain(fs.realpathSync(profileSkills));
 
     const profile = macSandboxProfile(workspace, '/bin/sh', false);
     expect(profile).toContain('(deny network*)');
@@ -95,6 +101,8 @@ describe('RunWorkspace', () => {
     expect(profile).toContain('(global-name "com.apple.SecurityServer")');
     expect(profile).toContain('(deny file-write*)');
     expect(profile).toContain(JSON.stringify(workspace.cwd));
+    expect(profile).toContain(`(allow file-read* (subpath ${JSON.stringify(fs.realpathSync(profileSkills))})`);
+    expect(profile).not.toContain(`(allow file-write* (subpath ${JSON.stringify(fs.realpathSync(profileSkills))})`);
     expect(profile).not.toContain('(allow file-write* (subpath "/Library")');
 
     const installerProfile = macSandboxProfile(workspace, '/bin/sh', true, {
@@ -104,5 +112,22 @@ describe('RunWorkspace', () => {
     expect(installerProfile).not.toContain(`(allow file-read* (subpath ${JSON.stringify(workspace.inputDir)})`);
     expect(installerProfile).not.toContain(`(allow file-read* (subpath ${JSON.stringify(workspace.cwd)})`);
     expect(installerProfile).toContain(`(allow file-read* (literal ${JSON.stringify(fs.realpathSync('/bin/sh'))})`);
+  });
+
+  it('does not silently expose configured read-only folders outside the user home', () => {
+    const home = tempDir();
+    const cwd = path.join(home, 'repo');
+    const externalSkills = tempDir();
+    fs.mkdirSync(cwd);
+    const workspace = createRunWorkspace({
+      id: 'run_external_read',
+      cwd,
+      runsDir: path.join(home, '.marifold', 'runs'),
+      userHome: home,
+      readOnlyFolders: [externalSkills],
+    });
+
+    expect(workspace.readOnlyRoots).not.toContain(fs.realpathSync(externalSkills));
+    expect(workspace.readRoots).not.toContain(fs.realpathSync(externalSkills));
   });
 });

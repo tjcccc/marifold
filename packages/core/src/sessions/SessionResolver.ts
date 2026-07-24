@@ -7,6 +7,7 @@ import { MarifoldError } from '../errors/MarifoldError';
 
 const ATTACHMENTS_TABLE = 'marifold_turn_attachments';
 const SESSION_DISPLAY_TABLE = 'marifold_session_display';
+const PROFILE_DISPLAY_TABLE = 'marifold_profile_display';
 const DEFAULT_IMAGE_MEDIA_TYPE = 'image/jpeg';
 const COMPACTION_METADATA_KEY = '__compaction';
 const SESSION_TITLE_MAX_CHARS = 200;
@@ -44,6 +45,13 @@ export interface SessionTruncateResult {
 export interface SessionReplaceResult {
   found: boolean;
   replaced: boolean;
+}
+
+export interface ProfileActivitySummary {
+  profileName: string;
+  pinned?: boolean;
+  updatedAt?: string;
+  preview?: string;
 }
 
 export class SessionResolver {
@@ -183,6 +191,112 @@ export class SessionResolver {
         `Could not list sessions from ${this.sessionsDb}: ${String(error)}`,
         { sessionsDb: this.sessionsDb },
       );
+    } finally {
+      db.close();
+    }
+  }
+
+  /** Contact-list metadata for every profile represented either by a session
+   * or a pinned display row. The latest session determines activity/preview. */
+  profileActivity(): ProfileActivitySummary[] {
+    if (!fs.existsSync(this.sessionsDb)) return [];
+
+    const db = this.open();
+    try {
+      this.ensureProfileDisplayTable(db);
+      const rows = db.prepare(`
+        SELECT
+          p.profile_name AS profileName,
+          p.pinned AS pinned,
+          s.updated_at AS updatedAt,
+          (
+            SELECT content
+            FROM turns
+            WHERE session_id = s.id AND role = 'assistant'
+            ORDER BY id DESC
+            LIMIT 1
+          ) AS response
+        FROM ${PROFILE_DISPLAY_TABLE} p
+        LEFT JOIN sessions s ON s.id = (
+          SELECT latest.id
+          FROM sessions latest
+          WHERE latest.profile_name = p.profile_name
+          ORDER BY latest.updated_at DESC, latest.id DESC
+          LIMIT 1
+        )
+        UNION ALL
+        SELECT
+          s.profile_name AS profileName,
+          0 AS pinned,
+          s.updated_at AS updatedAt,
+          (
+            SELECT content
+            FROM turns
+            WHERE session_id = s.id AND role = 'assistant'
+            ORDER BY id DESC
+            LIMIT 1
+          ) AS response
+        FROM sessions s
+        WHERE s.id = (
+          SELECT latest.id
+          FROM sessions latest
+          WHERE latest.profile_name = s.profile_name
+          ORDER BY latest.updated_at DESC, latest.id DESC
+          LIMIT 1
+        )
+        AND NOT EXISTS (
+          SELECT 1
+          FROM ${PROFILE_DISPLAY_TABLE} p
+          WHERE p.profile_name = s.profile_name
+        )
+      `).all() as Array<{
+        profileName: string;
+        pinned: number;
+        updatedAt: string | null;
+        response: string | null;
+      }>;
+      return rows.map(row => {
+        const preview = row.response ? firstLinePreview(row.response) : '';
+        return {
+          profileName: row.profileName,
+          ...(row.pinned === 1 ? { pinned: true } : {}),
+          ...(row.updatedAt ? { updatedAt: row.updatedAt } : {}),
+          ...(preview ? { preview } : {}),
+        };
+      });
+    } catch (error) {
+      throw this.storeError(`Could not list profile activity from ${this.sessionsDb}: ${String(error)}`);
+    } finally {
+      db.close();
+    }
+  }
+
+  setProfilePinned(profileName: string, pinned: boolean): void {
+    if (!fs.existsSync(this.sessionsDb)) this.openStore();
+    const db = this.open();
+    try {
+      this.ensureProfileDisplayTable(db);
+      db.prepare(`
+        INSERT INTO ${PROFILE_DISPLAY_TABLE} (profile_name, pinned)
+        VALUES (?, ?)
+        ON CONFLICT(profile_name) DO UPDATE SET pinned = excluded.pinned
+      `).run(profileName, pinned ? 1 : 0);
+    } catch (error) {
+      throw this.storeError(`Could not update profile '${profileName}' display state: ${String(error)}`);
+    } finally {
+      db.close();
+    }
+  }
+
+  deleteProfileDisplay(profileName: string): void {
+    if (!fs.existsSync(this.sessionsDb)) return;
+    const db = this.open();
+    try {
+      if (this.hasProfileDisplayTable(db)) {
+        db.prepare(`DELETE FROM ${PROFILE_DISPLAY_TABLE} WHERE profile_name = ?`).run(profileName);
+      }
+    } catch (error) {
+      throw this.storeError(`Could not remove profile '${profileName}' display state: ${String(error)}`);
     } finally {
       db.close();
     }
@@ -596,6 +710,30 @@ export class SessionResolver {
     }
   }
 
+  replaceLastUserTurn(sessionId: string, content: string): boolean {
+    if (!fs.existsSync(this.sessionsDb)) return false;
+
+    const db = this.open();
+    try {
+      const result = db.prepare(`
+        UPDATE turns
+        SET content = ?
+        WHERE id = (
+          SELECT id
+          FROM turns
+          WHERE session_id = ? AND role = 'user'
+          ORDER BY id DESC
+          LIMIT 1
+        )
+      `).run(content, sessionId);
+      return result.changes > 0;
+    } catch (error) {
+      throw this.storeError(`Could not clean session '${sessionId}' in ${this.sessionsDb}: ${String(error)}`);
+    } finally {
+      db.close();
+    }
+  }
+
   /** Append one clean user→assistant exchange to a session (creating it if
    * needed). Agent runs use this to record the objective + final answer as a
    * single tidy pair, instead of priest's raw per-iteration `Objective:`/tool
@@ -858,6 +996,23 @@ export class SessionResolver {
     }
   }
 
+  private ensureProfileDisplayTable(db: Database.Database): void {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS ${PROFILE_DISPLAY_TABLE} (
+        profile_name TEXT PRIMARY KEY,
+        pinned INTEGER NOT NULL DEFAULT 0 CHECK (pinned IN (0, 1))
+      )
+    `);
+  }
+
+  private hasProfileDisplayTable(db: Database.Database): boolean {
+    return db.prepare(`
+      SELECT 1
+      FROM sqlite_master
+      WHERE type = 'table' AND name = ?
+    `).get(PROFILE_DISPLAY_TABLE) !== undefined;
+  }
+
   private hasSessionDisplayTable(db: Database.Database): boolean {
     return db.prepare(`
       SELECT 1
@@ -882,4 +1037,16 @@ function sessionPreview(content: string): string {
   const flat = content.replace(/\s+/g, ' ').trim();
   if (flat.length <= PREVIEW_MAX_CHARS) return flat;
   return `${flat.slice(0, PREVIEW_MAX_CHARS - 1).trimEnd()}…`;
+}
+
+function firstLinePreview(content: string): string {
+  const first = content
+    .split(/\r?\n/)
+    .map(line => line.trim())
+    .find(Boolean)
+    ?.replace(/^#{1,6}\s+/, '')
+    .replace(/^[-*+]\s+/, '')
+    .replace(/^\d+[.)]\s+/, '') ?? '';
+  if (first.length <= PREVIEW_MAX_CHARS) return first;
+  return `${first.slice(0, PREVIEW_MAX_CHARS - 1).trimEnd()}…`;
 }

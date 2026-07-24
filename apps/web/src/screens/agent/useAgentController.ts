@@ -2,9 +2,17 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'r
 import type { ApiClient } from '../../api/client';
 import { MarifoldApiError } from '../../api/client';
 import { streamChat } from '../../api/chat';
-import { getModels, getSkills } from '../../api/misc';
-import type { SkillHint } from '../../api/misc';
-import { deleteMemory, getProfile, listMemories, listProfiles, rememberMemory, updateProfile } from '../../api/profiles';
+import { getModels, getSkills, resolveSkillInvocation } from '../../api/misc';
+import type { ResolvedSkillInvocation, SkillHint } from '../../api/misc';
+import {
+  deleteMemory,
+  getProfile,
+  listMemories,
+  listProfiles,
+  rememberMemory,
+  setProfilePinned as setProfilePinnedRequest,
+  updateProfile,
+} from '../../api/profiles';
 import { answerApproval, cancelRun, listRuns, startRun, steerRun } from '../../api/runs';
 import {
   compactSession,
@@ -79,6 +87,7 @@ export interface AgentController {
   send: (text: string) => Promise<void>;
   resendEdited: (userItemId: string, text: string) => Promise<boolean>;
   refreshProfiles: () => Promise<void>;
+  setProfilePinned: (name: string, pinned: boolean) => Promise<boolean>;
   showProfiles: () => void;
   selectProfile: (name: string) => void;
   selectSession: (id: string) => void;
@@ -337,6 +346,16 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
     }
   }, [client]);
 
+  const setProfilePinned = useCallback(async (name: string, pinned: boolean): Promise<boolean> => {
+    try {
+      setProfiles(await setProfilePinnedRequest(client, name, pinned));
+      return true;
+    } catch (error) {
+      handleError(error);
+      return false;
+    }
+  }, [client, handleError]);
+
   const refreshSessions = useCallback(async () => {
     if (!profileName) return;
     try {
@@ -381,7 +400,8 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
     setSkills([]);
     dispatch({ type: 'reset' });
     navigate({ view: 'agent' });
-  }, [abortActiveChat, followers, navigate]);
+    void refreshProfiles();
+  }, [abortActiveChat, followers, navigate, refreshProfiles]);
 
   const selectSession = useCallback(
     (id: string) => {
@@ -525,6 +545,24 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
         }
       }
 
+      let skill: ResolvedSkillInvocation | undefined;
+      if (trimmed.startsWith('$')) {
+        try {
+          skill = await resolveSkillInvocation(client, trimmed, profileName);
+        } catch (error) {
+          handleError(error);
+          return false;
+        }
+        if (skill.missing.length > 0) {
+          dispatch({
+            type: 'notice',
+            tone: 'warn',
+            text: `Missing required skill value(s): ${skill.missing.join(', ')}. Usage: ${skill.usage}`,
+          });
+          return false;
+        }
+      }
+
       let sid = sessionId;
       if (!sid) {
         sid = crypto.randomUUID();
@@ -576,7 +614,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
           data,
         }))];
       }));
-      const prompt = inlineTextAttachments(trimmed, textFiles);
+      const prompt = inlineTextAttachments(skill?.prompt ?? trimmed, textFiles);
       const bubbleAttachments: UserAttachment[] = pending.map(item =>
         item.kind === 'image'
           ? { kind: 'image', name: item.name, previewUrl: `data:${item.mediaType};base64,${item.data}` }
@@ -605,7 +643,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
         }));
       }
       const [provider, model] = splitModelChoice(modelChoice);
-      const mode = profileDetail?.settings.mode ?? 'agent';
+      const mode = skill?.mode ?? profileDetail?.settings.mode ?? 'agent';
 
       if (mode === 'chat') {
         setSending(true);
@@ -616,6 +654,11 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
         try {
           for await (const event of streamChat(client, {
             prompt,
+            ...(skill ? {
+              userTurn: skill.userTurn,
+              instructions: skill.instructions,
+              isolated: true,
+            } : {}),
             profile: profileName,
             sessionId: sid,
             replaceUserTurnIndex: options.replaceUserTurnIndex,
@@ -650,6 +693,11 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
         setSending(true);
         const run = await startRun(client, {
           objective: prompt,
+          ...(skill ? {
+            userTurn: skill.userTurn,
+            instructions: skill.instructions,
+            lean: true,
+          } : {}),
           profile: profileName,
           sessionId: sid,
           replaceUserTurnIndex: options.replaceUserTurnIndex,
@@ -955,6 +1003,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
     send,
     resendEdited,
     refreshProfiles,
+    setProfilePinned,
     showProfiles,
     selectProfile,
     selectSession,

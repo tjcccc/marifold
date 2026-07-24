@@ -325,7 +325,16 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
     }
   }, [runtime, approvalHandler, notify]);
 
-  const runChat = useCallback(async (prompt: string, extraContext: string[] = [], options: { instructions?: string[]; originalImages?: boolean } = {}) => {
+  const runChat = useCallback(async (
+    prompt: string,
+    extraContext: string[] = [],
+    options: {
+      instructions?: string[];
+      originalImages?: boolean;
+      userTurn?: string;
+      isolated?: boolean;
+    } = {},
+  ) => {
     const controller = new AbortController();
     abortRef.current = controller;
     const current = stateRef.current;
@@ -351,6 +360,8 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
           ...(current.maxContextTokens != null ? { maxContextTokens: current.maxContextTokens } : {}),
           userContext: userContext.length > 0 ? userContext : undefined,
           ...(options.instructions ? { instructions: options.instructions } : {}),
+          ...(options.userTurn ? { userTurn: options.userTurn } : {}),
+          ...(options.isolated ? { isolated: true } : {}),
           ...(options.originalImages ? { originalImages: true } : {}),
           images: images.length > 0 ? images : undefined,
           signal: controller.signal,
@@ -421,8 +432,8 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
     dispatch({ type: 'add_user', text: displayText });
     // Codex/Claude-style: the skill body is authoritative instructions (sent via
     // `instructions`, top of the system prompt), and the user's typed input is
-    // the turn the model acts on — so input is never dropped and the skill is not
-    // polluted by prior turns, without isolating it from the conversation.
+    // the turn the model acts on. Direct skills do not receive prior session
+    // turns, but their typed invocation and final output still persist there.
     const prompt = userInput.trim() || 'Follow the skill instructions above and produce the output.';
     // `/steps` armed: force a planned agent run for this skill (then disarm).
     const forcePlan = planNextRef.current;
@@ -432,7 +443,11 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
     // forced plan always runs as an agent (planning needs the agent loop).
     const mode = forcePlan ? 'agent' : (skill.mode ?? stateRef.current.mode);
     if (mode === 'chat') {
-      void runChat(prompt, [], { instructions: [body] });
+      void runChat(prompt, [], {
+        instructions: [body],
+        userTurn: displayText,
+        isolated: true,
+      });
     } else {
       // Tell the agent where the skill's bundled files live so it can read them
       // (e.g. a vars.toml of `#name` fragments) with read_file, as the skill

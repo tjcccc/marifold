@@ -180,6 +180,12 @@ export interface ProfileSummary {
   name: string;
   source: 'directory' | 'json' | 'built-in';
   path?: string;
+  /** Sidebar-only display state, stored separately from profile instructions. */
+  pinned?: boolean;
+  /** Most recent session activity for contact-style sorting. */
+  updatedAt?: string;
+  /** First non-empty line of the most recent session's latest response. */
+  preview?: string;
   /** Present when the profile has a stored avatar image (served at
    * GET /v1/profiles/:name/avatar). */
   avatar?: { mediaType: string };

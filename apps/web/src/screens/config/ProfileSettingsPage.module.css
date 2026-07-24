@@ -344,3 +344,128 @@ button.avatarButton:disabled {
 .avatarInput {
   display: none;
 }
+
+.dangerCard {
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--danger) 24%, var(--separator-soft));
+}
+
+.dangerTitle {
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.dangerDescription {
+  margin-top: 3px;
+  color: var(--text-3);
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+
+.removeProfileButton {
+  flex: 0 0 auto;
+  padding: 6px 12px;
+  border-radius: 8px;
+  color: white;
+  background: var(--danger);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.removeProfileButton:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.removeBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: color-mix(in srgb, #000 36%, transparent);
+  backdrop-filter: blur(1px);
+}
+
+.removeDialog {
+  width: min(400px, 100%);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  background: var(--surface);
+  border: 1px solid var(--separator);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sheet);
+}
+
+.removeDialogTitle {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.removeDialogDescription {
+  color: var(--text-2);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.removeConfirmLabel {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  color: var(--text-2);
+  font-size: 12.5px;
+}
+
+.removeConfirmInput {
+  width: 100%;
+  padding: 8px 10px;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--separator);
+  border-radius: var(--radius-sm);
+}
+
+.removeConfirmInput:focus {
+  outline: 2px solid color-mix(in srgb, var(--danger) 24%, transparent);
+  border-color: var(--danger);
+}
+
+.removeDialogActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.removeDialogCancel,
+.removeDialogDelete {
+  min-width: 88px;
+  padding: 7px 13px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  font-weight: 650;
+}
+
+.removeDialogCancel {
+  color: var(--text-2);
+  background: var(--surface-2);
+}
+
+.removeDialogDelete {
+  color: white;
+  background: var(--danger);
+}
+
+.removeDialogCancel:disabled,
+.removeDialogDelete:disabled {
+  opacity: 0.45;
+  cursor: default;
+}

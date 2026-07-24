@@ -55,6 +55,12 @@ await sessions.appendExchange('session-travel', 'default', 'Plan a quiet train t
 sessions.updateDisplay('session-travel', { title: 'Travel notes' });
 await sessions.appendExchange('session-archived', 'default', 'Old archived prompt', 'Archived answer.');
 sessions.updateDisplay('session-archived', { title: 'Archived ideas', archived: true });
+await sessions.appendExchange(
+  'session-research',
+  'research-lab',
+  'Summarize the experiment',
+  'Research reply preview.\nAdditional fixture detail.',
+);
 sessions.close();
 
 const server = createMarifoldService({

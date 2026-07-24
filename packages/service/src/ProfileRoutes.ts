@@ -13,6 +13,10 @@ const TOOL_KINDS: ToolKind[] = ['read', 'write', 'shell', 'network', 'delegate']
 const APPROVAL_MODES: ApprovalMode[] = ['allow', 'ask', 'deny'];
 const PROFILE_FILES: ProfileFileKind[] = ['profile', 'rules', 'custom'];
 
+export interface ProfileRouteOptions {
+  isProfileActive?: (name: string) => boolean;
+}
+
 /** Parsed PATCH /v1/profiles/:name body. For every field: absent = untouched,
  * null = clear the override (inherit again). */
 interface ProfilePatch {
@@ -31,7 +35,11 @@ interface ProfilePatch {
  * go through MarifoldRuntime → ProfileManager/MemoryStore, so validation and
  * profile.toml preservation match the TUI's commands exactly.
  */
-export function registerProfileRoutes(server: FastifyInstance, runtime: MarifoldRuntime): void {
+export function registerProfileRoutes(
+  server: FastifyInstance,
+  runtime: MarifoldRuntime,
+  options: ProfileRouteOptions = {},
+): void {
   // Scaffold a new profile (same layout as `profile init`); clients follow up
   // with PATCH / avatar PUT for the initial settings.
   server.post('/v1/profiles', async (request, reply) => {
@@ -39,6 +47,30 @@ export function registerProfileRoutes(server: FastifyInstance, runtime: Marifold
     const profile = runtime.initProfile(requiredString(body.name, 'name'));
     reply.status(201);
     return { ok: true, profile };
+  });
+
+  server.patch<{ Params: { name: string } }>('/v1/profiles/:name/display', async request => {
+    const name = request.params.name;
+    runtime.getProfile(name);
+    const body = objectBody(request.body);
+    if (typeof body.pinned !== 'boolean') {
+      throw MarifoldError.configInvalid('pinned must be a boolean.');
+    }
+    return {
+      ok: true,
+      profiles: runtime.setProfilePinned(name, body.pinned),
+    };
+  });
+
+  server.delete<{ Params: { name: string } }>('/v1/profiles/:name', async request => {
+    const name = request.params.name;
+    if (options.isProfileActive?.(name)) {
+      throw MarifoldError.agentRunInvalid(
+        'Cancel active requests for this profile before removing it.',
+      );
+    }
+    runtime.deleteProfile(name);
+    return { ok: true, deleted: true, name };
   });
 
   // Raw image bytes (not the JSON envelope): <img>-friendly apart from auth —

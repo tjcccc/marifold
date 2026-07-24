@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import type { SessionSummary } from '../../api/types';
+import { PinGlyph } from '../../components/PinGlyph';
 import { formatRelativeTime } from '../../lib/format';
 import styles from './SessionList.module.css';
 
@@ -420,14 +421,6 @@ function RenameGlyph() {
     <svg width="17" height="17" viewBox="0 0 18 18" aria-hidden>
       <path d="m4 12.8-.6 2.2 2.2-.6 7.8-7.8-1.6-1.6L4 12.8Z" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
       <path d="m10.9 5.9 1.6 1.6" stroke="currentColor" strokeWidth="1.5" />
-    </svg>
-  );
-}
-
-function PinGlyph() {
-  return (
-    <svg width="17" height="17" viewBox="0 0 18 18" aria-hidden>
-      <path d="m6.2 3.3 5.5 5.5-1.6 1.6.2 2.1-1 1-2.4-2.4-3.4 3.4-.8-.8 3.4-3.4-2.4-2.4 1-1 2.1.2 1.6-1.6" fill="none" stroke="currentColor" strokeWidth="1.35" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }

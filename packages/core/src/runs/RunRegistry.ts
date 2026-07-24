@@ -47,6 +47,9 @@ export interface RunStartInput {
   provider?: string;
   model?: string;
   sessionId?: string;
+  /** Display text persisted for the user turn when `objective` is an expanded
+   * skill prompt. */
+  userTurn?: string;
   /** Replace a persisted exchange instead of appending a new one. */
   replaceUserTurnIndex?: number;
   think?: boolean;
@@ -295,6 +298,7 @@ export class RunRegistry {
         provider: input.provider,
         model: input.model,
         sessionId: input.sessionId,
+        userTurn: input.userTurn,
         replaceUserTurnIndex: input.replaceUserTurnIndex,
         think: input.think,
         images: input.images,

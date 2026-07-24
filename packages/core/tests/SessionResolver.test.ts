@@ -167,6 +167,63 @@ describe('SessionResolver display metadata', () => {
   });
 });
 
+describe('SessionResolver profile activity', () => {
+  it('summarizes the latest session response and persists profile pin state', async () => {
+    const dbPath = tempDb();
+    const resolver = new SessionResolver(dbPath);
+    await resolver.appendExchange(
+      'writer-old',
+      'writer',
+      'Old prompt',
+      'Old answer',
+    );
+    await resolver.appendExchange(
+      'writer-new',
+      'writer',
+      'New prompt',
+      '\n## Fresh answer\nsecond line should not appear',
+    );
+    await resolver.appendExchange(
+      'painter-session',
+      'painter',
+      'Paint',
+      'Painter answer',
+    );
+
+    const db = new Database(dbPath);
+    db.prepare('UPDATE sessions SET updated_at = ? WHERE id = ?').run('2026-07-20T00:00:00.000Z', 'writer-old');
+    db.prepare('UPDATE sessions SET updated_at = ? WHERE id = ?').run('2026-07-24T08:00:00.000Z', 'writer-new');
+    db.prepare('UPDATE sessions SET updated_at = ? WHERE id = ?').run('2026-07-23T08:00:00.000Z', 'painter-session');
+    db.close();
+
+    resolver.setProfilePinned('writer', true);
+    resolver.setProfilePinned('empty-profile', true);
+    expect(resolver.profileActivity()).toEqual(expect.arrayContaining([
+      {
+        profileName: 'writer',
+        pinned: true,
+        updatedAt: '2026-07-24T08:00:00.000Z',
+        preview: 'Fresh answer',
+      },
+      {
+        profileName: 'painter',
+        updatedAt: '2026-07-23T08:00:00.000Z',
+        preview: 'Painter answer',
+      },
+      { profileName: 'empty-profile', pinned: true },
+    ]));
+
+    resolver.deleteProfileDisplay('writer');
+    expect(resolver.profileActivity().find(item => item.profileName === 'writer')).toMatchObject({
+      profileName: 'writer',
+      updatedAt: '2026-07-24T08:00:00.000Z',
+      preview: 'Fresh answer',
+    });
+    expect(resolver.profileActivity().find(item => item.profileName === 'writer')).not.toHaveProperty('pinned');
+    resolver.close();
+  });
+});
+
 describe('SessionResolver WAL hardening', () => {
   it('switches the DB into WAL mode on a normal operation', () => {
     const dbPath = tempDb();
@@ -286,6 +343,19 @@ describe('SessionResolver turn attachments', () => {
       { role: 'assistant', content: 'Updated answer 2' },
       { role: 'user', content: 'Conversation 3' },
       { role: 'assistant', content: 'Answer 3' },
+    ]);
+    resolver.close();
+  });
+
+  it('can preserve a display-only skill invocation after a model-facing prompt is saved', async () => {
+    const dbPath = tempDb();
+    const resolver = new SessionResolver(dbPath);
+    await resolver.appendExchange('skill', 'default', 'summer morning', 'Generated prompt');
+
+    expect(resolver.replaceLastUserTurn('skill', '$make-grok-imagine-prompt "summer morning"')).toBe(true);
+    expect(resolver.get('skill')?.turns.map(turn => turn.content)).toEqual([
+      '$make-grok-imagine-prompt "summer morning"',
+      'Generated prompt',
     ]);
     resolver.close();
   });

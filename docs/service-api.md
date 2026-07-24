@@ -148,9 +148,11 @@ Responses are `{ "ok": true, ... }` unless noted. Bodies are JSON.
 
 | Route | Returns |
 |---|---|
-| `GET /v1/profiles` | Profile summaries |
+| `GET /v1/profiles` | Profile summaries, pinned first and then by recent session activity. Summaries may carry contact-list metadata: `pinned?`, `updatedAt?`, and `preview?` (the first non-empty line of the latest assistant response in the profile's most recent session) |
 | `GET /v1/profiles/:name` | Profile detail (files, settings) |
 | `POST /v1/profiles` → 201 | Body `{ name }` — scaffold a new profile directory (PROFILE/RULES/CUSTOM.md + profile.toml, the `profile init` layout). Duplicate or invalid names are 400. Follow up with `PATCH` / avatar `PUT` for initial settings |
+| `PATCH /v1/profiles/:name/display` | Body `{ pinned: boolean }` — persist contact-list pin state and return the freshly sorted profile summaries. Display metadata never enters profile instructions or model context |
+| `DELETE /v1/profiles/:name` | Remove the stored profile directory/JSON and its display metadata. Deletes instructions, memories, skills, and avatar but retains SQLite session history. The built-in/current-default profile cannot be removed, and active requests/runs must be cancelled first |
 | `GET /v1/profiles/:name/avatar` | Raw avatar image bytes (`content-type` = stored media type, `ETag` + `no-cache`; honors `If-None-Match` with 304). 404 `AVATAR_NOT_FOUND` when unset. Auth'd clients fetch with headers and render a blob URL (`<img src>` can't send a bearer token) |
 | `PUT /v1/profiles/:name/avatar` | Body `{ data: <base64>, mediaType }` — store the avatar (PNG/JPEG/WebP, ≤1 MB; replaces any previous one). Returns the fresh profile detail (summaries carry `avatar?: { mediaType }`) |
 | `DELETE /v1/profiles/:name/avatar` | `{ removed: boolean }` + fresh profile detail |
@@ -192,9 +194,31 @@ Pass `sessionId` to continue a conversation; sessions are created on demand.
 To regenerate a historical exchange, also pass `replaceUserTurnIndex` (zero
 based among persisted user turns). The model receives only the earlier prefix;
 the selected user/assistant pair is replaced in place and later turns remain.
+`instructions` supplies request-scoped authoritative guidance. `userTurn` may
+carry a different display/persistence value than the model-facing `prompt`;
+direct skill runs use it to retain the original `$skill …` invocation. With
+`isolated: true`, a chat turn does not replay the session to the model, but its
+clean user/assistant pair is still appended to that durable session.
 Embedded/URL image sources are retained beside their user turn so clients can
 restore transcript thumbnails after navigation or reload; local filesystem
 paths are never exposed through this API.
+
+### Skill invocation
+
+**`POST /v1/skills/resolve`** resolves one direct invocation before chat or
+agent execution.
+
+```json
+{ "profile": "default", "invocation": "$make-grok-imagine-prompt \"summer morning\"" }
+```
+
+The response contains `{ invocation: { name, userTurn, prompt, instructions,
+mode?, missing, usage } }`. `prompt` is model-facing while `userTurn` is the
+original transcript text. `instructions` contains the expanded selected skill
+body and its exact bundled-file location; clients must not ask the model to
+search for the skill. Unknown skills return 404 `SKILL_NOT_FOUND`; invalid
+invocations return 400 `SKILL_INVALID`. A non-empty `missing` list means the
+client must collect the required variables before starting a run.
 
 ### Agent runs (live layer)
 
@@ -208,6 +232,7 @@ The run itself is ephemeral in-service state; its durable record is a task
 
 ```json
 { "objective": "Summarize ~/notes into notes.md",
+  "userTurn": "$summarize ~/notes",
   "profile": "default", "provider": "ollama", "model": "gemma4:e4b",
   "sessionId": "abc", "replaceUserTurnIndex": 1,
   "cwd": "/Users/me/project", "think": false,
@@ -229,6 +254,11 @@ accepts JSON bodies up to 25 MiB to make room for base64 payloads. Returns the *
 aggregate. Files are name-sanitized and staged read-only under the private run's
 `input/` directory; the model receives their paths and any separately extracted
 prompt text, not the raw bytes.
+
+For a resolved skill, `objective` carries the model-facing prompt,
+`instructions` carries the resolved body, and `userTurn` carries the original
+`$skill …` text stored in the transcript. Skill agent runs set `lean: true`, so
+they skip planning/verification overhead and do not receive prior session turns.
 
 With `sessionId`, optional `replaceUserTurnIndex` regenerates that historical
 exchange using only its earlier prefix as context, then replaces it in place;

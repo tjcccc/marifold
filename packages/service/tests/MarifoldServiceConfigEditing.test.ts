@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
+import { SessionResolver } from '@marifold/core';
 import { createMarifoldService } from '../src';
 import { cleanupTempDirs, fixtureLoadedConfig, tempDir } from './helpers';
 
@@ -250,6 +251,50 @@ describe('config editing routes', () => {
       expect(bad.statusCode).toBe(400);
     } finally {
       await server.close();
+    }
+  });
+
+  it('lists recent profile responses, pins profiles, and removes non-default profiles', async () => {
+    const loadedConfig = fixtureLoadedConfig(tempDir());
+    const writerDir = scaffoldProfile(loadedConfig.config.paths.profilesDir, 'writer');
+    scaffoldProfile(loadedConfig.config.paths.profilesDir, 'painter');
+    const sessions = new SessionResolver(loadedConfig.config.paths.sessionsDb);
+    await sessions.appendExchange('writer-session', 'writer', 'Write', '## Latest writer response\nMore detail');
+    await sessions.appendExchange('painter-session', 'painter', 'Paint', 'Latest painter response');
+    const server = createMarifoldService({ loadedConfig, scheduler: false });
+    try {
+      const listed = await server.inject({ method: 'GET', url: '/v1/profiles' });
+      expect(listed.json().profiles).toEqual(expect.arrayContaining([
+        expect.objectContaining({ name: 'writer', preview: 'Latest writer response' }),
+        expect.objectContaining({ name: 'painter', preview: 'Latest painter response' }),
+      ]));
+
+      const pinned = await server.inject({
+        method: 'PATCH',
+        url: '/v1/profiles/writer/display',
+        payload: { pinned: true },
+      });
+      expect(pinned.statusCode).toBe(200);
+      expect(pinned.json().profiles[0]).toMatchObject({ name: 'writer', pinned: true });
+
+      const badPin = await server.inject({
+        method: 'PATCH',
+        url: '/v1/profiles/writer/display',
+        payload: { pinned: 'yes' },
+      });
+      expect(badPin.statusCode).toBe(400);
+
+      const defaultDelete = await server.inject({ method: 'DELETE', url: '/v1/profiles/default' });
+      expect(defaultDelete.statusCode).toBe(400);
+
+      const removed = await server.inject({ method: 'DELETE', url: '/v1/profiles/writer' });
+      expect(removed.statusCode).toBe(200);
+      expect(removed.json()).toMatchObject({ deleted: true, name: 'writer' });
+      expect(fs.existsSync(writerDir)).toBe(false);
+      expect((await server.inject({ method: 'GET', url: '/v1/sessions/writer-session' })).statusCode).toBe(200);
+    } finally {
+      await server.close();
+      sessions.close();
     }
   });
 

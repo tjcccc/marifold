@@ -24,11 +24,19 @@ function stubProvider(script: string[]): { captured: unknown[] } {
   vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     if (url.includes('localhost:11434')) {
-      const index = captured.push(init?.body ? JSON.parse(String(init.body)) : {}) - 1;
+      const requestBody = init?.body ? JSON.parse(String(init.body)) : {};
+      const index = captured.push(requestBody) - 1;
       const text = script[Math.min(index, script.length - 1)];
       return new Response(
-        JSON.stringify({ message: { content: text }, done: true, done_reason: 'stop' }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } },
+        `${JSON.stringify({ message: { content: text }, done: true, done_reason: 'stop' })}\n`,
+        {
+          status: 200,
+          headers: {
+            'Content-Type': requestBody.stream === true
+              ? 'application/x-ndjson'
+              : 'application/json',
+          },
+        },
       );
     }
     return realFetch(input, init);
@@ -119,6 +127,70 @@ function toolCall(name: string, args: Record<string, unknown>): string {
 // ── Tests ───────────────────────────────────────────────────────────────────
 
 describe('MarifoldService /v1/runs', () => {
+  it('resolves profile skill invocations directly instead of making the agent search for them', async () => {
+    const root = tempDir();
+    const profilesDir = path.join(root, 'profiles');
+    const skillsDir = path.join(root, 'skills');
+    const skillDir = path.join(profilesDir, 'prompt-maker', 'skills', 'make-prompt');
+    fs.mkdirSync(skillDir, { recursive: true });
+    fs.writeFileSync(path.join(skillDir, 'SKILL.md'), `---
+name: make-prompt
+description: Make a prompt.
+mode: agent
+variables:
+  - name: text
+    required: true
+---
+Transform {{text}} into the final prompt.
+`);
+    const { server, base } = await startServer({
+      paths: {
+        profilesDir,
+        skillsDir,
+        sessionsDb: path.join(root, 'sessions.db'),
+        tasksDir: path.join(root, 'tasks'),
+        schedulesDir: path.join(root, 'schedules'),
+      },
+    });
+    try {
+      const response = await postJson(base, '/v1/skills/resolve', {
+        profile: 'prompt-maker',
+        invocation: '$make-prompt "summer morning"',
+      });
+      expect(response.status).toBe(200);
+      expect((await response.json()).invocation).toMatchObject({
+        name: 'make-prompt',
+        userTurn: '$make-prompt "summer morning"',
+        prompt: 'summer morning',
+        mode: 'agent',
+        missing: [],
+        usage: '$make-prompt <text>',
+      });
+
+      const missing = await postJson(base, '/v1/skills/resolve', {
+        profile: 'prompt-maker',
+        invocation: '$make-prompt',
+      });
+      expect((await missing.json()).invocation.missing).toEqual(['text']);
+
+      const unknown = await postJson(base, '/v1/skills/resolve', {
+        profile: 'prompt-maker',
+        invocation: '$missing-skill x',
+      });
+      expect(unknown.status).toBe(404);
+      expect((await unknown.json()).error.code).toBe('SKILL_NOT_FOUND');
+
+      const unsafeProfile = await postJson(base, '/v1/skills/resolve', {
+        profile: '../prompt-maker',
+        invocation: '$make-prompt x',
+      });
+      expect(unsafeProfile.status).toBe(400);
+      expect((await unsafeProfile.json()).error.code).toBe('PROFILE_INVALID');
+    } finally {
+      await server.close();
+    }
+  });
+
   it('runs an objective end-to-end over SSE and links the durable task', async () => {
     stubProvider(['All done, no tools needed.']);
     const { server, base } = await startServer();
@@ -147,6 +219,62 @@ describe('MarifoldService /v1/runs', () => {
       const task = await fetch(`${base}/v1/tasks/${done.data.taskId}`);
       expect(task.status).toBe(200);
       expect((await task.json()).task.tags).toContain('service');
+    } finally {
+      await server.close();
+    }
+  });
+
+  it('persists the original skill invocation instead of its model-facing objective', async () => {
+    const { captured } = stubProvider(['Grok-style final prompt.']);
+    const { server, base } = await startServer();
+    try {
+      const created = await postJson(base, '/v1/runs', {
+        objective: 'summer morning',
+        userTurn: '$make-grok-imagine-prompt "summer morning"',
+        instructions: ['Return one concise Grok Imagine prompt.'],
+        sessionId: 'direct-skill',
+        lean: true,
+        cwd: tempDir(),
+      });
+      expect(created.status).toBe(201);
+      const { run } = await created.json();
+      await pullFrames(
+        sseFrames(await fetch(`${base}/v1/runs/${run.id}/events`)),
+        frame => frame.event === 'done',
+      );
+
+      const detail = await (await fetch(`${base}/v1/sessions/direct-skill`)).json();
+      expect(detail.session.turns.map((turn: { content: string }) => turn.content)).toEqual([
+        '$make-grok-imagine-prompt "summer morning"',
+        'Grok-style final prompt.',
+      ]);
+      expect(JSON.stringify(captured)).toContain('Return one concise Grok Imagine prompt.');
+      expect(JSON.stringify(captured)).not.toContain('$make-grok-imagine-prompt');
+    } finally {
+      await server.close();
+    }
+  });
+
+  it('preserves the original invocation for skills that declare chat mode', async () => {
+    stubProvider(['Concise chat-mode prompt.']);
+    const { server, base } = await startServer();
+    try {
+      const response = await postJson(base, '/v1/chat/stream', {
+        prompt: 'summer morning',
+        userTurn: '$make-short-prompt "summer morning"',
+        instructions: ['Return one concise prompt.'],
+        sessionId: 'direct-chat-skill',
+        isolated: true,
+        memories: false,
+      });
+      expect(response.status).toBe(200);
+      await pullFrames(sseFrames(response), () => false);
+
+      const detail = await (await fetch(`${base}/v1/sessions/direct-chat-skill`)).json();
+      expect(detail.session.turns.map((turn: { content: string }) => turn.content)).toEqual([
+        '$make-short-prompt "summer morning"',
+        'Concise chat-mode prompt.',
+      ]);
     } finally {
       await server.close();
     }

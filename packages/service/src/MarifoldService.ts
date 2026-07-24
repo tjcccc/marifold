@@ -103,19 +103,31 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
   // to destructive history routes so a late completion cannot recreate a
   // session that was just deleted or truncated.
   const activeSessionRequests = new Map<string, number>();
-  const beginSessionRequest = (sessionId?: string): (() => void) => {
-    if (!sessionId) return () => undefined;
-    activeSessionRequests.set(sessionId, (activeSessionRequests.get(sessionId) ?? 0) + 1);
+  const activeProfileRequests = new Map<string, number>();
+  const beginSessionRequest = (sessionId?: string, profile?: string): (() => void) => {
+    if (sessionId) activeSessionRequests.set(sessionId, (activeSessionRequests.get(sessionId) ?? 0) + 1);
+    if (profile) activeProfileRequests.set(profile, (activeProfileRequests.get(profile) ?? 0) + 1);
     return () => {
-      const remaining = (activeSessionRequests.get(sessionId) ?? 1) - 1;
-      if (remaining > 0) activeSessionRequests.set(sessionId, remaining);
-      else activeSessionRequests.delete(sessionId);
+      if (sessionId) {
+        const remaining = (activeSessionRequests.get(sessionId) ?? 1) - 1;
+        if (remaining > 0) activeSessionRequests.set(sessionId, remaining);
+        else activeSessionRequests.delete(sessionId);
+      }
+      if (profile) {
+        const remaining = (activeProfileRequests.get(profile) ?? 1) - 1;
+        if (remaining > 0) activeProfileRequests.set(profile, remaining);
+        else activeProfileRequests.delete(profile);
+      }
     };
   };
   const hasActiveSessionRequest = (sessionId: string): boolean =>
     (activeSessionRequests.get(sessionId) ?? 0) > 0;
   registerRunRoutes(server, runRegistry);
-  registerProfileRoutes(server, runtime);
+  registerProfileRoutes(server, runtime, {
+    isProfileActive: profile =>
+      (activeProfileRequests.get(profile) ?? 0) > 0
+      || runRegistry.list().some(run => run.profile === profile && run.finishedAt === undefined),
+  });
 
   const webDir = options.web?.dir ?? options.loadedConfig.config.service?.webDir;
   if (webDir) registerStaticRoutes(server, webDir);
@@ -204,6 +216,21 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
     ok: true,
     skills: runtime.listSkills(request.query.profile).map(skillHint),
   }));
+
+  // Resolve a `$skill [args]` invocation in code so Web/service clients do not
+  // spend an agent loop searching the filesystem for a skill already indexed
+  // by Marifold.
+  server.post('/v1/skills/resolve', async request => {
+    const body = objectBody(request.body);
+    const profile = optionalStringField('profile', body.profile).profile;
+    return {
+      ok: true,
+      invocation: runtime.resolveSkillInvocation(
+        requiredString(body.invocation, 'invocation'),
+        profile,
+      ),
+    };
+  });
 
   server.get('/v1/models', async () => ({
     ok: true,
@@ -407,7 +434,10 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
 
   server.post('/v1/ask', async request => {
     const input = parseRunRequest(request.body);
-    const endRequest = beginSessionRequest(input.sessionId);
+    const endRequest = beginSessionRequest(
+      input.sessionId,
+      input.profile ?? options.loadedConfig.config.default.profile,
+    );
     try {
       return {
         ok: true,
@@ -420,7 +450,10 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
 
   server.post('/v1/chat/stream', async (request, reply) => {
     const input = parseRunRequest(request.body);
-    const endRequest = beginSessionRequest(input.sessionId);
+    const endRequest = beginSessionRequest(
+      input.sessionId,
+      input.profile ?? options.loadedConfig.config.default.profile,
+    );
     try {
       await streamChat(reply, runtime, input);
     } finally {
@@ -566,11 +599,14 @@ function parseRunRequest(value: unknown): MarifoldRunRequest {
     ...optionalStringField('provider', body.provider),
     ...optionalStringField('model', body.model),
     ...optionalStringField('sessionId', body.sessionId),
+    ...optionalStringField('userTurn', body.userTurn),
+    ...optionalBooleanField('isolated', body.isolated),
     ...optionalNonNegativeIntegerField('replaceUserTurnIndex', body.replaceUserTurnIndex),
     ...optionalBooleanField('memories', body.memories),
     ...optionalBooleanField('think', body.think),
     ...optionalBooleanField('originalImages', body.originalImages),
     ...optionalImagesField(body.images),
+    ...(body.instructions !== undefined ? { instructions: stringArray(body.instructions, 'instructions') } : {}),
   };
 }
 
@@ -738,6 +774,7 @@ function statusCodeForError(error: MarifoldError): number {
   if (
     error.code === 'TASK_NOT_FOUND'
     || error.code === 'SCHEDULE_NOT_FOUND'
+    || error.code === 'SKILL_NOT_FOUND'
     || error.code === 'RUN_NOT_FOUND'
     || error.code === 'APPROVAL_NOT_FOUND'
   ) {
@@ -751,6 +788,7 @@ function statusCodeForError(error: MarifoldError): number {
     || error.code === 'TASK_INVALID'
     || error.code === 'SCHEDULE_INVALID'
     || error.code === 'AGENT_RUN_INVALID'
+    || error.code === 'SKILL_INVALID'
   ) {
     return 400;
   }

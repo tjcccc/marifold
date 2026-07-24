@@ -1,5 +1,6 @@
 import type { ApiClient } from './client';
 import type { PublicConfig } from './types';
+import type { ProfileMode } from './types';
 
 export interface ServiceStatus {
   service: string;
@@ -60,6 +61,29 @@ export async function getSkills(client: ApiClient, profile?: string): Promise<Sk
   const query = profile ? `?profile=${encodeURIComponent(profile)}` : '';
   const body = await client.request<{ skills: SkillHint[] }>('GET', `/v1/skills${query}`);
   return body.skills;
+}
+
+export interface ResolvedSkillInvocation {
+  name: string;
+  userTurn: string;
+  prompt: string;
+  instructions: string[];
+  mode?: ProfileMode;
+  missing: string[];
+  usage: string;
+}
+
+export async function resolveSkillInvocation(
+  client: ApiClient,
+  invocation: string,
+  profile?: string,
+): Promise<ResolvedSkillInvocation> {
+  const body = await client.request<{ invocation: ResolvedSkillInvocation }>(
+    'POST',
+    '/v1/skills/resolve',
+    { invocation, ...(profile ? { profile } : {}) },
+  );
+  return body.invocation;
 }
 
 export interface ProviderModels {

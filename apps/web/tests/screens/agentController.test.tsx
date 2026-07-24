@@ -122,6 +122,164 @@ describe('useAgentController session lifecycle', () => {
     await waitFor(() => expect(result.current.sessions[0]).toEqual(durable));
   });
 
+  it('resolves a $skill once and starts a lean run with authoritative instructions', async () => {
+    let releaseStream!: () => void;
+    const streamReleased = new Promise<void>(resolve => { releaseStream = resolve; });
+    const run: RunRecord = {
+      id: 'run_skill',
+      objective: 'summer morning',
+      profile: 'prompt-maker',
+      sessionId: 'session_skill',
+      status: 'running',
+      createdAt: '2026-07-24T00:00:00.000Z',
+      eventCount: 0,
+      pendingApprovals: [],
+    };
+    let runBody: Record<string, unknown> | undefined;
+    const client: ApiClient = {
+      baseUrl: '',
+      request: async (method, path, body) => {
+        if (method === 'GET' && path === '/v1/profiles') return { profiles: [profile] } as never;
+        if (method === 'GET' && path === '/v1/status') {
+          return { service: 'marifold', apiVersion: 'v1', configPath: '', foundConfig: true, default: { profile: 'prompt-maker' } } as never;
+        }
+        if (method === 'GET' && path === '/v1/models') return { default: {}, options: [] } as never;
+        if (method === 'GET' && path === '/v1/profiles/prompt-maker') return { profile } as never;
+        if (method === 'GET' && path === '/v1/skills?profile=prompt-maker') {
+          return { skills: [{ name: 'make-prompt', description: 'Make a prompt', usage: '$make-prompt <text>' }] } as never;
+        }
+        if (method === 'GET' && path === '/v1/sessions?limit=100&profile=prompt-maker&archived=false') {
+          return { sessions: [] } as never;
+        }
+        if (method === 'GET' && path === '/v1/sessions/session_skill') {
+          throw new MarifoldApiError(404, { code: 'NOT_FOUND', message: 'not persisted yet' });
+        }
+        if (method === 'GET' && path === '/v1/runs') return { runs: [] } as never;
+        if (method === 'POST' && path === '/v1/skills/resolve') {
+          expect(body).toEqual({
+            invocation: '$make-prompt "summer morning"',
+            profile: 'prompt-maker',
+          });
+          return {
+            invocation: {
+              name: 'make-prompt',
+              userTurn: '$make-prompt "summer morning"',
+              prompt: 'summer morning',
+              instructions: [
+                'Transform summer morning into a final prompt.',
+                'Bundled files are in the profile skill directory.',
+              ],
+              mode: 'agent',
+              missing: [],
+              usage: '$make-prompt <text>',
+            },
+          } as never;
+        }
+        if (method === 'POST' && path === '/v1/runs') {
+          runBody = body as Record<string, unknown>;
+          return { run } as never;
+        }
+        throw new Error(`Unexpected request: ${method} ${path}`);
+      },
+      stream: async path => {
+        expect(path).toBe('/v1/runs/run_skill/events');
+        await streamReleased;
+        const done = { type: 'done', taskId: 'task_skill', status: 'completed' };
+        return new Response(`id: 1\nevent: done\ndata: ${JSON.stringify(done)}\n\n`, { status: 200 });
+      },
+      blob: async () => undefined,
+    };
+    const { result } = renderHook(() => useAgentController({
+      client,
+      route: { view: 'agent', profile: 'prompt-maker', session: 'session_skill' },
+      navigate: vi.fn(),
+      onUnauthorized: vi.fn(),
+    }));
+    await waitFor(() => expect(result.current.profileDetail?.name).toBe('prompt-maker'));
+
+    let send!: Promise<void>;
+    act(() => { send = result.current.send('$make-prompt "summer morning"'); });
+    await send;
+
+    expect(runBody).toMatchObject({
+      objective: 'summer morning',
+      userTurn: '$make-prompt "summer morning"',
+      instructions: [
+        'Transform summer morning into a final prompt.',
+        'Bundled files are in the profile skill directory.',
+      ],
+      lean: true,
+      profile: 'prompt-maker',
+      sessionId: 'session_skill',
+    });
+    act(() => releaseStream());
+  });
+
+  it('runs a chat-mode skill without replaying earlier session turns', async () => {
+    let chatBody: Record<string, unknown> | undefined;
+    const client: ApiClient = {
+      baseUrl: '',
+      request: async (method, path) => {
+        if (method === 'GET' && path === '/v1/profiles') return { profiles: [profile] } as never;
+        if (method === 'GET' && path === '/v1/status') {
+          return { service: 'marifold', apiVersion: 'v1', configPath: '', foundConfig: true, default: { profile: 'prompt-maker' } } as never;
+        }
+        if (method === 'GET' && path === '/v1/models') return { default: {}, options: [] } as never;
+        if (method === 'GET' && path === '/v1/profiles/prompt-maker') return { profile } as never;
+        if (method === 'GET' && path === '/v1/skills?profile=prompt-maker') return { skills: [] } as never;
+        if (method === 'GET' && path === '/v1/sessions?limit=100&profile=prompt-maker&archived=false') {
+          return { sessions: [] } as never;
+        }
+        if (method === 'GET' && path === '/v1/sessions/session_chat_skill') {
+          throw new MarifoldApiError(404, { code: 'NOT_FOUND', message: 'not persisted yet' });
+        }
+        if (method === 'GET' && path === '/v1/runs') return { runs: [] } as never;
+        if (method === 'POST' && path === '/v1/skills/resolve') {
+          return {
+            invocation: {
+              name: 'make-short-prompt',
+              userTurn: '$make-short-prompt "summer morning"',
+              prompt: 'summer morning',
+              instructions: ['Return one concise prompt.'],
+              mode: 'chat',
+              missing: [],
+              usage: '$make-short-prompt <text>',
+            },
+          } as never;
+        }
+        throw new Error(`Unexpected request: ${method} ${path}`);
+      },
+      stream: async (path, init) => {
+        expect(path).toBe('/v1/chat/stream');
+        chatBody = init?.body as Record<string, unknown>;
+        return new Response(
+          'event: chunk\ndata: {"text":"Concise prompt."}\n\nevent: done\ndata: {}\n\n',
+          { status: 200 },
+        );
+      },
+      blob: async () => undefined,
+    };
+    const { result } = renderHook(() => useAgentController({
+      client,
+      route: { view: 'agent', profile: 'prompt-maker', session: 'session_chat_skill' },
+      navigate: vi.fn(),
+      onUnauthorized: vi.fn(),
+    }));
+    await waitFor(() => expect(result.current.profileDetail?.name).toBe('prompt-maker'));
+
+    let send!: Promise<void>;
+    act(() => { send = result.current.send('$make-short-prompt "summer morning"'); });
+    await send;
+
+    expect(chatBody).toMatchObject({
+      prompt: 'summer morning',
+      userTurn: '$make-short-prompt "summer morning"',
+      instructions: ['Return one concise prompt.'],
+      isolated: true,
+      sessionId: 'session_chat_skill',
+    });
+  });
+
   it('rehydrates persisted image and inlined file attachments when a session is reopened', async () => {
     const summary: SessionSummary = {
       id: 'session_image',

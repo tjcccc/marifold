@@ -93,6 +93,27 @@ export async function createProfile(client: ApiClient, name: string): Promise<Pr
   return body.profile;
 }
 
+export async function setProfilePinned(
+  client: ApiClient,
+  name: string,
+  pinned: boolean,
+): Promise<ProfileSummary[]> {
+  const body = await client.request<{ profiles: ProfileSummary[] }>(
+    'PATCH',
+    `/v1/profiles/${encodeURIComponent(name)}/display`,
+    { pinned },
+  );
+  return body.profiles;
+}
+
+/** Remove profile files/memories/skills/avatar. Session history remains stored. */
+export async function deleteProfile(client: ApiClient, name: string): Promise<void> {
+  await client.request(
+    'DELETE',
+    `/v1/profiles/${encodeURIComponent(name)}`,
+  );
+}
+
 export async function putAvatar(
   client: ApiClient,
   name: string,

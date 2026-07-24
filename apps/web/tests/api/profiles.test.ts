@@ -1,6 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createApiClient } from '../../src/api/client';
-import { deleteMemory, putProfileFile, removeTrustedFolder, updateProfile } from '../../src/api/profiles';
+import {
+  deleteMemory,
+  deleteProfile,
+  putProfileFile,
+  removeTrustedFolder,
+  setProfilePinned,
+  updateProfile,
+} from '../../src/api/profiles';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -52,6 +59,27 @@ describe('profile write api', () => {
     expect(memories).toEqual([]);
     const [url, init] = mock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe('http://x.test/v1/profiles/writer/memories/mem-1?mode=delete');
+    expect(init.method).toBe('DELETE');
+  });
+
+  it('updates profile pin state and removes a profile', async () => {
+    const mock = stubFetch({
+      ok: true,
+      profiles: [{ name: 'writer', source: 'directory', pinned: true }],
+    });
+    const client = createApiClient({ baseUrl: 'http://x.test' });
+
+    await expect(setProfilePinned(client, 'writer', true)).resolves.toMatchObject([
+      { name: 'writer', pinned: true },
+    ]);
+    let [url, init] = mock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('http://x.test/v1/profiles/writer/display');
+    expect(init.method).toBe('PATCH');
+    expect(JSON.parse(String(init.body))).toEqual({ pinned: true });
+
+    await deleteProfile(client, 'writer');
+    [url, init] = mock.mock.calls[1] as [string, RequestInit];
+    expect(url).toBe('http://x.test/v1/profiles/writer');
     expect(init.method).toBe('DELETE');
   });
 });

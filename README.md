@@ -12,7 +12,7 @@ For product direction and future scope, see [docs/vision.md](docs/vision.md) and
 
 - Onboarding: `marifold init` writes config and interactively picks a provider/model (so a first run never points at a model you don't have); `marifold provider add` configures a provider (including pointing Ollama at a remote/Tailscale server); running `marifold` before `init` prints a clear hint instead of failing.
 - Session resume: `marifold --resume` (most recent) or `--resume <id>` replays the conversation; the in-TUI `/resume` picker resumes too (`/session` remains an alias). Agent/skill runs persist one clean turn (your invocation → the final answer).
-- Skills as agentic tools: `$name [args]` runs a skill; the skill body is authoritative instructions and, in agent mode, the model reads the skill's bundled files (e.g. `vars.toml` for `#name` fragments) via `read_file`. A skill's run mode follows the session unless it declares `mode:`.
+- Skills as agentic tools: `$name [args]` resolves the selected profile/global skill directly, expands its variables, and runs its authoritative instructions without leaking earlier skill-turn history. The original `$name …` invocation remains in durable history. In agent mode, bundled files (e.g. `vars.toml` for `#name` fragments) are available through `read_file`; a skill's run mode follows the session unless it declares `mode:`.
 - Built-in skill-management guidance: ordinary agent prompts that mention skills receive the active profile and configured global skill paths, so TUI, CLI, service, and Web UI agent runs update Marifold skills instead of creating another tool's skill directory in the workspace.
 - The TUI: launch with bare `marifold` (or `marifold --profile <name>`); agent mode by default, `/chat` for chat.
 - Input grammar: plain text → agent/chat, `/command` → app-executed action, `$skill [args]` → model-backed skill.
@@ -22,6 +22,7 @@ For product direction and future scope, see [docs/vision.md](docs/vision.md) and
 - Input editing: history (Up/Down), multi-line via trailing `\`, readline keys (Ctrl+A/E/U/W), and Tab completion for `/commands` and `$skills`.
 - `marifold.skill.v0` skills run via `$name [args]` (inline prompting for missing variables), managed with `/skills` (Enter run, Del remove) and `/install-skill <path|url>`; bundled examples in `examples/skills/`.
 - A launch-time profile picker when no default profile resolves.
+- The Web UI presents profiles as a compact contact list: 40 px avatars, the latest response preview and relative activity time, recent-activity sorting, persistent pinning, and a row menu that opens profile Config. Stored profiles can be removed from Config after changing the default profile and typing the profile name in a second confirmation dialog; their conversation history is retained.
 - The launch directory is the workspace; `~/.marifold` stays config/state; profiles are identities, not workspaces.
 - Non-TTY invocation falls back with a hint instead of starting Ink.
 
@@ -43,7 +44,7 @@ For product direction and future scope, see [docs/vision.md](docs/vision.md) and
 - Automatic control-block tool fallback (`<tool_call>` prompt blocks) for models without native tool support, plus `--tool-mode auto|native|control-block`.
 - Built-in agent tools: `read_file`, `write_file`, isolated `shell_exec`, per-run `python_package_install`, and `ask_profile` (one-shot delegation to another profile/model).
 - Per-profile approval policy per tool kind (`allow`/`ask`/`deny`), overriding a global `[agent]` default, with an Allow-once / Trust / Deny prompt, `--yes`, and unattended ask-degrades-to-deny behavior.
-- Capability-scoped run workspace: each run receives a private `~/.marifold/runs/<run-id>/` home, input, work, output, temp, cache, and `.venv`; shell processes can read/write only the selected working folder, trusted folders, and those run directories. There is no unrestricted fallback when a platform sandbox is unavailable.
+- Capability-scoped run workspace: each run receives a private `~/.marifold/runs/<run-id>/` home, input, work, output, temp, cache, and `.venv`; shell processes can read/write only the selected working folder, trusted folders, and those run directories. The active profile and configured global skill directories are exposed as narrow read-only roots so skills can inspect their own bundled files without exposing other Marifold state. There is no unrestricted fallback when a platform sandbox is unavailable.
 - Agent runs bypass profile memory: hidden memory control blocks are stripped and discarded, and task state is never promoted into profile memory.
 - Provider-backed agent eval through `pnpm agent-eval -- --provider ollama --model qwen3.5:9b`.
 - Marifold-branded CLI.

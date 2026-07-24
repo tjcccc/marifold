@@ -91,6 +91,33 @@ describe('ReadFileTool', () => {
     const result = await new ReadFileTool().execute({ path: '.' }, context(dir));
     expect(result.content).toContain('b.txt');
   });
+
+  it('allows app-owned skill reads without exposing other Marifold state', () => {
+    const home = tempDir();
+    const cwd = path.join(home, 'repo');
+    const skillDir = path.join(home, '.marifold', 'profiles', 'painter', 'skills', 'prompt-maker');
+    const skillFile = path.join(skillDir, 'SKILL.md');
+    const profileConfig = path.join(home, '.marifold', 'profiles', 'painter', 'profile.toml');
+    fs.mkdirSync(cwd);
+    fs.mkdirSync(skillDir, { recursive: true });
+    fs.writeFileSync(skillFile, '# Skill');
+    fs.writeFileSync(profileConfig, 'name = "painter"');
+    const workspace = createRunWorkspace({
+      id: 'tool_skill_read',
+      cwd,
+      runsDir: path.join(home, '.marifold', 'runs'),
+      userHome: home,
+      readOnlyFolders: [path.dirname(skillDir)],
+    });
+    const ctx: ToolExecutionContext = { cwd, outputLimit: 100000, workspace };
+    const tool = new ReadFileTool();
+
+    expect(tool.assessRisk({ path: skillFile }, ctx)).toEqual({ escalate: false });
+    expect(tool.assessRisk({ path: profileConfig }, ctx)).toMatchObject({
+      escalate: true,
+      persistable: false,
+    });
+  });
 });
 
 describe('WriteFileTool', () => {

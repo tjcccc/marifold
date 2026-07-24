@@ -20,6 +20,8 @@ v0.49.x completes the desktop Web workspace with profile/session search, archive
 
 v0.50.x adds local Web extraction for modern Word/Excel/PowerPoint attachments, bounded read-only original-file staging for agent runs, capability-scoped per-run workspaces, fail-closed macOS shell sandboxing, one-time approved `uv` package installation into disposable Python environments, and deterministic service shutdown/listen-failure cleanup.
 
+v0.51.x resolves direct `$skill` invocations in core with history-isolated execution and narrow read-only bundled-file access, and adds contact-style Web profile navigation with response previews/activity times, persistent profile pinning, and double-confirmed profile removal that retains conversation history.
+
 ## Stack
 
 - TypeScript

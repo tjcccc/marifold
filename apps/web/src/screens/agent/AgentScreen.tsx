@@ -141,6 +141,12 @@ export function AgentScreen(props: AgentScreenProps) {
               selected={controller.profileName}
               workingProfiles={workingProfiles}
               onSelect={controller.selectProfile}
+              onSetPinned={controller.setProfilePinned}
+              onConfigure={name => props.navigate({
+                view: 'config',
+                section: 'profiles',
+                item: name,
+              })}
               onCreate={() => {
                 setCreateError(undefined);
                 setCreateOpen(true);
