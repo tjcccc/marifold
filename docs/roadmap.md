@@ -56,7 +56,8 @@ short: what shipped (one line each), what's next, and what's deliberately deferr
 - **Web UI backlog**: `/v1/events` push channel to replace 10s run polling, a deliberate mobile
   navigation design, and profile rename/delete UI.
 - **Workflow composition**: chain native profiles, skills, skill apps, models, and
-  external-agent aliases into multi-step flows (design doc exists outside the repo).
+  external-agent aliases into multi-step flows; the living direction and open questions are in
+  [`workflow-plan.md`](workflow-plan.md).
 - **Apple clients** and alias profiles for Codex/Claude Code and other external agents.
 
 ## Deferred: native (server-side) web search — a priest milestone, not marifold
