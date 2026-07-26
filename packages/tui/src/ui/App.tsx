@@ -367,6 +367,7 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
           signal: controller.signal,
         },
         summary => { usage = summary.usage; },
+        text => { dispatch({ type: 'reasoning_delta', text }); },
       )) {
         if (controller.signal.aborted) break;
         dispatch({ type: 'assistant_delta', text: chunk });
@@ -546,7 +547,9 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
       return;
     }
     const currentSessionId = stateRef.current.sessionId;
-    const items = runtime.listSessions(20, stateRef.current.profile).map(sessionItem.bind(null, currentSessionId));
+    const items = runtime
+      .listSessions(20, stateRef.current.profile, { order: 'recent' })
+      .map(sessionItem.bind(null, currentSessionId));
     setOverlay({ type: 'sessions', items });
   }, [runtime, notify]);
 

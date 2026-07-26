@@ -575,7 +575,13 @@ async function streamChat(reply: FastifyReply, runtime: MarifoldRuntime, request
   const stopHeartbeat = startSseHeartbeat(reply);
 
   try {
-    for await (const chunk of runtime.stream({ ...request, signal: abort.signal })) {
+    for await (const chunk of runtime.stream(
+      { ...request, signal: abort.signal },
+      undefined,
+      text => {
+        if (!closed) writeSse(reply, 'reasoning', { text });
+      },
+    )) {
       if (closed) break;
       writeSse(reply, 'chunk', { text: chunk });
     }

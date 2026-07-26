@@ -5,6 +5,7 @@ import { agentEventToItems } from '../src/core/eventView.js';
 import { appReducer, createInitialState } from '../src/core/appState.js';
 import { listCommandCompletions, runCommand, type CommandContext } from '../src/core/commands.js';
 import { bindSkillArgs, skillUsage } from '../src/core/skills.js';
+import { runSummary } from '../src/ui/appHelpers.js';
 
 function initial() {
   return createInitialState({ profile: 'default', provider: 'ollama', model: 'm', cwd: '/tmp', version: '0.0.0-test' });
@@ -37,6 +38,8 @@ describe('eventView', () => {
       .toMatchObject({ kind: 'assistant', text: 'checking', muted: true });
     expect(agentEventToItems({ type: 'text', text: 'answer', phase: 'final' })[0])
       .toEqual({ kind: 'assistant', text: 'answer' });
+    expect(agentEventToItems({ type: 'reasoning', summary: 'Checked the constraints.' })[0])
+      .toEqual({ kind: 'assistant', text: 'Reasoning: Checked the constraints.', muted: true });
     expect(agentEventToItems({ type: 'text', text: '   ' })).toEqual([]);
     expect(agentEventToItems({ type: 'tool_request', call: { id: 'c', tool: 'read_file', kind: 'read', input: {}, summary: 's' } })[0])
       .toMatchObject({ kind: 'tool', phase: 'request', toolKind: 'read' });
@@ -64,6 +67,26 @@ describe('appReducer', () => {
     state = appReducer(state, { type: 'end_assistant' });
     state = appReducer(state, { type: 'assistant_delta', text: 'next' });
     expect(state.transcript).toHaveLength(3);
+  });
+
+  it('keeps safe reasoning summaries separate from the streamed answer', () => {
+    let state = appReducer(initial(), { type: 'reasoning_delta', text: 'Checked ' });
+    state = appReducer(state, { type: 'reasoning_delta', text: 'the constraints.' });
+    state = appReducer(state, { type: 'assistant_delta', text: 'Answer' });
+    expect(state.transcript).toEqual([
+      { id: 'item_1', kind: 'assistant', text: 'Reasoning: Checked the constraints.', muted: true },
+      { id: 'item_2', kind: 'assistant', text: 'Answer' },
+    ]);
+  });
+
+  it('reports cached and reasoning token details without inflating total tokens', () => {
+    expect(runSummary(1250, {
+      inputTokens: 80,
+      outputTokens: 20,
+      totalTokens: 100,
+      cachedInputTokens: 30,
+      reasoningTokens: 12,
+    })).toBe('(1.3s, 100 tokens, 30 cached on server, 12 reasoning)');
   });
 
   it('folds a tool result onto its request row (one self-updating line)', () => {

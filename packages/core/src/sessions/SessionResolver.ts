@@ -24,6 +24,8 @@ export interface SessionListOptions {
   archived?: boolean;
   /** Case-insensitive search across custom titles and first-message previews. */
   search?: string;
+  /** `display` keeps pinned sessions first; `recent` ignores pin state. */
+  order?: 'display' | 'recent';
 }
 
 /** Result of a session-DB integrity check (used by `marifold doctor`). */
@@ -135,6 +137,9 @@ export class SessionResolver {
         ...(search ? [`%${search}%`, `%${search}%`] : []),
         limit,
       ];
+      const orderBy = options.order === 'recent'
+        ? 's.updated_at DESC'
+        : 'COALESCE(d.pinned, 0) DESC, s.updated_at DESC';
       const rows = db.prepare(`
         SELECT
           s.id AS id,
@@ -156,9 +161,7 @@ export class SessionResolver {
         LEFT JOIN ${SESSION_DISPLAY_TABLE} d ON d.session_id = s.id
         WHERE ${filters.join(' AND ')}
         GROUP BY s.id
-        ORDER BY
-          COALESCE(d.pinned, 0) DESC,
-          s.updated_at DESC
+        ORDER BY ${orderBy}
         LIMIT ?
       `).all(...params) as Array<{
         id: string;

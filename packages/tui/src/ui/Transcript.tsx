@@ -47,8 +47,12 @@ export function TranscriptRow({ item }: { item: TranscriptItem }): React.ReactEl
             <Text><Text color={SKILL} bold>{head}</Text>{rest}</Text>
           ) : (
             <>
-              <Text color={DIM_ACCENT} bold>{'> '}</Text>
-              <Text>{item.text}</Text>
+              <Box width={2} flexShrink={0}>
+                <Text color={DIM_ACCENT} bold>{'> '}</Text>
+              </Box>
+              <Box flexGrow={1} flexShrink={1}>
+                <Text>{item.text}</Text>
+              </Box>
             </>
           )}
         </Box>

@@ -399,7 +399,7 @@ describe('MarifoldRuntime', () => {
       });
 
       expect(response.ok).toBe(true);
-      expect(requestBody?.think).toBe(true);
+      expect(requestBody?.think).toBe('high');
     } finally {
       runtime.close();
     }
@@ -627,7 +627,10 @@ describe('MarifoldRuntime', () => {
       requestBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
       return new Response(JSON.stringify({
         status: 'completed',
-        output_text: 'hello from responses',
+        output: [{
+          type: 'message',
+          content: [{ type: 'output_text', text: 'hello from responses' }],
+        }],
         usage: {
           input_tokens: 10,
           output_tokens: 3,
@@ -653,7 +656,10 @@ describe('MarifoldRuntime', () => {
       expect(requestBody?.model).toBe('gpt-5.4-mini');
       expect(requestBody?.stream).toBe(false);
       expect(requestBody?.input).toEqual(expect.arrayContaining([
-        expect.objectContaining({ role: 'user', content: 'Hello' }),
+        expect.objectContaining({
+          role: 'user',
+          content: expect.arrayContaining([{ type: 'input_text', text: 'Hello' }]),
+        }),
       ]));
     } finally {
       runtime.close();

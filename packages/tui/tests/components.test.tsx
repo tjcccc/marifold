@@ -54,6 +54,15 @@ describe('Transcript', () => {
     expect(frame).toContain('read_file');
     expect(frame).toContain('boom');
   });
+
+  it('keeps a fixed gap after the prompt when a submitted message wraps', () => {
+    const text = `Yes, ${'a long submitted message '.repeat(8)}`;
+    const frame = render(<Transcript items={[{ id: '1', kind: 'user', text }]} />).lastFrame() ?? '';
+    const messageLine = frame.split('\n').find(line => line.includes('Yes,'));
+    expect(messageLine).toBeDefined();
+    expect(messageLine?.trimStart()).toMatch(/^> Yes,/);
+    expect(frame).not.toContain('>Yes,');
+  });
 });
 
 describe('ApprovalModal', () => {

@@ -2,6 +2,16 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-07-26 — Unreleased (in progress) — Priest 2.8 reasoning integration
+
+- Linked the local `@priest-ai/core` 2.8 package and delegated OpenAI-compatible Responses transport to its new provider implementation while retaining Marifold-owned routing, OAuth headers, proxy selection, and ChatGPT's SSE-only behavior.
+- Replaced product-side `think` branching with Priest's provider-neutral reasoning configuration where supported; Bailian-compatible legacy options remain isolated at the compatibility edge.
+- Preserved safe reasoning summaries, opaque continuation across tool turns, and cached/reasoning usage through core, CLI, TUI, service SSE, and Web renderers without exposing private provider traces.
+- Fixed the TUI's two-column prompt gutter under wrapping pressure: submitted prompts retain the space after `>`, while live-input continuation lines no longer inherit a separator space that lands exactly on the automatic wrap boundary.
+- Made TUI session resume strictly recency-ordered. Web UI pins remain a Web display preference and no longer promote older sessions in the TUI picker or bare `marifold --resume` selection.
+- Added provider-wire, chat/agent tool-loop, usage-accounting, service SSE, TUI, Web stream, and renderer regression coverage. The local-link workspace gate passes 555 tests plus 123 CLI command checks; a manually built Priest tarball also passed TypeScript 5.9/7 consumer types, CJS/ESM, Node 18/20/22/24 imports, and a Node 24 SQLite check.
+- Still open before release: finish the practical TUI/Web smoke pass, publish Priest 2.8.0, replace the local `file:` dependency with the registry version, and cut the Marifold release version.
+
 ## 2026-07-26 — v0.51.1 — TypeScript 7 native compiler
 
 - Upgraded every workspace from TypeScript 5.9.3 to TypeScript 7.0.2, including the native platform compiler packages in the pnpm lockfile.

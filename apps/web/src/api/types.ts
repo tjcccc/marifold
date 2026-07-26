@@ -78,6 +78,7 @@ export interface SseFrame {
 
 export type ChatStreamEvent =
   | { type: 'chunk'; text: string }
+  | { type: 'reasoning'; text: string }
   | { type: 'error'; code: string; message: string }
   | { type: 'done' };
 

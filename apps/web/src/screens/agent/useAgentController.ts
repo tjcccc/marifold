@@ -669,6 +669,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
             ...(options.originalImages ? { originalImages: true } : {}),
           }, controller.signal)) {
             if (event.type === 'chunk') dispatch({ type: 'chat_chunk', text: event.text });
+            else if (event.type === 'reasoning') dispatch({ type: 'chat_reasoning', text: event.text });
             else if (event.type === 'error') {
               completed = false;
               dispatch({ type: 'chat_error', message: event.message });

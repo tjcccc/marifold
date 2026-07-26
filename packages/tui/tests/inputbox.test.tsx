@@ -168,4 +168,19 @@ describe('InputBox', () => {
       expect(frame).toMatch(/a\n\s+b|a[\s\S]*\n[\s\S]*b/); // a and b on separate lines
     }
   });
+
+  it('keeps the prompt gutter fixed and consumes a space at an automatic wrap boundary', async () => {
+    const { stdin, lastFrame } = renderInput();
+    // ink-testing-library exposes 100 columns. InputBox reserves two prompt
+    // columns and one cursor column, leaving 97 source columns per visual line.
+    stdin.write(`${'a'.repeat(97)} second`);
+    await delay();
+
+    const lines = (lastFrame() ?? '').split('\n');
+    const first = lines.find(line => line.includes('a'.repeat(20)));
+    const continuation = lines.find(line => line.includes('second'));
+    expect(first?.startsWith('> ')).toBe(true);
+    expect(continuation?.startsWith('  second')).toBe(true);
+    expect(continuation?.startsWith('   second')).toBe(false);
+  });
 });

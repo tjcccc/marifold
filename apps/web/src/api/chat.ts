@@ -35,6 +35,9 @@ export async function* streamChat(
       if (frame.event === 'chunk') {
         const text = (frame.data as { text?: string } | undefined)?.text;
         if (typeof text === 'string') yield { type: 'chunk', text };
+      } else if (frame.event === 'reasoning') {
+        const text = (frame.data as { text?: string } | undefined)?.text;
+        if (typeof text === 'string') yield { type: 'reasoning', text };
       } else if (frame.event === 'error') {
         const body = frame.data as { code?: string; message?: string } | undefined;
         yield { type: 'error', code: body?.code ?? 'STREAM_ERROR', message: body?.message ?? 'Stream failed.' };

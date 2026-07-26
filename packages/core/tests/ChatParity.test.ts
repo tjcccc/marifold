@@ -57,6 +57,14 @@ function ollamaJsonResponse(text: string): Response {
   });
 }
 
+function responsesSse(events: Array<Record<string, unknown>>): Response {
+  const body = events.map(event => `data: ${JSON.stringify(event)}\n\n`).join('') + 'data: [DONE]\n\n';
+  return new Response(body, {
+    status: 200,
+    headers: { 'Content-Type': 'text/event-stream' },
+  });
+}
+
 async function collectStream(stream: AsyncGenerator<string>): Promise<string> {
   const parts: string[] = [];
   for await (const chunk of stream) parts.push(chunk);
@@ -136,6 +144,123 @@ describe('chat tool loop', () => {
       const text = await collectStream(runtime.stream({ prompt: 'Hello', memories: false }));
       expect(text).toBe('plain');
       expect(bodies[0].tools).toBeUndefined();
+    } finally {
+      runtime.close();
+    }
+  });
+
+  it('replays opaque Responses reasoning through the chat tool loop and surfaces only the safe summary', async () => {
+    const dir = tempDir();
+    const bodies: Array<Record<string, unknown>> = [];
+    let call = 0;
+    vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      bodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+      call += 1;
+      if (call === 1) {
+        return responsesSse([
+          { type: 'response.reasoning_summary_text.delta', delta: 'Checking sources.' },
+          {
+            type: 'response.output_item.added',
+            output_index: 1,
+            item: { type: 'function_call', call_id: 'call_1', name: 'web_search', arguments: '' },
+          },
+          {
+            type: 'response.function_call_arguments.done',
+            output_index: 1,
+            name: 'web_search',
+            arguments: '{"query":"marifold news"}',
+          },
+          {
+            type: 'response.completed',
+            response: {
+              status: 'completed',
+              output: [
+                {
+                  type: 'reasoning',
+                  id: 'rs_1',
+                  summary: [{ type: 'summary_text', text: 'Checking sources.' }],
+                  encrypted_content: 'opaque',
+                },
+                {
+                  type: 'function_call',
+                  call_id: 'call_1',
+                  name: 'web_search',
+                  arguments: '{"query":"marifold news"}',
+                },
+              ],
+              usage: {
+                input_tokens: 10,
+                input_tokens_details: { cached_tokens: 4 },
+                output_tokens: 7,
+                output_tokens_details: { reasoning_tokens: 3 },
+              },
+            },
+          },
+        ]);
+      }
+      return responsesSse([
+        { type: 'response.output_text.delta', delta: 'Here is what I found.' },
+        {
+          type: 'response.completed',
+          response: {
+            status: 'completed',
+            output: [{
+              type: 'message',
+              content: [{ type: 'output_text', text: 'Here is what I found.' }],
+            }],
+            usage: { input_tokens: 20, output_tokens: 4 },
+          },
+        },
+      ]);
+    }));
+
+    const config = baseConfig(dir, {
+      default: {
+        provider: 'github_copilot',
+        model: 'gpt-5.4-mini',
+        profile: 'default',
+        think: true,
+      },
+      models: { options: ['github_copilot/gpt-5.4-mini'] },
+      providers: {
+        github_copilot: {
+          type: 'openai-compatible',
+          baseUrl: 'https://api.githubcopilot.com',
+          apiKey: 'tid=test',
+        },
+      },
+      webSearch: { enabled: true, maxResults: 3 },
+    });
+    const backend: SearchBackend = {
+      search: async () => [{ title: 'Result', url: 'https://example.com', snippet: 'Useful fact.' }],
+    };
+    const runtime = runtimeFor(dir, config, backend);
+    const summaries: string[] = [];
+    let usage: { reasoningTokens?: number; cachedInputTokens?: number } | undefined;
+    try {
+      const text = await collectStream(runtime.stream(
+        { prompt: 'Any marifold news?', memories: false },
+        result => { usage = result.usage; },
+        summary => summaries.push(summary),
+      ));
+
+      expect(text).toBe('Here is what I found.');
+      expect(summaries.join('')).toBe('Checking sources.');
+      expect(usage).toMatchObject({ cachedInputTokens: 4, reasoningTokens: 3 });
+      expect(bodies[0]).toMatchObject({
+        reasoning: { effort: 'high', summary: 'auto' },
+      });
+      const replay = bodies[1].input as Array<Record<string, unknown>>;
+      expect(replay).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          type: 'reasoning',
+          id: 'rs_1',
+          encrypted_content: 'opaque',
+        }),
+        expect.objectContaining({ type: 'function_call', call_id: 'call_1' }),
+        expect.objectContaining({ type: 'function_call_output', call_id: 'call_1' }),
+      ]));
+      expect(JSON.stringify(replay)).not.toContain('private');
     } finally {
       runtime.close();
     }

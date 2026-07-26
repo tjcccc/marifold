@@ -37,6 +37,9 @@ export function runSummary(elapsedMs: number, usage?: AgentUsage): string {
   if (usage?.cachedInputTokens != null && usage.cachedInputTokens > 0) {
     parts.push(`${usage.cachedInputTokens.toLocaleString()} cached on server`);
   }
+  if (usage?.reasoningTokens != null && usage.reasoningTokens > 0) {
+    parts.push(`${usage.reasoningTokens.toLocaleString()} reasoning`);
+  }
   if (usage?.estimatedCostUSD != null && usage.estimatedCostUSD > 0) {
     parts.push(`$${usage.estimatedCostUSD.toFixed(4)}`);
   }

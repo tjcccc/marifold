@@ -89,6 +89,7 @@ export function registerChatCommand(program: Command, printer: ConsolePrinter): 
           const userContext = [...extraContext, ...pendingContext.splice(0)];
           const images = pendingImages.splice(0);
           let responseStarted = false;
+          let reasoningStarted = false;
           for await (const chunk of runtime.stream({
             prompt: turnPrompt,
             profile: settings.profile,
@@ -99,8 +100,15 @@ export function registerChatCommand(program: Command, printer: ConsolePrinter): 
             think,
             userContext: userContext.length > 0 ? userContext : undefined,
             images: images.length > 0 ? images : undefined,
+          }, undefined, summary => {
+            if (!reasoningStarted) {
+              process.stdout.write(`\n${style.dim('reasoning >')}\n`);
+              reasoningStarted = true;
+            }
+            process.stdout.write(style.dim(summary));
           })) {
             if (!responseStarted) {
+              if (reasoningStarted) process.stdout.write('\n');
               process.stdout.write(`\n${style.bold(`${settings.profile} >`)}\n`);
               responseStarted = true;
             }

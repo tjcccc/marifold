@@ -83,16 +83,32 @@ const verifyPassResponse = response({ text: '{"passed": true, "notes": "objectiv
 
 describe('AgentRunner', () => {
   it('tallies token usage across plan and loop turns', async () => {
-    const withUsage = (partial: Partial<PriestResponse>, usage: { inputTokens: number; outputTokens: number }): PriestResponse =>
-      response({ ...partial, usage: { ...usage, totalTokens: usage.inputTokens + usage.outputTokens, estimatedCostUSD: 0.001 } });
+    const withUsage = (
+      partial: Partial<PriestResponse>,
+      usage: { inputTokens: number; outputTokens: number; reasoningTokens?: number },
+    ): PriestResponse =>
+      response({
+        ...partial,
+        usage: {
+          ...usage,
+          totalTokens: usage.inputTokens + usage.outputTokens,
+          estimatedCostUSD: 0.001,
+        },
+      });
     const engine = new ScriptedEngine([
       withUsage({ text: '{"title": "T", "steps": ["s"]}' }, { inputTokens: 10, outputTokens: 5 }), // plan
-      withUsage({ text: 'Final answer.' }, { inputTokens: 20, outputTokens: 8 }), // loop turn
+      withUsage({ text: 'Final answer.' }, { inputTokens: 20, outputTokens: 8, reasoningTokens: 3 }), // loop turn
     ]);
     const { runner } = makeRunner(engine, [fakeTool()]);
     const events = await collect(runner.run({ objective: 'Do it.', cwd: tempDir(), forcePlan: true }));
     const done = events.find(e => e.type === 'done') as Extract<AgentEvent, { type: 'done' }>;
-    expect(done.usage).toEqual({ inputTokens: 30, outputTokens: 13, totalTokens: 43, estimatedCostUSD: 0.002 });
+    expect(done.usage).toEqual({
+      inputTokens: 30,
+      outputTokens: 13,
+      totalTokens: 43,
+      reasoningTokens: 3,
+      estimatedCostUSD: 0.002,
+    });
   });
 
   it('skips the plan phase by default (adaptive) — first model call is the loop', async () => {
@@ -311,6 +327,10 @@ describe('AgentRunner', () => {
       response({
         text: 'I’ll read the file first.',
         toolCalls: [{ id: 'call_0', name: 'read_file', arguments: { path: 'a.txt' } }],
+        reasoning: {
+          summary: 'I should inspect the file.',
+          continuation: [{ format: 'test.reasoning.v1', value: { encrypted: 'opaque' } }],
+        },
         execution: { provider: 'mock', model: 'test-model', profile: 'default', finishedReason: 'tool_calls' },
       }),
       response({ text: 'The file says hello.' }),
@@ -321,6 +341,7 @@ describe('AgentRunner', () => {
     const types = events.map(e => e.type);
     expect(types).toEqual([
       'status', 'plan',
+      'reasoning',
       'text',
       'tool_request', 'approval_decision', 'tool_result',
       'text', 'status', 'done',
@@ -331,6 +352,10 @@ describe('AgentRunner', () => {
       { type: 'text', text: 'I’ll read the file first.', phase: 'progress' },
       { type: 'text', text: 'The file says hello.', phase: 'final' },
     ]);
+    expect(events.find(event => event.type === 'reasoning')).toEqual({
+      type: 'reasoning',
+      summary: 'I should inspect the file.',
+    });
 
     const done = events[events.length - 1] as Extract<AgentEvent, { type: 'done' }>;
     expect(done.status).toBe('completed');
@@ -342,7 +367,14 @@ describe('AgentRunner', () => {
     // Second loop request must replay the tool exchange.
     const loopRequest = engine.requests[2];
     expect(loopRequest.toolExchange).toMatchObject([
-      { kind: 'assistant', toolCalls: [{ name: 'read_file' }] },
+      {
+        kind: 'assistant',
+        toolCalls: [{ name: 'read_file' }],
+        reasoning: {
+          summary: 'I should inspect the file.',
+          continuation: [{ format: 'test.reasoning.v1' }],
+        },
+      },
       { kind: 'tool_result', toolCallId: 'call_0', content: 'tool output' },
     ]);
     expect(loopRequest.tools?.map(t => t.name)).toEqual(['read_file']);

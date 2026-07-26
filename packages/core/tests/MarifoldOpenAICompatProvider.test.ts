@@ -52,8 +52,8 @@ describe('MarifoldOpenAICompatProvider', () => {
       max_output_tokens: 50,
     });
     expect(requestBody?.input).toEqual([
-      { role: 'system', content: 'You are concise.' },
-      { role: 'user', content: 'Hello' },
+      { role: 'system', content: [{ type: 'input_text', text: 'You are concise.' }] },
+      { role: 'user', content: [{ type: 'input_text', text: 'Hello' }] },
     ]);
   });
 
@@ -147,7 +147,7 @@ describe('MarifoldOpenAICompatProvider', () => {
     expect(requestBody).not.toHaveProperty('think');
   });
 
-  it('translates ChatGPT think=true into the Responses reasoning param (and drops raw think)', async () => {
+  it('translates legacy ChatGPT think=true into neutral Responses reasoning and drops the raw key', async () => {
     let requestBody: Record<string, unknown> | undefined;
     vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
       requestBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
@@ -159,6 +159,80 @@ describe('MarifoldOpenAICompatProvider', () => {
     });
     expect(requestBody).toHaveProperty('reasoning', { effort: 'high' });
     expect(requestBody).not.toHaveProperty('think'); // raw flag never reaches the backend
+  });
+
+  it('preserves safe reasoning summaries, usage subsets, and opaque tool continuation', async () => {
+    const bodies: Array<Record<string, unknown>> = [];
+    let call = 0;
+    vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      bodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+      call += 1;
+      if (call === 1) {
+        return new Response(JSON.stringify({
+          status: 'completed',
+          output: [
+            {
+              type: 'reasoning',
+              id: 'rs_1',
+              summary: [{ type: 'summary_text', text: 'Checked safely.' }],
+              encrypted_content: 'opaque',
+            },
+            { type: 'function_call', call_id: 'call_1', name: 'lookup', arguments: '{"id":"42"}' },
+          ],
+          usage: {
+            input_tokens: 10,
+            input_tokens_details: { cached_tokens: 4 },
+            output_tokens: 7,
+            output_tokens_details: { reasoning_tokens: 3 },
+          },
+        }), { status: 200 });
+      }
+      return new Response(JSON.stringify({
+        status: 'completed',
+        output: [{ type: 'message', content: [{ type: 'output_text', text: 'done' }] }],
+      }), { status: 200 });
+    }));
+
+    const provider = new MarifoldOpenAICompatProvider('https://api.githubcopilot.com', 'tid=test', {
+      providerName: 'github_copilot',
+    });
+    const first = await provider.complete([{ role: 'user', content: 'Find 42.' }], {
+      provider: 'github_copilot',
+      model: 'gpt-5.4-mini',
+      reasoning: { enabled: true, effort: 'high', summary: 'auto' },
+    }, undefined, {
+      tools: [{ name: 'lookup', parameters: { type: 'object' } }],
+    });
+
+    expect(first).toMatchObject({
+      cachedInputTokens: 4,
+      reasoningTokens: 3,
+      reasoning: {
+        summary: 'Checked safely.',
+        continuation: [{ format: 'openai.responses.reasoning.v1' }],
+      },
+    });
+
+    await provider.complete([
+      { role: 'user', content: 'Find 42.' },
+      { role: 'assistant', content: '', toolCalls: first.toolCalls, reasoning: first.reasoning },
+      { role: 'tool', content: 'found', toolCallId: 'call_1', name: 'lookup' },
+    ], {
+      provider: 'github_copilot',
+      model: 'gpt-5.4-mini',
+    });
+
+    expect(bodies[1].input).toEqual([
+      { role: 'user', content: [{ type: 'input_text', text: 'Find 42.' }] },
+      {
+        type: 'reasoning',
+        id: 'rs_1',
+        summary: [{ type: 'summary_text', text: 'Checked safely.' }],
+        encrypted_content: 'opaque',
+      },
+      { type: 'function_call', call_id: 'call_1', name: 'lookup', arguments: '{"id":"42"}' },
+      { type: 'function_call_output', call_id: 'call_1', output: 'found' },
+    ]);
   });
 });
 

@@ -304,6 +304,9 @@ export class AgentRunner {
         }
 
         const { text, calls } = this.extractTurn(response, state);
+        if (response.reasoning?.summary) {
+          yield { type: 'reasoning', summary: response.reasoning.summary };
+        }
         if (text) yield { type: 'text', text, phase: calls.length > 0 ? 'progress' : 'final' };
 
         if (calls.length === 0) {
@@ -312,7 +315,12 @@ export class AgentRunner {
         }
 
         if (state.mode === 'native') {
-          state.exchange.push({ kind: 'assistant', text, toolCalls: calls });
+          state.exchange.push({
+            kind: 'assistant',
+            text,
+            toolCalls: calls,
+            ...(response.reasoning ? { reasoning: response.reasoning } : {}),
+          });
         } else if (text || calls.length > 0) {
           state.transcript.push(`Assistant reply:\n${text || '(tool calls only)'}`);
         }
@@ -744,6 +752,7 @@ function addUsage(total: AgentUsage, usage?: UsageInfo): void {
   if (usage.inputTokens != null) total.inputTokens = (total.inputTokens ?? 0) + usage.inputTokens;
   if (usage.outputTokens != null) total.outputTokens = (total.outputTokens ?? 0) + usage.outputTokens;
   if (usage.cachedInputTokens != null) total.cachedInputTokens = (total.cachedInputTokens ?? 0) + usage.cachedInputTokens;
+  if (usage.reasoningTokens != null) total.reasoningTokens = (total.reasoningTokens ?? 0) + usage.reasoningTokens;
   const turnTotal = usage.totalTokens ?? sumDefined(usage.inputTokens, usage.outputTokens);
   if (turnTotal != null) total.totalTokens = (total.totalTokens ?? 0) + turnTotal;
   if (usage.estimatedCostUSD != null) total.estimatedCostUSD = (total.estimatedCostUSD ?? 0) + usage.estimatedCostUSD;
@@ -755,5 +764,10 @@ function sumDefined(a?: number, b?: number): number | undefined {
 }
 
 function hasUsage(usage: AgentUsage): boolean {
-  return usage.inputTokens != null || usage.outputTokens != null || usage.totalTokens != null || usage.estimatedCostUSD != null;
+  return usage.inputTokens != null
+    || usage.outputTokens != null
+    || usage.totalTokens != null
+    || usage.cachedInputTokens != null
+    || usage.reasoningTokens != null
+    || usage.estimatedCostUSD != null;
 }

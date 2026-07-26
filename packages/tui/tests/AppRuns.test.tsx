@@ -24,6 +24,7 @@ function makeRuntime(opts: {
 } = {}) {
   const runSpy = vi.fn();
   const streamSpy = vi.fn();
+  const listSessionsSpy = vi.fn(() => opts.sessions ?? []);
 
   const defaultRun = async function* (): AsyncGenerator<unknown> {
     yield { type: 'done', taskId: 't', status: 'completed' };
@@ -32,7 +33,7 @@ function makeRuntime(opts: {
   const runtime = {
     listSkills: () => [],
     listProfiles: () => [{ name: 'default' }],
-    listSessions: () => opts.sessions ?? [],
+    listSessions: listSessionsSpy,
     getSession: (id: string) => opts.sessionDetail?.id === id ? opts.sessionDetail : undefined,
     resolveSettings: ({ profile }: { profile: string }) => ({ profile, provider: 'p', model: 'm', mode: 'agent' as Mode, think: false }),
     createAgentRunner: () => ({
@@ -50,7 +51,7 @@ function makeRuntime(opts: {
     },
   };
 
-  return { runtime: runtime as unknown as MarifoldRuntime, runSpy, streamSpy };
+  return { runtime: runtime as unknown as MarifoldRuntime, runSpy, streamSpy, listSessionsSpy };
 }
 
 const config = {
@@ -168,7 +169,7 @@ describe('App run routing', () => {
         { role: 'assistant', content: 'Earlier answer', timestamp: summary.updatedAt },
       ],
     };
-    const { runtime } = makeRuntime({ sessions: [summary], sessionDetail: detail });
+    const { runtime, listSessionsSpy } = makeRuntime({ sessions: [summary], sessionDetail: detail });
     const { stdin, lastFrame, unmount } = render(<App runtime={runtime} loadedConfig={config} initial={initial('agent')} />);
     await delay();
     stdin.write('/resume');
@@ -177,6 +178,7 @@ describe('App run routing', () => {
     await delay();
     expect(lastFrame()).toContain('Resume session');
     expect(lastFrame()).toContain('Earlier question about Fedo');
+    expect(listSessionsSpy).toHaveBeenCalledWith(20, 'default', { order: 'recent' });
     stdin.write('\r');
     await delay();
     expect(lastFrame()).toContain('Earlier answer');

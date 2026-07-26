@@ -214,12 +214,12 @@ function ThreadItemView({
     }
     case 'assistant': {
       const run = item.runId ? runs.get(item.runId) : undefined;
-      const progress = item.runPhase === 'progress';
-      const meta = run && run.status !== 'running' && !progress ? runMetaText(run) : undefined;
-      const copyable = !progress && !item.streaming && item.markdown.trim().length > 0;
+      const secondary = item.runPhase === 'progress' || item.runPhase === 'reasoning';
+      const meta = run && run.status !== 'running' && !secondary ? runMetaText(run) : undefined;
+      const copyable = !secondary && !item.streaming && item.markdown.trim().length > 0;
       return (
         <div className={styles.assistant} data-run-phase={item.runPhase}>
-          <Markdown source={item.markdown} muted={progress} />
+          <Markdown source={item.markdown} muted={secondary} />
           {item.streaming ? <span className={styles.cursor} aria-hidden /> : null}
           {meta || copyable ? (
             <div className={styles.responseFooter}>
@@ -434,6 +434,7 @@ function EditGlyph() {
 function runMetaText(run: RunCardState): string {
   const parts = [formatRunDuration(run.startedAt, run.finishedAt)];
   if (run.usage?.totalTokens !== undefined) parts.push(`${formatTokens(run.usage.totalTokens)} tokens`);
+  if (run.usage?.reasoningTokens !== undefined) parts.push(`${formatTokens(run.usage.reasoningTokens)} reasoning`);
   if (run.usage?.estimatedCostUSD !== undefined) parts.push(formatCostUSD(run.usage.estimatedCostUSD));
   return parts.join(' · ');
 }

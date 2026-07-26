@@ -4,7 +4,7 @@ Marifold is a local-first personal AI workspace for profiles, chats, skills, min
 
 The primary surface is the **TUI** — an Ink/React terminal app launched by bare `marifold`. It's agent-first (with a `/chat` mode), rendering chat and agent-event streams with `/` commands, `$skill` invocation, an approval modal, `/btw` mid-run steering, a skills manager, a profile-aware header, and session resume (`--resume`). Skills (`marifold.skill.v0`, run via `$name`) execute as agentic tools: the skill body is authoritative instructions and, in agent mode, the model reads the skill's own bundled files (e.g. a `vars.toml`) to do its work. `marifold init` and `marifold provider add` walk you through choosing a provider/model interactively.
 
-Underneath sits an approval-aware agent loop with native provider tool calling (through `@priest-ai/core` 2.4) and a control-block fallback, narrow built-in tools (file read/write, isolated shell, per-run Python packages, web search, profile delegation), capability-scoped run workspaces, config-driven approval policy, a `marifold agent` command, chat `/search`/`/read`/`/image`, ChatGPT/Copilot OAuth, the `marifold.skillapp.v0` schema spec, and cron-scheduled unattended runs hosted inside `marifold service` — alongside priests-style profile chat, structured per-profile memory, model/provider management, config backup/import, the loopback-only Fastify service API, and ephemeral task-state storage.
+Underneath sits an approval-aware agent loop with native provider tool calling and Responses reasoning continuity (through `@priest-ai/core` 2.8) plus a control-block fallback, narrow built-in tools (file read/write, isolated shell, per-run Python packages, web search, profile delegation), capability-scoped run workspaces, config-driven approval policy, a `marifold agent` command, chat `/search`/`/read`/`/image`, ChatGPT/Copilot OAuth, the `marifold.skillapp.v0` schema spec, and cron-scheduled unattended runs hosted inside `marifold service` — alongside priests-style profile chat, structured per-profile memory, model/provider management, config backup/import, the loopback-only Fastify service API, and ephemeral task-state storage.
 
 For product direction and future scope, see [docs/vision.md](docs/vision.md) and [docs/roadmap.md](docs/roadmap.md). For the terminal app, see [docs/tui.md](docs/tui.md).
 
@@ -40,7 +40,7 @@ For product direction and future scope, see [docs/vision.md](docs/vision.md) and
 - ChatGPT OAuth token refresh before provider requests, mirroring the GitHub Copilot refresh flow.
 - Approval-aware basic agent loop through `marifold agent "<objective>"`.
 - Agent phases: model-generated plan, tool loop, verification, and task summary, all persisted as ephemeral task state.
-- Native provider tool calling via `@priest-ai/core` 2.4 for Ollama, OpenAI-compatible (including the GitHub Copilot Responses API path), and Anthropic providers.
+- Native provider tool calling via `@priest-ai/core` 2.8 for Ollama, OpenAI-compatible Responses (including the GitHub Copilot path), and Anthropic providers. Neutral reasoning configuration, safe provider summaries, opaque multi-turn reasoning continuity, and cached/reasoning token usage are preserved across chat and agent tool loops.
 - Automatic control-block tool fallback (`<tool_call>` prompt blocks) for models without native tool support, plus `--tool-mode auto|native|control-block`.
 - Built-in agent tools: `read_file`, `write_file`, isolated `shell_exec`, per-run `python_package_install`, and `ask_profile` (one-shot delegation to another profile/model).
 - Per-profile approval policy per tool kind (`allow`/`ask`/`deny`), overriding a global `[agent]` default, with an Allow-once / Trust / Deny prompt, `--yes`, and unattended ask-degrades-to-deny behavior.
@@ -83,7 +83,7 @@ For product direction and future scope, see [docs/vision.md](docs/vision.md) and
 - Bulk session clearing with profile/date/keep-last filters.
 - Loopback-only local HTTP service through `marifold service`, with optional bearer-token auth and a CORS origin allowlist (`[service]`).
 - Service routes for health/status, sanitized config, providers, models, profiles, memories, sessions, ask, streaming chat, and live agent runs (SSE `AgentEvent` stream + approval/steer/cancel) — see [docs/service-api.md](docs/service-api.md).
-- Server-sent event streaming for chat chunks through `/v1/chat/stream`.
+- Server-sent event streaming for safe reasoning summaries and answer chunks through `/v1/chat/stream`.
 - Ephemeral task-state storage under `[paths].tasks_dir`, defaulting to `~/.marifold/tasks`.
 - Task API routes for objective, status, plan, events, summary, next action, and profile/session references.
 - Automated CLI command smoke checks through `pnpm command-test`.
@@ -404,7 +404,7 @@ For GitHub Copilot OAuth, Marifold refreshes the short-lived Copilot IDE token f
 
 `[memory].context_limit` caps the combined memory text injected into one provider request. Set it to `0` for unlimited memory injection. `[memory].size_limit` caps `memories/auto_short.jsonl`; low-priority short-term entries are trimmed first while priority `0` entries are preserved where possible.
 
-`[default].think` controls default thinking mode. Thinking is passed as provider option `think` only to providers known to support it: Ollama-compatible providers plus `bailian` and `alibaba_cloud`.
+`[default].think` controls default thinking mode. Marifold sends Priest's provider-neutral reasoning configuration to Ollama, Anthropic, ChatGPT, and Responses-only GitHub Copilot models. The legacy raw `think` option remains only for `bailian` and `alibaba_cloud`. When a provider returns a safe reasoning summary, Marifold renders it separately from the answer; opaque provider continuation data is replayed to the provider but never exposed as text.
 
 `[default]` also holds the conversation-context controls. `max_context_tokens` (budget that triggers summary compaction near ~80%; `0` disables it) and `session_context_turns` (hard cap on recent turns the model sees each turn — `"all"`/absent means no cap) are inherited by profiles and overridable per-profile in `profile.toml`. `compaction_keep_turns` (recent turns kept verbatim when compacting; defaults to 6) is global-only. See the `profile.toml` properties table below for the per-profile form.
 

@@ -87,6 +87,7 @@ export type AppAction =
   | { type: 'set_profile'; profile: string; provider: string; model: string; maxContextTokens?: number }
   | { type: 'add_user'; text: string }
   | { type: 'add_item'; item: TranscriptItemData }
+  | { type: 'reasoning_delta'; text: string }
   | { type: 'assistant_delta'; text: string }
   | { type: 'end_assistant' }
   | { type: 'set_running'; running: boolean }
@@ -134,6 +135,15 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       return withItem(state, { kind: 'user', text: action.text });
     case 'add_item':
       return withItem(state, action.item);
+    case 'reasoning_delta': {
+      const transcript = [...state.transcript];
+      const last = transcript[transcript.length - 1];
+      if (!state.streamingAssistant && last?.kind === 'assistant' && last.muted) {
+        transcript[transcript.length - 1] = { ...last, text: last.text + action.text };
+        return { ...state, transcript };
+      }
+      return withItem(state, { kind: 'assistant', text: `Reasoning: ${action.text}`, muted: true });
+    }
     case 'assistant_delta': {
       // Append to the open assistant item, or open a new one.
       if (state.streamingAssistant) {
@@ -211,6 +221,9 @@ function applyAgentEvent(state: AppState, event: AgentEvent): AppState {
       break;
     case 'text':
       next = { ...next, activity: 'thinking' };
+      break;
+    case 'reasoning':
+      next = { ...next, activity: 'reasoning' };
       break;
     case 'approval_request':
       next = { ...next, approval: event.request };

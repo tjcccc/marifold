@@ -99,6 +99,7 @@ describe('SessionResolver display metadata', () => {
     const staleModelSession = await store.get('s1');
     expect(resolver.updateDisplay('s1', { title: 'Important chat', pinned: true })).toBe(true);
     expect(resolver.list().map(session => session.id)).toEqual(['s1', 's2']);
+    expect(resolver.list(50, 'default', { order: 'recent' }).map(session => session.id)).toEqual(['s2', 's1']);
     expect(resolver.latest()?.id).toBe('s2');
     expect(resolver.get('s1')).toMatchObject({
       title: 'Important chat',

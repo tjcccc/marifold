@@ -18,6 +18,10 @@ export function agentEventToItems(event: AgentEvent): TranscriptItemData[] {
       return event.text.trim().length > 0
         ? [{ kind: 'assistant', text: event.text, ...(event.phase === 'progress' ? { muted: true } : {}) }]
         : [];
+    case 'reasoning':
+      return event.summary.trim().length > 0
+        ? [{ kind: 'assistant', text: `Reasoning: ${event.summary}`, muted: true }]
+        : [];
     case 'steering':
       // Queued guidance the runner just picked up for the next model turn.
       return [{ kind: 'notice', tone: 'info', text: `Steering applied: ${event.text}` }];

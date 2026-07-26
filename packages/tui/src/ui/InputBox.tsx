@@ -310,9 +310,13 @@ export function InputBox({
     if (value.length === 0 && placeholder) {
       return [
         <Box key={0}>
-          <Text color={ACCENT} bold>{PROMPT}</Text>
-          <Text color={DIM} inverse>{placeholder.slice(0, 1)}</Text>
-          <Text color={DIM}>{placeholder.slice(1)}</Text>
+          <Box width={PROMPT.length} flexShrink={0}>
+            <Text color={ACCENT} bold>{PROMPT}</Text>
+          </Box>
+          <Box flexGrow={1} flexShrink={1}>
+            <Text color={DIM} inverse>{placeholder.slice(0, 1)}</Text>
+            <Text color={DIM}>{placeholder.slice(1)}</Text>
+          </Box>
         </Box>,
       ];
     }
@@ -336,8 +340,10 @@ export function InputBox({
       const globalIndex = start + idx;
       return (
         <Box key={globalIndex}>
-          {globalIndex === 0 ? <Text color={ACCENT} bold>{PROMPT}</Text> : <Text>{CONT}</Text>}
-          <Box flexGrow={1}>
+          <Box width={PROMPT.length} flexShrink={0}>
+            {globalIndex === 0 ? <Text color={ACCENT} bold>{PROMPT}</Text> : <Text>{CONT}</Text>}
+          </Box>
+          <Box flexGrow={1} flexShrink={1}>
             {renderLine(
               vl.text,
               globalIndex === cursorLine ? cursorColumn : -1,
@@ -404,8 +410,15 @@ function wrapToVisualLines(value: string, width: number): VisualLine[] {
     if (line.length === 0) {
       visual.push({ text: '', start: offset });
     } else {
-      for (let c = 0; c < line.length; c += width) {
-        visual.push({ text: line.slice(c, c + width), start: offset + c });
+      let c = 0;
+      while (c < line.length) {
+        const text = line.slice(c, c + width);
+        visual.push({ text, start: offset + c });
+        c += text.length;
+        // A separator that lands exactly at an automatic wrap boundary should
+        // be consumed by the wrap, not displayed as indentation on the next
+        // visual line. The source value is unchanged.
+        while (c < line.length && line[c] === ' ') c += 1;
       }
     }
     offset += line.length + 1; // account for the consumed newline
@@ -419,11 +432,17 @@ function locateVisualCursor(visual: VisualLine[], cursor: number): { line: numbe
   for (let i = 0; i < visual.length; i += 1) {
     const start = visual[i].start;
     const end = start + visual[i].text.length;
+    const nextStart = visual[i + 1]?.start;
     if (cursor >= start && cursor <= end) {
       // At a wrap boundary (the next visual line continues the same logical line
       // at this offset), show the cursor at the start of that next line.
-      if (cursor === end && i + 1 < visual.length && visual[i + 1].start === end) continue;
+      if (cursor === end && nextStart === end) continue;
       return { line: i, column: cursor - start };
+    }
+    // Whitespace consumed at an automatic wrap boundary has no visible column.
+    // Place its caret at the start of the continuation line.
+    if (nextStart !== undefined && cursor > end && cursor < nextStart) {
+      return { line: i + 1, column: 0 };
     }
   }
   const last = visual.length - 1;

@@ -20,6 +20,7 @@ import { exchangeGitHubTokenForCopilotToken } from '../config/GitHubCopilotAuth'
 import { createSearchBackend } from '../search/createSearchBackend';
 import { formatSearchResults, SearchBackend } from '../search/SearchBackend';
 import { ProviderFactory } from '../config/ProviderFactory';
+import { isGitHubCopilotResponsesModelId } from '../config/ProviderRegistry';
 import { MarifoldError } from '../errors/MarifoldError';
 import { prepareImageInputs } from '../images/ImageOptimizer';
 import { MemoryStore } from '../memory/MemoryStore';
@@ -61,10 +62,9 @@ import { defaultSchedulesDir, defaultSkillsDir } from '../workspace/WorkspacePat
 import type { TaskCreateInput, TaskEventInput, TaskListOptions, TaskState, TaskSummary, TaskUpdateInput } from '../tasks/TaskStore';
 import { MarifoldAskResponse, MarifoldResolvedSettings, MarifoldRunRequest } from './MarifoldTypes';
 
-// Providers that honor marifold's think flag. bailian/alibaba_cloud take a raw
-// `{think}` provider option; chatgpt's think is translated to the Responses API
-// `reasoning: {effort}` param inside MarifoldOpenAICompatProvider.
-const THINK_PROVIDER_NAMES = new Set(['bailian', 'alibaba_cloud', 'chatgpt']);
+// Older OpenAI-compatible gateways still take a raw `{think}` body option.
+// Priest 2.8 owns neutral reasoning for Ollama, Anthropic, and Responses.
+const LEGACY_THINK_PROVIDER_NAMES = new Set(['bailian', 'alibaba_cloud']);
 const CHAT_TOOL_MAX_ITERATIONS = 3;
 const EDIT_HISTORY_BUDGET_DEFAULT_CHARS = 16_000;
 
@@ -177,6 +177,7 @@ export class MarifoldRuntime {
   async *stream(
     request: MarifoldRunRequest,
     onComplete?: (summary: { usage?: UsageInfo; latencyMs?: number }) => void,
+    onReasoningSummary?: (text: string) => void,
   ): AsyncGenerator<string, void, unknown> {
     const settings = this.resolveSettings(request);
     const preparedImages = await prepareImageInputs(request.images, { optimize: request.originalImages !== true });
@@ -236,6 +237,8 @@ export class MarifoldRuntime {
             visibleParts.push(visible);
             yield visible;
           }
+        } else if (event.type === 'reasoning_summary_delta') {
+          onReasoningSummary?.(event.text);
         } else if (event.type === 'done') {
           done = event.response;
         }
@@ -291,7 +294,12 @@ export class MarifoldRuntime {
         return;
       }
 
-      exchange.push({ kind: 'assistant', text: done?.text, toolCalls });
+      exchange.push({
+        kind: 'assistant',
+        text: done?.text,
+        toolCalls,
+        ...(done?.reasoning ? { reasoning: done.reasoning } : {}),
+      });
       for (const call of toolCalls) {
         const result = await chatTools.execute(call.name, call.arguments);
         exchange.push({
@@ -966,6 +974,8 @@ export class MarifoldRuntime {
 
   private toPriestConfig(settings: MarifoldResolvedSettings): PriestConfig {
     const { config } = this.options.loadedConfig;
+    const provider = config.providers[settings.provider];
+    const neutralReasoning = this.supportsNeutralReasoning(settings.provider, settings.model);
     return {
       provider: settings.provider,
       model: settings.model,
@@ -975,19 +985,38 @@ export class MarifoldRuntime {
       maxContextTokens: settings.maxContextTokens ?? config.default.maxContextTokens,
       compactionKeepTurns: config.default.compactionKeepTurns,
       sessionContextTurns: settings.sessionContextTurns ?? config.default.sessionContextTurns,
-      providerOptions: this.supportsThink(settings.provider) ? { think: settings.think } : undefined,
+      reasoning: provider?.type === 'ollama'
+        ? {
+            enabled: settings.think,
+            ...(settings.think ? { effort: 'high', summary: 'auto' as const } : {}),
+          }
+        : neutralReasoning && settings.think
+          ? { enabled: true, effort: 'high', summary: 'auto' }
+          : undefined,
+      providerOptions: LEGACY_THINK_PROVIDER_NAMES.has(settings.provider)
+        ? { think: settings.think }
+        : undefined,
     };
   }
 
-  private supportsThink(providerName: string): boolean {
+  private supportsNeutralReasoning(providerName: string, model: string): boolean {
     const provider = this.options.loadedConfig.config.providers[providerName];
-    return provider?.type === 'ollama' || THINK_PROVIDER_NAMES.has(providerName);
+    return provider?.type === 'ollama'
+      || provider?.type === 'anthropic'
+      || providerName === 'chatgpt'
+      || (providerName === 'github_copilot' && isGitHubCopilotResponsesModelId(model));
+  }
+
+  private supportsThink(providerName: string, model: string): boolean {
+    return LEGACY_THINK_PROVIDER_NAMES.has(providerName)
+      || this.supportsNeutralReasoning(providerName, model);
   }
 
   /** Whether the profile's resolved provider honors thinking mode — so a channel
    * can tell the user when `/think` would have no effect. */
   profileSupportsThink(profile: string): boolean {
-    return this.supportsThink(this.resolveSettings({ profile }).provider);
+    const settings = this.resolveSettings({ profile });
+    return this.supportsThink(settings.provider, settings.model);
   }
 
   private memoryForRequest(profile: string, requestMemories = true, prompt = '', thinking = false): string[] {
@@ -1080,6 +1109,7 @@ function sumUsage(a: UsageInfo | undefined, b: UsageInfo | undefined): UsageInfo
     outputTokens: add(a.outputTokens, b.outputTokens),
     totalTokens: add(a.totalTokens, b.totalTokens),
     cachedInputTokens: add(a.cachedInputTokens, b.cachedInputTokens),
+    reasoningTokens: add(a.reasoningTokens, b.reasoningTokens),
     estimatedCostUSD: add(a.estimatedCostUSD, b.estimatedCostUSD),
   };
 }

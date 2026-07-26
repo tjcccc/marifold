@@ -105,8 +105,9 @@ event: tool_request
 data: {"type":"tool_request", ...}
 ```
 
-- `data:` is always a self-describing JSON object (it repeats the event
-  name as `type`), so generic `onmessage` parsing works too.
+- Run-stream `data:` is a self-describing `AgentEvent` object that repeats the
+  event name as `type`. Chat frames use the `event:` name with a compact
+  `{text}` or `{}` payload.
 - Comment frames (`: ping`) arrive every 15 s as keepalives — ignore them.
 - **Runs stream** (`/v1/runs/:id/events`) is *resumable*: every frame has an
   `id:` sequence number, a `retry: 3000` hint is sent at open, and a
@@ -115,9 +116,11 @@ data: {"type":"tool_request", ...}
   backfill from the run's durable task record (`GET /v1/tasks/:taskId`).
 - **Chat stream** (`/v1/chat/stream`) is *one-shot*: it is a POST whose
   reconnect would re-run the prompt, so it has no ids and no resume. Events:
-  `chunk` (`{"text": "..."}`) repeated, then `done` (`{}`); on failure an
-  `error` event (error envelope shape) followed by `done`. Client disconnect
-  aborts the in-flight model call.
+  optional `reasoning` (`{"text": "..."}`) safe-summary fragments, `chunk`
+  (`{"text": "..."}`) answer fragments, then `done` (`{}`); on failure an
+  `error` event (error envelope shape) followed by `done`. Opaque provider
+  reasoning continuation is never serialized. Client disconnect aborts the
+  in-flight model call.
 
 ## Route reference
 
@@ -307,6 +310,7 @@ core — the same contract the TUI renders):
 { "type": "status",  "taskId": "task_x", "status": "running" }            // first event; also on terminal transitions
 { "type": "plan",    "taskId": "task_x", "plan": [{ "id": "s1", "text": "...", "status": "pending", ... }] }
 { "type": "step",    "taskId": "task_x", "stepId": "s1", "text": "...", "status": "completed" }
+{ "type": "reasoning", "summary": "safe provider reasoning summary" }
 { "type": "text",    "text": "checking the referenced files", "phase": "progress" }
 { "type": "text",    "text": "the completed answer", "phase": "final" }
 { "type": "steering","taskId": "task_x", "text": "user guidance just applied" }
@@ -322,7 +326,8 @@ core — the same contract the TUI renders):
 { "type": "error", "code": "...", "message": "..." }
 { "type": "done",  "taskId": "task_x", "status": "completed", "summary": "...",
   "usage": { "inputTokens": 900, "outputTokens": 120, "totalTokens": 1020,
-             "cachedInputTokens": 0, "estimatedCostUSD": 0.001 } }        // always the last event
+             "cachedInputTokens": 0, "reasoningTokens": 80,
+             "estimatedCostUSD": 0.001 } }                               // always the last event
 ```
 
 Tool `kind` is `read | write | shell | network | delegate`. Render unknown
@@ -330,6 +335,9 @@ event types as no-ops — the union may grow within v1. A `text.phase` of
 `progress` identifies model commentary emitted before a tool call; `final`
 identifies the completed answer. Treat an omitted phase as `final` for
 compatibility with older streams.
+`reasoning.summary` is provider-designated safe summary text. Clients may show
+it as secondary progress, but must not expect or request a provider's opaque
+reasoning continuation payload; that remains inside the model transport.
 
 #### The approval sequence
 

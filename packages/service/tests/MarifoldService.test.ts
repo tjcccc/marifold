@@ -299,6 +299,70 @@ describe('MarifoldService', () => {
     }
   });
 
+  it('streams safe Responses reasoning separately without exposing opaque continuation', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => {
+      const events = [
+        { type: 'response.reasoning_summary_text.delta', delta: 'Checked safely.' },
+        { type: 'response.output_text.delta', delta: 'Final answer.' },
+        {
+          type: 'response.completed',
+          response: {
+            status: 'completed',
+            output: [
+              {
+                type: 'reasoning',
+                id: 'rs_1',
+                summary: [{ type: 'summary_text', text: 'Checked safely.' }],
+                encrypted_content: 'private-opaque-state',
+              },
+              {
+                type: 'message',
+                content: [{ type: 'output_text', text: 'Final answer.' }],
+              },
+            ],
+          },
+        },
+      ];
+      return new Response(
+        events.map(event => `data: ${JSON.stringify(event)}\n\n`).join('') + 'data: [DONE]\n\n',
+        { status: 200, headers: { 'Content-Type': 'text/event-stream' } },
+      );
+    }));
+
+    const dir = tempDir();
+    const loaded = fixtureLoadedConfig(dir, {
+      default: {
+        provider: 'chatgpt',
+        model: 'gpt-5-codex',
+        profile: 'default',
+        think: true,
+      },
+      models: { options: ['chatgpt/gpt-5-codex'] },
+      providers: {
+        chatgpt: {
+          type: 'openai-compatible',
+          baseUrl: 'https://chatgpt.com/backend-api/codex',
+          apiKey: 'test-access-token',
+        },
+      },
+    });
+    const server = createMarifoldService({ loadedConfig: loaded, scheduler: false });
+    try {
+      const response = await server.inject({
+        method: 'POST',
+        url: '/v1/chat/stream',
+        payload: { prompt: 'Answer safely.', memories: false },
+      });
+      expect(response.statusCode).toBe(200);
+      expect(response.body.indexOf('event: reasoning')).toBeLessThan(response.body.indexOf('event: chunk'));
+      expect(response.body).toContain('data: {"text":"Checked safely."}');
+      expect(response.body).toContain('data: {"text":"Final answer."}');
+      expect(response.body).not.toContain('private-opaque-state');
+    } finally {
+      await server.close();
+    }
+  });
+
   it('truncates a session from an edited user turn', async () => {
     const dir = tempDir();
     const loaded = fixtureLoadedConfig(dir);

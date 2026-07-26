@@ -57,13 +57,20 @@ prompt.
   queued and handed to the model on its next turn. With no run active, it is sent
   as a normal message.
 - `/stop` (or Esc / Ctrl+C while running) cancels the current run.
+- `/think on|off` maps to Priest's provider-neutral reasoning configuration on
+  Ollama, Anthropic, ChatGPT, and Responses-only GitHub Copilot models (with
+  legacy provider options retained for Bailian-compatible endpoints). Safe
+  provider summaries appear as muted `Reasoning:` rows before the answer;
+  opaque continuation data is never rendered.
 - `/attach-original <prompt>` sends every image attached to that message with
   its original encoded bytes, then returns to default optimization for the next
   message. Validation, the four-image count limit, and the 16 MiB aggregate
   source limit still apply. Normal sends resize large images and choose a
   smaller high-fidelity encoding while preserving transparency and animation.
 - `/resume` opens a recent-session picker for the current profile; choose with
-  Up/Down and Enter. `/session` remains as a compatibility alias.
+  Up/Down and Enter. It is ordered strictly by conversation recency; Web UI
+  session pins do not influence this TUI workflow. `/session` remains as a
+  compatibility alias.
 - `/skills` opens an arrow-key list: Enter runs the selected skill, Del removes it.
 - `/agent` / `/chat` switch the **current session's** mode. `/agent default` /
   `/chat default` additionally persist it as the active profile's default mode

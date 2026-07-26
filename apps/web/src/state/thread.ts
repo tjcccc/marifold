@@ -79,8 +79,8 @@ export type ThreadItem =
       markdown: string;
       streaming?: boolean;
       runId?: string;
-      /** Model commentary before a tool call vs the run's completed answer. */
-      runPhase?: 'progress' | 'final';
+      /** Safe reasoning summary, model commentary, or the completed answer. */
+      runPhase?: 'reasoning' | 'progress' | 'final';
     }
   | { id: string; kind: 'run'; run: RunCardState }
   | { id: string; kind: 'notice'; tone: 'info' | 'warn' | 'error'; text: string };
@@ -105,6 +105,7 @@ export type ThreadAction =
   | { type: 'user_message'; text: string; attachments?: UserAttachment[] }
   | { type: 'edit_user_message'; itemId: string; text: string; attachments?: UserAttachment[] }
   | { type: 'chat_started' }
+  | { type: 'chat_reasoning'; text: string }
   | { type: 'chat_chunk'; text: string }
   | { type: 'chat_done' }
   | { type: 'chat_error'; message: string }
@@ -214,6 +215,9 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
 
     case 'chat_chunk':
       return updateStreamingAssistant(state, item => ({ ...item, markdown: item.markdown + action.text }));
+
+    case 'chat_reasoning':
+      return updateChatReasoning(state, action.text);
 
     case 'chat_done':
       return markLatestPendingUserPersisted(
@@ -341,6 +345,14 @@ function applyRunEvent(state: ThreadState, runId: string, seq: number, event: Ag
       break;
     }
 
+    case 'reasoning': {
+      next = updateRun(next, runId, run => ({ ...run, lastSeq: seq }));
+      if (event.summary.trim().length > 0) {
+        next = appendRunText(next, runId, `Reasoning: ${event.summary}`, 'reasoning');
+      }
+      break;
+    }
+
     case 'steering':
       next = updateRun(next, runId, run => ({
         ...run,
@@ -444,7 +456,7 @@ function appendRunText(
   state: ThreadState,
   runId: string,
   text: string,
-  runPhase: 'progress' | 'final',
+  runPhase: 'reasoning' | 'progress' | 'final',
 ): ThreadState {
   const closed = updateStreamingRunText(state, runId);
   const lastRunItem = closed.items.findLastIndex(
@@ -453,6 +465,32 @@ function appendRunText(
   );
   const assistant = { kind: 'assistant' as const, markdown: text, streaming: true, runId, runPhase };
   return lastRunItem === -1 ? append(closed, assistant) : insert(closed, lastRunItem + 1, assistant);
+}
+
+function updateChatReasoning(state: ThreadState, text: string): ThreadState {
+  const answerIndex = state.items.findLastIndex(
+    item => item.kind === 'assistant' && item.streaming && item.runId === undefined,
+  );
+  if (answerIndex === -1) return state;
+  const reasoningIndex = answerIndex - 1;
+  const previous = state.items[reasoningIndex];
+  if (previous?.kind === 'assistant' && previous.runPhase === 'reasoning') {
+    const items = [...state.items];
+    items[reasoningIndex] = { ...previous, markdown: previous.markdown + text };
+    return { ...state, items };
+  }
+  const seq = state.seq + 1;
+  const reasoning: ThreadItem = {
+    id: `item_${seq}`,
+    kind: 'assistant',
+    markdown: `Reasoning: ${text}`,
+    runPhase: 'reasoning',
+  };
+  return {
+    ...state,
+    seq,
+    items: [...state.items.slice(0, answerIndex), reasoning, ...state.items.slice(answerIndex)],
+  };
 }
 
 function updateStreamingRunText(state: ThreadState, runId: string): ThreadState {

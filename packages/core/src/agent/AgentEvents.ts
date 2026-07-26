@@ -11,6 +11,8 @@ export interface AgentUsage {
   totalTokens?: number;
   /** Portion of inputTokens served from the provider's prompt cache, when reported. */
   cachedInputTokens?: number;
+  /** Portion of outputTokens used for provider reasoning, when reported. */
+  reasoningTokens?: number;
   estimatedCostUSD?: number;
 }
 
@@ -30,6 +32,9 @@ export type AgentEvent =
        * completed answer. Omitted events from older clients are final. */
       phase?: 'progress' | 'final';
     }
+  /** Provider-supplied safe reasoning summary. Opaque/private reasoning state
+   * never crosses the renderer contract. */
+  | { type: 'reasoning'; summary: string }
   /** User guidance queued mid-run (`/btw` or a service steer call), emitted
    * when the runner drains it — so every attached client sees it in context. */
   | { type: 'steering'; taskId: string; text: string }

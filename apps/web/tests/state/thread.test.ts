@@ -41,15 +41,22 @@ describe('threadReducer', () => {
       { type: 'session_loaded', turns: [{ role: 'user', content: 'hi' }, { role: 'assistant', content: 'hello' }] },
       { type: 'user_message', text: 'again' },
       { type: 'chat_started' },
+      { type: 'chat_reasoning', text: 'Check' },
+      { type: 'chat_reasoning', text: 'ing.' },
       { type: 'chat_chunk', text: 'wor' },
       { type: 'chat_chunk', text: 'ld' },
     );
-    expect(state.items.map(i => i.kind)).toEqual(['user', 'assistant', 'user', 'assistant']);
-    const streaming = state.items[3];
+    expect(state.items.map(i => i.kind)).toEqual(['user', 'assistant', 'user', 'assistant', 'assistant']);
+    expect(state.items[3]).toMatchObject({
+      kind: 'assistant',
+      markdown: 'Reasoning: Checking.',
+      runPhase: 'reasoning',
+    });
+    const streaming = state.items[4];
     expect(streaming).toMatchObject({ kind: 'assistant', markdown: 'world', streaming: true });
 
     state = reduce(state, { type: 'chat_done' });
-    expect(state.items[3]).toMatchObject({ streaming: false });
+    expect(state.items[4]).toMatchObject({ streaming: false });
     expect(state.items[2]).toMatchObject({ kind: 'user', sessionUserTurnIndex: 1 });
   });
 
@@ -131,6 +138,7 @@ describe('threadReducer', () => {
       ...runEvents('run_1', [
         { type: 'status', taskId: 'task_9', status: 'running' },
         { type: 'plan', taskId: 'task_9', plan: [{ id: 's1', text: 'Read', status: 'in_progress', createdAt: '', updatedAt: '' }] },
+        { type: 'reasoning', summary: 'The notes are the relevant source.' },
         { type: 'text', text: 'I’ll check the notes first.', phase: 'progress' },
         { type: 'tool_request', call: { id: 'c1', tool: 'read_file', kind: 'read', input: {}, summary: 'read notes.md' } },
         { type: 'tool_result', callId: 'c1', tool: 'read_file', summary: 'read 1.2KB', isError: false },
@@ -145,7 +153,7 @@ describe('threadReducer', () => {
       status: 'completed',
       summary: 'Done',
       collapsed: true,
-      lastSeq: 8,
+      lastSeq: 9,
     });
     expect(run.rows).toEqual([
       { callId: 'c1', tool: 'read_file', kind: 'read', summary: 'read 1.2KB', phase: 'done', isError: false },
@@ -154,9 +162,10 @@ describe('threadReducer', () => {
     // Progress commentary and the final answer stay distinct so renderers can
     // mute only the former. The previous progress cursor closes immediately.
     const prose = state.items.filter(i => i.kind === 'assistant');
-    expect(prose).toHaveLength(2);
-    expect(prose[0]).toMatchObject({ markdown: 'I’ll check the notes first.', runId: 'run_1', runPhase: 'progress', streaming: false });
-    expect(prose[1]).toMatchObject({ markdown: 'All done.', runId: 'run_1', runPhase: 'final', streaming: false });
+    expect(prose).toHaveLength(3);
+    expect(prose[0]).toMatchObject({ markdown: 'Reasoning: The notes are the relevant source.', runId: 'run_1', runPhase: 'reasoning', streaming: false });
+    expect(prose[1]).toMatchObject({ markdown: 'I’ll check the notes first.', runId: 'run_1', runPhase: 'progress', streaming: false });
+    expect(prose[2]).toMatchObject({ markdown: 'All done.', runId: 'run_1', runPhase: 'final', streaming: false });
   });
 
   it('drops replayed events with seq <= lastSeq', () => {

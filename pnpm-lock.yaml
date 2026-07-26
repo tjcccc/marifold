@@ -95,8 +95,8 @@ importers:
   packages/core:
     dependencies:
       '@priest-ai/core':
-        specifier: ^2.7.0
-        version: 2.7.0
+        specifier: file:../../../priest-typescript
+        version: file:../priest-typescript
       better-sqlite3:
         specifier: ^11.10.0
         version: 11.10.0
@@ -822,8 +822,8 @@ packages:
     engines: {node: '>=18'}
     hasBin: true
 
-  '@priest-ai/core@2.7.0':
-    resolution: {integrity: sha512-G0GYupZZGAI53cqvA7EDn+D+u+c4A+WGIJBKvBKy4mYykrZ1uajt0Vt9YA1qjRPHlTxTns6GoP2SkE64AKmnGg==}
+  '@priest-ai/core@file:../priest-typescript':
+    resolution: {directory: ../priest-typescript, type: directory}
     engines: {node: '>=18.0.0'}
 
   '@rolldown/pluginutils@1.0.0-beta.27':
@@ -2600,7 +2600,7 @@ snapshots:
     dependencies:
       playwright: 1.61.1
 
-  '@priest-ai/core@2.7.0':
+  '@priest-ai/core@file:../priest-typescript':
     dependencies:
       better-sqlite3: 11.10.0
 
