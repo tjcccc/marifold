@@ -2,6 +2,12 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-07-26 — v0.51.1 — TypeScript 7 native compiler
+
+- Upgraded every workspace from TypeScript 5.9.3 to TypeScript 7.0.2, including the native platform compiler packages in the pnpm lockfile.
+- Replaced the removed legacy Node module resolver with `NodeNext` for core, service, and CLI builds. TUI remains on `NodeNext`, while the Vite WebUI retains its `Bundler` override.
+- Verified the frozen install, full workspace typecheck/build/test gate (547 tests), React WebUI production bundle, and 123 CLI command smoke checks. The full workspace typecheck completes in about 0.68 seconds on the development machine.
+
 ## 2026-07-24 — v0.51.0 — Direct skills and contact-style profiles
 
 - Web/service `$skill [args]` turns now resolve the selected profile/global skill in core before model execution instead of asking the agent to search filesystem paths. Expanded instructions and the exact bundled-file directory are request-scoped, while the original invocation remains in durable transcript history.
