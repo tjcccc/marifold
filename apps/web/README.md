@@ -32,7 +32,7 @@ slip into a compile error).
 
 ```sh
 # 1. Run the service with the Vite dev origin allowed:
-pnpm marifold service --cors-origin http://localhost:5173
+pnpm marifold service --cors-origin http://127.0.0.1:5173
 
 # 2. Run the dev server (proxies nothing; talks straight to :32140):
 pnpm --filter @marifold/web dev
@@ -81,6 +81,15 @@ cancelled, and the built-in `default` profile cannot be removed. The user must
 type the exact profile name in the destructive dialog before its final action
 enables. Removal deletes the profile directory (instructions, memories, skills,
 and avatar) but preserves its SQLite conversation history.
+
+Provider Config uses the same typed-confirmation pattern. A provider cannot be
+removed while it is the global default or referenced by a profile override.
+Removal clears its local credentials/config and saved model options without
+touching provider-owned models or remote accounts. OAuth provider pages expose
+a **Re-authenticate…** dialog with a copyable
+`pnpm marifold provider reauth <provider>` command. The command runs on the
+service host because a remotely forwarded browser's loopback callback points at
+the client machine, not the Mac hosting Marifold.
 
 Office source files are limited to 16 MiB, selected expanded XML to 8 MiB, and
 extracted prompt text to 256 KiB. Embedded images, charts, complex formatting,

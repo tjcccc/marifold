@@ -223,9 +223,41 @@ async function promptProviderSetupIfNeeded(
   if (entry?.kind !== 'oauth') return;
   if (providerHasUsableCredential(loadedConfig.config.providers[provider], options)) return;
 
+  await reauthenticateOAuthProvider(loadedConfig, getPrompt, style, provider);
+}
+
+/** Force a fresh credential flow for a registry-managed OAuth provider while
+ * preserving its non-credential settings (for example proxy and base URL). */
+export async function reauthenticateOAuthProvider(
+  loadedConfig: LoadedMarifoldConfig,
+  getPrompt: PromptFactory,
+  style: TerminalStyle,
+  provider: string,
+): Promise<MarifoldProviderConfig> {
+  const entry = listProviderRegistry().find(item => item.name === provider);
+  if (!entry) {
+    throw MarifoldError.configInvalid(`Unknown provider '${provider}'.`);
+  }
+  if (entry.kind !== 'oauth') {
+    throw MarifoldError.configInvalid(
+      `Provider '${provider}' does not use Marifold-managed OAuth. Update its API key or API key environment variable instead.`,
+    );
+  }
+
   const credentials = await promptOAuthCredentials(getPrompt, style, entry);
   const current = loadedConfig.config.providers[provider] ?? { type: entry.type };
-  loadedConfig.config.providers[provider] = {
+  const updated = applyOAuthCredentials(current, entry, credentials);
+  loadedConfig.config.providers[provider] = updated;
+  return updated;
+}
+
+/** Pure credential replacement used by setup and explicit re-authentication. */
+export function applyOAuthCredentials(
+  current: MarifoldProviderConfig,
+  entry: ProviderRegistryEntry,
+  credentials: Partial<MarifoldProviderConfig>,
+): MarifoldProviderConfig {
+  const updated: MarifoldProviderConfig = {
     ...current,
     type: entry.type,
     baseUrl: credentials.baseUrl ?? current.baseUrl ?? entry.defaultBaseUrl,
@@ -233,10 +265,17 @@ async function promptProviderSetupIfNeeded(
     apiKey: credentials.apiKey,
     oauthToken: credentials.oauthToken,
     apiKeyExpiresAt: credentials.apiKeyExpiresAt,
-    // ChatGPT subscription: the account id authorizes the Codex backend; without
-    // it the chatgpt-account-id header is empty and chat requests are rejected.
-    accountId: credentials.accountId ?? current.accountId,
+    accountId: credentials.accountId,
   };
+  // Keep the in-memory config as clean as the serialized TOML: switching from
+  // OAuth to a manual credential must not retain an obsolete refresh token,
+  // expiry, or ChatGPT account id.
+  if (!updated.apiKeyEnv) delete updated.apiKeyEnv;
+  if (!updated.apiKey) delete updated.apiKey;
+  if (!updated.oauthToken) delete updated.oauthToken;
+  if (updated.apiKeyExpiresAt === undefined) delete updated.apiKeyExpiresAt;
+  if (!updated.accountId) delete updated.accountId;
+  return updated;
 }
 
 async function promptOAuthCredentials(
@@ -368,11 +407,19 @@ async function readRequiredSecret(getPrompt: PromptFactory, style: TerminalStyle
   return value;
 }
 
-function providerHasUsableCredential(provider: MarifoldProviderConfig | undefined, options: ModelAddSetupOptions): boolean {
+export function providerHasUsableCredential(
+  provider: MarifoldProviderConfig | undefined,
+  options: ModelAddSetupOptions,
+): boolean {
   if (options.apiKeyEnv) return true;
   if (!provider) return false;
-  if (provider.apiKey) return true;
   if (provider.apiKeyEnv && process.env[provider.apiKeyEnv]) return true;
+  if (provider.apiKey) {
+    const refreshWindowSeconds = 60;
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    return provider.apiKeyExpiresAt === undefined
+      || provider.apiKeyExpiresAt > nowSeconds + refreshWindowSeconds;
+  }
   return false;
 }
 

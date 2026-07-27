@@ -50,7 +50,7 @@ registerSessionCommand(program, printer);
 // Bare `marifold` (or `marifold --profile x`) launches the Ink TUI. The TUI is
 // an ESM-only package (Ink v7); the CLI is CommonJS, so import it through a
 // real dynamic import the TypeScript CommonJS emit will not downlevel into a
-// require() (which would throw ERR_REQUIRE_ESM on Node 18).
+// require() (which would throw ERR_REQUIRE_ESM).
 const importEsm = new Function('specifier', 'return import(specifier);') as (
   specifier: string,
 ) => Promise<typeof import('@marifold/tui')>;

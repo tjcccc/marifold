@@ -80,7 +80,7 @@ export type ChatStreamEvent =
   | { type: 'chunk'; text: string }
   | { type: 'reasoning'; text: string }
   | { type: 'error'; code: string; message: string }
-  | { type: 'done' };
+  | { type: 'done'; usage?: AgentUsage; latencyMs?: number };
 
 /** Sanitized `/v1/config` view (secrets are booleans server-side). The
  * resolved `agent` section arrives with the static-hosting service change. */

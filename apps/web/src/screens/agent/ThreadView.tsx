@@ -7,8 +7,8 @@ import { ImagePreviewDialog } from '../../components/ImagePreviewDialog';
 import type { PreviewImage } from '../../components/ImagePreviewDialog';
 import type { RunApprovalAction } from '../../api/types';
 import { splitLeading } from '../../lib/commandSyntax';
-import { formatCostUSD, formatRunDuration, formatTokens } from '../../lib/format';
-import type { RunCardState, ThreadItem, UserAttachment } from '../../state/thread';
+import { formatCostUSD, formatDuration, formatRunDuration, formatTokens } from '../../lib/format';
+import type { ResponseMetaState, RunCardState, ThreadItem, UserAttachment } from '../../state/thread';
 import { hasRunActivity, isTrivialRun } from '../../state/thread';
 import { RunCard } from './RunCard';
 import styles from './ThreadView.module.css';
@@ -215,7 +215,13 @@ function ThreadItemView({
     case 'assistant': {
       const run = item.runId ? runs.get(item.runId) : undefined;
       const secondary = item.runPhase === 'progress' || item.runPhase === 'reasoning';
-      const meta = run && run.status !== 'running' && !secondary ? runMetaText(run) : undefined;
+      const meta = !secondary && !item.streaming
+        ? run && run.status !== 'running'
+          ? runMetaText(run)
+          : item.responseMeta?.finishedAt
+            ? responseMetaText(item.responseMeta)
+            : undefined
+        : undefined;
       const copyable = !secondary && !item.streaming && item.markdown.trim().length > 0;
       return (
         <div className={styles.assistant} data-run-phase={item.runPhase}>
@@ -432,10 +438,24 @@ function EditGlyph() {
 
 /** ChatGPT-style suffix under the run's response: `2s · 512 tokens · $0.01`. */
 function runMetaText(run: RunCardState): string {
-  const parts = [formatRunDuration(run.startedAt, run.finishedAt)];
-  if (run.usage?.totalTokens !== undefined) parts.push(`${formatTokens(run.usage.totalTokens)} tokens`);
-  if (run.usage?.reasoningTokens !== undefined) parts.push(`${formatTokens(run.usage.reasoningTokens)} reasoning`);
-  if (run.usage?.estimatedCostUSD !== undefined) parts.push(formatCostUSD(run.usage.estimatedCostUSD));
+  return formatResponseMeta(
+    formatRunDuration(run.startedAt, run.finishedAt),
+    run.usage,
+  );
+}
+
+function responseMetaText(meta: ResponseMetaState): string {
+  const duration = meta.latencyMs !== undefined
+    ? formatDuration(meta.latencyMs)
+    : formatRunDuration(meta.startedAt, meta.finishedAt);
+  return formatResponseMeta(duration, meta.usage);
+}
+
+function formatResponseMeta(duration: string, usage?: ResponseMetaState['usage']): string {
+  const parts = [duration];
+  if (usage?.totalTokens !== undefined) parts.push(`${formatTokens(usage.totalTokens)} tokens`);
+  if (usage?.reasoningTokens !== undefined) parts.push(`${formatTokens(usage.reasoningTokens)} reasoning`);
+  if (usage?.estimatedCostUSD !== undefined) parts.push(formatCostUSD(usage.estimatedCostUSD));
   return parts.join(' · ');
 }
 

@@ -1,5 +1,6 @@
 import fastify, { FastifyInstance, FastifyReply } from 'fastify';
 import {
+  type AgentUsage,
   LoadedMarifoldConfig,
   MarifoldError,
   resolveAgentConfig,
@@ -80,10 +81,11 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
   const runtime = new MarifoldRuntime({ loadedConfig: options.loadedConfig });
   const server = fastify({ logger: options.logger ?? false, bodyLimit: BODY_LIMIT_BYTES });
 
-  registerSecurity(server, resolveSecurityOptions(options.loadedConfig.config.service, {
+  const security = resolveSecurityOptions(options.loadedConfig.config.service, {
     token: options.auth?.token,
     corsOrigins: options.cors?.origins,
-  }));
+  });
+  registerSecurity(server, security);
 
   const scheduler = (options.scheduler ?? true)
     ? runtime.createScheduler(message => server.log.info(message))
@@ -176,7 +178,7 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
 
   server.get('/v1/config', async () => ({
     ok: true,
-    config: publicConfig(options.loadedConfig),
+    config: publicConfig(options.loadedConfig, Boolean(security.token)),
   }));
 
   // Mirrors the CLI's `config set <key> <value>` exactly (same dotted-key
@@ -184,7 +186,7 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
   server.patch('/v1/config', async request => {
     const body = objectBody(request.body);
     runtime.setConfigValue(requiredString(body.key, 'key'), stringValue(body.value, 'value'));
-    return { ok: true, config: publicConfig(options.loadedConfig) };
+    return { ok: true, config: publicConfig(options.loadedConfig, Boolean(security.token)) };
   });
 
   server.get('/v1/providers', async () => ({
@@ -209,6 +211,16 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
     ok: true,
     ...(await runtime.listProviderModels(request.params.name)),
   }));
+
+  server.delete<{ Params: { name: string } }>('/v1/providers/:name', async request => {
+    const result = runtime.removeProvider(request.params.name);
+    return {
+      ok: true,
+      ...result,
+      config: publicConfig(options.loadedConfig, Boolean(security.token)),
+      models: modelsView(options.loadedConfig),
+    };
+  });
 
   // Available skills (name + usage) for the composer's $-autocomplete,
   // profile-scoped so profile skills shadow global ones.
@@ -560,6 +572,8 @@ function assertLoopbackHost(host: string): void {
 
 async function streamChat(reply: FastifyReply, runtime: MarifoldRuntime, request: MarifoldRunRequest): Promise<void> {
   let closed = false;
+  let completion: { usage?: AgentUsage } | undefined;
+  const startedAt = Date.now();
   // A disconnected client must tear down the in-flight provider request, not
   // just stop the SSE writes — otherwise the model keeps generating unbilled-
   // for output after the browser tab is gone.
@@ -577,7 +591,9 @@ async function streamChat(reply: FastifyReply, runtime: MarifoldRuntime, request
   try {
     for await (const chunk of runtime.stream(
       { ...request, signal: abort.signal },
-      undefined,
+      summary => {
+        completion = { usage: summary.usage };
+      },
       text => {
         if (!closed) writeSse(reply, 'reasoning', { text });
       },
@@ -585,7 +601,12 @@ async function streamChat(reply: FastifyReply, runtime: MarifoldRuntime, request
       if (closed) break;
       writeSse(reply, 'chunk', { text: chunk });
     }
-    if (!closed) writeSse(reply, 'done', {});
+    if (!closed) {
+      writeSse(reply, 'done', {
+        ...(completion?.usage ? { usage: completion.usage } : {}),
+        latencyMs: Date.now() - startedAt,
+      });
+    }
   } catch (error) {
     if (!closed) {
       writeSse(reply, 'error', normalizeError(error).error);
@@ -684,7 +705,7 @@ function modelsView(loadedConfig: LoadedMarifoldConfig): JsonObject {
   };
 }
 
-function publicConfig(loadedConfig: LoadedMarifoldConfig): JsonObject {
+function publicConfig(loadedConfig: LoadedMarifoldConfig, hasEffectiveToken: boolean): JsonObject {
   const service = loadedConfig.config.service;
   return {
     default: loadedConfig.config.default,
@@ -711,7 +732,7 @@ function publicConfig(loadedConfig: LoadedMarifoldConfig): JsonObject {
       ...(service?.webDir ? { webDir: service.webDir } : {}),
       ...(service?.tokenEnv ? { tokenEnv: service.tokenEnv } : {}),
       corsOrigins: service?.corsOrigins ?? [],
-      hasToken: Boolean(service?.token),
+      hasToken: hasEffectiveToken,
     },
     providers: Object.fromEntries(
       Object.entries(loadedConfig.config.providers)

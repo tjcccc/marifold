@@ -60,7 +60,7 @@ export function ServicePage({ service, busy, onSave }: ServicePageProps) {
             <input
               className={styles.input}
               value={corsValue}
-              placeholder="http://localhost:5173, https://app.example.com"
+              placeholder="http://127.0.0.1:5173, https://app.example.com"
               onChange={event => setCors(event.target.value)}
             />
             {cors !== undefined && cors !== (service?.corsOrigins ?? []).join(', ') ? (

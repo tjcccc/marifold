@@ -49,6 +49,18 @@ export async function getProviderStatus(client: ApiClient): Promise<ProviderStat
   return body.providers;
 }
 
+export interface RemoveProviderResult {
+  removed: boolean;
+  removedModels: string[];
+  config: PublicConfig;
+  models: ModelsView;
+}
+
+/** Remove local provider config, credentials, and its saved model options. */
+export async function removeProvider(client: ApiClient, provider: string): Promise<RemoveProviderResult> {
+  return client.request('DELETE', `/v1/providers/${encodeURIComponent(provider)}`);
+}
+
 /** A skill for the composer's $-autocomplete (GET /v1/skills). */
 export interface SkillHint {
   name: string;

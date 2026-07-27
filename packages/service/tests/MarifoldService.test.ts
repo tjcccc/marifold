@@ -308,6 +308,11 @@ describe('MarifoldService', () => {
           type: 'response.completed',
           response: {
             status: 'completed',
+            usage: {
+              input_tokens: 120,
+              output_tokens: 30,
+              output_tokens_details: { reasoning_tokens: 20 },
+            },
             output: [
               {
                 type: 'reasoning',
@@ -357,6 +362,8 @@ describe('MarifoldService', () => {
       expect(response.body.indexOf('event: reasoning')).toBeLessThan(response.body.indexOf('event: chunk'));
       expect(response.body).toContain('data: {"text":"Checked safely."}');
       expect(response.body).toContain('data: {"text":"Final answer."}');
+      expect(response.body).toContain('"usage":{"inputTokens":120,"outputTokens":30,"totalTokens":150,"reasoningTokens":20}');
+      expect(response.body).toMatch(/"latencyMs":\d+/);
       expect(response.body).not.toContain('private-opaque-state');
     } finally {
       await server.close();

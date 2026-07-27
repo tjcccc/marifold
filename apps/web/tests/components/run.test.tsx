@@ -636,6 +636,33 @@ describe('ThreadView', () => {
     expect(screen.queryByText(/Hide|Show/)).toBeNull();
   });
 
+  it('renders time, token usage, reasoning usage, and cost for a completed chat response', () => {
+    render(
+      <ThreadView
+        items={[{
+          id: 'chat_1',
+          kind: 'assistant',
+          markdown: 'Chat response.',
+          responseMeta: {
+            startedAt: '2026-07-27T03:00:00.000Z',
+            finishedAt: '2026-07-27T03:00:02.250Z',
+            latencyMs: 2250,
+            usage: {
+              totalTokens: 512,
+              reasoningTokens: 20,
+              estimatedCostUSD: 0.01,
+            },
+          },
+        }]}
+        onCancelRun={() => {}}
+        onAnswerApproval={() => {}}
+        onToggleRun={() => {}}
+      />,
+    );
+    expect(screen.getByText('Chat response.')).toBeTruthy();
+    expect(screen.getByText('2s · 512 tokens · 20 reasoning · $0.010')).toBeTruthy();
+  });
+
   it('shows an inline thinking line for a tool-less running run, cancellable', () => {
     const onCancel = vi.fn();
     render(

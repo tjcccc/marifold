@@ -99,9 +99,13 @@ Web search uses DuckDuckGo scraping by default, which requires no API key but ca
 
 ## Setup
 
+Marifold requires Node.js 24 LTS. The repository's `.nvmrc` pins the current
+LTS patch, and `packageManager` pins the compatible pnpm release.
+
 Install and build:
 
 ```bash
+nvm use
 pnpm install
 pnpm build
 ```
@@ -205,6 +209,7 @@ pnpm marifold model default --profile coder --clear
 pnpm marifold provider
 pnpm marifold provider list
 pnpm marifold provider ollama list
+pnpm marifold provider reauth xai
 pnpm marifold provider status
 
 pnpm marifold profile list
@@ -335,7 +340,7 @@ The optional `[service]` section configures API access for browser clients:
 ```toml
 [service]
 token_env = "MARIFOLD_SERVICE_TOKEN"     # bearer token clients must send (preferred over inline `token`)
-cors_origins = ["http://localhost:5173"] # exact-match browser origins allowed to call the API
+cors_origins = ["http://127.0.0.1:5173"] # exact-match browser origins allowed to call the API
 ```
 
 With no token resolved, auth is off (bare loopback, the historic default); with no `cors_origins`, cross-origin browser requests are rejected. `marifold service --token/--token-env/--cors-origin` override the config per start. Auth covers `/v1/*`; `/health` and hosted static files stay reachable.
@@ -386,17 +391,21 @@ pnpm --filter @marifold/web build
 marifold service --web-dir apps/web/dist   # serves the app at http://127.0.0.1:32140
 ```
 
-For development: `marifold service --cors-origin http://localhost:5173` + `pnpm --filter @marifold/web dev`. Set `[service].web_dir` in config.toml to host it permanently.
+For development: `marifold service --cors-origin http://127.0.0.1:5173` + `pnpm --filter @marifold/web dev`. Set `[service].web_dir` in config.toml to host it permanently.
 
 `marifold config export <file>` writes config, profile files, memory files, and optional sessions into a local JSON backup. Treat backups as sensitive if your config contains saved `api_key` or `oauth_token` values.
 
-`marifold model add` stores provider/model choices in `[models].options`. With no arguments it starts an interactive provider picker, prompts for OAuth/manual credentials for OAuth providers such as GitHub Copilot and ChatGPT when no usable credential exists, then shows live provider models when Marifold can list them. Saved credentials use local `[providers.<name>]` fields such as `api_key`, `oauth_token`, and `api_key_expires_at`; existing `api_key_env` configs still work and environment variables take precedence at runtime. The positional `marifold model add <provider> <model>` form remains available for scripts. `marifold provider <name> list` asks the provider for live model names when Marifold knows how to query that provider type.
+`marifold model add` stores provider/model choices in `[models].options`. With no arguments it starts an interactive provider picker, prompts for OAuth/manual credentials for OAuth providers such as GitHub Copilot and ChatGPT when no usable credential exists, then shows live provider models when Marifold can list them. An expired saved access credential is not treated as usable, so setup can start a fresh sign-in when refresh fails. Saved credentials use local `[providers.<name>]` fields such as `api_key`, `oauth_token`, and `api_key_expires_at`; existing `api_key_env` configs still work and environment variables take precedence at runtime. The positional `marifold model add <provider> <model>` form remains available for scripts. `marifold provider <name> list` asks the provider for live model names when Marifold knows how to query that provider type.
+
+`marifold provider reauth <provider>` explicitly replaces saved credentials for the Marifold-managed OAuth providers `github_copilot`, `chatgpt`, and `xai`. It preserves the provider's proxy and other transport configuration plus every saved model choice. Run it on the machine hosting Marifold so browser/device callbacks return to the correct host.
 
 For GitHub Copilot, Marifold offers models compatible with the current chat adapters. Models such as `gpt-5.4` use `/chat/completions`; responses-only models such as `gpt-5.4-mini` use `/responses`.
 
 For GitHub Copilot OAuth, Marifold refreshes the short-lived Copilot IDE token from the saved `oauth_token` before provider requests when the saved token is expired or close to expiry. Pasted Copilot IDE tokens without an `oauth_token` cannot be refreshed automatically.
 
 `marifold model rm <provider/model>` removes a saved model option from Marifold config. It does not delete provider-owned model files, pull caches, or remote model access.
+
+Web Config can remove a non-default provider after typed confirmation. Removal deletes that provider's local configuration, saved credentials, and Marifold model options; it does not revoke a remote account or delete provider-owned models. Clear any profile model overrides that reference the provider first. OAuth provider pages expose **Re-authenticate…** with the exact host-local `marifold provider reauth <provider>` command.
 
 `marifold model validate` validates the default or profile-resolved provider/model. It checks configured provider access and uses live model lists for Ollama and OpenAI-compatible providers when reachable. `marifold model validate --all` validates every saved model option plus global and profile-specific defaults.
 

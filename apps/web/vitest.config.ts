@@ -4,7 +4,7 @@ import { configDefaults, defineConfig } from 'vitest/config';
 // design). Component tests opt into jsdom with a `@vitest-environment jsdom`
 // docblock pragma per file.
 export default defineConfig({
-  esbuild: { jsx: 'automatic' },
+  oxc: { jsx: { runtime: 'automatic' } },
   test: {
     environment: 'node',
     exclude: [...configDefaults.exclude, 'tests/e2e/**'],

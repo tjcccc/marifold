@@ -8,6 +8,7 @@ import {
   getModels,
   getProviderStatus,
   removeModel,
+  removeProvider,
   setConfigValue,
   setDefaultModel,
 } from '../../api/misc';
@@ -245,6 +246,23 @@ export function ConfigScreen({
     }
   }, [client, go, handleError, item]);
 
+  const removeSelectedProvider = useCallback(async () => {
+    if (!item) return;
+    setBusy(true);
+    try {
+      const result = await removeProvider(client, item);
+      setConfig(result.config);
+      setModels(result.models);
+      setProviderStatus(undefined);
+      setProblem(undefined);
+      go('providers');
+    } catch (error) {
+      handleError(error);
+    } finally {
+      setBusy(false);
+    }
+  }, [client, go, handleError, item]);
+
   /** setConfigValue with the shared busy/problem handling; refreshes config. */
   const writeConfig = useCallback(
     async (key: string, value: string) => {
@@ -441,6 +459,12 @@ export function ConfigScreen({
               setProviderStatus(undefined); // re-probe with the new entry
               go('providers', input.name);
             }}
+            onRemoveProvider={() => void removeSelectedProvider()}
+            deleteDisabledReason={
+              item === config?.default.provider
+                ? 'Choose another default model before removing this provider.'
+                : undefined
+            }
           />
         ) : null}
 

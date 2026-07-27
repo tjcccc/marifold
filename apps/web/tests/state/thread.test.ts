@@ -40,7 +40,7 @@ describe('threadReducer', () => {
       createThreadState('sess-1'),
       { type: 'session_loaded', turns: [{ role: 'user', content: 'hi' }, { role: 'assistant', content: 'hello' }] },
       { type: 'user_message', text: 'again' },
-      { type: 'chat_started' },
+      { type: 'chat_started', startedAt: '2026-07-27T03:00:00.000Z' },
       { type: 'chat_reasoning', text: 'Check' },
       { type: 'chat_reasoning', text: 'ing.' },
       { type: 'chat_chunk', text: 'wor' },
@@ -55,8 +55,21 @@ describe('threadReducer', () => {
     const streaming = state.items[4];
     expect(streaming).toMatchObject({ kind: 'assistant', markdown: 'world', streaming: true });
 
-    state = reduce(state, { type: 'chat_done' });
-    expect(state.items[4]).toMatchObject({ streaming: false });
+    state = reduce(state, {
+      type: 'chat_done',
+      finishedAt: '2026-07-27T03:00:02.250Z',
+      latencyMs: 2250,
+      usage: { inputTokens: 120, outputTokens: 30, totalTokens: 150 },
+    });
+    expect(state.items[4]).toMatchObject({
+      streaming: false,
+      responseMeta: {
+        startedAt: '2026-07-27T03:00:00.000Z',
+        finishedAt: '2026-07-27T03:00:02.250Z',
+        latencyMs: 2250,
+        usage: { inputTokens: 120, outputTokens: 30, totalTokens: 150 },
+      },
+    });
     expect(state.items[2]).toMatchObject({ kind: 'user', sessionUserTurnIndex: 1 });
   });
 

@@ -14,22 +14,22 @@
   },
   "dependencies": {
     "@priest-ai/core": "file:../../../priest-typescript",
-    "better-sqlite3": "^11.10.0",
+    "better-sqlite3": "^13.0.1",
     "croner": "^10.0.1",
     "duck-duck-scrape": "^2.2.7",
-    "sharp": "^0.34.5",
-    "smol-toml": "^1.6.1",
-    "undici": "^7.16.0",
+    "sharp": "^0.35.3",
+    "smol-toml": "^1.7.0",
+    "undici": "^7.28.0",
     "yaml": "^2.9.0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
-    "@types/node": "^22.19.19",
+    "@types/node": "^24.13.3",
     "typescript": "^7.0.2",
-    "vitest": "^2.1.9"
+    "vitest": "^4.1.10"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=24.0.0 <25"
   },
   "license": "GPL-3.0-only"
 }

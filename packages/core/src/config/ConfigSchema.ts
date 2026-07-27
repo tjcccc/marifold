@@ -120,7 +120,7 @@ export interface MarifoldServiceConfig {
   /** Bearer token stored directly in config. Prefer `tokenEnv`. */
   token?: string;
   /** Browser origins allowed to call the API (exact match, e.g.
-   * "http://localhost:5173"). Empty = no cross-origin browser access. */
+   * "http://127.0.0.1:5173"). Empty = no cross-origin browser access. */
   corsOrigins: string[];
   /** Directory of built Web UI assets the service hosts at / (SPA fallback
    * to its index.html). Unset = no static hosting, API-only. */

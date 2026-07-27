@@ -218,6 +218,44 @@ sessions_db = "${dir}/sessions.db"
     expect(updated.config.models.options).toContain('openai/gpt-4o-mini');
   });
 
+  it('removes a non-default provider with its credentials and model options', () => {
+    const dir = tempDir();
+    const configPath = path.join(dir, 'config.toml');
+    fs.writeFileSync(configPath, minimalConfigToml(dir));
+    const manager = new ConfigManager(new ConfigLoader().load({ configPath }));
+    manager.addModel('xai', 'grok-4.5', {
+      type: 'openai-compatible',
+      baseUrl: 'https://api.x.ai/v1',
+      apiKey: 'short-lived-access',
+      oauthToken: 'refresh-token',
+    });
+
+    const result = manager.removeProvider('xai');
+    expect(result).toMatchObject({
+      removed: true,
+      removedModels: ['xai/grok-4.5'],
+    });
+
+    const updated = new ConfigLoader().load({ configPath });
+    expect(updated.config.providers.xai).toBeUndefined();
+    expect(updated.config.models.options).not.toContain('xai/grok-4.5');
+    const saved = fs.readFileSync(configPath, 'utf-8');
+    expect(saved).not.toContain('[providers.xai]');
+    expect(saved).not.toContain('refresh-token');
+  });
+
+  it('refuses to remove the current default provider', () => {
+    const dir = tempDir();
+    const configPath = path.join(dir, 'config.toml');
+    fs.writeFileSync(configPath, minimalConfigToml(dir));
+    const manager = new ConfigManager(new ConfigLoader().load({ configPath }));
+
+    expect(() => manager.removeProvider('ollama')).toThrow(
+      /Cannot remove the current default provider 'ollama'/,
+    );
+    expect(manager.config.providers.ollama).toBeDefined();
+  });
+
   it('persists local provider credentials when adding an OAuth model', () => {
     const dir = tempDir();
     const configPath = path.join(dir, 'config.toml');

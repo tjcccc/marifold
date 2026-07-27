@@ -31,7 +31,7 @@ out of the file) or CLI flags (flags win):
 [service]
 token_env = "MARIFOLD_SERVICE_TOKEN"   # preferred
 # token = "inline-secret"             # discouraged
-cors_origins = ["http://localhost:5173"]
+cors_origins = ["http://127.0.0.1:5173"]
 # web_dir = "/path/to/apps/web/dist"  # host the built Web UI at / (or --web-dir)
 ```
 
@@ -117,10 +117,12 @@ data: {"type":"tool_request", ...}
 - **Chat stream** (`/v1/chat/stream`) is *one-shot*: it is a POST whose
   reconnect would re-run the prompt, so it has no ids and no resume. Events:
   optional `reasoning` (`{"text": "..."}`) safe-summary fragments, `chunk`
-  (`{"text": "..."}`) answer fragments, then `done` (`{}`); on failure an
-  `error` event (error envelope shape) followed by `done`. Opaque provider
-  reasoning continuation is never serialized. Client disconnect aborts the
-  in-flight model call.
+  (`{"text": "..."}`) answer fragments, then `done`
+  (`{"latencyMs": 1234, "usage": {"inputTokens": 120, "outputTokens": 30,
+  "totalTokens": 150}}`). `usage` is omitted when the provider does not report
+  it. On failure an `error` event (error envelope shape) is followed by an
+  empty `done`. Opaque provider reasoning continuation is never serialized.
+  Client disconnect aborts the in-flight model call.
 
 ## Route reference
 
@@ -142,6 +144,7 @@ Responses are `{ "ok": true, ... }` unless noted. Bodies are JSON.
 | `GET /v1/providers` | `providers: [{ name, type, baseUrl?, hasApiKey, hasOauthToken, ... }]` |
 | `GET /v1/providers/status` | Live reachability probe per provider (CLI `provider status`): adds `configured`, `reachable` (`null` = not probeable), `models`, `message`. Sanitized — key/token presence booleans and env-var *names* only |
 | `GET /v1/providers/:name/models` | Models the provider serves right now (feeds model pickers): `{ provider, reachable, models, message }`. Never errors — unconfigured/unreachable providers return an empty list with a message |
+| `DELETE /v1/providers/:name` | Remove the provider's local config, stored credentials, and saved model options. Refuses the global default provider and providers referenced by profile overrides. Returns `{ removed, removedModels, config, models }`; provider-owned models and remote accounts are untouched |
 | `GET /v1/models` | `default: { provider, model }` and saved `options: ["provider/model", ...]` |
 | `POST /v1/models` → 201 | Body `{ provider, model, type?, baseUrl?, apiKeyEnv? }` — add a saved option, creating/updating the provider entry (CLI `model add`). **Raw `api_key` values are not accepted over the wire** — set the env-var name and keep secrets in the environment or config file. Returns the models view |
 | `DELETE /v1/models` | Body `{ provider, model }` — remove a saved option; `{ removed, wasDefault }` (the default itself is left untouched) |

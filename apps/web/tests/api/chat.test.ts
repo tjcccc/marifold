@@ -12,7 +12,7 @@ describe('streamChat', () => {
       stream: async () => new Response([
         'event: reasoning\ndata: {"text":"Checked the constraints."}\n\n',
         'event: chunk\ndata: {"text":"Answer"}\n\n',
-        'event: done\ndata: {}\n\n',
+        'event: done\ndata: {"latencyMs":2250,"usage":{"inputTokens":120,"outputTokens":30,"totalTokens":150}}\n\n',
       ].join(''), { status: 200 }),
       blob: async () => undefined,
     };
@@ -25,7 +25,11 @@ describe('streamChat', () => {
     expect(events).toEqual([
       { type: 'reasoning', text: 'Checked the constraints.' },
       { type: 'chunk', text: 'Answer' },
-      { type: 'done' },
+      {
+        type: 'done',
+        latencyMs: 2250,
+        usage: { inputTokens: 120, outputTokens: 30, totalTokens: 150 },
+      },
     ]);
   });
 });

@@ -674,7 +674,11 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
               completed = false;
               dispatch({ type: 'chat_error', message: event.message });
             }
-            else dispatch({ type: 'chat_done' });
+            else dispatch({
+              type: 'chat_done',
+              usage: event.usage,
+              latencyMs: event.latencyMs,
+            });
           }
           if (controller.signal.aborted) completed = false;
           return completed;

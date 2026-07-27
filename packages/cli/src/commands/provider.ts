@@ -8,6 +8,7 @@ import {
   ProviderInspector,
 } from '@marifold/core';
 import { InteractivePrompt } from '../input/InteractivePrompt';
+import { reauthenticateOAuthProvider } from '../input/ModelPicker';
 import { isPromptAbortError, isPromptBackError, PromptAbortError } from '../input/PromptAbort';
 import { selectTerminalOption } from '../input/TerminalSelect';
 import { ConsolePrinter } from '../output/ConsolePrinter';
@@ -165,6 +166,33 @@ export function registerProviderCommand(program: Command, printer: ConsolePrinte
           process.stdout.write(style.dim(`Next: marifold model add ${name}\n`));
           break;
         }
+      } catch (error) {
+        if (isPromptAbortError(error)) {
+          process.stderr.write('Aborted.\n');
+          process.exitCode = 130;
+          return;
+        }
+        printer.printError(error);
+        process.exitCode = 1;
+      } finally {
+        prompt?.close();
+      }
+    });
+
+  provider
+    .command('reauth')
+    .description('Replace saved credentials for a Marifold-managed OAuth provider.')
+    .argument('<name>', 'OAuth provider key: github_copilot, chatgpt, or xai.')
+    .action(async (name: string) => {
+      let prompt: InteractivePrompt | undefined;
+      const getPrompt = (): InteractivePrompt => (prompt ??= new InteractivePrompt());
+      try {
+        const loadedConfig = loadConfig(program);
+        const style = new TerminalStyle();
+        await reauthenticateOAuthProvider(loadedConfig, getPrompt, style, name);
+        const savedPath = new ConfigManager(loadedConfig).save();
+        process.stdout.write(`Re-authenticated provider ${name}.\n`);
+        process.stdout.write(style.dim(`Saved ${savedPath}\n`));
       } catch (error) {
         if (isPromptAbortError(error)) {
           process.stderr.write('Aborted.\n');

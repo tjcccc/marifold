@@ -28,7 +28,7 @@ export function registerServiceCommand(program: Command, printer: ConsolePrinter
     .option('--token-env <name>', 'Require the bearer token held in this environment variable.')
     .option(
       '--cors-origin <origin>',
-      'Allow this browser origin (repeatable), e.g. http://localhost:5173.',
+      'Allow this browser origin (repeatable), e.g. http://127.0.0.1:5173.',
       (value: string, previous: string[]) => [...previous, value],
       [] as string[],
     )

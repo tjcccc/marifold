@@ -2,14 +2,19 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
-## 2026-07-26 — Unreleased (in progress) — Priest 2.8 reasoning integration
+## 2026-07-27 — Unreleased (in progress) — Priest 2.8 and provider lifecycle
 
 - Linked the local `@priest-ai/core` 2.8 package and delegated OpenAI-compatible Responses transport to its new provider implementation while retaining Marifold-owned routing, OAuth headers, proxy selection, and ChatGPT's SSE-only behavior.
 - Replaced product-side `think` branching with Priest's provider-neutral reasoning configuration where supported; Bailian-compatible legacy options remain isolated at the compatibility edge.
 - Preserved safe reasoning summaries, opaque continuation across tool turns, and cached/reasoning usage through core, CLI, TUI, service SSE, and Web renderers without exposing private provider traces.
 - Fixed the TUI's two-column prompt gutter under wrapping pressure: submitted prompts retain the space after `>`, while live-input continuation lines no longer inherit a separator space that lands exactly on the automatic wrap boundary.
 - Made TUI session resume strictly recency-ordered. Web UI pins remain a Web display preference and no longer promote older sessions in the TUI picker or bare `marifold --resume` selection.
-- Added provider-wire, chat/agent tool-loop, usage-accounting, service SSE, TUI, Web stream, and renderer regression coverage. The local-link workspace gate passes 555 tests plus 123 CLI command checks; a manually built Priest tarball also passed TypeScript 5.9/7 consumer types, CJS/ESM, Node 18/20/22/24 imports, and a Node 24 SQLite check.
+- Enlarged the browser favicon to match the in-app marigold mark and standardized Web development on the explicit IPv4 loopback origin `http://127.0.0.1:5173`, avoiding `localhost` resolver and address-family ambiguity.
+- Raised the supported runtime to Node 24 LTS and refreshed the stable dependency surface: React 19.2.8, Ink 7.1.1, Sharp 0.35.3, Fastify 5.10, Undici 7.28, Commander 15, Vite 8.1 with plugin-react 6, Vitest 4.1, Playwright 1.62, smol-toml 1.7, Node 24 types, and pnpm 11.17. Undici stays on Node 24's dispatcher-compatible major so proxied OAuth and provider calls work with the built-in `fetch`; a local proxy regression test guards that boundary. Vitest JSX transforms now use Vite 8's Oxc configuration instead of the deprecated esbuild compatibility path.
+- Aligned `better-sqlite3` 13.0.1 with Priest so one native SQLite implementation owns session databases; loading majors 11 and 13 in the same process produced corruption symptoms. The production dependency audit now reports zero advisories.
+- Added guarded provider removal to Web Config and the service API: typed confirmation clears local credentials/config plus saved model options, while global-default and profile-override references block deletion. `marifold provider reauth` now replaces GitHub Copilot, ChatGPT, or xAI OAuth credentials without deleting provider settings/models; Web Config exposes the copyable host-local command. Expired OAuth access tokens trigger fresh setup, and the Service page correctly reports environment-resolved bearer authentication.
+- Added completion metadata to plain Web chat streams: successful `done` events carry end-to-end latency and provider-reported usage, and chat responses now show the same time, token, reasoning, and estimated-cost footer as agent responses.
+- Added provider-wire, chat/agent tool-loop, usage-accounting, service SSE, TUI, Web stream, and renderer regression coverage. The local-link workspace gate passes 565 tests plus 123 CLI command checks; a manually built Priest tarball also passed TypeScript 5.9/7 consumer types, CJS/ESM, Node 18/20/22/24 imports, and a Node 24 SQLite check.
 - Still open before release: finish the practical TUI/Web smoke pass, publish Priest 2.8.0, replace the local `file:` dependency with the registry version, and cut the Marifold release version.
 
 ## 2026-07-26 — v0.51.1 — TypeScript 7 native compiler

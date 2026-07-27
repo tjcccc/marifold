@@ -45,6 +45,14 @@ export interface RunCardState {
   collapsed: boolean;
 }
 
+export interface ResponseMetaState {
+  startedAt: string;
+  finishedAt?: string;
+  /** End-to-end service latency for this chat request. */
+  latencyMs?: number;
+  usage?: AgentUsage;
+}
+
 /** What the user bubble shows for an attachment; the payload itself goes to
  * the service (images) or is inlined into the prompt (text files). */
 export interface UserAttachment {
@@ -81,6 +89,9 @@ export type ThreadItem =
       runId?: string;
       /** Safe reasoning summary, model commentary, or the completed answer. */
       runPhase?: 'reasoning' | 'progress' | 'final';
+      /** Completion metadata for a plain chat turn. Agent turns resolve the
+       * equivalent data through their runId. */
+      responseMeta?: ResponseMetaState;
     }
   | { id: string; kind: 'run'; run: RunCardState }
   | { id: string; kind: 'notice'; tone: 'info' | 'warn' | 'error'; text: string };
@@ -104,10 +115,10 @@ export type ThreadAction =
     }
   | { type: 'user_message'; text: string; attachments?: UserAttachment[] }
   | { type: 'edit_user_message'; itemId: string; text: string; attachments?: UserAttachment[] }
-  | { type: 'chat_started' }
+  | { type: 'chat_started'; startedAt?: string }
   | { type: 'chat_reasoning'; text: string }
   | { type: 'chat_chunk'; text: string }
-  | { type: 'chat_done' }
+  | { type: 'chat_done'; usage?: AgentUsage; latencyMs?: number; finishedAt?: string }
   | { type: 'chat_error'; message: string }
   | { type: 'run_created'; run: RunRecord }
   | { type: 'run_event'; runId: string; seq: number; event: AgentEvent }
@@ -208,9 +219,15 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
 
     case 'chat_started': {
       const replacingIndex = state.items.findIndex(item => item.kind === 'user' && item.replacing);
+      const assistant = {
+        kind: 'assistant' as const,
+        markdown: '',
+        streaming: true,
+        responseMeta: { startedAt: action.startedAt ?? new Date().toISOString() },
+      };
       return replacingIndex === -1
-        ? append(state, { kind: 'assistant', markdown: '', streaming: true })
-        : insert(state, replacingIndex + 1, { kind: 'assistant', markdown: '', streaming: true });
+        ? append(state, assistant)
+        : insert(state, replacingIndex + 1, assistant);
     }
 
     case 'chat_chunk':
@@ -221,7 +238,16 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
 
     case 'chat_done':
       return markLatestPendingUserPersisted(
-        updateStreamingAssistant(state, item => ({ ...item, streaming: false })),
+        updateStreamingAssistant(state, item => ({
+          ...item,
+          streaming: false,
+          responseMeta: item.responseMeta ? {
+            ...item.responseMeta,
+            finishedAt: action.finishedAt ?? new Date().toISOString(),
+            ...(action.latencyMs !== undefined ? { latencyMs: action.latencyMs } : {}),
+            ...(action.usage ? { usage: action.usage } : {}),
+          } : undefined,
+        })),
       );
 
     case 'chat_error': {

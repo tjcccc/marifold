@@ -390,6 +390,48 @@ describe('config editing routes', () => {
     }
   });
 
+  it('removes provider config, credentials, and saved models with reference guards', async () => {
+    const loadedConfig = fixtureLoadedConfig(tempDir());
+    loadedConfig.config.providers.xai = {
+      type: 'openai-compatible',
+      baseUrl: 'https://api.x.ai/v1',
+      apiKey: 'short-lived-access',
+      oauthToken: 'refresh-token',
+    };
+    loadedConfig.config.models.options.push('xai/grok-4.5');
+    const server = createMarifoldService({ loadedConfig, scheduler: false });
+    try {
+      const defaultProvider = await server.inject({ method: 'DELETE', url: '/v1/providers/ollama' });
+      expect(defaultProvider.statusCode).toBe(400);
+      expect(defaultProvider.json().error.message).toMatch(/current default provider/);
+
+      scaffoldProfile(loadedConfig.config.paths.profilesDir, 'grokker');
+      fs.writeFileSync(
+        path.join(loadedConfig.config.paths.profilesDir, 'grokker', 'profile.toml'),
+        'provider = "xai"\nmodel = "grok-4.5"\n',
+      );
+      const profileProvider = await server.inject({ method: 'DELETE', url: '/v1/providers/xai' });
+      expect(profileProvider.statusCode).toBe(400);
+      expect(profileProvider.json().error.message).toMatch(/profile 'grokker'/);
+
+      fs.writeFileSync(
+        path.join(loadedConfig.config.paths.profilesDir, 'grokker', 'profile.toml'),
+        'memories = true\n',
+      );
+      const removed = await server.inject({ method: 'DELETE', url: '/v1/providers/xai' });
+      expect(removed.statusCode).toBe(200);
+      expect(removed.json()).toMatchObject({
+        removed: true,
+        removedModels: ['xai/grok-4.5'],
+      });
+      expect(removed.json().config.providers.xai).toBeUndefined();
+      expect(removed.json().models.options).not.toContain('xai/grok-4.5');
+      expect(fs.readFileSync(loadedConfig.configPath, 'utf-8')).not.toContain('refresh-token');
+    } finally {
+      await server.close();
+    }
+  });
+
   it('avatar routes: PUT stores, GET serves bytes with ETag, DELETE removes', async () => {
     const loadedConfig = fixtureLoadedConfig(tempDir());
     scaffoldProfile(loadedConfig.config.paths.profilesDir, 'painter');

@@ -87,6 +87,31 @@ describe('MarifoldService security', () => {
     }
   });
 
+  it('reports an environment-resolved bearer token in the sanitized config view', async () => {
+    const envName = 'MARIFOLD_TEST_SERVICE_TOKEN';
+    process.env[envName] = 'env-token';
+    const loadedConfig = fixtureLoadedConfig(tempDir(), {
+      service: { tokenEnv: envName, corsOrigins: [] },
+    });
+    const server = createMarifoldService({ loadedConfig, scheduler: false });
+    try {
+      const response = await server.inject({
+        method: 'GET',
+        url: '/v1/config',
+        headers: { authorization: 'Bearer env-token' },
+      });
+      expect(response.statusCode).toBe(200);
+      expect(response.json().config.service).toMatchObject({
+        tokenEnv: envName,
+        hasToken: true,
+      });
+      expect(JSON.stringify(response.json())).not.toContain('env-token');
+    } finally {
+      delete process.env[envName];
+      await server.close();
+    }
+  });
+
   it('applies the CORS origin allowlist with a preflight short-circuit', async () => {
     const loadedConfig = fixtureLoadedConfig(tempDir(), {
       service: { corsOrigins: ['http://localhost:5173'] },

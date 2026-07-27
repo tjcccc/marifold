@@ -513,6 +513,22 @@ export class MarifoldRuntime {
     return { removed: result.removed, wasDefault: result.wasDefault };
   }
 
+  /** Remove local provider configuration and model options. Profile overrides
+   * are guarded here because they live outside the global config file. */
+  removeProvider(provider: string): { removed: boolean; removedModels: string[] } {
+    const profileNames = this.listProfiles()
+      .filter(profile => this.getProfile(profile.name).settings.provider === provider)
+      .map(profile => profile.name);
+    if (profileNames.length > 0) {
+      throw MarifoldError.configInvalid(
+        `Cannot remove provider '${provider}' because ${profileNames.length === 1 ? 'profile' : 'profiles'} `
+        + `${profileNames.map(name => `'${name}'`).join(', ')} use it. Clear those model overrides first.`,
+      );
+    }
+    const result = new ConfigManager(this.options.loadedConfig).removeProvider(provider);
+    return { removed: result.removed, removedModels: result.removedModels };
+  }
+
   /** Set the global default provider/model (also registers the option). */
   setDefaultModel(provider: string, model: string): void {
     new ConfigManager(this.options.loadedConfig).setDefaultModel(model, provider);
@@ -897,7 +913,7 @@ export class MarifoldRuntime {
         new ConfigManager(this.options.loadedConfig).save();
       } catch (error) {
         throw MarifoldError.configInvalid(
-          `GitHub Copilot authorization could not be refreshed: ${error instanceof Error ? error.message : String(error)}. Re-run marifold model add github_copilot to authorize again.`,
+          `GitHub Copilot authorization could not be refreshed: ${error instanceof Error ? error.message : String(error)}. Run marifold provider reauth github_copilot to authorize again.`,
         );
       }
       return;
@@ -912,7 +928,7 @@ export class MarifoldRuntime {
         new ConfigManager(this.options.loadedConfig).save();
       } catch (error) {
         throw MarifoldError.configInvalid(
-          `xAI authorization could not be refreshed: ${error instanceof Error ? error.message : String(error)}. Re-run marifold model add xai to sign in again.`,
+          `xAI authorization could not be refreshed: ${error instanceof Error ? error.message : String(error)}. Run marifold provider reauth xai to sign in again.`,
         );
       }
       return;
@@ -932,7 +948,7 @@ export class MarifoldRuntime {
       new ConfigManager(this.options.loadedConfig).save();
     } catch (error) {
       throw MarifoldError.configInvalid(
-        `ChatGPT authorization could not be refreshed: ${error instanceof Error ? error.message : String(error)}. Re-run marifold model add chatgpt to sign in again.`,
+        `ChatGPT authorization could not be refreshed: ${error instanceof Error ? error.message : String(error)}. Run marifold provider reauth chatgpt to sign in again.`,
       );
     }
   }

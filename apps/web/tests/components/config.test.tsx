@@ -234,6 +234,7 @@ describe('ProvidersPage', () => {
         onSaveField={onSaveField}
         onRefreshStatus={() => {}}
         onAddProvider={async () => {}}
+        onRemoveProvider={() => {}}
       />,
     );
     const proxyInput = screen.getByPlaceholderText(/blank = direct/) as HTMLInputElement;
@@ -242,6 +243,68 @@ describe('ProvidersPage', () => {
     fireEvent.change(proxyInput, { target: { value: '  http://127.0.0.1:1080  ' } });
     fireEvent.click(screen.getByText('Save'));
     expect(onSaveField).toHaveBeenCalledWith('xai', 'proxy', 'http://127.0.0.1:1080');
+  });
+
+  it('requires the provider name before removal', async () => {
+    const { ProvidersPage } = await import('../../src/screens/config/ProvidersPage');
+    const onRemoveProvider = vi.fn();
+    render(
+      <ProvidersPage
+        selected="xai"
+        config={{
+          default: { profile: 'default', provider: 'ollama', model: 'gemma4:e4b' },
+          models: { options: ['xai/grok-4.5'] },
+          providers: {
+            xai: { type: 'openai-compatible', hasApiKey: true, hasOauthToken: true },
+          },
+        } as never}
+        status={[]}
+        busy={false}
+        onSaveField={() => {}}
+        onRefreshStatus={() => {}}
+        onAddProvider={async () => {}}
+        onRemoveProvider={onRemoveProvider}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+    const dialog = screen.getByRole('alertdialog', { name: 'Remove “xai”?' });
+    const finalRemove = within(dialog).getByRole('button', { name: 'Remove provider' }) as HTMLButtonElement;
+    expect(finalRemove.disabled).toBe(true);
+    fireEvent.change(within(dialog).getByLabelText('Provider name confirmation'), {
+      target: { value: 'xai' },
+    });
+    expect(finalRemove.disabled).toBe(false);
+    fireEvent.click(finalRemove);
+    expect(onRemoveProvider).toHaveBeenCalledOnce();
+  });
+
+  it('offers the host-local re-authentication command for OAuth providers', async () => {
+    const { ProvidersPage } = await import('../../src/screens/config/ProvidersPage');
+    render(
+      <ProvidersPage
+        selected="xai"
+        config={{
+          default: { profile: 'default', provider: 'ollama', model: 'gemma4:e4b' },
+          models: { options: ['xai/grok-4.5'] },
+          providers: {
+            xai: { type: 'openai-compatible', hasApiKey: true, hasOauthToken: true },
+          },
+        } as never}
+        status={[]}
+        busy={false}
+        onSaveField={() => {}}
+        onRefreshStatus={() => {}}
+        onAddProvider={async () => {}}
+        onRemoveProvider={() => {}}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Re-authenticate…' }));
+    const dialog = screen.getByRole('dialog', { name: 'Re-authenticate “xai”' });
+    expect(within(dialog).getByText('pnpm marifold provider reauth xai')).toBeTruthy();
+    expect(within(dialog).getByRole('button', { name: 'Copy re-authentication command' })).toBeTruthy();
+    expect(within(dialog).getByText(/saved model choices are preserved/)).toBeTruthy();
   });
 });
 

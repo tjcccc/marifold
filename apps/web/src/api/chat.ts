@@ -1,6 +1,6 @@
 import type { ApiClient } from './client';
 import { parseSse } from './sse';
-import type { ChatStreamEvent, ImageInput } from './types';
+import type { AgentUsage, ChatStreamEvent, ImageInput } from './types';
 
 export interface ChatRequest {
   prompt: string;
@@ -42,8 +42,16 @@ export async function* streamChat(
         const body = frame.data as { code?: string; message?: string } | undefined;
         yield { type: 'error', code: body?.code ?? 'STREAM_ERROR', message: body?.message ?? 'Stream failed.' };
       } else if (frame.event === 'done') {
+        const body = frame.data as { usage?: unknown; latencyMs?: unknown } | undefined;
+        const usage = parseUsage(body?.usage);
         finished = true;
-        yield { type: 'done' };
+        yield {
+          type: 'done',
+          ...(usage ? { usage } : {}),
+          ...(typeof body?.latencyMs === 'number' && Number.isFinite(body.latencyMs)
+            ? { latencyMs: body.latencyMs }
+            : {}),
+        };
         return;
       }
     }
@@ -55,4 +63,22 @@ export async function* streamChat(
     yield { type: 'error', code: 'STREAM_INTERRUPTED', message: 'The chat stream ended before completing.' };
     yield { type: 'done' };
   }
+}
+
+function parseUsage(value: unknown): AgentUsage | undefined {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined;
+  const source = value as Record<string, unknown>;
+  const usage: AgentUsage = {};
+  for (const key of [
+    'inputTokens',
+    'outputTokens',
+    'totalTokens',
+    'cachedInputTokens',
+    'reasoningTokens',
+    'estimatedCostUSD',
+  ] as const) {
+    const field = source[key];
+    if (typeof field === 'number' && Number.isFinite(field) && field >= 0) usage[key] = field;
+  }
+  return Object.keys(usage).length > 0 ? usage : undefined;
 }

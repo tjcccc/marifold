@@ -25,6 +25,11 @@ export interface ConfigRemoveModelResult extends ConfigSetResult {
   wasDefault: boolean;
 }
 
+export interface ConfigRemoveProviderResult extends ConfigSetResult {
+  removed: boolean;
+  removedModels: string[];
+}
+
 export class ConfigManager {
   constructor(private readonly loadedConfig: LoadedMarifoldConfig) {}
 
@@ -247,6 +252,41 @@ export class ConfigManager {
       value: option,
       removed: true,
       wasDefault,
+    };
+  }
+
+  /** Remove one provider's local configuration, credentials, and saved model
+   * options. Refuse the global default so the config cannot be left unusable. */
+  removeProvider(provider: string): ConfigRemoveProviderResult {
+    if (!provider) throw MarifoldError.configInvalid('Provider cannot be empty.');
+    if (this.config.default.provider === provider) {
+      throw MarifoldError.configInvalid(
+        `Cannot remove the current default provider '${provider}'. Choose another default model first.`,
+      );
+    }
+
+    const key = `providers.${provider}`;
+    if (!this.config.providers[provider]) {
+      return {
+        configPath: this.configPath,
+        key,
+        value: provider,
+        removed: false,
+        removedModels: [],
+      };
+    }
+
+    const prefix = `${provider}/`;
+    const removedModels = this.config.models.options.filter(option => option.startsWith(prefix));
+    this.config.models.options = this.config.models.options.filter(option => !option.startsWith(prefix));
+    delete this.config.providers[provider];
+    this.save();
+    return {
+      configPath: this.configPath,
+      key,
+      value: provider,
+      removed: true,
+      removedModels,
     };
   }
 
