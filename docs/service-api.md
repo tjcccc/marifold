@@ -205,6 +205,10 @@ carry a different display/persistence value than the model-facing `prompt`;
 direct skill runs use it to retain the original `$skill …` invocation. With
 `isolated: true`, a chat turn does not replay the session to the model, but its
 clean user/assistant pair is still appended to that durable session.
+`profileContext: false` omits PROFILE/RULES/CUSTOM text while retaining
+request-scoped instructions and Marifold's minimal runtime framing. App routes
+set this server-side from the definition; ordinary clients should not
+use it as a way to bypass profile policy accidentally.
 Embedded/URL image sources are retained beside their user turn so clients can
 restore transcript thumbnails after navigation or reload; local filesystem
 paths are never exposed through this API.
@@ -228,6 +232,40 @@ body and its exact bundled-file location; clients must not ask the model to
 search for the skill. Unknown skills return 404 `SKILL_NOT_FOUND`; invalid
 invocations return 400 `SKILL_INVALID`. A non-empty `missing` list means the
 client must collect the required variables before starting a run.
+
+### Apps
+
+App definitions stay on the service host. Clients receive normalized JSON
+and submit typed values only:
+
+| Route | Returns |
+|---|---|
+| `GET /v1/apps` | `{ apps: AppDefinition[] }`, sorted by display title. Invalid local definitions are skipped so one bad bundle does not break the catalog |
+| `GET /v1/apps/:name` | `{ app: AppDefinition }`; 404 `APP_NOT_FOUND` |
+| `POST /v1/apps/:name/actions/:action/stream` | One-shot chat SSE for a v0 actor Skill action |
+
+The action body is:
+
+```json
+{
+  "values": {
+    "source_text": "Good morning",
+    "target_language": "Japanese"
+  }
+}
+```
+
+The server loads `<apps_dir>/<name>/app.toml`, validates the submitted
+input/state values, resolves the action's declared actor profile and its
+profile/global Skill, expands named arguments, and applies the definition's
+execution policy. The client cannot submit a profile, prompt, Skill name,
+permissions, session ID, or execution flags. Output arrives as the same
+`chunk`/`done` SSE sequence as chat. App actions neither replay nor write Agent
+sessions.
+
+v0 executes chat-mode `kind = "skill"` actions only. Invalid definitions or
+values return 400 `APP_INVALID`; the complete schema and example are in
+[docs/app.md](app.md).
 
 ### Agent runs (live layer)
 

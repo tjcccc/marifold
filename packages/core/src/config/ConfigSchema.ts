@@ -27,6 +27,8 @@ export interface MarifoldPathsConfig {
   schedulesDir?: string;
   /** Defaults to ~/.marifold/skills when omitted in older configs. */
   skillsDir?: string;
+  /** Defaults to ~/.marifold/apps when omitted in older configs. */
+  appsDir?: string;
 }
 
 export interface MarifoldModelsConfig {

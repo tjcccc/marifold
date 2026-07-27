@@ -31,6 +31,9 @@ export interface MarifoldRunRequest {
   instructions?: string[];
   /** Set false to disable model-initiated chat tools for this run even when [web_search].enabled is true. */
   chatTools?: boolean;
+  /** Set false to omit PROFILE.md, RULES.md, and CUSTOM.md from the provider
+   * request. Runtime safety framing and explicit instructions still apply. */
+  profileContext?: boolean;
   /** Session-scoped context-budget override (e.g. /context-window set N). Wins over profile/global. */
   maxContextTokens?: number;
   /** Cancels the in-flight provider request when aborted (e.g. ESC/Ctrl-C). Forwarded to the engine stream. */

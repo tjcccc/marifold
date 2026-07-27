@@ -1,26 +1,231 @@
-.surface {
+.workspace {
   flex: 1;
   min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  background: var(--content);
+  overflow-y: auto;
+  container-type: inline-size;
+}
+
+.header,
+.appCanvas {
+  width: min(960px, calc(100% - 64px));
+  margin-inline: auto;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 42px 0 24px;
+  border-bottom: 1px solid var(--separator);
+}
+
+.header h1 {
+  margin: 0;
+  color: var(--text);
+  font-size: 28px;
+  line-height: 1.2;
+}
+
+.header p {
+  margin: 8px 0 0;
+  color: var(--text-3);
+  font-size: 14px;
+}
+
+.version,
+.metrics,
+.status {
+  color: var(--text-3);
+  font-size: 12px;
+}
+
+.metrics,
+.status {
+  align-self: center;
+}
+
+.appCanvas {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 28px 0 64px;
+}
+
+.row {
+  display: flex;
+  align-items: stretch;
+}
+
+.column {
+  display: flex;
+  flex-direction: column;
+}
+
+.gap_none { gap: 0; }
+.gap_small { gap: 8px; }
+.gap_medium { gap: 16px; }
+.gap_large { gap: 24px; }
+
+.grow {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.spacer {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  height: 1px;
+}
+
+.field {
+  min-width: 0;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.label {
+  color: var(--text-2);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.field input,
+.field select,
+.field textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--separator);
+  border-radius: 10px;
+  outline: none;
+  color: var(--text);
+  background: var(--surface-2);
+  font: inherit;
+}
+
+.field input,
+.field select {
+  height: 42px;
+  padding: 0 12px;
+}
+
+.field textarea {
+  min-height: 220px;
+  padding: 12px 14px;
+  line-height: 1.55;
+  resize: vertical;
+}
+
+.field input:focus,
+.field select:focus,
+.field textarea:focus {
+  border-color: var(--brand-text);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--brand-fill) 16%, transparent);
+}
+
+.preview {
+  min-height: 220px;
+  box-sizing: border-box;
+  padding: 14px 16px;
+  border: 1px solid var(--separator);
+  border-radius: 10px;
+  color: var(--text);
+  background: var(--surface);
+  overflow-wrap: anywhere;
+}
+
+.preview pre {
+  margin: 0;
+  white-space: pre-wrap;
+  font: inherit;
+  line-height: 1.55;
+}
+
+.previewEmpty {
+  color: var(--text-3);
+  font-size: 13px;
+}
+
+.primaryButton {
+  align-self: flex-start;
+  min-width: 112px;
+  height: 42px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 10px;
+  color: var(--on-brand);
+  background: var(--brand-fill);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.primaryButton:disabled {
+  cursor: wait;
+  opacity: .55;
+}
+
+.text {
+  margin: 0;
+  color: var(--text-2);
+  line-height: 1.55;
+}
+
+.error {
+  padding: 12px 14px;
+  border-radius: 10px;
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+  font-size: 13px;
 }
 
 .placeholder {
   margin: auto;
-  text-align: center;
-  max-width: 360px;
+  max-width: 420px;
+  padding: 32px;
   color: var(--text-3);
+  text-align: center;
 }
 
 .placeholderTitle {
+  color: var(--text-2);
   font-size: 20px;
   font-weight: 700;
-  color: var(--text-2);
 }
 
 .placeholderHint {
   margin-top: 8px;
   font-size: 13px;
   line-height: 1.55;
+}
+
+@media (max-width: 760px) {
+  .header,
+  .appCanvas {
+    width: calc(100% - 32px);
+  }
+
+}
+
+@container (max-width: 620px) {
+  .stackResponsive {
+    flex-direction: column;
+  }
 }

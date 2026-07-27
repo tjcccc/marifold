@@ -4,18 +4,26 @@ import styles from './ResizableSidebar.module.css';
 
 export const DEFAULT_SIDEBAR_WIDTH = 256;
 export const MIN_SIDEBAR_WIDTH = 200;
-const STORAGE_KEY = 'marifold.sidebarWidth';
+const DEFAULT_STORAGE_KEY = 'marifold.sidebarWidth';
 const KEYBOARD_STEP = 8;
 
 export interface ResizableSidebarProps {
   children: ReactNode;
+  storageKey?: string;
+  defaultWidth?: number;
+  ariaLabel?: string;
 }
 
 /** Persistent desktop primary-sidebar width with pointer and keyboard resizing. */
-export function ResizableSidebar({ children }: ResizableSidebarProps) {
+export function ResizableSidebar({
+  children,
+  storageKey = DEFAULT_STORAGE_KEY,
+  defaultWidth = DEFAULT_SIDEBAR_WIDTH,
+  ariaLabel = 'Resize sidebar',
+}: ResizableSidebarProps) {
   const frameRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ x: number; width: number } | undefined>(undefined);
-  const [width, setWidth] = useState(loadSidebarWidth);
+  const [width, setWidth] = useState(() => loadSidebarWidth(storageKey, defaultWidth));
   const [dragging, setDragging] = useState(false);
 
   function maximumWidth(): number {
@@ -29,7 +37,7 @@ export function ResizableSidebar({ children }: ResizableSidebarProps) {
     setWidth(clamped);
     if (!persist) return;
     try {
-      window.localStorage.setItem(STORAGE_KEY, String(clamped));
+      window.localStorage.setItem(storageKey, String(clamped));
     } catch {
       // The in-page width still works when storage is unavailable.
     }
@@ -73,7 +81,7 @@ export function ResizableSidebar({ children }: ResizableSidebarProps) {
       <div
         className={`${styles.handle}${dragging ? ` ${styles.handleActive}` : ''}`}
         role="separator"
-        aria-label="Resize sidebar"
+        aria-label={ariaLabel}
         aria-orientation="vertical"
         aria-valuemin={MIN_SIDEBAR_WIDTH}
         aria-valuemax={maximumWidth()}
@@ -90,9 +98,9 @@ export function ResizableSidebar({ children }: ResizableSidebarProps) {
   );
 }
 
-function loadSidebarWidth(): number {
+function loadSidebarWidth(storageKey: string, defaultWidth: number): number {
   try {
-    const stored = Number(window.localStorage.getItem(STORAGE_KEY));
+    const stored = Number(window.localStorage.getItem(storageKey));
     if (Number.isFinite(stored) && stored >= MIN_SIDEBAR_WIDTH) {
       const maximum = Math.max(MIN_SIDEBAR_WIDTH, Math.floor(window.innerWidth * 0.4));
       return Math.min(maximum, stored);
@@ -100,5 +108,5 @@ function loadSidebarWidth(): number {
   } catch {
     // Fall through to the product default.
   }
-  return DEFAULT_SIDEBAR_WIDTH;
+  return defaultWidth;
 }

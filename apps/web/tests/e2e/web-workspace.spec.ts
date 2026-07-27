@@ -1,6 +1,29 @@
 import { expect, test } from '@playwright/test';
 import { strToU8, zipSync } from 'fflate';
 
+test('Agent and Apps reuse one sidebar shell and header toggle', async ({ page }) => {
+  await page.goto('/agent');
+  const profilesSidebar = page.getByRole('navigation', { name: 'Profiles' });
+  const resizeHandle = page.getByRole('separator', { name: 'Resize sidebar' });
+  await expect(profilesSidebar).toBeVisible();
+  await resizeHandle.press('ArrowRight');
+  await resizeHandle.press('ArrowRight');
+  const profileBox = await profilesSidebar.boundingBox();
+
+  await page.getByRole('tab', { name: 'Apps' }).click();
+  await expect(page).toHaveURL(/\/apps$/);
+  const appsSidebar = page.getByRole('navigation', { name: 'Apps' });
+  await expect(appsSidebar.getByLabel('Search apps')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Hide sidebar' })).toBeVisible();
+  const appsBox = await appsSidebar.boundingBox();
+  expect(Math.round(appsBox?.width ?? 0)).toBe(Math.round(profileBox?.width ?? -1));
+
+  await page.getByRole('button', { name: 'Hide sidebar' }).click();
+  await expect(appsSidebar).toHaveCount(0);
+  await page.getByRole('button', { name: 'Show sidebar' }).click();
+  await expect(page.getByRole('navigation', { name: 'Apps' })).toBeVisible();
+});
+
 test('profile search filters the project-style profile list', async ({ page }) => {
   await page.goto('/agent');
   await expect(page.getByText('Research reply preview.')).toBeVisible();

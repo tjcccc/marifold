@@ -7,7 +7,7 @@ questions; it is not an implementation commitment or a frozen schema.
 ## Product boundary
 
 Workflows should make Marifold a lightweight orchestration layer for profiles,
-models, skills, and SkillApps. They should not turn Marifold into a heavyweight
+models, Skills, and Apps. They should not turn Marifold into a heavyweight
 coding agent or project/goal manager. Long-running repository work remains a
 better fit for tools such as Codex and Claude Code.
 
@@ -234,15 +234,15 @@ Defer until real use demonstrates a need:
 - a general-purpose workflow programming language;
 - goal/project management.
 
-## Relationship to SkillApps
+## Relationship to Apps
 
-Workflows and SkillApps should share typed variables, approval vocabulary,
-profile/model invocation, and artifact handling. A later SkillApp action may
-invoke a workflow, and a workflow may eventually use a SkillApp as a node:
+Workflows and Apps should share typed variables, approval vocabulary,
+actor/model invocation, and artifact handling. A later App action may invoke a
+workflow, and a workflow may eventually use an App as a node:
 
 ```toml
-type = "skillapp"
-skillapp = "document-reviewer"
+type = "app"
+app = "document-reviewer"
 ```
 
 The intended composition is:
@@ -251,11 +251,11 @@ The intended composition is:
 Workflow
   -> profile/model nodes
   -> skill nodes
-  -> SkillApp nodes
+  -> App nodes
   -> structured artifacts
 ```
 
-Profile nodes are the appropriate first implementation. Skill and SkillApp
+Profile nodes are the appropriate first implementation. Skill and App
 nodes should be added only after their input/output and UI contracts are
 stable.
 

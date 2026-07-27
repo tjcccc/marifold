@@ -117,6 +117,7 @@ export class ConfigManager {
         tasks_dir: p.tasksDir,
         schedules_dir: p.schedulesDir,
         skills_dir: p.skillsDir,
+        apps_dir: p.appsDir,
       }, parts[1]);
     }
     if (parts[0] === 'memory' && parts.length === 2) {
@@ -370,6 +371,9 @@ export class ConfigManager {
       case 'skills_dir':
         this.config.paths.skillsDir = resolveUserPath(value);
         return;
+      case 'apps_dir':
+        this.config.paths.appsDir = resolveUserPath(value);
+        return;
       default:
         throw MarifoldError.configInvalid(`Unknown config key: paths.${key}`);
     }
@@ -536,6 +540,7 @@ export function renderMarifoldConfig(config: MarifoldConfig): string {
     `tasks_dir = ${tomlString(config.paths.tasksDir)}`,
     ...(config.paths.schedulesDir ? [`schedules_dir = ${tomlString(config.paths.schedulesDir)}`] : []),
     ...(config.paths.skillsDir ? [`skills_dir = ${tomlString(config.paths.skillsDir)}`] : []),
+    ...(config.paths.appsDir ? [`apps_dir = ${tomlString(config.paths.appsDir)}`] : []),
   ];
 
   const modelLines = [

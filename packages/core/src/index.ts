@@ -193,6 +193,7 @@ export {
   bindSkillArgs,
   parseSkillInvocation,
   resolveSkillInvocation,
+  resolveSkillValuesInvocation,
   skillUsage,
   tokenizeSkillArgs,
   SkillStore,
@@ -208,25 +209,35 @@ export type {
   SkillStoreOptions,
 } from './skill';
 export {
-  DEFAULT_SKILLAPP_PERMISSIONS,
-  SKILLAPP_KNOWN_TOOLS,
-  SKILLAPP_SCHEMA,
-} from './skillapp/SkillAppSchema';
+  APP_SCHEMA,
+  DEFAULT_APP_EXECUTION,
+  DEFAULT_APP_PERMISSIONS,
+} from './app/AppSchema';
 export type {
-  SkillAppAction,
-  SkillAppActionKind,
-  SkillAppComponent,
-  SkillAppDefinition,
-  SkillAppFilesPermission,
-  SkillAppInfo,
-  SkillAppLayoutItem,
-  SkillAppPermissions,
-  SkillAppVariable,
-  SkillAppVariableRole,
-  SkillAppVariableType,
-} from './skillapp/SkillAppSchema';
-export { validateSkillApp, validateSkillAppToml } from './skillapp/SkillAppValidator';
-export type { SkillAppValidationResult } from './skillapp/SkillAppValidator';
+  AppAction,
+  AppActionKind,
+  AppActor,
+  AppComponent,
+  AppDefinition,
+  AppExecution,
+  AppFilesPermission,
+  AppInfo,
+  AppLayoutItem,
+  AppLayoutGap,
+  AppPermissions,
+  AppResponsiveBehavior,
+  AppVariable,
+  AppVariableRole,
+  AppVariableType,
+  AppVariableValue,
+} from './app/AppSchema';
+export { validateApp, validateAppToml } from './app/AppValidator';
+export type { AppValidationResult } from './app/AppValidator';
+export { AppStore } from './app/AppStore';
+export {
+  resolveAppAction,
+  type ResolvedAppAction,
+} from './app/AppActionResolver';
 export { Workspace } from './workspace/Workspace';
 export { WorkspaceInitializer } from './workspace/WorkspaceInitializer';
 export type {
@@ -252,6 +263,7 @@ export type {
 } from './tasks/TaskStore';
 export {
   defaultConfigPath,
+  defaultAppsDir,
   defaultProfilesDir,
   defaultSessionsDb,
   defaultSchedulesDir,

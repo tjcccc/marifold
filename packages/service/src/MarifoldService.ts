@@ -244,6 +244,58 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
     };
   });
 
+  // App TOML stays server-owned. Every renderer receives the same validated,
+  // normalized JSON contract and can only submit typed state.
+  server.get('/v1/apps', async () => ({
+    ok: true,
+    apps: runtime.listApps(),
+  }));
+
+  server.get<{
+    Params: { name: string };
+  }>('/v1/apps/:name', async (request, reply) => {
+    const app = runtime.getApp(request.params.name);
+    if (!app) {
+      reply.status(404);
+      return {
+        ok: false,
+        error: {
+          code: 'APP_NOT_FOUND',
+          message: `App not found: ${request.params.name}`,
+        },
+      };
+    }
+    return { ok: true, app };
+  });
+
+  server.post<{
+    Params: { name: string; action: string };
+  }>('/v1/apps/:name/actions/:action/stream', async (request, reply) => {
+    const body = objectBody(request.body);
+    const values = objectBody(body.values);
+    const action = runtime.resolveAppAction(
+      request.params.name,
+      request.params.action,
+      values,
+    );
+    if (action.mode && action.mode !== 'chat') {
+      throw MarifoldError.appInvalid(
+        `App v0 only supports chat-mode skills; '${action.name}' uses '${action.mode}'.`,
+      );
+    }
+
+    await streamChat(reply, runtime, {
+      prompt: action.prompt,
+      userTurn: action.userTurn,
+      instructions: action.instructions,
+      profile: action.profile,
+      memories: action.execution.memory,
+      think: action.execution.think,
+      profileContext: action.execution.profileContext,
+      chatTools: false,
+    });
+  });
+
   server.get('/v1/models', async () => ({
     ok: true,
     default: {
@@ -630,6 +682,7 @@ function parseRunRequest(value: unknown): MarifoldRunRequest {
     ...optionalNonNegativeIntegerField('replaceUserTurnIndex', body.replaceUserTurnIndex),
     ...optionalBooleanField('memories', body.memories),
     ...optionalBooleanField('think', body.think),
+    ...optionalBooleanField('profileContext', body.profileContext),
     ...optionalBooleanField('originalImages', body.originalImages),
     ...optionalImagesField(body.images),
     ...(body.instructions !== undefined ? { instructions: stringArray(body.instructions, 'instructions') } : {}),
@@ -801,6 +854,7 @@ function statusCodeForError(error: MarifoldError): number {
     error.code === 'TASK_NOT_FOUND'
     || error.code === 'SCHEDULE_NOT_FOUND'
     || error.code === 'SKILL_NOT_FOUND'
+    || error.code === 'APP_NOT_FOUND'
     || error.code === 'RUN_NOT_FOUND'
     || error.code === 'APPROVAL_NOT_FOUND'
   ) {
@@ -815,6 +869,7 @@ function statusCodeForError(error: MarifoldError): number {
     || error.code === 'SCHEDULE_INVALID'
     || error.code === 'AGENT_RUN_INVALID'
     || error.code === 'SKILL_INVALID'
+    || error.code === 'APP_INVALID'
   ) {
     return 400;
   }

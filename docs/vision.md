@@ -25,13 +25,13 @@ Alias profiles point to external agents or commands, such as Codex or Claude Cod
 
 Skills are reusable capabilities. A skill should not only be a prompt; it can become a structured interface with inputs, variables, actions, and outputs.
 
-Skill apps are GUI surfaces generated from safe schemas, such as YAML or JSON. Marifold should own rendering, validation, permissions, state, downloads, and provider calls instead of letting skill definitions run arbitrary code by default.
+Apps are GUI surfaces generated from safe schemas. Marifold owns rendering, validation, permissions, state, downloads, actor routing, and provider calls instead of letting definitions run arbitrary code by default.
 
-Workflows connect profiles, skills, skill apps, models, and external agents into multi-step jobs.
+Workflows connect profiles, Skills, Apps, models, and external agents into multi-step jobs.
 
-## Future SkillApp Shape
+## App Shape
 
-A future SkillApp schema could define:
+The current `marifold.app.v0` schema defines a safe floor that can grow to include:
 
 - Layout: known UI components such as text inputs, text areas, selects, tabs, preview panes, file pickers, and download buttons.
 - Variables: user-editable state and generated outputs.

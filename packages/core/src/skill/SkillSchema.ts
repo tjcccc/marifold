@@ -3,8 +3,8 @@
  *
  * A skill is a prompt template with declared `{{variables}}` and an optional
  * default run mode. It is the shared primitive both the TUI (`$name`) and
- * future graphical SkillApps build on: the TUI runs it directly, while a
- * SkillApp renders the `variables` block as a form before running the same
+ * future graphical Apps build on: the TUI runs it directly, while an App
+ * renders the `variables` block as a form before running the same
  * skill. Keep this schema renderer-agnostic.
  */
 export const SKILL_SCHEMA_ID = 'marifold.skill.v0';

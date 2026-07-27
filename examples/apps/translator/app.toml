@@ -1,0 +1,76 @@
+schema = "marifold.app.v0"
+
+[app]
+name = "translator"
+title = "Marifold Translation"
+version = "1.0.0"
+description = "Translate text with a dedicated profile's xAI/Grok model."
+
+[[actors]]
+name = "translator"
+profile = "app_tester"
+
+[[variables]]
+name = "source_text"
+type = "string"
+role = "input"
+label = "Source text"
+required = true
+
+[[variables]]
+name = "target_language"
+type = "enum"
+role = "input"
+label = "Translate to"
+default = "English"
+options = ["Chinese", "English", "Japanese", "Korean", "French", "German", "Spanish"]
+
+[[variables]]
+name = "translated_text"
+type = "string"
+role = "output"
+label = "Translation"
+
+[[layout]]
+component = "row"
+children = [
+  { component = "select", bind = "target_language", grow = true },
+]
+
+[[layout]]
+component = "row"
+gap = "large"
+responsive = "stack"
+children = [
+  { component = "textarea", bind = "source_text", grow = true },
+  { component = "preview", bind = "translated_text", format = "markdown", grow = true },
+]
+
+[[layout]]
+component = "row"
+gap = "medium"
+children = [
+  { component = "spacer" },
+  { component = "button", action = "translate", label = "Translate" },
+  { component = "spacer" },
+]
+
+[[actions]]
+name = "translate"
+kind = "skill"
+actor = "translator"
+skill = "translate"
+arguments = { source_text = "{{source_text}}", target_language = "{{target_language}}" }
+output = "translated_text"
+
+[execution]
+think = false
+memory = false
+profile_context = false
+
+[permissions]
+provider_calls = true
+files = "none"
+shell = false
+network = false
+export = false

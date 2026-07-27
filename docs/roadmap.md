@@ -8,7 +8,7 @@ short: what shipped (one line each), what's next, and what's deliberately deferr
 - **v0.8–v0.13 — pre-TUI foundation**: CLI/profile management polish; structured JSONL memory
   system; `@marifold/service` + TaskStore; approval-aware agent loop on `@priest-ai/core` 2.4
   (native tool calling + control-block fallback); selective chat parity (search/read/image,
-  OAuth refresh); `marifold.skillapp.v0` spec (parser/validator, no runtime); cron scheduling
+  OAuth refresh); the earlier declarative app prototype; cron scheduling
   hosted in the service with unattended approval policy.
 - **v0.14–v0.25 — the TUI era**: bare `marifold` launches the Ink/React terminal app (agent-first,
   `/chat` mode, approval modal, `/btw` steering, session resume, profile picker); skills run as
@@ -47,15 +47,19 @@ short: what shipped (one line each), what's next, and what's deliberately deferr
   bounded read-only original-file staging; capability-scoped per-run workspaces; fail-closed
   macOS shell sandboxing; one-time external-path/package approvals; disposable `uv` Python
   environments; and deterministic service shutdown/listen-failure cleanup.
+- **v0.51+ — direct Skills and App MVP**: history-isolated direct Skill
+  invocation; global `marifold.app.v0` bundles with explicit profile actors;
+  normalized service contracts; portable nested layouts; transcript-free
+  streamed Skill actions; and a dedicated Apps view in the persistent Web workspace shell.
 
 ## Next
 
-- **SkillApp runtime**: give the Apps tab its runtime — render `marifold.skillapp.v0` layouts,
-  wire actions to the agent loop under the existing approval vocabulary. The spec + validator
-  (`docs/skillapp.md`, `packages/core/src/skillapp`) have been waiting for this since pre-TUI.
+- **App expansion**: conditional visibility, repeaters, typed artifacts,
+  richer design/canvas previews, controlled file export, `$app-creator`, and
+  approval-aware effectful actions.
 - **Web UI backlog**: `/v1/events` push channel to replace 10s run polling, a deliberate mobile
   navigation design, and profile rename/delete UI.
-- **Workflow composition**: chain native profiles, skills, skill apps, models, and
+- **Workflow composition**: chain native profiles, Skills, Apps, models, and
   external-agent aliases into multi-step flows; the living direction and open questions are in
   [`workflow-plan.md`](workflow-plan.md).
 - **Apple clients** and alias profiles for Codex/Claude Code and other external agents.

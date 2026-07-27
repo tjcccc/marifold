@@ -6,6 +6,7 @@ import { ensureProfileMemoryFiles } from '../memory/MemoryStore';
 import { PROFILE_TOML_STUB } from '../profiles/ProfileManager';
 import {
   defaultConfigPath,
+  defaultAppsDir,
   defaultProfilesDir,
   defaultSessionsDb,
   defaultSchedulesDir,
@@ -48,6 +49,7 @@ export interface WorkspaceInitOptions {
   tasksDir?: string;
   schedulesDir?: string;
   skillsDir?: string;
+  appsDir?: string;
   baseUrl?: string;
   apiKeyEnv?: string;
   force?: boolean;
@@ -60,6 +62,7 @@ export interface WorkspaceInitResult {
   tasksDir: string;
   schedulesDir: string;
   skillsDir: string;
+  appsDir: string;
   provider: string;
   providerType: ProviderType;
   model: string;
@@ -85,6 +88,7 @@ export class WorkspaceInitializer {
     const tasksDir = resolveUserPath(options.tasksDir ?? defaultTasksDir());
     const schedulesDir = resolveUserPath(options.schedulesDir ?? defaultSchedulesDir());
     const skillsDir = resolveUserPath(options.skillsDir ?? defaultSkillsDir());
+    const appsDir = resolveUserPath(options.appsDir ?? defaultAppsDir());
     const baseUrl = resolveBaseUrl(provider, providerType, options.baseUrl);
     const apiKeyEnv = resolveApiKeyEnv(provider, providerType, options.apiKeyEnv);
 
@@ -95,6 +99,7 @@ export class WorkspaceInitializer {
     fs.mkdirSync(tasksDir, { recursive: true });
     fs.mkdirSync(schedulesDir, { recursive: true });
     fs.mkdirSync(skillsDir, { recursive: true });
+    fs.mkdirSync(appsDir, { recursive: true });
 
     const configStatus: WorkspaceInitFileStatus = fs.existsSync(configPath) ? 'updated' : 'created';
     fs.writeFileSync(configPath, renderConfig({
@@ -107,6 +112,7 @@ export class WorkspaceInitializer {
       tasksDir,
       schedulesDir,
       skillsDir,
+      appsDir,
       baseUrl,
       apiKeyEnv,
     }));
@@ -127,6 +133,7 @@ export class WorkspaceInitializer {
       tasksDir,
       schedulesDir,
       skillsDir,
+      appsDir,
       provider,
       providerType,
       model,
@@ -146,6 +153,7 @@ interface RenderConfigOptions {
   tasksDir: string;
   schedulesDir: string;
   skillsDir: string;
+  appsDir: string;
   baseUrl?: string;
   apiKeyEnv?: string;
 }
@@ -188,6 +196,7 @@ sessions_db = ${tomlString(options.sessionsDb)}
 tasks_dir = ${tomlString(options.tasksDir)}
 schedules_dir = ${tomlString(options.schedulesDir)}
 skills_dir = ${tomlString(options.skillsDir)}
+apps_dir = ${tomlString(options.appsDir)}
 
 ${providerLines.join('\n')}
 `;

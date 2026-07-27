@@ -56,7 +56,8 @@ export class ConsolePrinter {
     process.stdout.write(`Profile:  ${result.profile}\n`);
     process.stdout.write(`Profiles: ${result.profilesDir}\n`);
     process.stdout.write(`Sessions: ${result.sessionsDb}\n`);
-    process.stdout.write(`Tasks:    ${result.tasksDir}\n\n`);
+    process.stdout.write(`Tasks:    ${result.tasksDir}\n`);
+    process.stdout.write(`Apps:     ${result.appsDir}\n\n`);
 
     for (const file of result.files) {
       process.stdout.write(`${file.status.padEnd(7)} ${file.path}\n`);

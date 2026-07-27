@@ -22,6 +22,8 @@ v0.50.x adds local Web extraction for modern Word/Excel/PowerPoint attachments, 
 
 v0.51.x resolves direct `$skill` invocations in core with history-isolated execution and narrow read-only bundled-file access, and adds contact-style Web profile navigation with response previews/activity times, persistent profile pinning, and double-confirmed profile removal that retains conversation history.
 
+v0.52.x adds the App MVP: global `~/.marifold/apps/<name>/app.toml` bundles, normalized definitions and transcript-free streamed Skill actions through the service, explicit actor profiles per action, and portable layout trees in the persistent Web workspace shell. Per-app execution controls independently gate thinking, memory, and profile context.
+
 ## Stack
 
 - TypeScript
@@ -40,7 +42,7 @@ v0.51.x resolves direct `$skill` invocations in core with history-isolated execu
 - Agent runs must not write profile memory; task state stays ephemeral.
 - `apps/web` contains the browser UI — a second renderer of the same contracts the TUI renders. All data flows over the service HTTP API; `src/api/types.ts` is the only file that may import from `@marifold/core`, and only with `import type`.
 - Raw provider `api_key` values never cross the wire: service routes expose env-var names and boolean presence flags only; key values are edited via the CLI or config file.
-- Do not implement SkillApp runtime/rendering, Workflow, Apple apps, external-agent aliases, or provider-owned model deletion until that area is explicitly in scope.
+- Do not expand App beyond the documented `marifold.app.v0` MVP or implement Workflow, Apple apps, external-agent aliases, effectful App actions, or provider-owned model deletion until that area is explicitly in scope.
 
 ## Validation
 

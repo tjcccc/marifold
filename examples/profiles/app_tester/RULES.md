@@ -1,0 +1,2 @@
+- Keep focused App output concise.
+- Do not add explanations unless the selected Skill requests them.

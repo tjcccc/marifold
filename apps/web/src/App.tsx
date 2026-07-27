@@ -24,6 +24,9 @@ export function App() {
   const lastAgentRoute = useRef<Extract<Route, { view: 'agent' }>>(
     route.view === 'agent' ? route : loadLastAgentRoute(),
   );
+  const settingsReturnRoute = useRef<Extract<Route, { view: 'agent' | 'apps' }>>(
+    route.view === 'apps' ? route : lastAgentRoute.current,
+  );
 
   useEffect(() => {
     if (route.view !== 'agent') return;
@@ -54,8 +57,9 @@ export function App() {
   }, [navigate]);
 
   const onOpenSettings = useCallback(() => {
+    if (route.view === 'agent' || route.view === 'apps') settingsReturnRoute.current = route;
     navigate({ view: 'config', section: 'profiles' });
-  }, [navigate]);
+  }, [navigate, route]);
 
   return (
     <div className={styles.shell}>
@@ -70,19 +74,19 @@ export function App() {
             onThemeChange={setTheme}
             onOpenConnection={() => setConnectionOpen(true)}
             onOpenSettings={onOpenSettings}
-            onDone={() => navigate(lastAgentRoute.current)}
+            onDone={() => navigate(settingsReturnRoute.current)}
           />
         ) : (
           <AgentScreen
             client={client}
             route={route.view === 'agent' ? route : lastAgentRoute.current}
-            workspaceView={route.view}
             navigate={navigate}
             onUnauthorized={onUnauthorized}
             theme={theme}
             onThemeChange={setTheme}
             onOpenConnection={() => setConnectionOpen(true)}
             onOpenSettings={onOpenSettings}
+            workspaceView={route.view}
             onWorkspaceViewChange={onWorkspaceViewChange}
           />
         )}

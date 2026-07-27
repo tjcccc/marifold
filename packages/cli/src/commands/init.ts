@@ -23,6 +23,7 @@ interface InitOptions {
   sessionsDb?: string;
   tasksDir?: string;
   schedulesDir?: string;
+  appsDir?: string;
   baseUrl?: string;
   apiKeyEnv?: string;
   searchProvider?: string;
@@ -45,6 +46,7 @@ export function registerInitCommand(program: Command, printer: ConsolePrinter): 
     .option('--sessions-db <path>', 'SQLite sessions database path.')
     .option('--tasks-dir <path>', 'Task-state directory.')
     .option('--schedules-dir <path>', 'Schedules directory.')
+    .option('--apps-dir <path>', 'Apps directory.')
     .option('--base-url <url>', 'Provider base URL.')
     .option('--api-key-env <name>', 'Environment variable containing the provider API key.')
     .option('--search-provider <name>', 'Web search provider: duckduckgo, firecrawl, or off.')
@@ -69,6 +71,7 @@ export function registerInitCommand(program: Command, printer: ConsolePrinter): 
           sessionsDb: options.sessionsDb,
           tasksDir: options.tasksDir,
           schedulesDir: options.schedulesDir,
+          appsDir: options.appsDir,
           baseUrl: interactive ? undefined : options.baseUrl,
           apiKeyEnv: interactive ? undefined : options.apiKeyEnv,
         });

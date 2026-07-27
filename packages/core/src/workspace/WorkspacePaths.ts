@@ -29,6 +29,10 @@ export function defaultSkillsDir(): string {
   return path.join(marifoldHome(), 'skills');
 }
 
+export function defaultAppsDir(): string {
+  return path.join(marifoldHome(), 'apps');
+}
+
 export function expandHome(input: string): string {
   if (input === '~') return os.homedir();
   if (input.startsWith('~/')) return path.join(os.homedir(), input.slice(2));

@@ -5,8 +5,8 @@ import type { ApiClient } from '../../api/client';
 import type { ProfileSummary } from '../../api/types';
 import { Avatar } from '../../components/Avatar';
 import { PinGlyph } from '../../components/PinGlyph';
-import { SidebarBrand } from '../../components/SidebarChrome';
 import { formatRelativeTime } from '../../lib/format';
+import { WorkspaceSidebar } from './WorkspaceSidebar';
 import styles from './ProfileSidebar.module.css';
 
 export interface ProfileSidebarProps {
@@ -32,7 +32,19 @@ interface MenuState {
 const MENU_WIDTH = 168;
 
 /** Root of the primary sidebar navigation stack: Marifold → profiles. */
-export function ProfileSidebar({
+export function ProfileSidebar(props: ProfileSidebarProps) {
+  const { footer, ...contentProps } = props;
+  return (
+    <WorkspaceSidebar ariaLabel="Profiles" footer={footer} showBrand>
+      <ProfileSidebarContent {...contentProps} />
+    </WorkspaceSidebar>
+  );
+}
+
+export type ProfileSidebarContentProps = Omit<ProfileSidebarProps, 'footer'>;
+
+/** Profile-specific catalog body for the persistent workspace sidebar. */
+export function ProfileSidebarContent({
   client,
   profiles,
   selected,
@@ -41,8 +53,7 @@ export function ProfileSidebar({
   onSetPinned,
   onConfigure,
   onCreate,
-  footer,
-}: ProfileSidebarProps) {
+}: ProfileSidebarContentProps) {
   const [search, setSearch] = useState('');
   const [menu, setMenu] = useState<MenuState | undefined>();
   const [busy, setBusy] = useState(false);
@@ -132,8 +143,7 @@ export function ProfileSidebar({
   }
 
   return (
-    <nav className={styles.pane} aria-label="Profiles">
-      <SidebarBrand prominent />
+    <>
       <div className={styles.searchWrap}>
         <SearchGlyph />
         <input
@@ -217,7 +227,6 @@ export function ProfileSidebar({
           );
         })}
       </div>
-      {footer}
 
       {menu ? createPortal(
         <div
@@ -254,7 +263,7 @@ export function ProfileSidebar({
         </div>,
         document.body,
       ) : null}
-    </nav>
+    </>
   );
 }
 

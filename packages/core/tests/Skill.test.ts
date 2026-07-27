@@ -116,9 +116,29 @@ describe('skill invocation', () => {
     expect(resolved.prompt).toBe('good morning Japanese');
     expect(resolved.instructions[0]).toContain('Translate into Japanese');
     expect(resolved.instructions[0]).toContain('good morning');
-    expect(resolved.instructions[1]).toContain(path.dirname(source));
+    expect(resolved.instructions).toHaveLength(1);
+    expect(resolved.instructions.join('\n')).not.toContain('vars.toml');
     expect(resolved.mode).toBe('chat');
     expect(resolved.missing).toEqual([]);
+  });
+
+  it('advertises the exact bundle only when a skill actually has bundled files', () => {
+    const folder = path.join(tempDir(), 'translate');
+    fs.mkdirSync(folder);
+    const source = path.join(folder, 'SKILL.md');
+    fs.writeFileSync(source, TRANSLATE);
+    fs.writeFileSync(path.join(folder, 'terms.toml'), 'hello = "こんにちは"\n');
+    const skill = parseSkill(TRANSLATE, source);
+
+    const resolved = resolveSkillInvocation(
+      skill,
+      parseSkillInvocation('$translate hello Japanese')!,
+    );
+
+    expect(resolved.instructions).toHaveLength(2);
+    expect(resolved.instructions[1]).toContain(folder);
+    expect(resolved.instructions[1]).toContain('terms.toml');
+    expect(resolved.instructions[1]).not.toContain('vars.toml');
   });
 
   it('reports missing required values before starting a model run', () => {

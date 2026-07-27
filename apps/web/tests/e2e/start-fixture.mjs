@@ -17,6 +17,14 @@ const researchProfileDir = path.join(profilesDir, 'research-lab');
 fs.mkdirSync(researchProfileDir, { recursive: true });
 fs.writeFileSync(path.join(researchProfileDir, 'PROFILE.md'), '# Research Lab\n\nA second profile for sidebar search.\n');
 fs.writeFileSync(path.join(researchProfileDir, 'profile.toml'), 'mode = "agent"\nmemories = false\n');
+const appTesterProfileDir = path.join(profilesDir, 'app_tester');
+fs.cpSync(path.join(root, 'examples/profiles/app_tester'), appTesterProfileDir, { recursive: true });
+const appsDir = path.join(stateDir, 'apps');
+fs.cpSync(path.join(root, 'examples/apps'), appsDir, { recursive: true });
+fs.writeFileSync(
+  path.join(appTesterProfileDir, 'profile.toml'),
+  'provider = "ollama"\nmodel = "fixture-model"\nmode = "chat"\nmemories = false\nthink = false\n',
+);
 
 const loadedConfig = {
   config: {
@@ -29,6 +37,7 @@ const loadedConfig = {
       tasksDir: path.join(stateDir, 'tasks'),
       schedulesDir: path.join(stateDir, 'schedules'),
       skillsDir: path.join(stateDir, 'skills'),
+      appsDir,
     },
     providers: { ollama: { type: 'ollama', baseUrl: 'http://127.0.0.1:9' } },
     agent: resolveAgentConfig(),

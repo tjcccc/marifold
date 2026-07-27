@@ -17,7 +17,7 @@
 - v0.10.0: local service API plus task/session foundation. Done.
 - v0.11.0: basic CLI agent loop using the task-state model, with narrow approval-aware tools, native tool calling through `@priest-ai/core` 2.4, and a control-block fallback. Done.
 - v0.12.0: selective chat parity — web search and file reading as agent tools reused by chat, ChatGPT OAuth token refresh, and image plumbing. Done.
-- SkillApp schema spec (docs + validator only, no runtime). Done: [docs/skillapp.md](docs/skillapp.md) defines `marifold.skillapp.v0` with a core parser/validator (`packages/core/src/skillapp`); runtime/rendering stays deferred until a client UI exists.
+- App MVP. Done: [docs/app.md](docs/app.md) defines `marifold.app.v0`; core discovers global bundles and resolves explicit actor profiles, the service exposes normalized definitions and transcript-free streamed Skill actions, and Web renders the portable layout tree in a dedicated Apps view. Approval-aware effectful actions and richer components remain deferred.
 - v0.13.0: scheduled task execution hosted in `marifold service` with an unattended approval policy. Done.
 - Spec 2.4.0 synced across all SDKs (2026-06-12): Python `priest` 2.4.0 (reference), `priest-dotnet` 2.4.0, `priest-rs` 2.4.0, `PriestSwift` 2.4.0 — all with caller-executes tool calling, the run-with-tools loop helper, stream-events (native in TS/Python; fallback wrapping in dotnet/rs/swift), and the tool-turn session persistence rule.
 - Publish `@priest-ai/core` 2.4.0 to npm, remove the `link:../priest-typescript` pnpm override in the workspace `package.json`, and reinstall. The other SDK packages (PyPI/NuGet/crates.io/SwiftPM tag) publish from their committed 2.4.0 states.
@@ -93,7 +93,7 @@
 - OAuth refresh: refresh expired ChatGPT credentials before provider requests, matching priests.
 - Web UI: browser chat app backed by the service API, initially focused on chat, profiles, sessions, memory, and task-state inspection.
 - Apple clients: macOS/iOS apps after the service API and Web UI stabilize.
-- SkillApp runtime: schema-defined GUI mini apps for focused skills such as translators, UI design helpers, research helpers, and prompt generators.
+- App expansion: conditionals, repeaters, typed artifacts, richer previews/canvases, controlled file export, and approval-aware effectful actions for apps such as email, design, and research helpers.
 - Alias profiles: profile entries that launch, wrap, delegate to, or compose with external agents such as Codex and Claude Code.
 - Workflow composition: route subtasks across native profiles, skill apps, models, and external-agent aliases.
 - Agent runtime: broader tool-call policy, permission boundaries, and external tool execution after the basic CLI agent loop is stable.
@@ -123,7 +123,7 @@
   task/session state, and reserve PriestSwift for a later explicit offline/local
   execution backend rather than running a second engine in ordinary connected
   clients.
-- SkillApp and workflow runtime: schema-defined focused apps, workflow composition, model/profile routing, external-agent routing, and durable workflow history.
+- App and workflow expansion: richer declarative components/actions, workflow composition, external-agent routing, and durable App/workflow history.
 - Testing and evaluation: service integration tests, cross-client contract tests, streaming smoke tests, adversarial memory tests, task-state regression tests, and broader provider-backed evals.
 - Operations and packaging: install/start/restart behavior, local daemon strategy, log rotation, migrations, diagnostics, crash recovery, and user-friendly troubleshooting.
 
@@ -138,7 +138,7 @@ Design conclusions from product discussion (2026-06-22). Captured for later; not
 - Decisions locked:
   - **Memory stays per-profile** (actor-model isolation): profiles share by talking, never by reading each other's memory files. Possible single exception: a read-only "owner card" (user's name/timezone) every contact may see — opt-in, not a shared-memory backdoor.
   - **New contact = init a new profile.** Offer starter templates (email writer, translator, coder) = preset profiles.
-  - **Skills remain global + profile-scoped.** Per-contact UI has Chat / Agent / SkillApp tabs; one SkillApp per profile (a container aggregating that profile's skills). OPEN: do Chat and Agent share one thread/history (preferred) or split into sub-threads? Decide before the session schema hardens.
+  - **Skills remain global + profile-scoped. Apps are global bundles with explicit actors.** Agent conversations remain profile/session based; Apps use their own workspace and do not write Agent transcripts.
 - **Pipelines / work chains before group chat.** A directed A→B handoff (e.g. Agent A collects stock news → JSON → Agent B writes investment advice). Build this first; group chat (shared room, all-to-all) is deferred and harder to make useful.
   - Keep the pipeline *structure* deterministic (fixed config run by code); the model powers only each *stage*. Do not let a model decide flow for recurring scheduled jobs.
   - The central artifact is the **typed handoff schema** between stages (priest `OutputSpec` enables this) — the schema is the API between agents; free-form string passing is fragile.

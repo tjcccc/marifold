@@ -10,6 +10,7 @@ export {
   bindSkillArgs,
   parseSkillInvocation,
   resolveSkillInvocation,
+  resolveSkillValuesInvocation,
   skillUsage,
   tokenizeSkillArgs,
 } from './SkillInvocation';

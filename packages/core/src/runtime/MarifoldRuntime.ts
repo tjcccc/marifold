@@ -58,8 +58,12 @@ import {
 } from '../skill/SkillInvocation';
 import type { ResolvedSkillInvocation } from '../skill/SkillInvocation';
 import { buildSkillManagerGuide, mentionsSkills } from '../skill/BuiltInSkillManager';
+import { resolveAppAction as resolveAppActionDefinition } from '../app/AppActionResolver';
+import type { ResolvedAppAction } from '../app/AppActionResolver';
+import type { AppDefinition } from '../app/AppSchema';
+import { AppStore } from '../app/AppStore';
 import { TaskStore } from '../tasks/TaskStore';
-import { defaultSchedulesDir, defaultSkillsDir } from '../workspace/WorkspacePaths';
+import { defaultAppsDir, defaultSchedulesDir, defaultSkillsDir } from '../workspace/WorkspacePaths';
 import type { TaskCreateInput, TaskEventInput, TaskListOptions, TaskState, TaskSummary, TaskUpdateInput } from '../tasks/TaskStore';
 import { MarifoldAskResponse, MarifoldResolvedSettings, MarifoldRunRequest } from './MarifoldTypes';
 
@@ -125,6 +129,7 @@ export class MarifoldRuntime {
     const engine = this.createEngine(
       settings.provider,
       Boolean(request.sessionId) && !replacing && !isolated,
+      request.profileContext !== false,
     );
     const memoryOn = this.memoryEnabled(settings.profile, request.memories);
     const memory = this.memoryForRequest(settings.profile, request.memories, request.prompt, settings.think);
@@ -209,6 +214,7 @@ export class MarifoldRuntime {
     const engine = this.createEngine(
       settings.provider,
       Boolean(request.sessionId) && !replacing && !isolated,
+      request.profileContext !== false,
     );
     const memoryOn = this.memoryEnabled(settings.profile, request.memories);
     const memory = this.memoryForRequest(settings.profile, request.memories, request.prompt, settings.think);
@@ -806,6 +812,41 @@ export class MarifoldRuntime {
     return this.createSkillStore(profile).remove(name, scope);
   }
 
+  createAppStore(): AppStore {
+    const { config } = this.options.loadedConfig;
+    return new AppStore(config.paths.appsDir ?? defaultAppsDir());
+  }
+
+  listApps(): AppDefinition[] {
+    return this.createAppStore().list();
+  }
+
+  getApp(name: string): AppDefinition | undefined {
+    return this.createAppStore().get(name);
+  }
+
+  resolveAppAction(
+    appName: string,
+    actionName: string,
+    values: Record<string, unknown>,
+  ): ResolvedAppAction {
+    const definition = this.createAppStore().require(appName);
+    const action = definition.actions.find(candidate => candidate.name === actionName);
+    if (!action) {
+      throw MarifoldError.appInvalid(
+        `App action '${actionName}' does not exist.`,
+      );
+    }
+    const actor = definition.actors.find(candidate => candidate.name === action.actor);
+    if (!actor) {
+      throw MarifoldError.appInvalid(
+        `App action '${actionName}' references missing actor '${action.actor}'.`,
+      );
+    }
+    const skill = this.createSkillStore(actor.profile).require(action.skill);
+    return resolveAppActionDefinition(definition, actionName, values, skill);
+  }
+
   createSchedule(input: ScheduleCreateInput): ScheduleState {
     return this.scheduleStore.create(input);
   }
@@ -931,10 +972,21 @@ export class MarifoldRuntime {
     this.sessionResolver.close();
   }
 
-  private createEngine(providerName: string, useSession: boolean): PriestEngine {
+  private createEngine(providerName: string, useSession: boolean, profileContext = true): PriestEngine {
     const adapter = this.providerFactory.create(providerName);
+    const profileLoader = profileContext
+      ? this.profileResolver
+      : {
+          load: (name: string) => ({
+            name,
+            identity: '',
+            rules: '',
+            custom: '',
+            memories: [],
+          }),
+        };
     return new PriestEngine(
-      this.profileResolver,
+      profileLoader,
       useSession ? this.sessionResolver.openStore() : undefined,
       { [providerName]: adapter },
     );
@@ -1100,7 +1152,7 @@ export class MarifoldRuntime {
   }
 
   private runtimeContext(memory: string[], prompt: string, memoryOn: boolean): string[] {
-    const context = ['Running inside Marifold CLI.'];
+    const context = ['Running inside Marifold.'];
     if (memoryOn) {
       context.push('Profile memory is app-owned context. Current user messages and profile rules outrank memory.');
       if (shouldInjectMemoryInstructions(prompt)) context.push(buildMemoryInstructions());

@@ -21,6 +21,7 @@ import {
 } from './ConfigSchema';
 import {
   defaultConfigPath,
+  defaultAppsDir,
   defaultProfilesDir,
   defaultSchedulesDir,
   defaultSessionsDb,
@@ -152,6 +153,7 @@ export class ConfigLoader {
       tasksDir: resolveUserPath(optionalString(raw.tasks_dir, 'paths.tasks_dir') ?? defaultTasksDir()),
       schedulesDir: resolveUserPath(optionalString(raw.schedules_dir, 'paths.schedules_dir') ?? defaultSchedulesDir()),
       skillsDir: resolveUserPath(optionalString(raw.skills_dir, 'paths.skills_dir') ?? defaultSkillsDir()),
+      appsDir: resolveUserPath(optionalString(raw.apps_dir, 'paths.apps_dir') ?? defaultAppsDir()),
     };
   }
 

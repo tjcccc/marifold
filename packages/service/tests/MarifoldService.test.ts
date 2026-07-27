@@ -57,6 +57,141 @@ describe('MarifoldService', () => {
     }
   });
 
+  it('lists and streams a global App actor without writing an Agent transcript', async () => {
+    const dir = tempDir();
+    const profileDir = path.join(dir, 'profiles', 'app_tester');
+    const postmanDir = path.join(dir, 'profiles', 'postman');
+    const appDir = path.join(dir, 'apps', 'translator');
+    fs.mkdirSync(appDir, { recursive: true });
+    fs.mkdirSync(path.join(profileDir, 'skills', 'translate'), { recursive: true });
+    fs.mkdirSync(path.join(postmanDir, 'skills', 'translate'), { recursive: true });
+    fs.writeFileSync(path.join(profileDir, 'PROFILE.md'), 'PROFILE TEXT THAT MUST BE OMITTED');
+    fs.writeFileSync(
+      path.join(profileDir, 'profile.toml'),
+      'provider = "ollama"\nmodel = "gemma4:e4b"\nmode = "chat"\nmemories = false\nthink = false\n',
+    );
+    fs.writeFileSync(
+      path.join(postmanDir, 'profile.toml'),
+      'provider = "ollama"\nmodel = "gemma4:e4b"\nmode = "chat"\nmemories = false\nthink = false\n',
+    );
+    fs.writeFileSync(
+      path.join(appDir, 'app.toml'),
+      `${fs.readFileSync(path.resolve(process.cwd(), '../../examples/apps/translator/app.toml'), 'utf-8')}
+
+[[actors]]
+name = "secondary"
+profile = "postman"
+
+[[actions]]
+name = "translate_secondary"
+kind = "skill"
+actor = "secondary"
+skill = "translate"
+arguments = { source_text = "{{source_text}}", target_language = "{{target_language}}" }
+output = "translated_text"
+`,
+    );
+    fs.copyFileSync(
+      path.resolve(process.cwd(), '../../examples/profiles/app_tester/skills/translate/SKILL.md'),
+      path.join(profileDir, 'skills', 'translate', 'SKILL.md'),
+    );
+    fs.writeFileSync(
+      path.join(postmanDir, 'skills', 'translate', 'SKILL.md'),
+      `---
+name: translate
+mode: chat
+variables:
+  - name: source_text
+    required: true
+  - name: target_language
+    required: true
+---
+Secondary actor instruction: translate {{source_text}} into {{target_language}}.
+`,
+    );
+
+    let providerBody: {
+      messages?: Array<{ content?: string }>;
+      think?: boolean;
+    } | undefined;
+    vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      providerBody = JSON.parse(String(init?.body));
+      const lines = [
+        JSON.stringify({ message: { content: 'おはよう' }, done: false }),
+        JSON.stringify({
+          message: { content: '' },
+          done: true,
+          done_reason: 'stop',
+          prompt_eval_count: 40,
+          eval_count: 4,
+        }),
+      ].join('\n');
+      return new Response(`${lines}\n`, {
+        status: 200,
+        headers: { 'Content-Type': 'application/x-ndjson' },
+      });
+    }));
+
+    const loaded = fixtureLoadedConfig(dir);
+    loaded.config.paths.appsDir = path.join(dir, 'apps');
+    const server = createMarifoldService({ loadedConfig: loaded, scheduler: false });
+    try {
+      const listed = await server.inject({
+        method: 'GET',
+        url: '/v1/apps',
+      });
+      expect(listed.statusCode).toBe(200);
+      expect(listed.json().apps[0]).toMatchObject({
+        app: { name: 'translator', version: '1.0.0' },
+        actors: [
+          { name: 'translator', profile: 'app_tester' },
+          { name: 'secondary', profile: 'postman' },
+        ],
+        execution: { think: false, memory: false, profileContext: false },
+      });
+
+      const streamed = await server.inject({
+        method: 'POST',
+        url: '/v1/apps/translator/actions/translate/stream',
+        payload: {
+          values: { source_text: 'Good morning', target_language: 'Japanese' },
+        },
+      });
+      expect(streamed.statusCode).toBe(200);
+      expect(streamed.body).toContain('data: {"text":"おはよう"}');
+      expect(streamed.body).toContain('"totalTokens":44');
+
+      const context = providerBody?.messages?.map(message => message.content ?? '').join('\n') ?? '';
+      expect(context).toContain('Translate the following text into Japanese.');
+      expect(context).toContain('Good morning');
+      expect(context).not.toContain('PROFILE TEXT THAT MUST BE OMITTED');
+      expect(context).not.toContain('bundled files');
+      expect(context).not.toContain('vars.toml');
+      expect(context).not.toContain('read_file');
+      expect(providerBody?.think).toBe(false);
+
+      const secondary = await server.inject({
+        method: 'POST',
+        url: '/v1/apps/translator/actions/translate_secondary/stream',
+        payload: {
+          values: { source_text: 'Good night', target_language: 'Japanese' },
+        },
+      });
+      expect(secondary.statusCode).toBe(200);
+      const secondaryContext = providerBody?.messages?.map(message => message.content ?? '').join('\n') ?? '';
+      expect(secondaryContext).toContain('Secondary actor instruction');
+      expect(secondaryContext).toContain('Good night');
+
+      const sessions = await server.inject({
+        method: 'GET',
+        url: '/v1/sessions?profile=app_tester',
+      });
+      expect(sessions.json().sessions).toEqual([]);
+    } finally {
+      await server.close();
+    }
+  });
+
   it('POST /v1/profiles/:name/memories saves a memory (the /remember command)', async () => {
     const server = createMarifoldService({ loadedConfig: fixtureLoadedConfig(tempDir()), scheduler: false });
     try {

@@ -17,6 +17,8 @@ export type MarifoldErrorCode =
   | 'SCHEDULE_NOT_FOUND'
   | 'SKILL_INVALID'
   | 'SKILL_NOT_FOUND'
+  | 'APP_INVALID'
+  | 'APP_NOT_FOUND'
   | 'RUN_NOT_FOUND'
   | 'APPROVAL_NOT_FOUND'
   | 'RUN_LIMIT_EXCEEDED'
@@ -112,6 +114,14 @@ export class MarifoldError extends Error {
 
   static skillNotFound(name: string): MarifoldError {
     return new MarifoldError('SKILL_NOT_FOUND', `Skill not found: ${name}`, { name });
+  }
+
+  static appInvalid(message: string, source?: string): MarifoldError {
+    return new MarifoldError('APP_INVALID', message, source ? { source } : {});
+  }
+
+  static appNotFound(name: string): MarifoldError {
+    return new MarifoldError('APP_NOT_FOUND', `App not found: ${name}`, { name });
   }
 
   static runNotFound(runId: string): MarifoldError {

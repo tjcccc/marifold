@@ -4,7 +4,7 @@ Marifold is a local-first personal AI workspace for profiles, chats, skills, min
 
 The primary surface is the **TUI** — an Ink/React terminal app launched by bare `marifold`. It's agent-first (with a `/chat` mode), rendering chat and agent-event streams with `/` commands, `$skill` invocation, an approval modal, `/btw` mid-run steering, a skills manager, a profile-aware header, and session resume (`--resume`). Skills (`marifold.skill.v0`, run via `$name`) execute as agentic tools: the skill body is authoritative instructions and, in agent mode, the model reads the skill's own bundled files (e.g. a `vars.toml`) to do its work. `marifold init` and `marifold provider add` walk you through choosing a provider/model interactively.
 
-Underneath sits an approval-aware agent loop with native provider tool calling and Responses reasoning continuity (through `@priest-ai/core` 3.0) plus a control-block fallback, narrow built-in tools (file read/write, isolated shell, per-run Python packages, web search, profile delegation), capability-scoped run workspaces, config-driven approval policy, a `marifold agent` command, chat `/search`/`/read`/`/image`, ChatGPT/Copilot OAuth, the `marifold.skillapp.v0` schema spec, and cron-scheduled unattended runs hosted inside `marifold service` — alongside priests-style profile chat, structured per-profile memory, model/provider management, config backup/import, the loopback-only Fastify service API, and ephemeral task-state storage.
+Underneath sits an approval-aware agent loop with native provider tool calling and Responses reasoning continuity (through `@priest-ai/core` 3.0) plus a control-block fallback, narrow built-in tools (file read/write, isolated shell, per-run Python packages, web search, profile delegation), capability-scoped run workspaces, config-driven approval policy, a `marifold agent` command, chat `/search`/`/read`/`/image`, ChatGPT/Copilot OAuth, the `marifold.app.v0` schema, and cron-scheduled unattended runs hosted inside `marifold service` — alongside priests-style profile chat, structured per-profile memory, model/provider management, config backup/import, the loopback-only Fastify service API, and ephemeral task-state storage.
 
 For product direction and future scope, see [docs/vision.md](docs/vision.md) and [docs/roadmap.md](docs/roadmap.md). For the terminal app, see [docs/tui.md](docs/tui.md).
 
@@ -32,7 +32,7 @@ For product direction and future scope, see [docs/vision.md](docs/vision.md) and
 - A scheduler hosted inside `marifold service` (minute resolution); schedules fire only while the service runs, and a firing missed during downtime fires once on the next tick.
 - Unattended approval policy for scheduled runs: `ask` degrades to deny, with explicit `[agent.unattended]` overrides (e.g. `write = "allow"`).
 - Read-only `/v1/schedules` service routes, `scheduled` task tags, and a `lastResultSeen` flag for future unread-result surfacing.
-- The `marifold.skillapp.v0` SkillApp schema spec ([docs/skillapp.md](docs/skillapp.md)) with a TOML parser/validator in core (spec only — no runtime yet).
+- A `marifold.app.v0` MVP ([docs/app.md](docs/app.md)): global `~/.marifold/apps/<name>/app.toml` bundles, explicit multi-profile actors, portable row/column layouts, typed state, transcript-free streamed Skill actions, and a dedicated Apps view in the persistent Web workspace shell.
 - Web search through the chat `/search <query>` command (DuckDuckGo by default, pluggable backend) with results injected as turn-local context.
 - Model-initiated `web_search` and `read_file` tools on chat turns when `[web_search].enabled = true`, using a bounded tool loop.
 - File attachment through chat `/read <path>` (100k-char truncation) and image attachment through `/image <path>` / `/image clear` and `ask --image <path>`. Local/base64 images are validated, MIME-corrected, metadata-stripped, and optimized before provider requests (1600 px maximum long edge; lossless WebP for PNG/transparent inputs; conservative high-quality encoding for JPEG and oversized static WebP inputs; animated images preserved). The candidate is used only when smaller. TUI and Web UI support one-turn `/attach-original <prompt>` to preserve original encoded bytes. Embedded/URL images are retained as display-only session attachments so the Web UI can restore transcript thumbnails without adding them to later model context. The Web composer also extracts readable text locally from modern Word (`.docx`), Excel (`.xlsx`), and PowerPoint (`.pptx`) files. Chat mode sends the extracted text only; agent mode additionally stages the original binary as a read-only per-run input so tools can inspect the workbook/document itself.
@@ -93,7 +93,7 @@ For product direction and future scope, see [docs/vision.md](docs/vision.md) and
 
 ## Non-goals
 
-Marifold does not yet include semantic/vector retrieval, memory encryption, SkillApp runtime/rendering, Workflow, Apple apps, external-agent aliases, provider-owned model deletion, remote (non-loopback) service binding, or service daemon packaging (schedules fire only while `marifold service` runs).
+Marifold does not yet include semantic/vector retrieval, memory encryption, approval-aware effectful App actions, advanced App components, Workflow, Apple apps, external-agent aliases, provider-owned model deletion, remote (non-loopback) service binding, or service daemon packaging (schedules fire only while `marifold service` runs).
 
 Web search uses DuckDuckGo scraping by default, which requires no API key but can be blocked by DuckDuckGo's anomaly detection on some networks. Errors surface clearly in `/search` output and tool results, and the `SearchBackend` interface is pluggable for alternative engines.
 
@@ -315,6 +315,8 @@ profiles_dir = "~/.marifold/profiles"
 sessions_db = "~/.marifold/sessions.db"
 tasks_dir = "~/.marifold/tasks"
 schedules_dir = "~/.marifold/schedules"
+skills_dir = "~/.marifold/skills"
+apps_dir = "~/.marifold/apps"
 
 [providers.ollama]
 type = "ollama"

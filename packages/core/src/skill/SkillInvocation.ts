@@ -1,3 +1,4 @@
+import * as fs from 'fs';
 import * as path from 'path';
 import { MarifoldError } from '../errors/MarifoldError';
 import type { MarifoldSkill, SkillMode } from './SkillSchema';
@@ -77,21 +78,48 @@ export function resolveSkillInvocation(
   if (parsed.name !== skill.name) {
     throw MarifoldError.skillInvalid(`Invocation $${parsed.name} does not match skill '${skill.name}'.`);
   }
-  const { prompt: body, missing } = renderSkillPrompt(skill, bindSkillArgs(skill, parsed.argv));
-  const bundledDir = skill.source ? path.dirname(skill.source) : undefined;
-  const instructions = bundledDir
-    ? [
-        body,
-        `This skill's bundled files are in ${bundledDir}. When the instructions reference files such as vars.toml, read them from there with read_file.`,
-      ]
-    : [body];
+  return resolveSkillValuesInvocation(
+    skill,
+    bindSkillArgs(skill, parsed.argv),
+    parsed.displayText,
+    parsed.argv.join(' ').trim() || 'Follow the skill instructions above and produce the output.',
+  );
+}
+
+/** Resolve a skill from named values supplied by a renderer such as an App. */
+export function resolveSkillValuesInvocation(
+  skill: MarifoldSkill,
+  supplied: Record<string, string>,
+  userTurn: string,
+  prompt = Object.values(supplied).filter(Boolean).join(' ').trim()
+    || 'Follow the skill instructions above and produce the output.',
+): ResolvedSkillInvocation {
+  const { prompt: body, missing } = renderSkillPrompt(skill, supplied);
+  const bundledFiles = bundledFilesInstruction(skill);
+  const instructions = [body, ...(bundledFiles ? [bundledFiles] : [])];
   return {
     name: skill.name,
-    userTurn: parsed.displayText,
-    prompt: parsed.argv.join(' ').trim() || 'Follow the skill instructions above and produce the output.',
+    userTurn,
+    prompt,
     instructions,
     ...(skill.mode ? { mode: skill.mode } : {}),
     missing,
     usage: skillUsage(skill),
   };
+}
+
+function bundledFilesInstruction(skill: MarifoldSkill): string | undefined {
+  const source = skill.source;
+  if (!source) return undefined;
+  const bundledDir = path.dirname(source);
+  let entries: string[];
+  try {
+    entries = fs.readdirSync(bundledDir)
+      .filter(name => name !== path.basename(source) && name !== '.DS_Store')
+      .sort();
+  } catch {
+    return undefined;
+  }
+  if (entries.length === 0) return undefined;
+  return `This skill's bundled files are in ${bundledDir}: ${entries.join(', ')}. Read a bundled file with read_file only when the skill instructions require it.`;
 }

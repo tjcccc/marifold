@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom';
 import type { SessionSummary } from '../../api/types';
 import { PinGlyph } from '../../components/PinGlyph';
 import { formatRelativeTime } from '../../lib/format';
+import { WorkspaceSidebar } from './WorkspaceSidebar';
 import styles from './SessionList.module.css';
 
 const MENU_WIDTH = 184;
@@ -36,7 +37,19 @@ interface MenuState {
 }
 
 /** Second level of the primary sidebar stack: selected profile → sessions. */
-export function SessionList({
+export function SessionList(props: SessionListProps) {
+  const { footer, ...contentProps } = props;
+  return (
+    <WorkspaceSidebar ariaLabel="Sessions" footer={footer}>
+      <SessionListContent {...contentProps} />
+    </WorkspaceSidebar>
+  );
+}
+
+export type SessionListContentProps = Omit<SessionListProps, 'footer'>;
+
+/** Session-specific body for the persistent workspace sidebar. */
+export function SessionListContent({
   sessions,
   selected,
   profileName,
@@ -53,8 +66,7 @@ export function SessionList({
   onSetPinned,
   onSetArchived,
   onDelete,
-  footer,
-}: SessionListProps) {
+}: SessionListContentProps) {
   const [menu, setMenu] = useState<MenuState | undefined>();
   const [renaming, setRenaming] = useState<SessionSummary | undefined>();
   const [deleting, setDeleting] = useState<SessionSummary | undefined>();
@@ -190,7 +202,7 @@ export function SessionList({
   }
 
   return (
-    <section className={styles.pane} aria-label="Sessions">
+    <>
       <div className={styles.profileHeader}>
         <button className={styles.backButton} onClick={onBack} title="Back to profiles" aria-label="Back to profiles">
           <BackGlyph />
@@ -260,7 +272,6 @@ export function SessionList({
           );
         })}
       </div>
-      {footer}
 
       {menu ? createPortal(
         <div
@@ -385,7 +396,7 @@ export function SessionList({
         </div>,
         document.body,
       ) : null}
-    </section>
+    </>
   );
 }
 

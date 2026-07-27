@@ -40,6 +40,7 @@ export function fixtureLoadedConfig(dir: string, overrides: Partial<MarifoldConf
       sessionsDb: path.join(dir, 'sessions.db'),
       tasksDir: path.join(dir, 'tasks'),
       schedulesDir: path.join(dir, 'schedules'),
+      appsDir: path.join(dir, 'apps'),
     },
     providers: {
       ollama: {

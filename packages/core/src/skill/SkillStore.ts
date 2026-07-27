@@ -20,7 +20,7 @@ export type SkillScope = 'global' | 'profile';
  * profile's skills/ dir. Each skill is a folder `<name>/SKILL.md` (the Claude
  * Code layout), so a skill can carry bundled files. A profile skill shadows a
  * global one of the same name. Skills are the TUI's `$name` primitive and a
- * future SkillApp's source.
+ * future App's source.
  */
 export class SkillStore {
   constructor(private readonly options: SkillStoreOptions) {}

@@ -42,7 +42,7 @@ export function parseSkill(text: string, source?: string): MarifoldSkill {
 
 export function validateSkill(raw: RawRecord, source?: string): MarifoldSkill {
   // `schema` is optional now (markdown skills don't need a marker); if present
-  // it must still name this schema, to catch a misplaced skillapp.
+  // it must still name this schema, to catch a misplaced App definition.
   if (raw.schema !== undefined) {
     const schema = requireString(raw.schema, 'schema', source);
     if (schema !== SKILL_SCHEMA_ID) {
@@ -68,7 +68,7 @@ export function validateSkill(raw: RawRecord, source?: string): MarifoldSkill {
   const variables = normalizeVariables(raw.variables, source);
 
   // Every variable referenced in the prompt must be declared, so the TUI and a
-  // graphical SkillApp resolve the same set before running the skill.
+  // graphical App resolve the same set before running the skill.
   const declared = new Set(variables.map(variable => variable.name));
   const referenced = extractTemplateVariables(prompt);
   const undeclared = referenced.filter(variable => !declared.has(variable));

@@ -10,7 +10,7 @@ export interface SkillRenderResult {
 /**
  * Effective value for each declared variable: the supplied value, else the
  * declared default. Required variables with neither are reported as missing so
- * the caller (TUI inline prompt, or a SkillApp form) can collect them.
+ * the caller (TUI inline prompt, or an App form) can collect them.
  */
 export function resolveSkillValues(
   skill: MarifoldSkill,
