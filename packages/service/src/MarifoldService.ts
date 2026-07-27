@@ -572,8 +572,7 @@ function assertLoopbackHost(host: string): void {
 
 async function streamChat(reply: FastifyReply, runtime: MarifoldRuntime, request: MarifoldRunRequest): Promise<void> {
   let closed = false;
-  let completion: { usage?: AgentUsage } | undefined;
-  const startedAt = Date.now();
+  let completion: { usage?: AgentUsage; latencyMs?: number } | undefined;
   // A disconnected client must tear down the in-flight provider request, not
   // just stop the SSE writes — otherwise the model keeps generating unbilled-
   // for output after the browser tab is gone.
@@ -592,7 +591,7 @@ async function streamChat(reply: FastifyReply, runtime: MarifoldRuntime, request
     for await (const chunk of runtime.stream(
       { ...request, signal: abort.signal },
       summary => {
-        completion = { usage: summary.usage };
+        completion = summary;
       },
       text => {
         if (!closed) writeSse(reply, 'reasoning', { text });
@@ -604,7 +603,7 @@ async function streamChat(reply: FastifyReply, runtime: MarifoldRuntime, request
     if (!closed) {
       writeSse(reply, 'done', {
         ...(completion?.usage ? { usage: completion.usage } : {}),
-        latencyMs: Date.now() - startedAt,
+        ...(completion?.latencyMs !== undefined ? { latencyMs: completion.latencyMs } : {}),
       });
     }
   } catch (error) {

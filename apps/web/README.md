@@ -91,6 +91,11 @@ a **Re-authenticate…** dialog with a copyable
 service host because a remotely forwarded browser's loopback callback points at
 the client machine, not the Mac hosting Marifold.
 
+Completed chat and agent responses show a shared time/token/reasoning/cost
+footer. The service persists those content-free metrics by session and stable
+user-turn ordinal, so the footer survives navigation, page reload, and service
+restart; providers that omit a usage field simply leave that field hidden.
+
 Office source files are limited to 16 MiB, selected expanded XML to 8 MiB, and
 extracted prompt text to 256 KiB. Embedded images, charts, complex formatting,
 macros, password-protected/encrypted files, and legacy `.doc`/`.xls`/`.ppt`

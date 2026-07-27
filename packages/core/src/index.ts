@@ -182,6 +182,7 @@ export {
   type SessionReplaceResult,
   type SessionTruncateResult,
 } from './sessions/SessionResolver';
+export type { ResponseMetrics } from './sessions/ResponseMetrics';
 export {
   SKILL_SCHEMA_ID,
   extractTemplateVariables,

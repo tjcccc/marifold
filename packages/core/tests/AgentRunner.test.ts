@@ -159,7 +159,10 @@ describe('AgentRunner', () => {
   });
 
   it('loads only the edit prefix and persists back to the selected exchange', async () => {
-    const engine = new ScriptedEngine([response({ text: 'Updated answer.' })]);
+    const engine = new ScriptedEngine([response({
+      text: 'Updated answer.',
+      usage: { inputTokens: 40, outputTokens: 10, totalTokens: 50 },
+    })]);
     const registry = new ToolRegistry();
     registry.register(fakeTool());
     const loadRecentTurns = vi.fn(() => [
@@ -191,6 +194,14 @@ describe('AgentRunner', () => {
       'Updated answer.',
       undefined,
       1,
+      expect.objectContaining({
+        mode: 'agent',
+        provider: 'mock',
+        model: 'test-model',
+        think: false,
+        latencyMs: expect.any(Number),
+        usage: { inputTokens: 40, outputTokens: 10, totalTokens: 50 },
+      }),
     );
   });
 
@@ -318,6 +329,14 @@ describe('AgentRunner', () => {
       'Describe it.',
       'I can see it.',
       [{ data: 'prepared', mediaType: 'image/png' }],
+      undefined,
+      expect.objectContaining({
+        mode: 'agent',
+        provider: 'mock',
+        model: 'test-model',
+        think: false,
+        latencyMs: expect.any(Number),
+      }),
     );
   });
 

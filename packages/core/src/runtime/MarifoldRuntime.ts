@@ -48,6 +48,7 @@ import {
   SessionListOptions,
   SessionTruncateResult,
 } from '../sessions/SessionResolver';
+import type { ResponseMetrics } from '../sessions/ResponseMetrics';
 import { SkillStore } from '../skill/SkillStore';
 import { MarifoldSkill } from '../skill/SkillSchema';
 import { SkillScope } from '../skill/SkillStore';
@@ -114,6 +115,8 @@ export class MarifoldRuntime {
   }
 
   async ask(request: MarifoldRunRequest): Promise<MarifoldAskResponse> {
+    const startedAtMs = Date.now();
+    const startedAt = new Date(startedAtMs).toISOString();
     const settings = this.resolveSettings(request);
     const preparedImages = await prepareImageInputs(request.images, { optimize: request.originalImages !== true });
     await this.refreshProviderCredentialsIfNeeded(settings.provider);
@@ -143,9 +146,23 @@ export class MarifoldRuntime {
     });
     const stripped = stripMemoryControls(response.text ?? '');
     const userTurn = request.userTurn ?? request.prompt;
+    const responseMetrics = completedResponseMetrics(
+      'chat',
+      settings,
+      startedAt,
+      startedAtMs,
+      response.usage,
+    );
     if (response.ok && request.sessionId) {
       if (request.replaceUserTurnIndex !== undefined) {
-        this.replaceEditedExchange(request.sessionId, request.replaceUserTurnIndex, userTurn, stripped.text, preparedImages.images);
+        this.replaceEditedExchange(
+          request.sessionId,
+          request.replaceUserTurnIndex,
+          userTurn,
+          stripped.text,
+          preparedImages.images,
+          responseMetrics,
+        );
       } else if (isolated) {
         await this.sessionResolver.appendExchange(
           request.sessionId,
@@ -153,11 +170,13 @@ export class MarifoldRuntime {
           userTurn,
           stripped.text,
           preparedImages.images,
+          responseMetrics,
         );
       } else {
         if (request.userTurn) this.sessionResolver.replaceLastUserTurn(request.sessionId, request.userTurn);
         this.sessionResolver.replaceLastAssistantTurn(request.sessionId, stripped.text);
         this.sessionResolver.saveLastUserTurnAttachments(request.sessionId, preparedImages.images);
+        this.sessionResolver.saveLastResponseMetrics(request.sessionId, responseMetrics);
       }
     }
     if (response.ok && memoryOn) {
@@ -168,7 +187,7 @@ export class MarifoldRuntime {
       ok: response.ok,
       text: stripped.text,
       settings,
-      latencyMs: response.execution.latencyMs,
+      latencyMs: response.ok ? responseMetrics.latencyMs : response.execution.latencyMs,
       session: response.session,
       error: response.error ? { code: response.error.code, message: response.error.message } : undefined,
     };
@@ -179,6 +198,8 @@ export class MarifoldRuntime {
     onComplete?: (summary: { usage?: UsageInfo; latencyMs?: number }) => void,
     onReasoningSummary?: (text: string) => void,
   ): AsyncGenerator<string, void, unknown> {
+    const startedAtMs = Date.now();
+    const startedAt = new Date(startedAtMs).toISOString();
     const settings = this.resolveSettings(request);
     const preparedImages = await prepareImageInputs(request.images, { optimize: request.originalImages !== true });
     await this.refreshProviderCredentialsIfNeeded(settings.provider);
@@ -259,6 +280,13 @@ export class MarifoldRuntime {
         const finalText = streamedText || fallbackControls?.text || '';
         if (streamedText.length === 0 && finalText) yield finalText;
         const userTurn = request.userTurn ?? request.prompt;
+        const responseMetrics = completedResponseMetrics(
+          'chat',
+          settings,
+          startedAt,
+          startedAtMs,
+          aggregateUsage,
+        );
         if (request.sessionId) {
           if (request.replaceUserTurnIndex !== undefined) {
             this.replaceEditedExchange(
@@ -267,6 +295,7 @@ export class MarifoldRuntime {
               userTurn,
               finalText,
               preparedImages.images,
+              responseMetrics,
             );
           } else if (isolated) {
             await this.sessionResolver.appendExchange(
@@ -275,11 +304,13 @@ export class MarifoldRuntime {
               userTurn,
               finalText,
               preparedImages.images,
+              responseMetrics,
             );
           } else {
             if (request.userTurn) this.sessionResolver.replaceLastUserTurn(request.sessionId, request.userTurn);
             this.sessionResolver.replaceLastAssistantTurn(request.sessionId, finalText);
             this.sessionResolver.saveLastUserTurnAttachments(request.sessionId, preparedImages.images);
+            this.sessionResolver.saveLastResponseMetrics(request.sessionId, responseMetrics);
           }
         }
         if (memoryOn) {
@@ -290,7 +321,7 @@ export class MarifoldRuntime {
             request.sessionId,
           );
         }
-        onComplete?.({ usage: aggregateUsage, latencyMs: done?.execution?.latencyMs });
+        onComplete?.({ usage: aggregateUsage, latencyMs: responseMetrics.latencyMs });
         return;
       }
 
@@ -652,12 +683,34 @@ export class MarifoldRuntime {
       prepareImages: async (images, optimize) => (await prepareImageInputs(images, { optimize })).images,
       // Record the run as a single tidy user→assistant exchange so resuming the
       // session shows the result, not the agent's internal framing.
-      persistTurn: async (sessionId, profile, userText, assistantText, images, replaceUserTurnIndex) => {
+      persistTurn: async (
+        sessionId,
+        profile,
+        userText,
+        assistantText,
+        images,
+        replaceUserTurnIndex,
+        responseMetrics,
+      ) => {
         if (replaceUserTurnIndex !== undefined) {
-          this.replaceEditedExchange(sessionId, replaceUserTurnIndex, userText, assistantText, images);
+          this.replaceEditedExchange(
+            sessionId,
+            replaceUserTurnIndex,
+            userText,
+            assistantText,
+            images,
+            responseMetrics,
+          );
           return;
         }
-        await this.sessionResolver.appendExchange(sessionId, profile, userText, assistantText, images);
+        await this.sessionResolver.appendExchange(
+          sessionId,
+          profile,
+          userText,
+          assistantText,
+          images,
+          responseMetrics,
+        );
       },
       // Bounded cross-objective memory for non-lean tasks: replay the clean
       // pairs (objective → answer) that persistTurn wrote, never raw framing.
@@ -1080,6 +1133,7 @@ export class MarifoldRuntime {
     userText: string,
     assistantText: string,
     images?: ImageInput[],
+    responseMetrics?: ResponseMetrics,
   ): void {
     const result = this.sessionResolver.replaceExchange(
       sessionId,
@@ -1087,6 +1141,7 @@ export class MarifoldRuntime {
       userText,
       assistantText,
       images,
+      responseMetrics,
     );
     if (!result.replaced) this.missingEditedTurn(sessionId, userTurnIndex);
   }
@@ -1111,6 +1166,26 @@ export class MarifoldRuntime {
     this.memoryStore.save(profile, extractPromptMemoryInputs(prompt), { sessionId });
     this.memoryStore.trimShortTerm(profile, this.options.loadedConfig.config.memory.sizeLimit);
   }
+}
+
+function completedResponseMetrics(
+  mode: ProfileMode,
+  settings: MarifoldResolvedSettings,
+  startedAt: string,
+  startedAtMs: number,
+  usage?: UsageInfo,
+): ResponseMetrics {
+  const finishedAtMs = Date.now();
+  return {
+    mode,
+    provider: settings.provider,
+    model: settings.model,
+    think: settings.think,
+    startedAt,
+    finishedAt: new Date(finishedAtMs).toISOString(),
+    latencyMs: Math.max(0, finishedAtMs - startedAtMs),
+    ...(usage && Object.values(usage).some(value => value !== undefined) ? { usage: { ...usage } } : {}),
+  };
 }
 
 /** Sum two provider usage reports, preserving undefined when neither side has

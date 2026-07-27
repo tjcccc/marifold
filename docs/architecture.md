@@ -76,12 +76,18 @@ Memory is context, not authority. Human-authored profile files and the current u
 Thinking mode is a provider option selected by Marifold and only forwarded to known compatible providers. It does not change context assembly or introduce agent behavior.
 
 SQLite session continuity is reused from `@priest-ai/core`. Marifold-owned
-sidebar metadata stays in companion tables in that same database:
-`marifold_session_display` holds session title/pin/archive state, while
-`marifold_profile_display` holds profile pin state. Profile contact previews and
-activity dates are derived from the latest durable session/assistant turn rather
-than copied into profile files or model context. Removing a stored profile
-clears its profile-display row but deliberately retains its session turns.
+metadata stays in companion tables in that same database:
+`marifold_session_display` holds session title/pin/archive state,
+`marifold_profile_display` holds profile pin state,
+`marifold_turn_attachments` holds display-only image sources, and
+`marifold_response_metrics` holds content-free timing/model/token/cost metadata
+for completed chat and agent exchanges. Response metrics use the stable
+zero-based user-turn ordinal rather than Priest's rewritten SQLite turn ids;
+session rename, edit, truncate, clear, and delete operations maintain the
+companion rows. Profile contact previews and activity dates are derived from
+the latest durable session/assistant turn rather than copied into profile files
+or model context. Removing a stored profile clears its profile-display row but
+deliberately retains its session turns and response metrics.
 
 Task state is stored as JSON files under `paths.tasks_dir`, defaulting to `~/.marifold/tasks`. Task state is generated working context: objective, status, plan, events, summary, next action, profile, and session references. It is separate from durable profile memory and is not promoted into profile memory by default.
 

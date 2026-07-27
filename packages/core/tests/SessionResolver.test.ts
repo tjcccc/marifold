@@ -4,6 +4,7 @@ import * as path from 'path';
 import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
 import { SessionResolver } from '../src/sessions/SessionResolver';
+import type { ResponseMetrics } from '../src/sessions/ResponseMetrics';
 
 const tempDirs: string[] = [];
 
@@ -358,6 +359,137 @@ describe('SessionResolver turn attachments', () => {
       '$make-grok-imagine-prompt "summer morning"',
       'Generated prompt',
     ]);
+    resolver.close();
+  });
+});
+
+describe('SessionResolver response metrics', () => {
+  const chatMetrics: ResponseMetrics = {
+    mode: 'chat',
+    provider: 'xai',
+    model: 'grok-4.5',
+    think: true,
+    startedAt: '2026-07-27T03:00:00.000Z',
+    finishedAt: '2026-07-27T03:00:18.000Z',
+    latencyMs: 18_000,
+    usage: {
+      inputTokens: 7_000,
+      outputTokens: 600,
+      totalTokens: 7_600,
+      cachedInputTokens: 2_000,
+      reasoningTokens: 120,
+      estimatedCostUSD: 0.0123,
+    },
+  };
+
+  it('replays, replaces, renames, truncates, deletes, and clears durable metrics by user-turn ordinal', async () => {
+    const dbPath = tempDb();
+    const resolver = new SessionResolver(dbPath);
+    await resolver.appendExchange(
+      'metrics',
+      'default',
+      'Conversation 1',
+      'Answer 1',
+      undefined,
+      chatMetrics,
+    );
+    await resolver.appendExchange(
+      'metrics',
+      'default',
+      'Conversation 2',
+      'Answer 2',
+      undefined,
+      {
+        ...chatMetrics,
+        mode: 'agent',
+        provider: 'chatgpt',
+        model: 'gpt-5-codex',
+        think: false,
+        latencyMs: 2_500,
+        usage: { inputTokens: 100, outputTokens: 25, totalTokens: 125 },
+      },
+    );
+
+    expect(resolver.get('metrics')?.turns).toMatchObject([
+      { role: 'user', content: 'Conversation 1' },
+      { role: 'assistant', content: 'Answer 1', responseMetrics: chatMetrics },
+      { role: 'user', content: 'Conversation 2' },
+      {
+        role: 'assistant',
+        content: 'Answer 2',
+        responseMetrics: {
+          mode: 'agent',
+          provider: 'chatgpt',
+          model: 'gpt-5-codex',
+          latencyMs: 2_500,
+          usage: { totalTokens: 125 },
+        },
+      },
+    ]);
+
+    const replacement = {
+      ...chatMetrics,
+      model: 'grok-4.5-fast',
+      latencyMs: 9_000,
+      usage: { inputTokens: 4_000, outputTokens: 400, totalTokens: 4_400 },
+    };
+    expect(resolver.replaceExchange(
+      'metrics',
+      0,
+      'Updated conversation 1',
+      'Updated answer 1',
+      undefined,
+      replacement,
+    )).toEqual({ found: true, replaced: true });
+    expect(resolver.get('metrics')?.turns[1]).toMatchObject({
+      content: 'Updated answer 1',
+      responseMetrics: replacement,
+    });
+
+    expect(resolver.replaceExchange(
+      'metrics',
+      0,
+      'Updated conversation without metrics',
+      'Updated answer without metrics',
+    )).toEqual({ found: true, replaced: true });
+    expect(resolver.get('metrics')?.turns[1]).not.toHaveProperty('responseMetrics');
+    expect(resolver.replaceExchange(
+      'metrics',
+      0,
+      'Updated conversation 1',
+      'Updated answer 1',
+      undefined,
+      replacement,
+    )).toEqual({ found: true, replaced: true });
+
+    expect(resolver.rename('metrics', 'metrics-renamed')).toBe(true);
+    expect(resolver.get('metrics-renamed')?.turns[1]).toMatchObject({ responseMetrics: replacement });
+    expect(resolver.truncateFromUserTurn('metrics-renamed', 1)).toEqual({ found: true, removedTurns: 2 });
+
+    const db = new Database(dbPath, { fileMustExist: true });
+    expect((db.prepare('SELECT count(*) AS count FROM marifold_response_metrics').get() as { count: number }).count)
+      .toBe(1);
+    db.close();
+
+    expect(resolver.delete('metrics-renamed')).toBe(true);
+    const deletedProbe = new Database(dbPath, { fileMustExist: true });
+    expect((deletedProbe.prepare('SELECT count(*) AS count FROM marifold_response_metrics').get() as { count: number }).count)
+      .toBe(0);
+    deletedProbe.close();
+
+    await resolver.appendExchange(
+      'metrics-clear',
+      'default',
+      'Conversation to clear',
+      'Answer to clear',
+      undefined,
+      chatMetrics,
+    );
+    expect(resolver.clear()).toEqual({ count: 1, ids: ['metrics-clear'] });
+    const clearedProbe = new Database(dbPath, { fileMustExist: true });
+    expect((clearedProbe.prepare('SELECT count(*) AS count FROM marifold_response_metrics').get() as { count: number }).count)
+      .toBe(0);
+    clearedProbe.close();
     resolver.close();
   });
 });

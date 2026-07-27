@@ -1,4 +1,5 @@
 import type { MarifoldAgentConfig, PartialAgentConfig } from '../agent/ApprovalPolicy';
+import type { ResponseMetrics } from '../sessions/ResponseMetrics';
 
 export type ProviderType = 'ollama' | 'openai-compatible' | 'anthropic';
 
@@ -232,6 +233,8 @@ export interface SessionTurnSummary {
   /** Display-only images attached to this user turn. These are returned to
    * clients on replay but are never injected into later model context. */
   attachments?: SessionImageAttachment[];
+  /** Marifold-owned completion metadata for this assistant response. */
+  responseMetrics?: ResponseMetrics;
 }
 
 export interface SessionImageAttachment {

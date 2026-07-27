@@ -94,6 +94,13 @@ describe('MarifoldRuntime', () => {
           ref: { userTurnIndex: 0, attachmentIndex: 0 },
         },
       ]);
+      expect(runtime.getSession('test-session')?.turns[1]?.responseMetrics).toMatchObject({
+        mode: 'chat',
+        provider: 'ollama',
+        model: 'gemma4:e4b',
+        think: false,
+        latencyMs: expect.any(Number),
+      });
       expect(runtime.getSessionAttachment('test-session', 0, 0)).toEqual({
         mediaType: 'image/png',
         data: TINY_PNG,
@@ -160,6 +167,12 @@ describe('MarifoldRuntime', () => {
         'Conversation 3',
         'Answer 3',
       ]);
+      expect(runtime.getSession('edit-session')?.turns[3]?.responseMetrics).toMatchObject({
+        mode: 'chat',
+        provider: 'ollama',
+        model: 'gemma4:e4b',
+        latencyMs: expect.any(Number),
+      });
     } finally {
       runtime.close();
     }

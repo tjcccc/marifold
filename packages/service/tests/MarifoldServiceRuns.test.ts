@@ -248,6 +248,13 @@ Transform {{text}} into the final prompt.
         '$make-grok-imagine-prompt "summer morning"',
         'Grok-style final prompt.',
       ]);
+      expect(detail.session.turns[1].responseMetrics).toMatchObject({
+        mode: 'agent',
+        provider: 'ollama',
+        model: 'gemma4:e4b',
+        think: false,
+        latencyMs: expect.any(Number),
+      });
       expect(JSON.stringify(captured)).toContain('Return one concise Grok Imagine prompt.');
       expect(JSON.stringify(captured)).not.toContain('$make-grok-imagine-prompt');
     } finally {

@@ -176,7 +176,7 @@ Memory **content** authoring stays model-driven (`memory_save` blocks) — there
 | Route | Returns |
 |---|---|
 | `GET /v1/sessions?limit=&profile=&archived=&q=` | Sessions matching the active/archived view and optional case-insensitive title/first-prompt query, with pinned sessions first. Summaries may carry sidebar-only `title?`, `pinned?`, `archived?`, plus the first-user-message `preview?` |
-| `GET /v1/sessions/:id` | Session detail with all turns. Embedded display-only images are references (`{ kind: "image", mediaType, ref: { userTurnIndex, attachmentIndex } }`) rather than base64; remote attachments retain `url`. These images are not replayed into model context. 404 `SESSION_NOT_FOUND` |
+| `GET /v1/sessions/:id` | Session detail with all turns. Assistant turns may include durable `responseMetrics: { mode, provider, model, think, startedAt, finishedAt, latencyMs, usage? }`; usage may carry input/output/total/cached/reasoning tokens and estimated USD cost. Embedded display-only images are references (`{ kind: "image", mediaType, ref: { userTurnIndex, attachmentIndex } }`) rather than base64; remote attachments retain `url`. Metrics and images are not replayed into model context. 404 `SESSION_NOT_FOUND` |
 | `GET /v1/sessions/:id/attachments/:userTurnIndex/:attachmentIndex` | Authenticated binary delivery for one embedded transcript image, with its stored image content type. This keeps large base64 payloads out of session JSON |
 | `PATCH /v1/sessions/:id` | Update sidebar-only metadata with `{ title?: string \| null, pinned?: boolean, archived?: boolean }`. `null` clears a custom title. Does not change the session id, transcript, model context, or conversation recency. Returns the updated session; 404 `SESSION_NOT_FOUND` |
 | `DELETE /v1/sessions/:id` | `{ deleted: boolean }`. Refuses with `AGENT_RUN_INVALID` while a run for that session is active, preventing its final save from recreating deleted history |
@@ -208,6 +208,9 @@ clean user/assistant pair is still appended to that durable session.
 Embedded/URL image sources are retained beside their user turn so clients can
 restore transcript thumbnails after navigation or reload; local filesystem
 paths are never exposed through this API.
+Successful session-backed chat and agent responses also retain content-free
+completion metrics beside the exchange. Editing replaces that exchange's
+metrics, while truncation/deletion removes the matching companion rows.
 
 ### Skill invocation
 

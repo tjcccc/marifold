@@ -111,7 +111,12 @@ export type ThreadAction =
   | { type: 'reset'; sessionId?: string }
   | {
       type: 'session_loaded';
-      turns: Array<{ role: 'user' | 'assistant'; content: string; attachments?: UserAttachment[] }>;
+      turns: Array<{
+        role: 'user' | 'assistant';
+        content: string;
+        attachments?: UserAttachment[];
+        responseMeta?: ResponseMetaState;
+      }>;
     }
   | { type: 'user_message'; text: string; attachments?: UserAttachment[] }
   | { type: 'edit_user_message'; itemId: string; text: string; attachments?: UserAttachment[] }
@@ -183,7 +188,11 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
                 sessionUserTurnIndex: userTurnIndex++,
                 ...(turn.attachments && turn.attachments.length > 0 ? { attachments: turn.attachments } : {}),
               }
-            : { kind: 'assistant', markdown: turn.content },
+            : {
+                kind: 'assistant',
+                markdown: turn.content,
+                ...(turn.responseMeta ? { responseMeta: turn.responseMeta } : {}),
+              },
         );
       }
       return next;

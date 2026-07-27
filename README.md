@@ -4,7 +4,7 @@ Marifold is a local-first personal AI workspace for profiles, chats, skills, min
 
 The primary surface is the **TUI** — an Ink/React terminal app launched by bare `marifold`. It's agent-first (with a `/chat` mode), rendering chat and agent-event streams with `/` commands, `$skill` invocation, an approval modal, `/btw` mid-run steering, a skills manager, a profile-aware header, and session resume (`--resume`). Skills (`marifold.skill.v0`, run via `$name`) execute as agentic tools: the skill body is authoritative instructions and, in agent mode, the model reads the skill's own bundled files (e.g. a `vars.toml`) to do its work. `marifold init` and `marifold provider add` walk you through choosing a provider/model interactively.
 
-Underneath sits an approval-aware agent loop with native provider tool calling and Responses reasoning continuity (through `@priest-ai/core` 2.8) plus a control-block fallback, narrow built-in tools (file read/write, isolated shell, per-run Python packages, web search, profile delegation), capability-scoped run workspaces, config-driven approval policy, a `marifold agent` command, chat `/search`/`/read`/`/image`, ChatGPT/Copilot OAuth, the `marifold.skillapp.v0` schema spec, and cron-scheduled unattended runs hosted inside `marifold service` — alongside priests-style profile chat, structured per-profile memory, model/provider management, config backup/import, the loopback-only Fastify service API, and ephemeral task-state storage.
+Underneath sits an approval-aware agent loop with native provider tool calling and Responses reasoning continuity (through `@priest-ai/core` 3.0) plus a control-block fallback, narrow built-in tools (file read/write, isolated shell, per-run Python packages, web search, profile delegation), capability-scoped run workspaces, config-driven approval policy, a `marifold agent` command, chat `/search`/`/read`/`/image`, ChatGPT/Copilot OAuth, the `marifold.skillapp.v0` schema spec, and cron-scheduled unattended runs hosted inside `marifold service` — alongside priests-style profile chat, structured per-profile memory, model/provider management, config backup/import, the loopback-only Fastify service API, and ephemeral task-state storage.
 
 For product direction and future scope, see [docs/vision.md](docs/vision.md) and [docs/roadmap.md](docs/roadmap.md). For the terminal app, see [docs/tui.md](docs/tui.md).
 
@@ -40,7 +40,7 @@ For product direction and future scope, see [docs/vision.md](docs/vision.md) and
 - ChatGPT OAuth token refresh before provider requests, mirroring the GitHub Copilot refresh flow.
 - Approval-aware basic agent loop through `marifold agent "<objective>"`.
 - Agent phases: model-generated plan, tool loop, verification, and task summary, all persisted as ephemeral task state.
-- Native provider tool calling via `@priest-ai/core` 2.8 for Ollama, OpenAI-compatible Responses (including the GitHub Copilot path), and Anthropic providers. Neutral reasoning configuration, safe provider summaries, opaque multi-turn reasoning continuity, and cached/reasoning token usage are preserved across chat and agent tool loops.
+- Native provider tool calling via `@priest-ai/core` 3.0 for Ollama, OpenAI-compatible Responses (including the GitHub Copilot path), and Anthropic providers. Neutral reasoning configuration, safe provider summaries, opaque multi-turn reasoning continuity, and cached/reasoning token usage are preserved across chat and agent tool loops.
 - Automatic control-block tool fallback (`<tool_call>` prompt blocks) for models without native tool support, plus `--tool-mode auto|native|control-block`.
 - Built-in agent tools: `read_file`, `write_file`, isolated `shell_exec`, per-run `python_package_install`, and `ask_profile` (one-shot delegation to another profile/model).
 - Per-profile approval policy per tool kind (`allow`/`ask`/`deny`), overriding a global `[agent]` default, with an Allow-once / Trust / Deny prompt, `--yes`, and unattended ask-degrades-to-deny behavior.
@@ -88,7 +88,7 @@ For product direction and future scope, see [docs/vision.md](docs/vision.md) and
 - Task API routes for objective, status, plan, events, summary, next action, and profile/session references.
 - Automated CLI command smoke checks through `pnpm command-test`.
 - Provider-backed memory eval script through `pnpm memory-eval -- --provider ollama --model gemma4:e4b`.
-- SQLite session continuity through `@priest-ai/core`.
+- SQLite session continuity through `@priest-ai/core`, with Marifold-owned durable response timing, model, token, reasoning, cache, and estimated-cost metadata for chat and agent exchanges.
 - A thin Marifold runtime wrapper around `@priest-ai/core`.
 
 ## Non-goals
@@ -384,7 +384,7 @@ security behavior.
 
 ## Web UI
 
-`apps/web` is the browser client (Vite + React, see [apps/web/README.md](apps/web/README.md)): the Agent screen renders chat and live agent runs — plan, tool activity, the approval sheet (Allow once / Always allow / Trust folder / Deny), mid-run steering, cancel, catch-up replay, response/code copying, lazily loaded authenticated image galleries, local Office-file text extraction, scalable profile search, durable session rename/pin/archive/delete actions, server-backed session search, per-session drafts, and history-aware prompt editing that regenerates the selected exchange in place without deleting later turns. Config edits profiles, providers, models, global agent defaults, web search, appearance, and the local service. The current browser shell intentionally targets desktop widths (900 px and above); a dedicated mobile navigation design remains future work.
+`apps/web` is the browser client (Vite + React, see [apps/web/README.md](apps/web/README.md)): the Agent screen renders chat and live agent runs — plan, tool activity, the approval sheet (Allow once / Always allow / Trust folder / Deny), mid-run steering, cancel, catch-up replay, durable response time/token/cost footers, response/code copying, lazily loaded authenticated image galleries, local Office-file text extraction, scalable profile search, durable session rename/pin/archive/delete actions, server-backed session search, per-session drafts, and history-aware prompt editing that regenerates the selected exchange in place without deleting later turns. Config edits profiles, providers, models, global agent defaults, web search, appearance, and the local service. The current browser shell intentionally targets desktop widths (900 px and above); a dedicated mobile navigation design remains future work.
 
 ```sh
 pnpm --filter @marifold/web build

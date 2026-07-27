@@ -203,7 +203,20 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
         dispatch({
           type: 'session_loaded',
           turns: detail.turns.map(turn => {
-            if (turn.role === 'assistant') return { role: turn.role, content: turn.content };
+            if (turn.role === 'assistant') {
+              return {
+                role: turn.role,
+                content: turn.content,
+                ...(turn.responseMetrics ? {
+                  responseMeta: {
+                    startedAt: turn.responseMetrics.startedAt,
+                    finishedAt: turn.responseMetrics.finishedAt,
+                    latencyMs: turn.responseMetrics.latencyMs,
+                    usage: turn.responseMetrics.usage,
+                  },
+                } : {}),
+              };
+            }
             const restored = splitInlineTextAttachments(turn.content);
             const attachments: UserAttachment[] = [
               ...toUserAttachments(id, turn.attachments ?? []),

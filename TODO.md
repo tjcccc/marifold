@@ -113,7 +113,16 @@
 - External-agent aliases: Codex and Claude Code wrappers, capability metadata, handoff summaries, result import, and write-conflict safeguards.
 - Subagent/delegation model: only after the basic agent loop is stable; use summary-only returns, clear ownership boundaries, and conservative write coordination.
 - Web UI: chat, sessions, profiles, memory inspection/editing, task-state inspection, streaming, cancellation, and local service connection management.
-- Apple clients: macOS and iOS clients after the service contract is stable, including local service discovery, auth handoff, background limits, and platform storage rules.
+- Apple clients (agreed architecture): build native SwiftUI renderers over a shared
+  `MarifoldClient` package that consumes the service HTTP/SSE contracts with
+  `URLSession`. The macOS app connects directly to the loopback service on its
+  host; iOS connects to the Mac mini through private Tailscale Serve HTTPS.
+  Keep profiles, memory, skills, sessions, tools, approvals, provider credentials,
+  and execution authoritative in the TypeScript service. Store remote bearer
+  credentials in Keychain, recover interrupted iOS streams by reloading durable
+  task/session state, and reserve PriestSwift for a later explicit offline/local
+  execution backend rather than running a second engine in ordinary connected
+  clients.
 - SkillApp and workflow runtime: schema-defined focused apps, workflow composition, model/profile routing, external-agent routing, and durable workflow history.
 - Testing and evaluation: service integration tests, cross-client contract tests, streaming smoke tests, adversarial memory tests, task-state regression tests, and broader provider-backed evals.
 - Operations and packaging: install/start/restart behavior, local daemon strategy, log rotation, migrations, diagnostics, crash recovery, and user-friendly troubleshooting.

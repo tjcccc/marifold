@@ -356,7 +356,7 @@ describe('MarifoldService', () => {
       const response = await server.inject({
         method: 'POST',
         url: '/v1/chat/stream',
-        payload: { prompt: 'Answer safely.', memories: false },
+        payload: { prompt: 'Answer safely.', sessionId: 'chat-metrics', memories: false },
       });
       expect(response.statusCode).toBe(200);
       expect(response.body.indexOf('event: reasoning')).toBeLessThan(response.body.indexOf('event: chunk'));
@@ -365,6 +365,26 @@ describe('MarifoldService', () => {
       expect(response.body).toContain('"usage":{"inputTokens":120,"outputTokens":30,"totalTokens":150,"reasoningTokens":20}');
       expect(response.body).toMatch(/"latencyMs":\d+/);
       expect(response.body).not.toContain('private-opaque-state');
+
+      const session = await server.inject({ method: 'GET', url: '/v1/sessions/chat-metrics' });
+      expect(session.statusCode).toBe(200);
+      expect(session.json().session.turns[1]).toMatchObject({
+        role: 'assistant',
+        content: 'Final answer.',
+        responseMetrics: {
+          mode: 'chat',
+          provider: 'chatgpt',
+          model: 'gpt-5-codex',
+          think: true,
+          latencyMs: expect.any(Number),
+          usage: {
+            inputTokens: 120,
+            outputTokens: 30,
+            totalTokens: 150,
+            reasoningTokens: 20,
+          },
+        },
+      });
     } finally {
       await server.close();
     }

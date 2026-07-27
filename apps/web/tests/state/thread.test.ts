@@ -38,7 +38,22 @@ describe('threadReducer', () => {
   it('replays session turns and appends chat streaming turns', () => {
     let state = reduce(
       createThreadState('sess-1'),
-      { type: 'session_loaded', turns: [{ role: 'user', content: 'hi' }, { role: 'assistant', content: 'hello' }] },
+      {
+        type: 'session_loaded',
+        turns: [
+          { role: 'user', content: 'hi' },
+          {
+            role: 'assistant',
+            content: 'hello',
+            responseMeta: {
+              startedAt: '2026-07-27T02:59:58.000Z',
+              finishedAt: '2026-07-27T03:00:00.000Z',
+              latencyMs: 2_000,
+              usage: { totalTokens: 90 },
+            },
+          },
+        ],
+      },
       { type: 'user_message', text: 'again' },
       { type: 'chat_started', startedAt: '2026-07-27T03:00:00.000Z' },
       { type: 'chat_reasoning', text: 'Check' },
@@ -47,6 +62,10 @@ describe('threadReducer', () => {
       { type: 'chat_chunk', text: 'ld' },
     );
     expect(state.items.map(i => i.kind)).toEqual(['user', 'assistant', 'user', 'assistant', 'assistant']);
+    expect(state.items[1]).toMatchObject({
+      kind: 'assistant',
+      responseMeta: { latencyMs: 2_000, usage: { totalTokens: 90 } },
+    });
     expect(state.items[3]).toMatchObject({
       kind: 'assistant',
       markdown: 'Reasoning: Checking.',

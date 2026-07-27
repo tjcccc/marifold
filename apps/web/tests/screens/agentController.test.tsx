@@ -314,7 +314,21 @@ describe('useAgentController session lifecycle', () => {
                     ref: { userTurnIndex: 0, attachmentIndex: 0 },
                   }],
                 },
-                { role: 'assistant', content: 'A portrait.', timestamp: '2026-07-22T00:00:01.000Z' },
+                {
+                  role: 'assistant',
+                  content: 'A portrait.',
+                  timestamp: '2026-07-22T00:00:01.000Z',
+                  responseMetrics: {
+                    mode: 'chat',
+                    provider: 'xai',
+                    model: 'grok-4.5',
+                    think: true,
+                    startedAt: '2026-07-22T00:00:00.000Z',
+                    finishedAt: '2026-07-22T00:00:18.000Z',
+                    latencyMs: 18_000,
+                    usage: { totalTokens: 7_600 },
+                  },
+                },
               ],
             },
           } as never;
@@ -352,6 +366,16 @@ describe('useAgentController session lifecycle', () => {
           officeKind: 'word',
         },
       ],
+    });
+    expect(result.current.thread.items[1]).toMatchObject({
+      kind: 'assistant',
+      markdown: 'A portrait.',
+      responseMeta: {
+        startedAt: '2026-07-22T00:00:00.000Z',
+        finishedAt: '2026-07-22T00:00:18.000Z',
+        latencyMs: 18_000,
+        usage: { totalTokens: 7_600 },
+      },
     });
   });
 

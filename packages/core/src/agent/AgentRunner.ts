@@ -30,6 +30,7 @@ import {
 } from './ControlBlockTools';
 import { createRunWorkspace, RunFileInput, RunWorkspace } from './RunWorkspace';
 import { AgentTool, ToolExecutionContext, ToolRegistry } from './ToolRegistry';
+import type { ResponseMetrics } from '../sessions/ResponseMetrics';
 
 const PLAN_SCHEMA = {
   type: 'object',
@@ -129,6 +130,7 @@ export interface AgentRunnerDeps {
     assistantText: string,
     images?: ImageInput[],
     replaceUserTurnIndex?: number,
+    responseMetrics?: ResponseMetrics,
   ) => Promise<void>;
   /** Load the session's clean turns (objective → answer pairs) for bounded
    * cross-objective memory on NON-lean runs. Lean/skill runs stay stateless. */
@@ -172,6 +174,8 @@ export class AgentRunner {
   constructor(private readonly deps: AgentRunnerDeps) {}
 
   async *run(options: AgentRunOptions): AsyncGenerator<AgentEvent, void, unknown> {
+    const startedAtMs = Date.now();
+    const startedAt = new Date(startedAtMs).toISOString();
     const agentConfig = this.deps.agentConfig;
     const settings = this.deps.resolveSettings(options);
     // A skill invocation already supplies its own authoritative instructions;
@@ -343,18 +347,26 @@ export class AgentRunner {
       // Persist a single clean turn pair (objective → final answer) so resuming
       // the session shows the result, not the raw `Objective:`/tool framing.
       if (options.sessionId && this.deps.persistTurn) {
-        const args = [
+        const finishedAtMs = Date.now();
+        const responseMetrics: ResponseMetrics = {
+          mode: 'agent',
+          provider: settings.provider,
+          model: settings.model,
+          think: settings.think,
+          startedAt,
+          finishedAt: new Date(finishedAtMs).toISOString(),
+          latencyMs: Math.max(0, finishedAtMs - startedAtMs),
+          ...(hasUsage(usage) ? { usage: { ...usage } } : {}),
+        };
+        await this.deps.persistTurn(
           options.sessionId,
           settings.profile,
           options.userTurn ?? options.objective,
           finalText,
           runOptions.images,
-        ] as const;
-        if (options.replaceUserTurnIndex === undefined) {
-          await this.deps.persistTurn(...args);
-        } else {
-          await this.deps.persistTurn(...args, options.replaceUserTurnIndex);
-        }
+          options.replaceUserTurnIndex,
+          responseMetrics,
+        );
       }
 
       // Complete. No verification phase: a separate self-grading model call was

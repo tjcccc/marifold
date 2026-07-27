@@ -2,9 +2,9 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
-## 2026-07-27 — Unreleased (in progress) — Priest 2.8 and provider lifecycle
+## 2026-07-27 — Unreleased (in progress) — Priest 3.0 and provider lifecycle
 
-- Linked the local `@priest-ai/core` 2.8 package and delegated OpenAI-compatible Responses transport to its new provider implementation while retaining Marifold-owned routing, OAuth headers, proxy selection, and ChatGPT's SSE-only behavior.
+- Adopted published `@priest-ai/core` 3.0.0 and delegated OpenAI-compatible Responses transport to its provider implementation while retaining Marifold-owned routing, OAuth headers, proxy selection, and ChatGPT's SSE-only behavior.
 - Replaced product-side `think` branching with Priest's provider-neutral reasoning configuration where supported; Bailian-compatible legacy options remain isolated at the compatibility edge.
 - Preserved safe reasoning summaries, opaque continuation across tool turns, and cached/reasoning usage through core, CLI, TUI, service SSE, and Web renderers without exposing private provider traces.
 - Fixed the TUI's two-column prompt gutter under wrapping pressure: submitted prompts retain the space after `>`, while live-input continuation lines no longer inherit a separator space that lands exactly on the automatic wrap boundary.
@@ -14,8 +14,9 @@ Cross-session development log. Newest first. Keep entries short: what shipped, w
 - Aligned `better-sqlite3` 13.0.1 with Priest so one native SQLite implementation owns session databases; loading majors 11 and 13 in the same process produced corruption symptoms. The production dependency audit now reports zero advisories.
 - Added guarded provider removal to Web Config and the service API: typed confirmation clears local credentials/config plus saved model options, while global-default and profile-override references block deletion. `marifold provider reauth` now replaces GitHub Copilot, ChatGPT, or xAI OAuth credentials without deleting provider settings/models; Web Config exposes the copyable host-local command. Expired OAuth access tokens trigger fresh setup, and the Service page correctly reports environment-resolved bearer authentication.
 - Added completion metadata to plain Web chat streams: successful `done` events carry end-to-end latency and provider-reported usage, and chat responses now show the same time, token, reasoning, and estimated-cost footer as agent responses.
-- Added provider-wire, chat/agent tool-loop, usage-accounting, service SSE, TUI, Web stream, and renderer regression coverage. The local-link workspace gate passes 565 tests plus 123 CLI command checks; a manually built Priest tarball also passed TypeScript 5.9/7 consumer types, CJS/ESM, Node 18/20/22/24 imports, and a Node 24 SQLite check.
-- Still open before release: finish the practical TUI/Web smoke pass, publish Priest 2.8.0, replace the local `file:` dependency with the registry version, and cut the Marifold release version.
+- Persisted unified chat/agent response metrics in a Marifold-owned SQLite companion table keyed by stable session/user-turn ordinal. Reloaded transcripts retain timing, provider/model, thinking, token/cache/reasoning, and estimated-cost data; edit, rename, truncate, clear, and delete lifecycle operations keep metrics aligned for future statistics.
+- Added provider-wire, chat/agent tool-loop, usage-accounting, service SSE, TUI, Web stream, and renderer regression coverage. The published-package workspace gate passes 566 tests plus 124 CLI command checks; the Priest artifact also passed TypeScript 5.9/7 consumer types, CJS/ESM, Node 18/20/22/24 imports, and a Node 24 SQLite check.
+- Still open before release: finish the practical TUI/Web smoke pass and cut the Marifold release version.
 
 ## 2026-07-26 — v0.51.1 — TypeScript 7 native compiler
 
