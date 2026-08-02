@@ -4,7 +4,7 @@ Marifold is a local-first personal AI workspace for profiles, chats, skills, min
 
 The primary surface is the **TUI** — an Ink/React terminal app launched by bare `marifold`. It's agent-first (with a `/chat` mode), rendering chat and agent-event streams with `/` commands, `$skill` invocation, an approval modal, `/btw` mid-run steering, a skills manager, a profile-aware header, and session resume (`--resume`). Skills (`marifold.skill.v0`, run via `$name`) execute as agentic tools: the skill body is authoritative instructions and, in agent mode, the model reads the skill's own bundled files (e.g. a `vars.toml`) to do its work. `marifold init` and `marifold provider add` walk you through choosing a provider/model interactively.
 
-Underneath sits an approval-aware agent loop with native provider tool calling and Responses reasoning continuity (through `@priest-ai/core` 3.0) plus a control-block fallback, narrow built-in tools (file read/write, isolated shell, per-run Python packages, web search, profile delegation), capability-scoped run workspaces, config-driven approval policy, a `marifold agent` command, chat `/search`/`/read`/`/image`, ChatGPT/Copilot OAuth, the `marifold.app.v0` schema, and cron-scheduled unattended runs hosted inside `marifold service` — alongside priests-style profile chat, structured per-profile memory, model/provider management, config backup/import, the loopback-only Fastify service API, and ephemeral task-state storage.
+Underneath sits an approval-aware agent loop with native provider tool calling and Responses reasoning continuity (through `@priest-ai/core` 3.0) plus a control-block fallback, narrow built-in tools (file read/write, isolated shell, per-run Python packages, web search, profile delegation), capability-scoped run workspaces, config-driven approval policy, a `marifold agent` command, chat `/search`/`/read`/`/image`, ChatGPT/Copilot OAuth, the `marifold.app.v0` schema, and cron-scheduled unattended runs hosted inside `marifold service` — alongside priests-style profile chat, structured per-profile memory, model/provider management, config backup/import, the default-loopback Fastify service API with authenticated opt-in remote binding, and ephemeral task-state storage.
 
 For product direction and future scope, see [docs/vision.md](docs/vision.md) and [docs/roadmap.md](docs/roadmap.md). For the terminal app, see [docs/tui.md](docs/tui.md).
 
@@ -81,7 +81,7 @@ For product direction and future scope, see [docs/vision.md](docs/vision.md) and
 - Profile rename and delete commands for stored profiles.
 - Profile-filtered session listing.
 - Bulk session clearing with profile/date/keep-last filters.
-- Loopback-only local HTTP service through `marifold service`, with optional bearer-token auth and a CORS origin allowlist (`[service]`).
+- Default-loopback HTTP service through `marifold service`, with mandatory bearer authentication for non-loopback binds and a CORS origin allowlist (`[service]`).
 - Service routes for health/status, sanitized config, providers, models, profiles, memories, sessions, ask, streaming chat, and live agent runs (SSE `AgentEvent` stream + approval/steer/cancel) — see [docs/service-api.md](docs/service-api.md).
 - Server-sent event streaming for safe reasoning summaries and answer chunks through `/v1/chat/stream`.
 - Ephemeral task-state storage under `[paths].tasks_dir`, defaulting to `~/.marifold/tasks`.
@@ -93,7 +93,7 @@ For product direction and future scope, see [docs/vision.md](docs/vision.md) and
 
 ## Non-goals
 
-Marifold does not yet include semantic/vector retrieval, memory encryption, approval-aware effectful App actions, advanced App components, Workflow, Apple apps, external-agent aliases, provider-owned model deletion, remote (non-loopback) service binding, or service daemon packaging (schedules fire only while `marifold service` runs).
+Marifold does not yet include semantic/vector retrieval, memory encryption, approval-aware effectful App actions, advanced App components, Workflow, Apple apps, external-agent aliases, provider-owned model deletion, or service daemon packaging (schedules fire only while `marifold service` runs).
 
 Web search uses DuckDuckGo scraping by default, which requires no API key but can be blocked by DuckDuckGo's anomaly detection on some networks. Errors surface clearly in `/search` output and tool results, and the `SearchBackend` interface is pluggable for alternative engines.
 
@@ -335,7 +335,7 @@ For `openai-compatible`, `base_url` may be the API root such as `https://api.ope
 
 `marifold init` accepts `--provider`, `--provider-type`, `--model`, `--base-url`, `--api-key-env`, `--profiles-dir`, `--sessions-db`, `--tasks-dir`, and `--force`. Non-Ollama providers require `--model`; custom OpenAI-compatible providers also require `--base-url`.
 
-`marifold service` starts a Fastify HTTP service bound to `127.0.0.1:32140` by default. It intentionally accepts loopback hosts only. Ctrl+C/SIGTERM performs graceful cleanup and exits; shutdown is forced after five seconds or immediately on a second signal. A bind failure also closes the newly created runtime instead of leaving a background process alive. The API surface is `/health` and `/v1/*` routes for app clients: sanitized config/provider/model views, profiles, memories, sessions, ask/chat, SSE streaming chat, task state, read-only schedules, live agent runs (`POST /v1/runs`, a resumable SSE `AgentEvent` stream, and approval/steer/cancel routes), and config-editing writes (`PATCH /v1/config` with CLI `config set` parity, per-profile settings/files/trusted-folders/memory-forget routes). The full wire contract is documented in [docs/service-api.md](docs/service-api.md).
+`marifold service` starts a Fastify HTTP service bound to `127.0.0.1:32140` by default. An explicit non-loopback `--host` is allowed only when a bearer token resolves; `--host 0.0.0.0` listens on every network interface, while a specific LAN or Tailscale address narrows exposure to that interface. Ctrl+C/SIGTERM performs graceful cleanup and exits; shutdown is forced after five seconds or immediately on a second signal. A bind failure also closes the newly created runtime instead of leaving a background process alive. The API surface is `/health` and `/v1/*` routes for app clients: sanitized config/provider/model views, profiles, memories, sessions, ask/chat, SSE streaming chat, task state, read-only schedules, live agent runs (`POST /v1/runs`, a resumable SSE `AgentEvent` stream, and approval/steer/cancel routes), and config-editing writes (`PATCH /v1/config` with CLI `config set` parity, per-profile settings/files/trusted-folders/memory-forget routes). The full wire contract is documented in [docs/service-api.md](docs/service-api.md).
 
 The optional `[service]` section configures API access for browser clients:
 
@@ -345,7 +345,7 @@ token_env = "MARIFOLD_SERVICE_TOKEN"     # bearer token clients must send (prefe
 cors_origins = ["http://127.0.0.1:5173"] # exact-match browser origins allowed to call the API
 ```
 
-With no token resolved, auth is off (bare loopback, the historic default); with no `cors_origins`, cross-origin browser requests are rejected. `marifold service --token/--token-env/--cors-origin` override the config per start. Auth covers `/v1/*`; `/health` and hosted static files stay reachable.
+With no token resolved, auth is off and the service must remain on loopback. With no `cors_origins`, cross-origin browser requests are rejected; a hosted Web UI reached through the same loopback, LAN, or Tailscale address is same-origin and needs no allowlist entry. `marifold service --token/--token-env/--cors-origin` override the config per start. Auth covers `/v1/*`; `/health` and hosted static files stay reachable.
 
 ### Service token workflow
 
@@ -365,24 +365,41 @@ marifold service
 
 The `export` above lasts only for that shell. For a persistent service, define
 the variable in its service manager or another appropriate local secret store.
-In the Web UI, open **Connection** from the sidebar and enter the same value in
-**Bearer token**. Leave **Service URL** empty when the Web UI is served by that
-service; the token is stored in that browser's local storage and sent as the
+In the Web UI, open **Connection** from the sidebar, select **This server**, and
+enter the same value in **Bearer token**. The token is stored for that named
+server in the browser's local storage and sent as the
 `Authorization: Bearer …` header.
 
-The token authenticates requests but does not make Marifold remotely
-reachable. The service remains loopback-only. For office-to-home access, keep
-the home service on loopback and create an authenticated tunnel from the office
-machine:
+For direct access over a trusted LAN or tailnet, start the service with an
+authenticated non-loopback bind:
 
 ```sh
-ssh -L 32140:127.0.0.1:32140 user@home-host
+marifold service --host 0.0.0.0
 ```
 
-Then open `http://127.0.0.1:32140` locally and enter the host's token if one is
-configured. Do not expose port 32140 directly to the public internet. See
+Then open `http://<service-host-ip>:32140`, select **This server**, and enter the
+host's token. The hosted Web UI and API are already same-origin.
+Binding `0.0.0.0` exposes the port on every active interface; pass the host's
+specific Tailscale or LAN address instead when narrower exposure is desired.
+Do not expose port 32140 directly to the public internet. See
 [Service API authentication](docs/service-api.md#authentication) for the full
 security behavior.
+
+Alternatively, keep using a locally hosted Web UI and point it at another
+Marifold service: open **Connection**, choose **Add server**, name it, and enter
+the remote root URL (for example `http://<mac-mini-tailscale-ip>:32140`) plus
+that server's bearer token. Switching entries remounts the workspace against
+the selected service; profiles, sessions, routes, and drafts do not leak across
+servers. Because this route is cross-origin, the remote service must include
+the local Web UI's exact origin in `[service].cors_origins`, for example:
+
+```toml
+[service]
+cors_origins = ["http://127.0.0.1:32140"]
+```
+
+Native macOS/iOS/iPadOS clients are not subject to browser CORS, but still use
+the same service root and bearer token.
 
 ## Web UI
 

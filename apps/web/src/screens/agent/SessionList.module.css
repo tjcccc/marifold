@@ -18,8 +18,21 @@
 
 .profileHero {
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
   padding: 10px 16px 12px;
+}
+
+.profileAvatarButton {
+  display: inline-flex;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.profileAvatarButton:focus-visible {
+  outline: 2px solid var(--brand-fill);
+  outline-offset: 3px;
 }
 
 .backButton {
@@ -38,12 +51,21 @@
   color: var(--text);
 }
 
-.profileName {
+.headerTitle {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 14px;
+  font-weight: 650;
+}
+
+.profileName {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 16px;
   font-weight: 650;
 }
 

@@ -196,6 +196,7 @@ describe('Desktop workspace sidebar', () => {
     const onBack = vi.fn();
     const onNew = vi.fn();
     const onSelect = vi.fn();
+    const onConfigureProfile = vi.fn();
     const onRename = vi.fn(async () => true);
     const onSetPinned = vi.fn(async () => true);
     const onDelete = vi.fn(async () => true);
@@ -217,6 +218,7 @@ describe('Desktop workspace sidebar', () => {
         onShowArchivedChange={vi.fn()}
         runningSessionIds={new Set()}
         onBack={onBack}
+        onConfigureProfile={onConfigureProfile}
         onNew={onNew}
         onSelect={onSelect}
         onRename={onRename}
@@ -226,15 +228,20 @@ describe('Desktop workspace sidebar', () => {
       />,
     );
     fireEvent.click(screen.getByLabelText('Back to profiles'));
+    fireEvent.click(screen.getByLabelText('Open profile config for prompt-maker'));
     fireEvent.click(screen.getByTitle('New session'));
     fireEvent.click(screen.getByText('Portrait prompt'));
     expect(onBack).toHaveBeenCalledOnce();
+    expect(onConfigureProfile).toHaveBeenCalledOnce();
     expect(onNew).toHaveBeenCalledOnce();
     expect(onSelect).toHaveBeenCalledWith('session_1');
     const backRow = screen.getByLabelText('Back to profiles').parentElement;
     expect(backRow?.textContent).not.toContain('Profile portrait');
     const portrait = screen.getByText('Profile portrait');
+    const profileName = screen.getByText('prompt-maker');
     const sessionsHeading = screen.getByText('Sessions');
+    expect(screen.getByText('marifold')).toBeTruthy();
+    expect(portrait.compareDocumentPosition(profileName) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(portrait.compareDocumentPosition(sessionsHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
@@ -259,6 +266,7 @@ describe('Desktop workspace sidebar', () => {
         onShowArchivedChange={vi.fn()}
         runningSessionIds={new Set()}
         onBack={vi.fn()}
+        onConfigureProfile={vi.fn()}
         onNew={vi.fn()}
         onSelect={vi.fn()}
         onRename={onRename}

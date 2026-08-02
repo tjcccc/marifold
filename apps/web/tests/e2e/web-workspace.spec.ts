@@ -24,6 +24,33 @@ test('Agent and Apps reuse one sidebar shell and header toggle', async ({ page }
   await expect(page.getByRole('navigation', { name: 'Apps' })).toBeVisible();
 });
 
+test('Connection switches the local Web shell between named Marifold servers', async ({ page }) => {
+  await page.goto('/agent');
+  await expect(page.getByText('research-lab', { exact: true })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Connection' }).click();
+  await page.getByRole('button', { name: 'Add server' }).click();
+  await page.getByLabel('Server name').fill('Remote fixture');
+  await page.getByLabel('Service URL').fill('http://127.0.0.1:32142');
+  await page.getByLabel('Bearer token').fill('remote-fixture-token');
+  await page.getByRole('button', { name: 'Connect', exact: true }).click();
+
+  await expect(page.getByText('remote-only', { exact: true })).toBeVisible();
+  await expect(page.getByText('research-lab', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('Remote fixture', { exact: true })).toBeVisible();
+
+  await page.reload();
+  await expect(page.getByText('remote-only', { exact: true })).toBeVisible();
+  await expect(page.getByText('Remote fixture', { exact: true })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Connection' }).click();
+  await page.getByRole('button', { name: /This server/ }).click();
+  await page.getByRole('button', { name: 'Connect', exact: true }).click();
+
+  await expect(page.getByText('research-lab', { exact: true })).toBeVisible();
+  await expect(page.getByText('remote-only', { exact: true })).toHaveCount(0);
+});
+
 test('profile search filters the project-style profile list', async ({ page }) => {
   await page.goto('/agent');
   await expect(page.getByText('Research reply preview.')).toBeVisible();
@@ -63,6 +90,19 @@ test('profile actions pin contacts, open Config, and double-confirm removal', as
   await expect(finalRemove).toBeEnabled();
   await dialog.getByRole('button', { name: 'Cancel' }).click();
   await expect(dialog).toHaveCount(0);
+});
+
+test('session sidebar profile header opens the selected profile Config', async ({ page }) => {
+  await page.goto('/agent/default/session-gallery');
+  const sessionsSidebar = page.getByRole('navigation', { name: 'Sessions' });
+  const avatarButton = sessionsSidebar.getByRole('button', { name: 'Open profile config for default' });
+
+  await expect(sessionsSidebar.getByText('marifold', { exact: true })).toHaveCSS('font-size', '14px');
+  await expect(sessionsSidebar.getByText('default', { exact: true })).toHaveCSS('font-size', '16px');
+  await expect(avatarButton).toHaveCSS('cursor', 'pointer');
+
+  await avatarButton.click();
+  await expect(page).toHaveURL(/\/config\/profiles\/default$/);
 });
 
 test('modern Office files are extracted locally into composer attachments', async ({ page }) => {

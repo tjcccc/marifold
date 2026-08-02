@@ -24,6 +24,10 @@ v0.51.x resolves direct `$skill` invocations in core with history-isolated execu
 
 v0.52.x adds the App MVP: global `~/.marifold/apps/<name>/app.toml` bundles, normalized definitions and transcript-free streamed Skill actions through the service, explicit actor profiles per action, and portable layout trees in the persistent Web workspace shell. Per-app execution controls independently gate thinking, memory, and profile context.
 
+v0.53.x enables bearer-protected non-loopback service binding for trusted LAN or tailnet access. The Web shell keeps named same-origin or remote Marifold servers with independent tokens and remounts its data views when the active connection changes.
+
+The service defaults to loopback. Explicit non-loopback binds require resolved bearer authentication and support same-origin hosted Web access without a CORS entry.
+
 ## Stack
 
 - TypeScript
@@ -35,7 +39,7 @@ v0.52.x adds the App MVP: global `~/.marifold/apps/<name>/app.toml` bundles, nor
 ## Boundaries
 
 - `packages/core` contains runtime, workspace, config, profile, memory, agent (runner/tools/approval), task-state, and session logic.
-- `packages/service` contains the loopback-only Fastify API. Keep it as a thin transport layer over `packages/core`.
+- `packages/service` contains the default-loopback Fastify API and its authenticated opt-in remote binding. Keep it as a thin transport layer over `packages/core`.
 - `packages/cli` contains terminal commands and interactive CLI behavior.
 - `@priest-ai/core` (../priest-typescript) owns model-side primitives: providers, tool-call transport, streaming, context assembly. Changes there must be synced to the priest spec repository.
 - The `AgentEvent` union in `packages/core/src/agent/AgentEvents.ts` is the render contract for all future clients; keep it renderer-agnostic.

@@ -4,18 +4,19 @@ The HTTP contract for `marifold service` — the local API every app client
 (Web UI first, desktop/mobile later) is built on. One service process powers
 the HTTP API, the schedule runner, and the Telegram bridge.
 
-- **Base URL:** `http://127.0.0.1:32140` (`--host` / `--port`; binding is
-  loopback-only in this release)
+- **Base URL:** `http://127.0.0.1:32140` by default (`--host` / `--port`). An
+  explicit non-loopback host requires resolved bearer authentication.
 - **Versioning:** all routes are under `/v1` except `GET /health`. Additive
   changes (new fields, new event types) may land within v1 — clients must
   ignore unknown fields and unknown SSE event types. Breaking changes get a
   new prefix.
-- **Start:** `marifold service [--log] [--token <t> | --token-env <NAME>]
+- **Start:** `marifold service [--host <host>] [--log] [--token <t> | --token-env <NAME>]
   [--cors-origin <origin>]...`
 
 ## Authentication
 
-Off by default (bare loopback). When a bearer token is configured, every
+Off by default on loopback. A non-loopback bind is rejected unless a bearer
+token resolves. When a bearer token is configured, every
 **`/v1/*`** route requires it — `GET /health`, CORS preflights, and the
 hosted Web UI shell (static files) stay reachable; the shell carries no
 secrets and every stateful route is versioned under `/v1`:
@@ -42,18 +43,23 @@ issues or exposes through the API. Generate and store it on the service host,
 preferably through `token_env`, then enter the same value in the client. The
 sanitized Config screen intentionally reports only whether a token is present.
 
-A token authenticates requests; it does not make the service remotely
-reachable. This release still binds to and accepts loopback hosts only. To use
-the home service from another machine, keep it on loopback and forward it over
-an authenticated tunnel, for example from the client machine:
+A non-loopback `--host` makes the service directly reachable on that interface.
+For example, after configuring `token_env`, listen on every interface with:
 
 ```sh
-ssh -L 32140:127.0.0.1:32140 user@home-host
+marifold service --host 0.0.0.0
 ```
 
-Then open `http://127.0.0.1:32140`; if host-side token authentication is
-enabled, enter that same secret in the Web UI Connection sheet. Do not expose
-the service port directly to the public internet.
+Then open `http://<service-host-ip>:32140`, select **This server** in the Web UI
+Connection sheet, and enter the same secret. `0.0.0.0` exposes every active
+interface; binding the specific Tailscale or LAN address is narrower. The API
+has no TLS termination, so use only a trusted private network or a TLS reverse
+proxy, and do not expose the port publicly.
+
+A Web UI hosted by another Marifold instance can instead save this endpoint as
+a named Connection. That is a cross-origin browser request, so this service
+must allow the shell's exact origin in `cors_origins`. Native app clients send
+the bearer token but are not subject to browser CORS.
 
 **SSE exception:** native `EventSource` cannot set headers, so
 `GET /v1/runs/:id/events` also accepts `?access_token=<token>`. Prefer
@@ -68,13 +74,15 @@ Browser access is allowlist-only, exact-match against `cors_origins`:
   `OPTIONS` short-circuits to `204` with
   `Access-Control-Allow-Methods: GET,POST,PATCH,DELETE,OPTIONS`,
   `Access-Control-Allow-Headers: authorization, content-type, last-event-id`.
-- **Same-origin exception:** an `Origin` equal to the request's own loopback
-  `Host` always passes — that is the service-hosted Web UI talking to itself
+- **Same-origin exception:** an `Origin` equal to the request's allowed `Host`
+  always passes — that is the service-hosted Web UI talking to itself
   (browsers send `Origin` on every non-GET request, same-origin included).
 - Any other `Origin` → `403 ORIGIN_FORBIDDEN`, even before auth. With no
   `cors_origins` configured, all cross-origin browser requests are rejected.
 - Requests without an `Origin` header (curl, native apps) are unaffected.
-- A non-loopback `Host` header is rejected `403` (DNS-rebinding hardening).
+- A non-loopback `Host` header is rejected `403` under the default loopback
+  bind. An authenticated explicit remote bind accepts its externally addressed
+  Host values.
 
 ## Errors
 
@@ -86,10 +94,10 @@ Every non-2xx response uses one envelope:
 
 | Code | HTTP | Meaning |
 |---|---|---|
-| `CONFIG_INVALID` | 400 | Malformed request body / parameter |
+| `CONFIG_INVALID` | 400 | Malformed request body/parameter, or a non-loopback bind without authentication |
 | `PROFILE_INVALID`, `MEMORY_INVALID`, `TASK_INVALID`, `SCHEDULE_INVALID`, `AGENT_RUN_INVALID` | 400 | Domain validation failed |
 | `UNAUTHORIZED` | 401 | Missing/invalid bearer token |
-| `ORIGIN_FORBIDDEN` | 403 | Disallowed browser origin or non-loopback Host |
+| `ORIGIN_FORBIDDEN` | 403 | Disallowed browser origin or Host for the active bind scope |
 | `NOT_FOUND` | 404 | Unknown route |
 | `TASK_NOT_FOUND`, `SESSION_NOT_FOUND`, `SCHEDULE_NOT_FOUND`, `RUN_NOT_FOUND`, `APPROVAL_NOT_FOUND`, `CONFIG_FILE_NOT_FOUND` | 404 | Unknown resource |
 | `RUN_LIMIT_EXCEEDED` | 429 | Too many active agent runs (default limit 5) |

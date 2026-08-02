@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { createApiClient } from './api/client';
+import { createApiClient, MarifoldApiError } from './api/client';
+import { getStatus } from './api/misc';
 import { ConnectionPopover } from './components/ConnectionPopover';
 import { MarigoldLogo } from './components/MarigoldLogo';
 import type { WorkspaceView } from './components/WorkspaceTabs';
@@ -7,22 +8,31 @@ import type { Route } from './lib/route';
 import { AgentScreen } from './screens/agent/AgentScreen';
 import { ConfigScreen } from './screens/config/ConfigScreen';
 import { useRoute } from './screens/useRoute';
-import type { ConnectionSettings } from './state/connection';
-import { loadConnection, saveConnection } from './state/connection';
+import type { ServerConnection } from './state/connection';
+import {
+  activeConnection,
+  apiSettings,
+  loadConnections,
+  removeConnection,
+  saveConnections,
+  upsertAndActivateConnection,
+} from './state/connection';
 import { useTheme } from './theme/theme';
 import styles from './App.module.css';
 
-const LAST_AGENT_ROUTE_KEY = 'marifold.lastAgentRoute';
+const LAST_AGENT_ROUTE_PREFIX = 'marifold.lastAgentRoute.';
 
 /** Root shell: clean-path desktop views and the service connection. */
 export function App() {
   const [route, navigate] = useRoute();
   const [theme, setTheme] = useTheme();
-  const [connection, setConnection] = useState<ConnectionSettings>(() => loadConnection());
+  const [connections, setConnections] = useState(loadConnections);
+  const [connectionEpoch, setConnectionEpoch] = useState(0);
   const [connectionOpen, setConnectionOpen] = useState(false);
   const [connectionProblem, setConnectionProblem] = useState<string | undefined>();
+  const currentConnection = useMemo(() => activeConnection(connections), [connections]);
   const lastAgentRoute = useRef<Extract<Route, { view: 'agent' }>>(
-    route.view === 'agent' ? route : loadLastAgentRoute(),
+    route.view === 'agent' ? route : loadLastAgentRoute(currentConnection.id),
   );
   const settingsReturnRoute = useRef<Extract<Route, { view: 'agent' | 'apps' }>>(
     route.view === 'apps' ? route : lastAgentRoute.current,
@@ -32,24 +42,64 @@ export function App() {
     if (route.view !== 'agent') return;
     lastAgentRoute.current = route;
     try {
-      window.sessionStorage.setItem(LAST_AGENT_ROUTE_KEY, JSON.stringify(route));
+      window.sessionStorage.setItem(lastAgentRouteKey(currentConnection.id), JSON.stringify(route));
     } catch {
       // In-memory continuity still works when storage is unavailable.
     }
-  }, [route]);
+  }, [currentConnection.id, route]);
 
-  const client = useMemo(() => createApiClient(connection), [connection]);
+  const client = useMemo(
+    () => createApiClient(apiSettings(currentConnection)),
+    [currentConnection.baseUrl, currentConnection.token],
+  );
 
   const onUnauthorized = useCallback(() => {
     setConnectionProblem('The service rejected the request — set the bearer token it expects.');
     setConnectionOpen(true);
   }, []);
 
-  const onSaveConnection = useCallback((settings: ConnectionSettings) => {
-    saveConnection(settings);
-    setConnection(settings);
+  const onConnect = useCallback(async (connection: ServerConnection): Promise<string | undefined> => {
+    try {
+      const status = await getStatus(createApiClient(apiSettings(connection)));
+      if (status.service !== 'marifold' || status.apiVersion !== 'v1') {
+        return 'The endpoint responded, but it is not a compatible Marifold service.';
+      }
+    } catch (error) {
+      if (error instanceof MarifoldApiError && error.code === 'UNAUTHORIZED') {
+        return 'The service rejected this bearer token.';
+      }
+      return error instanceof Error ? error.message : String(error);
+    }
+
+    const switchingServers = currentConnection.id !== connection.id;
+    const next = upsertAndActivateConnection(connections, connection);
+    saveConnections(next);
+    setConnections(next);
+    setConnectionEpoch(epoch => epoch + 1);
     setConnectionProblem(undefined);
-  }, []);
+    if (switchingServers) {
+      const nextAgentRoute = loadLastAgentRoute(connection.id);
+      lastAgentRoute.current = nextAgentRoute;
+      settingsReturnRoute.current = route.view === 'apps' ? { view: 'apps' } : nextAgentRoute;
+      navigate(route.view === 'apps' ? { view: 'apps' } : nextAgentRoute);
+    }
+    return undefined;
+  }, [connections, currentConnection.id, navigate, route.view]);
+
+  const onRemoveConnection = useCallback((id: string) => {
+    const removingActive = connections.activeId === id;
+    const next = removeConnection(connections, id);
+    saveConnections(next);
+    setConnections(next);
+    setConnectionProblem(undefined);
+    if (!removingActive) return;
+    setConnectionEpoch(epoch => epoch + 1);
+    const nextConnection = activeConnection(next);
+    const nextRoute = loadLastAgentRoute(nextConnection.id);
+    lastAgentRoute.current = nextRoute;
+    settingsReturnRoute.current = nextRoute;
+    navigate(nextRoute);
+  }, [connections, navigate]);
 
   const onWorkspaceViewChange = useCallback((view: WorkspaceView) => {
     if (view === 'agent') navigate(lastAgentRoute.current);
@@ -63,7 +113,7 @@ export function App() {
 
   return (
     <div className={styles.shell}>
-      <main className={styles.content}>
+      <main key={`${currentConnection.id}:${connectionEpoch}`} className={styles.content}>
         {route.view === 'config' ? (
           <ConfigScreen
             client={client}
@@ -74,6 +124,7 @@ export function App() {
             onThemeChange={setTheme}
             onOpenConnection={() => setConnectionOpen(true)}
             onOpenSettings={onOpenSettings}
+            connectionName={currentConnection.name}
             onDone={() => navigate(settingsReturnRoute.current)}
           />
         ) : (
@@ -86,6 +137,8 @@ export function App() {
             onThemeChange={setTheme}
             onOpenConnection={() => setConnectionOpen(true)}
             onOpenSettings={onOpenSettings}
+            connectionId={currentConnection.id}
+            connectionName={currentConnection.name}
             workspaceView={route.view}
             onWorkspaceViewChange={onWorkspaceViewChange}
           />
@@ -98,9 +151,10 @@ export function App() {
       </div>
       {connectionOpen ? (
         <ConnectionPopover
-          settings={connection}
+          store={connections}
           problem={connectionProblem}
-          onSave={onSaveConnection}
+          onConnect={onConnect}
+          onRemove={onRemoveConnection}
           onClose={() => setConnectionOpen(false)}
         />
       ) : null}
@@ -108,9 +162,9 @@ export function App() {
   );
 }
 
-function loadLastAgentRoute(): Extract<Route, { view: 'agent' }> {
+function loadLastAgentRoute(connectionId: string): Extract<Route, { view: 'agent' }> {
   try {
-    const value = JSON.parse(window.sessionStorage.getItem(LAST_AGENT_ROUTE_KEY) ?? 'null') as unknown;
+    const value = JSON.parse(window.sessionStorage.getItem(lastAgentRouteKey(connectionId)) ?? 'null') as unknown;
     if (!value || typeof value !== 'object' || !('view' in value) || value.view !== 'agent') {
       return { view: 'agent' };
     }
@@ -125,4 +179,8 @@ function loadLastAgentRoute(): Extract<Route, { view: 'agent' }> {
   } catch {
     return { view: 'agent' };
   }
+}
+
+function lastAgentRouteKey(connectionId: string): string {
+  return `${LAST_AGENT_ROUTE_PREFIX}${encodeURIComponent(connectionId)}`;
 }

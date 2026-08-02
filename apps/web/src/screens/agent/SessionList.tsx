@@ -22,6 +22,7 @@ export interface SessionListProps {
   onSelect: (id: string) => void;
   onNew: () => void;
   onBack: () => void;
+  onConfigureProfile: () => void;
   onRename: (id: string, title: string) => Promise<boolean>;
   onSetPinned: (id: string, pinned: boolean) => Promise<boolean>;
   onSetArchived: (id: string, archived: boolean) => Promise<boolean>;
@@ -62,6 +63,7 @@ export function SessionListContent({
   onSelect,
   onNew,
   onBack,
+  onConfigureProfile,
   onRename,
   onSetPinned,
   onSetArchived,
@@ -207,9 +209,22 @@ export function SessionListContent({
         <button className={styles.backButton} onClick={onBack} title="Back to profiles" aria-label="Back to profiles">
           <BackGlyph />
         </button>
+        <span className={styles.headerTitle}>marifold</span>
+      </div>
+      <div className={styles.profileHero}>
+        {profileAvatar ? (
+          <button
+            className={styles.profileAvatarButton}
+            type="button"
+            title={`Open profile config for ${profileName}`}
+            aria-label={`Open profile config for ${profileName}`}
+            onClick={onConfigureProfile}
+          >
+            {profileAvatar}
+          </button>
+        ) : null}
         <span className={styles.profileName}>{profileName}</span>
       </div>
-      {profileAvatar ? <div className={styles.profileHero}>{profileAvatar}</div> : null}
       <div className={styles.header}>
         <button
           className={showArchived ? styles.archiveFilterActive : styles.archiveFilter}

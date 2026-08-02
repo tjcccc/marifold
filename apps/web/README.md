@@ -41,6 +41,21 @@ pnpm --filter @marifold/web dev
 `VITE_MARIFOLD_URL` overrides the dev service URL. If the service runs with a
 token, set it in the app through the sidebar's Connection sheet.
 
+## Server connections
+
+The Connection sheet keeps a named list of Marifold services. **This server**
+uses the origin that delivered the Web UI; additional entries use an explicit
+HTTP(S) service root and their own bearer token. A candidate is saved and made
+active only after its `/v1/status` response identifies a compatible Marifold v1
+service. Switching servers remounts the data-owning screens and namespaces the
+last Agent route and composer drafts by server, preventing one server's
+profiles or sessions from remaining in another server's workspace.
+
+An explicit remote URL is cross-origin from the local shell, so its service
+must allow the shell's exact origin with `[service].cors_origins`. Directly
+opening the Web UI hosted by the remote service remains same-origin and needs
+no CORS entry.
+
 ## Production
 
 ```sh

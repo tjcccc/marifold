@@ -80,10 +80,41 @@ const server = createMarifoldService({
 await server.listen({ host: '127.0.0.1', port: 32141 });
 process.stdout.write('Marifold Playwright fixture listening at http://127.0.0.1:32141\n');
 
+const remoteStateDir = path.join(stateDir, 'remote');
+const remoteProfilesDir = path.join(remoteStateDir, 'profiles');
+const remoteProfileDir = path.join(remoteProfilesDir, 'remote-only');
+fs.mkdirSync(remoteProfileDir, { recursive: true });
+fs.writeFileSync(path.join(remoteProfileDir, 'PROFILE.md'), '# Remote Only\n\nA profile owned by the remote fixture.\n');
+fs.writeFileSync(path.join(remoteProfileDir, 'profile.toml'), 'mode = "agent"\nmemories = false\n');
+const remoteLoadedConfig = {
+  config: {
+    ...loadedConfig.config,
+    default: { ...loadedConfig.config.default, profile: 'remote-only' },
+    paths: {
+      profilesDir: remoteProfilesDir,
+      sessionsDb: path.join(remoteStateDir, 'sessions.db'),
+      tasksDir: path.join(remoteStateDir, 'tasks'),
+      schedulesDir: path.join(remoteStateDir, 'schedules'),
+      skillsDir: path.join(remoteStateDir, 'skills'),
+      appsDir: path.join(remoteStateDir, 'apps'),
+    },
+    service: {
+      token: 'remote-fixture-token',
+      corsOrigins: ['http://127.0.0.1:32141'],
+    },
+  },
+  configPath: path.join(remoteStateDir, 'config.toml'),
+  foundConfig: true,
+};
+const remoteServer = createMarifoldService({ loadedConfig: remoteLoadedConfig, scheduler: false });
+await remoteServer.listen({ host: '127.0.0.1', port: 32142 });
+process.stdout.write('Remote Marifold fixture listening at http://127.0.0.1:32142\n');
+
 let closing = false;
 async function close() {
   if (closing) return;
   closing = true;
+  await remoteServer.close().catch(() => undefined);
   await server.close().catch(() => undefined);
   fs.rmSync(stateDir, { recursive: true, force: true });
   process.exit(0);

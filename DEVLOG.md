@@ -2,6 +2,17 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-08-02 — v0.53.0 — Authenticated remote service binding and switching
+
+- Kept `127.0.0.1:32140` as the default while allowing explicit non-loopback `--host` values only when bearer authentication resolves from config or CLI flags.
+- Allowed the hosted Web UI to call the API same-origin through a LAN or Tailscale IP without a redundant Connection URL or CORS entry; cross-origin browsers remain exact-allowlist gated.
+- Replaced the one-off Web connection fields with named Marifold servers: **This server** stays same-origin, remote entries retain independent URLs/tokens, and activation requires a compatible `/v1/status` response.
+- Remounted the Web data surface on connection changes and namespaced last Agent routes and drafts by server so profiles, sessions, and in-flight state cannot carry across a switch.
+- Added a two-service Chromium regression that switches from the local fixture to a token-protected remote service and back.
+- Documented direct `--host 0.0.0.0` access, its all-interface exposure, and the narrower specific-address option.
+- Verified the full workspace typecheck/build/test gate (581 tests), all eight Chromium workspace scenarios including remote switch/reload/switch-back, a real wildcard socket bind, and 124 CLI command checks.
+- Released as v0.53.0.
+
 ## 2026-07-27 — v0.52.0 — Global Apps and multi-profile actors
 
 - Fixed bundle-free Skill and App prompts so they no longer advertise a nonexistent `vars.toml` or unavailable `read_file` action; actual bundled skills now name only the files they carry.

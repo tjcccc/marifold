@@ -22,6 +22,7 @@ export interface SidebarSystemFooterProps {
   onThemeChange: (theme: ThemePreference) => void;
   onOpenConnection: () => void;
   onOpenSettings: () => void;
+  connectionName?: string;
   settingsActive?: boolean;
 }
 
@@ -31,6 +32,7 @@ export function SidebarSystemFooter({
   onThemeChange,
   onOpenConnection,
   onOpenSettings,
+  connectionName,
   settingsActive = false,
 }: SidebarSystemFooterProps) {
   return (
@@ -38,6 +40,7 @@ export function SidebarSystemFooter({
       <button className={styles.row} onClick={onOpenConnection}>
         <span className={styles.icon}><ConnectionGlyph /></span>
         <span>Connection</span>
+        {connectionName ? <span className={styles.value} aria-hidden>{connectionName}</span> : null}
       </button>
       <button className={styles.row} onClick={() => onThemeChange(nextThemePreference(theme))}>
         <span className={styles.icon}><AppearanceGlyph /></span>

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { createMarifoldService } from '../src';
+import { createMarifoldService, startMarifoldService } from '../src';
 import { cleanupTempDirs, fixtureLoadedConfig, tempDir } from './helpers';
 
 afterEach(() => {
@@ -7,6 +7,34 @@ afterEach(() => {
 });
 
 describe('MarifoldService security', () => {
+  it('requires bearer authentication before enabling a non-loopback bind', () => {
+    expect(() => createMarifoldService({
+      loadedConfig: fixtureLoadedConfig(tempDir()),
+      host: '0.0.0.0',
+      scheduler: false,
+    })).toThrow(/non-loopback service host requires bearer authentication/i);
+  });
+
+  it('listens on the wildcard host when bearer authentication is configured', async () => {
+    const result = await startMarifoldService({
+      loadedConfig: fixtureLoadedConfig(tempDir(), {
+        service: { token: 'sekret-token', corsOrigins: [] },
+      }),
+      host: '0.0.0.0',
+      port: 0,
+      scheduler: false,
+    });
+    try {
+      expect(result.host).toBe('0.0.0.0');
+      const address = result.server.server.address();
+      if (!address || typeof address === 'string') throw new Error('Expected an IP socket address.');
+      const health = await fetch(`http://127.0.0.1:${address.port}/health`);
+      expect(health.status).toBe(200);
+    } finally {
+      await result.server.close();
+    }
+  });
+
   it('requires the configured bearer token everywhere except /health', async () => {
     const loadedConfig = fixtureLoadedConfig(tempDir(), {
       service: { token: 'sekret-token', corsOrigins: [] },
@@ -187,6 +215,51 @@ describe('MarifoldService security', () => {
         headers: { host: '127.0.0.1:32140' },
       });
       expect(loopback.statusCode).toBe(200);
+    } finally {
+      await server.close();
+    }
+  });
+
+  it('accepts authenticated same-origin requests through a remote bind', async () => {
+    const server = createMarifoldService({
+      loadedConfig: fixtureLoadedConfig(tempDir(), {
+        service: { token: 'sekret-token', corsOrigins: [] },
+      }),
+      host: '0.0.0.0',
+      scheduler: false,
+    });
+    try {
+      const unauthenticated = await server.inject({
+        method: 'GET',
+        url: '/v1/status',
+        headers: { host: '100.101.102.103:32140' },
+      });
+      expect(unauthenticated.statusCode).toBe(401);
+
+      const sameOrigin = await server.inject({
+        method: 'POST',
+        url: '/v1/tasks',
+        headers: {
+          host: '100.101.102.103:32140',
+          origin: 'http://100.101.102.103:32140',
+          authorization: 'Bearer sekret-token',
+          'content-type': 'application/json',
+        },
+        payload: { objective: 'remote same-origin write' },
+      });
+      expect(sameOrigin.statusCode).toBe(201);
+
+      const crossOrigin = await server.inject({
+        method: 'GET',
+        url: '/v1/status',
+        headers: {
+          host: '100.101.102.103:32140',
+          origin: 'https://evil.example.com',
+          authorization: 'Bearer sekret-token',
+        },
+      });
+      expect(crossOrigin.statusCode).toBe(403);
+      expect(crossOrigin.json().error.code).toBe('ORIGIN_FORBIDDEN');
     } finally {
       await server.close();
     }

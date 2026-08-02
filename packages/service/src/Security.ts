@@ -9,6 +9,9 @@ import { MarifoldError, MarifoldServiceConfig } from '@marifold/core';
 export interface ServiceSecurityOptions {
   token?: string;
   corsOrigins: string[];
+  /** Accept request Host values beyond loopback. Enabled only when the
+   * service explicitly binds a non-loopback address with authentication. */
+  allowRemoteHosts?: boolean;
 }
 
 export function resolveSecurityOptions(
@@ -26,8 +29,7 @@ export function resolveSecurityOptions(
 const CORS_METHODS = 'GET,POST,PATCH,DELETE,OPTIONS';
 const CORS_HEADERS = 'authorization, content-type, last-event-id';
 const CORS_MAX_AGE = '600';
-/** Host values a loopback-bound service legitimately sees. Anything else is a
- * DNS-rebinding attempt (a hostile page resolving its domain to 127.0.0.1). */
+/** Host values a default loopback-bound service legitimately sees. */
 const LOOPBACK_HOST = /^(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/i;
 /** Native EventSource cannot set headers, so the runs event stream may carry
  * the token as ?access_token=. Fetch-based SSE with the header is preferred. */
@@ -35,13 +37,13 @@ const QUERY_TOKEN_PATHS = /^\/v1\/runs\/[^/]+\/events(\?|$)/;
 
 /**
  * One onRequest hook enforcing, in order: the browser origin allowlist (with
- * preflight short-circuit), a loopback Host check, and optional bearer auth.
+ * preflight short-circuit), a bind-scope Host check, and optional bearer auth.
  * Runs before route matching, so unknown routes are protected too.
  */
 export function registerSecurity(server: FastifyInstance, options: ServiceSecurityOptions): void {
   server.addHook('onRequest', async (request, reply) => {
     const origin = request.headers.origin;
-    if (typeof origin === 'string' && origin !== '' && !isSameLoopbackOrigin(origin, request.headers.host)) {
+    if (typeof origin === 'string' && origin !== '' && !isSameAllowedOrigin(origin, request.headers.host, options)) {
       if (!options.corsOrigins.includes(origin)) throw MarifoldError.originForbidden(origin);
       reply.header('Access-Control-Allow-Origin', origin);
       reply.header('Vary', 'Origin');
@@ -57,7 +59,7 @@ export function registerSecurity(server: FastifyInstance, options: ServiceSecuri
     }
 
     const host = request.headers.host;
-    if (typeof host === 'string' && host !== '' && !LOOPBACK_HOST.test(host)) {
+    if (typeof host === 'string' && host !== '' && !isAllowedHost(host, options)) {
       throw MarifoldError.originForbidden(host);
     }
 
@@ -94,13 +96,19 @@ function isApiPath(url: string): boolean {
   return normalized === '/v1' || normalized.startsWith('/v1/');
 }
 
-/** fetch sends an Origin header on every non-GET request, including
- * same-origin ones — so the app served by this service would 403 against
- * the allowlist without this: an Origin whose host equals the request's own
- * loopback Host is the served app talking to itself. */
-function isSameLoopbackOrigin(origin: string, host: string | undefined): boolean {
-  if (!host || !LOOPBACK_HOST.test(host)) return false;
+/** The service-hosted app is same-origin whether it was reached through the
+ * default loopback bind or an explicitly authenticated remote bind. */
+function isSameAllowedOrigin(
+  origin: string,
+  host: string | undefined,
+  options: ServiceSecurityOptions,
+): boolean {
+  if (!host || !isAllowedHost(host, options)) return false;
   return origin === `http://${host}` || origin === `https://${host}`;
+}
+
+function isAllowedHost(host: string, options: ServiceSecurityOptions): boolean {
+  return options.allowRemoteHosts === true || LOOPBACK_HOST.test(host);
 }
 
 function extractToken(request: FastifyRequest): string | undefined {

@@ -21,7 +21,7 @@ export function registerServiceCommand(program: Command, printer: ConsolePrinter
   program
     .command('service')
     .description('Start the local Marifold HTTP service.')
-    .option('--host <host>', 'Loopback host to bind.', '127.0.0.1')
+    .option('--host <host>', 'Host to bind. Non-loopback addresses require bearer authentication.', '127.0.0.1')
     .option('--port <number>', 'Port to bind. Use 0 for a random open port.', '32140')
     .option('--log', 'Enable HTTP request logging.')
     .option('--token <token>', 'Require this bearer token on API requests (prefer --token-env).')

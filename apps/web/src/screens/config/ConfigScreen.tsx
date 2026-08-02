@@ -63,6 +63,7 @@ export interface ConfigScreenProps {
   onThemeChange: (theme: ThemePreference) => void;
   onOpenConnection: () => void;
   onOpenSettings: () => void;
+  connectionName: string;
   onDone: () => void;
 }
 
@@ -78,6 +79,7 @@ export function ConfigScreen({
   onThemeChange,
   onOpenConnection,
   onOpenSettings,
+  connectionName,
   onDone,
 }: ConfigScreenProps) {
   const { section, item } = route;
@@ -306,6 +308,7 @@ export function ConfigScreen({
             onThemeChange={onThemeChange}
             onOpenConnection={onOpenConnection}
             onOpenSettings={onOpenSettings}
+            connectionName={connectionName}
             settingsActive
           />
         </nav>

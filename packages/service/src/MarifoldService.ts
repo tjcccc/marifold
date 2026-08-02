@@ -36,6 +36,9 @@ import {
 
 export interface MarifoldServiceOptions {
   loadedConfig: LoadedMarifoldConfig;
+  /** Address the HTTP server will bind to. Defaults to loopback. A
+   * non-loopback address requires resolved bearer authentication. */
+  host?: string;
   logger?: boolean;
   /** Run the schedule scheduler inside this service process. Default true.
    * Schedules only fire while the service is running. */
@@ -51,7 +54,6 @@ export interface MarifoldServiceOptions {
 }
 
 export interface MarifoldServiceStartOptions extends MarifoldServiceOptions {
-  host?: string;
   port?: number;
 }
 
@@ -74,18 +76,24 @@ const DEFAULT_HOST = '127.0.0.1';
 const DEFAULT_PORT = 32140;
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '::1']);
 /** Base64 image attachments ride the JSON body; fastify's 1 MiB default
- * would reject them. Still gated by loopback + CORS + the optional token. */
+ * would reject them. Still gated by bind scope, CORS, and bearer auth whenever
+ * the service leaves loopback. */
 const BODY_LIMIT_BYTES = 25 * 1024 * 1024;
 
 export function createMarifoldService(options: MarifoldServiceOptions): FastifyInstance {
-  const runtime = new MarifoldRuntime({ loadedConfig: options.loadedConfig });
-  const server = fastify({ logger: options.logger ?? false, bodyLimit: BODY_LIMIT_BYTES });
-
+  const host = options.host ?? DEFAULT_HOST;
   const security = resolveSecurityOptions(options.loadedConfig.config.service, {
     token: options.auth?.token,
     corsOrigins: options.cors?.origins,
   });
-  registerSecurity(server, security);
+  assertBindingSecurity(host, security.token);
+
+  const runtime = new MarifoldRuntime({ loadedConfig: options.loadedConfig });
+  const server = fastify({ logger: options.logger ?? false, bodyLimit: BODY_LIMIT_BYTES });
+  registerSecurity(server, {
+    ...security,
+    allowRemoteHosts: !LOOPBACK_HOSTS.has(host),
+  });
 
   const scheduler = (options.scheduler ?? true)
     ? runtime.createScheduler(message => server.log.info(message))
@@ -594,8 +602,7 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
 export async function startMarifoldService(options: MarifoldServiceStartOptions): Promise<MarifoldServiceStartResult> {
   const host = options.host ?? DEFAULT_HOST;
   const port = options.port ?? DEFAULT_PORT;
-  assertLoopbackHost(host);
-  const server = createMarifoldService(options);
+  const server = createMarifoldService({ ...options, host });
   try {
     const address = await server.listen({ host, port });
     return { server, address, host, port, telegram: (server as ServiceWithBridge).marifoldTelegram };
@@ -614,10 +621,10 @@ export async function startMarifoldService(options: MarifoldServiceStartOptions)
   }
 }
 
-function assertLoopbackHost(host: string): void {
-  if (LOOPBACK_HOSTS.has(host)) return;
+function assertBindingSecurity(host: string, token: string | undefined): void {
+  if (LOOPBACK_HOSTS.has(host) || token) return;
   throw MarifoldError.configInvalid(
-    `Marifold service is loopback-only in this release. Use ${DEFAULT_HOST}, localhost, or ::1.`,
+    'A non-loopback service host requires bearer authentication. Configure [service].token_env or pass --token-env/--token.',
     { host },
   );
 }

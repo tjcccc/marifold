@@ -33,6 +33,8 @@ export interface AgentScreenProps {
   onThemeChange: (theme: ThemePreference) => void;
   onOpenConnection: () => void;
   onOpenSettings: () => void;
+  connectionId: string;
+  connectionName: string;
   workspaceView: WorkspaceView;
   onWorkspaceViewChange: (view: WorkspaceView) => void;
 }
@@ -104,6 +106,7 @@ export function AgentScreen(props: AgentScreenProps) {
       onThemeChange={props.onThemeChange}
       onOpenConnection={props.onOpenConnection}
       onOpenSettings={props.onOpenSettings}
+      connectionName={props.connectionName}
     />
   );
 
@@ -148,6 +151,11 @@ export function AgentScreen(props: AgentScreenProps) {
                 onSelect={controller.selectSession}
                 onNew={controller.newSession}
                 onBack={controller.showProfiles}
+                onConfigureProfile={() => props.navigate({
+                  view: 'config',
+                  section: 'profiles',
+                  item: controller.profileName,
+                })}
                 onRename={controller.renameSession}
                 onSetPinned={controller.setSessionPinned}
                 onSetArchived={controller.setSessionArchived}
@@ -225,7 +233,7 @@ export function AgentScreen(props: AgentScreenProps) {
               editingDisabled={controller.steeringRun !== undefined || controller.sending}
             />
             <InputBar
-              draftKey={`${controller.profileName}:${controller.sessionId ?? 'new'}`}
+              draftKey={`${props.connectionId}:${controller.profileName}:${controller.sessionId ?? 'new'}`}
               steering={controller.steeringRun !== undefined}
               disabled={controller.sending}
               think={controller.think}
