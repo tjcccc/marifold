@@ -1,3 +1,4 @@
+import { fetchWithTransientRetry } from '../util/fetchRetry';
 import { proxyDispatcher } from '../util/proxy';
 
 const XAI_OAUTH_TOKEN_URL = 'https://auth.x.ai/oauth2/token';
@@ -39,25 +40,29 @@ export async function refreshXaiAccessToken(refreshToken: string, proxy?: string
 }
 
 async function postForm(url: string, body: Record<string, string>, label: string, proxy?: string): Promise<Record<string, unknown>> {
-  return parseResponse(await doFetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
-    body: new URLSearchParams(body),
-    signal: AbortSignal.timeout(REFRESH_TIMEOUT_MS),
-  }, label, proxy), label);
-}
-
-async function doFetch(url: string, init: RequestInit, label: string, proxy?: string): Promise<Response> {
   const dispatcher = proxyDispatcher(proxy);
   try {
-    return await fetch(url, dispatcher ? { ...init, dispatcher } as RequestInit : init);
-  } catch (error) {
-    if (!(error instanceof Error)) throw new Error(`${label}: ${String(error)}`);
-    // undici puts the real transport reason on `.cause` (ECONNREFUSED, TLS,
-    // proxy errors); surface it so a "fetch failed" is diagnosable.
-    const cause = (error as { cause?: { code?: string; message?: string } }).cause;
-    const causeText = cause ? ` (cause: ${cause.code ?? cause.message})` : '';
-    throw new Error(`${label}: ${error.name}: ${error.message}${causeText}`);
+    const init: Record<string, unknown> = {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
+      body: new URLSearchParams(body),
+      signal: AbortSignal.timeout(REFRESH_TIMEOUT_MS),
+    };
+    if (dispatcher) init.dispatcher = dispatcher;
+    let response: Response;
+    try {
+      response = await fetchWithTransientRetry(url, init as RequestInit);
+    } catch (error) {
+      if (!(error instanceof Error)) throw new Error(`${label}: ${String(error)}`);
+      // undici puts the real transport reason on `.cause` (ECONNREFUSED, TLS,
+      // proxy errors); surface it so a "fetch failed" is diagnosable.
+      const cause = (error as { cause?: { code?: string; message?: string } }).cause;
+      const causeText = cause ? ` (cause: ${cause.code ?? cause.message})` : '';
+      throw new Error(`${label}: ${error.name}: ${error.message}${causeText}`);
+    }
+    return await parseResponse(response, label);
+  } finally {
+    await dispatcher?.close();
   }
 }
 

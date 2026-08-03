@@ -110,10 +110,10 @@ pnpm install
 pnpm build
 ```
 
-Create local configuration:
+After installing or linking the packaged `marifold` binary, create local configuration:
 
 ```bash
-pnpm marifold init
+marifold init
 ```
 
 This writes `~/.marifold/config.toml`, creates `~/.marifold/profiles/default`, and keeps existing profile files if you re-run with `--force`. On a terminal it then **interactively picks your provider and model** (and offers an optional web-search toggle), so the default model is one you actually have. Pass `--model <name>` (or run non-interactively) to skip the picker.
@@ -159,83 +159,83 @@ The agent eval runs scripted objectives in sandboxed temp directories and report
 
 ## Commands
 
-Run the local CLI from the workspace:
+Use the installed CLI directly. `pnpm` is reserved for source-workspace build and test commands:
 
 ```bash
-pnpm marifold agent "Read package.json and summarize the scripts."
-pnpm marifold agent --profile coder --max-iterations 10 "Count the .md files in this directory."
-pnpm marifold agent --tool-mode control-block --yes "Write a haiku into haiku.txt"
+marifold agent "Read package.json and summarize the scripts."
+marifold agent --profile coder --max-iterations 10 "Count the .md files in this directory."
+marifold agent --tool-mode control-block --yes "Write a haiku into haiku.txt"
 
-pnpm marifold ask "Hello"
-pnpm marifold ask --profile default "Explain Marifold in one sentence."
-pnpm marifold ask --no-memories "Format this JSON"
-pnpm marifold ask --think true "Solve step by step."
-pnpm marifold ask --image ./photo.jpg "What is in this image?"
+marifold ask "Hello"
+marifold ask --profile default "Explain Marifold in one sentence."
+marifold ask --no-memories "Format this JSON"
+marifold ask --think true "Solve step by step."
+marifold ask --image ./photo.jpg "What is in this image?"
 
-pnpm marifold chat
-pnpm marifold chat --profile default
-pnpm marifold chat --profile default --no-memories
-pnpm marifold chat --profile default --think true
-pnpm marifold chat --profile default --session test-session
-pnpm marifold chat --profile default --resume
-pnpm marifold chat --profile default --resume last
+marifold chat
+marifold chat --profile default
+marifold chat --profile default --no-memories
+marifold chat --profile default --think true
+marifold chat --profile default --session test-session
+marifold chat --profile default --resume
+marifold chat --profile default --resume last
 
-pnpm marifold init
-pnpm marifold init --provider openai --model gpt-4o-mini
+marifold init
+marifold init --provider openai --model gpt-4o-mini
 
-pnpm marifold config show
-pnpm marifold config set default.model gemma4:e4b
-pnpm marifold config set service.web_dir ./apps/web/dist
-pnpm marifold config get service.web_dir
-pnpm marifold config export ./marifold-backup.json --include-sessions
-pnpm marifold config import ./marifold-backup.json --force
+marifold config show
+marifold config set default.model gemma4:e4b
+marifold config set service.web_dir ./apps/web/dist
+marifold config get service.web_dir
+marifold config export ./marifold-backup.json --include-sessions
+marifold config import ./marifold-backup.json --force
 
-pnpm marifold model
-pnpm marifold model list
-pnpm marifold model add
-pnpm marifold model add ollama qwen3:8b
-pnpm marifold model add openai gpt-4o-mini --base-url https://api.openai.com --api-key-env OPENAI_API_KEY --default
-pnpm marifold model validate
-pnpm marifold model validate --all
-pnpm marifold model validate ollama/gemma4:e4b
-pnpm marifold model validate gemma4:e4b --provider ollama
-pnpm marifold model rm openai/gpt-4o-mini
-pnpm marifold model default
-pnpm marifold model default --profile coder
-pnpm marifold model default gemma4:e4b
-pnpm marifold model default qwen3:8b --provider ollama --profile coder
-pnpm marifold model default --profile coder --clear
+marifold model
+marifold model list
+marifold model add
+marifold model add ollama qwen3:8b
+marifold model add openai gpt-4o-mini --base-url https://api.openai.com --api-key-env OPENAI_API_KEY --default
+marifold model validate
+marifold model validate --all
+marifold model validate ollama/gemma4:e4b
+marifold model validate gemma4:e4b --provider ollama
+marifold model rm openai/gpt-4o-mini
+marifold model default
+marifold model default --profile coder
+marifold model default gemma4:e4b
+marifold model default qwen3:8b --provider ollama --profile coder
+marifold model default --profile coder --clear
 
-pnpm marifold provider
-pnpm marifold provider list
-pnpm marifold provider ollama list
-pnpm marifold provider reauth xai
-pnpm marifold provider status
+marifold provider
+marifold provider list
+marifold provider ollama list
+marifold provider reauth xai
+marifold provider status
 
-pnpm marifold profile list
-pnpm marifold profile show default
-pnpm marifold profile memory default
-pnpm marifold profile memory default --all --limit 100
-pnpm marifold profile init coder
-pnpm marifold profile rename coder writer
-pnpm marifold profile delete writer --yes
-pnpm marifold profile default coder
+marifold profile list
+marifold profile show default
+marifold profile memory default
+marifold profile memory default --all --limit 100
+marifold profile init coder
+marifold profile rename coder writer
+marifold profile delete writer --yes
+marifold profile default coder
 
-pnpm marifold session list --profile default
-pnpm marifold session show test-session
-pnpm marifold session rename test-session renamed-session
-pnpm marifold session delete renamed-session
-pnpm marifold session clear --profile default --keep-last 10 --yes
+marifold session list --profile default
+marifold session show test-session
+marifold session rename test-session renamed-session
+marifold session delete renamed-session
+marifold session clear --profile default --keep-last 10 --yes
 
-pnpm marifold schedule add --cron "0 9 * * 1-5" --name digest "Summarize my notes folder."
-pnpm marifold schedule list
-pnpm marifold schedule show sched_xxxx
-pnpm marifold schedule disable sched_xxxx
-pnpm marifold schedule run sched_xxxx
-pnpm marifold schedule rm sched_xxxx
+marifold schedule add --cron "0 9 * * 1-5" --name digest "Summarize my notes folder."
+marifold schedule list
+marifold schedule show sched_xxxx
+marifold schedule disable sched_xxxx
+marifold schedule run sched_xxxx
+marifold schedule rm sched_xxxx
 
-pnpm marifold service
-pnpm marifold service --host 127.0.0.1 --port 32140
+marifold service
+marifold service --host 127.0.0.1 --port 32140
 ```
 
 The packaged binary name is `marifold`.
@@ -270,7 +270,7 @@ Default config path:
 You can override it with:
 
 ```bash
-pnpm marifold --config ./config.example.toml profile list
+marifold --config ./config.example.toml profile list
 ```
 
 Config shape:

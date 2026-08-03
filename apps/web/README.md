@@ -32,7 +32,7 @@ slip into a compile error).
 
 ```sh
 # 1. Run the service with the Vite dev origin allowed:
-pnpm marifold service --cors-origin http://127.0.0.1:5173
+marifold service --cors-origin http://127.0.0.1:5173
 
 # 2. Run the dev server (proxies nothing; talks straight to :32140):
 pnpm --filter @marifold/web dev
@@ -60,7 +60,7 @@ no CORS entry.
 
 ```sh
 pnpm --filter @marifold/web build
-pnpm marifold service --web-dir apps/web/dist        # or [service].web_dir in config.toml
+marifold service --web-dir apps/web/dist        # or [service].web_dir in config.toml
 ```
 
 Served same-origin, no CORS configuration needed; with a token configured,
@@ -115,7 +115,7 @@ removed while it is the global default or referenced by a profile override.
 Removal clears its local credentials/config and saved model options without
 touching provider-owned models or remote accounts. OAuth provider pages expose
 a **Re-authenticate…** dialog with a copyable
-`pnpm marifold provider reauth <provider>` command. The command runs on the
+`marifold provider reauth <provider>` command. The command runs on the
 service host because a remotely forwarded browser's loopback callback points at
 the client machine, not the Mac hosting Marifold.
 

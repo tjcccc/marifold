@@ -120,7 +120,7 @@ export function ProvidersPage(props: ProvidersPageProps) {
   const proxyValue = proxy ?? provider.proxy ?? '';
   const removeConfirmed = removeName === props.selected;
   const supportsReauth = OAUTH_PROVIDERS.has(props.selected);
-  const reauthCommand = `pnpm marifold provider reauth ${props.selected}`;
+  const reauthCommand = `marifold provider reauth ${props.selected}`;
 
   function closeRemoveDialog(): void {
     if (props.busy) return;

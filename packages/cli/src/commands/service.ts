@@ -98,7 +98,7 @@ interface ShutdownOptions {
   forceClose?: () => void;
   graceMs?: number;
   /** Test seam. Production deliberately exits after cleanup so a stray SDK
-   * handle cannot keep `pnpm marifold service` alive after Ctrl+C. */
+   * handle cannot keep `marifold service` alive after Ctrl+C. */
   terminate?: (code: number) => void;
 }
 

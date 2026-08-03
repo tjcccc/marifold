@@ -163,6 +163,8 @@ export type {
 export { TelegramBridge } from './channels/TelegramBridge';
 export type { TelegramBridgeDeps } from './channels/TelegramBridge';
 export { proxyDispatcher } from './util/proxy';
+export { fetchWithTransientRetry, isTransientFetchError } from './util/fetchRetry';
+export type { TransientFetchRetryOptions } from './util/fetchRetry';
 export { accountIdFromIdToken } from './util/idToken';
 export type {
   MarifoldAskResponse,

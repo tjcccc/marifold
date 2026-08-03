@@ -302,7 +302,7 @@ describe('ProvidersPage', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Re-authenticate…' }));
     const dialog = screen.getByRole('dialog', { name: 'Re-authenticate “xai”' });
-    expect(within(dialog).getByText('pnpm marifold provider reauth xai')).toBeTruthy();
+    expect(within(dialog).getByText('marifold provider reauth xai')).toBeTruthy();
     expect(within(dialog).getByRole('button', { name: 'Copy re-authentication command' })).toBeTruthy();
     expect(within(dialog).getByText(/saved model choices are preserved/)).toBeTruthy();
   });

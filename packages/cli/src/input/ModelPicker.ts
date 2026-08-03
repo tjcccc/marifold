@@ -244,8 +244,8 @@ export async function reauthenticateOAuthProvider(
     );
   }
 
-  const credentials = await promptOAuthCredentials(getPrompt, style, entry);
   const current = loadedConfig.config.providers[provider] ?? { type: entry.type };
+  const credentials = await promptOAuthCredentials(getPrompt, style, entry, current.proxy);
   const updated = applyOAuthCredentials(current, entry, credentials);
   loadedConfig.config.providers[provider] = updated;
   return updated;
@@ -282,10 +282,11 @@ async function promptOAuthCredentials(
   getPrompt: PromptFactory,
   style: TerminalStyle,
   provider: ProviderRegistryEntry,
+  proxy?: string,
 ): Promise<Partial<MarifoldProviderConfig>> {
   if (provider.name === 'github_copilot') return promptGitHubCopilotCredentials(getPrompt, style, provider);
   if (provider.name === 'chatgpt') return promptChatGptCredentials(getPrompt, style, provider);
-  if (provider.name === 'xai') return promptXaiCredentials(getPrompt, style, provider);
+  if (provider.name === 'xai') return promptXaiCredentials(getPrompt, style, provider, proxy);
 
   const token = await readRequiredSecret(getPrompt, style, 'OAuth token: ');
   return {
@@ -364,6 +365,7 @@ async function promptXaiCredentials(
   getPrompt: PromptFactory,
   style: TerminalStyle,
   provider: ProviderRegistryEntry,
+  proxy?: string,
 ): Promise<Partial<MarifoldProviderConfig>> {
   // SuperGrok / X Premium+ subscription OAuth is the intended path. A raw key is
   // still honored via the XAI_API_KEY env var (apiKeyEnv), so the picker stays
@@ -372,6 +374,7 @@ async function promptXaiCredentials(
   const tokens = await authorizeXaiWithBrowser(
     text => process.stdout.write(text),
     async label => getPrompt().readUserMessage(style.bold(label)),
+    { proxy },
   );
   return {
     // api.x.ai is plain OpenAI-compatible: the OAuth access token is the Bearer

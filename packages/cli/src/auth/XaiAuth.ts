@@ -1,13 +1,18 @@
 import { createHash, randomBytes } from 'crypto';
 import { createServer, Server } from 'http';
 import { spawn } from 'child_process';
-import { proxyDispatcher } from '@marifold/core';
+import { fetchWithTransientRetry, proxyDispatcher } from '@marifold/core';
 
 export interface XaiAuthTokens {
   /** OAuth access token — used directly as the api.x.ai Bearer credential. */
   accessToken: string;
   refreshToken: string;
   expiresAt?: number;
+}
+
+export interface XaiAuthOptions {
+  /** Explicit provider proxy. Falls back to HTTP(S)_PROXY when omitted. */
+  proxy?: string;
 }
 
 interface PkceCodes {
@@ -34,6 +39,7 @@ export type ReadPastedCode = (prompt: string) => Promise<string | undefined>;
 export async function authorizeXaiWithBrowser(
   write: (text: string) => void = text => process.stdout.write(text),
   readPastedCode?: ReadPastedCode,
+  options: XaiAuthOptions = {},
 ): Promise<XaiAuthTokens> {
   const pkce = generatePkce();
   const state = base64Url(randomBytes(32));
@@ -67,7 +73,7 @@ export async function authorizeXaiWithBrowser(
     }
 
     write('Exchanging the authorization code for tokens with xAI...\n');
-    return await exchangeXaiCodeForTokens(code, callback.redirectUri, pkce);
+    return await exchangeXaiCodeForTokens(code, callback.redirectUri, pkce, options.proxy);
   } finally {
     await callback.close();
   }
@@ -120,6 +126,7 @@ async function exchangeXaiCodeForTokens(
   code: string,
   redirectUri: string,
   pkce: PkceCodes,
+  proxy?: string,
 ): Promise<XaiAuthTokens> {
   const data = await postForm(XAI_OAUTH_TOKEN_URL, {
     grant_type: 'authorization_code',
@@ -129,7 +136,7 @@ async function exchangeXaiCodeForTokens(
     code_verifier: pkce.codeVerifier,
     code_challenge: pkce.codeChallenge,
     code_challenge_method: 'S256',
-  }, 'xAI token exchange failed');
+  }, 'xAI token exchange failed', proxy);
 
   const accessToken = stringField(data.access_token);
   const refreshToken = stringField(data.refresh_token);
@@ -145,7 +152,12 @@ async function exchangeXaiCodeForTokens(
   };
 }
 
-async function postForm(url: string, data: Record<string, string>, label: string): Promise<Record<string, unknown>> {
+async function postForm(
+  url: string,
+  data: Record<string, string>,
+  label: string,
+  proxy?: string,
+): Promise<Record<string, unknown>> {
   // Node's fetch ignores HTTPS_PROXY by default; honor it for this external call
   // (xAI's token endpoint) so the exchange works behind a proxy like the browser.
   const init: Record<string, unknown> = {
@@ -158,13 +170,17 @@ async function postForm(url: string, data: Record<string, string>, label: string
     // Generous ceiling: the OAuth token endpoint can be slow through a proxy.
     signal: AbortSignal.timeout(60000),
   };
-  const dispatcher = proxyDispatcher();
+  const dispatcher = proxyDispatcher(proxy);
   if (dispatcher) init.dispatcher = dispatcher;
-  const response = await fetch(url, init as RequestInit).catch(error => {
-    throw new Error(`${label}: ${stringifyError(error)}`);
-  });
-  if (!response.ok) throw new Error(`${label}: HTTP ${response.status}: ${await response.text()}`);
-  return await response.json() as Record<string, unknown>;
+  try {
+    const response = await fetchWithTransientRetry(url, init as RequestInit).catch(error => {
+      throw new Error(`${label}: ${stringifyError(error)}`);
+    });
+    if (!response.ok) throw new Error(`${label}: HTTP ${response.status}: ${await response.text()}`);
+    return await response.json() as Record<string, unknown>;
+  } finally {
+    await dispatcher?.close();
+  }
 }
 
 async function startCallbackServer(expectedState: string): Promise<{

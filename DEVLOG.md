@@ -2,6 +2,15 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-08-03 — v0.53.1 — xAI OAuth proxy resilience
+
+- Routed xAI browser token exchange through the saved per-provider proxy, with the existing HTTP(S)_PROXY fallback.
+- Added bounded retries for transient xAI token exchange and refresh transport failures such as `ECONNRESET`; HTTP responses remain single-attempt so rejected or consumed authorization codes are not replayed.
+- Added focused retry and proxy-forwarding regressions and verified live reachability of `auth.x.ai` through the configured proxy without sending credentials.
+- Standardized Web reauthentication copy and product documentation on installed commands such as `marifold provider reauth xai`; `pnpm` remains limited to source-workspace build and test workflows.
+- Verified the full workspace typecheck/build/test gate (587 tests), 124 CLI command checks, and the built CLI version output.
+- Released as v0.53.1.
+
 ## 2026-08-02 — v0.53.0 — Authenticated remote service binding and switching
 
 - Kept `127.0.0.1:32140` as the default while allowing explicit non-loopback `--host` values only when bearer authentication resolves from config or CLI flags.
@@ -405,7 +414,7 @@ Groundwork for the upcoming Telegram/messaging channel (a remote bot honours *it
 - **Clean init output.** `printInitResult` gained `{ showModel, showNextSteps }`; interactive runs suppress the misleading bootstrap `Provider:` line and the premature "Next steps", printing the *chosen* model and a "Run `marifold` to start." line after the picker instead.
 - **Not-initialized hint.** Running `marifold` (the TUI) before `init` now prints `Marifold is not initialized yet. Run \`marifold init\` to get started.` and exits, instead of showing a pointless profile picker that can't resolve a provider/model (gated on `loadedConfig.foundConfig`).
 - **Unknown commands no longer launch the TUI.** A stray/unknown subcommand (e.g. `marifold frobnicate`, or a typo like `marifold marifold model`) was falling through to the bare-launch default action and opening the TUI. The root action now rejects leftover operands with `unknown command '…'`; bare `marifold` (with/without root options) still launches the TUI.
-- **Production-facing hints use `marifold`, not `pnpm marifold`.**
+- **Production-facing hints use the packaged `marifold` binary without a package-manager prefix.**
 - Version 0.23.0 → 0.24.0 across all packages + CLI `.version`.
 - Verified: core 141, tui 30, service 4 — all pass; all 4 packages build/typecheck green. Non-interactive `init` paths, unknown-command rejection, and bare-launch routing checked against the built CLI. The interactive picker itself needs a real TTY (confirmed live by the user).
 
