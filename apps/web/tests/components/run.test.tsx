@@ -33,6 +33,7 @@ function cardFixture(partial: Partial<RunCardState> = {}): RunCardState {
     errors: [],
     collapsed: false,
     ...partial,
+    inputResponses: partial.inputResponses ?? [],
   };
 }
 
@@ -114,6 +115,58 @@ describe('RunCard', () => {
     expect(screen.queryByText('Trust this folder')).toBeNull();
     expect(screen.getByText(/Allow once/)).toBeTruthy();
     expect(screen.getByText('Deny')).toBeTruthy();
+  });
+
+  it('batches clarification questions and submits once after every answer', () => {
+    const onSubmitInput = vi.fn();
+    const run = cardFixture({
+      userInput: {
+        id: 'question_1',
+        questions: [
+          {
+            id: 'style',
+            header: 'Visual style',
+            question: 'What style do you prefer?',
+            options: [
+              { id: 'apple', label: 'Apple', description: 'Quiet and restrained.' },
+              { id: 'material', label: 'Material' },
+            ],
+          },
+          {
+            id: 'density',
+            question: 'How dense should it be?',
+            options: [{ id: 'compact', label: 'Compact' }, { id: 'roomy', label: 'Roomy' }],
+          },
+        ],
+      },
+    });
+    render(
+      <RunCard
+        run={run}
+        onCancel={() => {}}
+        onAnswer={() => {}}
+        onSubmitInput={onSubmitInput}
+        onToggle={() => {}}
+      />,
+    );
+
+    expect(screen.getByText('Waiting for your answers')).toBeTruthy();
+    const submit = screen.getByRole('button', { name: /Submit answers/ }) as HTMLButtonElement;
+    expect(submit.disabled).toBe(true);
+    fireEvent.click(screen.getByLabelText(/Apple/));
+    expect(submit.disabled).toBe(true);
+    const custom = screen.getByLabelText('Custom answer for question 2');
+    fireEvent.focus(custom);
+    fireEvent.change(custom, { target: { value: 'Medium density' } });
+    expect(submit.disabled).toBe(false);
+    fireEvent.click(submit);
+
+    expect(onSubmitInput).toHaveBeenCalledWith('question_1', {
+      answers: [
+        { questionId: 'style', optionId: 'apple' },
+        { questionId: 'density', customText: 'Medium density' },
+      ],
+    });
   });
 
   it('collapses a finished run to the footer and toggles details', () => {
@@ -404,7 +457,8 @@ describe('ThreadView', () => {
               collapsed: true,
               finishedAt: new Date().toISOString(),
               plan: undefined,
-              rows: [],
+    rows: [],
+    inputResponses: [],
               steering: [],
             }),
           },

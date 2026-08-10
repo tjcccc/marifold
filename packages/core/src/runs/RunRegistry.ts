@@ -8,8 +8,14 @@ import type { RunFileInput } from '../agent/RunWorkspace';
 import { isInsideAny } from '../agent/tools/WriteFileTool';
 import { MarifoldError } from '../errors/MarifoldError';
 import { TaskStatus } from '../tasks/TaskStore';
+import {
+  normalizeUserInputSubmission,
+  type UserInputRequest,
+  type UserInputSubmission,
+} from '../agent/UserInput';
 
 const DEFAULT_APPROVAL_TIMEOUT_MS = 5 * 60 * 1000;
+const DEFAULT_USER_INPUT_TIMEOUT_MS = 30 * 60 * 1000;
 const DEFAULT_FINISHED_RUN_TTL_MS = 5 * 60 * 1000;
 const DEFAULT_MAX_ACTIVE_RUNS = 5;
 const DEFAULT_MAX_BUFFERED_EVENTS = 10_000;
@@ -29,6 +35,9 @@ export interface RunRegistryOptions {
   /** How long an approval prompt waits for an answer before auto-denying.
    * Matches the Telegram bridge's five-minute window by default. */
   approvalTimeoutMs?: number;
+  /** How long a clarification card may remain unanswered before the tool is
+   * returned to the model as unavailable. */
+  userInputTimeoutMs?: number;
   /** How long a finished run (and its event buffer) stays queryable for
    * late/reconnecting clients before eviction. */
   finishedRunTtlMs?: number;
@@ -82,6 +91,7 @@ export interface RunRecord {
   /** Sequence number of the newest buffered event (0 = none yet). */
   eventCount: number;
   pendingApprovals: ApprovalRequest[];
+  pendingUserInputs: UserInputRequest[];
 }
 
 export interface SequencedEvent {
@@ -95,6 +105,12 @@ interface PendingApproval {
   runId: string;
   request: ApprovalRequest;
   settle: (decision: ApprovalDecision) => void;
+}
+
+interface PendingUserInput {
+  runId: string;
+  request: UserInputRequest;
+  settle: (submission: UserInputSubmission | undefined) => void;
 }
 
 interface ActiveRun {
@@ -130,8 +146,10 @@ interface ActiveRun {
 export class RunRegistry {
   private readonly runs = new Map<string, ActiveRun>();
   private readonly pending = new Map<string, PendingApproval>();
+  private readonly pendingUserInputs = new Map<string, PendingUserInput>();
   private readonly runtime: RunRegistryRuntime;
   private readonly approvalTimeoutMs: number;
+  private readonly userInputTimeoutMs: number;
   private readonly finishedRunTtlMs: number;
   private readonly maxActiveRuns: number;
   private readonly maxBufferedEvents: number;
@@ -141,6 +159,7 @@ export class RunRegistry {
   constructor(options: RunRegistryOptions) {
     this.runtime = options.runtime;
     this.approvalTimeoutMs = options.approvalTimeoutMs ?? DEFAULT_APPROVAL_TIMEOUT_MS;
+    this.userInputTimeoutMs = options.userInputTimeoutMs ?? DEFAULT_USER_INPUT_TIMEOUT_MS;
     this.finishedRunTtlMs = options.finishedRunTtlMs ?? DEFAULT_FINISHED_RUN_TTL_MS;
     this.maxActiveRuns = options.maxActiveRuns ?? DEFAULT_MAX_ACTIVE_RUNS;
     this.maxBufferedEvents = options.maxBufferedEvents ?? DEFAULT_MAX_BUFFERED_EVENTS;
@@ -263,6 +282,20 @@ export class RunRegistry {
     }
   }
 
+  answerUserInput(
+    runId: string,
+    requestId: string,
+    value: unknown,
+  ): { requestId: string; accepted: true } {
+    const run = this.runs.get(runId);
+    if (!run) throw MarifoldError.runNotFound(runId);
+    const entry = this.pendingUserInputs.get(this.userInputKey(runId, requestId));
+    if (!entry) throw MarifoldError.userInputNotFound(requestId);
+    const submission = normalizeUserInputSubmission(entry.request, value);
+    entry.settle(submission);
+    return { requestId, accepted: true };
+  }
+
   /** Queue mid-run guidance; the runner drains it before its next iteration
    * and emits a `steering` event so attached clients see it land. */
   steer(runId: string, text: string): void {
@@ -314,6 +347,7 @@ export class RunRegistry {
         signal: run.abort.signal,
         steering: () => run.steeringQueue.splice(0),
         approvalHandler: request => this.handleApproval(run, request),
+        userInputHandler: request => this.handleUserInput(run, request),
       });
       for await (const event of events) {
         this.append(run, event);
@@ -359,6 +393,12 @@ export class RunRegistry {
         entry.settle({ approved: false, reason: 'run finished' });
       }
     }
+    for (const [key, entry] of this.pendingUserInputs) {
+      if (entry.runId === run.id) {
+        this.pendingUserInputs.delete(key);
+        entry.settle(undefined);
+      }
+    }
     run.evictTimer = setTimeout(() => {
       this.runs.delete(run.id);
     }, this.finishedRunTtlMs);
@@ -397,6 +437,28 @@ export class RunRegistry {
       // not after the timeout, so the loop can observe the abort and finish.
       run.abort.signal.addEventListener('abort', onAbort, { once: true });
       this.pending.set(request.id, { runId: run.id, request, settle });
+      this.notify(run);
+    });
+  }
+
+  private handleUserInput(
+    run: ActiveRun,
+    request: UserInputRequest,
+  ): Promise<UserInputSubmission | undefined> {
+    return new Promise<UserInputSubmission | undefined>(resolve => {
+      const key = this.userInputKey(run.id, request.id);
+      const timer = setTimeout(() => settle(undefined), this.userInputTimeoutMs);
+      timer.unref?.();
+      const onAbort = (): void => settle(undefined);
+      const settle = (submission: UserInputSubmission | undefined): void => {
+        clearTimeout(timer);
+        run.abort.signal.removeEventListener('abort', onAbort);
+        this.pendingUserInputs.delete(key);
+        this.notify(run);
+        resolve(submission);
+      };
+      run.abort.signal.addEventListener('abort', onAbort, { once: true });
+      this.pendingUserInputs.set(key, { runId: run.id, request, settle });
       this.notify(run);
     });
   }
@@ -447,7 +509,14 @@ export class RunRegistry {
       pendingApprovals: [...this.pending.values()]
         .filter(entry => entry.runId === run.id)
         .map(entry => entry.request),
+      pendingUserInputs: [...this.pendingUserInputs.values()]
+        .filter(entry => entry.runId === run.id)
+        .map(entry => entry.request),
     };
+  }
+
+  private userInputKey(runId: string, requestId: string): string {
+    return `${runId}:${requestId}`;
   }
 
   private createRunId(): string {

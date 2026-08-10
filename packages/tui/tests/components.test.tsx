@@ -1,9 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import { render } from 'ink-testing-library';
-import type { ApprovalRequest } from '@marifold/core';
+import type { ApprovalRequest, UserInputRequest } from '@marifold/core';
 import { Transcript } from '../src/ui/Transcript.js';
 import { Markdown } from '../src/ui/Markdown.js';
 import { ApprovalModal } from '../src/ui/ApprovalModal.js';
+import { QuestionModal } from '../src/ui/QuestionModal.js';
 import { SelectList } from '../src/ui/SelectList.js';
 import { StatusLine } from '../src/ui/StatusLine.js';
 import { createInitialState } from '../src/core/appState.js';
@@ -104,6 +105,73 @@ describe('ApprovalModal', () => {
     const frame = render(<ApprovalModal request={escalated} onResolve={() => {}} />).lastFrame() ?? '';
     expect(frame).toContain('/home/u/blog');     // the folder a trust would add
     expect(frame).toContain('allow always');
+  });
+});
+
+describe('QuestionModal', () => {
+  const request: UserInputRequest = {
+    id: 'q1',
+    questions: [
+      {
+        id: 'style',
+        header: 'Visual style',
+        question: 'What style do you prefer?',
+        options: [{ id: 'apple', label: 'Apple' }, { id: 'material', label: 'Material' }],
+      },
+      {
+        id: 'density',
+        question: 'How dense should it be?',
+        options: [{ id: 'compact', label: 'Compact' }, { id: 'roomy', label: 'Roomy' }],
+      },
+    ],
+  };
+
+  it('collects every answer before a separate submit action', async () => {
+    const onSubmit = vi.fn();
+    const { stdin, lastFrame, unmount } = render(
+      <QuestionModal request={request} onSubmit={onSubmit} onCancel={() => {}} />,
+    );
+    await delay();
+    expect(lastFrame()).toContain('A few details before I continue');
+    expect(lastFrame()).toContain('Answer every question before submitting.');
+    stdin.write('\r'); // Apple, then automatically advance
+    await delay();
+    expect(onSubmit).not.toHaveBeenCalled();
+    stdin.write('\r'); // Compact
+    await delay();
+    expect(lastFrame()).toContain('All answers ready.');
+    expect(onSubmit).not.toHaveBeenCalled();
+    stdin.write('s');
+    await delay();
+    expect(onSubmit).toHaveBeenCalledWith({
+      answers: [
+        { questionId: 'style', optionId: 'apple' },
+        { questionId: 'density', optionId: 'compact' },
+      ],
+    });
+    unmount();
+  });
+
+  it('shows the custom-edit cursor only on the question being edited', async () => {
+    const { stdin, lastFrame, unmount } = render(
+      <QuestionModal request={request} onSubmit={() => {}} onCancel={() => {}} />,
+    );
+    await delay();
+    stdin.write('\r'); // answer the first question and advance
+    await delay();
+    stdin.write('\u001b[B');
+    stdin.write('\u001b[B'); // focus Something else on the second question
+    await delay();
+    stdin.write('\r');
+    await delay();
+    stdin.write('Time travel');
+    await delay();
+
+    const customLines = (lastFrame() ?? '').split('\n').filter(line => line.includes('Something else'));
+    expect(customLines).toHaveLength(2);
+    expect(customLines[0]).not.toContain('▌');
+    expect(customLines[1]).toContain('Time travel▌');
+    unmount();
   });
 });
 

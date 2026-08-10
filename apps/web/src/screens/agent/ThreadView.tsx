@@ -5,7 +5,7 @@ import { Markdown } from '../../components/Markdown';
 import { CopyButton } from '../../components/CopyButton';
 import { ImagePreviewDialog } from '../../components/ImagePreviewDialog';
 import type { PreviewImage } from '../../components/ImagePreviewDialog';
-import type { RunApprovalAction } from '../../api/types';
+import type { RunApprovalAction, UserInputSubmission } from '../../api/types';
 import { splitLeading } from '../../lib/commandSyntax';
 import { formatCostUSD, formatDuration, formatRunDuration, formatTokens } from '../../lib/format';
 import type { ResponseMetaState, RunCardState, ThreadItem, UserAttachment } from '../../state/thread';
@@ -18,6 +18,7 @@ export interface ThreadViewProps {
   items: ThreadItem[];
   onCancelRun: (runId: string) => void;
   onAnswerApproval: (runId: string, requestId: string, action: RunApprovalAction) => void;
+  onSubmitUserInput?: (runId: string, requestId: string, submission: UserInputSubmission) => void;
   onToggleRun: (runId: string) => void;
   /** Regenerate one user→assistant exchange in place from an inline editor. */
   onEditUserMessage?: (itemId: string, text: string) => Promise<boolean>;
@@ -34,6 +35,7 @@ export function ThreadView({
   items,
   onCancelRun,
   onAnswerApproval,
+  onSubmitUserInput,
   onToggleRun,
   onEditUserMessage,
   editingDisabled = false,
@@ -84,6 +86,7 @@ export function ThreadView({
             proseRuns={proseRuns}
             onCancelRun={onCancelRun}
             onAnswerApproval={onAnswerApproval}
+            onSubmitUserInput={onSubmitUserInput}
             onToggleRun={onToggleRun}
             onEditUserMessage={onEditUserMessage}
             editingDisabled={editingDisabled}
@@ -113,6 +116,7 @@ function ThreadItemView({
   proseRuns,
   onCancelRun,
   onAnswerApproval,
+  onSubmitUserInput,
   onToggleRun,
   onEditUserMessage,
   editingDisabled,
@@ -130,7 +134,7 @@ function ThreadItemView({
   onCancelEditing: () => void;
   onPreviewImages: (images: PreviewImage[], index: number) => void;
   client?: ApiClient;
-} & Pick<ThreadViewProps, 'onCancelRun' | 'onAnswerApproval' | 'onToggleRun' | 'onEditUserMessage' | 'editingDisabled'>) {
+} & Pick<ThreadViewProps, 'onCancelRun' | 'onAnswerApproval' | 'onSubmitUserInput' | 'onToggleRun' | 'onEditUserMessage' | 'editingDisabled'>) {
   switch (item.kind) {
     case 'user': {
       const previewImages = (item.attachments ?? []).flatMap(attachment =>
@@ -278,6 +282,7 @@ function ThreadItemView({
           run={run}
           onCancel={() => onCancelRun(run.runId)}
           onAnswer={(requestId, action) => onAnswerApproval(run.runId, requestId, action)}
+          onSubmitInput={(requestId, submission) => onSubmitUserInput?.(run.runId, requestId, submission)}
           onToggle={() => onToggleRun(run.runId)}
         />
       );

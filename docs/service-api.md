@@ -95,11 +95,11 @@ Every non-2xx response uses one envelope:
 | Code | HTTP | Meaning |
 |---|---|---|
 | `CONFIG_INVALID` | 400 | Malformed request body/parameter, or a non-loopback bind without authentication |
-| `PROFILE_INVALID`, `MEMORY_INVALID`, `TASK_INVALID`, `SCHEDULE_INVALID`, `AGENT_RUN_INVALID` | 400 | Domain validation failed |
+| `PROFILE_INVALID`, `MEMORY_INVALID`, `TASK_INVALID`, `SCHEDULE_INVALID`, `AGENT_TOOL_INVALID`, `AGENT_RUN_INVALID` | 400 | Domain validation failed |
 | `UNAUTHORIZED` | 401 | Missing/invalid bearer token |
 | `ORIGIN_FORBIDDEN` | 403 | Disallowed browser origin or Host for the active bind scope |
 | `NOT_FOUND` | 404 | Unknown route |
-| `TASK_NOT_FOUND`, `SESSION_NOT_FOUND`, `SCHEDULE_NOT_FOUND`, `RUN_NOT_FOUND`, `APPROVAL_NOT_FOUND`, `CONFIG_FILE_NOT_FOUND` | 404 | Unknown resource |
+| `TASK_NOT_FOUND`, `SESSION_NOT_FOUND`, `SCHEDULE_NOT_FOUND`, `RUN_NOT_FOUND`, `APPROVAL_NOT_FOUND`, `USER_INPUT_NOT_FOUND`, `CONFIG_FILE_NOT_FOUND` | 404 | Unknown resource |
 | `RUN_LIMIT_EXCEEDED` | 429 | Too many active agent runs (default limit 5) |
 | anything else | 500 | Internal error |
 
@@ -331,7 +331,7 @@ and safety limits still apply. The TUI/Web UI expose this as
   "id": "run_20260704151200_ab12cd34", "objective": "...", "profile": "default",
   "status": "running", "sessionId": "abc",
   "createdAt": "2026-07-04T15:12:00.000Z",
-  "eventCount": 0, "pendingApprovals": [] } }
+  "eventCount": 0, "pendingApprovals": [], "pendingUserInputs": [] } }
 ```
 
 `status` is `running | blocked | completed | failed | cancelled`. Unset
@@ -347,11 +347,12 @@ the agent within those capabilities.
 | Route | Returns |
 |---|---|
 | `GET /v1/runs` | All live + recently finished RunRecords, newest first |
-| `GET /v1/runs/:id` | One RunRecord (poll `pendingApprovals` if not using SSE) |
+| `GET /v1/runs/:id` | One RunRecord (poll `pendingUserInputs` / `pendingApprovals` if not using SSE) |
 | `GET /v1/runs/:id/events` | Resumable SSE of AgentEvents (below) |
+| `POST /v1/runs/:id/inputs/:requestId` | Submit every answer for one clarification checkpoint (below) |
 | `POST /v1/runs/:id/approvals/:requestId` | Answer an approval (below) |
 | `POST /v1/runs/:id/steer` `{ "text": "..." }` → 202 | Queue mid-run guidance; applied before the next model turn, echoed as a `steering` event |
-| `POST /v1/runs/:id/cancel` → 202 | Idempotent; returns current `status`. Unblocks a pending approval immediately; the run finishes `cancelled` |
+| `POST /v1/runs/:id/cancel` → 202 | Idempotent; returns current `status`. Unblocks a pending clarification or approval immediately; the run finishes `cancelled` |
 
 #### The AgentEvent stream
 
@@ -374,6 +375,12 @@ core — the same contract the TUI renders):
                                             "escalated": true, "escalationReason": "outside the working directory",
                                             "escalatedPath": "/tmp/x", "persistable": false } }
 { "type": "approval_decision", "requestId": "call_0", "approved": true, "source": "user", "reason": "..." }
+{ "type": "user_input_request", "request": { "id": "call_1", "questions": [
+  { "id": "style", "header": "Visual style", "question": "What style do you prefer?",
+    "options": [{ "id": "apple", "label": "Apple", "description": "Quiet and restrained" },
+                { "id": "material", "label": "Material" }] }] } }
+{ "type": "user_input_response", "response": { "requestId": "call_1",
+  "answers": [{ "questionId": "style", "optionId": "apple", "value": "Apple" }] } }
 { "type": "tool_result", "callId": "call_0", "tool": "write_file", "summary": "wrote 12B to /tmp/x", "isError": false }
 { "type": "error", "code": "...", "message": "..." }
 { "type": "done",  "taskId": "task_x", "status": "completed", "summary": "...",
@@ -382,7 +389,8 @@ core — the same contract the TUI renders):
              "estimatedCostUSD": 0.001 } }                               // always the last event
 ```
 
-Tool `kind` is `read | write | shell | network | delegate`. Render unknown
+Tool `kind` is `read | write | shell | network | delegate | interaction`; the
+last value identifies `ask_user` and is not approval-controlled. Render unknown
 event types as no-ops — the union may grow within v1. A `text.phase` of
 `progress` identifies model commentary emitted before a tool call; `final`
 identifies the completed answer. Treat an omitted phase as `final` for
@@ -390,6 +398,42 @@ compatibility with older streams.
 `reasoning.summary` is provider-designated safe summary text. Clients may show
 it as secondary progress, but must not expect or request a provider's opaque
 reasoning continuation payload; that remains inside the model transport.
+
+#### The clarification sequence
+
+`ask_user` is optional model behavior, not a mandatory stage of every run. The
+agent instructions reserve it for essential missing information that could
+materially change the result; otherwise the model should proceed with a
+reasonable assumption. A request contains one to three questions, each with
+two to four suggested options. Clients should also offer a free-text custom
+answer.
+
+1. The stream emits `user_input_request`; the run blocks and the same request
+   appears in `RunRecord.pendingUserInputs`.
+2. The client collects exactly one answer for every question, then sends one
+   request:
+
+   ```json
+   { "answers": [
+     { "questionId": "style", "optionId": "apple" },
+     { "questionId": "notes", "customText": "Use a warm gray background" }
+   ] }
+   ```
+
+   to `POST /v1/runs/:id/inputs/:requestId`. Option ids and question ids are
+   checked against the pending request; missing, duplicate, or forged answers
+   return `400 AGENT_TOOL_INVALID` without clearing the prompt. A valid answer
+   returns `{ ok, requestId, accepted: true }`. Unknown, expired, or already
+   answered requests return `404 USER_INPUT_NOT_FOUND`.
+3. The stream emits `user_input_response`, followed by the successful
+   `ask_user` `tool_result`, and the model continues the same run. The response
+   event contains normalized display values so all attached clients converge.
+
+The default live-run wait is 30 minutes. Cancellation resolves it immediately.
+Unattended runs and clients without a `UserInputHandler` do not wait: the tool
+returns an unavailable result to the model so it can make a reasonable
+assumption or report that the missing detail is required. Clarification answers
+never grant permissions; effectful calls still pass through the approval policy.
 
 #### The approval sequence
 

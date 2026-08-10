@@ -3,11 +3,12 @@ import * as os from 'os';
 import * as path from 'path';
 import { PriestRequest, PriestResponse } from '@priest-ai/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { AgentEngine, AgentRunner } from '../src/agent/AgentRunner';
+import { AgentEngine, AgentRunner, AgentRunnerDeps } from '../src/agent/AgentRunner';
 import { AgentEvent } from '../src/agent/AgentEvents';
 import { resolveAgentConfig } from '../src/agent/ApprovalPolicy';
 import { AgentTool, ToolRegistry } from '../src/agent/ToolRegistry';
 import { WriteFileTool } from '../src/agent/tools/WriteFileTool';
+import { AskUserTool } from '../src/agent/tools/AskUserTool';
 import { TaskStore } from '../src/tasks/TaskStore';
 
 const tempDirs: string[] = [];
@@ -58,7 +59,12 @@ function fakeTool(overrides: Partial<AgentTool> & { name?: string } = {}): Agent
   };
 }
 
-function makeRunner(engine: AgentEngine, tools: AgentTool[], configOverrides: Parameters<typeof resolveAgentConfig>[0] = {}) {
+function makeRunner(
+  engine: AgentEngine,
+  tools: AgentTool[],
+  configOverrides: Parameters<typeof resolveAgentConfig>[0] = {},
+  depsOverrides: Partial<AgentRunnerDeps> = {},
+) {
   const taskStore = new TaskStore(tempDir());
   const registry = new ToolRegistry();
   for (const tool of tools) registry.register(tool);
@@ -68,6 +74,7 @@ function makeRunner(engine: AgentEngine, tools: AgentTool[], configOverrides: Pa
     agentConfig: resolveAgentConfig(configOverrides),
     resolveSettings: () => ({ profile: 'default', provider: 'mock', model: 'test-model', think: false, mode: 'agent' }),
     prepareEngine: async () => ({ engine, config: { provider: 'mock', model: 'test-model' } }),
+    ...depsOverrides,
   });
   return { runner, taskStore };
 }
@@ -120,6 +127,104 @@ describe('AgentRunner', () => {
     expect(engine.requests).toHaveLength(1);
     const done = events[events.length - 1] as Extract<AgentEvent, { type: 'done' }>;
     expect(done.status).toBe('completed');
+  });
+
+  it('tells the model that ~ is the user home, not the disposable run home', async () => {
+    const engine = new ScriptedEngine([response({ text: 'Done.' })]);
+    const { runner } = makeRunner(engine, [fakeTool()]);
+
+    await collect(runner.run({ objective: 'Explain path handling.', cwd: tempDir() }));
+
+    const context = (engine.requests[0].context ?? []).join('\n');
+    expect(context).toContain(`User home: ${os.homedir()}.`);
+    expect(context).toContain('~ refers to this directory');
+    expect(context).not.toContain('~ is the isolated run home');
+    expect(context).toContain('Use write_file for an explicit output path elsewhere');
+  });
+
+  it('pauses for optional structured user input and continues with the answers', async () => {
+    const engine = new ScriptedEngine([
+      response({
+        toolCalls: [{
+          id: 'call_question',
+          name: 'ask_user',
+          arguments: {
+            questions: [{
+              id: 'style',
+              question: 'What style do you prefer?',
+              options: [
+                { id: 'apple', label: 'Apple' },
+                { id: 'material', label: 'Material' },
+              ],
+            }],
+          },
+        }],
+      }),
+      response({ text: 'Created the Apple-style design.' }),
+    ]);
+    const { runner } = makeRunner(engine, [new AskUserTool()]);
+
+    const events = await collect(runner.run({
+      objective: 'Create a design.',
+      cwd: tempDir(),
+      userInputHandler: async request => {
+        expect(request.questions[0].question).toBe('What style do you prefer?');
+        return { answers: [{ questionId: 'style', optionId: 'apple' }] };
+      },
+    }));
+
+    expect(events.map(event => event.type)).toContain('user_input_request');
+    expect(events.find(event => event.type === 'user_input_response')).toEqual({
+      type: 'user_input_response',
+      response: {
+        requestId: 'call_question',
+        answers: [{ questionId: 'style', optionId: 'apple', value: 'Apple' }],
+      },
+    });
+    expect(events.some(event => event.type === 'approval_request')).toBe(false);
+    expect(engine.requests[1].toolExchange?.[1]).toMatchObject({
+      kind: 'tool_result',
+      content: expect.stringContaining('style: Apple'),
+    });
+    expect((engine.requests[0].context ?? []).join('\n')).toContain('ask_user is optional');
+  });
+
+  it('returns immediately when ask_user is unavailable in an unattended run', async () => {
+    const engine = new ScriptedEngine([
+      response({
+        toolCalls: [{
+          id: 'call_question',
+          name: 'ask_user',
+          arguments: {
+            questions: [{
+              id: 'style',
+              question: 'Choose a style.',
+              options: [{ id: 'a', label: 'A' }, { id: 'b', label: 'B' }],
+            }],
+          },
+        }],
+      }),
+      response({ text: 'Used a reasonable default.' }),
+    ]);
+    const { runner } = makeRunner(engine, [new AskUserTool()]);
+
+    const events = await collect(runner.run({
+      objective: 'Create a design.',
+      cwd: tempDir(),
+      unattended: true,
+      userInputHandler: async () => ({ answers: [{ questionId: 'style', optionId: 'a' }] }),
+    }));
+
+    expect(events.some(event => event.type === 'user_input_request')).toBe(false);
+    expect(events.find(event => event.type === 'tool_result')).toMatchObject({
+      type: 'tool_result',
+      summary: 'user input unavailable',
+      isError: true,
+    });
+    expect(engine.requests[1].toolExchange?.[1]).toMatchObject({
+      content: expect.stringContaining('No interactive user is available'),
+      isError: true,
+    });
   });
 
   it('passes the session id to the main loop turns only', async () => {
@@ -203,6 +308,81 @@ describe('AgentRunner', () => {
         usage: { inputTokens: 40, outputTokens: 10, totalTokens: 50 },
       }),
     );
+  });
+
+  it('persists an ordinary failed run so its submitted prompt survives session resume', async () => {
+    const engine = new ScriptedEngine([response({
+      ok: false,
+      error: { code: 'PROVIDER_ERROR', message: 'fetch failed', details: {} },
+    })]);
+    const persistTurn = vi.fn(async () => undefined);
+    const { runner } = makeRunner(engine, [fakeTool()], {}, { persistTurn });
+
+    const events = await collect(runner.run({
+      objective: 'Save these answers.',
+      sessionId: 'sess-failed',
+      toolMode: 'native',
+    }));
+
+    expect(events.at(-1)).toMatchObject({ type: 'done', status: 'failed' });
+    expect(persistTurn).toHaveBeenCalledWith(
+      'sess-failed',
+      'default',
+      'Save these answers.',
+      'Run failed before a final response was produced.\n\nfetch failed',
+      undefined,
+      undefined,
+      undefined,
+    );
+  });
+
+  it('persists a cancelled ordinary run but preserves an existing exchange on failed regeneration', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const persistCancelled = vi.fn(async () => undefined);
+    const { runner: cancelledRunner } = makeRunner(
+      new ScriptedEngine([response({ text: 'unused' })]),
+      [fakeTool()],
+      {},
+      { persistTurn: persistCancelled },
+    );
+
+    await collect(cancelledRunner.run({
+      objective: 'Keep this cancelled prompt.',
+      sessionId: 'sess-cancelled',
+      signal: controller.signal,
+    }));
+
+    expect(persistCancelled).toHaveBeenCalledWith(
+      'sess-cancelled',
+      'default',
+      'Keep this cancelled prompt.',
+      'Run cancelled before a final response was produced.',
+      undefined,
+      undefined,
+      undefined,
+    );
+
+    const persistReplacement = vi.fn(async () => undefined);
+    const failedEngine = new ScriptedEngine([response({
+      ok: false,
+      error: { code: 'PROVIDER_ERROR', message: 'fetch failed', details: {} },
+    })]);
+    const { runner: replacementRunner } = makeRunner(
+      failedEngine,
+      [fakeTool()],
+      {},
+      { persistTurn: persistReplacement },
+    );
+
+    await collect(replacementRunner.run({
+      objective: 'Regenerate this answer.',
+      sessionId: 'sess-edit',
+      replaceUserTurnIndex: 2,
+      toolMode: 'native',
+    }));
+
+    expect(persistReplacement).not.toHaveBeenCalled();
   });
 
   it('keeps lean (skill) runs stateless — no prior conversation injected', async () => {

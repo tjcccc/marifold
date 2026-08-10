@@ -1,11 +1,13 @@
 import type {
   AgentEvent,
+  AgentToolKind,
   AgentUsage,
   ApprovalRequest,
   RunRecord,
   TaskStatus,
   TaskStepStatus,
-  ToolKind,
+  UserInputRequest,
+  UserInputResponse,
 } from '../api/types';
 
 /**
@@ -17,7 +19,7 @@ import type {
 export interface ToolRowState {
   callId: string;
   tool: string;
-  kind?: ToolKind;
+  kind?: AgentToolKind;
   summary: string;
   phase: 'running' | 'done';
   isError?: boolean;
@@ -36,6 +38,12 @@ export interface RunCardState {
   approval?: ApprovalRequest;
   /** True while the answer POST is in flight (disables the sheet buttons). */
   approvalBusy?: boolean;
+  /** Non-undefined → the agent is waiting for all clarification answers. */
+  userInput?: UserInputRequest;
+  /** True while the complete answer set is being submitted. */
+  userInputBusy?: boolean;
+  /** Resolved questions stay visible in the run history. */
+  inputResponses: Array<{ request: UserInputRequest; response: UserInputResponse }>;
   steering: string[];
   denials: string[];
   errors: Array<{ code: string; message: string }>;
@@ -130,6 +138,8 @@ export type ThreadAction =
   | { type: 'run_lost'; runId: string }
   | { type: 'approval_submitting'; runId: string }
   | { type: 'approval_failed'; runId: string; message: string; gone?: boolean }
+  | { type: 'user_input_submitting'; runId: string }
+  | { type: 'user_input_failed'; runId: string; message: string; gone?: boolean }
   | { type: 'toggle_run_details'; runId: string }
   | { type: 'catch_up'; runs: RunRecord[] }
   | { type: 'dismiss_catch_up' }
@@ -150,7 +160,9 @@ export function hasRunActivity(run: RunCardState): boolean {
     run.steering.length > 0 ||
     run.denials.length > 0 ||
     run.errors.length > 0 ||
-    run.approval !== undefined
+    run.approval !== undefined ||
+    run.userInput !== undefined ||
+    run.inputResponses.length > 0
   );
 }
 
@@ -293,6 +305,18 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
         // gone = the prompt no longer exists server-side (answered elsewhere
         // or timed out); the sheet must come down without a decision event.
         approval: action.gone ? undefined : run.approval,
+      }));
+      return append(cleared, { kind: 'notice', tone: 'warn', text: action.message });
+    }
+
+    case 'user_input_submitting':
+      return updateRun(state, action.runId, run => ({ ...run, userInputBusy: true }));
+
+    case 'user_input_failed': {
+      const cleared = updateRun(state, action.runId, run => ({
+        ...run,
+        userInputBusy: false,
+        userInput: action.gone ? undefined : run.userInput,
       }));
       return append(cleared, { kind: 'notice', tone: 'warn', text: action.message });
     }
@@ -452,6 +476,30 @@ function applyRunEvent(state: ThreadState, runId: string, seq: number, event: Ag
       }));
       break;
 
+    case 'user_input_request':
+      next = updateRun(next, runId, run => ({
+        ...run,
+        lastSeq: seq,
+        userInput: event.request,
+        userInputBusy: false,
+      }));
+      break;
+
+    case 'user_input_response':
+      next = updateRun(next, runId, run => {
+        const request = run.userInput;
+        return {
+          ...run,
+          lastSeq: seq,
+          userInput: undefined,
+          userInputBusy: false,
+          inputResponses: request && request.id === event.response.requestId
+            ? [...run.inputResponses, { request, response: event.response }]
+            : run.inputResponses,
+        };
+      });
+      break;
+
     case 'error':
       next = updateRun(next, runId, run => ({
         ...run,
@@ -470,6 +518,8 @@ function applyRunEvent(state: ThreadState, runId: string, seq: number, event: Ag
         usage: event.usage,
         approval: undefined,
         approvalBusy: false,
+        userInput: undefined,
+        userInputBusy: false,
         finishedAt: new Date().toISOString(),
         collapsed: true,
       }));
@@ -648,6 +698,7 @@ function cardFromRecord(record: RunRecord): RunCardState {
     finishedAt: record.finishedAt,
     summary: record.summary,
     usage: record.usage,
+    userInput: record.pendingUserInputs[0],
     collapsed: record.status !== 'running',
   };
 }
@@ -659,6 +710,7 @@ function emptyCard(runId: string): RunCardState {
     lastSeq: 0,
     startedAt: new Date().toISOString(),
     rows: [],
+    inputResponses: [],
     steering: [],
     denials: [],
     errors: [],

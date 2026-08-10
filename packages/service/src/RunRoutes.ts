@@ -18,7 +18,7 @@ const RECONNECT_DELAY_MS = 3000;
 /**
  * Live agent-run routes over a RunRegistry: start, inspect, follow the
  * AgentEvent stream (SSE with seq ids + Last-Event-ID replay), answer
- * approvals, steer, and cancel. The AgentEvent union is serialized verbatim —
+ * clarifications, approvals, steer, and cancel. The AgentEvent union is serialized verbatim —
  * it is the wire contract shared with every other Marifold client.
  */
 export function registerRunRoutes(server: FastifyInstance, registry: RunRegistry): void {
@@ -50,6 +50,18 @@ export function registerRunRoutes(server: FastifyInstance, registry: RunRegistry
     async request => {
       const action = parseApprovalAction(request.body);
       const result = registry.answerApproval(request.params.id, request.params.requestId, action);
+      return { ok: true, ...result };
+    },
+  );
+
+  server.post<{ Params: { id: string; requestId: string } }>(
+    '/v1/runs/:id/inputs/:requestId',
+    async request => {
+      const result = registry.answerUserInput(
+        request.params.id,
+        request.params.requestId,
+        objectBody(request.body),
+      );
       return { ok: true, ...result };
     },
   );

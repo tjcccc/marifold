@@ -1,0 +1,144 @@
+.sheet {
+  background: var(--surface);
+  border: 1px solid var(--brand-tint);
+  outline: 3px solid var(--brand-tint);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  margin-top: 10px;
+  box-shadow: var(--shadow-sheet);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.heading {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.question {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+
+.legend {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-bottom: 8px;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.header {
+  color: var(--brand-text);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.options {
+  display: grid;
+  gap: 6px;
+}
+
+.option {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 9px 10px;
+  border: 1px solid var(--separator);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+
+.option:hover {
+  background: var(--surface-2);
+}
+
+.option:has(input[type='radio']:checked) {
+  border-color: var(--brand-fill);
+  background: var(--brand-tint);
+}
+
+.option input[type='radio'] {
+  margin-top: 2px;
+  accent-color: var(--brand-fill);
+}
+
+.optionLabel {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.description {
+  display: block;
+  margin-top: 2px;
+  color: var(--text-2);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.customOption,
+.customBody {
+  min-width: 0;
+}
+
+.customBody {
+  flex: 1;
+}
+
+.customInput {
+  width: 100%;
+  margin-top: 6px;
+  padding: 7px 9px;
+  border: 1px solid var(--separator);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+}
+
+.customInput:focus {
+  border-color: var(--brand-fill);
+  outline: 2px solid var(--brand-tint);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.progress {
+  flex: 1;
+  color: var(--text-3);
+  font-size: 12px;
+}
+
+.submit {
+  padding: 7px 16px;
+  border-radius: var(--radius-md);
+  background: var(--brand-fill);
+  color: var(--on-brand);
+  font-weight: 700;
+  box-shadow: 0 1px 3px var(--brand-shadow);
+}
+
+.submit:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.kbd {
+  margin-left: 6px;
+  font-weight: 400;
+  opacity: 0.75;
+}

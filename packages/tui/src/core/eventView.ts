@@ -54,6 +54,12 @@ export function agentEventToItems(event: AgentEvent): TranscriptItemData[] {
             tone: 'warn',
             text: `Denied (${event.source})${event.reason ? `: ${event.reason}` : ''}`,
           }];
+    case 'user_input_response':
+      return [{
+        kind: 'notice',
+        tone: 'info',
+        text: `Answered: ${event.response.answers.map(answer => `${answer.questionId} = ${answer.value}`).join(' · ')}`,
+      }];
     case 'verification':
       return [{ kind: 'verification', passed: event.passed, notes: event.notes }];
     case 'error':
@@ -65,6 +71,7 @@ export function agentEventToItems(event: AgentEvent): TranscriptItemData[] {
     case 'status':
     case 'step':
     case 'approval_request':
+    case 'user_input_request':
       return [];
     default:
       return [];

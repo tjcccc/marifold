@@ -25,11 +25,16 @@ export {
 } from './agent/ControlBlockTools';
 export { capToolOutput, ToolRegistry } from './agent/ToolRegistry';
 export type {
+  AgentToolKind,
   AgentTool,
+  EffectfulAgentTool,
+  RegisteredAgentTool,
   ToolExecutionContext,
   ToolExecutionResult,
   ToolRiskAssessment,
+  UserInputAgentTool,
 } from './agent/ToolRegistry';
+export { AskUserTool } from './agent/tools/AskUserTool';
 export { DelegateTool } from './agent/tools/DelegateTool';
 export type { DelegateAskRequest, DelegateAskResult, DelegateToolDeps } from './agent/tools/DelegateTool';
 export { PythonPackageTool } from './agent/tools/PythonPackageTool';
@@ -37,6 +42,25 @@ export { ReadFileTool } from './agent/tools/ReadFileTool';
 export { ShellExecTool } from './agent/tools/ShellExecTool';
 export { WebSearchTool } from './agent/tools/WebSearchTool';
 export { isInsideWorkspace, isInsideAny, WriteFileTool } from './agent/tools/WriteFileTool';
+export {
+  MAX_USER_INPUT_CUSTOM_TEXT,
+  MAX_USER_INPUT_OPTIONS,
+  MAX_USER_INPUT_QUESTIONS,
+  formatUserInputResponse,
+  normalizeUserInputSubmission,
+  parseUserInputRequest,
+  resolveUserInputResponse,
+} from './agent/UserInput';
+export type {
+  UserInputAnswer,
+  UserInputHandler,
+  UserInputOption,
+  UserInputQuestion,
+  UserInputRequest,
+  UserInputResponse,
+  UserInputSubmission,
+  UserInputSubmissionAnswer,
+} from './agent/UserInput';
 export {
   MAX_RUN_INPUT_BYTES,
   RUN_WORKSPACE_RETENTION_MS,

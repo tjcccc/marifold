@@ -8,6 +8,7 @@ import { AgentEvent } from '../src/agent/AgentEvents';
 import { resolveAgentConfig } from '../src/agent/ApprovalPolicy';
 import { AgentTool, ToolRegistry } from '../src/agent/ToolRegistry';
 import { WriteFileTool } from '../src/agent/tools/WriteFileTool';
+import { AskUserTool } from '../src/agent/tools/AskUserTool';
 import { MarifoldError } from '../src/errors/MarifoldError';
 import { RunRegistry, RunRegistryOptions, SequencedEvent } from '../src/runs/RunRegistry';
 import { TaskStore } from '../src/tasks/TaskStore';
@@ -145,6 +146,7 @@ describe('RunRegistry', () => {
     expect(record.id).toMatch(/^run_/);
     expect(record.status).toBe('running');
     expect(record.pendingApprovals).toEqual([]);
+    expect(record.pendingUserInputs).toEqual([]);
 
     const events = await drain(registry.events(record.id, 0));
     expect(events[0].seq).toBe(1);
@@ -200,6 +202,72 @@ describe('RunRegistry', () => {
     expect(executed).toBe(1);
     expect(seen.some(({ event }) => event.type === 'approval_decision' && event.approved && event.source === 'user')).toBe(true);
     expect(registry.require(record.id).pendingApprovals).toEqual([]);
+  });
+
+  it('parks ask_user until a client submits every answer, then resumes the run', async () => {
+    const { registry, engines } = makeRegistry([
+      response({
+        toolCalls: [{
+          id: 'call_question',
+          name: 'ask_user',
+          arguments: {
+            questions: [{
+              id: 'style',
+              question: 'What style do you prefer?',
+              options: [{ id: 'apple', label: 'Apple' }, { id: 'material', label: 'Material' }],
+            }],
+          },
+        }],
+      }),
+      response({ text: 'Created the requested style.' }),
+    ], [new AskUserTool()]);
+
+    const record = registry.start({ objective: 'Create a design.', cwd: tempDir() });
+    const stream = registry.events(record.id, 0);
+    const { matched } = await pullUntil(stream, event => event.type === 'user_input_request');
+    const request = (matched!.event as Extract<AgentEvent, { type: 'user_input_request' }>).request;
+    expect(registry.require(record.id).pendingUserInputs).toEqual([request]);
+
+    expect(() => registry.answerUserInput(record.id, request.id, { answers: [] })).toThrow(/Every question/);
+    expect(registry.require(record.id).pendingUserInputs).toEqual([request]);
+    expect(registry.answerUserInput(record.id, request.id, {
+      answers: [{ questionId: 'style', optionId: 'apple' }],
+    })).toEqual({ requestId: request.id, accepted: true });
+
+    const { matched: done, seen } = await pullUntil(stream, doneEvent);
+    expect(done!.event).toMatchObject({ type: 'done', status: 'completed' });
+    expect(seen.some(({ event }) => event.type === 'user_input_response'
+      && event.response.answers[0].value === 'Apple')).toBe(true);
+    expect(engines[0].requests[1].toolExchange?.[1]).toMatchObject({
+      content: expect.stringContaining('style: Apple'),
+    });
+    expect(registry.require(record.id).pendingUserInputs).toEqual([]);
+  });
+
+  it('cancel() while ask_user is pending unblocks the run immediately', async () => {
+    const { registry } = makeRegistry([
+      response({
+        toolCalls: [{
+          id: 'call_question',
+          name: 'ask_user',
+          arguments: {
+            questions: [{
+              id: 'style',
+              question: 'Choose.',
+              options: [{ id: 'a', label: 'A' }, { id: 'b', label: 'B' }],
+            }],
+          },
+        }],
+      }),
+    ], [new AskUserTool()]);
+    const record = registry.start({ objective: 'Create.', cwd: tempDir() });
+    const stream = registry.events(record.id, 0);
+    await pullUntil(stream, event => event.type === 'user_input_request');
+
+    registry.cancel(record.id);
+    const { matched: done } = await pullUntil(stream, doneEvent);
+    expect(done!.event).toMatchObject({ type: 'done', status: 'cancelled' });
+    expect(registry.require(record.id).pendingUserInputs).toEqual([]);
   });
 
   it('"always" persists the kind to the profile and auto-approves later calls this run', async () => {
@@ -403,6 +471,7 @@ describe('RunRegistry', () => {
       () => registry.steer('run_nope', 'x'),
       () => registry.cancel('run_nope'),
       () => registry.answerApproval('run_nope', 'req', 'once'),
+      () => registry.answerUserInput('run_nope', 'req', { answers: [] }),
     ]) {
       try {
         call();
@@ -417,6 +486,13 @@ describe('RunRegistry', () => {
       expect.unreachable('should have thrown');
     } catch (error) {
       expect((error as MarifoldError).code).toBe('APPROVAL_NOT_FOUND');
+    }
+
+    try {
+      registry.answerUserInput(record.id, 'req_bogus', { answers: [] });
+      expect.unreachable('should have thrown');
+    } catch (error) {
+      expect((error as MarifoldError).code).toBe('USER_INPUT_NOT_FOUND');
     }
   });
 });

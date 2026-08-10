@@ -70,7 +70,10 @@ prompt.
 - `/resume` opens a recent-session picker for the current profile; choose with
   Up/Down and Enter. It is ordered strictly by conversation recency; Web UI
   session pins do not influence this TUI workflow. `/session` remains as a
-  compatibility alias.
+  compatibility alias. Ordinary agent prompts remain in the session after a
+  failed or cancelled run, paired with a short terminal outcome so the next
+  resume does not silently lose the request. A failed historical regeneration
+  leaves the prior successful exchange unchanged.
 - `/skills` opens an arrow-key list: Enter runs the selected skill, Del removes it.
 - `/agent` / `/chat` switch the **current session's** mode. `/agent default` /
   `/chat default` additionally persist it as the active profile's default mode
@@ -138,6 +141,20 @@ skill is either a direct file edit or done by asking the agent in normal input
 A Skill is the shared primitive a graphical **App** renders as a form before
 running the selected actor profile's Skill. Apps are not rendered in the TUI.
 
+## Clarification questions
+
+In agent mode, the model may call `ask_user` when essential information is
+missing and a reasonable assumption could materially change the result. It is
+not a required phase: ordinary tasks continue without a prompt. One checkpoint
+may contain up to three questions with two to four suggested choices each,
+plus a free-text “Something else” answer supplied by the client.
+
+The TUI shows every question in one keyboard modal. Use Up/Down to choose,
+Left/Right to move between questions, Enter to select or edit the custom answer,
+then press `s` once every question is complete. Esc cancels the run. This is
+separate from tool approval: answering a question never grants filesystem,
+shell, network, or delegation permission.
+
 ## Permissions
 
 The TUI reuses the core approval engine unchanged (see
@@ -161,6 +178,8 @@ installation cannot be persisted, so their modal offers only **allow once** and
 **deny**.
 
 Every agent run has a private workspace under `~/.marifold/runs/<run-id>/`.
+User-facing `~` and `$HOME` paths continue to resolve to the real account home;
+the private run home is internal runtime state only.
 On macOS, shell commands run through the system sandbox with network disabled and
 writes limited to that run, the selected working folder, and configured in-home
 trusted folders. Python uses the run's `.venv`; network package installation is a
@@ -172,5 +191,6 @@ and shell execution fails closed when no supported sandbox backend is available.
 Logic lives in pure, unit-tested modules under `packages/tui/src/core/`
 (`inputGrammar`, `eventView`, `appState` reducer, `commands`, `skills`); the Ink
 components under `packages/tui/src/ui/` stay thin. The agent run wires a TUI
-`ApprovalHandler` whose Promise the approval modal resolves, an `AbortController`
-for cancellation, and a steering drain closure for `/btw`.
+`ApprovalHandler` whose Promise the approval modal resolves, a `UserInputHandler`
+whose Promise the question modal resolves, an `AbortController` for cancellation,
+and a steering drain closure for `/btw`.

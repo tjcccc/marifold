@@ -66,6 +66,7 @@ describe('useAgentController session lifecycle', () => {
       createdAt: '2026-07-22T00:00:00.000Z',
       eventCount: 0,
       pendingApprovals: [],
+      pendingUserInputs: [],
     };
 
     const client: ApiClient = {
@@ -134,6 +135,7 @@ describe('useAgentController session lifecycle', () => {
       createdAt: '2026-07-24T00:00:00.000Z',
       eventCount: 0,
       pendingApprovals: [],
+      pendingUserInputs: [],
     };
     let runBody: Record<string, unknown> | undefined;
     const client: ApiClient = {
@@ -471,6 +473,7 @@ describe('useAgentController session lifecycle', () => {
       createdAt: '2026-07-22T00:01:00.000Z',
       eventCount: 0,
       pendingApprovals: [],
+      pendingUserInputs: [],
     };
     let edited = false;
     const client: ApiClient = {

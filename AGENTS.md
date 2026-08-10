@@ -26,6 +26,8 @@ v0.52.x adds the App MVP: global `~/.marifold/apps/<name>/app.toml` bundles, nor
 
 v0.53.x enables bearer-protected non-loopback service binding for trusted LAN or tailnet access. The Web shell keeps named same-origin or remote Marifold servers with independent tokens and remounts its data views when the active connection changes.
 
+v0.54.x adds optional model-authored clarification questions through one renderer-neutral interaction contract, with batched standalone question interfaces in the TUI and Web UI. It also restores normal user-home semantics for `~` and `$HOME` while retaining capability-scoped run isolation.
+
 The service defaults to loopback. Explicit non-loopback binds require resolved bearer authentication and support same-origin hosted Web access without a CORS entry.
 
 ## Stack

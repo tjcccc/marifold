@@ -13,7 +13,7 @@ import {
   setProfilePinned as setProfilePinnedRequest,
   updateProfile,
 } from '../../api/profiles';
-import { answerApproval, cancelRun, listRuns, startRun, steerRun } from '../../api/runs';
+import { answerApproval, answerUserInput, cancelRun, listRuns, startRun, steerRun } from '../../api/runs';
 import {
   compactSession,
   deleteSession as deleteSessionRequest,
@@ -29,6 +29,7 @@ import type {
   RunRecord,
   SessionImageAttachment,
   SessionSummary,
+  UserInputSubmission,
 } from '../../api/types';
 import type { Route } from '../../lib/route';
 import type { PreparedAttachment } from '../../lib/attachments';
@@ -98,6 +99,7 @@ export interface AgentController {
   deleteSession: (id: string) => Promise<boolean>;
   cancel: (runId: string) => Promise<void>;
   answer: (runId: string, requestId: string, action: RunApprovalAction) => Promise<void>;
+  answerInput: (runId: string, requestId: string, submission: UserInputSubmission) => Promise<void>;
   toggleRun: (runId: string) => void;
   expandCatchUp: (run: RunRecord) => void;
   dismissCatchUp: () => void;
@@ -978,6 +980,29 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
     [client],
   );
 
+  const answerInput = useCallback(
+    async (runId: string, requestId: string, submission: UserInputSubmission) => {
+      dispatch({ type: 'user_input_submitting', runId });
+      try {
+        await answerUserInput(client, runId, requestId, submission);
+        // user_input_response on the stream archives the answers and clears the form.
+      } catch (error) {
+        const gone = error instanceof MarifoldApiError && error.code === 'USER_INPUT_NOT_FOUND';
+        dispatch({
+          type: 'user_input_failed',
+          runId,
+          gone,
+          message: gone
+            ? 'Those questions already resolved (answered elsewhere or timed out).'
+            : error instanceof Error
+              ? error.message
+              : String(error),
+        });
+      }
+    },
+    [client],
+  );
+
   const toggleRun = useCallback((runId: string) => dispatch({ type: 'toggle_run_details', runId }), []);
 
   const expandCatchUp = useCallback(
@@ -1032,6 +1057,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
     deleteSession,
     cancel,
     answer,
+    answerInput,
     toggleRun,
     expandCatchUp,
     dismissCatchUp,

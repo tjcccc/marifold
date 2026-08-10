@@ -29,6 +29,8 @@ export interface StagedRunFile {
 export interface RunWorkspace {
   id: string;
   rootDir: string;
+  /** Disposable app/runtime state directory. User-facing `~` paths resolve
+   * against `userHome`, not this directory. */
   homeDir: string;
   workDir: string;
   inputDir: string;
@@ -146,8 +148,8 @@ export function stageRunFiles(workspace: RunWorkspace, files: RunFileInput[]): S
 }
 
 export function resolveToolPath(input: string, workspace: RunWorkspace | undefined, cwd: string): string {
-  if (input === '~' && workspace) return workspace.homeDir;
-  if (input.startsWith('~/') && workspace) return path.join(workspace.homeDir, input.slice(2));
+  if (input === '~' && workspace) return workspace.userHome;
+  if (input.startsWith('~/') && workspace) return path.join(workspace.userHome, input.slice(2));
   if (input === '~') return os.homedir();
   if (input.startsWith('~/')) return path.join(os.homedir(), input.slice(2));
   return path.resolve(cwd, input);

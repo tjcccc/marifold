@@ -864,6 +864,7 @@ function statusCodeForError(error: MarifoldError): number {
     || error.code === 'APP_NOT_FOUND'
     || error.code === 'RUN_NOT_FOUND'
     || error.code === 'APPROVAL_NOT_FOUND'
+    || error.code === 'USER_INPUT_NOT_FOUND'
   ) {
     return 404;
   }
@@ -874,6 +875,7 @@ function statusCodeForError(error: MarifoldError): number {
     || error.code === 'MEMORY_INVALID'
     || error.code === 'TASK_INVALID'
     || error.code === 'SCHEDULE_INVALID'
+    || error.code === 'AGENT_TOOL_INVALID'
     || error.code === 'AGENT_RUN_INVALID'
     || error.code === 'SKILL_INVALID'
     || error.code === 'APP_INVALID'

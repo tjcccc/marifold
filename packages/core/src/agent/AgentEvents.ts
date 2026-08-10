@@ -1,6 +1,8 @@
 import { JSONValue } from '@priest-ai/core';
 import { TaskPlanItem, TaskStatus, TaskStepStatus } from '../tasks/TaskStore';
-import { ApprovalRequest, ToolKind } from './ApprovalPolicy';
+import { ApprovalRequest } from './ApprovalPolicy';
+import type { AgentToolKind } from './ToolRegistry';
+import type { UserInputRequest, UserInputResponse } from './UserInput';
 
 /** Token usage accumulated over an agent run's model calls (plan, loop turns,
  * verification), as reported by the provider. Fields are undefined when the
@@ -43,13 +45,15 @@ export type AgentEvent =
       call: {
         id: string;
         tool: string;
-        kind: ToolKind;
+        kind: AgentToolKind;
         input: Record<string, JSONValue>;
         summary: string;
       };
     }
   | { type: 'approval_request'; request: ApprovalRequest }
   | { type: 'approval_decision'; requestId: string; approved: boolean; source: 'policy' | 'user'; reason?: string }
+  | { type: 'user_input_request'; request: UserInputRequest }
+  | { type: 'user_input_response'; response: UserInputResponse }
   | { type: 'tool_result'; callId: string; tool: string; summary: string; isError: boolean }
   | { type: 'verification'; passed: boolean; notes: string }
   | { type: 'error'; code: string; message: string }

@@ -1,21 +1,23 @@
 import { useEffect, useState } from 'react';
-import type { RunApprovalAction } from '../../api/types';
+import type { RunApprovalAction, UserInputSubmission } from '../../api/types';
 import { formatElapsed, formatRunDuration } from '../../lib/format';
 import type { RunCardState } from '../../state/thread';
 import { ApprovalSheet } from './ApprovalSheet';
+import { QuestionSheet } from './QuestionSheet';
 import styles from './RunCard.module.css';
 
 export interface RunCardProps {
   run: RunCardState;
   onCancel: () => void;
   onAnswer: (requestId: string, action: RunApprovalAction) => void;
+  onSubmitInput?: (requestId: string, submission: UserInputSubmission) => void;
   onToggle: () => void;
 }
 
 /** A live agent run inline in the thread (design "THE RUN" + 1b edge states):
  * status line with elapsed + Cancel, plan checklist, folding tool rows,
  * steering pills, the approval sheet, and the collapsed ✓ footer. */
-export function RunCard({ run, onCancel, onAnswer, onToggle }: RunCardProps) {
+export function RunCard({ run, onCancel, onAnswer, onSubmitInput, onToggle }: RunCardProps) {
   const running = run.status === 'running';
   const showDetails = running || !run.collapsed;
 
@@ -25,7 +27,11 @@ export function RunCard({ run, onCancel, onAnswer, onToggle }: RunCardProps) {
         <div className={styles.statusLine}>
           <span className={styles.spinner} aria-hidden />
           <span className={styles.statusText}>
-            {run.approval ? 'Waiting for your approval' : `Working — ${activity(run)}`}
+            {run.approval
+              ? 'Waiting for your approval'
+              : run.userInput
+                ? 'Waiting for your answers'
+                : `Working — ${activity(run)}`}
           </span>
           <Elapsed startedAt={run.startedAt} />
           <button className={styles.cancel} onClick={onCancel}>
@@ -89,6 +95,19 @@ export function RunCard({ run, onCancel, onAnswer, onToggle }: RunCardProps) {
               {error.code}: {error.message}
             </div>
           ))}
+
+          {run.inputResponses.map(({ request, response }) => (
+            <div key={response.requestId} className={styles.answers}>
+              {response.answers.map(answer => (
+                <div key={answer.questionId} className={styles.answerRow}>
+                  <span className={styles.answerQuestion}>
+                    {request.questions.find(question => question.id === answer.questionId)?.question ?? answer.questionId}
+                  </span>
+                  <span className={styles.answerValue}>{answer.value}</span>
+                </div>
+              ))}
+            </div>
+          ))}
         </div>
       ) : null}
 
@@ -97,6 +116,15 @@ export function RunCard({ run, onCancel, onAnswer, onToggle }: RunCardProps) {
           request={run.approval}
           busy={run.approvalBusy}
           onAnswer={action => onAnswer(run.approval!.id, action)}
+        />
+      ) : null}
+
+      {run.userInput ? (
+        <QuestionSheet
+          key={run.userInput.id}
+          request={run.userInput}
+          busy={run.userInputBusy}
+          onSubmit={submission => onSubmitInput?.(run.userInput!.id, submission)}
         />
       ) : null}
 

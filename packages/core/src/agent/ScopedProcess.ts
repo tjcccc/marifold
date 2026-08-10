@@ -203,8 +203,10 @@ function scopedEnvironment(workspace: RunWorkspace): NodeJS.ProcessEnv {
     ? path.join(workspace.venvDir, 'Scripts')
     : path.join(workspace.venvDir, 'bin');
   return {
-    HOME: workspace.homeDir,
-    USERPROFILE: workspace.homeDir,
+    // Preserve normal shell path semantics without exposing the account:
+    // Seatbelt still denies the broad home and re-opens only explicit roots.
+    HOME: workspace.userHome,
+    USERPROFILE: workspace.userHome,
     TMPDIR: workspace.tempDir,
     TMP: workspace.tempDir,
     TEMP: workspace.tempDir,
@@ -218,6 +220,7 @@ function scopedEnvironment(workspace: RunWorkspace): NodeJS.ProcessEnv {
     LC_ALL: process.env.LC_ALL ?? '',
     TERM: process.env.TERM ?? 'dumb',
     MARIFOLD_RUN_DIR: workspace.rootDir,
+    MARIFOLD_RUN_HOME: workspace.homeDir,
     MARIFOLD_INPUT_DIR: workspace.inputDir,
     MARIFOLD_OUTPUT_DIR: workspace.outputDir,
     MARIFOLD_WORK_DIR: workspace.workDir,

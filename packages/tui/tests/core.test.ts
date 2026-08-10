@@ -48,6 +48,10 @@ describe('eventView', () => {
     expect(agentEventToItems({ type: 'approval_decision', requestId: 'c', approved: true, source: 'user' })).toEqual([]);
     expect(agentEventToItems({ type: 'approval_decision', requestId: 'c', approved: false, source: 'user', reason: 'no' })[0])
       .toMatchObject({ kind: 'notice', tone: 'warn' });
+    expect(agentEventToItems({
+      type: 'user_input_response',
+      response: { requestId: 'q', answers: [{ questionId: 'style', optionId: 'apple', value: 'Apple' }] },
+    })[0]).toMatchObject({ kind: 'notice', text: 'Answered: style = Apple' });
     expect(agentEventToItems({ type: 'verification', passed: true, notes: 'n' })[0]).toMatchObject({ kind: 'verification', passed: true });
     expect(agentEventToItems({ type: 'error', code: 'X', message: 'm' })[0]).toMatchObject({ kind: 'notice', tone: 'error' });
     // done produces no item; the App emits the completion line with timing/tokens.
@@ -108,6 +112,30 @@ describe('appReducer', () => {
     expect(state.approval).toBeUndefined();
     state = appReducer(state, { type: 'agent_event', event: { type: 'done', taskId: 't', status: 'completed' } });
     expect(state.running).toBe(false);
+  });
+
+  it('opens clarification questions and archives the submitted response', () => {
+    const request = {
+      id: 'q1',
+      questions: [{
+        id: 'style',
+        question: 'Choose a style.',
+        options: [{ id: 'apple', label: 'Apple' }, { id: 'material', label: 'Material' }],
+      }],
+    };
+    let state = appReducer(initial(), { type: 'set_running', running: true });
+    state = appReducer(state, { type: 'agent_event', event: { type: 'user_input_request', request } });
+    expect(state.userInput).toEqual(request);
+    expect(state.activity).toBe('waiting for your answers');
+    state = appReducer(state, {
+      type: 'agent_event',
+      event: {
+        type: 'user_input_response',
+        response: { requestId: 'q1', answers: [{ questionId: 'style', optionId: 'apple', value: 'Apple' }] },
+      },
+    });
+    expect(state.userInput).toBeUndefined();
+    expect(state.transcript.at(-1)).toMatchObject({ kind: 'notice', text: 'Answered: style = Apple' });
   });
 
   it('clears transcript on new_session', () => {

@@ -228,6 +228,7 @@ export function AgentScreen(props: AgentScreenProps) {
               scrollToBottomRequest={scrollToBottomRequest}
               onCancelRun={runId => void controller.cancel(runId)}
               onAnswerApproval={(runId, requestId, action) => void controller.answer(runId, requestId, action)}
+              onSubmitUserInput={(runId, requestId, submission) => void controller.answerInput(runId, requestId, submission)}
               onToggleRun={controller.toggleRun}
               onEditUserMessage={controller.resendEdited}
               editingDisabled={controller.steeringRun !== undefined || controller.sending}

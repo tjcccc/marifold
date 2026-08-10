@@ -6,6 +6,7 @@
  */
 import type {
   AgentEvent,
+  AgentToolKind,
   AgentUsage,
   ApprovalMode,
   ApprovalRequest,
@@ -33,10 +34,14 @@ import type {
   TaskStatus,
   TaskStepStatus,
   ToolKind,
+  UserInputRequest,
+  UserInputResponse,
+  UserInputSubmission,
 } from '@marifold/core';
 
 export type {
   AgentEvent,
+  AgentToolKind,
   AgentUsage,
   ApprovalMode,
   ApprovalRequest,
@@ -64,6 +69,9 @@ export type {
   TaskStatus,
   TaskStepStatus,
   ToolKind,
+  UserInputRequest,
+  UserInputResponse,
+  UserInputSubmission,
 };
 
 /** The service's error envelope payload. */

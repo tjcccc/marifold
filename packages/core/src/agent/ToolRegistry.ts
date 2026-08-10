@@ -2,6 +2,13 @@ import { JSONValue, ToolDefinition } from '@priest-ai/core';
 import { MarifoldError } from '../errors/MarifoldError';
 import { ToolKind } from './ApprovalPolicy';
 import type { RunWorkspace } from './RunWorkspace';
+import type {
+  UserInputRequest,
+  UserInputResponse,
+  UserInputSubmission,
+} from './UserInput';
+
+export type AgentToolKind = ToolKind | 'interaction';
 
 export interface ToolExecutionContext {
   /** Working directory the run was started from. Filesystem tools resolve
@@ -55,21 +62,34 @@ export interface AgentTool {
   execute(input: Record<string, JSONValue>, ctx: ToolExecutionContext): Promise<ToolExecutionResult>;
 }
 
-export class ToolRegistry {
-  private readonly tools = new Map<string, AgentTool>();
+export type EffectfulAgentTool = AgentTool;
 
-  register(tool: AgentTool): void {
+export interface UserInputAgentTool {
+  definition: ToolDefinition;
+  kind: 'interaction';
+  summarizeCall(input: Record<string, JSONValue>): string;
+  createRequest(callId: string, input: Record<string, JSONValue>): UserInputRequest;
+  resolveResponse(request: UserInputRequest, submission: UserInputSubmission): UserInputResponse;
+  formatResponse(response: UserInputResponse): string;
+}
+
+export type RegisteredAgentTool = AgentTool | UserInputAgentTool;
+
+export class ToolRegistry {
+  private readonly tools = new Map<string, RegisteredAgentTool>();
+
+  register(tool: RegisteredAgentTool): void {
     if (this.tools.has(tool.definition.name)) {
       throw MarifoldError.agentToolInvalid(`Agent tool '${tool.definition.name}' is already registered.`, tool.definition.name);
     }
     this.tools.set(tool.definition.name, tool);
   }
 
-  get(name: string): AgentTool | undefined {
+  get(name: string): RegisteredAgentTool | undefined {
     return this.tools.get(name);
   }
 
-  list(): AgentTool[] {
+  list(): RegisteredAgentTool[] {
     return [...this.tools.values()];
   }
 

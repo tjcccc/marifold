@@ -29,7 +29,9 @@ import {
   parseControlBlockCalls,
 } from './ControlBlockTools';
 import { createRunWorkspace, RunFileInput, RunWorkspace } from './RunWorkspace';
-import { AgentTool, ToolExecutionContext, ToolRegistry } from './ToolRegistry';
+import { ToolRegistry } from './ToolRegistry';
+import type { EffectfulAgentTool, ToolExecutionContext, UserInputAgentTool } from './ToolRegistry';
+import type { UserInputHandler } from './UserInput';
 import type { ResponseMetrics } from '../sessions/ResponseMetrics';
 
 const PLAN_SCHEMA = {
@@ -52,7 +54,7 @@ export interface AgentRunOptions {
   /** Preserve the attached images' original encoded bytes for this turn. */
   originalImages?: boolean;
   /** Conversation session id. When set, a single clean turn pair (the user's
-   * text + the final answer) is persisted so the session can be resumed. */
+   * text + the terminal outcome) is persisted so the session can be resumed. */
   sessionId?: string;
   /** Replace this persisted user→assistant exchange in place. Later turns are
    * preserved and excluded from this run's history context. */
@@ -86,6 +88,9 @@ export interface AgentRunOptions {
   instructions?: string[];
   /** Resolves 'ask' approvals. Absent (unattended runs): 'ask' degrades to deny. */
   approvalHandler?: ApprovalHandler;
+  /** Resolves optional model-authored clarification questions. Absent or
+   * unattended runs return an immediate unavailable result to the model. */
+  userInputHandler?: UserInputHandler;
   signal?: AbortSignal;
   maxIterations?: number;
   toolMode?: AgentToolMode;
@@ -121,8 +126,8 @@ export interface AgentRunnerDeps {
   prepareEngine: (settings: MarifoldResolvedSettings) => Promise<AgentEngineContext>;
   /** Normalize and optimize image inputs before the first provider request. */
   prepareImages?: (images: ImageInput[], optimize: boolean) => Promise<ImageInput[]>;
-  /** Persist one clean conversation turn (objective → final answer) to the
-   * session, so resuming shows the result without the raw agent framing. */
+  /** Persist one clean conversation turn (objective → terminal outcome) to
+   * the session, so resuming shows the result without the raw agent framing. */
   persistTurn?: (
     sessionId: string,
     profile: string,
@@ -248,6 +253,52 @@ export class AgentRunner {
       steeringNotes: [],
     };
 
+    let sessionTurnPersisted = false;
+    const persistSessionTurn = async (
+      assistantText: string,
+      outcome: 'completed' | 'failed' | 'cancelled',
+    ): Promise<void> => {
+      if (sessionTurnPersisted || !options.sessionId || !this.deps.persistTurn) return;
+      // A failed regeneration must leave the existing exchange intact. Ordinary
+      // append-only runs still keep their submitted prompt and terminal state.
+      if (outcome !== 'completed' && options.replaceUserTurnIndex !== undefined) return;
+
+      sessionTurnPersisted = true;
+      let responseMetrics: ResponseMetrics | undefined;
+      if (outcome === 'completed') {
+        const finishedAtMs = Date.now();
+        responseMetrics = {
+          mode: 'agent',
+          provider: settings.provider,
+          model: settings.model,
+          think: settings.think,
+          startedAt,
+          finishedAt: new Date(finishedAtMs).toISOString(),
+          latencyMs: Math.max(0, finishedAtMs - startedAtMs),
+          ...(hasUsage(usage) ? { usage: { ...usage } } : {}),
+        };
+      }
+
+      try {
+        await this.deps.persistTurn(
+          options.sessionId,
+          settings.profile,
+          options.userTurn ?? options.objective,
+          assistantText,
+          runOptions.images,
+          options.replaceUserTurnIndex,
+          responseMetrics,
+        );
+      } catch (error) {
+        if (outcome === 'completed') throw error;
+        const message = error instanceof Error ? error.message : String(error);
+        this.deps.taskStore.appendEvent(task.id, {
+          kind: 'note',
+          message: `Could not persist the ${outcome} session turn: ${truncate(message, 500)}`,
+        });
+      }
+    };
+
     try {
       // Phase 1 — plan, only when forced (the TUI's `/steps`, or a weak-model
       // config). Adaptive by default: a separate planning call is overhead for
@@ -302,7 +353,9 @@ export class AgentRunner {
             continue;
           }
           if (response.error?.code === 'REQUEST_ABORTED') throw new AbortedError();
-          yield { type: 'error', code: response.error?.code ?? 'PROVIDER_ERROR', message: response.error?.message ?? 'Provider call failed.' };
+          const message = response.error?.message ?? 'Provider call failed.';
+          yield { type: 'error', code: response.error?.code ?? 'PROVIDER_ERROR', message };
+          await persistSessionTurn(failedSessionOutcome(message), 'failed');
           yield* this.finish(task.id, 'failed', undefined, 'Retry the run once the provider issue is resolved.', usage);
           return;
         }
@@ -340,34 +393,17 @@ export class AgentRunner {
           kind: 'blocker',
           message: `Iteration cap of ${maxIterations} reached before the objective was completed.`,
         });
+        await persistSessionTurn(
+          failedSessionOutcome(`Stopped at the iteration cap of ${maxIterations} before completing the objective.`),
+          'failed',
+        );
         yield* this.finish(task.id, 'failed', 'Stopped at the iteration cap before completing the objective.', 'Re-run with a higher iteration cap or a narrower objective.', usage);
         return;
       }
 
       // Persist a single clean turn pair (objective → final answer) so resuming
       // the session shows the result, not the raw `Objective:`/tool framing.
-      if (options.sessionId && this.deps.persistTurn) {
-        const finishedAtMs = Date.now();
-        const responseMetrics: ResponseMetrics = {
-          mode: 'agent',
-          provider: settings.provider,
-          model: settings.model,
-          think: settings.think,
-          startedAt,
-          finishedAt: new Date(finishedAtMs).toISOString(),
-          latencyMs: Math.max(0, finishedAtMs - startedAtMs),
-          ...(hasUsage(usage) ? { usage: { ...usage } } : {}),
-        };
-        await this.deps.persistTurn(
-          options.sessionId,
-          settings.profile,
-          options.userTurn ?? options.objective,
-          finalText,
-          runOptions.images,
-          options.replaceUserTurnIndex,
-          responseMetrics,
-        );
-      }
+      await persistSessionTurn(finalText, 'completed');
 
       // Complete. No verification phase: a separate self-grading model call was
       // non-actionable (a failed grade didn't retry or fix anything) and models
@@ -378,11 +414,13 @@ export class AgentRunner {
     } catch (error) {
       if (error instanceof AbortedError || (options.signal?.aborted ?? false)) {
         this.deps.taskStore.appendEvent(task.id, { kind: 'note', message: 'Run cancelled by the user.' });
+        await persistSessionTurn('Run cancelled before a final response was produced.', 'cancelled');
         yield* this.finish(task.id, 'cancelled', undefined, 'Resume by starting a new run with the same objective.', usage);
         return;
       }
       const message = error instanceof Error ? error.message : String(error);
       yield { type: 'error', code: 'AGENT_RUN_ERROR', message };
+      await persistSessionTurn(failedSessionOutcome(message), 'failed');
       yield* this.finish(task.id, 'failed', undefined, message, usage);
     }
   }
@@ -407,6 +445,11 @@ export class AgentRunner {
       type: 'tool_request',
       call: { id: call.id, tool: call.name, kind: tool.kind, input: call.arguments, summary },
     };
+
+    if (tool.kind === 'interaction') {
+      yield* this.requestUserInput(taskId, call, tool, summary, options, state);
+      return;
+    }
 
     const decision = yield* this.resolveApproval(call, tool, summary, options, toolContext);
     if (!decision.approved) {
@@ -435,9 +478,73 @@ export class AgentRunner {
     this.recordToolResult(taskId, state, call, content, isError, resultSummary);
   }
 
+  private async *requestUserInput(
+    taskId: string,
+    call: ToolCall,
+    tool: UserInputAgentTool,
+    summary: string,
+    options: AgentRunOptions,
+    state: LoopState,
+  ): AsyncGenerator<AgentEvent, void, unknown> {
+    let request;
+    try {
+      request = tool.createRequest(call.id, call.arguments);
+    } catch (error) {
+      const content = `Tool '${call.name}' failed: ${error instanceof Error ? error.message : String(error)}`;
+      yield { type: 'tool_result', callId: call.id, tool: call.name, summary: `${summary} failed`, isError: true };
+      this.recordToolResult(taskId, state, call, content, true, `${summary} failed`);
+      return;
+    }
+
+    if (options.unattended || !options.userInputHandler) {
+      const content = [
+        'No interactive user is available for this run.',
+        'Continue with a reasonable assumption when that is safe; otherwise explain what information is missing.',
+      ].join(' ');
+      yield { type: 'tool_result', callId: call.id, tool: call.name, summary: 'user input unavailable', isError: true };
+      this.recordToolResult(taskId, state, call, content, true, 'user input unavailable');
+      return;
+    }
+
+    yield { type: 'user_input_request', request };
+    const submission = await options.userInputHandler(request);
+    if (!submission) {
+      const content = 'The clarification request ended without an answer.';
+      yield { type: 'tool_result', callId: call.id, tool: call.name, summary: 'no user answer received', isError: true };
+      this.recordToolResult(taskId, state, call, content, true, 'no user answer received');
+      return;
+    }
+
+    try {
+      const response = tool.resolveResponse(request, submission);
+      const content = tool.formatResponse(response);
+      yield { type: 'user_input_response', response };
+      yield {
+        type: 'tool_result',
+        callId: call.id,
+        tool: call.name,
+        summary: `received ${response.answers.length} user ${response.answers.length === 1 ? 'answer' : 'answers'}`,
+        isError: false,
+      };
+      this.deps.taskStore.appendEvent(taskId, { kind: 'decision', message: content });
+      this.recordToolResult(
+        taskId,
+        state,
+        call,
+        content,
+        false,
+        `received ${response.answers.length} user ${response.answers.length === 1 ? 'answer' : 'answers'}`,
+      );
+    } catch (error) {
+      const content = `Could not accept the user answers: ${error instanceof Error ? error.message : String(error)}`;
+      yield { type: 'tool_result', callId: call.id, tool: call.name, summary: 'invalid user answers', isError: true };
+      this.recordToolResult(taskId, state, call, content, true, 'invalid user answers');
+    }
+  }
+
   private async *resolveApproval(
     call: ToolCall,
-    tool: AgentTool,
+    tool: EffectfulAgentTool,
     summary: string,
     options: AgentRunOptions,
     toolContext: ToolExecutionContext,
@@ -603,9 +710,13 @@ export class AgentRunner {
       : 'No binary input files were staged for this run.';
     const workspaceContext = [
       `Working directory: ${workspace.cwd}. Relative tool paths resolve against it.`,
-      `Isolated run directory: ${workspace.rootDir}. ~ is the isolated run home (${workspace.homeDir}), not the user's real home.`,
-      `${files}\nWrite files intended for the user to ${workspace.outputDir}. Temporary scripts and environments belong in ${workspace.workDir}.`,
-      'shell_exec has no network access and cannot mutate host system/global package directories. Use python_package_install for approved Python dependencies; it installs only into this run’s disposable uv environment.',
+      `User home: ${workspace.userHome}. In tool paths and shell commands, ~ refers to this directory.`,
+      `Isolated run directory: ${workspace.rootDir}. Its internal runtime home is ${workspace.homeDir}.`,
+      `${files}\nHonor explicit destination paths from the user; otherwise write generated deliverables to ${workspace.outputDir}. Temporary scripts and environments belong in ${workspace.workDir}.`,
+      ...(this.deps.registry.get('ask_user')?.kind === 'interaction' ? [
+        'ask_user is optional. Use it only when essential information is missing and a reasonable assumption could materially change the result. Otherwise proceed. Batch all currently known questions into one call, and call it without other tools in that response.',
+      ] : []),
+      'shell_exec has no network access and can write only the working directory, configured trusted folders, and private run directories even after execution approval. Use write_file for an explicit output path elsewhere. Use python_package_install for approved Python dependencies; it installs only into this run’s disposable uv environment.',
     ].join('\n');
     // Lean run (skills): minimal framing — the instructions are authoritative,
     // and we ask for only the final output to avoid plan/preamble/reasoning prose.
@@ -746,6 +857,13 @@ function parseJsonObject(text: string): Record<string, JSONValue> | undefined {
 
 function truncate(text: string, limit: number): string {
   return text.length <= limit ? text : `${text.slice(0, limit - 3)}...`;
+}
+
+function failedSessionOutcome(message: string): string {
+  const detail = truncate(message.trim(), 1000);
+  return detail
+    ? `Run failed before a final response was produced.\n\n${detail}`
+    : 'Run failed before a final response was produced.';
 }
 
 /** Wrap an engine so each model call's token usage accrues into `total`. */

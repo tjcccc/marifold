@@ -187,3 +187,28 @@
   color: var(--danger);
   font-family: var(--font-mono);
 }
+
+.answers {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 7px 9px;
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+}
+
+.answerRow {
+  display: grid;
+  grid-template-columns: minmax(100px, 1fr) minmax(100px, 1fr);
+  gap: 10px;
+  font-size: 12px;
+}
+
+.answerQuestion {
+  color: var(--text-3);
+}
+
+.answerValue {
+  color: var(--text-2);
+  font-weight: 600;
+}

@@ -1,7 +1,14 @@
 import type { ApiClient } from './client';
 import { MarifoldApiError } from './client';
 import { parseSse } from './sse';
-import type { AgentEvent, RunApprovalAction, RunRecord, RunStartInput, TaskStatus } from './types';
+import type {
+  AgentEvent,
+  RunApprovalAction,
+  RunRecord,
+  RunStartInput,
+  TaskStatus,
+  UserInputSubmission,
+} from './types';
 
 export async function startRun(client: ApiClient, input: RunStartInput): Promise<RunRecord> {
   const body = await client.request<{ run: RunRecord }>('POST', '/v1/runs', input);
@@ -28,6 +35,19 @@ export async function answerApproval(
     'POST',
     `/v1/runs/${encodeURIComponent(runId)}/approvals/${encodeURIComponent(requestId)}`,
     { action },
+  );
+}
+
+export async function answerUserInput(
+  client: ApiClient,
+  runId: string,
+  requestId: string,
+  submission: UserInputSubmission,
+): Promise<{ requestId: string; accepted: true }> {
+  return client.request(
+    'POST',
+    `/v1/runs/${encodeURIComponent(runId)}/inputs/${encodeURIComponent(requestId)}`,
+    submission,
   );
 }
 

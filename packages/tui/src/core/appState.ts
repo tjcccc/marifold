@@ -1,4 +1,4 @@
-import type { AgentEvent, ApprovalRequest, ToolKind } from '@marifold/core';
+import type { AgentEvent, AgentToolKind, ApprovalRequest, UserInputRequest } from '@marifold/core';
 import { agentEventToItems } from './eventView.js';
 
 export type Mode = 'agent' | 'chat';
@@ -11,7 +11,7 @@ export type TranscriptItemData =
   | { kind: 'assistant'; text: string; muted?: boolean }
   | { kind: 'notice'; tone: NoticeTone; text: string }
   | { kind: 'plan'; steps: Array<{ id: string; text: string; status: string }> }
-  | { kind: 'tool'; tool: string; toolKind?: ToolKind; summary: string; phase: 'request' | 'result'; isError?: boolean; callId?: string }
+  | { kind: 'tool'; tool: string; toolKind?: AgentToolKind; summary: string; phase: 'request' | 'result'; isError?: boolean; callId?: string }
   | { kind: 'verification'; passed: boolean; notes: string }
   | { kind: 'info'; title: string; lines: string[] };
 
@@ -36,6 +36,8 @@ export interface AppState {
   running: boolean;
   /** Pending approval request; non-undefined drives the approval modal. */
   approval?: ApprovalRequest;
+  /** Pending clarification questions; non-undefined drives QuestionModal. */
+  userInput?: UserInputRequest;
   /** Short status-line activity label, e.g. "thinking" or "shell". */
   activity?: string;
   /** True while an assistant item is open and accepting streamed deltas. */
@@ -93,6 +95,7 @@ export type AppAction =
   | { type: 'set_running'; running: boolean }
   | { type: 'set_activity'; activity?: string }
   | { type: 'set_approval'; request?: ApprovalRequest }
+  | { type: 'set_user_input'; request?: UserInputRequest }
   | { type: 'agent_event'; event: AgentEvent }
   | { type: 'notice'; tone?: NoticeTone; text: string }
   | { type: 'clear' }
@@ -170,6 +173,8 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       return { ...state, activity: action.activity };
     case 'set_approval':
       return { ...state, approval: action.request };
+    case 'set_user_input':
+      return { ...state, userInput: action.request };
     case 'agent_event':
       return applyAgentEvent(state, action.event);
     case 'notice':
@@ -231,8 +236,14 @@ function applyAgentEvent(state: AppState, event: AgentEvent): AppState {
     case 'approval_decision':
       next = { ...next, approval: undefined };
       break;
+    case 'user_input_request':
+      next = { ...next, userInput: event.request, activity: 'waiting for your answers' };
+      break;
+    case 'user_input_response':
+      next = { ...next, userInput: undefined, activity: 'thinking' };
+      break;
     case 'done':
-      next = { ...next, running: false, activity: undefined, approval: undefined };
+      next = { ...next, running: false, activity: undefined, approval: undefined, userInput: undefined };
       break;
     default:
       break;

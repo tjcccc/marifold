@@ -180,6 +180,31 @@ describe('WriteFileTool', () => {
     expect(result.content).not.toContain('/~/');
   });
 
+  it('resolves scoped ~/ file paths against the user home, not the disposable run home', async () => {
+    const home = tempDir();
+    const cwd = path.join(home, 'repo');
+    fs.mkdirSync(cwd);
+    const workspace = createRunWorkspace({
+      id: 'tool_home_path',
+      cwd,
+      runsDir: path.join(home, '.marifold', 'runs'),
+      userHome: home,
+    });
+    const ctx: ToolExecutionContext = { cwd, outputLimit: 100000, workspace };
+    const tool = new WriteFileTool();
+    const target = path.join(fs.realpathSync(home), 'tempfiles', 'test.md');
+
+    expect(tool.assessRisk({ path: '~/tempfiles/test.md', content: '# test\ntest\n' }, ctx)).toMatchObject({
+      escalate: true,
+      targetPath: target,
+    });
+    const result = await tool.execute({ path: '~/tempfiles/test.md', content: '# test\ntest\n' }, ctx);
+
+    expect(result.isError, result.content).toBeFalsy();
+    expect(fs.readFileSync(target, 'utf8')).toBe('# test\ntest\n');
+    expect(fs.existsSync(path.join(workspace.homeDir, 'tempfiles', 'test.md'))).toBe(false);
+  });
+
   it('isInsideWorkspace handles traversal and absolute paths', () => {
     expect(isInsideWorkspace('/tmp/ws/a/b.txt', '/tmp/ws')).toBe(true);
     expect(isInsideWorkspace('/tmp/ws', '/tmp/ws')).toBe(true);
@@ -189,13 +214,15 @@ describe('WriteFileTool', () => {
 });
 
 describe('ShellExecTool', () => {
-  it.skipIf(process.platform !== 'darwin')('runs commands in cwd with a synthetic home and captures output', async () => {
+  it.skipIf(process.platform !== 'darwin')('runs commands in cwd with user-home shell semantics and captures output', async () => {
     const dir = tempDir();
     fs.writeFileSync(path.join(dir, 'c.txt'), 'x');
     const ctx = scopedContext(dir);
-    const result = await new ShellExecTool().execute({ command: 'ls; printf "\\nhome=$HOME"' }, ctx);
+    const result = await new ShellExecTool().execute({ command: 'ls; printf "\\nhome=%s\\ntilde=%s" "$HOME" ~' }, ctx);
     expect(result.content).toContain('c.txt');
-    expect(result.content).toContain(`home=${ctx.workspace!.homeDir}`);
+    expect(result.content).toContain(`home=${ctx.workspace!.userHome}`);
+    expect(result.content).toContain(`tilde=${ctx.workspace!.userHome}`);
+    expect(result.content).not.toContain(`home=${ctx.workspace!.homeDir}`);
     expect(result.isError).toBeFalsy();
   });
 
@@ -236,6 +263,20 @@ describe('ShellExecTool', () => {
     );
     expect(result.isError).toBe(true);
     expect(fs.existsSync(outside)).toBe(false);
+  });
+
+  it.skipIf(process.platform !== 'darwin')('keeps ungranted user-home files private with user-home shell semantics', async () => {
+    const home = tempDir();
+    const dir = path.join(home, 'workspace');
+    fs.mkdirSync(dir);
+    fs.writeFileSync(path.join(home, 'private.txt'), 'must-stay-private');
+    const result = await new ShellExecTool().execute(
+      { command: 'cat ~/private.txt' },
+      scopedContext(dir),
+    );
+
+    expect(result.isError).toBe(true);
+    expect(result.content).not.toContain('must-stay-private');
   });
 
   it('fails closed without an isolated run workspace', async () => {

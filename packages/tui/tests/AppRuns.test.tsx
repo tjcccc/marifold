@@ -208,4 +208,43 @@ describe('App run routing', () => {
     await vi.waitFor(() => expect(captured?.aborted).toBe(true));
     unmount();
   });
+
+  it('pauses for optional agent questions and resumes after one complete submission', async () => {
+    let submitted: unknown;
+    const questioningRun = (call: RunnerCall) => (async function* (): AsyncGenerator<unknown> {
+      const request = {
+        id: 'q1',
+        questions: [{
+          id: 'style',
+          question: 'What style do you prefer?',
+          options: [{ id: 'apple', label: 'Apple' }, { id: 'material', label: 'Material' }],
+        }],
+      };
+      yield { type: 'user_input_request', request };
+      submitted = await (call.userInputHandler as (value: typeof request) => Promise<unknown>)(request);
+      yield {
+        type: 'user_input_response',
+        response: { requestId: 'q1', answers: [{ questionId: 'style', optionId: 'apple', value: 'Apple' }] },
+      };
+      yield { type: 'done', taskId: 't', status: 'completed' };
+    })();
+    const { runtime } = makeRuntime({ agentRun: questioningRun });
+    const { stdin, lastFrame, unmount } = render(
+      <App runtime={runtime} loadedConfig={config} initial={initial('agent')} />,
+    );
+    await delay();
+    stdin.write('build a page');
+    await delay();
+    stdin.write('\r');
+    await vi.waitFor(() => expect(lastFrame()).toContain('What style do you prefer?'));
+    stdin.write('\r'); // select Apple
+    await delay();
+    expect(submitted).toBeUndefined();
+    stdin.write('s');
+    await vi.waitFor(() => expect(submitted).toEqual({
+      answers: [{ questionId: 'style', optionId: 'apple' }],
+    }));
+    await vi.waitFor(() => expect(lastFrame()).toContain('Answered: style = Apple'));
+    unmount();
+  });
 });

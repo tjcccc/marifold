@@ -2,6 +2,18 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-08-10 — v0.54.0 — Optional agent clarification questions
+
+- Added the interaction-only `ask_user` agent tool. Models are instructed to use it only when essential information is missing; ordinary work proceeds without a question checkpoint. Requests are bounded to one–three questions with validated suggested options and one complete submission.
+- Added renderer-neutral `user_input_request` / `user_input_response` events, live-run pending state, and `POST /v1/runs/:id/inputs/:requestId`. Clarifications remain separate from permissions, resume the same run, time out safely, and fail immediately in unattended contexts.
+- Added a standalone inline Web question sheet (suggested choices, “Something else,” one final Submit) and a keyboard TUI modal, with core/service/reducer/component/end-to-end coverage.
+- Fixed the TUI custom-answer cursor leaking into other questions. Clarified the shell contract so models use `write_file` for explicit destinations outside the shell sandbox instead of attempting redirection that approval cannot make writable.
+- Kept ordinary failed/cancelled agent prompts durable as clean session pairs with an explicit terminal outcome, while failed historical regenerations preserve the existing successful exchange.
+- Restored normal `~` and `$HOME` handling for agent file tools, shell commands, and model context. The disposable per-run home remains internal runtime state, while writes outside the working/trusted folders continue through the existing approval and sandbox boundaries.
+- Added focused regressions for path resolution, approval targeting, file placement, shell environment expansion, and agent instructions.
+- Verified by the user in both TUI and Web UI, plus the full workspace typecheck, production build, and test gate (606 tests: core 304, service 55, TUI 58, CLI 14, Web 175), including the macOS Seatbelt integration checks.
+- Released as v0.54.0.
+
 ## 2026-08-03 — v0.53.1 — xAI OAuth proxy resilience
 
 - Routed xAI browser token exchange through the saved per-provider proxy, with the existing HTTP(S)_PROXY fallback.

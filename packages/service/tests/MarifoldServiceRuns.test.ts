@@ -378,6 +378,60 @@ Transform {{text}} into the final prompt.
     }
   });
 
+  it('parks ask_user until every question is submitted, then resumes the run', async () => {
+    const { captured } = stubProvider([
+      toolCall('ask_user', {
+        questions: [{
+          id: 'style',
+          header: 'Visual style',
+          question: 'What style do you prefer?',
+          options: [
+            { id: 'apple', label: 'Apple', description: 'Quiet and restrained.' },
+            { id: 'material', label: 'Material', description: 'Colorful and expressive.' },
+          ],
+        }],
+      }),
+      'Created the Apple-style result.',
+    ]);
+    const { server, base } = await startServer();
+    try {
+      const { run } = await (await postJson(base, '/v1/runs', {
+        objective: 'Create a design.',
+        cwd: tempDir(),
+      })).json();
+      const frames = sseFrames(await fetch(`${base}/v1/runs/${run.id}/events`));
+      const { matched } = await pullFrames(frames, frame => frame.event === 'user_input_request');
+      const request = (matched!.data as { request: { id: string } }).request;
+
+      const record = await (await fetch(`${base}/v1/runs/${run.id}`)).json();
+      expect(record.run.pendingUserInputs).toEqual([request]);
+
+      const invalid = await postJson(base, `/v1/runs/${run.id}/inputs/${request.id}`, { answers: [] });
+      expect(invalid.status).toBe(400);
+      expect((await invalid.json()).error.code).toBe('AGENT_TOOL_INVALID');
+
+      const answered = await postJson(base, `/v1/runs/${run.id}/inputs/${request.id}`, {
+        answers: [{ questionId: 'style', optionId: 'apple' }],
+      });
+      expect(answered.status).toBe(200);
+      expect(await answered.json()).toEqual({ ok: true, requestId: request.id, accepted: true });
+
+      const { seen } = await pullFrames(frames, frame => frame.event === 'done');
+      expect(seen.some(frame => frame.event === 'user_input_response'
+        && (frame.data as { response: { answers: Array<{ value: string }> } }).response.answers[0].value === 'Apple')).toBe(true);
+      expect(JSON.stringify(captured[1])).toContain('style: Apple');
+      expect((await (await fetch(`${base}/v1/runs/${run.id}`)).json()).run.pendingUserInputs).toEqual([]);
+
+      const stale = await postJson(base, `/v1/runs/${run.id}/inputs/${request.id}`, {
+        answers: [{ questionId: 'style', optionId: 'apple' }],
+      });
+      expect(stale.status).toBe(404);
+      expect((await stale.json()).error.code).toBe('USER_INPUT_NOT_FOUND');
+    } finally {
+      await server.close();
+    }
+  });
+
   it('deny surfaces a denied decision and an isError tool result', async () => {
     const workspace = tempDir();
     stubProvider([

@@ -12,11 +12,15 @@ export class ShellExecTool implements AgentTool {
   readonly kind = 'shell' as const;
   readonly definition = {
     name: 'shell_exec',
-    description: 'Run a shell command in the working directory and return stdout/stderr. Commands time out after 60 seconds.',
+    description: [
+      'Run a shell command in the working directory and return stdout/stderr. Commands time out after 60 seconds.',
+      'The process sandbox can write only the working directory, configured trusted folders, and private run directories—even after the user approves execution.',
+      'For an explicit output file elsewhere, use write_file instead of shell redirection.',
+    ].join(' '),
     parameters: {
       type: 'object',
       properties: {
-        command: { type: 'string', description: 'The shell command to run.' },
+        command: { type: 'string', description: 'The shell command to run. ~ and $HOME refer to the user home; filesystem sandbox limits still apply.' },
       },
       required: ['command'],
     },

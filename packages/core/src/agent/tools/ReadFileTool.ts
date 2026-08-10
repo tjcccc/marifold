@@ -23,7 +23,7 @@ export class ReadFileTool implements AgentTool {
     parameters: {
       type: 'object',
       properties: {
-        path: { type: 'string', description: 'File path, absolute or relative to the working directory.' },
+        path: { type: 'string', description: 'File path, absolute, relative to the working directory, or ~/ relative to the user home.' },
       },
       required: ['path'],
     },

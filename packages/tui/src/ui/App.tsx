@@ -18,6 +18,8 @@ import type {
   MarifoldSkill,
   SessionSummary,
   ToolKind,
+  UserInputHandler,
+  UserInputSubmission,
 } from '@marifold/core';
 import { appReducer, createInitialState, type Mode, type NoticeTone, type TranscriptItem, type TranscriptItemData } from '../core/appState.js';
 import { parseInput } from '../core/inputGrammar.js';
@@ -29,6 +31,7 @@ import { InputBox, type CompletionItem } from './InputBox.js';
 import { StatusLine } from './StatusLine.js';
 import { RunStatus } from './RunStatus.js';
 import { ApprovalModal, trustTargetFolder, type ApprovalChoice } from './ApprovalModal.js';
+import { QuestionModal } from './QuestionModal.js';
 import { SelectList, type SelectItem } from './SelectList.js';
 import { useTerminalSize } from './useTerminalSize.js';
 import { useResizing } from './useResizing.js';
@@ -137,7 +140,7 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
   // so it never competes with the picker's or approval modal's key handling.
   useInput((input, key) => {
     if (key.ctrl && input === 'l') repaint();
-  }, { isActive: !overlay && !state.approval });
+  }, { isActive: !overlay && !state.approval && !state.userInput });
 
   // The committed transcript lives in Ink's <Static>, which is append-only and
   // cannot un-render. So whenever items are removed/reset (a /new, /clear,
@@ -154,6 +157,7 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
   // Mutable run plumbing (does not drive rendering directly).
   const abortRef = useRef<AbortController | null>(null);
   const approvalResolverRef = useRef<((decision: ApprovalDecision) => void) | null>(null);
+  const userInputResolverRef = useRef<((submission: UserInputSubmission | undefined) => void) | null>(null);
   const sessionGrantsRef = useRef<Set<ToolKind>>(new Set());
   const sessionTrustedFoldersRef = useRef<Set<string>>(new Set());
   const steeringRef = useRef<string[]>([]);
@@ -237,6 +241,21 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
     resolve({ approved: true });
   }, []);
 
+  // --- Clarification questions --------------------------------------------
+  const userInputHandler = useCallback<UserInputHandler>(request => {
+    dispatch({ type: 'set_user_input', request });
+    return new Promise<UserInputSubmission | undefined>(resolve => {
+      userInputResolverRef.current = resolve;
+    });
+  }, []);
+
+  const resolveUserInput = useCallback((submission: UserInputSubmission | undefined) => {
+    const resolve = userInputResolverRef.current;
+    userInputResolverRef.current = null;
+    dispatch({ type: 'set_user_input', request: undefined });
+    resolve?.(submission);
+  }, []);
+
   // "Always (allow <kind>)": persist to the active profile + grant for this session.
   const persistApprovalKind = useCallback((kind: ToolKind) => {
     const profile = stateRef.current.profile;
@@ -297,6 +316,7 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
         ...(images.length > 0 ? { images } : {}),
         signal: controller.signal,
         approvalHandler,
+        userInputHandler,
         steering: () => {
           const queued = steeringRef.current;
           steeringRef.current = [];
@@ -323,7 +343,7 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
         notify(`Task ${status}. ${runSummary(Date.now() - startedAt, usage)}`, status === 'completed' ? 'info' : 'warn');
       }
     }
-  }, [runtime, approvalHandler, notify]);
+  }, [runtime, approvalHandler, userInputHandler, notify]);
 
   const runChat = useCallback(async (
     prompt: string,
@@ -425,8 +445,9 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
       dispatch({ type: 'set_approval', request: undefined });
       resolve({ approved: false, reason: 'cancelled' });
     }
+    if (userInputResolverRef.current) resolveUserInput(undefined);
     if (stateRef.current.running) notify('Cancelling…', 'warn');
-  }, [notify]);
+  }, [notify, resolveUserInput]);
 
   // --- Skills --------------------------------------------------------------
   const startSkillRun = useCallback((skill: MarifoldSkill, body: string, userInput: string, displayText: string) => {
@@ -931,6 +952,15 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
   function renderOverlay(): React.ReactElement | null {
     if (state.approval) {
       return <ApprovalModal request={state.approval} onResolve={resolveApproval} />;
+    }
+    if (state.userInput) {
+      return (
+        <QuestionModal
+          request={state.userInput}
+          onSubmit={resolveUserInput}
+          onCancel={stop}
+        />
+      );
     }
     if (!overlay) return null;
     // Cap overlay height so it fits between the banner and status line.

@@ -26,6 +26,7 @@ const record: RunRecord = {
   createdAt: '2026-07-05T10:00:00.000Z',
   eventCount: 0,
   pendingApprovals: [],
+  pendingUserInputs: [],
 };
 
 function card(state: ThreadState, runId = 'run_1') {
@@ -241,6 +242,56 @@ describe('threadReducer', () => {
     expect(card(denied).approval).toBeUndefined();
     expect(card(denied).approvalBusy).toBe(false);
     expect(card(denied).denials).toEqual(['denied via service']);
+  });
+
+  it('parks on user-input questions, preserves answers, and clears stale forms', () => {
+    const request = {
+      id: 'q1',
+      questions: [{
+        id: 'style',
+        question: 'Choose a style.',
+        options: [{ id: 'apple', label: 'Apple' }, { id: 'material', label: 'Material' }],
+      }],
+    };
+    const waiting = reduce(
+      createThreadState(),
+      { type: 'run_created', run: record },
+      { type: 'run_event', runId: 'run_1', seq: 1, event: { type: 'user_input_request', request } },
+    );
+    expect(card(waiting).userInput).toEqual(request);
+    expect(hasRunActivity(card(waiting))).toBe(true);
+
+    const restored = reduce(createThreadState(), {
+      type: 'run_created',
+      run: { ...record, pendingUserInputs: [request] },
+    });
+    expect(card(restored).userInput).toEqual(request);
+
+    const busy = reduce(waiting, { type: 'user_input_submitting', runId: 'run_1' });
+    expect(card(busy).userInputBusy).toBe(true);
+    const answered = reduce(busy, {
+      type: 'run_event',
+      runId: 'run_1',
+      seq: 2,
+      event: {
+        type: 'user_input_response',
+        response: { requestId: 'q1', answers: [{ questionId: 'style', optionId: 'apple', value: 'Apple' }] },
+      },
+    });
+    expect(card(answered).userInput).toBeUndefined();
+    expect(card(answered).userInputBusy).toBe(false);
+    expect(card(answered).inputResponses[0]).toMatchObject({
+      request,
+      response: { answers: [{ value: 'Apple' }] },
+    });
+
+    const failed = reduce(waiting, {
+      type: 'user_input_failed',
+      runId: 'run_1',
+      gone: true,
+      message: 'Already answered.',
+    });
+    expect(card(failed).userInput).toBeUndefined();
   });
 
   it('steering events append pills; unknown event types are no-ops that advance lastSeq', () => {

@@ -21,6 +21,7 @@ export type MarifoldErrorCode =
   | 'APP_NOT_FOUND'
   | 'RUN_NOT_FOUND'
   | 'APPROVAL_NOT_FOUND'
+  | 'USER_INPUT_NOT_FOUND'
   | 'RUN_LIMIT_EXCEEDED'
   | 'UNAUTHORIZED'
   | 'ORIGIN_FORBIDDEN';
@@ -132,6 +133,14 @@ export class MarifoldError extends Error {
     return new MarifoldError(
       'APPROVAL_NOT_FOUND',
       `No pending approval with id ${requestId}. It may have expired, been answered, or belong to another run.`,
+      { requestId },
+    );
+  }
+
+  static userInputNotFound(requestId: string): MarifoldError {
+    return new MarifoldError(
+      'USER_INPUT_NOT_FOUND',
+      `No pending user-input request with id ${requestId}. It may have expired, been answered, or belong to another run.`,
       { requestId },
     );
   }
