@@ -385,13 +385,14 @@ Transform {{text}} into the final prompt.
           id: 'style',
           header: 'Visual style',
           question: 'What style do you prefer?',
+          multiple: true,
           options: [
             { id: 'apple', label: 'Apple', description: 'Quiet and restrained.' },
             { id: 'material', label: 'Material', description: 'Colorful and expressive.' },
           ],
         }],
       }),
-      'Created the Apple-style result.',
+      'Created the combined-style result.',
     ]);
     const { server, base } = await startServer();
     try {
@@ -411,19 +412,19 @@ Transform {{text}} into the final prompt.
       expect((await invalid.json()).error.code).toBe('AGENT_TOOL_INVALID');
 
       const answered = await postJson(base, `/v1/runs/${run.id}/inputs/${request.id}`, {
-        answers: [{ questionId: 'style', optionId: 'apple' }],
+        answers: [{ questionId: 'style', optionIds: ['apple', 'material'] }],
       });
       expect(answered.status).toBe(200);
       expect(await answered.json()).toEqual({ ok: true, requestId: request.id, accepted: true });
 
       const { seen } = await pullFrames(frames, frame => frame.event === 'done');
       expect(seen.some(frame => frame.event === 'user_input_response'
-        && (frame.data as { response: { answers: Array<{ value: string }> } }).response.answers[0].value === 'Apple')).toBe(true);
-      expect(JSON.stringify(captured[1])).toContain('style: Apple');
+        && (frame.data as { response: { answers: Array<{ value: string }> } }).response.answers[0].value === 'Apple, Material')).toBe(true);
+      expect(JSON.stringify(captured[1])).toContain('style: Apple, Material');
       expect((await (await fetch(`${base}/v1/runs/${run.id}`)).json()).run.pendingUserInputs).toEqual([]);
 
       const stale = await postJson(base, `/v1/runs/${run.id}/inputs/${request.id}`, {
-        answers: [{ questionId: 'style', optionId: 'apple' }],
+        answers: [{ questionId: 'style', optionIds: ['apple', 'material'] }],
       });
       expect(stale.status).toBe(404);
       expect((await stale.json()).error.code).toBe('USER_INPUT_NOT_FOUND');

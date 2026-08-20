@@ -173,6 +173,59 @@ describe('QuestionModal', () => {
     expect(customLines[1]).toContain('Time travel▌');
     unmount();
   });
+
+  it('toggles several choices and keeps custom text on a multi-select question', async () => {
+    const onSubmit = vi.fn();
+    const multipleRequest: UserInputRequest = {
+      id: 'q_multi',
+      questions: [{
+        id: 'outputs',
+        question: 'Which outputs should I create?',
+        multiple: true,
+        options: [
+          { id: 'report', label: 'Report' },
+          { id: 'slides', label: 'Slides' },
+          { id: 'sheet', label: 'Spreadsheet' },
+        ],
+      }],
+    };
+    const { stdin, lastFrame, unmount } = render(
+      <QuestionModal request={multipleRequest} onSubmit={onSubmit} onCancel={() => {}} />,
+    );
+    await delay();
+    expect(lastFrame()).toContain('select all that apply');
+
+    stdin.write('\r'); // toggle Report
+    await delay();
+    stdin.write('\u001b[B');
+    await delay();
+    stdin.write('\r'); // toggle Slides
+    await delay();
+    expect(lastFrame()).toContain('[x] Report');
+    expect(lastFrame()).toContain('[x] Slides');
+
+    stdin.write('\u001b[B');
+    await delay();
+    stdin.write('\u001b[B'); // Something else
+    await delay();
+    stdin.write('\r');
+    await delay();
+    stdin.write('A plain-text summary');
+    await delay();
+    stdin.write('\r'); // finish custom editing
+    await delay();
+    stdin.write('s');
+    await delay();
+
+    expect(onSubmit).toHaveBeenCalledWith({
+      answers: [{
+        questionId: 'outputs',
+        optionIds: ['report', 'slides'],
+        customText: 'A plain-text summary',
+      }],
+    });
+    unmount();
+  });
 });
 
 describe('SelectList', () => {

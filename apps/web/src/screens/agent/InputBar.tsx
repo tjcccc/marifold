@@ -14,6 +14,8 @@ export interface InputBarProps {
   draftKey?: string;
   /** True while a run is active: submissions steer instead of starting a turn. */
   steering: boolean;
+  /** True while the current chat or agent response can be stopped. */
+  responding: boolean;
   disabled?: boolean;
   think: boolean;
   onToggleThink: () => void;
@@ -27,6 +29,7 @@ export interface InputBarProps {
   /** Available skills for the `$` autocomplete (from GET /v1/skills). */
   skills?: SkillHint[];
   onSubmit: (text: string) => void;
+  onStop: () => void;
 }
 
 /** The composer (design 1a): attach +, textarea, Think pill, model chip,
@@ -347,14 +350,25 @@ export function InputBar(props: InputBarProps) {
               Think
             </button>
             <ModelChip options={props.modelOptions} choice={props.modelChoice} onSelect={props.onSelectModel} />
-            <button
-              className={styles.send}
-              disabled={props.disabled || text.trim().length === 0}
-              aria-label={props.steering ? 'Send guidance' : 'Send'}
-              onClick={submit}
-            >
-              ↑
-            </button>
+            {props.responding ? (
+              <button
+                className={styles.stop}
+                aria-label="Stop response"
+                title="Stop response"
+                onClick={props.onStop}
+              >
+                <span className={styles.stopIcon} aria-hidden />
+              </button>
+            ) : (
+              <button
+                className={styles.send}
+                disabled={props.disabled || text.trim().length === 0}
+                aria-label={props.steering ? 'Send guidance' : 'Send'}
+                onClick={submit}
+              >
+                ↑
+              </button>
+            )}
           </div>
         </div>
       </div>

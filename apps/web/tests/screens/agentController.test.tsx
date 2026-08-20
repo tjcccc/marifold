@@ -45,6 +45,133 @@ describe('useAgentController session lifecycle', () => {
     expect(navigate).not.toHaveBeenCalled();
   });
 
+  it('aborts a live chat response and closes its partial assistant turn', async () => {
+    const chatProfile: ProfileDetail = {
+      ...profile,
+      settings: { ...profile.settings, mode: 'chat' },
+    };
+    let streamSignal: AbortSignal | undefined;
+    const client: ApiClient = {
+      baseUrl: '',
+      request: async (method, path) => {
+        if (method === 'GET' && path === '/v1/profiles') return { profiles: [chatProfile] } as never;
+        if (method === 'GET' && path === '/v1/models') return { default: {}, options: [] } as never;
+        if (method === 'GET' && path === '/v1/profiles/prompt-maker') return { profile: chatProfile } as never;
+        if (method === 'GET' && path === '/v1/skills?profile=prompt-maker') return { skills: [] } as never;
+        if (method === 'GET' && path.startsWith('/v1/sessions?')) return { sessions: [] } as never;
+        throw new Error(`Unexpected request: ${method} ${path}`);
+      },
+      stream: async (path, init) => {
+        expect(path).toBe('/v1/chat/stream');
+        streamSignal = init?.signal;
+        return new Promise<Response>((_resolve, reject) => {
+          if (init?.signal?.aborted) {
+            reject(new DOMException('Aborted', 'AbortError'));
+            return;
+          }
+          init?.signal?.addEventListener(
+            'abort',
+            () => reject(new DOMException('Aborted', 'AbortError')),
+            { once: true },
+          );
+        });
+      },
+      blob: async () => undefined,
+    };
+    const { result } = renderHook(() => useAgentController({
+      client,
+      route: { view: 'agent', profile: 'prompt-maker' },
+      navigate: vi.fn(),
+      onUnauthorized: vi.fn(),
+    }));
+    await waitFor(() => expect(result.current.profileDetail?.settings.mode).toBe('chat'));
+
+    let send!: Promise<void>;
+    act(() => { send = result.current.send('Keep this concise'); });
+    await waitFor(() => expect(result.current.responding).toBe(true));
+
+    let stop!: Promise<boolean>;
+    act(() => { stop = result.current.stop(); });
+    const stopped = await stop;
+    await send;
+
+    expect(stopped).toBe(true);
+    expect(streamSignal?.aborted).toBe(true);
+    expect(result.current.responding).toBe(false);
+    expect(result.current.thread.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: 'assistant', streaming: false }),
+    ]));
+    expect(result.current.thread.items).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: 'notice', tone: 'error' }),
+    ]));
+  });
+
+  it('cancels the live agent run selected by the composer', async () => {
+    let releaseRun!: () => void;
+    const runFinished = new Promise<void>(resolve => { releaseRun = resolve; });
+    let cancelledPath: string | undefined;
+    const client: ApiClient = {
+      baseUrl: '',
+      request: async (method, path, body) => {
+        if (method === 'GET' && path === '/v1/profiles') return { profiles: [profile] } as never;
+        if (method === 'GET' && path === '/v1/models') return { default: {}, options: [] } as never;
+        if (method === 'GET' && path === '/v1/profiles/prompt-maker') return { profile } as never;
+        if (method === 'GET' && path === '/v1/skills?profile=prompt-maker') return { skills: [] } as never;
+        if (method === 'GET' && path.startsWith('/v1/sessions?')) return { sessions: [] } as never;
+        if (method === 'GET' && path === '/v1/runs') return { runs: [] } as never;
+        if (method === 'POST' && path === '/v1/runs') {
+          const input = body as { objective: string; sessionId: string };
+          return {
+            run: {
+              id: 'run_stop',
+              objective: input.objective,
+              profile: 'prompt-maker',
+              sessionId: input.sessionId,
+              status: 'running',
+              createdAt: '2026-08-20T00:00:00.000Z',
+              eventCount: 0,
+              pendingApprovals: [],
+              pendingUserInputs: [],
+            },
+          } as never;
+        }
+        if (method === 'POST' && path === '/v1/runs/run_stop/cancel') {
+          cancelledPath = path;
+          releaseRun();
+          return { status: 'cancelled' } as never;
+        }
+        throw new Error(`Unexpected request: ${method} ${path}`);
+      },
+      stream: async path => {
+        expect(path).toBe('/v1/runs/run_stop/events');
+        await runFinished;
+        return new Response(
+          `id: 1\nevent: done\ndata: ${JSON.stringify({ type: 'done', taskId: 'task_stop', status: 'cancelled' })}\n\n`,
+          { status: 200 },
+        );
+      },
+      blob: async () => undefined,
+    };
+    const { result } = renderHook(() => useAgentController({
+      client,
+      route: { view: 'agent', profile: 'prompt-maker' },
+      navigate: vi.fn(),
+      onUnauthorized: vi.fn(),
+    }));
+    await waitFor(() => expect(result.current.profileDetail?.settings.mode).toBe('agent'));
+
+    let send!: Promise<void>;
+    act(() => { send = result.current.send('Run until stopped'); });
+    await send;
+    await waitFor(() => expect(result.current.responding).toBe(true));
+    let stop!: Promise<boolean>;
+    act(() => { stop = result.current.stop(); });
+    expect(await stop).toBe(true);
+
+    expect(cancelledPath).toBe('/v1/runs/run_stop/cancel');
+    await waitFor(() => expect(result.current.responding).toBe(false));
+  });
+
   it('shows a pending new session, then replaces it from the server when the run completes', async () => {
     let releaseStream!: () => void;
     const streamReleased = new Promise<void>(resolve => { releaseStream = resolve; });

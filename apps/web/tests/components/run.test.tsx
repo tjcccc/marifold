@@ -169,6 +169,58 @@ describe('RunCard', () => {
     });
   });
 
+  it('collects multiple selected choices and optional custom text', () => {
+    const onSubmitInput = vi.fn();
+    const run = cardFixture({
+      userInput: {
+        id: 'question_multi',
+        questions: [{
+          id: 'outputs',
+          question: 'Which outputs should I create?',
+          multiple: true,
+          options: [
+            { id: 'report', label: 'Report' },
+            { id: 'slides', label: 'Slides' },
+            { id: 'sheet', label: 'Spreadsheet' },
+          ],
+        }],
+      },
+    });
+    render(
+      <RunCard
+        run={run}
+        onCancel={() => {}}
+        onAnswer={() => {}}
+        onSubmitInput={onSubmitInput}
+        onToggle={() => {}}
+      />,
+    );
+
+    expect(screen.getByText('Select all that apply')).toBeTruthy();
+    const report = screen.getByLabelText('Report') as HTMLInputElement;
+    const slides = screen.getByLabelText('Slides') as HTMLInputElement;
+    expect(report.type).toBe('checkbox');
+    fireEvent.click(report);
+    fireEvent.click(slides);
+
+    const submit = screen.getByRole('button', { name: /Submit answers/ }) as HTMLButtonElement;
+    expect(submit.disabled).toBe(false);
+    const custom = screen.getByLabelText('Custom answer for question 1');
+    fireEvent.focus(custom);
+    expect(submit.disabled).toBe(true);
+    fireEvent.change(custom, { target: { value: 'A plain-text summary' } });
+    expect(submit.disabled).toBe(false);
+    fireEvent.click(submit);
+
+    expect(onSubmitInput).toHaveBeenCalledWith('question_multi', {
+      answers: [{
+        questionId: 'outputs',
+        optionIds: ['report', 'slides'],
+        customText: 'A plain-text summary',
+      }],
+    });
+  });
+
   it('collapses a finished run to the footer and toggles details', () => {
     const onToggle = vi.fn();
     const run = cardFixture({
@@ -190,11 +242,13 @@ describe('InputBar', () => {
     render(
       <InputBar
         steering={false}
+        responding={false}
         think={false}
         onToggleThink={() => {}}
         modelOptions={[]}
         onSelectModel={() => {}}
         onSubmit={onSubmit}
+        onStop={() => {}}
       />,
     );
     const input = screen.getByPlaceholderText('Message the agent…') as HTMLTextAreaElement;
@@ -210,11 +264,13 @@ describe('InputBar', () => {
     render(
       <InputBar
         steering
+        responding
         think={false}
         onToggleThink={() => {}}
         modelOptions={[]}
         onSelectModel={() => {}}
         onSubmit={() => {}}
+        onStop={() => {}}
       />,
     );
     expect(screen.getByPlaceholderText(/guidance is picked up mid-task/)).toBeTruthy();

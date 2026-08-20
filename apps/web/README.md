@@ -77,6 +77,10 @@ is additionally staged by the local service as a read-only file in the private
 run workspace so file tools can inspect it; raw Office bytes are not sent to the
 model.
 
+While the selected conversation is responding, the circular Send control
+becomes Stop. It cancels a live agent run through the service run API or aborts
+a plain chat stream; partial chat text already received remains visible.
+
 Submitted `$skill [args]` turns are resolved by `/v1/skills/resolve` before a
 model run starts. The service expands the selected profile/global skill once;
 the Web UI runs those instructions without prior skill-turn history and keeps
@@ -123,6 +127,11 @@ Completed chat and agent responses show a shared time/token/reasoning/cost
 footer. The service persists those content-free metrics by session and stable
 user-turn ordinal, so the footer survives navigation, page reload, and service
 restart; providers that omit a usage field simply leave that field hidden.
+
+Agent clarification sheets render ordinary questions as radio choices and
+questions marked `multiple` as “select all that apply” checkboxes. A
+multi-select answer may combine suggested choices with “Something else” text;
+the run resumes only after every question has a complete answer.
 
 Office source files are limited to 16 MiB, selected expanded XML to 8 MiB, and
 extracted prompt text to 256 KiB. Embedded images, charts, complex formatting,

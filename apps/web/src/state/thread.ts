@@ -132,6 +132,7 @@ export type ThreadAction =
   | { type: 'chat_reasoning'; text: string }
   | { type: 'chat_chunk'; text: string }
   | { type: 'chat_done'; usage?: AgentUsage; latencyMs?: number; finishedAt?: string }
+  | { type: 'chat_cancelled' }
   | { type: 'chat_error'; message: string }
   | { type: 'run_created'; run: RunRecord }
   | { type: 'run_event'; runId: string; seq: number; event: AgentEvent }
@@ -270,6 +271,12 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
           } : undefined,
         })),
       );
+
+    case 'chat_cancelled':
+      // A disconnected one-shot chat is not persisted by the service. Keep
+      // whatever partial text reached the browser, but do not mark its user
+      // turn as durable or leave the response looking live forever.
+      return updateStreamingAssistant(state, item => ({ ...item, streaming: false }));
 
     case 'chat_error': {
       const cleared = updateStreamingAssistant(state, item => ({ ...item, streaming: false }));

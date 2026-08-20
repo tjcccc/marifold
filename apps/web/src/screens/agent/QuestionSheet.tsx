@@ -1,10 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { UserInputRequest, UserInputSubmission } from '../../api/types';
+import type {
+  UserInputQuestion,
+  UserInputRequest,
+  UserInputSubmission,
+  UserInputSubmissionAnswer,
+} from '../../api/types';
 import styles from './QuestionSheet.module.css';
 
 type DraftAnswer =
   | { kind: 'option'; optionId: string }
-  | { kind: 'custom'; text: string };
+  | { kind: 'custom'; text: string }
+  | { kind: 'multiple'; optionIds: string[]; customText?: string };
 
 export interface QuestionSheetProps {
   request: UserInputRequest;
@@ -20,21 +26,28 @@ export function QuestionSheet({ request, busy, onSubmit }: QuestionSheetProps) {
   useEffect(() => setDrafts({}), [request.id]);
 
   const complete = useMemo(
-    () => request.questions.every(question => {
-      const answer = drafts[question.id];
-      return answer?.kind === 'option' || (answer?.kind === 'custom' && answer.text.trim().length > 0);
-    }),
+    () => request.questions.every(question => isComplete(question, drafts[question.id])),
     [drafts, request.questions],
   );
 
   function submit(): void {
     if (!complete || busy) return;
     onSubmit({
-      answers: request.questions.map(question => {
+      answers: request.questions.map((question): UserInputSubmissionAnswer => {
         const answer = drafts[question.id]!;
-        return answer.kind === 'option'
-          ? { questionId: question.id, optionId: answer.optionId }
-          : { questionId: question.id, customText: answer.text.trim() };
+        if (question.multiple) {
+          if (answer.kind !== 'multiple') throw new Error('Incomplete multi-select answer.');
+          return {
+            questionId: question.id,
+            optionIds: answer.optionIds,
+            ...(answer.customText !== undefined ? { customText: answer.customText.trim() } : {}),
+          };
+        }
+        if (answer.kind === 'option') return { questionId: question.id, optionId: answer.optionId };
+        if (answer.kind === 'custom') {
+          return { questionId: question.id, customText: answer.text.trim() };
+        }
+        throw new Error('Incomplete single-select answer.');
       }),
     });
   }
@@ -57,24 +70,45 @@ export function QuestionSheet({ request, busy, onSubmit }: QuestionSheetProps) {
       <div className={styles.heading}>A few details before I continue</div>
       {request.questions.map((question, questionIndex) => {
         const answer = drafts[question.id];
-        const customSelected = answer?.kind === 'custom';
+        const multipleAnswer = answer?.kind === 'multiple' ? answer : undefined;
+        const customSelected = question.multiple
+          ? multipleAnswer?.customText !== undefined
+          : answer?.kind === 'custom';
         return (
           <fieldset key={question.id} className={styles.question} disabled={busy}>
             <legend className={styles.legend}>
               {question.header ? <span className={styles.header}>{question.header}</span> : null}
               <span>{question.question}</span>
+              {question.multiple ? <span className={styles.multipleHint}>Select all that apply</span> : null}
             </legend>
             <div className={styles.options}>
               {question.options.map(option => (
                 <label key={option.id} className={styles.option}>
                   <input
-                    type="radio"
+                    type={question.multiple ? 'checkbox' : 'radio'}
                     name={`${request.id}-${question.id}`}
-                    checked={answer?.kind === 'option' && answer.optionId === option.id}
-                    onChange={() => setDrafts(current => ({
-                      ...current,
-                      [question.id]: { kind: 'option', optionId: option.id },
-                    }))}
+                    checked={question.multiple
+                      ? multipleAnswer?.optionIds.includes(option.id) ?? false
+                      : answer?.kind === 'option' && answer.optionId === option.id}
+                    onChange={event => {
+                      const checked = event.currentTarget.checked;
+                      setDrafts(current => {
+                        if (!question.multiple) {
+                          return {
+                            ...current,
+                            [question.id]: { kind: 'option', optionId: option.id },
+                          };
+                        }
+                        const previous = asMultiple(current[question.id]);
+                        const optionIds = checked
+                          ? [...previous.optionIds, option.id]
+                          : previous.optionIds.filter(optionId => optionId !== option.id);
+                        return {
+                          ...current,
+                          [question.id]: { ...previous, optionIds },
+                        };
+                      });
+                    }}
                   />
                   <span>
                     <span className={styles.optionLabel}>{option.label}</span>
@@ -84,34 +118,70 @@ export function QuestionSheet({ request, busy, onSubmit }: QuestionSheetProps) {
               ))}
               <label className={`${styles.option} ${styles.customOption}`}>
                 <input
-                  type="radio"
+                  type={question.multiple ? 'checkbox' : 'radio'}
                   name={`${request.id}-${question.id}`}
                   checked={customSelected}
-                  onChange={() => setDrafts(current => ({
-                    ...current,
-                    [question.id]: { kind: 'custom', text: '' },
-                  }))}
+                  onChange={event => {
+                    const checked = event.currentTarget.checked;
+                    setDrafts(current => {
+                      if (!question.multiple) {
+                        return {
+                          ...current,
+                          [question.id]: { kind: 'custom', text: '' },
+                        };
+                      }
+                      const previous = asMultiple(current[question.id]);
+                      return {
+                        ...current,
+                        [question.id]: checked
+                          ? { ...previous, customText: previous.customText ?? '' }
+                          : { kind: 'multiple', optionIds: previous.optionIds },
+                      };
+                    });
+                  }}
                 />
                 <span className={styles.customBody}>
                   <span className={styles.optionLabel}>Something else</span>
                   <input
                     className={styles.customInput}
                     aria-label={`Custom answer for question ${questionIndex + 1}`}
-                    value={customSelected ? answer.text : ''}
+                    value={question.multiple
+                      ? multipleAnswer?.customText ?? ''
+                      : customSelected && answer?.kind === 'custom' ? answer.text : ''}
                     placeholder="Describe your preference"
                     maxLength={2000}
                     onFocus={() => {
                       if (!customSelected) {
-                        setDrafts(current => ({
-                          ...current,
-                          [question.id]: { kind: 'custom', text: '' },
-                        }));
+                        setDrafts(current => {
+                          if (question.multiple) {
+                            const previous = asMultiple(current[question.id]);
+                            return {
+                              ...current,
+                              [question.id]: { ...previous, customText: '' },
+                            };
+                          }
+                          return {
+                            ...current,
+                            [question.id]: { kind: 'custom', text: '' },
+                          };
+                        });
                       }
                     }}
-                    onChange={event => setDrafts(current => ({
-                      ...current,
-                      [question.id]: { kind: 'custom', text: event.target.value },
-                    }))}
+                    onChange={event => {
+                      const text = event.target.value;
+                      setDrafts(current => {
+                        if (question.multiple) {
+                          return {
+                            ...current,
+                            [question.id]: { ...asMultiple(current[question.id]), customText: text },
+                          };
+                        }
+                        return {
+                          ...current,
+                          [question.id]: { kind: 'custom', text },
+                        };
+                      });
+                    }}
                   />
                 </span>
               </label>
@@ -130,4 +200,17 @@ export function QuestionSheet({ request, busy, onSubmit }: QuestionSheetProps) {
       </div>
     </form>
   );
+}
+
+function asMultiple(answer: DraftAnswer | undefined): Extract<DraftAnswer, { kind: 'multiple' }> {
+  return answer?.kind === 'multiple' ? answer : { kind: 'multiple', optionIds: [] };
+}
+
+function isComplete(question: UserInputQuestion, answer: DraftAnswer | undefined): boolean {
+  if (question.multiple) {
+    if (answer?.kind !== 'multiple') return false;
+    if (answer.customText !== undefined && !answer.customText.trim()) return false;
+    return answer.optionIds.length > 0 || answer.customText !== undefined;
+  }
+  return answer?.kind === 'option' || (answer?.kind === 'custom' && answer.text.trim().length > 0);
 }

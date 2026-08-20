@@ -164,6 +164,26 @@ describe('threadReducer', () => {
     expect(state.items[1]).toMatchObject({ kind: 'notice', tone: 'error', text: 'boom' });
   });
 
+  it('keeps partial cancelled chat text without marking the turn durable', () => {
+    const state = reduce(
+      createThreadState(),
+      { type: 'user_message', text: 'Draft an answer' },
+      { type: 'chat_started' },
+      { type: 'chat_chunk', text: 'Partial answer' },
+      { type: 'chat_cancelled' },
+    );
+    expect(state.items[0]).toMatchObject({
+      kind: 'user',
+      text: 'Draft an answer',
+    });
+    expect(state.items[0]).not.toHaveProperty('sessionUserTurnIndex');
+    expect(state.items[1]).toMatchObject({
+      kind: 'assistant',
+      markdown: 'Partial answer',
+      streaming: false,
+    });
+  });
+
   it('groups a full run into a card: plan, tool fold, text, footer', () => {
     const state = reduce(
       createThreadState(),

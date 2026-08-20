@@ -40,6 +40,12 @@
   text-transform: uppercase;
 }
 
+.multipleHint {
+  color: var(--text-3);
+  font-size: 11.5px;
+  font-weight: 500;
+}
+
 .options {
   display: grid;
   gap: 6px;
@@ -59,12 +65,12 @@
   background: var(--surface-2);
 }
 
-.option:has(input[type='radio']:checked) {
+.option:has(> input:checked) {
   border-color: var(--brand-fill);
   background: var(--brand-tint);
 }
 
-.option input[type='radio'] {
+.option > input {
   margin-top: 2px;
   accent-color: var(--brand-fill);
 }

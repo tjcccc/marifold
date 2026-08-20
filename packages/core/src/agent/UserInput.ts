@@ -15,6 +15,8 @@ export interface UserInputQuestion {
   id: string;
   question: string;
   header?: string;
+  /** When true, clients may select more than one option. Defaults to false. */
+  multiple?: boolean;
   options: UserInputOption[];
 }
 
@@ -24,8 +26,9 @@ export interface UserInputRequest {
 }
 
 export type UserInputSubmissionAnswer =
-  | { questionId: string; optionId: string; customText?: never }
-  | { questionId: string; optionId?: never; customText: string };
+  | { questionId: string; optionId: string; optionIds?: never; customText?: never }
+  | { questionId: string; optionId?: never; optionIds: string[]; customText?: string }
+  | { questionId: string; optionId?: never; optionIds?: never; customText: string };
 
 export interface UserInputSubmission {
   answers: UserInputSubmissionAnswer[];
@@ -35,6 +38,7 @@ export interface UserInputAnswer {
   questionId: string;
   value: string;
   optionId?: string;
+  optionIds?: string[];
   customText?: string;
 }
 
@@ -97,6 +101,7 @@ export function parseUserInputRequest(
       id,
       question: boundedString(item.question, `questions[${index}].question`, 500),
       ...optionalBoundedString(item.header, `questions[${index}].header`, 40, 'header'),
+      ...optionalTrue(item.multiple, `questions[${index}].multiple`, 'multiple'),
       options,
     };
   });
@@ -112,7 +117,7 @@ export function normalizeUserInputSubmission(
   const body = record(value, 'submission');
   if (!Array.isArray(body.answers)) throw invalid('answers must be an array.');
   if (body.answers.length !== request.questions.length) {
-    throw invalid('Every question requires exactly one answer before submission.');
+    throw invalid('Every question requires an answer before submission.');
   }
 
   const questions = new Map(request.questions.map(question => [question.id, question]));
@@ -125,6 +130,51 @@ export function normalizeUserInputSubmission(
     if (seen.has(questionId)) throw invalid(`Question '${questionId}' was answered more than once.`);
     seen.add(questionId);
 
+    if (question.multiple) {
+      const hasOptionId = answer.optionId !== undefined;
+      const hasOptionIds = answer.optionIds !== undefined;
+      if (hasOptionId && hasOptionIds) {
+        throw invalid(`Answer '${questionId}' cannot provide both optionId and optionIds.`);
+      }
+      if (hasOptionIds && !Array.isArray(answer.optionIds)) {
+        throw invalid(`Answer '${questionId}'.optionIds must be an array.`);
+      }
+      const optionIds = hasOptionIds
+        ? (answer.optionIds as unknown[]).map((optionId, optionIndex) => identifier(
+          optionId,
+          `answers[${index}].optionIds[${optionIndex}]`,
+        ))
+        : hasOptionId
+          ? [identifier(answer.optionId, `answers[${index}].optionId`)]
+          : [];
+      if (new Set(optionIds).size !== optionIds.length) {
+        throw invalid(`Answer '${questionId}' contains the same option more than once.`);
+      }
+      for (const optionId of optionIds) {
+        if (!question.options.some(option => option.id === optionId)) {
+          throw invalid(`Unknown option '${optionId}' for question '${questionId}'.`);
+        }
+      }
+      const customText = answer.customText === undefined
+        ? undefined
+        : boundedString(
+          answer.customText,
+          `answers[${index}].customText`,
+          MAX_USER_INPUT_CUSTOM_TEXT,
+        );
+      if (optionIds.length === 0 && customText === undefined) {
+        throw invalid(`Answer '${questionId}' must choose at least one option or provide custom text.`);
+      }
+      return {
+        questionId,
+        optionIds,
+        ...(customText !== undefined ? { customText } : {}),
+      };
+    }
+
+    if (answer.optionIds !== undefined) {
+      throw invalid(`Answer '${questionId}' does not allow multiple options.`);
+    }
     const hasOption = typeof answer.optionId === 'string' && answer.optionId.trim().length > 0;
     const hasCustom = typeof answer.customText === 'string' && answer.customText.trim().length > 0;
     if (hasOption === hasCustom) {
@@ -158,6 +208,17 @@ export function resolveUserInputResponse(
     requestId: request.id,
     answers: normalized.answers.map(answer => {
       const question = request.questions.find(item => item.id === answer.questionId)!;
+      if (answer.optionIds) {
+        const labels = answer.optionIds.map(optionId =>
+          question.options.find(item => item.id === optionId)!.label);
+        const values = answer.customText ? [...labels, answer.customText] : labels;
+        return {
+          questionId: question.id,
+          optionIds: answer.optionIds,
+          ...(answer.customText ? { customText: answer.customText } : {}),
+          value: values.join(', '),
+        };
+      }
       if (answer.optionId) {
         const option = question.options.find(item => item.id === answer.optionId)!;
         return { questionId: question.id, optionId: option.id, value: option.label };
@@ -212,4 +273,10 @@ function optionalBoundedString(
 ): Record<string, string> {
   if (value === undefined) return {};
   return { [key]: boundedString(value, label, maxLength) };
+}
+
+function optionalTrue(value: unknown, label: string, key: string): Record<string, true> {
+  if (value === undefined || value === false) return {};
+  if (value !== true) throw invalid(`${label} must be a boolean.`);
+  return { [key]: true };
 }

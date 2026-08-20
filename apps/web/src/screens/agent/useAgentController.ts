@@ -74,6 +74,8 @@ export interface AgentController {
   sessionId?: string;
   thread: ThreadState;
   steeringRun?: string;
+  /** True while the selected conversation has a live chat or agent response. */
+  responding: boolean;
   sending: boolean;
   think: boolean;
   setThink: (on: boolean) => void;
@@ -98,6 +100,7 @@ export interface AgentController {
   setSessionArchived: (id: string, archived: boolean) => Promise<boolean>;
   deleteSession: (id: string) => Promise<boolean>;
   cancel: (runId: string) => Promise<void>;
+  stop: () => Promise<boolean>;
   answer: (runId: string, requestId: string, action: RunApprovalAction) => Promise<void>;
   answerInput: (runId: string, requestId: string, submission: UserInputSubmission) => Promise<void>;
   toggleRun: (runId: string) => void;
@@ -124,6 +127,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
   const [modelOptions, setModelOptions] = useState<string[]>([]);
   const [modelChoice, setModelChoice] = useState<string | undefined>();
   const [sending, setSending] = useState(false);
+  const [chatResponding, setChatResponding] = useState(false);
 
   const [thread, dispatch] = useReducer(threadReducer, undefined, () => createThreadState(route.session));
   const threadRef = useRef(thread);
@@ -142,9 +146,12 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
   const editedRunIdsRef = useRef(new Set<string>());
   const ignoredFinishedRunIdsRef = useRef(new Set<string>());
   const activeChatRef = useRef<{ sessionId: string; controller: AbortController } | undefined>(undefined);
-  const abortActiveChat = useCallback(() => {
-    activeChatRef.current?.controller.abort();
+  const abortActiveChat = useCallback((): boolean => {
+    if (!activeChatRef.current) return false;
+    activeChatRef.current.controller.abort();
     activeChatRef.current = undefined;
+    setChatResponding(false);
+    return true;
   }, []);
   const followers = useMemo(
     () => new RunFollowers(client, dispatch, runId => {
@@ -158,7 +165,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
     [client],
   );
   useEffect(() => () => followers.stopAll(), [followers]);
-  useEffect(() => () => abortActiveChat(), [abortActiveChat]);
+  useEffect(() => () => { abortActiveChat(); }, [abortActiveChat]);
 
   const handleError = useCallback(
     (error: unknown) => {
@@ -666,6 +673,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
         let completed = true;
         const controller = new AbortController();
         activeChatRef.current = { sessionId: sid, controller };
+        setChatResponding(true);
         try {
           for await (const event of streamChat(client, {
             prompt,
@@ -698,11 +706,16 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
           if (controller.signal.aborted) completed = false;
           return completed;
         } catch (error) {
-          dispatch({ type: 'chat_done' });
-          if (!controller.signal.aborted) handleError(error);
+          if (!controller.signal.aborted) {
+            dispatch({ type: 'chat_done' });
+            handleError(error);
+          }
           return false;
         } finally {
-          if (activeChatRef.current?.controller === controller) activeChatRef.current = undefined;
+          if (activeChatRef.current?.controller === controller) {
+            activeChatRef.current = undefined;
+            setChatResponding(false);
+          }
           setSending(false);
           void refreshSessions();
           if (options.replaceUserTurnIndex !== undefined) void loadSession(sid);
@@ -744,6 +757,22 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
     },
     [client, profileName, sessionId, modelChoice, think, profileDetail, followers, navigate, handleError, refreshSessions, loadSession, attachmentDraftKey],
   );
+
+  const stop = useCallback(async (): Promise<boolean> => {
+    if (abortActiveChat()) {
+      dispatch({ type: 'chat_cancelled' });
+      return true;
+    }
+    const running = activeRun(threadRef.current);
+    if (!running) return false;
+    try {
+      await cancelRun(client, running.runId);
+      return true;
+    } catch (error) {
+      handleError(error);
+      return false;
+    }
+  }, [abortActiveChat, client, handleError]);
 
   const runCommand = useCallback(
     async ({ name, args }: { name: string; args: string }) => {
@@ -821,9 +850,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
           break;
         }
         case 'stop': {
-          const active = activeRun(threadRef.current);
-          if (active) await cancelRun(client, active.runId).catch(handleError);
-          else notify('No task is running.');
+          if (!await stop()) notify('No task is running.');
           break;
         }
         case 'remember': {
@@ -881,7 +908,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
           notify(`Unknown command: /${name}`, 'warn');
       }
     },
-    [client, profileName, profileDetail, modelChoice, think, sessionId, newSession, setThink, setModelChoice, setProfileDetail, sendMessage, refreshSessions, handleError],
+    [client, profileName, profileDetail, modelChoice, think, sessionId, newSession, setThink, setModelChoice, setProfileDetail, sendMessage, refreshSessions, handleError, stop],
   );
 
   // `/command` is a deterministic web action, handled before steering so e.g.
@@ -1034,6 +1061,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
     sessionId,
     thread,
     steeringRun: activeRun(thread)?.runId,
+    responding: chatResponding || activeRun(thread) !== undefined,
     sending,
     think,
     setThink,
@@ -1056,6 +1084,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
     setSessionArchived,
     deleteSession,
     cancel,
+    stop,
     answer,
     answerInput,
     toggleRun,

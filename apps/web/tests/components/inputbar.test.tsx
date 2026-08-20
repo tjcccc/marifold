@@ -18,12 +18,14 @@ function renderBar(onSubmit = vi.fn()) {
   render(
     <InputBar
       steering={false}
+      responding={false}
       think={false}
       onToggleThink={() => {}}
       modelOptions={[]}
       onSelectModel={() => {}}
       skills={skills}
       onSubmit={onSubmit}
+      onStop={() => {}}
     />,
   );
   return { onSubmit, textarea: screen.getByPlaceholderText('Message the agent…') as HTMLTextAreaElement };
@@ -33,11 +35,13 @@ describe('InputBar $-autocomplete', () => {
   it('restores unsent text independently for each session key', () => {
     const base = {
       steering: false,
+      responding: false,
       think: false,
       onToggleThink: vi.fn(),
       modelOptions: [] as string[],
       onSelectModel: vi.fn(),
       onSubmit: vi.fn(),
+      onStop: vi.fn(),
     };
     const view = render(<InputBar {...base} draftKey="writer:one" />);
     let textarea = screen.getByPlaceholderText('Message the agent…') as HTMLTextAreaElement;
@@ -161,6 +165,29 @@ describe('InputBar $-autocomplete', () => {
 });
 
 describe('InputBar composer interactions', () => {
+  it('replaces Send with an always-available Stop response button while responding', () => {
+    const onSubmit = vi.fn();
+    const onStop = vi.fn();
+    render(
+      <InputBar
+        steering={false}
+        responding
+        disabled
+        think={false}
+        onToggleThink={() => {}}
+        modelOptions={[]}
+        onSelectModel={() => {}}
+        onSubmit={onSubmit}
+        onStop={onStop}
+      />,
+    );
+
+    expect(screen.queryByRole('button', { name: 'Send' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Stop response' }));
+    expect(onStop).toHaveBeenCalledOnce();
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
   it('lets Enter commit an IME composition without submitting it', () => {
     const { textarea, onSubmit } = renderBar();
     fireEvent.focus(textarea);
@@ -179,11 +206,13 @@ describe('InputBar composer interactions', () => {
     render(
       <InputBar
         steering={false}
+        responding={false}
         think={false}
         onToggleThink={() => {}}
         modelOptions={[]}
         onSelectModel={() => {}}
         onSubmit={() => {}}
+        onStop={() => {}}
         attachments={[
           { kind: 'image', name: 'first.png', size: 3, data: 'AAA', mediaType: 'image/png' },
           { kind: 'text', name: 'notes.txt', size: 4, content: 'note' },
@@ -205,11 +234,13 @@ describe('InputBar composer interactions', () => {
     const { container } = render(
       <InputBar
         steering={false}
+        responding={false}
         think={false}
         onToggleThink={() => {}}
         modelOptions={[]}
         onSelectModel={() => {}}
         onSubmit={() => {}}
+        onStop={() => {}}
         attachments={[
           {
             kind: 'text',

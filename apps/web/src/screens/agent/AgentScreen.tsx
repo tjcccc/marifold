@@ -236,6 +236,7 @@ export function AgentScreen(props: AgentScreenProps) {
             <InputBar
               draftKey={`${props.connectionId}:${controller.profileName}:${controller.sessionId ?? 'new'}`}
               steering={controller.steeringRun !== undefined}
+              responding={controller.responding}
               disabled={controller.sending}
               think={controller.think}
               onToggleThink={() => controller.setThink(!controller.think)}
@@ -250,6 +251,7 @@ export function AgentScreen(props: AgentScreenProps) {
                 setScrollToBottomRequest(request => request + 1);
                 void controller.send(text);
               }}
+              onStop={() => void controller.stop()}
             />
           </>
         ) : (

@@ -205,23 +205,44 @@
   cursor: pointer;
 }
 
-.send {
+.send,
+.stop {
   width: 30px;
   height: 30px;
   border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.send {
   background: var(--brand-fill);
   color: var(--on-brand);
   font-size: 15px;
   font-weight: 700;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
   box-shadow: 0 1px 3px var(--brand-shadow);
 }
 
 .send:disabled {
   opacity: 0.45;
   cursor: default;
+}
+
+.stop {
+  background: var(--text);
+  color: var(--surface);
+  box-shadow: var(--shadow-card);
+}
+
+.stop:hover {
+  opacity: 0.82;
+}
+
+.stopIcon {
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  background: currentColor;
 }
 
 .attach {

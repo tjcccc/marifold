@@ -147,13 +147,15 @@ In agent mode, the model may call `ask_user` when essential information is
 missing and a reasonable assumption could materially change the result. It is
 not a required phase: ordinary tasks continue without a prompt. One checkpoint
 may contain up to three questions with two to four suggested choices each,
-plus a free-text “Something else” answer supplied by the client.
+plus a free-text “Something else” answer supplied by the client. Questions are
+single-select unless the model marks them “select all that apply.”
 
 The TUI shows every question in one keyboard modal. Use Up/Down to choose,
 Left/Right to move between questions, Enter to select or edit the custom answer,
-then press `s` once every question is complete. Esc cancels the run. This is
-separate from tool approval: answering a question never grants filesystem,
-shell, network, or delegation permission.
+and Space or Enter to toggle choices in a multi-select question. Then press `s`
+once every question is complete. Esc cancels the run. This is separate from
+tool approval: answering a question never grants filesystem, shell, network,
+or delegation permission.
 
 ## Permissions
 

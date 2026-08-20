@@ -2,13 +2,30 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
-## 2026-08-20 — fx-inspired reliability groundwork
+## 2026-08-20 — v0.55.0 — Web response control and multi-select questions
 
+- Added a ChatGPT-style Stop control to the Web composer while either a plain
+  chat stream or agent run is responding. Agent mode uses the existing run
+  cancellation route; chat mode aborts the SSE request and keeps received
+  partial text without misclassifying the cancelled exchange as durable.
+- Added Web component, reducer, and controller regressions for both cancellation
+  paths.
+- Extended `ask_user` with opt-in `multiple: true` questions. The core validates
+  and normalizes several selected option ids plus optional custom text, while
+  preserving single-select defaults and accepting a legacy single `optionId`
+  for a multi-select question.
+- Added checkbox interaction to the Web question sheet and keyboard toggle
+  interaction to the TUI modal, with core, service, Web, and TUI regressions and
+  updated API/client documentation.
+- Verified the full workspace typecheck/build/test gate (614 tests: core 306,
+  service 55, TUI 59, CLI 14, Web 180).
+- Version 0.54.0 → 0.55.0 across all packages + CLI `.version`.
 - Aligned the live agent contract, README, architecture/service documentation, TODOs, and `.projnavi` notes with the post-v0.24.2 runtime: observable checks run through ordinary tools inside the loop, with no separate model self-grading call. The legacy `AgentEvent.verification` variant remains deprecated compatibility surface, while the generic TaskStore event name is reserved for explicit evidence from future producers.
 - Added focused-check guidance to ordinary agent context and standardized every built-in tool description on explicit “When to use” / “When NOT to use” affordances without changing permission or execution policy.
 - Removed stale scripted verification responses, added a regression covering all seven built-in tool descriptions, and tightened the optional provider-backed agent eval around direct-answer and dedicated file-tool selection.
 - Recorded the deferred context, Workflow, external-agent/ACP, MCP, checkpoint, and durable-process work in `TODO.md` with product triggers, ownership boundaries, and explicit non-goals. Marifold remains a lightweight local-first personal AI workspace, not a heavyweight coding agent or general agent SDK.
 - Verified `scripts/agent-eval.mjs` syntax plus the full workspace typecheck/build/test gate (607 tests: core 305, service 55, TUI 58, CLI 14, Web 175). The optional live-provider agent eval was not run because it requires a configured model.
+- Released as v0.55.0.
 
 ## 2026-08-10 — v0.54.0 — Optional agent clarification questions
 

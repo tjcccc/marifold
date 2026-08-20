@@ -34,9 +34,11 @@ import type {
   TaskStatus,
   TaskStepStatus,
   ToolKind,
+  UserInputQuestion,
   UserInputRequest,
   UserInputResponse,
   UserInputSubmission,
+  UserInputSubmissionAnswer,
 } from '@marifold/core';
 
 export type {
@@ -69,9 +71,11 @@ export type {
   TaskStatus,
   TaskStepStatus,
   ToolKind,
+  UserInputQuestion,
   UserInputRequest,
   UserInputResponse,
   UserInputSubmission,
+  UserInputSubmissionAnswer,
 };
 
 /** The service's error envelope payload. */

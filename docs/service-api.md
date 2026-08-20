@@ -377,10 +377,12 @@ core — the same contract the TUI renders):
 { "type": "approval_decision", "requestId": "call_0", "approved": true, "source": "user", "reason": "..." }
 { "type": "user_input_request", "request": { "id": "call_1", "questions": [
   { "id": "style", "header": "Visual style", "question": "What style do you prefer?",
+    "multiple": true,
     "options": [{ "id": "apple", "label": "Apple", "description": "Quiet and restrained" },
                 { "id": "material", "label": "Material" }] }] } }
 { "type": "user_input_response", "response": { "requestId": "call_1",
-  "answers": [{ "questionId": "style", "optionId": "apple", "value": "Apple" }] } }
+  "answers": [{ "questionId": "style", "optionIds": ["apple", "material"],
+                "value": "Apple, Material" }] } }
 { "type": "tool_result", "callId": "call_0", "tool": "write_file", "summary": "wrote 12B to /tmp/x", "isError": false }
 { "type": "error", "code": "...", "message": "..." }
 { "type": "done",  "taskId": "task_x", "status": "completed", "summary": "...",
@@ -406,25 +408,28 @@ agent instructions reserve it for essential missing information that could
 materially change the result; otherwise the model should proceed with a
 reasonable assumption. A request contains one to three questions, each with
 two to four suggested options. Clients should also offer a free-text custom
-answer.
+answer. Questions are single-select by default; `multiple: true` means the
+choices may be combined and clients should render checkboxes.
 
 1. The stream emits `user_input_request`; the run blocks and the same request
    appears in `RunRecord.pendingUserInputs`.
-2. The client collects exactly one answer for every question, then sends one
-   request:
+2. The client collects one complete answer object for every question, then
+   sends one request:
 
    ```json
    { "answers": [
-     { "questionId": "style", "optionId": "apple" },
+     { "questionId": "style", "optionIds": ["apple", "material"] },
      { "questionId": "notes", "customText": "Use a warm gray background" }
    ] }
    ```
 
-   to `POST /v1/runs/:id/inputs/:requestId`. Option ids and question ids are
-   checked against the pending request; missing, duplicate, or forged answers
-   return `400 AGENT_TOOL_INVALID` without clearing the prompt. A valid answer
-   returns `{ ok, requestId, accepted: true }`. Unknown, expired, or already
-   answered requests return `404 USER_INPUT_NOT_FOUND`.
+   to `POST /v1/runs/:id/inputs/:requestId`. Single-select questions use
+   `optionId`; multi-select questions use `optionIds` and may also include
+   `customText`. Option ids and question ids are checked against the pending
+   request; missing, duplicate, or forged answers return
+   `400 AGENT_TOOL_INVALID` without clearing the prompt. A valid answer returns
+   `{ ok, requestId, accepted: true }`. Unknown, expired, or already answered
+   requests return `404 USER_INPUT_NOT_FOUND`.
 3. The stream emits `user_input_response`, followed by the successful
    `ask_user` `tool_result`, and the model continues the same run. The response
    event contains normalized display values so all attached clients converge.

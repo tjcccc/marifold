@@ -17,7 +17,7 @@ export class AskUserTool implements UserInputAgentTool {
       'Pause and ask the user for essential missing information using one compact set of choices.',
       'When to use: a concrete decision blocks safe or correct progress and cannot be discovered from local context or tools.',
       'When NOT to use: discoverable facts, minor preferences, confirmation of a reasonable assumption, or any question that does not block progress.',
-      'Batch all currently known questions into one call. Do not add an Other option because the UI provides free-text automatically.',
+      'Batch all currently known questions into one call. Set multiple to true only when choices may be combined. Do not add an Other option because the UI provides free-text automatically.',
       'Call this tool by itself, without other tool calls in the same response.',
     ].join(' '),
     parameters: {
@@ -33,6 +33,10 @@ export class AskUserTool implements UserInputAgentTool {
               id: { type: 'string', description: 'Stable short id, such as style or output_format.' },
               header: { type: 'string', description: 'Optional short category label.' },
               question: { type: 'string', description: 'The specific decision the user must make.' },
+              multiple: {
+                type: 'boolean',
+                description: 'True when the user may select more than one option; defaults to false.',
+              },
               options: {
                 type: 'array',
                 minItems: 2,
