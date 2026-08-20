@@ -6,15 +6,15 @@
       "mapsTo": ["AgentEvent", "AgentRunner"],
       "topics": ["agent", "events", "tui", "contract"],
       "paths": ["packages/core/src/agent/AgentEvents.ts", "packages/core/src/agent/AgentRunner.ts", "packages/cli/src/commands/agent.ts"],
-      "notes": "The renderer-agnostic event union every client consumes. Start here for any TUI/Web/Apple rendering work."
+      "notes": "The renderer-agnostic event union consumed by CLI, TUI, Web, service SSE, and future clients. The legacy verification variant is deprecated and not emitted by the current runner."
     },
     {
       "term": "agent loop",
-      "aliases": ["agent runner", "marifold agent", "plan tool loop verification"],
+      "aliases": ["agent runner", "marifold agent", "optional plan tool loop outcome"],
       "mapsTo": ["AgentRunner"],
       "topics": ["agent", "loop", "tools", "tasks"],
       "paths": ["packages/core/src/agent/AgentRunner.ts", "packages/cli/src/commands/agent.ts"],
-      "notes": "plan -> tool loop -> verification -> summary over TaskStore."
+      "notes": "Optional plan -> approval-aware tool loop -> final outcome over TaskStore; focused checks use ordinary tools and no separate model self-grade."
     },
     {
       "term": "approval policy",

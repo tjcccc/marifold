@@ -480,7 +480,7 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
         : [body];
       // Persist the invocation the user typed (e.g. `$make-… #photo1 …`) as the
       // resumable user turn, not the agent's internal objective. `lean` skips the
-      // plan/verify phases and verbose framing — a skill is a single transform,
+      // optional planning and verbose framing — a skill is a single transform,
       // so that's pure token overhead.
       void runAgent(prompt, { instructions, userTurn: displayText, lean: true, ...(forcePlan ? { forcePlan: true } : {}) });
     }

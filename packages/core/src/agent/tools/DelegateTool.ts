@@ -26,7 +26,11 @@ export class DelegateTool implements AgentTool {
   readonly kind = 'delegate' as const;
   readonly definition = {
     name: 'ask_profile',
-    description: 'Send a one-shot prompt to another Marifold profile (which may use a different model) and return its reply. Use for subtasks that fit a specialized profile, such as translation.',
+    description: [
+      'Send a one-shot prompt to another Marifold profile, which may use a different model, and return its reply without tools.',
+      'When to use: a known specialized profile is materially better suited to a bounded subtask, such as translation.',
+      'When NOT to use: ordinary work the active profile can complete, tool-using or multi-step delegation, implicit profile discovery, or recursive delegation.',
+    ].join(' '),
     parameters: {
       type: 'object',
       properties: {

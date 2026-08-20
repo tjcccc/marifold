@@ -14,6 +14,8 @@ export class ShellExecTool implements AgentTool {
     name: 'shell_exec',
     description: [
       'Run a shell command in the working directory and return stdout/stderr. Commands time out after 60 seconds.',
+      'When to use: run a focused test, build, formatter, program, or filesystem/process operation that dedicated tools cannot perform.',
+      'When NOT to use: read a known text file, write exact file content, access the network, install Python packages, or demonstrate unnecessary command execution.',
       'The process sandbox can write only the working directory, configured trusted folders, and private run directories—even after the user approves execution.',
       'For an explicit output file elsewhere, use write_file instead of shell redirection.',
     ].join(' '),

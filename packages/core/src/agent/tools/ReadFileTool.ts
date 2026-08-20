@@ -19,7 +19,11 @@ export class ReadFileTool implements AgentTool {
   readonly kind = 'read' as const;
   readonly definition = {
     name: 'read_file',
-    description: 'Read a local text file. Returns the file content, truncated when very large.',
+    description: [
+      'Read one local UTF-8 text file with bounded output, or list one known directory level.',
+      'When to use: inspect an exact path, read source or instructions before acting, or confirm a written file.',
+      'When NOT to use: broad content search, binary-file extraction, facts already available in context, or speculative filesystem exploration.',
+    ].join(' '),
     parameters: {
       type: 'object',
       properties: {

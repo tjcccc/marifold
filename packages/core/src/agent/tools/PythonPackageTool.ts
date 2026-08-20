@@ -23,7 +23,9 @@ export class PythonPackageTool implements AgentTool {
     name: 'python_package_install',
     description: [
       'Install Python registry packages into this run’s disposable uv environment.',
-      'Use this instead of pip/uv inside shell_exec. URLs, Git sources, paths, flags, and global installs are refused.',
+      'When to use: a required Python import is missing and installing a named PyPI dependency is necessary to complete the objective.',
+      'When NOT to use: speculative dependencies, packages already available, non-Python tools, URLs, Git sources, paths, flags, or global installs.',
+      'Use this instead of pip/uv inside shell_exec.',
     ].join(' '),
     parameters: {
       type: 'object',

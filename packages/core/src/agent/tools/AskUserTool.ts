@@ -15,7 +15,8 @@ export class AskUserTool implements UserInputAgentTool {
     name: 'ask_user',
     description: [
       'Pause and ask the user for essential missing information using one compact set of choices.',
-      'Use only when you cannot proceed safely or correctly without the answer; otherwise make a reasonable assumption and continue.',
+      'When to use: a concrete decision blocks safe or correct progress and cannot be discovered from local context or tools.',
+      'When NOT to use: discoverable facts, minor preferences, confirmation of a reasonable assumption, or any question that does not block progress.',
       'Batch all currently known questions into one call. Do not add an Other option because the UI provides free-text automatically.',
       'Call this tool by itself, without other tool calls in the same response.',
     ].join(' '),

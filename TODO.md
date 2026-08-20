@@ -12,6 +12,60 @@
   - `useSkills(...)` layered on `useRuns` — *owns* `pendingSkill`; returns `runSkill / fillSkillVariable / startSkillRun`.
   - Before committing the extraction, extend `AppRuns.test.tsx` to also cover: a skill run routes through `startSkillRun`, and an approval prompt resolves (fake runner calls `approvalHandler`, then drive the modal key). Only true terminal fidelity (the `<Static>` repaint of single-line tool rows, resize reflow, live streaming) still needs a human eyeball — that's Tier 3, out of scope for the refactor's correctness.
 
+## fx-inspired reliability backlog (reviewed 2026-08-20)
+
+These items borrow bounded contracts and lifecycle discipline from `fx` without
+changing Marifold's product direction. Marifold remains a local-first personal
+AI workspace and coordinator, not a heavyweight coding agent or general agent
+SDK.
+
+### Design next
+
+- **Minimal context provenance and omission tracing.** Centralize the duplicated
+  chat/agent request assembly and retain a stable source id, target Priest lane,
+  lifetime, and omission reason before projecting into today's `context`,
+  `memory`, `userContext`, session, image, and `toolExchange` fields. Marifold
+  owns product source/trust policy; `@priest-ai/core` continues to own provider
+  message projection, token budgeting, and any provider cache semantics. Start
+  only with tracing and deterministic projection—do not create a competing
+  generic prompt/message model.
+- **Workflow run and artifact contracts.** Continue the constrained design in
+  `docs/workflow-plan.md`: durable node status, typed inputs/outputs, artifacts,
+  approvals, cancellation, and rerun. Let the first Workflow implementation
+  reveal which runtime ports and checkpoint boundaries are actually reusable.
+
+### Design with the first real consumer
+
+- **External-agent aliases.** Define a capability-negotiated Marifold contract
+  for session creation/attachment, prompts, semantic events, permission requests,
+  cancellation, close, and result/artifact handoff. Use ACP v1 as one adapter
+  when the first real external coding agent supports it; do not make ACP the
+  internal run model or force external events into `AgentEvent` losslessly.
+- **MCP integration.** Add MCP only for a concrete App or Workflow. Keep server
+  transport/auth/discovery/lifecycle separate from execution; adapt an explicitly
+  selected MCP tool through `ToolRegistry`, enrich effect metadata beyond the
+  current `ToolKind`, lazily advertise schemas, and fail closed on unknown effects.
+
+### Research until a product trigger exists
+
+- **Recoverable execution checkpoints.** Keep conversation history, TaskStore
+  activity, live RunRegistry state, and execution recovery separate. Introduce a
+  versioned, execution-kind-specific checkpoint only when Workflow nodes,
+  external-agent reattachment, or measured interrupted native runs require it.
+- **Durable process sessions.** Preserve `shell_exec` as bounded foreground
+  execution. Design a service-owned process resource only when a Workflow,
+  external-agent CLI, or terminal App needs long-lived input/output. Require an
+  owning run/node, immutable capability snapshot, quotas, explicit close, cleanup,
+  and backend-specific restart guarantees.
+- **ACP v2 and remote transports.** Track the draft and HTTP/WebSocket transport
+  work, but keep the first adapter on stable local ACP v1 semantics.
+
+### Non-goals
+
+- No Zig rewrite, binary-size program, Unix-shell-centered product, browser-local
+  full agent runtime, public embeddable Marifold SDK, universal Agent Host callback
+  table, full durable subagent manager, or copied `fx` sandbox defaults.
+
 ## Current Plan
 
 - v0.10.0: local service API plus task/session foundation. Done.
@@ -55,7 +109,7 @@
 ## Completed in v0.11.0
 
 - Upgraded `@priest-ai/core` to 2.4.0: native tool calling (caller-executes contract), `runWithTools` loop helper, `streamEvents` structured streaming, AbortSignal cancellation, and ImageInput parity — with spec docs synced to the priest repository (Python implementation sync pending).
-- Added `packages/core/src/agent`: AgentRunner (plan → tool loop → verification → summary over TaskStore), renderer-agnostic AgentEvent stream, ToolRegistry, and approval policy.
+- Added `packages/core/src/agent`: AgentRunner (plan → tool loop → verification → summary over TaskStore at release time), renderer-agnostic AgentEvent stream, ToolRegistry, and approval policy. The separate self-grading verification call was removed in v0.24.2; current checks run through ordinary tools.
 - Added built-in tools: `read_file`, `write_file` (workspace jail with escalation), `shell_exec`, and `ask_profile` delegation.
 - Added control-block tool fallback for models without native tool support, with automatic switching in `auto` mode.
 - Added the optional `[agent]` / `[agent.approval]` config section with config round-tripping.
@@ -84,9 +138,9 @@
 ## Future Agent-App Core Features
 
 - Local service API expansion: backup/import routes where practical, client contract docs, generated clients, cancellation, reconnect/resume behavior, and service hardening.
-- Ephemeral task memory expansion: richer observations, decisions, blockers, verification, compaction, and task-to-memory promotion rules for future agent loops.
+- Ephemeral task memory expansion: richer observations, decisions, blockers, explicit check evidence, compaction, and task-to-memory promotion rules for future agent loops.
 - Task/session integration: stronger links between chat sessions, service requests, and task state without making task memory durable profile memory by default.
-- Basic CLI agent loop: narrow file/shell/search capabilities with explicit approval policy, using task state for objective, plan, progress, observations, and verification.
+- Agent-loop evidence: retain bounded observations from focused checks without adding a separate model self-grade or replaying raw tool framing into conversation history.
 - Memory expansion: workspace/project scopes, used-memory tracing, semantic retrieval, memory edit UI, optional encryption, and richer redaction.
 - Web search: future `/search <query>` chat command plus model-requested search hooks.
 - Image paste/upload: terminal image attachment workflow and provider request plumbing.
@@ -108,7 +162,7 @@
 - Memory promotion: explicit rules and UI/API controls for promoting stable task discoveries into durable profile or workspace memory, including evidence, confidence, redaction, and user deletion.
 - Memory retrieval upgrades: workspace/project scopes, semantic retrieval, used-memory tracing, conflict review, background consolidation, external-context gating, secret redaction, optional encryption, and backup/restore compatibility.
 - Agent permissions: approval-aware policies for filesystem, shell, network, browser, external agents, and future tool calls, with clear defaults for CLI, Web UI, macOS, and iOS clients.
-- Agent execution controls: pause, resume, cancel, retry, continue, checkpoint restore, task export/import, failure summaries, and verification status.
+- Agent execution controls: pause, resume, cancel, retry, continue, checkpoint restore, task export/import, failure summaries, and explicit evidence/check status.
 - Tool-result management: structured observations, large-output summarization, artifact references, sensitive-output filtering, and a retention policy for raw logs.
 - External-agent aliases: Codex and Claude Code wrappers, capability metadata, handoff summaries, result import, and write-conflict safeguards.
 - Subagent/delegation model: only after the basic agent loop is stable; use summary-only returns, clear ownership boundaries, and conservative write coordination.

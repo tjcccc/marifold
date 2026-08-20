@@ -57,7 +57,8 @@ describe('ask_user input contract', () => {
 
   it('describes optional use and batches questions in the tool contract', () => {
     const tool = new AskUserTool();
-    expect(tool.definition.description).toContain('Use only when');
+    expect(tool.definition.description).toContain('When to use:');
+    expect(tool.definition.description).toContain('When NOT to use:');
     expect(tool.definition.description).toContain('Batch');
     expect(tool.summarizeCall(input)).toBe('ask the user 1 clarification question');
   });

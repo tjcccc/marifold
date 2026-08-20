@@ -2,10 +2,12 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
+import { AskUserTool } from '../src/agent/tools/AskUserTool';
 import { DelegateTool } from '../src/agent/tools/DelegateTool';
 import { PythonPackageTool } from '../src/agent/tools/PythonPackageTool';
 import { ReadFileTool } from '../src/agent/tools/ReadFileTool';
 import { ShellExecTool } from '../src/agent/tools/ShellExecTool';
+import { WebSearchTool } from '../src/agent/tools/WebSearchTool';
 import { isInsideWorkspace, WriteFileTool } from '../src/agent/tools/WriteFileTool';
 import { createRunWorkspace } from '../src/agent/RunWorkspace';
 import { capToolOutput, ToolExecutionContext, ToolRegistry } from '../src/agent/ToolRegistry';
@@ -68,6 +70,26 @@ describe('ToolRegistry', () => {
     expect(out).toContain('TAIL'); // the end survives, unlike head-only truncation
     expect(out).toContain('truncated');
     expect(out.length).toBeLessThan(content.length);
+  });
+
+  it('gives every built-in tool explicit positive and negative affordances', () => {
+    const tools = [
+      new AskUserTool(),
+      new ReadFileTool(),
+      new WriteFileTool(),
+      new ShellExecTool(),
+      new PythonPackageTool(),
+      new WebSearchTool({ search: async () => [] }),
+      new DelegateTool({
+        ask: async () => ({ ok: true, text: '' }),
+        listProfileNames: () => [],
+      }),
+    ];
+
+    for (const tool of tools) {
+      expect(tool.definition.description, tool.definition.name).toContain('When to use:');
+      expect(tool.definition.description, tool.definition.name).toContain('When NOT to use:');
+    }
   });
 });
 

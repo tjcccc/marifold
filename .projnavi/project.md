@@ -21,9 +21,9 @@ Authoritative prose docs (read these first for design, don't restate them here):
 
 ## Cross-cutting contracts (highest-value to know before editing)
 
-- **`AgentEvent` union** (`packages/core/src/agent/AgentEvents.ts`) — the renderer-agnostic event stream every future client (CLI today; TUI/Web/Apple later) consumes. Change it carefully.
+- **`AgentEvent` union** (`packages/core/src/agent/AgentEvents.ts`) — the renderer-agnostic event stream consumed by CLI, TUI, Web, service SSE, and future clients. Change it carefully; `verification` is deprecated compatibility surface, not a current runner phase.
 - **priest tool-calling boundary** — the SDK transports tool calls; marifold executes them. Tools live in `packages/core/src/agent/tools/`, registered via `ToolRegistry`.
-- **approval seam** — `ApprovalHandler` callback (`packages/core/src/agent/ApprovalPolicy.ts`); CLI implements it with a readline prompt, the TUI will bring its own.
+- **approval seam** — `ApprovalHandler` callback (`packages/core/src/agent/ApprovalPolicy.ts`); CLI, TUI, Web/service, and Telegram provide their own interaction surfaces.
 - **memory pipeline** — chat runs apply memory control blocks; agent runs strip and discard them. See `packages/core/src/memory/MemoryControls.ts`.
 
 ## Useful queries

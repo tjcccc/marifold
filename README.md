@@ -39,7 +39,7 @@ For product direction and future scope, see [docs/vision.md](docs/vision.md) and
 - Base64/URL image payloads on the service `/v1/ask` route.
 - ChatGPT OAuth token refresh before provider requests, mirroring the GitHub Copilot refresh flow.
 - Approval-aware basic agent loop through `marifold agent "<objective>"`.
-- Agent phases: model-generated plan, tool loop, verification, and task summary, all persisted as ephemeral task state.
+- Agent execution: optional model-generated plan, approval-aware tool loop, focused checks through normal tools, and a task summary persisted as ephemeral task state. There is no separate model self-grading pass.
 - Native provider tool calling via `@priest-ai/core` 3.0 for Ollama, OpenAI-compatible Responses (including the GitHub Copilot path), and Anthropic providers. Neutral reasoning configuration, safe provider summaries, opaque multi-turn reasoning continuity, and cached/reasoning token usage are preserved across chat and agent tool loops.
 - Automatic control-block tool fallback (`<tool_call>` prompt blocks) for models without native tool support, plus `--tool-mode auto|native|control-block`.
 - Built-in agent tools: `read_file`, `write_file`, isolated `shell_exec`, per-run `python_package_install`, `ask_profile` (one-shot delegation to another profile/model), and optional `ask_user` clarification checkpoints. The agent is instructed to ask only when essential information is missing; otherwise it proceeds with reasonable assumptions.
@@ -450,11 +450,11 @@ Each agent run creates `~/.marifold/runs/<run-id>/` with isolated runtime-state,
 
 ## Agent
 
-`marifold agent "<objective>"` runs a basic agent loop: the model produces a short plan, iterates with tools (file read/write, shell, profile delegation), verifies the outcome against the objective, and writes a summary. Progress persists as ephemeral task state under `[paths].tasks_dir` — inspectable via the task service routes — and is never promoted into profile memory.
+`marifold agent "<objective>"` runs a basic agent loop: the model optionally produces a short plan, iterates with tools (file read/write, shell, profile delegation), performs focused observable checks through those same tools when the task needs them, and writes a summary. It does not make a separate self-grading model call. Progress persists as ephemeral task state under `[paths].tasks_dir` — inspectable via the task service routes — and is never promoted into profile memory.
 
 The `ask_profile` tool lets the agent delegate a one-shot subtask to another profile (and that profile's provider/model), which is Marifold's minimal form of multi-model orchestration. Delegated requests are plain asks without tools, so delegation depth is structurally one.
 
-Cancel a run with Ctrl+C; the task is marked `cancelled`. Runs stopped at the iteration cap are marked `failed`, and runs whose verification does not confirm the objective are marked `blocked` with a suggested next action.
+Cancel a run with Ctrl+C; the task is marked `cancelled`. Runs stopped at the iteration cap are marked `failed`. Tool denials and failed checks are returned to the model inside the normal loop so it can adapt or report the unresolved limitation.
 
 ## Schedules
 

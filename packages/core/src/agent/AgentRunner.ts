@@ -63,8 +63,8 @@ export interface AgentRunOptions {
    * invocation). Defaults to `objective` when omitted. */
   userTurn?: string;
   /** Lean run (e.g. a skill): keep tools (so it can read bundled files) but skip
-   * the plan and verify phases and the verbose agent framing, and ask for only
-   * the final output. Cuts token cost sharply without changing the result. */
+   * the optional planning pass and verbose agent framing, and ask for only the
+   * final output. Cuts token cost sharply without changing the result. */
   lean?: boolean;
   /** Force a planning pass before the loop. Off by default (adaptive: the model
    * plans inline only when the task warrants it). The TUI's `/steps` sets this
@@ -164,11 +164,12 @@ interface LoopState {
 }
 
 /**
- * Approval-aware agent loop. Plans, iterates tool calls against the
- * ToolRegistry, verifies, and summarizes — persisting progress into the
- * ephemeral TaskStore. Task state is never promoted into profile memory, and
- * the chat memory pipeline is bypassed entirely: hidden memory control blocks
- * in model output are stripped and their payloads discarded.
+ * Approval-aware agent loop. Optionally plans, iterates tool calls against the
+ * ToolRegistry, and records the final outcome in the ephemeral TaskStore.
+ * Observable checks run through ordinary tools inside the loop; there is no
+ * separate model self-grading phase. Task state is never promoted into profile
+ * memory, and the chat memory pipeline is bypassed entirely: hidden memory
+ * control blocks in model output are stripped and their payloads discarded.
  *
  * Events are delivered as an AsyncGenerator so renderers get backpressure and
  * cancellation for free. v0.11 emits one text event per model turn; a future
@@ -198,7 +199,7 @@ export class AgentRunner {
       };
     }
     const { engine: rawEngine, config } = await this.deps.prepareEngine(settings);
-    // Tally token usage across every model call (plan, loop turns, verify).
+    // Tally token usage across every model call (optional plan + loop turns).
     const usage: AgentUsage = {};
     const engine = withUsageTally(rawEngine, usage);
     const cwd = options.cwd ?? process.cwd();
@@ -733,6 +734,7 @@ export class AgentRunner {
     const context = [
       'You are running as the Marifold agent. Stay focused on the stated objective and keep replies concise.',
       'Prefer answering directly. Reach for a tool only when the objective cannot be completed from your own knowledge — never use a tool just to demonstrate one.',
+      'After changing files or producing an observable result, use the narrowest relevant tool for a focused check before claiming success. Report the evidence you actually observed; do not invent results or perform a separate self-grade.',
       workspaceContext,
     ];
     // Skill instructions are authoritative for this run — lead with them.

@@ -4,8 +4,8 @@ import { ApprovalRequest } from './ApprovalPolicy';
 import type { AgentToolKind } from './ToolRegistry';
 import type { UserInputRequest, UserInputResponse } from './UserInput';
 
-/** Token usage accumulated over an agent run's model calls (plan, loop turns,
- * verification), as reported by the provider. Fields are undefined when the
+/** Token usage accumulated over an agent run's model calls (optional planning
+ * and loop turns), as reported by the provider. Fields are undefined when the
  * provider does not report usage (e.g. some local models). */
 export interface AgentUsage {
   inputTokens?: number;
@@ -19,8 +19,8 @@ export interface AgentUsage {
 }
 
 /**
- * Renderer-agnostic agent run events. This union is the contract every
- * Marifold client (CLI today; TUI, Web UI, and Apple clients later) renders,
+ * Renderer-agnostic agent run events. This union is the contract the CLI, TUI,
+ * Web UI, service API, and future clients consume,
  * so keep payloads self-describing and free of terminal formatting.
  */
 export type AgentEvent =
@@ -55,6 +55,9 @@ export type AgentEvent =
   | { type: 'user_input_request'; request: UserInputRequest }
   | { type: 'user_input_response'; response: UserInputResponse }
   | { type: 'tool_result'; callId: string; tool: string; summary: string; isError: boolean }
+  /** @deprecated Kept for wire/source compatibility with pre-v0.24.2 runners.
+   * Current runners verify observable behavior through normal tool calls and
+   * never emit a separate model-authored self-grade. */
   | { type: 'verification'; passed: boolean; notes: string }
   | { type: 'error'; code: string; message: string }
   | { type: 'done'; taskId: string; status: TaskStatus; summary?: string; usage?: AgentUsage };

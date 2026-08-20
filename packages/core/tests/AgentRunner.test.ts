@@ -86,7 +86,6 @@ async function collect(events: AsyncGenerator<AgentEvent>): Promise<AgentEvent[]
 }
 
 const planResponse = response({ text: '{"title": "Test plan", "steps": ["Read the file", "Summarize"]}' });
-const verifyPassResponse = response({ text: '{"passed": true, "notes": "objective met"}' });
 
 describe('AgentRunner', () => {
   it('tallies token usage across plan and loop turns', async () => {
@@ -545,6 +544,8 @@ describe('AgentRunner', () => {
       'tool_request', 'approval_decision', 'tool_result',
       'text', 'status', 'done',
     ]);
+    expect(engine.requests).toHaveLength(3);
+    expect(types).not.toContain('verification');
 
     const textEvents = events.filter((event): event is Extract<AgentEvent, { type: 'text' }> => event.type === 'text');
     expect(textEvents).toEqual([
@@ -562,6 +563,8 @@ describe('AgentRunner', () => {
 
     // The loop prompt steers the model away from gratuitous tool use.
     expect(engine.requests[1].prompt).toContain('Use tools only when');
+    expect(engine.requests[1].context?.join('\n')).toContain('focused check before claiming success');
+    expect(engine.requests[1].context?.join('\n')).toContain('do not invent results or perform a separate self-grade');
 
     // Second loop request must replay the tool exchange.
     const loopRequest = engine.requests[2];
@@ -650,7 +653,6 @@ describe('AgentRunner', () => {
       planResponse,
       response({ toolCalls: [{ id: 'call_0', name: 'write_note', arguments: {} }] }),
       response({ text: 'Done.' }),
-      verifyPassResponse,
     ]);
     const tool = fakeTool({ name: 'write_note', kind: 'write' });
     const { runner } = makeRunner(engine, [tool]);
@@ -706,7 +708,6 @@ describe('AgentRunner', () => {
       response({ ok: false, error: { code: 'PROVIDER_ERROR', message: 'model does not support tools', details: {} } }),
       response({ text: 'Let me check.\n<tool_call name="read_file">{"path": "a.txt"}</tool_call>' }),
       response({ text: 'The file says hello.' }),
-      verifyPassResponse,
     ]);
     const { runner, taskStore } = makeRunner(engine, [fakeTool()]);
 
@@ -732,7 +733,6 @@ describe('AgentRunner', () => {
     const engine = new ScriptedEngine([
       planResponse,
       response({ text: 'Answer ready.<memory_save>{"kind":"user","text":"secret"}</memory_save>' }),
-      verifyPassResponse,
     ]);
     const { runner } = makeRunner(engine, [fakeTool()]);
 
@@ -748,7 +748,6 @@ describe('AgentRunner', () => {
       planResponse,
       response({ toolCalls: [{ id: 'call_0', name: 'write_note', arguments: {} }] }),
       response({ text: 'Done.' }),
-      verifyPassResponse,
     ]);
     const tool = fakeTool({
       name: 'write_note',
@@ -769,7 +768,6 @@ describe('AgentRunner', () => {
       planResponse,
       response({ toolCalls: [{ id: 'call_0', name: 'read_file', arguments: {} }] }),
       response({ text: 'Done with the steering applied.' }),
-      verifyPassResponse,
     ]);
     const { runner, taskStore } = makeRunner(engine, [fakeTool()]);
 
@@ -801,7 +799,6 @@ describe('AgentRunner', () => {
       planResponse,
       response({ toolCalls: [{ id: 'call_0', name: 'risky_read', arguments: {} }] }),
       response({ text: 'Done.' }),
-      verifyPassResponse,
     ]);
     const tool = fakeTool({
       name: 'risky_read',

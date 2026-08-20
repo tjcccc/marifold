@@ -16,7 +16,11 @@ export class WriteFileTool implements AgentTool {
   readonly kind = 'write' as const;
   readonly definition = {
     name: 'write_file',
-    description: 'Write text content to a local file, creating parent directories as needed. Overwrites existing files.',
+    description: [
+      'Create or fully overwrite a local text file, creating parent directories as needed.',
+      'When to use: the objective requires a concrete file at an explicit path or a complete small/generated file.',
+      'When NOT to use: merely answering a question, speculative files the user did not request, or shell output that can remain in the response.',
+    ].join(' '),
     parameters: {
       type: 'object',
       properties: {

@@ -2,6 +2,14 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-08-20 — fx-inspired reliability groundwork
+
+- Aligned the live agent contract, README, architecture/service documentation, TODOs, and `.projnavi` notes with the post-v0.24.2 runtime: observable checks run through ordinary tools inside the loop, with no separate model self-grading call. The legacy `AgentEvent.verification` variant remains deprecated compatibility surface, while the generic TaskStore event name is reserved for explicit evidence from future producers.
+- Added focused-check guidance to ordinary agent context and standardized every built-in tool description on explicit “When to use” / “When NOT to use” affordances without changing permission or execution policy.
+- Removed stale scripted verification responses, added a regression covering all seven built-in tool descriptions, and tightened the optional provider-backed agent eval around direct-answer and dedicated file-tool selection.
+- Recorded the deferred context, Workflow, external-agent/ACP, MCP, checkpoint, and durable-process work in `TODO.md` with product triggers, ownership boundaries, and explicit non-goals. Marifold remains a lightweight local-first personal AI workspace, not a heavyweight coding agent or general agent SDK.
+- Verified `scripts/agent-eval.mjs` syntax plus the full workspace typecheck/build/test gate (607 tests: core 305, service 55, TUI 58, CLI 14, Web 175). The optional live-provider agent eval was not run because it requires a configured model.
+
 ## 2026-08-10 — v0.54.0 — Optional agent clarification questions
 
 - Added the interaction-only `ask_user` agent tool. Models are instructed to use it only when essential information is missing; ordinary work proceeds without a question checkpoint. Requests are bounded to one–three questions with validated suggested options and one complete submission.
@@ -415,7 +423,7 @@ Groundwork for the upcoming Telegram/messaging channel (a remote bot honours *it
 ## 2026-06-23 — v0.24.1 — Agent runs persist a clean session turn (fixes lost skill output)
 
 - **Fix: agent-mode output was never saved.** `createAgentRunner` built the priest engine with no session store (`createEngine(provider, false)`), so priest's persistence guard (`session && this.sessionStore`) never fired — an agent run's final answer was dropped, and resuming a session showed nothing from it. Since skills now run agentically, their generated output vanished on `--resume`.
-- **Clean single-turn persistence.** Rather than re-enabling priest's raw per-iteration writes (which stored the wrapped `Objective: …Use tools…` prompt *and* duplicate turns), the runner now persists exactly one tidy pair via new `SessionResolver.appendExchange`: the **user's actual invocation** (e.g. `$make-grok-imagine-prompt #photo1 …`, passed as `AgentRunOptions.userTurn`) and the **final answer**. Run mechanics (plan, tool calls, verification, timing/tokens) stay in ephemeral task state, not the conversation — so resumed transcripts are clean.
+- **Clean single-turn persistence.** Rather than re-enabling priest's raw per-iteration writes (which stored the wrapped `Objective: …Use tools…` prompt *and* duplicate turns), the runner now persists exactly one tidy pair via new `SessionResolver.appendExchange`: the **user's actual invocation** (e.g. `$make-grok-imagine-prompt #photo1 …`, passed as `AgentRunOptions.userTurn`) and the **final answer**. Run mechanics (plan, tool calls, timing/tokens) stay in ephemeral task state, not the conversation — so resumed transcripts are clean.
 - README refreshed from the stale v0.14.0 framing to current (TUI-first overview, interactive `init`, `--resume`, `provider add`, agentic skills, `marifold` as the command, `timeout_seconds` default 300).
 - Version 0.24.0 → 0.24.1 across all packages + CLI `.version`.
 - Verified: core 141, tui 30, service 4 — all pass; all 4 packages build/typecheck green. `SessionResolver.appendExchange` verified directly (one clean user/assistant pair, retrievable); full agent→resume path confirmed live by the user.

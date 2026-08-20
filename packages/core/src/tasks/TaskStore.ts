@@ -7,6 +7,8 @@ export const TASK_STATE_SCHEMA = 'marifold.task-state.v1';
 
 export type TaskStatus = 'running' | 'blocked' | 'completed' | 'failed' | 'cancelled';
 export type TaskStepStatus = 'pending' | 'in_progress' | 'completed' | 'skipped' | 'cancelled';
+/** `verification` is retained for explicit evidence attached by task/workflow
+ * producers. AgentRunner does not append a model-authored verification event. */
 export type TaskEventKind = 'progress' | 'decision' | 'observation' | 'blocker' | 'verification' | 'note';
 
 export interface TaskPlanItem {

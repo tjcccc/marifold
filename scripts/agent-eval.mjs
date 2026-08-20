@@ -40,13 +40,27 @@ const configPath = path.join(root, 'config.toml');
 
 const cases = [
   {
+    name: 'direct-answer-without-tools',
+    setup: () => {},
+    objective: 'Reply with exactly MARIGOLD.',
+    check: ({ events, finalSummary }) => {
+      const usedTool = events.some(event => event.type === 'tool_request');
+      if (usedTool) return 'expected a direct answer without tool use';
+      if ((finalSummary ?? '').trim() !== 'MARIGOLD') return `expected exactly MARIGOLD, got: ${finalSummary}`;
+      return undefined;
+    },
+  },
+  {
     name: 'read-and-answer',
     setup: dir => fs.writeFileSync(path.join(dir, 'fact.txt'), 'The launch code word is MARIGOLD.\n'),
     objective: 'Read the file fact.txt and report the launch code word it contains.',
     check: ({ events, finalSummary }) => {
-      const usedTool = events.some(e => e.type === 'tool_result' && !e.isError);
+      const requestedTools = events
+        .filter(event => event.type === 'tool_request')
+        .map(event => event.call.tool);
       const mentioned = /marigold/i.test(finalSummary ?? '');
-      if (!usedTool) return 'expected at least one successful tool call';
+      if (!requestedTools.includes('read_file')) return `expected read_file, got: ${requestedTools.join(', ') || '(none)'}`;
+      if (requestedTools.includes('shell_exec')) return 'expected the dedicated read_file tool instead of shell_exec';
       if (!mentioned) return `expected the summary to mention MARIGOLD, got: ${finalSummary}`;
       return undefined;
     },
@@ -55,9 +69,14 @@ const cases = [
     name: 'write-file',
     setup: () => {},
     objective: 'Create a file named greeting.txt containing exactly the text "hello agent".',
-    check: ({ dir }) => {
+    check: ({ dir, events }) => {
       const target = path.join(dir, 'greeting.txt');
       if (!fs.existsSync(target)) return 'greeting.txt was not created';
+      const requestedTools = events
+        .filter(event => event.type === 'tool_request')
+        .map(event => event.call.tool);
+      if (!requestedTools.includes('write_file')) return `expected write_file, got: ${requestedTools.join(', ') || '(none)'}`;
+      if (requestedTools.includes('shell_exec')) return 'expected the dedicated write_file tool instead of shell_exec';
       const content = fs.readFileSync(target, 'utf-8').trim();
       if (!/hello agent/i.test(content)) return `unexpected content: ${content}`;
       return undefined;

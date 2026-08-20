@@ -313,7 +313,7 @@ prompt text, not the raw bytes.
 For a resolved skill, `objective` carries the model-facing prompt,
 `instructions` carries the resolved body, and `userTurn` carries the original
 `$skill …` text stored in the transcript. Skill agent runs set `lean: true`, so
-they skip planning/verification overhead and do not receive prior session turns.
+they skip the optional planning pass and verbose agent framing and do not receive prior session turns.
 
 With `sessionId`, optional `replaceUserTurnIndex` regenerates that historical
 exchange using only its earlier prefix as context, then replaces it in place;
@@ -474,6 +474,10 @@ schedules).
 | `PATCH /v1/tasks/:id` | Update status/summary/nextAction/plan/... |
 | `POST /v1/tasks/:id/events` | Append `{ kind: progress\|decision\|observation\|blocker\|verification\|note, message, stepId?, metadata? }` |
 | `DELETE /v1/tasks/:id` | `{ deleted: true }` |
+
+The generic task-event kind `verification` is reserved for explicit evidence
+attached by task or future Workflow producers. Current `AgentRunner` executions
+perform checks through ordinary tools and do not emit a separate model self-grade.
 
 ### Schedules (read-only)
 
