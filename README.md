@@ -82,6 +82,7 @@ For product direction and future scope, see [docs/vision.md](docs/vision.md) and
 - Profile-filtered session listing.
 - Bulk session clearing with profile/date/keep-last filters.
 - Default-loopback HTTP service through `marifold service`, with mandatory bearer authentication for non-loopback binds and a CORS origin allowlist (`[service]`).
+- Single-instance service lifecycle through foreground `marifold service` / `marifold service start`, background `marifold service start --daemon`, `marifold status [--logs]`, and `marifold service stop`.
 - Service routes for health/status, sanitized config, providers, models, profiles, memories, sessions, ask, streaming chat, and live agent runs (SSE `AgentEvent` stream + clarification/approval/steer/cancel) — see [docs/service-api.md](docs/service-api.md).
 - Server-sent event streaming for safe reasoning summaries and answer chunks through `/v1/chat/stream`.
 - Ephemeral task-state storage under `[paths].tasks_dir`, defaulting to `~/.marifold/tasks`.
@@ -93,7 +94,7 @@ For product direction and future scope, see [docs/vision.md](docs/vision.md) and
 
 ## Non-goals
 
-Marifold does not yet include semantic/vector retrieval, memory encryption, approval-aware effectful App actions, advanced App components, Workflow, Apple apps, external-agent aliases, provider-owned model deletion, or service daemon packaging (schedules fire only while `marifold service` runs).
+Marifold does not yet include semantic/vector retrieval, memory encryption, approval-aware effectful App actions, advanced App components, Workflow, Apple apps, external-agent aliases, or provider-owned model deletion.
 
 Web search uses DuckDuckGo scraping by default, which requires no API key but can be blocked by DuckDuckGo's anomaly detection on some networks. Errors surface clearly in `/search` output and tool results, and the `SearchBackend` interface is pluggable for alternative engines.
 
@@ -235,6 +236,11 @@ marifold schedule run sched_xxxx
 marifold schedule rm sched_xxxx
 
 marifold service
+marifold service start
+marifold service start --daemon
+marifold status
+marifold status --logs
+marifold service stop
 marifold service --host 127.0.0.1 --port 32140
 ```
 
@@ -335,7 +341,7 @@ For `openai-compatible`, `base_url` may be the API root such as `https://api.ope
 
 `marifold init` accepts `--provider`, `--provider-type`, `--model`, `--base-url`, `--api-key-env`, `--profiles-dir`, `--sessions-db`, `--tasks-dir`, and `--force`. Non-Ollama providers require `--model`; custom OpenAI-compatible providers also require `--base-url`.
 
-`marifold service` starts a Fastify HTTP service bound to `127.0.0.1:32140` by default. An explicit non-loopback `--host` is allowed only when a bearer token resolves; `--host 0.0.0.0` listens on every network interface, while a specific LAN or Tailscale address narrows exposure to that interface. Ctrl+C/SIGTERM performs graceful cleanup and exits; shutdown is forced after five seconds or immediately on a second signal. A bind failure also closes the newly created runtime instead of leaving a background process alive. The API surface is `/health` and `/v1/*` routes for app clients: sanitized config/provider/model views, profiles, memories, sessions, ask/chat, SSE streaming chat, task state, read-only schedules, live agent runs (`POST /v1/runs`, a resumable SSE `AgentEvent` stream, and clarification/approval/steer/cancel routes), and config-editing writes (`PATCH /v1/config` with CLI `config set` parity, per-profile settings/files/trusted-folders/memory-forget routes). The full wire contract is documented in [docs/service-api.md](docs/service-api.md).
+`marifold service` and `marifold service start` start the same foreground Fastify HTTP service, bound to `127.0.0.1:32140` by default. `marifold service start --daemon` runs it in the background; `marifold status` reports the managed process, `marifold status --logs` includes its latest 100 log lines, and `marifold service stop` performs a graceful stop. State and the daemon log live under `~/.marifold/service/`, and stale state is cleaned automatically. Only one managed service instance can run at a time, including foreground starts. An explicit non-loopback `--host` is allowed only when a bearer token resolves; `--host 0.0.0.0` listens on every network interface, while a specific LAN or Tailscale address narrows exposure to that interface. Ctrl+C/SIGTERM performs graceful cleanup and exits; shutdown is forced after five seconds or immediately on a second signal. A bind failure also closes the newly created runtime instead of leaving a background process alive. `--log` enables Fastify request logging: it prints in the foreground or is captured in the daemon log. The API surface is `/health` and `/v1/*` routes for app clients: sanitized config/provider/model views, profiles, memories, sessions, ask/chat, SSE streaming chat, task state, read-only schedules, live agent runs (`POST /v1/runs`, a resumable SSE `AgentEvent` stream, and clarification/approval/steer/cancel routes), and config-editing writes (`PATCH /v1/config` with CLI `config set` parity, per-profile settings/files/trusted-folders/memory-forget routes). The full wire contract is documented in [docs/service-api.md](docs/service-api.md).
 
 The optional `[service]` section configures API access for browser clients:
 
@@ -363,8 +369,10 @@ marifold config set service.token_env MARIFOLD_SERVICE_TOKEN
 marifold service
 ```
 
-The `export` above lasts only for that shell. For a persistent service, define
-the variable in its service manager or another appropriate local secret store.
+The `export` above lasts only for that shell. A daemon started from that shell
+inherits the variable. For automatic restart after login or reboot, define the
+variable in the external service manager or another appropriate local secret
+store.
 In the Web UI, open **Connection** from the sidebar, select **This server**, and
 enter the same value in **Bearer token**. The token is stored for that named
 server in the browser's local storage and sent as the

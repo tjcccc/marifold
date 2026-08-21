@@ -2,6 +2,22 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-08-21 — v0.56.0 — Managed service daemon lifecycle
+
+- Added equivalent foreground `marifold service` / `marifold service start`
+  entry points plus detached `marifold service start --daemon` execution.
+- Added single-instance state, stale-state recovery, graceful
+  `marifold service stop`, `marifold status`, and a bounded
+  `marifold status --logs` daemon tail.
+- Kept `--log` as Fastify request logging in both modes; daemon stdout/stderr is
+  stored under `~/.marifold/service/service.log`.
+- Added spawned-process regressions for foreground deduplication/status and the
+  complete daemon start/status/log/deduplicate/stop lifecycle.
+- Verified 127 CLI command checks and the full workspace typecheck/build/test
+  gate (618 tests: core 306, service 55, TUI 59, CLI 18, Web 180).
+- Version 0.55.0 → 0.56.0 across all packages + CLI `.version`.
+- Released as v0.56.0.
+
 ## 2026-08-20 — v0.55.0 — Web response control and multi-select questions
 
 - Added a ChatGPT-style Stop control to the Web composer while either a plain

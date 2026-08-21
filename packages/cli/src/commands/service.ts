@@ -1,14 +1,27 @@
+import { ChildProcess, spawn } from 'child_process';
+import * as fs from 'fs';
 import * as path from 'path';
 import { Command } from 'commander';
 import { MarifoldError } from '@marifold/core';
 import { resolveSecurityOptions, startMarifoldService } from '@marifold/service';
 import { ConsolePrinter } from '../output/ConsolePrinter';
-import { loadConfig } from './RuntimeFactory';
+import {
+  claimServiceProcess,
+  ensureServiceProcessDir,
+  getActiveServiceProcess,
+  markServiceProcessRunning,
+  releaseServiceProcess,
+  ServiceProcessState,
+  serviceProcessPaths,
+  stopActiveServiceProcess,
+} from '../service/ServiceProcess';
+import { loadConfig, RootCommandOptions } from './RuntimeFactory';
 
 interface ServiceOptions {
   host?: string;
   port?: string;
   log?: boolean;
+  daemon?: boolean;
   token?: string;
   tokenEnv?: string;
   corsOrigin?: string[];
@@ -16,11 +29,49 @@ interface ServiceOptions {
 }
 
 const SHUTDOWN_GRACE_MS = 5_000;
+const DAEMON_START_TIMEOUT_MS = 10_000;
+const DAEMON_CHILD_ENV = 'MARIFOLD_SERVICE_DAEMON_CHILD';
+const DAEMON_TOKEN_ENV = 'MARIFOLD_SERVICE_DAEMON_TOKEN';
 
 export function registerServiceCommand(program: Command, printer: ConsolePrinter): void {
-  program
+  const service = program
     .command('service')
-    .description('Start the local Marifold HTTP service.')
+    .description('Run and manage the local Marifold HTTP service.');
+
+  addServiceOptions(service)
+    .action(async (options: ServiceOptions) => {
+      await runService(program, printer, options);
+    });
+
+  addServiceOptions(service.command('start').description('Start the Marifold service.'), true)
+    .action(async (options: ServiceOptions) => {
+      if (options.daemon) {
+        await startDaemon(program, printer, options);
+      } else {
+        await runService(program, printer, options);
+      }
+    });
+
+  service
+    .command('stop')
+    .description('Stop the managed Marifold service.')
+    .action(async () => {
+      try {
+        const stopped = await stopActiveServiceProcess();
+        if (stopped) {
+          process.stdout.write(`Marifold service stopped (PID ${stopped.pid}).\n`);
+        } else {
+          process.stdout.write('Marifold service is not running.\n');
+        }
+      } catch (error) {
+        printer.printError(error);
+        process.exitCode = 1;
+      }
+    });
+}
+
+function addServiceOptions(command: Command, allowDaemon = false): Command {
+  command
     .option('--host <host>', 'Host to bind. Non-loopback addresses require bearer authentication.', '127.0.0.1')
     .option('--port <number>', 'Port to bind. Use 0 for a random open port.', '32140')
     .option('--log', 'Enable HTTP request logging.')
@@ -32,47 +83,164 @@ export function registerServiceCommand(program: Command, printer: ConsolePrinter
       (value: string, previous: string[]) => [...previous, value],
       [] as string[],
     )
-    .option('--web-dir <dir>', 'Host the built Web UI from this directory (overrides [service].web_dir).')
-    .action(async (options: ServiceOptions) => {
-      try {
-        const loadedConfig = loadConfig(program);
-        const token = resolveTokenFlags(options);
-        const corsOrigins = options.corsOrigin && options.corsOrigin.length > 0 ? options.corsOrigin : undefined;
-        const webDir = options.webDir ? path.resolve(options.webDir) : undefined;
-        const result = await startMarifoldService({
-          loadedConfig,
-          host: options.host,
-          port: parsePort(options.port),
-          logger: Boolean(options.log),
-          auth: { token },
-          cors: { origins: corsOrigins },
-          web: { dir: webDir },
-        });
+    .option('--web-dir <dir>', 'Host the built Web UI from this directory (overrides [service].web_dir).');
+  if (allowDaemon) command.option('--daemon', 'Run the service in the background.');
+  return command;
+}
 
-        process.stdout.write(`Marifold service listening at ${result.address}\n`);
-        if (result.telegram) {
-          process.stdout.write(`Telegram bridge active (profile ${result.telegram.profile}).\n`);
-        }
-        const servedWebDir = webDir ?? loadedConfig.config.service?.webDir;
-        if (servedWebDir) process.stdout.write(`Web UI: serving ${servedWebDir}\n`);
-        const security = resolveSecurityOptions(loadedConfig.config.service, { token, corsOrigins });
-        if (security.token) process.stdout.write('Auth: bearer token required on /v1 (exempt: /health, static).\n');
-        if (security.corsOrigins.length > 0) {
-          process.stdout.write(`CORS: allowing ${security.corsOrigins.join(', ')}\n`);
-        }
-        process.stdout.write('Press Ctrl+C to stop.\n');
-        await waitForShutdown({
-          close: result.server.close.bind(result.server),
-          forceClose: () => {
-            result.server.server.closeIdleConnections?.();
-            result.server.server.closeAllConnections?.();
-          },
-        });
-      } catch (error) {
-        printer.printError(error);
-        process.exitCode = 1;
-      }
+async function runService(program: Command, printer: ConsolePrinter, options: ServiceOptions): Promise<void> {
+  let owner: ReturnType<typeof claimServiceProcess> | undefined;
+  try {
+    const loadedConfig = loadConfig(program);
+    const daemonChild = process.env[DAEMON_CHILD_ENV] === '1';
+    const token = resolveTokenFlags(options);
+    if (daemonChild) {
+      delete process.env[DAEMON_CHILD_ENV];
+      if (options.tokenEnv === DAEMON_TOKEN_ENV) delete process.env[DAEMON_TOKEN_ENV];
+    }
+    const corsOrigins = options.corsOrigin && options.corsOrigin.length > 0 ? options.corsOrigin : undefined;
+    const webDir = options.webDir ? path.resolve(options.webDir) : undefined;
+    const mode = daemonChild ? 'daemon' : 'foreground';
+    owner = claimServiceProcess(mode, loadedConfig.configPath);
+    const result = await startMarifoldService({
+      loadedConfig,
+      host: options.host,
+      port: parsePort(options.port),
+      logger: Boolean(options.log),
+      auth: { token },
+      cors: { origins: corsOrigins },
+      web: { dir: webDir },
     });
+    markServiceProcessRunning(owner, result.address);
+
+    process.stdout.write(`Marifold service listening at ${result.address}\n`);
+    if (result.telegram) {
+      process.stdout.write(`Telegram bridge active (profile ${result.telegram.profile}).\n`);
+    }
+    const servedWebDir = webDir ?? loadedConfig.config.service?.webDir;
+    if (servedWebDir) process.stdout.write(`Web UI: serving ${servedWebDir}\n`);
+    const security = resolveSecurityOptions(loadedConfig.config.service, { token, corsOrigins });
+    if (security.token) process.stdout.write('Auth: bearer token required on /v1 (exempt: /health, static).\n');
+    if (security.corsOrigins.length > 0) {
+      process.stdout.write(`CORS: allowing ${security.corsOrigins.join(', ')}\n`);
+    }
+    if (mode === 'foreground') process.stdout.write('Press Ctrl+C to stop.\n');
+    await waitForShutdown({
+      close: result.server.close.bind(result.server),
+      forceClose: () => {
+        result.server.server.closeIdleConnections?.();
+        result.server.server.closeAllConnections?.();
+      },
+      onFinish: () => {
+        if (owner) releaseServiceProcess(owner);
+      },
+    });
+  } catch (error) {
+    printer.printError(error);
+    process.exitCode = 1;
+  } finally {
+    if (owner) releaseServiceProcess(owner);
+  }
+}
+
+async function startDaemon(program: Command, printer: ConsolePrinter, options: ServiceOptions): Promise<void> {
+  try {
+    const loadedConfig = loadConfig(program);
+    resolveTokenFlags(options);
+    parsePort(options.port);
+
+    const existing = getActiveServiceProcess();
+    if (existing) throw new Error(`Marifold service is already running (PID ${existing.pid}, ${existing.mode}).`);
+
+    const paths = serviceProcessPaths();
+    ensureServiceProcessDir(paths);
+    const logFd = fs.openSync(paths.log, 'a', 0o600);
+    let daemon: ChildProcess;
+    try {
+      daemon = spawn(process.execPath, buildDaemonArgs(program, loadedConfig.configPath, options), {
+        cwd: process.cwd(),
+        detached: true,
+        env: buildDaemonEnv(options),
+        stdio: ['ignore', logFd, logFd],
+        windowsHide: true,
+      });
+    } finally {
+      fs.closeSync(logFd);
+    }
+
+    const state = await waitForDaemonStart(daemon, DAEMON_START_TIMEOUT_MS);
+    daemon.unref();
+    process.stdout.write(`Marifold service started in background (PID ${state.pid}).\n`);
+    process.stdout.write(`Log: ${paths.log}\n`);
+  } catch (error) {
+    printer.printError(error);
+    process.exitCode = 1;
+  }
+}
+
+function buildDaemonArgs(program: Command, configPath: string, options: ServiceOptions): string[] {
+  const args = [path.resolve(__dirname, '../index.js')];
+  const rootOptions = program.opts<RootCommandOptions>();
+  if (rootOptions.config) args.push('--config', configPath);
+  args.push('service', 'start');
+  args.push('--host', options.host ?? '127.0.0.1');
+  args.push('--port', options.port ?? '32140');
+  if (options.log) args.push('--log');
+  if (options.token) {
+    args.push('--token-env', DAEMON_TOKEN_ENV);
+  } else if (options.tokenEnv) {
+    args.push('--token-env', options.tokenEnv);
+  }
+  for (const origin of options.corsOrigin ?? []) args.push('--cors-origin', origin);
+  if (options.webDir) args.push('--web-dir', path.resolve(options.webDir));
+  return args;
+}
+
+function buildDaemonEnv(options: ServiceOptions): NodeJS.ProcessEnv {
+  return {
+    ...process.env,
+    [DAEMON_CHILD_ENV]: '1',
+    ...(options.token ? { [DAEMON_TOKEN_ENV]: options.token } : {}),
+  };
+}
+
+function waitForDaemonStart(child: ChildProcess, timeoutMs: number): Promise<ServiceProcessState> {
+  return new Promise((resolve, reject) => {
+    const deadline = Date.now() + timeoutMs;
+    let settled = false;
+    const finish = (error?: Error): void => {
+      if (settled) return;
+      settled = true;
+      clearInterval(timer);
+      child.off('error', onError);
+      child.off('exit', onExit);
+      if (error) reject(error);
+    };
+    const check = (): void => {
+      if (settled) return;
+      try {
+        const state = getActiveServiceProcess();
+        if (state && state.pid === child.pid && state.status === 'running') {
+          finish();
+          resolve(state);
+        } else if (Date.now() >= deadline) {
+          child.kill('SIGTERM');
+          finish(new Error(`Timed out starting the Marifold daemon. See ${serviceProcessPaths().log}.`));
+        }
+      } catch (error) {
+        child.kill('SIGTERM');
+        finish(error instanceof Error ? error : new Error(String(error)));
+      }
+    };
+    const onError = (error: Error): void => finish(error);
+    const onExit = (code: number | null, signal: NodeJS.Signals | null): void => {
+      finish(new Error(`Marifold daemon exited during startup (code=${code}, signal=${signal}). See ${serviceProcessPaths().log}.`));
+    };
+    const timer = setInterval(check, 50);
+    child.once('error', onError);
+    child.once('exit', onExit);
+    check();
+  });
 }
 
 function resolveTokenFlags(options: ServiceOptions): string | undefined {
@@ -97,6 +265,7 @@ interface ShutdownOptions {
   close: () => Promise<void>;
   forceClose?: () => void;
   graceMs?: number;
+  onFinish?: () => void;
   /** Test seam. Production deliberately exits after cleanup so a stray SDK
    * handle cannot keep `marifold service` alive after Ctrl+C. */
   terminate?: (code: number) => void;
@@ -117,6 +286,11 @@ export function waitForShutdown(options: ShutdownOptions): Promise<void> {
       if (finished) return;
       finished = true;
       cleanup();
+      try {
+        options.onFinish?.();
+      } catch (error) {
+        process.stderr.write(`Service process-state cleanup failed: ${error instanceof Error ? error.message : String(error)}\n`);
+      }
       resolve();
       terminate(code);
     };

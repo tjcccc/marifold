@@ -10,8 +10,9 @@ the HTTP API, the schedule runner, and the Telegram bridge.
   changes (new fields, new event types) may land within v1 — clients must
   ignore unknown fields and unknown SSE event types. Breaking changes get a
   new prefix.
-- **Start:** `marifold service [--host <host>] [--log] [--token <t> | --token-env <NAME>]
-  [--cors-origin <origin>]...`
+- **Foreground:** `marifold service [options]` or `marifold service start [options]`
+- **Background:** `marifold service start --daemon [options]`; inspect with
+  `marifold status [--logs]` and stop with `marifold service stop`.
 
 ## Authentication
 
