@@ -119,6 +119,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
   const [profileDetail, setProfileDetail] = useState<ProfileDetail | undefined>();
   const [skills, setSkills] = useState<SkillHint[]>([]);
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
+  const [persistedSessionIds, setPersistedSessionIds] = useState<ReadonlySet<string>>(() => new Set());
   const [sessionSearch, setSessionSearch] = useState('');
   const [showArchivedSessions, setShowArchivedSessions] = useState(false);
   const [runs, setRuns] = useState<RunRecord[]>([]);
@@ -182,6 +183,27 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
     [onUnauthorized],
   );
 
+  const rememberPersistedSessionIds = useCallback((ids: Iterable<string>) => {
+    setPersistedSessionIds(current => {
+      let next: Set<string> | undefined;
+      for (const id of ids) {
+        if (current.has(id)) continue;
+        next ??= new Set(current);
+        next.add(id);
+      }
+      return next ?? current;
+    });
+  }, []);
+
+  const forgetPersistedSessionId = useCallback((id: string) => {
+    setPersistedSessionIds(current => {
+      if (!current.has(id)) return current;
+      const next = new Set(current);
+      next.delete(id);
+      return next;
+    });
+  }, []);
+
   /** Attach running runs of this session; banner recently finished ones. */
   const catchUpRuns = useCallback(
     async (forSession: string) => {
@@ -209,6 +231,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
       if (!id) return;
       try {
         const detail = await getSession(client, id);
+        rememberPersistedSessionIds([id]);
         dispatch({
           type: 'session_loaded',
           turns: detail.turns.map(turn => {
@@ -255,6 +278,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
           handleError(error);
           return;
         }
+        forgetPersistedSessionId(id);
       }
       try {
         await catchUpRuns(id);
@@ -262,8 +286,12 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
         handleError(error);
       }
     },
-    [client, followers, catchUpRuns, handleError],
+    [client, followers, catchUpRuns, forgetPersistedSessionId, handleError, rememberPersistedSessionIds],
   );
+
+  useEffect(() => {
+    setPersistedSessionIds(new Set());
+  }, [client]);
 
   // Bootstrap the profile list and model options. The root Agent route stays
   // on the profile picker; only an explicit route selects a profile.
@@ -322,7 +350,10 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
         archived: showArchivedSessions,
         search: sessionSearch,
       }).then(result => {
-        if (!cancelled) setSessions(result);
+        if (!cancelled) {
+          rememberPersistedSessionIds(result.map(session => session.id));
+          setSessions(result);
+        }
       }).catch(error => {
         if (!cancelled) handleError(error);
       });
@@ -331,7 +362,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [client, handleError, profileName, sessionSearch, showArchivedSessions]);
+  }, [client, handleError, profileName, rememberPersistedSessionIds, sessionSearch, showArchivedSessions]);
 
   // External navigation (back/forward, deep link) → adopt the route's session.
   useEffect(() => {
@@ -378,19 +409,31 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
     }
   }, [client, handleError]);
 
-  const refreshSessions = useCallback(async () => {
+  const refreshSessions = useCallback(async (forSession = sessionId) => {
     if (!profileName) return;
     try {
-      setSessions(await listSessions(client, {
+      const result = await listSessions(client, {
         profile: profileName,
         limit: 100,
         archived: showArchivedSessions,
         search: sessionSearch,
-      }));
+      });
+      rememberPersistedSessionIds(result.map(session => session.id));
+      setSessions(result);
+      if (forSession && !result.some(session => session.id === forSession)) {
+        try {
+          await getSession(client, forSession);
+          rememberPersistedSessionIds([forSession]);
+        } catch (error) {
+          if (error instanceof MarifoldApiError && error.status === 404) {
+            forgetPersistedSessionId(forSession);
+          }
+        }
+      }
     } catch {
       // List refresh is cosmetic; ignore failures.
     }
-  }, [client, profileName, sessionSearch, showArchivedSessions]);
+  }, [client, forgetPersistedSessionId, profileName, rememberPersistedSessionIds, sessionId, sessionSearch, showArchivedSessions]);
   refreshSessionsRef.current = () => { void refreshSessions(); };
   const refreshRuns = useCallback(async () => {
     try {
@@ -437,21 +480,22 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
   );
 
   const newSession = useCallback(() => {
-    if (!profileName) return;
+    if (!profileName || !sessionId || !persistedSessionIds.has(sessionId)) return;
     const id = crypto.randomUUID();
     abortActiveChat();
     followers.stopAll();
     setSessionId(id);
     dispatch({ type: 'reset', sessionId: id });
     navigate({ view: 'agent', profile: profileName, session: id });
-  }, [abortActiveChat, profileName, followers, navigate]);
+  }, [abortActiveChat, profileName, followers, navigate, persistedSessionIds, sessionId]);
 
   const replaceSessionSummary = useCallback((updated: SessionSummary) => {
+    rememberPersistedSessionIds([updated.id]);
     setSessions(current => current
       .map(session => session.id === updated.id ? updated : session)
       .sort((a, b) => Number(Boolean(b.pinned)) - Number(Boolean(a.pinned))
         || b.updatedAt.localeCompare(a.updatedAt)));
-  }, []);
+  }, [rememberPersistedSessionIds]);
 
   const renameSession = useCallback(async (id: string, title: string): Promise<boolean> => {
     try {
@@ -499,6 +543,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
       if (activeChatRef.current?.sessionId === id) abortActiveChat();
       const pending = sessions.some(session => session.id === id && session.pending);
       if (!await deleteSessionWhenIdle(client, id) && !pending) return false;
+      forgetPersistedSessionId(id);
       setSessions(current => current.filter(session => session.id !== id));
       setRuns(current => current.filter(run => run.sessionId !== id));
       if (profileName) {
@@ -519,7 +564,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
       handleError(error);
       return false;
     }
-  }, [abortActiveChat, client, followers, handleError, navigate, profileName, sessionId, sessions]);
+  }, [abortActiveChat, client, followers, forgetPersistedSessionId, handleError, navigate, profileName, sessionId, sessions]);
 
   const addFiles = useCallback(async (files: Iterable<File>) => {
     const result = await prepareFiles(files, attachmentsRef.current);
@@ -717,7 +762,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
             setChatResponding(false);
           }
           setSending(false);
-          void refreshSessions();
+          void refreshSessions(sid);
           if (options.replaceUserTurnIndex !== undefined) void loadSession(sid);
         }
       }
@@ -748,7 +793,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
         return true;
       } catch (error) {
         handleError(error);
-        void refreshSessions();
+        void refreshSessions(sid);
         if (options.replaceUserTurnIndex !== undefined) void loadSession(sid);
         return false;
       } finally {

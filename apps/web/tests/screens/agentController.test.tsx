@@ -236,6 +236,13 @@ describe('useAgentController session lifecycle', () => {
     }));
     await waitFor(() => expect(result.current.profileDetail?.name).toBe('prompt-maker'));
 
+    act(() => {
+      result.current.newSession();
+      result.current.newSession();
+    });
+    expect(result.current.sessionId).toBe('session_new');
+    expect(navigate).not.toHaveBeenCalled();
+
     let send!: Promise<void>;
     act(() => { send = result.current.send('My first prompt'); });
     await send;
@@ -245,9 +252,20 @@ describe('useAgentController session lifecycle', () => {
       preview: 'My first prompt',
       turnCount: 1,
     });
+    act(() => result.current.newSession());
+    expect(result.current.sessionId).toBe('session_new');
+    expect(navigate).not.toHaveBeenCalled();
 
     act(() => releaseStream());
     await waitFor(() => expect(result.current.sessions[0]).toEqual(durable));
+
+    act(() => result.current.newSession());
+    expect(navigate).toHaveBeenCalledOnce();
+    expect(navigate).toHaveBeenCalledWith({
+      view: 'agent',
+      profile: 'prompt-maker',
+      session: expect.not.stringMatching(/^session_new$/),
+    });
   });
 
   it('resolves a $skill once and starts a lean run with authoritative instructions', async () => {

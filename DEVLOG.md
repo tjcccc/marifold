@@ -2,6 +2,18 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-08-21 — v0.56.1 — Idempotent empty-session creation
+
+- Made Web `New session` idempotent while the active GUID has no corresponding
+  database session. Optimistic `Saving…` rows and filtered sidebar results do
+  not count as persistence; successful session detail/list responses do.
+- Preserved normal new-session creation once the active session is confirmed
+  durable, with a controller regression covering both sides of the boundary.
+- Verified 127 CLI command checks and the full workspace typecheck/build/test
+  gate (618 tests: core 306, service 55, TUI 59, CLI 18, Web 180).
+- Version 0.56.0 → 0.56.1 across all packages + CLI `.version`.
+- Released as v0.56.1.
+
 ## 2026-08-21 — v0.56.0 — Managed service daemon lifecycle
 
 - Added equivalent foreground `marifold service` / `marifold service start`
