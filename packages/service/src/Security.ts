@@ -1,4 +1,5 @@
 import * as crypto from 'crypto';
+import { isIP } from 'net';
 import * as path from 'path';
 import { FastifyInstance, FastifyRequest } from 'fastify';
 import { MarifoldError, MarifoldServiceConfig } from '@marifold/core';
@@ -6,18 +7,23 @@ import { MarifoldError, MarifoldServiceConfig } from '@marifold/core';
 /** Effective security settings: explicit options win over the [service]
  * config section. An unresolved/empty token means auth is disabled (bare
  * loopback keeps working, the pre-auth default). */
-export interface ServiceSecurityOptions {
+export interface ResolvedServiceSecurityOptions {
   token?: string;
   corsOrigins: string[];
-  /** Accept request Host values beyond loopback. Enabled only when the
-   * service explicitly binds a non-loopback address with authentication. */
-  allowRemoteHosts?: boolean;
+}
+
+export interface ServiceSecurityOptions extends ResolvedServiceSecurityOptions {
+  /** Network reachability policy. The actual listen address remains a separate
+   * transport choice; private mode filters every request by its socket peer. */
+  access: 'loopback' | 'private' | 'public';
+  /** Explicit listen host, used as an allowed Host value in private mode. */
+  boundHost: string;
 }
 
 export function resolveSecurityOptions(
   config: MarifoldServiceConfig | undefined,
   overrides: { token?: string; corsOrigins?: string[] } = {},
-): ServiceSecurityOptions {
+): ResolvedServiceSecurityOptions {
   const configured = config?.tokenEnv ? process.env[config.tokenEnv] : config?.token;
   const token = overrides.token ?? configured;
   return {
@@ -42,6 +48,10 @@ const QUERY_TOKEN_PATHS = /^\/v1\/runs\/[^/]+\/events(\?|$)/;
  */
 export function registerSecurity(server: FastifyInstance, options: ServiceSecurityOptions): void {
   server.addHook('onRequest', async (request, reply) => {
+    if (options.access === 'private' && !isPrivateNetworkAddress(request.ip)) {
+      throw MarifoldError.networkForbidden(request.ip);
+    }
+
     const origin = request.headers.origin;
     if (typeof origin === 'string' && origin !== '' && !isSameAllowedOrigin(origin, request.headers.host, options)) {
       if (!options.corsOrigins.includes(origin)) throw MarifoldError.originForbidden(origin);
@@ -108,7 +118,85 @@ function isSameAllowedOrigin(
 }
 
 function isAllowedHost(host: string, options: ServiceSecurityOptions): boolean {
-  return options.allowRemoteHosts === true || LOOPBACK_HOST.test(host);
+  if (options.access === 'public') return true;
+  if (options.access === 'loopback') return LOOPBACK_HOST.test(host);
+  if (options.token) return true;
+
+  const hostname = hostnameFromHeader(host);
+  if (!hostname) return false;
+  const normalized = hostname.toLowerCase();
+  return normalized === options.boundHost.toLowerCase()
+    || isPrivateNetworkAddress(normalized)
+    || !normalized.includes('.')
+    || normalized.endsWith('.local')
+    || normalized.endsWith('.ts.net');
+}
+
+function hostnameFromHeader(host: string): string | undefined {
+  try {
+    const hostname = new URL(`http://${host}`).hostname;
+    return hostname.startsWith('[') && hostname.endsWith(']')
+      ? hostname.slice(1, -1)
+      : hostname;
+  } catch {
+    return undefined;
+  }
+}
+
+/** True for directly connected client ranges intended by private access:
+ * loopback, RFC 1918 LANs, IPv4/IPv6 link-local, IPv6 ULA, and the shared
+ * 100.64/10 range used by Tailscale. X-Forwarded-For is intentionally ignored;
+ * Fastify's direct socket peer is the security boundary. */
+function isPrivateNetworkAddress(address: string): boolean {
+  const bytes = parseIpAddress(address);
+  if (!bytes) return false;
+  if (bytes.length === 4) return isPrivateIpv4(bytes);
+
+  const mapped = bytes.slice(0, 10).every(byte => byte === 0)
+    && bytes[10] === 0xff
+    && bytes[11] === 0xff;
+  if (mapped) return isPrivateIpv4(bytes.slice(12));
+
+  const loopback = bytes.slice(0, 15).every(byte => byte === 0) && bytes[15] === 1;
+  const uniqueLocal = (bytes[0] & 0xfe) === 0xfc;
+  const linkLocal = bytes[0] === 0xfe && (bytes[1] & 0xc0) === 0x80;
+  return loopback || uniqueLocal || linkLocal;
+}
+
+function isPrivateIpv4(bytes: number[]): boolean {
+  return bytes[0] === 10
+    || bytes[0] === 127
+    || (bytes[0] === 169 && bytes[1] === 254)
+    || (bytes[0] === 172 && bytes[1] >= 16 && bytes[1] <= 31)
+    || (bytes[0] === 192 && bytes[1] === 168)
+    || (bytes[0] === 100 && bytes[1] >= 64 && bytes[1] <= 127);
+}
+
+function parseIpAddress(rawAddress: string): number[] | undefined {
+  const address = rawAddress.split('%', 1)[0];
+  const version = isIP(address);
+  if (version === 4) return address.split('.').map(part => Number(part));
+  if (version !== 6) return undefined;
+
+  let ipv6 = address.toLowerCase();
+  if (ipv6.includes('.')) {
+    const lastColon = ipv6.lastIndexOf(':');
+    const ipv4 = parseIpAddress(ipv6.slice(lastColon + 1));
+    if (!ipv4 || ipv4.length !== 4) return undefined;
+    ipv6 = `${ipv6.slice(0, lastColon)}:${((ipv4[0] << 8) | ipv4[1]).toString(16)}:${((ipv4[2] << 8) | ipv4[3]).toString(16)}`;
+  }
+
+  const halves = ipv6.split('::');
+  if (halves.length > 2) return undefined;
+  const left = halves[0] ? halves[0].split(':') : [];
+  const right = halves.length === 2 && halves[1] ? halves[1].split(':') : [];
+  const missing = 8 - left.length - right.length;
+  if (missing < 0 || (halves.length === 1 && missing !== 0)) return undefined;
+  const words = [...left, ...Array(missing).fill('0'), ...right].map(word => Number.parseInt(word, 16));
+  if (words.length !== 8 || words.some(word => !Number.isInteger(word) || word < 0 || word > 0xffff)) {
+    return undefined;
+  }
+  return words.flatMap(word => [word >> 8, word & 0xff]);
 }
 
 function extractToken(request: FastifyRequest): string | undefined {

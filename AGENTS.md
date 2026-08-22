@@ -28,7 +28,9 @@ v0.53.x enables bearer-protected non-loopback service binding for trusted LAN or
 
 v0.54.x adds optional model-authored clarification questions through one renderer-neutral interaction contract, with batched standalone question interfaces in the TUI and Web UI. It also restores normal user-home semantics for `~` and `$HOME` while retaining capability-scoped run isolation.
 
-The service defaults to loopback. Explicit non-loopback binds require resolved bearer authentication and support same-origin hosted Web access without a CORS entry.
+v0.55–v0.57.x add interruptible runs and multi-select clarification answers, managed foreground/daemon service lifecycle with restartable safe launch options, idempotent empty-session creation, live signed-in ChatGPT model discovery, strict provider-error surfacing through `@priest-ai/core` 3.0.1, and private-network-only tokenless non-loopback access with explicit authenticated `--public` exposure.
+
+The service defaults to loopback. Explicit non-loopback binds accept direct private LAN, link-local, IPv6 ULA, and Tailscale peers by default; public-source access requires `--public` plus resolved bearer authentication. Same-origin hosted Web access needs no CORS entry.
 
 ## Stack
 

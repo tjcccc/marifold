@@ -64,16 +64,18 @@ describe('marifold service lifecycle', () => {
     expect(stoppedStatus.output).toContain('Marifold service: stopped');
   }, 15_000);
 
-  it('starts, reports, logs, deduplicates, and stops a daemon', async () => {
+  it('starts, reports, logs, restarts with the same options, deduplicates, and stops a daemon', async () => {
     const cliEntry = path.resolve(__dirname, '../dist/index.js');
     const configPath = fixtureConfig();
-    const started = await runCli(cliEntry, configPath, ['service', 'start', '--daemon', '--port', '0'], 12_000);
+    const started = await runCli(cliEntry, configPath, ['service', 'start', '--daemon', '--port', '0', '--log'], 12_000);
     expect(started.code).toBe(0);
     expect(started.output).toMatch(/Marifold service started in background \(PID \d+\)/);
+    const startedPid = Number(started.output.match(/PID (\d+)/)?.[1]);
 
     const status = await runCli(cliEntry, configPath, ['status']);
     expect(status.code).toBe(0);
     expect(status.output).toContain('Mode:    daemon');
+    expect(status.output).toContain('Access:  loopback');
     const address = status.output.match(/Address: (http:\/\/127\.0\.0\.1:\d+)/)?.[1];
     expect(address).toBeDefined();
     expect(await fetch(`${address}/health`).then(response => response.json())).toMatchObject({
@@ -88,6 +90,34 @@ describe('marifold service lifecycle', () => {
     expect(loggedStatus.output).toContain('Recent logs (last 100 lines):');
     expect(loggedStatus.output).toContain('Marifold service listening at');
 
+    const restarted = await runCli(cliEntry, configPath, ['service', 'restart'], 12_000);
+    expect(restarted.code).toBe(0);
+    expect(restarted.output).toContain(`Marifold service stopped (PID ${startedPid}). Restarting...`);
+    expect(restarted.output).toMatch(/Marifold service started in background \(PID \d+\)/);
+    const restartedPid = Number(restarted.output.match(/started in background \(PID (\d+)\)/)?.[1]);
+    expect(restartedPid).not.toBe(startedPid);
+
+    const restartedStatus = await runCli(cliEntry, configPath, ['status']);
+    expect(restartedStatus.code).toBe(0);
+    expect(restartedStatus.output).toContain('Mode:    daemon');
+    const restartedAddress = restartedStatus.output.match(/Address: (http:\/\/127\.0\.0\.1:\d+)/)?.[1];
+    expect(restartedAddress).toBeDefined();
+    expect(await fetch(`${restartedAddress}/health`).then(response => response.json())).toMatchObject({
+      ok: true,
+      service: 'marifold',
+    });
+
+    const state = JSON.parse(fs.readFileSync(path.join(serviceStateDir(configPath), 'state.json'), 'utf8')) as {
+      launch?: Record<string, unknown>;
+    };
+    expect(state.launch).toMatchObject({
+      host: '127.0.0.1',
+      port: '0',
+      log: true,
+      publicAccess: false,
+      tokenSource: 'config',
+    });
+
     const duplicate = await runCli(cliEntry, configPath, ['service', 'start', '--daemon', '--port', '0']);
     expect(duplicate.code).toBe(1);
     expect(duplicate.output).toContain('Marifold service is already running');
@@ -95,12 +125,44 @@ describe('marifold service lifecycle', () => {
     const stopped = await runCli(cliEntry, configPath, ['service', 'stop'], 8_000);
     expect(stopped.code).toBe(0);
     expect(stopped.output).toMatch(/Marifold service stopped \(PID \d+\)/);
-    await expect(fetch(`${address}/health`)).rejects.toThrow();
+    await expect(fetch(`${restartedAddress}/health`)).rejects.toThrow();
 
     const stoppedStatus = await runCli(cliEntry, configPath, ['status']);
     expect(stoppedStatus.code).toBe(1);
     expect(stoppedStatus.output).toContain('Marifold service: stopped');
-  }, 25_000);
+  }, 35_000);
+
+  it('requires a raw token again without persisting it or stopping the service first', async () => {
+    const cliEntry = path.resolve(__dirname, '../dist/index.js');
+    const configPath = fixtureConfig();
+    const token = 'restart-test-secret';
+    const started = await runCli(cliEntry, configPath, [
+      'service', 'start', '--daemon', '--host', '0.0.0.0', '--public', '--port', '0', '--token', token,
+    ], 12_000);
+    expect(started.code).toBe(0);
+
+    const statePath = path.join(serviceStateDir(configPath), 'state.json');
+    const stateText = fs.readFileSync(statePath, 'utf8');
+    expect(stateText).not.toContain(token);
+    expect(JSON.parse(stateText)).toMatchObject({
+      launch: { host: '0.0.0.0', publicAccess: true, tokenSource: 'raw' },
+    });
+
+    const missingToken = await runCli(cliEntry, configPath, ['service', 'restart']);
+    expect(missingToken.code).toBe(1);
+    expect(missingToken.output).toContain('service restart --token <token>');
+    const publicStatus = await runCli(cliEntry, configPath, ['status']);
+    expect(publicStatus.code).toBe(0);
+    expect(publicStatus.output).toContain('Access:  public');
+
+    const restarted = await runCli(cliEntry, configPath, ['service', 'restart', '--token', token], 12_000);
+    expect(restarted.code).toBe(0);
+    expect(restarted.output).toContain('Restarting...');
+    expect(fs.readFileSync(statePath, 'utf8')).not.toContain(token);
+
+    const stopped = await runCli(cliEntry, configPath, ['service', 'stop'], 8_000);
+    expect(stopped.code).toBe(0);
+  }, 30_000);
 });
 
 function fixtureConfig(): string {

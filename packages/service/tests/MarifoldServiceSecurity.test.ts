@@ -7,19 +7,28 @@ afterEach(() => {
 });
 
 describe('MarifoldService security', () => {
-  it('requires bearer authentication before enabling a non-loopback bind', () => {
+  it('requires bearer authentication before enabling public access', () => {
     expect(() => createMarifoldService({
       loadedConfig: fixtureLoadedConfig(tempDir()),
       host: '0.0.0.0',
+      publicAccess: true,
       scheduler: false,
-    })).toThrow(/non-loopback service host requires bearer authentication/i);
+    })).toThrow(/public service access requires bearer authentication/i);
   });
 
-  it('listens on the wildcard host when bearer authentication is configured', async () => {
-    const result = await startMarifoldService({
+  it('rejects public mode on a loopback-only bind', () => {
+    expect(() => createMarifoldService({
       loadedConfig: fixtureLoadedConfig(tempDir(), {
         service: { token: 'sekret-token', corsOrigins: [] },
       }),
+      publicAccess: true,
+      scheduler: false,
+    })).toThrow(/--public requires a non-loopback --host/i);
+  });
+
+  it('listens on the wildcard host in tokenless private mode', async () => {
+    const result = await startMarifoldService({
+      loadedConfig: fixtureLoadedConfig(tempDir()),
       host: '0.0.0.0',
       port: 0,
       scheduler: false,
@@ -32,6 +41,121 @@ describe('MarifoldService security', () => {
       expect(health.status).toBe(200);
     } finally {
       await result.server.close();
+    }
+  });
+
+  it('allows LAN, link-local, and Tailscale peers while rejecting public source addresses', async () => {
+    const server = createMarifoldService({
+      loadedConfig: fixtureLoadedConfig(tempDir()),
+      host: '0.0.0.0',
+      scheduler: false,
+    });
+    try {
+      for (const remoteAddress of [
+        '127.0.0.1',
+        '10.1.2.3',
+        '172.16.1.2',
+        '192.168.1.2',
+        '169.254.1.2',
+        '100.64.1.2',
+        '100.127.255.254',
+        '::1',
+        'fd7a:115c:a1e0::1',
+        'fe80::1',
+        '::ffff:192.168.1.2',
+      ]) {
+        const response = await server.inject({
+          method: 'GET',
+          url: '/v1/status',
+          remoteAddress,
+          headers: { host: '192.168.1.10:32140' },
+        });
+        expect(response.statusCode, remoteAddress).toBe(200);
+      }
+
+      for (const remoteAddress of ['8.8.8.8', '100.128.0.1', '172.32.0.1', '2001:4860:4860::8888']) {
+        const response = await server.inject({
+          method: 'GET',
+          url: '/v1/status',
+          remoteAddress,
+          headers: {
+            host: '192.168.1.10:32140',
+            'x-forwarded-for': '192.168.1.2',
+          },
+        });
+        expect(response.statusCode, remoteAddress).toBe(403);
+        expect(response.json().error.code, remoteAddress).toBe('NETWORK_FORBIDDEN');
+      }
+    } finally {
+      await server.close();
+    }
+  });
+
+  it('rejects DNS-rebinding hosts in tokenless private mode', async () => {
+    const server = createMarifoldService({
+      loadedConfig: fixtureLoadedConfig(tempDir()),
+      host: '0.0.0.0',
+      scheduler: false,
+    });
+    try {
+      const rebound = await server.inject({
+        method: 'GET',
+        url: '/v1/status',
+        remoteAddress: '192.168.1.2',
+        headers: { host: 'evil.example.com' },
+      });
+      expect(rebound.statusCode).toBe(403);
+      expect(rebound.json().error.code).toBe('ORIGIN_FORBIDDEN');
+
+      for (const host of [
+        '100.101.102.103:32140',
+        '[fd7a:115c:a1e0::1]:32140',
+        'marifold.local:32140',
+        'device.tailnet.ts.net:32140',
+      ]) {
+        const allowed = await server.inject({
+          method: 'GET',
+          url: '/v1/status',
+          remoteAddress: '100.101.102.103',
+          headers: { host },
+        });
+        expect(allowed.statusCode, host).toBe(200);
+      }
+    } finally {
+      await server.close();
+    }
+  });
+
+  it('accepts public source addresses only in authenticated public mode', async () => {
+    const server = createMarifoldService({
+      loadedConfig: fixtureLoadedConfig(tempDir(), {
+        service: { token: 'sekret-token', corsOrigins: [] },
+      }),
+      host: '0.0.0.0',
+      publicAccess: true,
+      scheduler: false,
+    });
+    try {
+      const bare = await server.inject({
+        method: 'GET',
+        url: '/v1/status',
+        remoteAddress: '8.8.8.8',
+        headers: { host: 'public.example.com' },
+      });
+      expect(bare.statusCode).toBe(401);
+
+      const authenticated = await server.inject({
+        method: 'GET',
+        url: '/v1/status',
+        remoteAddress: '8.8.8.8',
+        headers: {
+          host: 'public.example.com',
+          authorization: 'Bearer sekret-token',
+        },
+      });
+      expect(authenticated.statusCode).toBe(200);
+    } finally {
+      await server.close();
     }
   });
 

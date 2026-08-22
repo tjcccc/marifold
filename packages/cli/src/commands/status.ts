@@ -27,6 +27,11 @@ export function registerStatusCommand(program: Command, printer: ConsolePrinter)
           process.stdout.write(`Mode:    ${state.mode}\n`);
           process.stdout.write(`Started: ${state.startedAt}\n`);
           if (state.address) process.stdout.write(`Address: ${state.address}\n`);
+          if (state.launch) {
+            const loopback = ['127.0.0.1', 'localhost', '::1'].includes(state.launch.host);
+            const access = state.launch.publicAccess ? 'public' : loopback ? 'loopback' : 'private';
+            process.stdout.write(`Access:  ${access}\n`);
+          }
           process.stdout.write(`Config:  ${state.configPath}\n`);
         } else {
           process.stdout.write('Marifold service: stopped\n');

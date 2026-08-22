@@ -5,6 +5,20 @@ import { marifoldHome } from '@marifold/core';
 
 export type ServiceProcessMode = 'foreground' | 'daemon';
 export type ServiceProcessStatus = 'starting' | 'running';
+export type ServiceTokenSource = 'config' | 'env' | 'raw';
+
+export interface ServiceLaunchOptions {
+  host: string;
+  port: string;
+  cwd: string;
+  log: boolean;
+  /** Optional for state written before private/public access modes existed. */
+  publicAccess?: boolean;
+  corsOrigins: string[];
+  webDir?: string;
+  tokenSource: ServiceTokenSource;
+  tokenEnv?: string;
+}
 
 export interface ServiceProcessState {
   version: 1;
@@ -15,6 +29,9 @@ export interface ServiceProcessState {
   startedAt: string;
   configPath: string;
   address?: string;
+  /** Non-secret launch details used by `marifold service restart`. Older state
+   * files omit this and remain readable for status/stop compatibility. */
+  launch?: ServiceLaunchOptions;
 }
 
 export interface ServiceProcessPaths {
@@ -48,6 +65,7 @@ export function claimServiceProcess(
   mode: ServiceProcessMode,
   configPath: string,
   paths = serviceProcessPaths(),
+  launch?: ServiceLaunchOptions,
 ): ServiceProcessState {
   return withStateLock(paths, () => {
     const existing = readStateFile(paths.state);
@@ -64,6 +82,7 @@ export function claimServiceProcess(
       status: 'starting',
       startedAt: new Date().toISOString(),
       configPath,
+      ...(launch ? { launch } : {}),
     };
     writeStateFile(paths.state, state);
     return state;
@@ -220,7 +239,25 @@ function isServiceProcessState(value: unknown): value is ServiceProcessState {
     && (state.status === 'starting' || state.status === 'running')
     && typeof state.startedAt === 'string'
     && typeof state.configPath === 'string'
-    && (state.address === undefined || typeof state.address === 'string');
+    && (state.address === undefined || typeof state.address === 'string')
+    && (state.launch === undefined || isServiceLaunchOptions(state.launch));
+}
+
+function isServiceLaunchOptions(value: unknown): value is ServiceLaunchOptions {
+  if (!value || typeof value !== 'object') return false;
+  const launch = value as Record<string, unknown>;
+  return typeof launch.host === 'string'
+    && typeof launch.port === 'string'
+    && typeof launch.cwd === 'string'
+    && typeof launch.log === 'boolean'
+    && (launch.publicAccess === undefined || typeof launch.publicAccess === 'boolean')
+    && Array.isArray(launch.corsOrigins)
+    && launch.corsOrigins.every(origin => typeof origin === 'string')
+    && (launch.webDir === undefined || typeof launch.webDir === 'string')
+    && (launch.tokenSource === 'config' || launch.tokenSource === 'env' || launch.tokenSource === 'raw')
+    && (launch.tokenSource === 'env'
+      ? typeof launch.tokenEnv === 'string' && launch.tokenEnv.length > 0
+      : launch.tokenEnv === undefined);
 }
 
 function isProcessRunning(pid: number): boolean {

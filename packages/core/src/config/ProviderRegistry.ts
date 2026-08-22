@@ -268,10 +268,8 @@ const REGISTRY: ProviderRegistryEntry[] = [
     // the OAuth access token + chatgpt-account-id header are used directly here.
     defaultBaseUrl: 'https://chatgpt.com/backend-api/codex',
     apiKeyEnv: 'CHATGPT_API_KEY',
-    // The Codex backend only accepts ChatGPT-account-enabled models; others are
-    // rejected with "not supported for ChatGPT account". Model names churn (a
-    // sunset runs mid-2026) — these are the current set; the picker also accepts
-    // a custom id.
+    // Offline/auth-failure fallback only. Live model selection queries the
+    // signed-in account's Codex model catalog; custom ids remain available.
     knownModels: ['gpt-5.5', 'gpt-5.3-codex', 'gpt-5.4-mini'],
   },
   {

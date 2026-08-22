@@ -36,9 +36,12 @@ import {
 
 export interface MarifoldServiceOptions {
   loadedConfig: LoadedMarifoldConfig;
-  /** Address the HTTP server will bind to. Defaults to loopback. A
-   * non-loopback address requires resolved bearer authentication. */
+  /** Address the HTTP server will bind to. Defaults to loopback. */
   host?: string;
+  /** Accept public source addresses. Requires a non-loopback host and resolved
+   * bearer authentication. Non-loopback binds otherwise accept private
+   * LAN/link-local/Tailscale sources only. */
+  publicAccess?: boolean;
   logger?: boolean;
   /** Run the schedule scheduler inside this service process. Default true.
    * Schedules only fire while the service is running. */
@@ -76,8 +79,8 @@ const DEFAULT_HOST = '127.0.0.1';
 const DEFAULT_PORT = 32140;
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '::1']);
 /** Base64 image attachments ride the JSON body; fastify's 1 MiB default
- * would reject them. Still gated by bind scope, CORS, and bearer auth whenever
- * the service leaves loopback. */
+ * would reject them. Still gated by bind scope, source network, CORS, and any
+ * configured bearer auth whenever the service leaves loopback. */
 const BODY_LIMIT_BYTES = 25 * 1024 * 1024;
 
 export function createMarifoldService(options: MarifoldServiceOptions): FastifyInstance {
@@ -86,13 +89,14 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
     token: options.auth?.token,
     corsOrigins: options.cors?.origins,
   });
-  assertBindingSecurity(host, security.token);
+  validateBindingSecurity(host, security.token, Boolean(options.publicAccess));
 
   const runtime = new MarifoldRuntime({ loadedConfig: options.loadedConfig });
   const server = fastify({ logger: options.logger ?? false, bodyLimit: BODY_LIMIT_BYTES });
   registerSecurity(server, {
     ...security,
-    allowRemoteHosts: !LOOPBACK_HOSTS.has(host),
+    access: LOOPBACK_HOSTS.has(host) ? 'loopback' : options.publicAccess ? 'public' : 'private',
+    boundHost: host,
   });
 
   const scheduler = (options.scheduler ?? true)
@@ -621,12 +625,17 @@ export async function startMarifoldService(options: MarifoldServiceStartOptions)
   }
 }
 
-function assertBindingSecurity(host: string, token: string | undefined): void {
-  if (LOOPBACK_HOSTS.has(host) || token) return;
-  throw MarifoldError.configInvalid(
-    'A non-loopback service host requires bearer authentication. Configure [service].token_env or pass --token-env/--token.',
-    { host },
-  );
+export function validateBindingSecurity(host: string, token: string | undefined, publicAccess = false): void {
+  if (!publicAccess) return;
+  if (LOOPBACK_HOSTS.has(host)) {
+    throw MarifoldError.configInvalid('--public requires a non-loopback --host such as 0.0.0.0.', { host });
+  }
+  if (!token) {
+    throw MarifoldError.configInvalid(
+      'Public service access requires bearer authentication. Configure [service].token_env or pass --token-env/--token.',
+      { host },
+    );
+  }
 }
 
 async function streamChat(reply: FastifyReply, runtime: MarifoldRuntime, request: MarifoldRunRequest): Promise<void> {
@@ -884,8 +893,9 @@ function statusCodeForError(error: MarifoldError): number {
   }
   if (error.code === 'CONFIG_FILE_NOT_FOUND') return 404;
   if (error.code === 'UNAUTHORIZED') return 401;
-  if (error.code === 'ORIGIN_FORBIDDEN') return 403;
+  if (error.code === 'NETWORK_FORBIDDEN' || error.code === 'ORIGIN_FORBIDDEN') return 403;
   if (error.code === 'RUN_LIMIT_EXCEEDED') return 429;
+  if (error.code === 'PROVIDER_ERROR') return 502;
   return 500;
 }
 

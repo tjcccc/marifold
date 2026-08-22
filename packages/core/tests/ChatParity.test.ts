@@ -84,6 +84,124 @@ describe('search formatting', () => {
 });
 
 describe('chat tool loop', () => {
+  it('surfaces provider failures instead of completing with a blank response', async () => {
+    const dir = tempDir();
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('rate limited', { status: 429 })));
+
+    const runtime = runtimeFor(dir, baseConfig(dir));
+    try {
+      await expect(collectStream(runtime.stream({
+        prompt: 'Hello',
+        sessionId: 'failed-new-session',
+        memories: false,
+      })))
+        .rejects.toMatchObject({
+          code: 'PROVIDER_ERROR',
+          message: expect.stringContaining('HTTP 429'),
+          details: {
+            provider: 'ollama',
+            model: 'gemma4:e4b',
+            upstreamCode: 'PROVIDER_ERROR',
+          },
+        });
+      expect(runtime.getSession('failed-new-session')).toBeUndefined();
+    } finally {
+      runtime.close();
+    }
+  });
+
+  it('surfaces a successful provider completion that contains no answer text', async () => {
+    const dir = tempDir();
+    vi.stubGlobal('fetch', vi.fn(async () => ndjsonResponse([
+      { message: { content: '' }, done: true, done_reason: 'stop' },
+    ])));
+
+    const runtime = runtimeFor(dir, baseConfig(dir));
+    try {
+      await expect(collectStream(runtime.stream({
+        prompt: 'Hello',
+        sessionId: 'empty-new-session',
+        memories: false,
+      })))
+        .rejects.toMatchObject({
+          code: 'PROVIDER_ERROR',
+          message: "Provider 'ollama' returned no text for model 'gemma4:e4b'.",
+          details: {
+            provider: 'ollama',
+            model: 'gemma4:e4b',
+            upstreamCode: 'EMPTY_RESPONSE',
+          },
+        });
+      expect(runtime.getSession('empty-new-session')).toBeUndefined();
+    } finally {
+      runtime.close();
+    }
+  });
+
+  it('replays Responses session assistant turns as output_text', async () => {
+    const dir = tempDir();
+    const bodies: Array<Record<string, unknown>> = [];
+    let call = 0;
+    vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      bodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+      call += 1;
+      const text = call === 1 ? 'First answer.' : 'Second answer.';
+      return responsesSse([
+        { type: 'response.output_text.delta', delta: text },
+        {
+          type: 'response.completed',
+          response: {
+            status: 'completed',
+            output: [{
+              type: 'message',
+              content: [{ type: 'output_text', text }],
+            }],
+          },
+        },
+      ]);
+    }));
+
+    const config = baseConfig(dir, {
+      default: {
+        provider: 'chatgpt',
+        model: 'gpt-5.6-sol',
+        profile: 'default',
+        think: true,
+      },
+      models: { options: ['chatgpt/gpt-5.6-sol'] },
+      providers: {
+        chatgpt: {
+          type: 'openai-compatible',
+          baseUrl: 'https://chatgpt.com/backend-api/codex',
+          apiKey: 'test-access-token',
+        },
+      },
+    });
+    const runtime = runtimeFor(dir, config);
+    try {
+      expect(await collectStream(runtime.stream({
+        prompt: 'First question.',
+        sessionId: 'responses-history',
+        memories: false,
+      }))).toBe('First answer.');
+      expect(await collectStream(runtime.stream({
+        prompt: 'Second question.',
+        sessionId: 'responses-history',
+        memories: false,
+      }))).toBe('Second answer.');
+
+      expect(bodies[1].input).toEqual(expect.arrayContaining([{
+        role: 'assistant',
+        content: [{ type: 'output_text', text: 'First answer.' }],
+      }]));
+      expect(JSON.stringify(bodies[1].input)).not.toContain(
+        '"role":"assistant","content":[{"type":"input_text"',
+      );
+    } finally {
+      runtime.close();
+    }
+  });
+
   it('executes model-initiated web_search and streams the final answer', async () => {
     const dir = tempDir();
     const queries: string[] = [];

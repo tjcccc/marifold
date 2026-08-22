@@ -95,8 +95,8 @@ importers:
   packages/core:
     dependencies:
       '@priest-ai/core':
-        specifier: ^3.0.0
-        version: 3.0.0
+        specifier: ^3.0.1
+        version: 3.0.1
       better-sqlite3:
         specifier: ^13.0.1
         version: 13.0.1
@@ -473,8 +473,8 @@ packages:
     engines: {node: '>=20'}
     hasBin: true
 
-  '@priest-ai/core@3.0.0':
-    resolution: {integrity: sha512-XQchmjrWIqO/2fwvs33S5WWHUPRpw2T8XaMfn6iKPZvjwOEqkgDq7jLq2fCamhKawuLG0D7aWbj0XoGwWgCQHw==}
+  '@priest-ai/core@3.0.1':
+    resolution: {integrity: sha512-y2fwIU3+S5+KfWFPBVWBiuKpDnizg6fiDoqtZpbxOU8BlqQOvs5QsdcQJNfs9etV8BabcbFnw4QwG05kAWFgjw==}
     engines: {node: ^22.0.0 || ^24.0.0}
 
   '@rolldown/binding-android-arm64@1.1.5':
@@ -1819,7 +1819,7 @@ snapshots:
     dependencies:
       playwright: 1.62.0
 
-  '@priest-ai/core@3.0.0':
+  '@priest-ai/core@3.0.1':
     dependencies:
       better-sqlite3: 13.0.1
 

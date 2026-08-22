@@ -24,7 +24,9 @@ export function openAIResponsesUrl(baseUrl: string, options: OpenAICompatUrlOpti
 export function openAIModelsUrl(baseUrl: string, options: OpenAICompatUrlOptions = {}): string {
   const normalized = normalizeBaseUrl(baseUrl);
   if (normalized.endsWith('/models')) return normalized;
-  if (options.providerName === 'github_copilot') return `${normalized}/models`;
+  if (options.providerName === 'github_copilot' || options.providerName === 'chatgpt') {
+    return `${normalized}/models`;
+  }
   if (isVersionRoot(normalized)) return `${normalized}/models`;
   return `${normalized}/v1/models`;
 }

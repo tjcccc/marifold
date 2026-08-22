@@ -5,6 +5,7 @@ export type MarifoldErrorCode =
   | 'IMAGE_INVALID'
   | 'PROFILE_INVALID'
   | 'PROVIDER_NOT_CONFIGURED'
+  | 'PROVIDER_ERROR'
   | 'API_KEY_MISSING'
   | 'MEMORY_INVALID'
   | 'TASK_INVALID'
@@ -24,6 +25,7 @@ export type MarifoldErrorCode =
   | 'USER_INPUT_NOT_FOUND'
   | 'RUN_LIMIT_EXCEEDED'
   | 'UNAUTHORIZED'
+  | 'NETWORK_FORBIDDEN'
   | 'ORIGIN_FORBIDDEN';
 
 export class MarifoldError extends Error {
@@ -70,6 +72,23 @@ export class MarifoldError extends Error {
       'PROVIDER_NOT_CONFIGURED',
       `Provider '${provider}' is not configured in ${configPath}. Add a [providers.${provider}] table.`,
       { provider, configPath },
+    );
+  }
+
+  static providerError(
+    message: string,
+    provider: string,
+    model: string,
+    upstreamCode?: string,
+  ): MarifoldError {
+    return new MarifoldError(
+      'PROVIDER_ERROR',
+      message,
+      {
+        provider,
+        model,
+        ...(upstreamCode ? { upstreamCode } : {}),
+      },
     );
   }
 
@@ -155,6 +174,14 @@ export class MarifoldError extends Error {
 
   static unauthorized(): MarifoldError {
     return new MarifoldError('UNAUTHORIZED', 'Missing or invalid bearer token.');
+  }
+
+  static networkForbidden(address: string): MarifoldError {
+    return new MarifoldError(
+      'NETWORK_FORBIDDEN',
+      `Network source not allowed: ${address}. Start the service with --public and bearer authentication to accept public clients.`,
+      { address },
+    );
   }
 
   static originForbidden(origin: string): MarifoldError {

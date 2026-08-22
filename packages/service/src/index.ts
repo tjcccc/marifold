@@ -1,6 +1,7 @@
 export {
   createMarifoldService,
   startMarifoldService,
+  validateBindingSecurity,
 } from './MarifoldService';
 export type {
   MarifoldServiceOptions,
@@ -8,4 +9,4 @@ export type {
   MarifoldServiceStartResult,
 } from './MarifoldService';
 export { resolveSecurityOptions } from './Security';
-export type { ServiceSecurityOptions } from './Security';
+export type { ResolvedServiceSecurityOptions, ServiceSecurityOptions } from './Security';

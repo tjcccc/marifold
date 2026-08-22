@@ -4,20 +4,24 @@ The HTTP contract for `marifold service` — the local API every app client
 (Web UI first, desktop/mobile later) is built on. One service process powers
 the HTTP API, the schedule runner, and the Telegram bridge.
 
-- **Base URL:** `http://127.0.0.1:32140` by default (`--host` / `--port`). An
-  explicit non-loopback host requires resolved bearer authentication.
+- **Base URL:** `http://127.0.0.1:32140` by default (`--host` / `--port`). A
+  non-loopback bind accepts private-network peers by default; `--public`
+  accepts any source address and requires resolved bearer authentication.
 - **Versioning:** all routes are under `/v1` except `GET /health`. Additive
   changes (new fields, new event types) may land within v1 — clients must
   ignore unknown fields and unknown SSE event types. Breaking changes get a
   new prefix.
 - **Foreground:** `marifold service [options]` or `marifold service start [options]`
 - **Background:** `marifold service start --daemon [options]`; inspect with
-  `marifold status [--logs]` and stop with `marifold service stop`.
+  `marifold status [--logs]`, restart with `marifold service restart`, and stop
+  with `marifold service stop`. Restart reuses the previous safe launch options
+  and mode. Raw `--token` values are not persisted, so repeat one as
+  `marifold service restart --token <token>` when required.
 
 ## Authentication
 
-Off by default on loopback. A non-loopback bind is rejected unless a bearer
-token resolves. When a bearer token is configured, every
+Off by default on loopback and in private-network mode. Public access requires
+a bearer token. When a bearer token is configured, every
 **`/v1/*`** route requires it — `GET /health`, CORS preflights, and the
 hosted Web UI shell (static files) stay reachable; the shell carries no
 secrets and every stateful route is versioned under `/v1`:
@@ -44,18 +48,31 @@ issues or exposes through the API. Generate and store it on the service host,
 preferably through `token_env`, then enter the same value in the client. The
 sanitized Config screen intentionally reports only whether a token is present.
 
-A non-loopback `--host` makes the service directly reachable on that interface.
-For example, after configuring `token_env`, listen on every interface with:
+A non-loopback `--host` makes the service listen on that interface. For
+example, listen on every interface while accepting only direct loopback,
+private LAN, link-local, IPv6 ULA, and Tailscale (`100.64.0.0/10`) peers with:
 
 ```sh
 marifold service --host 0.0.0.0
 ```
 
-Then open `http://<service-host-ip>:32140`, select **This server** in the Web UI
-Connection sheet, and enter the same secret. `0.0.0.0` exposes every active
-interface; binding the specific Tailscale or LAN address is narrower. The API
-has no TLS termination, so use only a trusted private network or a TLS reverse
-proxy, and do not expose the port publicly.
+Then open `http://<service-host-ip>:32140`. A token remains optional but
+supported in private mode. Tokenless private mode also restricts request Host
+values to private IPs, loopback, single-label names, `.local`, `.ts.net`, and
+the explicit bind host to resist DNS rebinding.
+
+Accept all source addresses only through the explicit authenticated mode:
+
+```sh
+marifold service --host 0.0.0.0 --public --token-env MARIFOLD_SERVICE_TOKEN
+```
+
+`0.0.0.0` opens every active interface; binding a specific Tailscale or LAN
+address is narrower. Source filtering uses the direct socket peer and ignores
+forwarded-IP headers. A public reverse proxy or tunnel can make even a
+loopback/private bind publicly reachable, so require a bearer token in that
+topology. The API has no TLS termination; use a trusted private network or a
+TLS reverse proxy.
 
 A Web UI hosted by another Marifold instance can instead save this endpoint as
 a named Connection. That is a cross-origin browser request, so this service
@@ -82,8 +99,8 @@ Browser access is allowlist-only, exact-match against `cors_origins`:
   `cors_origins` configured, all cross-origin browser requests are rejected.
 - Requests without an `Origin` header (curl, native apps) are unaffected.
 - A non-loopback `Host` header is rejected `403` under the default loopback
-  bind. An authenticated explicit remote bind accepts its externally addressed
-  Host values.
+  bind. Tokenless private mode allows only private/local Host forms; an
+  authenticated remote bind accepts its externally addressed Host values.
 
 ## Errors
 
@@ -95,12 +112,14 @@ Every non-2xx response uses one envelope:
 
 | Code | HTTP | Meaning |
 |---|---|---|
-| `CONFIG_INVALID` | 400 | Malformed request body/parameter, or a non-loopback bind without authentication |
+| `CONFIG_INVALID` | 400 | Malformed request body/parameter, tokenless `--public`, or `--public` on a loopback bind |
 | `PROFILE_INVALID`, `MEMORY_INVALID`, `TASK_INVALID`, `SCHEDULE_INVALID`, `AGENT_TOOL_INVALID`, `AGENT_RUN_INVALID` | 400 | Domain validation failed |
 | `UNAUTHORIZED` | 401 | Missing/invalid bearer token |
+| `NETWORK_FORBIDDEN` | 403 | Public source address rejected by private-network mode |
 | `ORIGIN_FORBIDDEN` | 403 | Disallowed browser origin or Host for the active bind scope |
 | `NOT_FOUND` | 404 | Unknown route |
 | `TASK_NOT_FOUND`, `SESSION_NOT_FOUND`, `SCHEDULE_NOT_FOUND`, `RUN_NOT_FOUND`, `APPROVAL_NOT_FOUND`, `USER_INPUT_NOT_FOUND`, `CONFIG_FILE_NOT_FOUND` | 404 | Unknown resource |
+| `PROVIDER_ERROR` | 502 | Upstream provider rejected the request or returned no usable response |
 | `RUN_LIMIT_EXCEEDED` | 429 | Too many active agent runs (default limit 5) |
 | anything else | 500 | Internal error |
 

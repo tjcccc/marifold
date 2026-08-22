@@ -434,6 +434,29 @@ Secondary actor instruction: translate {{source_text}} into {{target_language}}.
     }
   });
 
+  it('streams provider failures as errors instead of blank completed replies', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('rate limited', { status: 429 })));
+    const server = createMarifoldService({ loadedConfig: fixtureLoadedConfig(tempDir()), scheduler: false });
+    try {
+      const response = await server.inject({
+        method: 'POST',
+        url: '/v1/chat/stream',
+        payload: { prompt: 'Hello', sessionId: 'failed-chat', memories: false },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.body).toContain('event: error');
+      expect(response.body).toContain('"code":"PROVIDER_ERROR"');
+      expect(response.body).toContain('HTTP 429');
+      expect(response.body).not.toContain('event: chunk');
+
+      const session = await server.inject({ method: 'GET', url: '/v1/sessions/failed-chat' });
+      expect(session.statusCode).toBe(404);
+    } finally {
+      await server.close();
+    }
+  });
+
   it('streams safe Responses reasoning separately without exposing opaque continuation', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => {
       const events = [

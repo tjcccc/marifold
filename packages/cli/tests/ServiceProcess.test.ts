@@ -21,12 +21,29 @@ afterEach(() => {
 describe('service process state', () => {
   it('claims one owner, records readiness, and releases it', () => {
     const paths = fixturePaths();
-    const owner = claimServiceProcess('foreground', '/tmp/config.toml', paths);
+    const owner = claimServiceProcess('foreground', '/tmp/config.toml', paths, {
+      host: '0.0.0.0',
+      port: '32140',
+      cwd: '/tmp/workspace',
+      log: true,
+      publicAccess: true,
+      corsOrigins: ['https://example.test'],
+      tokenSource: 'raw',
+    });
 
     expect(getActiveServiceProcess(paths)).toMatchObject({
       pid: process.pid,
       mode: 'foreground',
       status: 'starting',
+      launch: {
+        host: '0.0.0.0',
+        port: '32140',
+        cwd: '/tmp/workspace',
+        log: true,
+        publicAccess: true,
+        corsOrigins: ['https://example.test'],
+        tokenSource: 'raw',
+      },
     });
     expect(() => claimServiceProcess('daemon', '/tmp/config.toml', paths)).toThrow('already running');
 

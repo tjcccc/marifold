@@ -5,6 +5,12 @@ import {
   isKnownGitHubCopilotUnsupportedModelId,
   providerConfigFromRegistry,
 } from './ProviderRegistry';
+import { proxyDispatcher } from '../util/proxy';
+
+// The ChatGPT Codex catalog requires a Codex client version and gates catalog
+// entries against it. This is a catalog-protocol compatibility version, not the
+// Marifold package version; update it when adopting a newer Codex catalog shape.
+const CHATGPT_MODEL_CATALOG_CLIENT_VERSION = '0.149.0';
 
 export interface ProviderSummary {
   name: string;
@@ -78,17 +84,6 @@ export class ProviderInspector {
     }
     const registryModels = registry?.knownModels ?? undefined;
 
-    // The ChatGPT subscription (Codex backend) exposes no model-listing endpoint;
-    // probing …/codex/v1/models stalls. Always show the registry's known models.
-    if (providerName === 'chatgpt' && Array.isArray(registryModels)) {
-      return {
-        provider: providerName,
-        reachable: null,
-        models: registryModels,
-        message: 'Showing known models for the ChatGPT subscription.',
-      };
-    }
-
     if (provider.type === 'ollama') {
       const result = await this.fetchOllamaModels(provider.baseUrl ?? 'http://localhost:11434');
       if (shouldShowRegistryModelFallback(providerName, result) && Array.isArray(registryModels) && registryModels.length > 0) {
@@ -124,11 +119,16 @@ export class ProviderInspector {
           provider: providerName,
           reachable: null,
           models: registryModels,
-          message: `Set ${provider.apiKeyEnv} for live model listing. Showing registry models.`,
+          message: providerName === 'chatgpt'
+            ? 'Sign in with ChatGPT for live model listing. Showing known models.'
+            : `Set ${provider.apiKeyEnv} for live model listing. Showing registry models.`,
         };
       }
       const apiKey = this.readApiKey(provider);
-      const result = await this.fetchOpenAICompatibleModels(providerName, provider.baseUrl, apiKey);
+      const result = await this.fetchOpenAICompatibleModels(providerName, provider.baseUrl, apiKey, {
+        accountId: provider.accountId,
+        proxy: provider.proxy,
+      });
       if (shouldShowRegistryModelFallback(providerName, result) && Array.isArray(registryModels) && registryModels.length > 0) {
         return {
           provider: providerName,
@@ -297,7 +297,12 @@ export class ProviderInspector {
     }
   }
 
-  private async fetchOpenAICompatibleModels(providerName: string, baseUrl: string, apiKey?: string): Promise<Omit<ProviderModelList, 'provider'>> {
+  private async fetchOpenAICompatibleModels(
+    providerName: string,
+    baseUrl: string,
+    apiKey?: string,
+    options: { accountId?: string; proxy?: string } = {},
+  ): Promise<Omit<ProviderModelList, 'provider'>> {
     const headers: Record<string, string> = {};
     if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
     if (providerName === 'github_copilot') {
@@ -306,17 +311,30 @@ export class ProviderInspector {
       headers['Copilot-Integration-Id'] = 'vscode-chat';
       headers['User-Agent'] = 'marifold';
     }
-    const url = openAIModelsUrl(baseUrl, { providerName });
+    if (providerName === 'chatgpt') {
+      headers.originator = 'codex_cli_rs';
+      headers['User-Agent'] = 'marifold';
+      if (options.accountId) headers['chatgpt-account-id'] = options.accountId;
+    }
+    const baseModelsUrl = openAIModelsUrl(baseUrl, { providerName });
+    const url = providerName === 'chatgpt'
+      ? `${baseModelsUrl}?client_version=${CHATGPT_MODEL_CATALOG_CLIENT_VERSION}`
+      : baseModelsUrl;
     try {
-      const response = await fetch(url, {
+      const init: RequestInit = {
         headers,
         signal: AbortSignal.timeout(5000),
-      });
+      };
+      const dispatcher = proxyDispatcher(options.proxy);
+      const response = await fetch(url, dispatcher ? { ...init, dispatcher } as RequestInit : init);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const body = await response.json() as { data?: OpenAICompatibleModelRecord[] };
-      const models = filterOpenAICompatibleModels(providerName, body.data ?? [])
-        .map(model => model.id)
-        .filter((id): id is string => typeof id === 'string')
+      const body = await response.json() as OpenAICompatibleModelsResponse;
+      const records = providerName === 'chatgpt'
+        ? body.models ?? body.data ?? []
+        : body.data ?? body.models ?? [];
+      const models = [...new Set(filterOpenAICompatibleModels(providerName, records)
+        .map(model => modelId(providerName, model))
+        .filter((id): id is string => typeof id === 'string'))]
         .sort();
       return {
         reachable: true,
@@ -352,14 +370,29 @@ export class ProviderInspector {
 
 interface OpenAICompatibleModelRecord {
   id?: unknown;
+  slug?: unknown;
   capabilities?: {
     type?: unknown;
   };
   model_picker_enabled?: unknown;
   supported_endpoints?: unknown;
+  supported_in_api?: unknown;
+  visibility?: unknown;
+}
+
+interface OpenAICompatibleModelsResponse {
+  data?: OpenAICompatibleModelRecord[];
+  models?: OpenAICompatibleModelRecord[];
 }
 
 function filterOpenAICompatibleModels(providerName: string, models: OpenAICompatibleModelRecord[]): OpenAICompatibleModelRecord[] {
+  if (providerName === 'chatgpt') {
+    return models.filter(model => {
+      if (model.supported_in_api === false) return false;
+      if (typeof model.visibility === 'string' && model.visibility !== 'list') return false;
+      return typeof model.slug === 'string' || typeof model.id === 'string';
+    });
+  }
   if (providerName !== 'github_copilot') return models;
 
   return models.filter(model => {
@@ -372,11 +405,16 @@ function filterOpenAICompatibleModels(providerName: string, models: OpenAICompat
   });
 }
 
+function modelId(providerName: string, model: OpenAICompatibleModelRecord): string | undefined {
+  const value = providerName === 'chatgpt' ? model.slug ?? model.id : model.id;
+  return typeof value === 'string' && value ? value : undefined;
+}
+
 function shouldShowRegistryModelFallback(
   providerName: string,
   result: Omit<ProviderModelList, 'provider'>,
 ): boolean {
   if (result.models.length > 0) return false;
-  if (providerName === 'github_copilot' && result.reachable === true) return false;
+  if ((providerName === 'github_copilot' || providerName === 'chatgpt') && result.reachable === true) return false;
   return true;
 }

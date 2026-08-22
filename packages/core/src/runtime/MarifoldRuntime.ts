@@ -212,9 +212,13 @@ export class MarifoldRuntime {
     let aggregateUsage: UsageInfo | undefined;
     const replacing = request.replaceUserTurnIndex !== undefined;
     const isolated = request.isolated === true;
+    const enginePersistsSession = Boolean(request.sessionId) && !replacing && !isolated;
+    const sessionWasMissing = enginePersistsSession
+      ? this.sessionResolver.get(request.sessionId!) === undefined
+      : false;
     const engine = this.createEngine(
       settings.provider,
-      Boolean(request.sessionId) && !replacing && !isolated,
+      enginePersistsSession,
       request.profileContext !== false,
     );
     const memoryOn = this.memoryEnabled(settings.profile, request.memories);
@@ -278,6 +282,15 @@ export class MarifoldRuntime {
       }
 
       aggregateUsage = sumUsage(aggregateUsage, done?.usage);
+      if (done?.error) {
+        this.discardFailedNewSession(request.sessionId, sessionWasMissing);
+        throw MarifoldError.providerError(
+          done.error.message,
+          settings.provider,
+          settings.model,
+          done.error.code,
+        );
+      }
       const toolCalls = done?.toolCalls ?? [];
       if (!chatTools || toolCalls.length === 0) {
         const streamedText = visibleParts.join('');
@@ -285,6 +298,15 @@ export class MarifoldRuntime {
           ? stripMemoryControls(done?.text ?? '')
           : undefined;
         const finalText = streamedText || fallbackControls?.text || '';
+        if (done?.text === undefined && finalText.length === 0) {
+          this.discardFailedNewSession(request.sessionId, sessionWasMissing);
+          throw MarifoldError.providerError(
+            `Provider '${settings.provider}' returned no text for model '${settings.model}'.`,
+            settings.provider,
+            settings.model,
+            'EMPTY_RESPONSE',
+          );
+        }
         if (streamedText.length === 0 && finalText) yield finalText;
         const userTurn = request.userTurn ?? request.prompt;
         const responseMetrics = completedResponseMetrics(
@@ -972,6 +994,12 @@ export class MarifoldRuntime {
 
   close(): void {
     this.sessionResolver.close();
+  }
+
+  private discardFailedNewSession(sessionId: string | undefined, sessionWasMissing: boolean): void {
+    if (!sessionId || !sessionWasMissing) return;
+    const session = this.sessionResolver.get(sessionId);
+    if (session?.turnCount === 0) this.sessionResolver.delete(sessionId);
   }
 
   private createEngine(providerName: string, useSession: boolean, profileContext = true): PriestEngine {

@@ -187,6 +187,76 @@ describe('ProviderInspector', () => {
     });
   });
 
+  it('lists selectable ChatGPT models from the authenticated Codex catalog', async () => {
+    const loadedConfig = testConfig();
+    loadedConfig.config.providers.chatgpt = {
+      type: 'openai-compatible',
+      baseUrl: 'https://chatgpt.com/backend-api/codex',
+      apiKey: 'access-token',
+      accountId: 'acct_123',
+    };
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      models: [
+        { slug: 'gpt-5.6-sol', visibility: 'list', supported_in_api: true },
+        { slug: 'gpt-5.6-luna', visibility: 'list', supported_in_api: true },
+        { slug: 'gpt-hidden', visibility: 'hide', supported_in_api: true },
+        { slug: 'gpt-on-request', visibility: 'on_request', supported_in_api: true },
+        { slug: 'gpt-unsupported', visibility: 'list', supported_in_api: false },
+      ],
+    }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await new ProviderInspector(loadedConfig).listModels('chatgpt');
+
+    expect(result).toMatchObject({
+      reachable: true,
+      models: ['gpt-5.6-luna', 'gpt-5.6-sol'],
+      message: '2 model(s) available.',
+    });
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    const headers = new Headers(init.headers);
+    expect(url).toBe('https://chatgpt.com/backend-api/codex/models?client_version=0.149.0');
+    expect(headers.get('Authorization')).toBe('Bearer access-token');
+    expect(headers.get('chatgpt-account-id')).toBe('acct_123');
+    expect(headers.get('originator')).toBe('codex_cli_rs');
+  });
+
+  it('does not offer known ChatGPT models when a live catalog has no selectable entries', async () => {
+    const loadedConfig = testConfig();
+    loadedConfig.config.providers.chatgpt = {
+      type: 'openai-compatible',
+      baseUrl: 'https://chatgpt.com/backend-api/codex',
+      apiKey: 'access-token',
+      accountId: 'acct_123',
+    };
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
+      models: [{ slug: 'gpt-hidden', visibility: 'hide', supported_in_api: true }],
+    }), { status: 200 })));
+
+    const result = await new ProviderInspector(loadedConfig).listModels('chatgpt');
+
+    expect(result.reachable).toBe(true);
+    expect(result.models).toEqual([]);
+    expect(result.message).toBe('0 model(s) available.');
+  });
+
+  it('falls back to known ChatGPT models when live catalog discovery fails', async () => {
+    const loadedConfig = testConfig();
+    loadedConfig.config.providers.chatgpt = {
+      type: 'openai-compatible',
+      baseUrl: 'https://chatgpt.com/backend-api/codex',
+      apiKey: 'access-token',
+      accountId: 'acct_123',
+    };
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('', { status: 503 })));
+
+    const result = await new ProviderInspector(loadedConfig).listModels('chatgpt');
+
+    expect(result.reachable).toBe(false);
+    expect(result.models).toEqual(['gpt-5.5', 'gpt-5.3-codex', 'gpt-5.4-mini']);
+    expect(result.message).toContain('Showing registry models.');
+  });
+
   it('builds OpenAI-compatible URLs for root and versioned provider bases', () => {
     expect(openAIChatCompletionsUrl('https://api.openai.com')).toBe('https://api.openai.com/v1/chat/completions');
     expect(openAIChatCompletionsUrl('https://generativelanguage.googleapis.com/v1beta/openai')).toBe(
@@ -206,6 +276,9 @@ describe('ProviderInspector', () => {
     );
     expect(openAIModelsUrl('https://api.githubcopilot.com', { providerName: 'github_copilot' })).toBe(
       'https://api.githubcopilot.com/models',
+    );
+    expect(openAIModelsUrl('https://chatgpt.com/backend-api/codex', { providerName: 'chatgpt' })).toBe(
+      'https://chatgpt.com/backend-api/codex/models',
     );
   });
 });

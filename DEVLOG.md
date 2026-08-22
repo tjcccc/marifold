@@ -2,6 +2,34 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-08-22 — v0.57.0 — Live ChatGPT models and managed service access
+
+- Made interactive `marifold model add chatgpt` query the authenticated Codex
+  model catalog and offer its current list-visible, API-supported models.
+- Kept the curated ChatGPT model list as an offline/auth-failure fallback and
+  preserved custom model entry.
+- Corrected Responses conversation replay so saved assistant turns use
+  `output_text` instead of the input-only `input_text`; adopted the published
+  `@priest-ai/core` 3.0.1 fix and removed the temporary pnpm patch.
+- Stopped swallowing provider failures and empty completions in chat streams:
+  the Web UI now receives the real error, and failed brand-new sessions do not
+  leave empty database rows.
+- Added `marifold service restart`, preserving the running service's foreground
+  or daemon mode and its safe launch options.
+- Kept raw bearer tokens out of restart state and require `--token` again when
+  the original service used a raw token; added spawned lifecycle regressions
+  for option reuse and safe refusal before stopping.
+- Made non-loopback binds private-network-only by default, allowing tokenless
+  LAN, link-local, IPv6 ULA, and Tailscale peers while rejecting public source
+  addresses and DNS-rebinding hosts. Added token-required `--public` access and
+  persisted that mode across service restarts.
+- Verified the live signed-in catalog returned six selectable models, a real
+  ChatGPT assistant-history replay returned `HISTORY_OK`, and the full workspace
+  typecheck/build/test gate passed (630 tests). The upstream Priest suite passed
+  134 tests.
+- Version 0.56.1 → 0.57.0 across all packages + CLI `.version`.
+- Released as v0.57.0.
+
 ## 2026-08-21 — v0.56.1 — Idempotent empty-session creation
 
 - Made Web `New session` idempotent while the active GUID has no corresponding
