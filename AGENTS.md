@@ -28,11 +28,13 @@ v0.53.x enables bearer-protected non-loopback service binding for trusted LAN or
 
 v0.54.x adds optional model-authored clarification questions through one renderer-neutral interaction contract, with batched standalone question interfaces in the TUI and Web UI. It also restores normal user-home semantics for `~` and `$HOME` while retaining capability-scoped run isolation.
 
-v0.55–v0.57.x add interruptible runs and multi-select clarification answers, managed foreground/daemon service lifecycle with restartable safe launch options, idempotent empty-session creation, live signed-in ChatGPT model discovery, strict provider-error surfacing through `@priest-ai/core` 3.0.1, and private-network-only tokenless non-loopback access with explicit authenticated `--public` exposure.
+v0.55–v0.57.x add interruptible runs and multi-select clarification answers, managed foreground/daemon service lifecycle with restartable safe launch options, idempotent empty-session creation, live signed-in ChatGPT model discovery, strict provider-error surfacing through `@priest-ai/core` 3.0.1, and private-network non-loopback access.
 
 v0.58.x adds lazy, attachment-scoped agent inspection for images, readable documents, and other staged uploads. An inspected image remains available through the rest of its run so Skills can resolve additional bundled inputs without losing visual context.
 
-The service defaults to loopback. Explicit non-loopback binds accept direct private LAN, link-local, IPv6 ULA, and Tailscale peers by default; public-source access requires `--public` plus resolved bearer authentication. Same-origin hosted Web access needs no CORS entry.
+v0.58.1 makes bearer authentication optional for private-network service access and removes the public-access override. Every non-loopback bind permanently filters direct peers and Host values to private LAN, link-local, Tailscale/CGNAT, and private IPv6 networks for single-owner access from personal devices, including a future iOS client.
+
+The service defaults to loopback. Explicit non-loopback binds accept only direct private LAN, link-local, IPv6 ULA, and Tailscale peers. Same-origin hosted Web access needs no CORS entry.
 
 ## Stack
 
@@ -45,18 +47,19 @@ The service defaults to loopback. Explicit non-loopback binds accept direct priv
 ## Boundaries
 
 - `packages/core` contains runtime, workspace, config, profile, memory, agent (runner/tools/approval), task-state, and session logic.
-- `packages/service` contains the default-loopback Fastify API and its authenticated opt-in remote binding. Keep it as a thin transport layer over `packages/core`.
+- `packages/service` contains the default-loopback Fastify API and its private-network remote binding. Keep it as a thin transport layer over `packages/core`.
 - `packages/cli` contains terminal commands and interactive CLI behavior.
 - `@priest-ai/core` (../priest-typescript) owns model-side primitives: providers, tool-call transport, streaming, context assembly. Changes there must be synced to the priest spec repository.
 - The `AgentEvent` union in `packages/core/src/agent/AgentEvents.ts` is the render contract for all future clients; keep it renderer-agnostic.
 - Agent runs must not write profile memory; task state stays ephemeral.
 - `apps/web` contains the browser UI — a second renderer of the same contracts the TUI renders. All data flows over the service HTTP API; `src/api/types.ts` is the only file that may import from `@marifold/core`, and only with `import type`.
 - Raw provider `api_key` values never cross the wire: service routes expose env-var names and boolean presence flags only; key values are edited via the CLI or config file.
+- Marifold is permanently a personal, single-owner BYOK/BYO-auth agent. Remote access connects that owner's devices; never add multi-tenant accounts, credential pooling, subscription/API relays, quota resale, or public-internet service exposure.
 - Do not expand App beyond the documented `marifold.app.v0` MVP or implement Workflow, Apple apps, external-agent aliases, effectful App actions, or provider-owned model deletion until that area is explicitly in scope.
 
 ## Versioning
 
-- Marifold uses Semantic Versioning. The authoritative version files are the root `package.json`, `packages/cli/package.json`, `packages/core/package.json`, `packages/service/package.json`, `packages/tui/package.json`, and `apps/web/package.json`; keep all six versions synchronized.
+- Marifold uses Semantic Versioning. The authoritative version sites are the root `package.json`, `packages/cli/package.json`, `packages/core/package.json`, `packages/service/package.json`, `packages/tui/package.json`, `apps/web/package.json`, and the `.version(...)` value in `packages/cli/src/index.ts`; keep all seven synchronized.
 - For a release checkpoint, update the matching `DEVLOG.md` heading and refresh `pnpm-lock.yaml` with pnpm when the manifest changes affect it.
 
 ## Validation

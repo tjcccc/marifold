@@ -12,7 +12,9 @@ export interface ServiceLaunchOptions {
   port: string;
   cwd: string;
   log: boolean;
-  /** Optional for state written before private/public access modes existed. */
+  /** Legacy field accepted only so status/stop/restart can read state written
+   * by versions that supported internet-wide access. New launches omit it,
+   * and restart deliberately ignores it so the service becomes private. */
   publicAccess?: boolean;
   corsOrigins: string[];
   webDir?: string;

@@ -38,10 +38,6 @@ export interface MarifoldServiceOptions {
   loadedConfig: LoadedMarifoldConfig;
   /** Address the HTTP server will bind to. Defaults to loopback. */
   host?: string;
-  /** Accept public source addresses. Requires a non-loopback host and resolved
-   * bearer authentication. Non-loopback binds otherwise accept private
-   * LAN/link-local/Tailscale sources only. */
-  publicAccess?: boolean;
   logger?: boolean;
   /** Run the schedule scheduler inside this service process. Default true.
    * Schedules only fire while the service is running. */
@@ -89,13 +85,12 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
     token: options.auth?.token,
     corsOrigins: options.cors?.origins,
   });
-  validateBindingSecurity(host, security.token, Boolean(options.publicAccess));
 
   const runtime = new MarifoldRuntime({ loadedConfig: options.loadedConfig });
   const server = fastify({ logger: options.logger ?? false, bodyLimit: BODY_LIMIT_BYTES });
   registerSecurity(server, {
     ...security,
-    access: LOOPBACK_HOSTS.has(host) ? 'loopback' : options.publicAccess ? 'public' : 'private',
+    access: LOOPBACK_HOSTS.has(host) ? 'loopback' : 'private',
     boundHost: host,
   });
 
@@ -622,19 +617,6 @@ export async function startMarifoldService(options: MarifoldServiceStartOptions)
       // individual lifecycle owners also stop from the onClose hook.
     }
     throw error;
-  }
-}
-
-export function validateBindingSecurity(host: string, token: string | undefined, publicAccess = false): void {
-  if (!publicAccess) return;
-  if (LOOPBACK_HOSTS.has(host)) {
-    throw MarifoldError.configInvalid('--public requires a non-loopback --host such as 0.0.0.0.', { host });
-  }
-  if (!token) {
-    throw MarifoldError.configInvalid(
-      'Public service access requires bearer authentication. Configure [service].token_env or pass --token-env/--token.',
-      { host },
-    );
   }
 }
 

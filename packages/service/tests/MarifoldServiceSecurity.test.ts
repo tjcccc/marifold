@@ -7,25 +7,6 @@ afterEach(() => {
 });
 
 describe('MarifoldService security', () => {
-  it('requires bearer authentication before enabling public access', () => {
-    expect(() => createMarifoldService({
-      loadedConfig: fixtureLoadedConfig(tempDir()),
-      host: '0.0.0.0',
-      publicAccess: true,
-      scheduler: false,
-    })).toThrow(/public service access requires bearer authentication/i);
-  });
-
-  it('rejects public mode on a loopback-only bind', () => {
-    expect(() => createMarifoldService({
-      loadedConfig: fixtureLoadedConfig(tempDir(), {
-        service: { token: 'sekret-token', corsOrigins: [] },
-      }),
-      publicAccess: true,
-      scheduler: false,
-    })).toThrow(/--public requires a non-loopback --host/i);
-  });
-
   it('listens on the wildcard host in tokenless private mode', async () => {
     const result = await startMarifoldService({
       loadedConfig: fixtureLoadedConfig(tempDir()),
@@ -126,34 +107,38 @@ describe('MarifoldService security', () => {
     }
   });
 
-  it('accepts public source addresses only in authenticated public mode', async () => {
+  it('does not let bearer authentication widen the private network or Host boundary', async () => {
     const server = createMarifoldService({
       loadedConfig: fixtureLoadedConfig(tempDir(), {
         service: { token: 'sekret-token', corsOrigins: [] },
       }),
       host: '0.0.0.0',
-      publicAccess: true,
       scheduler: false,
     });
     try {
-      const bare = await server.inject({
+      const publicPeer = await server.inject({
         method: 'GET',
         url: '/v1/status',
         remoteAddress: '8.8.8.8',
-        headers: { host: 'public.example.com' },
+        headers: {
+          host: '192.168.1.10:32140',
+          authorization: 'Bearer sekret-token',
+        },
       });
-      expect(bare.statusCode).toBe(401);
+      expect(publicPeer.statusCode).toBe(403);
+      expect(publicPeer.json().error.code).toBe('NETWORK_FORBIDDEN');
 
-      const authenticated = await server.inject({
+      const publicHost = await server.inject({
         method: 'GET',
         url: '/v1/status',
-        remoteAddress: '8.8.8.8',
+        remoteAddress: '192.168.1.2',
         headers: {
           host: 'public.example.com',
           authorization: 'Bearer sekret-token',
         },
       });
-      expect(authenticated.statusCode).toBe(200);
+      expect(publicHost.statusCode).toBe(403);
+      expect(publicHost.json().error.code).toBe('ORIGIN_FORBIDDEN');
     } finally {
       await server.close();
     }

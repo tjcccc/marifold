@@ -1,7 +1,6 @@
 export {
   createMarifoldService,
   startMarifoldService,
-  validateBindingSecurity,
 } from './MarifoldService';
 export type {
   MarifoldServiceOptions,

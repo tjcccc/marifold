@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { Command } from 'commander';
 import { ConfigLoader, MarifoldError } from '@marifold/core';
-import { resolveSecurityOptions, startMarifoldService, validateBindingSecurity } from '@marifold/service';
+import { resolveSecurityOptions, startMarifoldService } from '@marifold/service';
 import { ConsolePrinter } from '../output/ConsolePrinter';
 import {
   claimServiceProcess,
@@ -27,7 +27,6 @@ interface ServiceOptions {
   tokenEnv?: string;
   corsOrigin?: string[];
   webDir?: string;
-  public?: boolean;
   /** Internal restart option; daemon children inherit this through spawn cwd. */
   cwd?: string;
 }
@@ -88,9 +87,8 @@ export function registerServiceCommand(program: Command, printer: ConsolePrinter
 
 function addServiceOptions(command: Command, allowDaemon = false): Command {
   command
-    .option('--host <host>', 'Host to bind. Non-loopback binds accept private network clients by default.', '127.0.0.1')
+    .option('--host <host>', 'Host to bind. Non-loopback binds accept private LAN and overlay-network clients only.', '127.0.0.1')
     .option('--port <number>', 'Port to bind. Use 0 for a random open port.', '32140')
-    .option('--public', 'Accept public source addresses (requires a bearer token and non-loopback host).')
     .option('--log', 'Enable HTTP request logging.')
     .option('--token <token>', 'Require this bearer token on API requests (prefer --token-env).')
     .option('--token-env <name>', 'Require the bearer token held in this environment variable.')
@@ -125,7 +123,6 @@ async function runService(
     const corsOrigins = options.corsOrigin && options.corsOrigin.length > 0 ? options.corsOrigin : undefined;
     const webDir = options.webDir ? path.resolve(options.webDir) : undefined;
     const security = resolveSecurityOptions(loadedConfig.config.service, { token, corsOrigins });
-    validateBindingSecurity(options.host ?? '127.0.0.1', security.token, Boolean(options.public));
     const mode = daemonChild ? 'daemon' : 'foreground';
     owner = claimServiceProcess(
       mode,
@@ -136,7 +133,6 @@ async function runService(
     const result = await startMarifoldService({
       loadedConfig,
       host: options.host,
-      publicAccess: Boolean(options.public),
       port: parsePort(options.port),
       logger: Boolean(options.log),
       auth: { token },
@@ -152,9 +148,7 @@ async function runService(
     const servedWebDir = webDir ?? loadedConfig.config.service?.webDir;
     if (servedWebDir) process.stdout.write(`Web UI: serving ${servedWebDir}\n`);
     if (security.token) process.stdout.write('Auth: bearer token required on /v1 (exempt: /health, static).\n');
-    if (options.public) {
-      process.stdout.write('Access: public source addresses allowed.\n');
-    } else if (options.host && !['127.0.0.1', 'localhost', '::1'].includes(options.host)) {
+    if (options.host && !['127.0.0.1', 'localhost', '::1'].includes(options.host)) {
       process.stdout.write('Access: private networks only (LAN, link-local, and Tailscale).\n');
     }
     if (security.corsOrigins.length > 0) {
@@ -187,10 +181,8 @@ async function startDaemon(
 ): Promise<void> {
   try {
     const loadedConfig = loadServiceConfig(program, configPath);
-    const token = resolveTokenFlags(options);
+    resolveTokenFlags(options);
     parsePort(options.port);
-    const security = resolveSecurityOptions(loadedConfig.config.service, { token });
-    validateBindingSecurity(options.host ?? '127.0.0.1', security.token, Boolean(options.public));
 
     const existing = getActiveServiceProcess();
     if (existing) throw new Error(`Marifold service is already running (PID ${existing.pid}, ${existing.mode}).`);
@@ -227,7 +219,6 @@ function buildDaemonArgs(configPath: string, options: ServiceOptions): string[] 
   args.push('service', 'start');
   args.push('--host', options.host ?? '127.0.0.1');
   args.push('--port', options.port ?? '32140');
-  if (options.public) args.push('--public');
   if (options.log) args.push('--log');
   if (options.token) {
     args.push('--token-env', DAEMON_TOKEN_ENV);
@@ -257,11 +248,9 @@ async function restartService(
     if (!fs.existsSync(active.launch.cwd)) {
       throw new Error(`Previous service working directory no longer exists: ${active.launch.cwd}`);
     }
-    const loadedConfig = loadServiceConfig(program, active.configPath);
-    const token = resolveTokenFlags(options);
+    loadServiceConfig(program, active.configPath);
+    resolveTokenFlags(options);
     parsePort(options.port);
-    const security = resolveSecurityOptions(loadedConfig.config.service, { token });
-    validateBindingSecurity(options.host ?? '127.0.0.1', security.token, Boolean(options.public));
 
     const stopped = await stopActiveServiceProcess();
     if (!stopped) throw new Error('Marifold service stopped before restart could claim it.');
@@ -285,7 +274,6 @@ function serviceLaunchOptions(options: ServiceOptions, rawToken: boolean): Servi
     port: options.port ?? '32140',
     cwd: options.cwd ?? process.cwd(),
     log: Boolean(options.log),
-    publicAccess: Boolean(options.public),
     corsOrigins: [...(options.corsOrigin ?? [])],
     ...(options.webDir ? { webDir: path.resolve(options.webDir) } : {}),
     tokenSource,
@@ -304,7 +292,6 @@ function serviceOptionsForRestart(launch: ServiceLaunchOptions, token?: string):
     port: launch.port,
     cwd: launch.cwd,
     log: launch.log,
-    public: Boolean(launch.publicAccess),
     corsOrigin: [...launch.corsOrigins],
     webDir: launch.webDir,
     ...(token ? { token } : {}),

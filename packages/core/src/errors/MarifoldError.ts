@@ -179,7 +179,7 @@ export class MarifoldError extends Error {
   static networkForbidden(address: string): MarifoldError {
     return new MarifoldError(
       'NETWORK_FORBIDDEN',
-      `Network source not allowed: ${address}. Start the service with --public and bearer authentication to accept public clients.`,
+      `Network source not allowed: ${address}. Marifold accepts only loopback, private LAN, link-local, and private overlay-network clients.`,
       { address },
     );
   }

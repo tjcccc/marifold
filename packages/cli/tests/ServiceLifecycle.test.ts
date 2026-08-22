@@ -114,7 +114,6 @@ describe('marifold service lifecycle', () => {
       host: '127.0.0.1',
       port: '0',
       log: true,
-      publicAccess: false,
       tokenSource: 'config',
     });
 
@@ -132,33 +131,50 @@ describe('marifold service lifecycle', () => {
     expect(stoppedStatus.output).toContain('Marifold service: stopped');
   }, 35_000);
 
-  it('requires a raw token again without persisting it or stopping the service first', async () => {
+  it('removes public mode and restarts legacy launch state as private without persisting raw tokens', async () => {
     const cliEntry = path.resolve(__dirname, '../dist/index.js');
     const configPath = fixtureConfig();
     const token = 'restart-test-secret';
+    const removed = await runCli(cliEntry, configPath, ['service', '--public']);
+    expect(removed.code).toBe(1);
+    expect(removed.output).toContain("unknown option '--public'");
+
     const started = await runCli(cliEntry, configPath, [
-      'service', 'start', '--daemon', '--host', '0.0.0.0', '--public', '--port', '0', '--token', token,
+      'service', 'start', '--daemon', '--host', '0.0.0.0', '--port', '0', '--token', token,
     ], 12_000);
     expect(started.code).toBe(0);
 
     const statePath = path.join(serviceStateDir(configPath), 'state.json');
-    const stateText = fs.readFileSync(statePath, 'utf8');
+    let stateText = fs.readFileSync(statePath, 'utf8');
     expect(stateText).not.toContain(token);
     expect(JSON.parse(stateText)).toMatchObject({
-      launch: { host: '0.0.0.0', publicAccess: true, tokenSource: 'raw' },
+      launch: { host: '0.0.0.0', tokenSource: 'raw' },
     });
+    expect(JSON.parse(stateText).launch).not.toHaveProperty('publicAccess');
+
+    // Simulate state left by a pre-removal daemon. The old process remains
+    // visible with an explicit warning; restart ignores the legacy flag and
+    // launches the replacement under the permanent private-network policy.
+    const legacyState = JSON.parse(stateText) as { launch: Record<string, unknown> };
+    legacyState.launch.publicAccess = true;
+    fs.writeFileSync(statePath, `${JSON.stringify(legacyState, null, 2)}\n`);
 
     const missingToken = await runCli(cliEntry, configPath, ['service', 'restart']);
     expect(missingToken.code).toBe(1);
     expect(missingToken.output).toContain('service restart --token <token>');
-    const publicStatus = await runCli(cliEntry, configPath, ['status']);
-    expect(publicStatus.code).toBe(0);
-    expect(publicStatus.output).toContain('Access:  public');
+    const legacyStatus = await runCli(cliEntry, configPath, ['status']);
+    expect(legacyStatus.code).toBe(0);
+    expect(legacyStatus.output).toContain('Access:  legacy-public');
+    expect(legacyStatus.output).toContain('restart this legacy service');
 
     const restarted = await runCli(cliEntry, configPath, ['service', 'restart', '--token', token], 12_000);
     expect(restarted.code).toBe(0);
     expect(restarted.output).toContain('Restarting...');
-    expect(fs.readFileSync(statePath, 'utf8')).not.toContain(token);
+    stateText = fs.readFileSync(statePath, 'utf8');
+    expect(stateText).not.toContain(token);
+    expect(JSON.parse(stateText).launch).not.toHaveProperty('publicAccess');
+    const privateStatus = await runCli(cliEntry, configPath, ['status']);
+    expect(privateStatus.output).toContain('Access:  private');
 
     const stopped = await runCli(cliEntry, configPath, ['service', 'stop'], 8_000);
     expect(stopped.code).toBe(0);

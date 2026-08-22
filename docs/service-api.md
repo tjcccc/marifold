@@ -4,9 +4,9 @@ The HTTP contract for `marifold service` — the local API every app client
 (Web UI first, desktop/mobile later) is built on. One service process powers
 the HTTP API, the schedule runner, and the Telegram bridge.
 
-- **Base URL:** `http://127.0.0.1:32140` by default (`--host` / `--port`). A
-  non-loopback bind accepts private-network peers by default; `--public`
-  accepts any source address and requires resolved bearer authentication.
+- **Base URL:** `http://127.0.0.1:32140` by default (`--host` / `--port`). Every
+  non-loopback bind accepts only private LAN, link-local, Tailscale/CGNAT, and
+  private IPv6 peers; bearer authentication never widens that boundary.
 - **Versioning:** all routes are under `/v1` except `GET /health`. Additive
   changes (new fields, new event types) may land within v1 — clients must
   ignore unknown fields and unknown SSE event types. Breaking changes get a
@@ -20,8 +20,7 @@ the HTTP API, the schedule runner, and the Telegram bridge.
 
 ## Authentication
 
-Off by default on loopback and in private-network mode. Public access requires
-a bearer token. When a bearer token is configured, every
+Off by default on loopback and private networks. When a bearer token is configured, every
 **`/v1/*`** route requires it — `GET /health`, CORS preflights, and the
 hosted Web UI shell (static files) stay reachable; the shell carries no
 secrets and every stateful route is versioned under `/v1`:
@@ -57,22 +56,20 @@ marifold service --host 0.0.0.0
 ```
 
 Then open `http://<service-host-ip>:32140`. A token remains optional but
-supported in private mode. Tokenless private mode also restricts request Host
+supported in private mode. Private mode also restricts request Host
 values to private IPs, loopback, single-label names, `.local`, `.ts.net`, and
 the explicit bind host to resist DNS rebinding.
 
-Accept all source addresses only through the explicit authenticated mode:
-
-```sh
-marifold service --host 0.0.0.0 --public --token-env MARIFOLD_SERVICE_TOKEN
-```
-
 `0.0.0.0` opens every active interface; binding a specific Tailscale or LAN
 address is narrower. Source filtering uses the direct socket peer and ignores
-forwarded-IP headers. A public reverse proxy or tunnel can make even a
-loopback/private bind publicly reachable, so require a bearer token in that
-topology. The API has no TLS termination; use a trusted private network or a
-TLS reverse proxy.
+forwarded-IP headers. Public reverse proxies and internet tunnels are not a
+supported deployment: they can hide the original peer and bypass this network
+boundary. Use a trusted private LAN or an encrypted private overlay such as
+Tailscale; bearer authentication remains available as defense in depth.
+
+This private service contract is suitable for a future native iOS client. An
+iPhone on the same LAN, or connected to the service host through Tailscale,
+uses the host's private address and can optionally send the bearer token.
 
 A Web UI hosted by another Marifold instance can instead save this endpoint as
 a named Connection. That is a cross-origin browser request, so this service
@@ -99,8 +96,8 @@ Browser access is allowlist-only, exact-match against `cors_origins`:
   `cors_origins` configured, all cross-origin browser requests are rejected.
 - Requests without an `Origin` header (curl, native apps) are unaffected.
 - A non-loopback `Host` header is rejected `403` under the default loopback
-  bind. Tokenless private mode allows only private/local Host forms; an
-  authenticated remote bind accepts its externally addressed Host values.
+  bind. Private mode allows only private/local Host forms regardless of bearer
+  authentication.
 
 ## Errors
 
@@ -112,7 +109,7 @@ Every non-2xx response uses one envelope:
 
 | Code | HTTP | Meaning |
 |---|---|---|
-| `CONFIG_INVALID` | 400 | Malformed request body/parameter, tokenless `--public`, or `--public` on a loopback bind |
+| `CONFIG_INVALID` | 400 | Malformed request body or parameter |
 | `PROFILE_INVALID`, `MEMORY_INVALID`, `TASK_INVALID`, `SCHEDULE_INVALID`, `AGENT_TOOL_INVALID`, `AGENT_RUN_INVALID` | 400 | Domain validation failed |
 | `UNAUTHORIZED` | 401 | Missing/invalid bearer token |
 | `NETWORK_FORBIDDEN` | 403 | Public source address rejected by private-network mode |

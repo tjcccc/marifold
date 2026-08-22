@@ -15,7 +15,7 @@ export interface ResolvedServiceSecurityOptions {
 export interface ServiceSecurityOptions extends ResolvedServiceSecurityOptions {
   /** Network reachability policy. The actual listen address remains a separate
    * transport choice; private mode filters every request by its socket peer. */
-  access: 'loopback' | 'private' | 'public';
+  access: 'loopback' | 'private';
   /** Explicit listen host, used as an allowed Host value in private mode. */
   boundHost: string;
 }
@@ -118,9 +118,7 @@ function isSameAllowedOrigin(
 }
 
 function isAllowedHost(host: string, options: ServiceSecurityOptions): boolean {
-  if (options.access === 'public') return true;
   if (options.access === 'loopback') return LOOPBACK_HOST.test(host);
-  if (options.token) return true;
 
   const hostname = hostnameFromHeader(host);
   if (!hostname) return false;

@@ -2,6 +2,22 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-08-22 — v0.58.1 — Optional-token private service access
+
+- Kept bearer authentication optional for `--host 0.0.0.0` and removed
+  `--public`; every non-loopback bind permanently rejects public source
+  addresses, even when bearer authentication is configured.
+- Kept LAN, link-local, Tailscale/CGNAT, IPv6 ULA, and IPv6 link-local access
+  for the owner's other devices and a future native iOS client.
+- Made legacy public launch state visible as a warning and fail closed on the
+  next restart, which drops the obsolete mode instead of preserving it.
+- Corrected the CLI version banner and documented every authoritative version
+  site.
+- Verified 128 CLI command checks and the full workspace typecheck/build/test
+  gate (633 tests: core 315, service 58, TUI 59, CLI 19, Web 182).
+- Version 0.58.0 → 0.58.1 across all packages + CLI `.version`.
+- Released as v0.58.1.
+
 ## 2026-08-22 — v0.58.0 — Lazy run attachment inspection
 
 - Staged every agent-run upload behind an opaque, read-only attachment manifest

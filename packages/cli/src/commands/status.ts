@@ -29,8 +29,11 @@ export function registerStatusCommand(program: Command, printer: ConsolePrinter)
           if (state.address) process.stdout.write(`Address: ${state.address}\n`);
           if (state.launch) {
             const loopback = ['127.0.0.1', 'localhost', '::1'].includes(state.launch.host);
-            const access = state.launch.publicAccess ? 'public' : loopback ? 'loopback' : 'private';
+            const access = state.launch.publicAccess ? 'legacy-public' : loopback ? 'loopback' : 'private';
             process.stdout.write(`Access:  ${access}\n`);
+            if (state.launch.publicAccess) {
+              process.stdout.write('Warning: restart this legacy service to enforce private-network-only access.\n');
+            }
           }
           process.stdout.write(`Config:  ${state.configPath}\n`);
         } else {

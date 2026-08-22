@@ -26,7 +26,6 @@ describe('service process state', () => {
       port: '32140',
       cwd: '/tmp/workspace',
       log: true,
-      publicAccess: true,
       corsOrigins: ['https://example.test'],
       tokenSource: 'raw',
     });
@@ -40,7 +39,6 @@ describe('service process state', () => {
         port: '32140',
         cwd: '/tmp/workspace',
         log: true,
-        publicAccess: true,
         corsOrigins: ['https://example.test'],
         tokenSource: 'raw',
       },

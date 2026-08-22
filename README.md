@@ -4,7 +4,7 @@ Marifold is a local-first personal AI workspace for profiles, chats, skills, min
 
 The primary surface is the **TUI** — an Ink/React terminal app launched by bare `marifold`. It's agent-first (with a `/chat` mode), rendering chat and agent-event streams with `/` commands, `$skill` invocation, an approval modal, `/btw` mid-run steering, a skills manager, a profile-aware header, and session resume (`--resume`). Skills (`marifold.skill.v0`, run via `$name`) execute as agentic tools: the skill body is authoritative instructions and, in agent mode, the model reads the skill's own bundled files (e.g. a `vars.toml`) to do its work. `marifold init` and `marifold provider add` walk you through choosing a provider/model interactively.
 
-Underneath sits an approval-aware agent loop with native provider tool calling and Responses reasoning continuity (through `@priest-ai/core` 3.0) plus a control-block fallback, narrow built-in tools (file read/write, isolated shell, per-run Python packages, web search, profile delegation), capability-scoped run workspaces, config-driven approval policy, a `marifold agent` command, chat `/search`/`/read`/`/image`, ChatGPT/Copilot OAuth, the `marifold.app.v0` schema, and cron-scheduled unattended runs hosted inside `marifold service` — alongside priests-style profile chat, structured per-profile memory, model/provider management, config backup/import, the default-loopback Fastify service API with tokenless private-network and authenticated public access modes, and ephemeral task-state storage.
+Underneath sits an approval-aware agent loop with native provider tool calling and Responses reasoning continuity (through `@priest-ai/core` 3.0) plus a control-block fallback, narrow built-in tools (file read/write, isolated shell, per-run Python packages, web search, profile delegation), capability-scoped run workspaces, config-driven approval policy, a `marifold agent` command, chat `/search`/`/read`/`/image`, ChatGPT/Copilot OAuth, the `marifold.app.v0` schema, and cron-scheduled unattended runs hosted inside `marifold service` — alongside priests-style profile chat, structured per-profile memory, model/provider management, config backup/import, the default-loopback Fastify service API with private LAN/Tailscale access for the owner's devices, and ephemeral task-state storage.
 
 For product direction and future scope, see [docs/vision.md](docs/vision.md) and [docs/roadmap.md](docs/roadmap.md). For the terminal app, see [docs/tui.md](docs/tui.md).
 
@@ -81,7 +81,7 @@ For product direction and future scope, see [docs/vision.md](docs/vision.md) and
 - Profile rename and delete commands for stored profiles.
 - Profile-filtered session listing.
 - Bulk session clearing with profile/date/keep-last filters.
-- Default-loopback HTTP service through `marifold service`, with source-filtered tokenless LAN/Tailscale access, authenticated opt-in public access, and a CORS origin allowlist (`[service]`).
+- Default-loopback HTTP service through `marifold service`, with permanently source-filtered LAN/Tailscale access for the owner's devices, optional bearer authentication, and a CORS origin allowlist (`[service]`).
 - Single-instance service lifecycle through foreground `marifold service` / `marifold service start`, background `marifold service start --daemon`, `marifold service restart`, `marifold status [--logs]`, and `marifold service stop`.
 - Service routes for health/status, sanitized config, providers, models, profiles, memories, sessions, ask, streaming chat, and live agent runs (SSE `AgentEvent` stream + clarification/approval/steer/cancel) — see [docs/service-api.md](docs/service-api.md).
 - Server-sent event streaming for safe reasoning summaries and answer chunks through `/v1/chat/stream`.
@@ -244,7 +244,6 @@ marifold status --logs
 marifold service stop
 marifold service --host 127.0.0.1 --port 32140
 marifold service --host 0.0.0.0
-marifold service --host 0.0.0.0 --public --token-env MARIFOLD_SERVICE_TOKEN
 ```
 
 The packaged binary name is `marifold`.
@@ -344,7 +343,7 @@ For `openai-compatible`, `base_url` may be the API root such as `https://api.ope
 
 `marifold init` accepts `--provider`, `--provider-type`, `--model`, `--base-url`, `--api-key-env`, `--profiles-dir`, `--sessions-db`, `--tasks-dir`, and `--force`. Non-Ollama providers require `--model`; custom OpenAI-compatible providers also require `--base-url`.
 
-`marifold service` and `marifold service start` start the same foreground Fastify HTTP service, bound to `127.0.0.1:32140` by default. `marifold service start --daemon` runs it in the background; `marifold service restart` gracefully replaces the running process in the same foreground or daemon mode and reuses its config path, host, port, private/public access mode, working directory, logging, CORS origins, Web directory, and token source. `marifold status` reports the managed process and its loopback/private/public access mode, `marifold status --logs` includes its latest 100 log lines, and `marifold service stop` performs a graceful stop. State and the daemon log live under `~/.marifold/service/`, and stale state is cleaned automatically. Only one managed service instance can run at a time, including foreground starts. Restart metadata never contains the bearer token: a configured token or token-environment name is resolved again, while a service originally started with raw `--token` requires `marifold service restart --token <token>`. A service already running from a version without restart metadata must be stopped and started once before it can be restarted. `--host 0.0.0.0` listens on every interface but, by default, Marifold accepts only direct loopback, private LAN, link-local, IPv6 ULA, and Tailscale (`100.64.0.0/10`) peers; bearer authentication remains optional in this private mode. `--public` admits other source addresses and requires a resolved bearer token. A specific LAN or Tailscale bind address further narrows the interfaces exposed. Ctrl+C/SIGTERM performs graceful cleanup and exits; shutdown is forced after five seconds or immediately on a second signal. A bind failure also closes the newly created runtime instead of leaving a background process alive. `--log` enables Fastify request logging: it prints in the foreground or is captured in the daemon log. The API surface is `/health` and `/v1/*` routes for app clients: sanitized config/provider/model views, profiles, memories, sessions, ask/chat, SSE streaming chat, task state, read-only schedules, live agent runs (`POST /v1/runs`, a resumable SSE `AgentEvent` stream, and clarification/approval/steer/cancel routes), and config-editing writes (`PATCH /v1/config` with CLI `config set` parity, per-profile settings/files/trusted-folders/memory-forget routes). The full wire contract is documented in [docs/service-api.md](docs/service-api.md).
+`marifold service` and `marifold service start` start the same foreground Fastify HTTP service, bound to `127.0.0.1:32140` by default. `marifold service start --daemon` runs it in the background; `marifold service restart` gracefully replaces the running process in the same foreground or daemon mode and reuses its config path, host, port, working directory, logging, CORS origins, Web directory, and token source. `marifold status` reports the managed process and its loopback/private access mode, `marifold status --logs` includes its latest 100 log lines, and `marifold service stop` performs a graceful stop. State and the daemon log live under `~/.marifold/service/`, and stale state is cleaned automatically. Only one managed service instance can run at a time, including foreground starts. Restart metadata never contains the bearer token: a configured token or token-environment name is resolved again, while a service originally started with raw `--token` requires `marifold service restart --token <token>`. A service already running from a version without restart metadata must be stopped and started once before it can be restarted. `--host 0.0.0.0` listens on every interface, but Marifold always accepts only direct loopback, private LAN, link-local, IPv6 ULA, and Tailscale/CGNAT (`100.64.0.0/10`) peers; bearer authentication is optional and never widens that network boundary. A specific LAN or Tailscale bind address further narrows the interfaces exposed. Launch state from an older public-mode service is marked `legacy-public`; restarting it drops that obsolete mode and enforces private-network filtering. Ctrl+C/SIGTERM performs graceful cleanup and exits; shutdown is forced after five seconds or immediately on a second signal. A bind failure also closes the newly created runtime instead of leaving a background process alive. `--log` enables Fastify request logging: it prints in the foreground or is captured in the daemon log. The API surface is `/health` and `/v1/*` routes for app clients: sanitized config/provider/model views, profiles, memories, sessions, ask/chat, SSE streaming chat, task state, read-only schedules, live agent runs (`POST /v1/runs`, a resumable SSE `AgentEvent` stream, and clarification/approval/steer/cancel routes), and config-editing writes (`PATCH /v1/config` with CLI `config set` parity, per-profile settings/files/trusted-folders/memory-forget routes). The full wire contract is documented in [docs/service-api.md](docs/service-api.md).
 
 The optional `[service]` section configures API access for browser clients:
 
@@ -354,7 +353,7 @@ token_env = "MARIFOLD_SERVICE_TOKEN"     # bearer token clients must send (prefe
 cors_origins = ["http://127.0.0.1:5173"] # exact-match browser origins allowed to call the API
 ```
 
-With no token resolved, auth is off; loopback and private-network modes remain available, while `--public` is rejected. With no `cors_origins`, cross-origin browser requests are rejected; a hosted Web UI reached through the same loopback, LAN, or Tailscale address is same-origin and needs no allowlist entry. `marifold service --token/--token-env/--cors-origin` override the config per start. When enabled, auth covers `/v1/*`; `/health` and hosted static files stay reachable.
+With no token resolved, auth is off; loopback and private-network access remain available. With no `cors_origins`, cross-origin browser requests are rejected; a hosted Web UI reached through the same loopback, LAN, or Tailscale address is same-origin and needs no allowlist entry. `marifold service --token/--token-env/--cors-origin` override the config per start. When enabled, auth covers `/v1/*`; `/health` and hosted static files stay reachable. Authentication protects the API but never admits public source addresses.
 
 ### Service token workflow
 
@@ -378,6 +377,7 @@ environment-variable name. A raw `--token` is never persisted and must be
 supplied again to the restart command. For automatic restart after login or
 reboot, define the variable in the external service manager or another
 appropriate local secret store.
+
 In the Web UI, open **Connection** from the sidebar, select **This server**, and
 enter the same value in **Bearer token**. The token is stored for that named
 server in the browser's local storage and sent as the
@@ -397,16 +397,11 @@ but Marifold rejects source addresses outside its private ranges. Pass the
 host's specific Tailscale or LAN address when narrower interface exposure is
 desired.
 
-To accept any source IP, opt in explicitly and provide a token:
-
-```sh
-marifold service --host 0.0.0.0 --public --token-env MARIFOLD_SERVICE_TOKEN
-```
-
 Private mode uses the direct socket peer and deliberately ignores forwarded-IP
-headers. Do not place tokenless private mode behind a public reverse proxy;
-use bearer authentication for any proxy or tunnel that makes the service
-publicly reachable. See
+headers. Public reverse proxies and internet tunnels are unsupported because
+they can hide the original peer from this boundary. Use a private LAN or an
+encrypted private overlay such as Tailscale; add bearer authentication as
+defense in depth. See
 [Service API authentication](docs/service-api.md#authentication) for the full
 security behavior.
 
