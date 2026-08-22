@@ -2,7 +2,7 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
-## 2026-08-22 — Unreleased — Lazy run attachment inspection
+## 2026-08-22 — v0.58.0 — Lazy run attachment inspection
 
 - Staged every agent-run upload behind an opaque, read-only attachment manifest
   and added `inspect_attachment` as the single model-facing inspection tool.

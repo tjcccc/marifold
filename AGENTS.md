@@ -30,6 +30,8 @@ v0.54.x adds optional model-authored clarification questions through one rendere
 
 v0.55–v0.57.x add interruptible runs and multi-select clarification answers, managed foreground/daemon service lifecycle with restartable safe launch options, idempotent empty-session creation, live signed-in ChatGPT model discovery, strict provider-error surfacing through `@priest-ai/core` 3.0.1, and private-network-only tokenless non-loopback access with explicit authenticated `--public` exposure.
 
+v0.58.x adds lazy, attachment-scoped agent inspection for images, readable documents, and other staged uploads. An inspected image remains available through the rest of its run so Skills can resolve additional bundled inputs without losing visual context.
+
 The service defaults to loopback. Explicit non-loopback binds accept direct private LAN, link-local, IPv6 ULA, and Tailscale peers by default; public-source access requires `--public` plus resolved bearer authentication. Same-origin hosted Web access needs no CORS entry.
 
 ## Stack
@@ -51,6 +53,11 @@ The service defaults to loopback. Explicit non-loopback binds accept direct priv
 - `apps/web` contains the browser UI — a second renderer of the same contracts the TUI renders. All data flows over the service HTTP API; `src/api/types.ts` is the only file that may import from `@marifold/core`, and only with `import type`.
 - Raw provider `api_key` values never cross the wire: service routes expose env-var names and boolean presence flags only; key values are edited via the CLI or config file.
 - Do not expand App beyond the documented `marifold.app.v0` MVP or implement Workflow, Apple apps, external-agent aliases, effectful App actions, or provider-owned model deletion until that area is explicitly in scope.
+
+## Versioning
+
+- Marifold uses Semantic Versioning. The authoritative version files are the root `package.json`, `packages/cli/package.json`, `packages/core/package.json`, `packages/service/package.json`, `packages/tui/package.json`, and `apps/web/package.json`; keep all six versions synchronized.
+- For a release checkpoint, update the matching `DEVLOG.md` heading and refresh `pnpm-lock.yaml` with pnpm when the manifest changes affect it.
 
 ## Validation
 
