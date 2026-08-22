@@ -61,10 +61,10 @@ export interface ResponseMetaState {
   usage?: AgentUsage;
 }
 
-/** What the user bubble shows for an attachment; the payload itself goes to
- * the service (images) or is inlined into the prompt (text files). */
+/** What the user bubble shows for an attachment; generic binary payloads are
+ * deliberately turn-local and are staged only for the active agent run. */
 export interface UserAttachment {
-  kind: 'image' | 'text';
+  kind: 'image' | 'text' | 'file';
   name: string;
   officeKind?: 'word' | 'spreadsheet' | 'presentation';
   /** Retained locally/recovered from the durable inlined prompt so text and

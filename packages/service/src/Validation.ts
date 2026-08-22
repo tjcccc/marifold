@@ -1,4 +1,10 @@
-import { ImageInput, MarifoldError, MAX_RUN_INPUT_BYTES, RunFileInput } from '@marifold/core';
+import {
+  ImageInput,
+  MarifoldError,
+  MAX_RUN_INPUT_BYTES,
+  MAX_RUN_INSPECTION_TEXT_BYTES,
+  RunFileInput,
+} from '@marifold/core';
 
 export type JsonObject = Record<string, unknown>;
 
@@ -84,7 +90,7 @@ export function optionalRunFilesField(value: unknown): { files: RunFileInput[] }
     if (typeof item !== 'object' || item === null || Array.isArray(item)) {
       throw MarifoldError.configInvalid(`Expected files[${index}] to be an object.`);
     }
-    const file = item as { name?: unknown; mediaType?: unknown; data?: unknown };
+    const file = item as { name?: unknown; mediaType?: unknown; data?: unknown; inspectionText?: unknown };
     const name = requiredString(file.name, `files[${index}].name`);
     const mediaType = requiredString(file.mediaType, `files[${index}].mediaType`);
     const data = requiredString(file.data, `files[${index}].data`);
@@ -97,7 +103,16 @@ export function optionalRunFilesField(value: unknown): { files: RunFileInput[] }
     if (total > MAX_RUN_INPUT_BYTES) {
       throw MarifoldError.configInvalid(`Run files exceed ${MAX_RUN_INPUT_BYTES / (1024 * 1024)} MiB.`);
     }
-    return { name, mediaType, data };
+    let inspectionText: string | undefined;
+    if (file.inspectionText !== undefined) {
+      inspectionText = stringValue(file.inspectionText, `files[${index}].inspectionText`);
+      if (Buffer.byteLength(inspectionText, 'utf8') > MAX_RUN_INSPECTION_TEXT_BYTES) {
+        throw MarifoldError.configInvalid(
+          `files[${index}].inspectionText exceeds ${MAX_RUN_INSPECTION_TEXT_BYTES / 1024} KiB.`,
+        );
+      }
+    }
+    return { name, mediaType, data, ...(inspectionText !== undefined ? { inspectionText } : {}) };
   });
   return { files };
 }

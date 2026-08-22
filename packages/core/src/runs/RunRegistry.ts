@@ -62,7 +62,7 @@ export interface RunStartInput {
   /** Replace a persisted exchange instead of appending a new one. */
   replaceUserTurnIndex?: number;
   think?: boolean;
-  /** Attached to the objective on the first turn (AgentRunner semantics). */
+  /** Staged for lazy inspect_attachment access during the agent run. */
   images?: ImageInput[];
   /** Preserve attached images' original encoded bytes for this run. */
   originalImages?: boolean;

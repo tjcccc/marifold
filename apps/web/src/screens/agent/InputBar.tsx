@@ -204,7 +204,9 @@ export function InputBar(props: InputBarProps) {
                 ? `${formatBytes(attachment.originalSize ?? attachment.size)} → ${formatBytes(attachment.size)}`
                 : attachment.kind === 'text' && attachment.officeKind
                   ? `${officeKindLabel(attachment.officeKind)} · ${formatBytes(attachment.size)} extracted text${attachment.truncated ? ' · truncated' : ''}`
-                  : undefined}
+                  : attachment.kind === 'file'
+                    ? `${attachment.mediaType} · ${formatBytes(attachment.size)}`
+                    : undefined}
             >
               {attachment.kind === 'image' ? (
                 <button
@@ -226,10 +228,10 @@ export function InputBar(props: InputBarProps) {
                 </button>
               ) : (
                 <span
-                  className={attachment.officeKind ? styles.officeFileIcon : undefined}
+                  className={attachment.kind === 'text' && attachment.officeKind ? styles.officeFileIcon : undefined}
                   aria-hidden
                 >
-                  {officeKindGlyph(attachment.officeKind)}
+                  {officeKindGlyph(attachment.kind === 'text' ? attachment.officeKind : undefined)}
                 </span>
               )}
               <span className={styles.chipName}>
@@ -321,8 +323,8 @@ export function InputBar(props: InputBarProps) {
             <>
               <button
                 className={styles.attach}
-                title="Attach images, text, or Office files"
-                aria-label="Attach images, text, or Office files"
+                title="Attach files"
+                aria-label="Attach files"
                 onClick={() => fileInputRef.current?.click()}
               >
                 +
@@ -332,7 +334,6 @@ export function InputBar(props: InputBarProps) {
                 className={styles.fileInput}
                 type="file"
                 multiple
-                accept="image/png,image/jpeg,image/webp,image/gif,text/*,.md,.json,.yaml,.yml,.toml,.csv,.ts,.tsx,.js,.jsx,.py,.sh,.log,.xml,.html,.css,.sql,.docx,.xlsx,.pptx,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.openxmlformats-officedocument.presentationml.presentation"
                 onChange={event => {
                   const files = [...(event.target.files ?? [])];
                   if (files.length > 0) props.onAttachFiles?.(files);

@@ -48,8 +48,8 @@ export interface AgentRunOptions {
   profile?: string;
   provider?: string;
   model?: string;
-  /** Images attached to the objective. Sent to the model on the first turn
-   * (priest carries them through the request, exactly like the chat path). */
+  /** Images attached to the objective. Agent runs stage them read-only and
+   * expose them lazily through inspect_attachment; chat remains native. */
   images?: ImageInput[];
   /** Preserve the attached images' original encoded bytes for this turn. */
   originalImages?: boolean;
@@ -161,6 +161,10 @@ interface LoopState {
   toolSummaries: string[];
   /** Mid-run `/btw` guidance, surfaced to the model via userContext. */
   steeringNotes: string[];
+  /** Images selected through inspect_attachment for the rest of this run.
+   * Keeping them active across later tool iterations prevents a skill from
+   * losing visual context while it resolves another required input. */
+  activeImages: ImageInput[];
 }
 
 /**
@@ -219,6 +223,7 @@ export class AgentRunner {
       trustedFolders: [...agentConfig.trustedFolders, ...(options.trustedFolders ?? [])],
       readOnlyFolders: this.deps.resolveReadOnlyFolders?.(settings.profile),
       files: options.files,
+      images: runOptions.images,
     });
     const toolContext: ToolExecutionContext = {
       cwd: workspace.cwd,
@@ -252,6 +257,7 @@ export class AgentRunner {
       historyContext,
       toolSummaries: [],
       steeringNotes: [],
+      activeImages: [],
     };
 
     let sessionTurnPersisted = false;
@@ -330,7 +336,6 @@ export class AgentRunner {
         const response = await engine.run(this.loopRequest(config, settings.profile, runOptions, state, workspace), {
           signal: options.signal,
         });
-
         this.trace({
           kind: 'iteration',
           iteration: iterations,
@@ -469,6 +474,11 @@ export class AgentRunner {
       content = result.content;
       isError = result.isError ?? false;
       resultSummary = result.summary ?? summary;
+      if (!isError && result.images?.length) {
+        for (const image of result.images) {
+          if (!state.activeImages.includes(image)) state.activeImages.push(image);
+        }
+      }
     } catch (error) {
       content = `Tool '${call.name}' failed: ${error instanceof Error ? error.message : String(error)}`;
       isError = true;
@@ -556,7 +566,8 @@ export class AgentRunner {
       yield { type: 'approval_decision', requestId: call.id, approved: false, source: 'policy', reason };
       return { approved: false, reason };
     }
-    // Tools only set `trusted` for eligible in-home capabilities.
+    // Tools set `trusted` only for narrow pre-authorized capabilities such as
+    // current-run attachments and eligible in-home trusted folders.
     if (risk.trusted) {
       yield { type: 'approval_decision', requestId: call.id, approved: true, source: 'policy' };
       return { approved: true };
@@ -674,10 +685,6 @@ export class AgentRunner {
     state: LoopState,
     workspace: RunWorkspace,
   ): PriestRequest {
-    // Attach the objective's images on the first turn only (before any tool
-    // exchange/transcript accrues), so the model sees them without re-uploading
-    // on every iteration.
-    const firstTurn = state.exchange.length === 0 && state.transcript.length === 0;
     const base: PriestRequest = {
       config,
       profile,
@@ -686,7 +693,7 @@ export class AgentRunner {
         : `Objective: ${options.objective}\n\nUse tools only when the objective genuinely requires reading or writing files, running commands, searching the web, or delegating. Many objectives — greetings, questions, explanations, drafting text — need no tools at all; for those, answer directly from your own knowledge. Do not invent tool calls. When the objective is complete, reply with a short final answer describing the outcome.`,
       context: this.agentContext(state, workspace, options.instructions, options.lean),
       ...(options.sessionId ? { session: { id: options.sessionId, createIfMissing: true } } : {}),
-      ...(firstTurn && options.images && options.images.length > 0 ? { images: options.images } : {}),
+      ...(state.activeImages.length > 0 ? { images: state.activeImages } : {}),
     };
     const steering = state.steeringNotes.map(
       note => `The user added this guidance while you were working — take it into account: ${note}`,
@@ -706,14 +713,20 @@ export class AgentRunner {
   }
 
   private agentContext(state: LoopState, workspace: RunWorkspace, instructions?: string[], lean = false): string[] {
-    const files = workspace.files.length > 0
-      ? `Read-only input files:\n${workspace.files.map(file => `- ${file.name}: ${file.path}`).join('\n')}`
-      : 'No binary input files were staged for this run.';
+    const attachments = workspace.attachments.length > 0
+      ? [
+          'Attachments uploaded for this run:',
+          ...workspace.attachments.map(attachment => (
+            `- ${attachment.id}: ${attachment.name} (${attachment.mediaType}, ${formatAttachmentBytes(attachment.size)})`
+          )),
+          'Attachments are not embedded in this agent prompt. Use inspect_attachment with an attachment ID when their contents matter. You may inspect independent attachments in parallel with other read-only tool calls.',
+        ].join('\n')
+      : 'No attachments were uploaded for this run.';
     const workspaceContext = [
       `Working directory: ${workspace.cwd}. Relative tool paths resolve against it.`,
       `User home: ${workspace.userHome}. In tool paths and shell commands, ~ refers to this directory.`,
       `Isolated run directory: ${workspace.rootDir}. Its internal runtime home is ${workspace.homeDir}.`,
-      `${files}\nHonor explicit destination paths from the user; otherwise write generated deliverables to ${workspace.outputDir}. Temporary scripts and environments belong in ${workspace.workDir}.`,
+      `${attachments}\nHonor explicit destination paths from the user; otherwise write generated deliverables to ${workspace.outputDir}. Temporary scripts and environments belong in ${workspace.workDir}.`,
       ...(this.deps.registry.get('ask_user')?.kind === 'interaction' ? [
         'ask_user is optional. Use it only when essential information is missing and a reasonable assumption could materially change the result. Otherwise proceed. Batch all currently known questions into one call, and call it without other tools in that response.',
       ] : []),
@@ -724,7 +737,7 @@ export class AgentRunner {
     if (lean) {
       const context = [...(instructions ?? [])];
       context.push(
-        `${workspaceContext}\nUse read_file only if the instructions reference a bundled file (e.g. vars.toml); resolve it, then reply with ONLY the final output the instructions define — no plan, preamble, reasoning, or commentary.`,
+        `${workspaceContext}\nUse inspect_attachment when the skill depends on an uploaded attachment. Use read_file only if the instructions reference a bundled file (e.g. vars.toml). Resolve required inputs, then reply with ONLY the final output the instructions define — no plan, preamble, reasoning, or commentary.`,
       );
       if (state.mode === 'control-block') {
         context.push(buildControlBlockInstructions(this.deps.registry.definitions()));
@@ -855,6 +868,13 @@ function parseJsonObject(text: string): Record<string, JSONValue> | undefined {
     }
   }
   return undefined;
+}
+
+function formatAttachmentBytes(bytes: number): string {
+  if (bytes === 0) return 'remote';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KiB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MiB`;
 }
 
 function truncate(text: string, limit: number): string {

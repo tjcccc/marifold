@@ -230,7 +230,7 @@ describe('InputBar composer interactions', () => {
     expect(screen.getByRole('dialog', { name: 'first.png preview' })).toBeTruthy();
   });
 
-  it('offers modern Office files and identifies extracted workbook attachments', () => {
+  it('offers arbitrary files and identifies extracted workbook attachments', () => {
     const { container } = render(
       <InputBar
         steering={false}
@@ -257,9 +257,8 @@ describe('InputBar composer interactions', () => {
     expect(screen.getByText('X')).toBeTruthy();
     expect(screen.getByTitle(/Excel workbook · 2 KiB extracted text/)).toBeTruthy();
     const picker = container.querySelector<HTMLInputElement>('input[type="file"]');
-    expect(picker?.accept).toContain('.docx');
-    expect(picker?.accept).toContain('.xlsx');
-    expect(picker?.accept).toContain('.pptx');
+    expect(picker?.accept).toBe('');
+    expect(screen.getByRole('button', { name: 'Attach files' })).toBeTruthy();
   });
 
   it('keeps the visible mirror at the pasted textarea caret', () => {

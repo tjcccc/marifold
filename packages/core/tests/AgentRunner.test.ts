@@ -9,6 +9,7 @@ import { resolveAgentConfig } from '../src/agent/ApprovalPolicy';
 import { AgentTool, ToolRegistry } from '../src/agent/ToolRegistry';
 import { WriteFileTool } from '../src/agent/tools/WriteFileTool';
 import { AskUserTool } from '../src/agent/tools/AskUserTool';
+import { InspectAttachmentTool } from '../src/agent/tools/InspectAttachmentTool';
 import { TaskStore } from '../src/tasks/TaskStore';
 
 const tempDirs: string[] = [];
@@ -463,18 +464,34 @@ describe('AgentRunner', () => {
     expect(ctx).not.toContain('OLDEST-Q'); // dropped by the turn cap
   });
 
-  it('forwards objective images on the first agent turn only', async () => {
+  it('keeps an inspected image available through later tool iterations', async () => {
     const engine = new ScriptedEngine([
-      planResponse,
+      response({
+        toolCalls: [{ id: 'call_image', name: 'inspect_attachment', arguments: { attachment_id: 'attachment-1' } }],
+      }),
+      response({
+        toolCalls: [{ id: 'call_vars', name: 'read_file', arguments: { path: 'vars.toml' } }],
+      }),
       response({ text: 'I can see the image.' }),
     ]);
-    const { runner } = makeRunner(engine, [fakeTool()]);
-    const images = [{ path: '/tmp/pic.png' }];
+    const { runner } = makeRunner(engine, [new InspectAttachmentTool(), fakeTool()]);
+    const images = [{ data: Buffer.from('image-bytes').toString('base64'), mediaType: 'image/png' }];
 
-    await collect(runner.run({ objective: 'Describe the image.', cwd: tempDir(), forcePlan: true, images }));
+    await collect(runner.run({ objective: 'Describe the image.', cwd: tempDir(), lean: true, images }));
 
-    expect(engine.requests[0].images).toBeUndefined(); // plan turn
-    expect(engine.requests[1].images).toEqual(images); // first loop turn
+    expect(engine.requests[0].images).toBeUndefined();
+    expect(engine.requests[0].context?.join('\n')).toContain('attachment-1: image-1.png');
+    expect(engine.requests[1].images).toEqual([
+      expect.objectContaining({ path: expect.stringContaining('/input/image-1.png'), mediaType: 'image/png' }),
+    ]);
+    expect(engine.requests[1].toolExchange).toContainEqual(expect.objectContaining({
+      kind: 'tool_result',
+      name: 'inspect_attachment',
+      content: expect.stringContaining('now visible as image input'),
+    }));
+    expect(engine.requests[2].images).toEqual([
+      expect.objectContaining({ path: expect.stringContaining('/input/image-1.png'), mediaType: 'image/png' }),
+    ]);
   });
 
   it('prepares images once and honors the one-turn original bypass', async () => {
@@ -501,7 +518,8 @@ describe('AgentRunner', () => {
     }));
 
     expect(prepareImages).toHaveBeenCalledWith([{ data: 'source', mediaType: 'image/png' }], false);
-    expect(engine.requests[0].images).toEqual([{ data: 'prepared', mediaType: 'image/png' }]);
+    expect(engine.requests[0].images).toBeUndefined();
+    expect(engine.requests[0].context?.join('\n')).toContain('attachment-1: image-1.png');
     expect(persistTurn).toHaveBeenCalledWith(
       'image-session',
       'default',

@@ -315,20 +315,27 @@ The run itself is ephemeral in-service state; its durable record is a task
   "images": [{ "data": "<base64>", "mediaType": "image/png" }, { "url": "https://..." }],
   "files": [{ "name": "v23.xlsx",
               "mediaType": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-              "data": "<base64>" }],
+              "data": "<base64>",
+              "inspectionText": "Sheet: Budget\nA1: Revenue" }],
   "instructions": ["Write in English."], "maxIterations": 20,
   "forcePlan": false, "lean": false }
 ```
 
 Only `objective` is required. `images` follow the same shape as chat/ask
 (base64 `{data, mediaType}` or URL; exactly one of `data`/`url` per entry)
-and are attached to the objective on the first model turn. The service
+and are staged in an agent run's attachment manifest. The model calls
+`inspect_attachment` when it needs an image; the selected image then remains
+available through later tool iterations in that run, while earlier and
+uninspected iterations consume no image input tokens. The service
 accepts JSON bodies up to 25 MiB to make room for base64 payloads. Returns the **RunRecord**:
 
 `files` contains original file bytes for agent tools, limited to 16 MiB
-aggregate. Files are name-sanitized and staged read-only under the private run's
-`input/` directory; the model receives their paths and any separately extracted
-prompt text, not the raw bytes.
+aggregate with local/embedded images. Files are name-sanitized and staged
+read-only under the private run's `input/` directory. Optional
+`inspectionText` is a bounded (256 KiB) client-supplied preview for formats such
+as DOCX/XLSX/PPTX. The model receives an opaque attachment manifest;
+`inspect_attachment` returns image input, bounded text, or safe binary metadata
+and the run-scoped path, never arbitrary host-file access.
 
 For a resolved skill, `objective` carries the model-facing prompt,
 `instructions` carries the resolved body, and `userTurn` carries the original

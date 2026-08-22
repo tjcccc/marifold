@@ -637,9 +637,19 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
         navigate({ view: 'agent', profile: profileName, session: sid });
       }
 
-      // Consume the pending attachments: images ride the request natively,
-      // text files are inlined into the prompt as fenced blocks.
+      // Consume the pending attachments: chat images ride the request natively
+      // and readable text is inlined for chat parity; every agent-run upload is
+      // staged read-only for inspect_attachment.
       const pending = options.attachments ?? attachmentsRef.current;
+      const mode = skill?.mode ?? profileDetail?.settings.mode ?? 'agent';
+      if (mode === 'chat' && pending.some(item => item.kind === 'file')) {
+        dispatch({
+          type: 'notice',
+          tone: 'warn',
+          text: 'Binary attachments require Agent mode so inspect_attachment can open them.',
+        });
+        return false;
+      }
       if (options.originalImages) {
         const originalBytes = pending.reduce(
           (sum, item) => sum + (item.kind === 'image' ? (item.originalSize ?? item.size) : item.size),
@@ -672,27 +682,37 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
       const textFiles = pending.filter(
         (item): item is Extract<PreparedAttachment, { kind: 'text' }> => item.kind === 'text',
       );
-      const files: RunFileInput[] = await Promise.all(textFiles.flatMap(item => {
-        if (item.officeKind && !item.originalFile) return [];
+      const stagedAttachments = pending.filter(item => item.kind !== 'image');
+      const files: RunFileInput[] = await Promise.all(stagedAttachments.map(async item => {
+        if (item.kind === 'file') {
+          return {
+            name: item.name,
+            mediaType: item.mediaType,
+            data: await fileToBase64(item.originalFile),
+          };
+        }
         const source = item.originalFile ?? new Blob([item.content], { type: item.mediaType || 'text/plain' });
-        return [fileToBase64(source).then(data => ({
+        return {
           name: item.name,
           mediaType: item.mediaType || source.type || 'text/plain',
-          data,
-        }))];
+          data: await fileToBase64(source),
+          inspectionText: item.content,
+        };
       }));
       const prompt = inlineTextAttachments(skill?.prompt ?? trimmed, textFiles);
-      const bubbleAttachments: UserAttachment[] = pending.map(item =>
-        item.kind === 'image'
-          ? { kind: 'image', name: item.name, previewUrl: `data:${item.mediaType};base64,${item.data}` }
-          : {
+      const bubbleAttachments: UserAttachment[] = pending.map(item => {
+        if (item.kind === 'image') {
+          return { kind: 'image', name: item.name, previewUrl: `data:${item.mediaType};base64,${item.data}` };
+        }
+        if (item.kind === 'file') return { kind: 'file', name: item.name };
+        return {
               kind: 'text',
               name: item.name,
               content: item.content,
               ...(item.officeKind ? { officeKind: item.officeKind } : {}),
               ...(item.truncated ? { truncated: true } : {}),
-            },
-      );
+            };
+      });
 
       if (options.replaceItemId) {
         dispatch({
@@ -710,8 +730,6 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
         }));
       }
       const [provider, model] = splitModelChoice(modelChoice);
-      const mode = skill?.mode ?? profileDetail?.settings.mode ?? 'agent';
-
       if (mode === 'chat') {
         setSending(true);
         dispatch({ type: 'chat_started' });
@@ -1179,6 +1197,9 @@ async function preparedAttachmentsFromUser(
 ): Promise<PreparedAttachment[]> {
   const prepared: PreparedAttachment[] = [];
   for (const attachment of items ?? []) {
+    // Generic binaries are intentionally scoped to their original agent run;
+    // historical resend cannot recover bytes that were never persisted.
+    if (attachment.kind === 'file') continue;
     if (attachment.kind === 'text') {
       if (attachment.content === undefined) continue;
       prepared.push({

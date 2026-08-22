@@ -1,10 +1,12 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import type { ImageInput } from '@priest-ai/core';
 import { MarifoldError } from '../errors/MarifoldError';
 import { marifoldHome } from '../workspace/WorkspacePaths';
 
 export const MAX_RUN_INPUT_BYTES = 16 * 1024 * 1024;
+export const MAX_RUN_INSPECTION_TEXT_BYTES = 256 * 1024;
 export const RUN_WORKSPACE_RETENTION_MS = 24 * 60 * 60 * 1000;
 
 export interface RunFileInput {
@@ -12,13 +14,31 @@ export interface RunFileInput {
   mediaType: string;
   /** Base64-encoded file bytes. Service clients may not supply host paths. */
   data: string;
+  /** Optional bounded text already extracted by the submitting client (for example
+   * from DOCX/XLSX/PPTX in the browser). The original bytes remain authoritative. */
+  inspectionText?: string;
 }
 
 export interface StagedRunFile {
+  id: string;
   name: string;
   mediaType: string;
   path: string;
   size: number;
+  inspectionText?: string;
+}
+
+/** One upload addressable by an agent through inspect_attachment. Local
+ * uploads are copied into the run input directory; remote image references
+ * remain URLs and are never fetched by the staging boundary. */
+export interface StagedRunAttachment {
+  id: string;
+  name: string;
+  mediaType: string;
+  size: number;
+  path?: string;
+  image?: ImageInput;
+  inspectionText?: string;
 }
 
 /**
@@ -49,6 +69,7 @@ export interface RunWorkspace {
    * remain escalated and can never become a persistent "always" grant. */
   externalRoots: string[];
   files: StagedRunFile[];
+  attachments: StagedRunAttachment[];
 }
 
 export interface CreateRunWorkspaceOptions {
@@ -59,6 +80,9 @@ export interface CreateRunWorkspaceOptions {
    * the user's home remain approval-gated. */
   readOnlyFolders?: string[];
   files?: RunFileInput[];
+  /** Prepared image inputs to stage alongside ordinary files for lazy,
+   * attachment-scoped inspection during an agent run. */
+  images?: ImageInput[];
   /** Test/embedding overrides. Product runs use ~/.marifold/runs and the real
    * account home. */
   runsDir?: string;
@@ -119,32 +143,87 @@ export function createRunWorkspace(options: CreateRunWorkspaceOptions): RunWorks
     writeRoots,
     externalRoots,
     files: [],
+    attachments: [],
   };
   workspace.files = stageRunFiles(workspace, options.files ?? []);
+  workspace.attachments.push(...workspace.files);
+  stageRunImages(workspace, options.images ?? []);
   return workspace;
 }
 
 export function stageRunFiles(workspace: RunWorkspace, files: RunFileInput[]): StagedRunFile[] {
-  let total = 0;
-  const used = new Set<string>();
+  let total = workspace.attachments.reduce((sum, attachment) => sum + attachment.size, 0);
+  const used = new Set(workspace.attachments.map(attachment => attachment.name.toLowerCase()));
   return files.map((file, index) => {
     const bytes = decodeBase64(file.data, `files[${index}].data`);
     total += bytes.length;
     if (total > MAX_RUN_INPUT_BYTES) {
       throw MarifoldError.agentRunInvalid(
-        `Run input files exceed ${MAX_RUN_INPUT_BYTES / (1024 * 1024)} MiB.`,
+        `Run attachments exceed ${MAX_RUN_INPUT_BYTES / (1024 * 1024)} MiB.`,
+      );
+    }
+    if (file.inspectionText && Buffer.byteLength(file.inspectionText, 'utf8') > MAX_RUN_INSPECTION_TEXT_BYTES) {
+      throw MarifoldError.agentRunInvalid(
+        `files[${index}].inspectionText exceeds ${MAX_RUN_INSPECTION_TEXT_BYTES / 1024} KiB.`,
       );
     }
     const name = uniqueFileName(safeFileName(file.name, index), used);
     const target = path.join(workspace.inputDir, name);
     fs.writeFileSync(target, bytes, { mode: 0o400 });
     return {
+      id: `attachment-${workspace.attachments.length + index + 1}`,
       name,
       mediaType: file.mediaType || 'application/octet-stream',
       path: target,
       size: bytes.length,
+      ...(file.inspectionText ? { inspectionText: file.inspectionText } : {}),
     };
   });
+}
+
+/** Stage local/embedded images into the same read-only attachment area used by
+ * files. This lets an agent inspect an image only when needed instead of
+ * sending it on every stateless model iteration. */
+export function stageRunImages(workspace: RunWorkspace, images: ImageInput[]): StagedRunAttachment[] {
+  const used = new Set(workspace.attachments.map(attachment => attachment.name.toLowerCase()));
+  let total = workspace.attachments.reduce((sum, attachment) => sum + attachment.size, 0);
+  const staged = images.map((image, index): StagedRunAttachment => {
+    const id = `attachment-${workspace.attachments.length + index + 1}`;
+    const mediaType = image.mediaType || 'image/jpeg';
+    const extension = imageExtension(mediaType);
+    const name = uniqueFileName(`image-${index + 1}.${extension}`, used);
+    if (image.url) {
+      return { id, name, mediaType, size: 0, image: { url: image.url, mediaType } };
+    }
+
+    let bytes: Buffer;
+    try {
+      bytes = image.path ? fs.readFileSync(image.path) : decodeBase64(image.data ?? '', `images[${index}].data`);
+    } catch (error) {
+      if (error instanceof MarifoldError) throw error;
+      throw MarifoldError.agentRunInvalid(
+        `Could not stage image #${index + 1}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+    total += bytes.length;
+    if (total > MAX_RUN_INPUT_BYTES) {
+      throw MarifoldError.agentRunInvalid(
+        `Run attachments exceed ${MAX_RUN_INPUT_BYTES / (1024 * 1024)} MiB.`,
+      );
+    }
+    const target = path.join(workspace.inputDir, name);
+    fs.writeFileSync(target, bytes, { mode: 0o400 });
+    return {
+      id,
+      name,
+      mediaType,
+      path: target,
+      size: bytes.length,
+      image: { path: target, mediaType },
+    };
+  });
+  workspace.attachments.push(...staged);
+  return staged;
 }
 
 export function resolveToolPath(input: string, workspace: RunWorkspace | undefined, cwd: string): string {
@@ -269,6 +348,13 @@ function uniqueFileName(value: string, used: Set<string>): string {
   }
   used.add(candidate.toLowerCase());
   return candidate;
+}
+
+function imageExtension(mediaType: string): string {
+  if (mediaType === 'image/png') return 'png';
+  if (mediaType === 'image/webp') return 'webp';
+  if (mediaType === 'image/gif') return 'gif';
+  return 'jpg';
 }
 
 function decodeBase64(value: string, label: string): Buffer {

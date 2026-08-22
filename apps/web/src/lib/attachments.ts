@@ -9,6 +9,7 @@ export const MAX_IMAGES_PER_MESSAGE = 4;
 export const MAX_TOTAL_BYTES = 16 * 1024 * 1024;
 export const MAX_TEXT_FILE_BYTES = 256 * 1024;
 export const MAX_OFFICE_FILE_BYTES = 16 * 1024 * 1024;
+export const MAX_GENERIC_FILE_BYTES = 16 * 1024 * 1024;
 export const IMAGE_OPTIMIZE_MIN_BYTES = 300 * 1024;
 export const IMAGE_MAX_LONG_EDGE = 1600;
 export const IMAGE_OUTPUT_QUALITY = 0.85;
@@ -53,6 +54,7 @@ export type AttachmentClass =
   | { kind: 'image' }
   | { kind: 'text' }
   | { kind: 'office'; officeKind: OfficeFileKind }
+  | { kind: 'file' }
   | { kind: 'rejected'; reason: string };
 
 export function classifyFile(name: string, mediaType: string, size: number): AttachmentClass {
@@ -85,10 +87,13 @@ export function classifyFile(name: string, mediaType: string, size: number): Att
       reason: `${name}: legacy Office files are not supported; save it as ${modernFormat} first.`,
     };
   }
-  return {
-    kind: 'rejected',
-    reason: `${name}: attach PNG/JPEG/WebP/GIF, text, DOCX, XLSX, or PPTX files.`,
-  };
+  if (size > MAX_GENERIC_FILE_BYTES) {
+    return {
+      kind: 'rejected',
+      reason: `${name}: files up to ${MAX_GENERIC_FILE_BYTES / (1024 * 1024)} MiB can be attached.`,
+    };
+  }
+  return { kind: 'file' };
 }
 
 export type PreparedAttachment =
@@ -112,19 +117,30 @@ export type PreparedAttachment =
       officeKind?: OfficeFileKind;
       truncated?: boolean;
       /** Original browser file retained only for the pending submission so an
-       * agent run can stage the real binary read-only. */
+       * agent run can stage the real upload read-only. */
       originalFile?: File;
       originalSize?: number;
       mediaType?: string;
+    }
+  | {
+      kind: 'file';
+      name: string;
+      size: number;
+      mediaType: string;
+      /** Generic binary retained only for the pending agent run. */
+      originalFile: File;
     };
 
 /** Enforce the per-message caps over already-accepted attachments. Returns the
  * reason the next file must be refused, or undefined when it fits. */
-export function capViolation(existing: PreparedAttachment[], nextSize: number, nextKind: 'image' | 'text'): string | undefined {
+export function capViolation(existing: PreparedAttachment[], nextSize: number, nextKind: 'image' | 'file' | 'text'): string | undefined {
   if (nextKind === 'image' && existing.filter(a => a.kind === 'image').length >= MAX_IMAGES_PER_MESSAGE) {
     return `Up to ${MAX_IMAGES_PER_MESSAGE} images per message.`;
   }
-  const total = existing.reduce((sum, item) => sum + (item.originalSize ?? item.size), 0) + nextSize;
+  const total = existing.reduce(
+    (sum, item) => sum + (item.kind === 'file' ? item.size : (item.originalSize ?? item.size)),
+    0,
+  ) + nextSize;
   if (total > MAX_TOTAL_BYTES) {
     return `Attachments are limited to ${Math.round(MAX_TOTAL_BYTES / (1024 * 1024))} MB per message.`;
   }
@@ -210,17 +226,24 @@ export async function prepareFiles(files: Iterable<File>, existing: PreparedAtta
         rejected.push(`${file.name}: could not decode or optimize image (${errorMessage(error)}).`);
       }
     } else if (cls.kind === 'text') {
-      const violation = capViolation([...existing, ...accepted], file.size, 'text');
+      const violation = capViolation([...existing, ...accepted], file.size, 'file');
       if (violation) {
         rejected.push(`${file.name}: ${violation}`);
         continue;
       }
-      accepted.push({ kind: 'text', name: file.name, size: file.size, content: await file.text() });
-    } else {
+      accepted.push({
+        kind: 'text',
+        name: file.name,
+        size: file.size,
+        content: await file.text(),
+        originalFile: file,
+        mediaType: file.type || 'text/plain',
+      });
+    } else if (cls.kind === 'office') {
       try {
         const { extractOfficeText } = await import('./officeAttachments');
         const extracted = await extractOfficeText(file, cls.officeKind, MAX_TEXT_FILE_BYTES);
-        const violation = capViolation([...existing, ...accepted], file.size, 'text');
+        const violation = capViolation([...existing, ...accepted], file.size, 'file');
         if (violation) {
           rejected.push(`${file.name}: ${violation}`);
           continue;
@@ -239,6 +262,19 @@ export async function prepareFiles(files: Iterable<File>, existing: PreparedAtta
       } catch (error) {
         rejected.push(`${file.name}: could not extract Office text (${errorMessage(error)}).`);
       }
+    } else {
+      const violation = capViolation([...existing, ...accepted], file.size, 'file');
+      if (violation) {
+        rejected.push(`${file.name}: ${violation}`);
+        continue;
+      }
+      accepted.push({
+        kind: 'file',
+        name: file.name,
+        size: file.size,
+        mediaType: file.type || 'application/octet-stream',
+        originalFile: file,
+      });
     }
   }
   return { accepted, rejected };

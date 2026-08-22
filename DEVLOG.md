@@ -2,6 +2,16 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-08-22 — Unreleased — Lazy run attachment inspection
+
+- Staged every agent-run upload behind an opaque, read-only attachment manifest
+  and added `inspect_attachment` as the single model-facing inspection tool.
+- Made image inspection lazy and run-scoped after selection, fixing direct
+  Skills that resolve another bundled input after opening an image without
+  adding image tokens before the attachment is actually requested.
+- Added bounded extracted-text previews for browser-read Office files and
+  turn-local Web upload support for generic binaries such as audio and archives.
+
 ## 2026-08-22 — v0.57.0 — Live ChatGPT models and managed service access
 
 - Made interactive `marifold model add chatgpt` query the authenticated Codex

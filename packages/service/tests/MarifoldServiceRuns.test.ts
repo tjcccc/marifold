@@ -287,9 +287,12 @@ Transform {{text}} into the final prompt.
     }
   });
 
-  it('forwards image attachments on the objective to the model request', async () => {
+  it('stages image attachments and sends one only after inspect_attachment', async () => {
     const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl2nGQAAAAASUVORK5CYII=';
-    const { captured } = stubProvider(['A tiny test image.']);
+    const { captured } = stubProvider([
+      toolCall('inspect_attachment', { attachment_id: 'attachment-1' }),
+      'A tiny test image.',
+    ]);
     const { server, base } = await startServer();
     try {
       const created = await postJson(base, '/v1/runs', {
@@ -301,8 +304,9 @@ Transform {{text}} into the final prompt.
       expect(created.status).toBe(201);
       const { run } = await created.json();
       await pullFrames(sseFrames(await fetch(`${base}/v1/runs/${run.id}/events`)), frame => frame.event === 'done');
-      // The base64 payload must reach the provider request on the first turn.
-      expect(JSON.stringify(captured)).toContain(png);
+      expect(JSON.stringify(captured[0])).not.toContain(png);
+      expect(JSON.stringify(captured[0])).toContain('attachment-1: image-1.png');
+      expect(JSON.stringify(captured[1])).toContain(png);
 
       const invalid = await postJson(base, '/v1/runs', { objective: 'x', images: [{}] });
       expect(invalid.status).toBe(400);
@@ -313,7 +317,10 @@ Transform {{text}} into the final prompt.
   });
 
   it('stages binary files read-only and tells the model their run input path', async () => {
-    const { captured } = stubProvider(['I found the workbook.']);
+    const { captured } = stubProvider([
+      toolCall('inspect_attachment', { attachment_id: 'attachment-1' }),
+      'I found the workbook.',
+    ]);
     const { server, base } = await startServer();
     let runDir: string | undefined;
     try {

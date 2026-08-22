@@ -1,4 +1,4 @@
-import { JSONValue, ToolDefinition } from '@priest-ai/core';
+import { ImageInput, JSONValue, ToolDefinition } from '@priest-ai/core';
 import { MarifoldError } from '../errors/MarifoldError';
 import { ToolKind } from './ApprovalPolicy';
 import type { RunWorkspace } from './RunWorkspace';
@@ -28,6 +28,9 @@ export interface ToolExecutionContext {
 export interface ToolExecutionResult {
   /** Output returned to the model. */
   content: string;
+  /** Images made visible to the next model iteration by an attachment tool.
+   * They remain turn-local and are not embedded in the textual tool result. */
+  images?: ImageInput[];
   /** Short human-readable outcome for event rendering, e.g. "1.2KB read". */
   summary?: string;
   isError?: boolean;
@@ -39,7 +42,8 @@ export interface ToolRiskAssessment {
   /** True forces interactive approval even when policy says allow. */
   escalate: boolean;
   reason?: string;
-  /** True when the call is in an eligible in-home trusted folder —
+  /** True when the call targets a narrowly pre-authorized capability (for
+   * example an uploaded attachment or eligible in-home trusted folder) and is
    * auto-approved regardless of the tool kind's approval mode. */
   trusted?: boolean;
   /** Absolute target path of an escalated file call, so a client can offer to

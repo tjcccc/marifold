@@ -4,6 +4,7 @@ import * as path from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { AskUserTool } from '../src/agent/tools/AskUserTool';
 import { DelegateTool } from '../src/agent/tools/DelegateTool';
+import { InspectAttachmentTool } from '../src/agent/tools/InspectAttachmentTool';
 import { PythonPackageTool } from '../src/agent/tools/PythonPackageTool';
 import { ReadFileTool } from '../src/agent/tools/ReadFileTool';
 import { ShellExecTool } from '../src/agent/tools/ShellExecTool';
@@ -75,6 +76,7 @@ describe('ToolRegistry', () => {
   it('gives every built-in tool explicit positive and negative affordances', () => {
     const tools = [
       new AskUserTool(),
+      new InspectAttachmentTool(),
       new ReadFileTool(),
       new WriteFileTool(),
       new ShellExecTool(),
@@ -90,6 +92,60 @@ describe('ToolRegistry', () => {
       expect(tool.definition.description, tool.definition.name).toContain('When to use:');
       expect(tool.definition.description, tool.definition.name).toContain('When NOT to use:');
     }
+  });
+});
+
+describe('InspectAttachmentTool', () => {
+  it('opens staged images by opaque attachment ID', async () => {
+    const home = tempDir();
+    const cwd = path.join(home, 'repo');
+    fs.mkdirSync(cwd);
+    const workspace = createRunWorkspace({
+      id: 'tool_attachment_image',
+      cwd,
+      runsDir: path.join(home, '.marifold', 'runs'),
+      userHome: home,
+      images: [{ data: Buffer.from('image-bytes').toString('base64'), mediaType: 'image/png' }],
+    });
+    const result = await new InspectAttachmentTool().execute(
+      { attachment_id: 'attachment-1' },
+      { cwd, outputLimit: 100000, workspace },
+    );
+
+    expect(result.isError).toBeFalsy();
+    expect(result.content).toContain('now visible as image input');
+    expect(result.images).toEqual([
+      expect.objectContaining({ path: workspace.attachments[0].path, mediaType: 'image/png' }),
+    ]);
+    expect(new InspectAttachmentTool().assessRisk()).toEqual({ escalate: false, trusted: true });
+  });
+
+  it('returns bounded extracted document text and rejects unknown IDs', async () => {
+    const home = tempDir();
+    const cwd = path.join(home, 'repo');
+    fs.mkdirSync(cwd);
+    const workspace = createRunWorkspace({
+      id: 'tool_attachment_document',
+      cwd,
+      runsDir: path.join(home, '.marifold', 'runs'),
+      userHome: home,
+      files: [{
+        name: 'budget.xlsx',
+        mediaType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        data: Buffer.from('binary-workbook').toString('base64'),
+        inspectionText: 'Sheet: Budget\nA1: Revenue',
+      }],
+    });
+    const tool = new InspectAttachmentTool();
+    const ctx: ToolExecutionContext = { cwd, outputLimit: 20, workspace };
+
+    const inspected = await tool.execute({ attachment_id: 'attachment-1' }, ctx);
+    expect(inspected.content).toContain('Sheet');
+    expect(inspected.content).toContain('truncated');
+
+    const missing = await tool.execute({ attachment_id: '../../etc/passwd' }, ctx);
+    expect(missing.isError).toBe(true);
+    expect(missing.content).toContain('Available attachment IDs: attachment-1');
   });
 });
 

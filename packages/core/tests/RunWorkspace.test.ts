@@ -40,12 +40,37 @@ describe('RunWorkspace', () => {
 
     expect(workspace.cwd).toBe(fs.realpathSync(cwd));
     expect(workspace.files).toHaveLength(1);
+    expect(workspace.attachments).toHaveLength(1);
+    expect(workspace.attachments[0].id).toBe('attachment-1');
     expect(workspace.files[0].name).toBe('budget.xlsx');
     expect(fs.readFileSync(workspace.files[0].path, 'utf8')).toBe('xlsx-bytes');
     expect(fs.statSync(workspace.files[0].path).mode & 0o222).toBe(0);
     expect(resolveToolPath('~', workspace, cwd)).toBe(fs.realpathSync(home));
     expect(resolveToolPath('~/note.txt', workspace, cwd)).toBe(path.join(fs.realpathSync(home), 'note.txt'));
     expect(resolveToolPath('~/note.txt', workspace, cwd)).not.toBe(path.join(workspace.homeDir, 'note.txt'));
+  });
+
+  it('copies images into the read-only attachment manifest', () => {
+    const home = tempDir();
+    const cwd = path.join(home, 'repo');
+    fs.mkdirSync(cwd);
+    const workspace = createRunWorkspace({
+      id: 'run_image',
+      cwd,
+      runsDir: path.join(home, '.marifold', 'runs'),
+      userHome: home,
+      images: [{ data: Buffer.from('image-bytes').toString('base64'), mediaType: 'image/png' }],
+    });
+
+    expect(workspace.attachments).toHaveLength(1);
+    expect(workspace.attachments[0]).toMatchObject({
+      id: 'attachment-1',
+      name: 'image-1.png',
+      mediaType: 'image/png',
+      size: 11,
+    });
+    expect(fs.readFileSync(workspace.attachments[0].path!)).toEqual(Buffer.from('image-bytes'));
+    expect(fs.statSync(workspace.attachments[0].path!).mode & 0o222).toBe(0);
   });
 
   it('does not grant a broad home cwd and marks external roots', () => {

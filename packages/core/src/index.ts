@@ -35,6 +35,7 @@ export type {
   UserInputAgentTool,
 } from './agent/ToolRegistry';
 export { AskUserTool } from './agent/tools/AskUserTool';
+export { InspectAttachmentTool } from './agent/tools/InspectAttachmentTool';
 export { DelegateTool } from './agent/tools/DelegateTool';
 export type { DelegateAskRequest, DelegateAskResult, DelegateToolDeps } from './agent/tools/DelegateTool';
 export { PythonPackageTool } from './agent/tools/PythonPackageTool';
@@ -63,11 +64,18 @@ export type {
 } from './agent/UserInput';
 export {
   MAX_RUN_INPUT_BYTES,
+  MAX_RUN_INSPECTION_TEXT_BYTES,
   RUN_WORKSPACE_RETENTION_MS,
   createRunWorkspace,
   isInsideAnyRoot,
+  stageRunImages,
 } from './agent/RunWorkspace';
-export type { RunFileInput, RunWorkspace, StagedRunFile } from './agent/RunWorkspace';
+export type {
+  RunFileInput,
+  RunWorkspace,
+  StagedRunAttachment,
+  StagedRunFile,
+} from './agent/RunWorkspace';
 export { DuckDuckGoBackend } from './search/DuckDuckGoBackend';
 export { FirecrawlBackend } from './search/FirecrawlBackend';
 export type { FirecrawlBackendOptions } from './search/FirecrawlBackend';

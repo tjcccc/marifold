@@ -34,8 +34,9 @@ describe('classifyFile', () => {
     ['budget.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 100, 'office'],
     ['deck.pptx', 'application/zip', 100, 'office'],
     ['legacy.doc', 'application/msword', 100, 'rejected'],
-    ['binary.bin', 'application/octet-stream', 100, 'rejected'],
-    ['archive.zip', 'application/zip', 100, 'rejected'],
+    ['binary.bin', 'application/octet-stream', 100, 'file'],
+    ['archive.zip', 'application/zip', 100, 'file'],
+    ['voice.mp3', 'audio/mpeg', 100, 'file'],
   ])('%s (%s) → %s', (name, type, size, expected) => {
     expect(classifyFile(name, type, size).kind).toBe(expected);
   });
@@ -50,6 +51,20 @@ describe('classifyFile', () => {
     const result = classifyFile('huge.pptx', '', MAX_OFFICE_FILE_BYTES + 1);
     expect(result.kind).toBe('rejected');
     if (result.kind === 'rejected') expect(result.reason).toContain('16 MiB');
+  });
+
+  it('accepts a generic binary for turn-local agent inspection', async () => {
+    const file = new File(['audio-bytes'], 'voice.mp3', { type: 'audio/mpeg' });
+    const result = await prepareFiles([file], []);
+
+    expect(result.rejected).toEqual([]);
+    expect(result.accepted[0]).toMatchObject({
+      kind: 'file',
+      name: 'voice.mp3',
+      size: file.size,
+      mediaType: 'audio/mpeg',
+      originalFile: file,
+    });
   });
 });
 

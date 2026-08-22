@@ -9,6 +9,7 @@ import { ReadFileTool } from '../agent/tools/ReadFileTool';
 import { ShellExecTool } from '../agent/tools/ShellExecTool';
 import { WebSearchTool } from '../agent/tools/WebSearchTool';
 import { AskUserTool } from '../agent/tools/AskUserTool';
+import { InspectAttachmentTool } from '../agent/tools/InspectAttachmentTool';
 import { WriteFileTool } from '../agent/tools/WriteFileTool';
 import { AgentTool, ToolRegistry } from '../agent/ToolRegistry';
 import { ChatGptRefreshedTokens, refreshChatGptAccessToken } from '../config/ChatGptTokenRefresh';
@@ -772,6 +773,7 @@ export class MarifoldRuntime {
   private createDefaultToolRegistry(profile?: string): ToolRegistry {
     const registry = new ToolRegistry();
     registry.register(new AskUserTool());
+    registry.register(new InspectAttachmentTool());
     registry.register(new ReadFileTool());
     registry.register(new WriteFileTool());
     registry.register(new ShellExecTool());
