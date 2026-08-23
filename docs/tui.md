@@ -138,8 +138,10 @@ There is intentionally no `$new`/`$run`/`$remove` verb. Creating or editing a
 skill is either a direct file edit or done by asking the agent in normal input
 ("make a skill that translates to Japanese") — that is model work, not a command.
 
-A Skill is the shared primitive a graphical **App** renders as a form before
-running the selected actor profile's Skill. Apps are not rendered in the TUI.
+A Skill is the shared primitive a graphical **SkillApp** renders as a form
+before running an app-local Skill with its explicitly registered model. Legacy
+App v0 actor/profile bundles remain compatible. Apps are not rendered in the
+TUI.
 
 ## Clarification questions
 

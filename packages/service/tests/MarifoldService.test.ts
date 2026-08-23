@@ -57,78 +57,34 @@ describe('MarifoldService', () => {
     }
   });
 
-  it('lists and streams a global App actor without writing an Agent transcript', async () => {
+  it('runs model-driven SkillApp state triggers and buttons without a profile', async () => {
     const dir = tempDir();
-    const profileDir = path.join(dir, 'profiles', 'app_tester');
-    const postmanDir = path.join(dir, 'profiles', 'postman');
     const appDir = path.join(dir, 'apps', 'translator');
-    fs.mkdirSync(appDir, { recursive: true });
-    fs.mkdirSync(path.join(profileDir, 'skills', 'translate'), { recursive: true });
-    fs.mkdirSync(path.join(postmanDir, 'skills', 'translate'), { recursive: true });
-    fs.writeFileSync(path.join(profileDir, 'PROFILE.md'), 'PROFILE TEXT THAT MUST BE OMITTED');
+    fs.mkdirSync(path.join(appDir, 'skills', 'translate'), { recursive: true });
     fs.writeFileSync(
-      path.join(profileDir, 'profile.toml'),
-      'provider = "ollama"\nmodel = "gemma4:e4b"\nmode = "chat"\nmemories = false\nthink = false\n',
-    );
-    fs.writeFileSync(
-      path.join(postmanDir, 'profile.toml'),
-      'provider = "ollama"\nmodel = "gemma4:e4b"\nmode = "chat"\nmemories = false\nthink = false\n',
-    );
-    fs.writeFileSync(
-      path.join(appDir, 'app.toml'),
-      `${fs.readFileSync(path.resolve(process.cwd(), '../../examples/apps/translator/app.toml'), 'utf-8')}
-
-[[actors]]
-name = "secondary"
-profile = "postman"
-
-[[actions]]
-name = "translate_secondary"
-kind = "skill"
-actor = "secondary"
-skill = "translate"
-arguments = { source_text = "{{source_text}}", target_language = "{{target_language}}" }
-output = "translated_text"
-`,
+      path.join(appDir, 'skillapp.ts'),
+      fs.readFileSync(
+        path.resolve(process.cwd(), '../../examples/apps/translator/skillapp.ts'),
+        'utf-8',
+      ).replace('debounce: 1_000', 'debounce: 0'),
     );
     fs.copyFileSync(
-      path.resolve(process.cwd(), '../../examples/profiles/app_tester/skills/translate/SKILL.md'),
-      path.join(profileDir, 'skills', 'translate', 'SKILL.md'),
-    );
-    fs.writeFileSync(
-      path.join(postmanDir, 'skills', 'translate', 'SKILL.md'),
-      `---
-name: translate
-mode: chat
-variables:
-  - name: source_text
-    required: true
-  - name: target_language
-    required: true
----
-Secondary actor instruction: translate {{source_text}} into {{target_language}}.
-`,
+      path.resolve(process.cwd(), '../../examples/apps/translator/skills/translate/SKILL.md'),
+      path.join(appDir, 'skills', 'translate', 'SKILL.md'),
     );
 
-    let providerBody: {
-      messages?: Array<{ content?: string }>;
-      think?: boolean;
-    } | undefined;
+    const providerBodies: Array<{ model?: string; messages?: Array<{ content?: string }>; think?: boolean }> = [];
     vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
-      providerBody = JSON.parse(String(init?.body));
-      const lines = [
-        JSON.stringify({ message: { content: 'おはよう' }, done: false }),
-        JSON.stringify({
-          message: { content: '' },
-          done: true,
-          done_reason: 'stop',
-          prompt_eval_count: 40,
-          eval_count: 4,
-        }),
-      ].join('\n');
-      return new Response(`${lines}\n`, {
+      providerBodies.push(JSON.parse(String(init?.body)));
+      return new Response(JSON.stringify({
+        message: { content: '  Good morning  ' },
+        done: true,
+        done_reason: 'stop',
+        prompt_eval_count: 20,
+        eval_count: 3,
+      }), {
         status: 200,
-        headers: { 'Content-Type': 'application/x-ndjson' },
+        headers: { 'Content-Type': 'application/json' },
       });
     }));
 
@@ -136,57 +92,69 @@ Secondary actor instruction: translate {{source_text}} into {{target_language}}.
     loaded.config.paths.appsDir = path.join(dir, 'apps');
     const server = createMarifoldService({ loadedConfig: loaded, scheduler: false });
     try {
-      const listed = await server.inject({
-        method: 'GET',
-        url: '/v1/apps',
-      });
+      const listed = await server.inject({ method: 'GET', url: '/v1/apps' });
       expect(listed.statusCode).toBe(200);
       expect(listed.json().apps[0]).toMatchObject({
-        app: { name: 'translator', version: '1.0.0' },
-        actors: [
-          { name: 'translator', profile: 'app_tester' },
-          { name: 'secondary', profile: 'postman' },
-        ],
-        execution: { think: false, memory: false, profileContext: false },
+        schema: 'marifold.skillapp.v1',
+        models: [{ provider: 'ollama', model: 'maternion/hy-mt2:1.8b' }],
+        operations: [{ name: 'translate', requiredInputs: ['source', 'targetLanguage'], output: 'result' }],
       });
 
-      const streamed = await server.inject({
+      const created = await server.inject({
         method: 'POST',
-        url: '/v1/apps/translator/actions/translate/stream',
-        payload: {
-          values: { source_text: 'Good morning', target_language: 'Japanese' },
+        url: '/v1/apps/translator/instances',
+      });
+      expect(created.statusCode).toBe(201);
+      const instanceId = created.json().instance.id as string;
+
+      const changed = await server.inject({
+        method: 'PATCH',
+        url: `/v1/app-instances/${instanceId}/state`,
+        payload: { values: { source: '早上好', targetLanguage: 'English' } },
+      });
+      expect(changed.statusCode).toBe(200);
+      expect(changed.json()).toMatchObject({
+        status: 'completed',
+        instance: { state: { source: '早上好', targetLanguage: 'English', result: 'Good morning' } },
+        result: {
+          status: 'ok',
+          data: { text: 'Good morning' },
+          meta: { engine: 'ollama', model: 'maternion/hy-mt2:1.8b' },
         },
       });
-      expect(streamed.statusCode).toBe(200);
-      expect(streamed.body).toContain('data: {"text":"おはよう"}');
-      expect(streamed.body).toContain('"totalTokens":44');
 
-      const context = providerBody?.messages?.map(message => message.content ?? '').join('\n') ?? '';
-      expect(context).toContain('Translate the following text into Japanese.');
-      expect(context).toContain('Good morning');
-      expect(context).not.toContain('PROFILE TEXT THAT MUST BE OMITTED');
-      expect(context).not.toContain('bundled files');
-      expect(context).not.toContain('vars.toml');
-      expect(context).not.toContain('read_file');
-      expect(providerBody?.think).toBe(false);
-
-      const secondary = await server.inject({
+      const manual = await server.inject({
         method: 'POST',
-        url: '/v1/apps/translator/actions/translate_secondary/stream',
-        payload: {
-          values: { source_text: 'Good night', target_language: 'Japanese' },
-        },
+        url: `/v1/app-instances/${instanceId}/operations/translate`,
       });
-      expect(secondary.statusCode).toBe(200);
-      const secondaryContext = providerBody?.messages?.map(message => message.content ?? '').join('\n') ?? '';
-      expect(secondaryContext).toContain('Secondary actor instruction');
-      expect(secondaryContext).toContain('Good night');
+      expect(manual.statusCode).toBe(200);
+      expect(manual.json()).toMatchObject({ status: 'completed', result: { status: 'ok' } });
 
-      const sessions = await server.inject({
-        method: 'GET',
-        url: '/v1/sessions?profile=app_tester',
+      expect(providerBodies).toHaveLength(2);
+      expect(providerBodies[0]).toMatchObject({ model: 'maternion/hy-mt2:1.8b', think: false });
+      const context = providerBodies[0].messages?.map(message => message.content ?? '').join('\n') ?? '';
+      expect(context).toContain('Translate the following text into English.');
+      expect(context).toContain('早上好');
+      expect(context).not.toContain('PROFILE TEXT');
+
+      const emptied = await server.inject({
+        method: 'PATCH',
+        url: `/v1/app-instances/${instanceId}/state`,
+        payload: { values: { source: '' } },
       });
-      expect(sessions.json().sessions).toEqual([]);
+      expect(emptied.json()).toMatchObject({
+        status: 'idle',
+        reason: 'missing_required_input',
+        operation: 'translate',
+        instance: { state: { source: '', result: '' } },
+      });
+      expect(providerBodies).toHaveLength(2);
+
+      const removed = await server.inject({
+        method: 'DELETE',
+        url: `/v1/app-instances/${instanceId}`,
+      });
+      expect(removed.json()).toMatchObject({ ok: true, deleted: true });
     } finally {
       await server.close();
     }

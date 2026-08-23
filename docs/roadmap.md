@@ -47,10 +47,10 @@ short: what shipped (one line each), what's next, and what's deliberately deferr
   bounded read-only original-file staging; capability-scoped per-run workspaces; fail-closed
   macOS shell sandboxing; one-time external-path/package approvals; disposable `uv` Python
   environments; and deterministic service shutdown/listen-failure cleanup.
-- **v0.51+ — direct Skills and App MVP**: history-isolated direct Skill
-  invocation; global `marifold.app.v0` bundles with explicit profile actors;
-  normalized service contracts; portable nested layouts; transcript-free
-  streamed Skill actions; and a dedicated Apps view in the persistent Web workspace shell.
+- **v0.51+ — direct Skills and SkillApp foundation**: history-isolated direct
+  Skill invocation; global, statically compiled `skillapp.ts` bundles;
+  app-local Skills and explicit models; renderer-neutral state/layout/result
+  contracts; and a dedicated Apps view in the persistent Web workspace shell.
 
 ## Next
 

@@ -40,20 +40,18 @@ Chat reuses the same tool layer selectively: `/search` calls the pluggable `Sear
 
 Scheduling lives in `packages/core/src/schedule`: a file-backed `ScheduleStore` (cron via `croner`) and a minute-resolution `Scheduler` hosted inside the `marifold service` process. Scheduled firings are unattended agent runs (`AgentRunOptions.unattended`): `[agent.unattended]` approval overrides apply, and `ask` degrades to deny. Schedule results link to TaskStore tasks tagged `scheduled`.
 
-The App subsystem (`packages/core/src/app`) defines and validates
-`marifold.app.v0`, discovers global `<apps_dir>/<name>/app.toml` bundles,
-validates renderer state, and resolves declarative actor Skill actions. Each
-action names an App-local actor whose profile supplies model settings, Skills,
-and optional context. The service is authoritative: clients receive normalized
-definitions and submit only values, while core owns the actor, Skill, argument
-templates, permissions, and execution policy. App actions never use Agent
-sessions. The Web UI keeps one persistent workspace shell and replaces only
-the sidebar catalog body and right-pane content; the Apps view renders the
-portable layout tree without showing Agent profiles, sessions, transcripts, or
-the composer. The MVP executes chat-mode Skill actions; approval-aware
-effectful actions and richer components remain reserved.
+The App subsystem (`packages/core/src/app`) statically compiles restricted
+`marifold.skillapp.v1` `<apps_dir>/<name>/skillapp.ts` templates into
+renderer-neutral definitions. A v1 operation binds service-owned string state
+to one app-local Skill, one explicit provider/model, and one normalized result;
+it never loads a profile, memory, Agent session, transcript, or tool. Ephemeral
+instances implement read-only output bindings plus button and debounced
+latest-wins state triggers. The TypeScript authoring file is never imported or
+executed. The Web UI renders the normalized semantic component tree, and a
+future SwiftUI client can consume the same service data. Approval-aware
+effectful actions and general scripted App logic remain out of scope.
 
-The skill subsystem (`packages/core/src/skill`) defines the `marifold.skill.v0` primitive — a prompt template with declared `{{variables}}` and an optional run mode. `SkillStore` loads skills from `[paths].skills_dir` (default `~/.marifold/skills`) and each profile's `skills/` directory, with profile skills shadowing global ones; `parseSkill`/`renderSkillPrompt` validate and expand them. The TUI invokes an indexed skill directly with core's binding rules; service/Web clients use `resolveSkillInvocation` to do the same over HTTP. Both paths resolve exactly one skill before model execution, inject its expanded body and bundled-file directory, preserve the typed invocation in durable history, and use history-isolated execution so one prompt skill cannot inherit another prompt skill's style. A Skill is also the shared unit a graphical App consumes: the App binds typed UI state to a selected actor profile's Skill. See `docs/tui.md`.
+The skill subsystem (`packages/core/src/skill`) defines the `marifold.skill.v0` primitive — a prompt template with declared `{{variables}}` and an optional run mode. `SkillStore` loads skills from `[paths].skills_dir` (default `~/.marifold/skills`) and each profile's `skills/` directory, with profile skills shadowing global ones; `parseSkill`/`renderSkillPrompt` validate and expand them. The TUI invokes an indexed skill directly with core's binding rules; service/Web clients use `resolveSkillInvocation` to do the same over HTTP. Both paths resolve exactly one skill before model execution, inject its expanded body and bundled-file directory, preserve the typed invocation in durable history, and use history-isolated execution so one prompt skill cannot inherit another prompt skill's style. A Skill is also the shared unit a graphical SkillApp consumes: SkillApp binds semantic form state to an app-local Skill and explicit model. See `docs/tui.md`.
 
 The TUI (`packages/tui`, Ink/React) is the primary interactive surface and a pure renderer of two existing core streams — `MarifoldRuntime.stream` (chat) and `AgentRunner.run`→`AgentEvent` (agent). It adds no model-side logic. It is an ESM-only package the CommonJS CLI loads through a dynamic `import()` (kept a real import via a `new Function` escape hatch so `tsc`'s CommonJS emit does not turn it into a `require()`). Logic lives in pure, unit-tested modules under `src/core/` (input grammar, event→view mapping, an `appState` reducer, command/skill registries); Ink components under `src/ui/` stay thin. The `/btw` steering hook (`AgentRunOptions.steering`) drains queued user guidance between iterations. Approval UX (allow-once / session-grant / persist-to-config / deny) reuses the core `ApprovalPolicy`; non-persistable risks expose only allow-once/deny, while the process sandbox enforces the hard filesystem and network ceiling independently of approval. Optional `ask_user` events open a separate keyboard question modal, batch every answer, and resume through `AgentRunOptions.userInputHandler`.
 

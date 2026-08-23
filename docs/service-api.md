@@ -265,32 +265,61 @@ and submit typed values only:
 
 | Route | Returns |
 |---|---|
-| `GET /v1/apps` | `{ apps: AppDefinition[] }`, sorted by display title. Invalid local definitions are skipped so one bad bundle does not break the catalog |
-| `GET /v1/apps/:name` | `{ app: AppDefinition }`; 404 `APP_NOT_FOUND` |
-| `POST /v1/apps/:name/actions/:action/stream` | One-shot chat SSE for a v0 actor Skill action |
+| `GET /v1/apps` | `{ apps: SkillAppDefinition[] }`, sorted by display title. Invalid local definitions are skipped so one bad bundle does not break the catalog |
+| `GET /v1/apps/:name` | `{ app: SkillAppDefinition }`; 404 `APP_NOT_FOUND` |
+| `POST /v1/apps/:name/instances` | Create ephemeral state for a `marifold.skillapp.v1` definition |
+| `PATCH /v1/app-instances/:id/state` | Update editable state and run matching declarative triggers |
+| `POST /v1/app-instances/:id/operations/:operation` | Run one button-bound v1 operation |
+| `DELETE /v1/app-instances/:id` | Cancel work and release an instance |
 
-The action body is:
+For v1, the server loads and statically compiles
+`<apps_dir>/<name>/skillapp.ts`; it never imports or executes the TypeScript.
+An instance begins with the declared `State(...)` values. A state update body is:
+
+```json
+{ "values": { "source": "早上好", "targetLanguage": "English" } }
+```
+
+The mutation response has `status: "idle" | "completed" | "superseded"`, a
+complete instance/state snapshot, optional `operation` and `reason` fields, and
+an optional normalized Skill result:
 
 ```json
 {
-  "values": {
-    "source_text": "Good morning",
-    "target_language": "Japanese"
+  "ok": true,
+  "status": "completed",
+  "operation": "translate",
+  "instance": {
+    "id": "app_...",
+    "appName": "translator",
+    "state": {
+      "source": "早上好",
+      "targetLanguage": "English",
+      "result": "Good morning"
+    }
+  },
+  "result": {
+    "status": "ok",
+    "data": { "text": "Good morning" },
+    "meta": {
+      "engine": "ollama",
+      "model": "maternion/hy-mt2:1.8b",
+      "durationMs": 830
+    }
   }
 }
 ```
 
-The server loads `<apps_dir>/<name>/app.toml`, validates the submitted
-input/state values, resolves the action's declared actor profile and its
-profile/global Skill, expands named arguments, and applies the definition's
-execution policy. The client cannot submit a profile, prompt, Skill name,
-permissions, session ID, or execution flags. Output arrives as the same
-`chunk`/`done` SSE sequence as chat. App actions neither replay nor write Agent
-sessions.
-
-v0 executes chat-mode `kind = "skill"` actions only. Invalid definitions or
-values return 400 `APP_INVALID`; the complete schema and example are in
-[docs/app.md](app.md).
+The operation resolves only `<app>/skills/<name>/SKILL.md` and uses the
+definition's model directly. It loads no profile, memory, history, transcript,
+or tools. Output states are server-owned. Debounced triggers use latest-wins
+concurrency, cancelling older work and preventing stale state writes.
+Required, default-less Skill variables identify operation inputs that must be
+non-empty. If one becomes empty, the server cancels that operation, clears its
+output, and returns `status: "idle"` with
+`reason: "missing_required_input"`; it does not return an App error. Invalid
+definitions or values return 400 `APP_INVALID`; the complete schema and example
+are in [docs/app.md](app.md).
 
 ### Agent runs (live layer)
 

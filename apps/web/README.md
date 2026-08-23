@@ -86,18 +86,17 @@ model run starts. The service expands the selected profile/global skill once;
 the Web UI runs those instructions without prior skill-turn history and keeps
 the original `$skill …` text in the transcript.
 
-The Apps view renders global `~/.marifold/apps/<name>/app.toml` bundles returned
-as normalized JSON by the service. Agent and Apps share one persistent desktop
-shell: switching tabs changes only the sidebar catalog body and right-pane
-content, preserving the Marifold brand, system footer, sidebar width/visibility,
-and header controls. Apps renders no profile/session list, transcript, or
-composer. The MVP supports explicit multi-profile actors, portable row/column
-layout trees, typed text/enum state, markdown/text previews, buttons, and
-streamed actor Skill actions. App-defined execution controls can independently
-disable thinking, memory, and PROFILE/RULES/CUSTOM context; clients cannot
-override those controls, choose an actor profile, submit action prompts, or
-write App turns into Agent sessions. See `docs/app.md`,
-`examples/apps/translator`, and `examples/profiles/app_tester`.
+The Apps view renders global `~/.marifold/apps/<name>/skillapp.ts` bundles from
+the service's normalized JSON contract. Agent and Apps share one persistent
+desktop shell: switching tabs changes only the sidebar catalog body and
+right-pane content, preserving the Marifold brand, system footer, sidebar
+width/visibility, and header controls. Apps renders no profile/session list,
+transcript, or composer. It supports semantic row/column form layouts,
+service-owned state, direct buttons, and debounced latest-wins operations over
+an app-local Skill and explicit model. A workspace footer exposes the App
+version and an Activity drawer for runs, genuine warnings/errors, latency, and
+token use; missing required input remains a silent idle form state. See
+`docs/app.md` and `examples/apps/translator`.
 
 ## Profile navigation
 

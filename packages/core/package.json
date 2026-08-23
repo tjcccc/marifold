@@ -1,6 +1,6 @@
 {
   "name": "@marifold/core",
-  "version": "0.58.1",
+  "version": "0.59.0",
   "description": "Core runtime for Marifold",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -19,6 +19,7 @@
     "duck-duck-scrape": "^2.2.7",
     "sharp": "^0.35.3",
     "smol-toml": "^1.7.0",
+    "typescript-compiler": "npm:typescript@^6.0.2",
     "undici": "^7.28.0",
     "yaml": "^2.9.0"
   },

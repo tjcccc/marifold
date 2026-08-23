@@ -25,18 +25,18 @@ Alias profiles point to external agents or commands, such as Codex or Claude Cod
 
 Skills are reusable capabilities. A skill should not only be a prompt; it can become a structured interface with inputs, variables, actions, and outputs.
 
-Apps are GUI surfaces generated from safe schemas. Marifold owns rendering, validation, permissions, state, downloads, actor routing, and provider calls instead of letting definitions run arbitrary code by default.
+Apps are GUI surfaces generated from safe schemas. Marifold owns rendering, validation, permissions, state, result normalization, and provider calls instead of executing definition files as arbitrary code.
 
 Workflows connect profiles, Skills, Apps, models, and external agents into multi-step jobs.
 
 ## App Shape
 
-The current `marifold.app.v0` schema defines a safe floor that can grow to include:
+The current `marifold.skillapp.v1` template contract defines a safe floor that can grow to include:
 
 - Layout: known UI components such as text inputs, text areas, selects, tabs, preview panes, file pickers, and download buttons.
-- Variables: user-editable state and generated outputs.
-- Actions: calls to skills, models, tools, workflows, or external-agent aliases.
-- Permissions: explicit access to files, shell commands, network requests, provider calls, and exports.
+- State: user-editable bindings and server-owned generated outputs.
+- Operations: one app-local Skill run with one explicitly registered model and a declared result shape.
+- Triggers: direct button bindings and debounced state-change bindings with service-owned concurrency.
 
 Example targets:
 

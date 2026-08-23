@@ -1,5 +1,0 @@
-provider = "xai"
-model = "grok-4.5"
-mode = "chat"
-memories = false
-think = false

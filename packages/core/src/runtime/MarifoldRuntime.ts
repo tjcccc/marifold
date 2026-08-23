@@ -60,10 +60,10 @@ import {
 } from '../skill/SkillInvocation';
 import type { ResolvedSkillInvocation } from '../skill/SkillInvocation';
 import { buildSkillManagerGuide, mentionsSkills } from '../skill/BuiltInSkillManager';
-import { resolveAppAction as resolveAppActionDefinition } from '../app/AppActionResolver';
-import type { ResolvedAppAction } from '../app/AppActionResolver';
-import type { AppDefinition } from '../app/AppSchema';
 import { AppStore } from '../app/AppStore';
+import { resolveSkillAppOperation as resolveSkillAppOperationDefinition } from '../app/SkillAppResolver';
+import type { SkillAppDefinition, SkillAppResult, SkillAppStateValue } from '../app/SkillAppSchema';
+import { SkillAppInstanceRegistry } from '../app/SkillAppInstanceRegistry';
 import { TaskStore } from '../tasks/TaskStore';
 import { defaultAppsDir, defaultSchedulesDir, defaultSkillsDir } from '../workspace/WorkspacePaths';
 import type { TaskCreateInput, TaskEventInput, TaskListOptions, TaskState, TaskSummary, TaskUpdateInput } from '../tasks/TaskStore';
@@ -843,34 +843,88 @@ export class MarifoldRuntime {
     return new AppStore(config.paths.appsDir ?? defaultAppsDir());
   }
 
-  listApps(): AppDefinition[] {
+  listApps(): SkillAppDefinition[] {
     return this.createAppStore().list();
   }
 
-  getApp(name: string): AppDefinition | undefined {
+  getApp(name: string): SkillAppDefinition | undefined {
     return this.createAppStore().get(name);
   }
 
-  resolveAppAction(
+  /** Execute one profile-free v1 operation and normalize provider output to
+   * the Skill's declared result contract. No session, memory, tools, profile
+   * context, or transcript is created. */
+  async runSkillAppOperation(
     appName: string,
-    actionName: string,
-    values: Record<string, unknown>,
-  ): ResolvedAppAction {
-    const definition = this.createAppStore().require(appName);
-    const action = definition.actions.find(candidate => candidate.name === actionName);
-    if (!action) {
-      throw MarifoldError.appInvalid(
-        `App action '${actionName}' does not exist.`,
+    operationName: string,
+    state: Record<string, SkillAppStateValue>,
+    signal?: AbortSignal,
+  ): Promise<SkillAppResult> {
+    const startedAt = Date.now();
+    try {
+      const store = this.createAppStore();
+      const definition = store.require(appName);
+      const operation = resolveSkillAppOperationDefinition(
+        store,
+        definition,
+        operationName,
+        state,
       );
+      await this.refreshProviderCredentialsIfNeeded(operation.model.provider);
+      const settings: MarifoldResolvedSettings = {
+        profile: `skillapp-${appName}`,
+        provider: operation.model.provider,
+        model: operation.model.model,
+        think: operation.model.think,
+        mode: 'chat',
+      };
+      const response = await this.createEngine(settings.provider, false, false).run({
+        config: this.toPriestConfig(settings),
+        profile: settings.profile,
+        prompt: operation.prompt,
+        context: operation.instructions,
+      }, signal ? { signal } : undefined);
+      if (response.error) {
+        throw MarifoldError.providerError(
+          response.error.message,
+          settings.provider,
+          settings.model,
+          response.error.code,
+        );
+      }
+      if (response.text === undefined) {
+        throw MarifoldError.providerError(
+          `Provider '${settings.provider}' returned no text for model '${settings.model}'.`,
+          settings.provider,
+          settings.model,
+          'EMPTY_RESPONSE',
+        );
+      }
+      const text = operation.result.trim ? response.text.trim() : response.text;
+      return {
+        status: 'ok',
+        data: { text },
+        meta: {
+          engine: settings.provider,
+          model: settings.model,
+          durationMs: Date.now() - startedAt,
+          ...(response.usage ? { usage: response.usage } : {}),
+        },
+      };
+    } catch (error) {
+      if (signal?.aborted) throw error;
+      return {
+        status: 'error',
+        error: {
+          code: error instanceof MarifoldError ? error.code : 'APP_INVALID',
+          message: error instanceof Error ? error.message : String(error),
+        },
+      };
     }
-    const actor = definition.actors.find(candidate => candidate.name === action.actor);
-    if (!actor) {
-      throw MarifoldError.appInvalid(
-        `App action '${actionName}' references missing actor '${action.actor}'.`,
-      );
-    }
-    const skill = this.createSkillStore(actor.profile).require(action.skill);
-    return resolveAppActionDefinition(definition, actionName, values, skill);
+  }
+
+  createSkillAppInstanceRegistry(): SkillAppInstanceRegistry {
+    return new SkillAppInstanceRegistry(this);
   }
 
   createSchedule(input: ScheduleCreateInput): ScheduleState {

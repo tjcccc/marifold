@@ -22,7 +22,7 @@ v0.50.x adds local Web extraction for modern Word/Excel/PowerPoint attachments, 
 
 v0.51.x resolves direct `$skill` invocations in core with history-isolated execution and narrow read-only bundled-file access, and adds contact-style Web profile navigation with response previews/activity times, persistent profile pinning, and double-confirmed profile removal that retains conversation history.
 
-v0.52.x adds the App MVP: global `~/.marifold/apps/<name>/app.toml` bundles, normalized definitions and transcript-free streamed Skill actions through the service, explicit actor profiles per action, and portable layout trees in the persistent Web workspace shell. Per-app execution controls independently gate thinking, memory, and profile context.
+v0.52.x introduced the original App MVP. The current unreleased replacement is model-driven `marifold.skillapp.v1`: restricted, statically compiled `~/.marifold/apps/<name>/skillapp.ts` templates, app-local Skills, explicit models, service-owned form state, renderer-neutral layouts/results, and profile-free execution. The earlier profile-driven TOML runtime has been removed.
 
 v0.53.x enables bearer-protected non-loopback service binding for trusted LAN or tailnet access. The Web shell keeps named same-origin or remote Marifold servers with independent tokens and remounts its data views when the active connection changes.
 
@@ -55,7 +55,7 @@ The service defaults to loopback. Explicit non-loopback binds accept only direct
 - `apps/web` contains the browser UI — a second renderer of the same contracts the TUI renders. All data flows over the service HTTP API; `src/api/types.ts` is the only file that may import from `@marifold/core`, and only with `import type`.
 - Raw provider `api_key` values never cross the wire: service routes expose env-var names and boolean presence flags only; key values are edited via the CLI or config file.
 - Marifold is permanently a personal, single-owner BYOK/BYO-auth agent. Remote access connects that owner's devices; never add multi-tenant accounts, credential pooling, subscription/API relays, quota resale, or public-internet service exposure.
-- Do not expand App beyond the documented `marifold.app.v0` MVP or implement Workflow, Apple apps, external-agent aliases, effectful App actions, or provider-owned model deletion until that area is explicitly in scope.
+- Do not expand SkillApp beyond the documented `marifold.skillapp.v1` contract or implement Workflow, Apple apps, external-agent aliases, effectful App actions, or provider-owned model deletion until that area is explicitly in scope.
 
 ## Versioning
 

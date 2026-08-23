@@ -1,198 +1,312 @@
-# App Schema Specification (`marifold.app.v0`)
+# SkillApp Specification (`marifold.skillapp.v1`)
 
-Apps are declarative, local GUI bundles for focused jobs such as translation,
-email preparation, research, and design assistance. An App can name multiple
-profile actors, and each action explicitly chooses the actor whose Skill runs.
-The currently selected Agent profile is never implicit App state.
+SkillApps are declarative, local GUI templates for one focused model-backed
+job. Their core operation is deliberately narrow:
 
-Marifold validates each `app.toml` on the service host and returns normalized
-JSON to renderers. Clients submit typed variable values only; they cannot
-replace actor profiles, Skills, prompts, permissions, or execution controls.
+> Bind user parameters to one app-local Skill, run that Skill with one
+> explicitly registered model, normalize the response, and bind it to output
+> state.
 
-## Storage
+`skillapp.ts` is an authoring format, not an application runtime. Marifold
+statically inspects its TypeScript syntax and compiles it to renderer-neutral
+JSON. It never imports or executes the file. The Web UI renders that JSON now;
+a macOS client can render the same component and state contract with SwiftUI
+without parsing TypeScript.
 
-Apps are global rather than profile-owned:
+## Bundle layout
+
+SkillApps remain global rather than profile-owned:
 
 ```text
 ~/.marifold/apps/
   translator/
-    app.toml
-    assets/
-      ...
+    skillapp.ts
+    skills/
+      translate/
+        SKILL.md
 ```
 
-`[paths].apps_dir` can override the default `~/.marifold/apps`. The bundle
-directory and `[app].name` must match and use kebab-case. Additional bundle
-files such as `assets/` are kept beside `app.toml` so future renderers and the
-planned `$app-creator` Skill can treat an App as one portable folder.
+`[paths].apps_dir` overrides the default `~/.marifold/apps`. The bundle folder
+and `app.name` must match and use kebab-case.
 
-The former profile-scoped `skillapps/*.skillapp.toml` prototype is not part of
-this schema and is not loaded.
+`registerSkill("translate", ...)` resolves exactly
+`<bundle>/skills/translate/SKILL.md`. There is no profile/global fallback, and
+the resolved file must remain inside the bundle after symbolic links are
+resolved. The folder name and the Skill frontmatter `name` must match.
 
-## Complete example
+## Complete translator
 
-```toml
-schema = "marifold.app.v0"
+The repository example is
+[`examples/apps/translator/skillapp.ts`](../examples/apps/translator/skillapp.ts):
 
-[app]
-name = "translator"
-title = "Marifold Translation"
-version = "1.0.0"
-description = "Translate focused text."
+```ts
+import {
+  App,
+  Button,
+  Row,
+  Select,
+  Spacer,
+  State,
+  Textarea,
+  TextResult,
+  defineSkillApp,
+  registerModel,
+  registerSkill,
+  trigger,
+  useSkill,
+} from '@marifold/core';
 
-[[actors]]
-name = "translator"
-profile = "app_tester"
+const targetLanguages = [
+  'Chinese',
+  'English',
+  'Japanese',
+  'Korean',
+  'French',
+  'German',
+  'Spanish',
+] as const;
 
-[[variables]]
-name = "source_text"
-type = "string"
-role = "input"
-label = "Source text"
-required = true
+const source = State('');
+const targetLanguage = State('English');
+const result = State('');
 
-[[variables]]
-name = "target_language"
-type = "enum"
-role = "input"
-label = "Translate to"
-default = "English"
-options = ["Chinese", "English", "Japanese"]
+const translationModel = registerModel(
+  'ollama/maternion/hy-mt2:1.8b',
+  { think: false },
+);
 
-[[variables]]
-name = "translated_text"
-type = "string"
-role = "output"
-label = "Translation"
+const translationSkill = registerSkill('translate', {
+  result: TextResult({ trim: true }),
+});
 
-[[layout]]
-component = "row"
-children = [
-  { component = "select", bind = "target_language", grow = true },
-]
+const translate = useSkill(translationModel, translationSkill, {
+  parameters: {
+    source_text: source,
+    target_language: targetLanguage,
+  },
+  output: result,
+  memory: false,
+  history: false,
+  profileContext: false,
+});
 
-[[layout]]
-component = "row"
-gap = "large"
-responsive = "stack"
-children = [
-  { component = "textarea", bind = "source_text", grow = true },
-  { component = "preview", bind = "translated_text", format = "markdown", grow = true },
-]
+trigger(translate, {
+  onChange: [source, targetLanguage],
+  debounce: 1_000,
+  concurrency: 'latest',
+});
 
-[[layout]]
-component = "row"
-children = [
-  { component = "spacer" },
-  { component = "button", action = "translate", label = "Translate" },
-  { component = "spacer" },
-]
+export default defineSkillApp({
+  app: {
+    name: 'translator',
+    title: 'Marifold Translation',
+    version: '1.0.0',
+    description: 'Translate text with a dedicated local model.',
+  },
+  ui: App([
+    Row([
+      Select('Translate to', targetLanguage, {
+        options: targetLanguages,
+        grow: true,
+      }),
+    ]),
+    Row([
+      Textarea('Input', source, {
+        grow: true,
+        placeholder: 'Enter text to translate',
+      }),
+      Textarea('Result', result, {
+        grow: true,
+        editable: false,
+        copyable: true,
+      }),
+    ], {
+      gap: 'large',
+      responsive: 'stack',
+    }),
+    Row([
+      Spacer(),
+      Button('Translate', {
+        trigger: translate,
+        emphasis: 'primary',
+      }),
+      Spacer(),
+    ]),
+  ]),
+});
+```
 
-[[actions]]
-name = "translate"
-kind = "skill"
-actor = "translator"
-skill = "translate"
-arguments = {
-  source_text = "{{source_text}}",
-  target_language = "{{target_language}}",
+Its Skill declares `source_text` and `target_language`; operation parameter
+keys intentionally match those Skill variable names. State names are local to
+the template and may use normal TypeScript camelCase.
+
+## Restricted TypeScript
+
+The `.ts` extension provides familiar syntax, editor completion, and type
+checking. It does not make SkillApp a general front-end framework. The static
+compiler accepts only:
+
+- named builder imports from `@marifold/core`;
+- top-level `const` declarations made from literals, arrays, objects,
+  references, and approved builder calls;
+- top-level declarative `trigger(...)` registrations;
+- one `export default defineSkillApp(...)` declaration.
+
+Functions, callbacks, classes, loops, conditions, property access, dynamic
+imports, arbitrary packages, object/array spreads, mutation, and side effects
+are rejected. Consequently there is no `watch()` callback, `computed()`, local
+reducer, network call, or access to `State.value`. Stateful non-model software
+such as a todo manager belongs in a normal application rather than SkillApp.
+
+## State and binding
+
+`State(initial)` declares string state and gives it the surrounding `const`
+name. Components bind to the state reference; the template never reads or
+writes it directly.
+
+When a renderer opens a v1 SkillApp, the service creates an ephemeral instance
+with the declared initial values. User edits are validated and stored there.
+States used as an operation output are read-only to clients. A successful
+operation replaces its bound output state, causing every renderer component
+bound to that state to refresh.
+
+Required inputs are derived from required, default-less variables in the
+operation's `SKILL.md`. When any such bound state is empty or whitespace,
+Marifold treats the operation as not ready: it cancels pending work, clears the
+bound output, returns an idle mutation with
+`reason: "missing_required_input"`, and disables buttons for that operation.
+This is ordinary form state, not a warning or error.
+
+v1 intentionally supports string state only. Lists, structured results,
+append/replace list policies, and computed state can be added later without
+introducing arbitrary template code.
+
+## Models, Skills, and operations
+
+`registerModel("provider/model", options)` splits on the first slash. The
+provider must already exist in Marifold configuration; the remainder is passed
+as the provider's model ID, so model IDs may contain additional slashes.
+
+v1 model options contain `think` only. `memory`, `history`, and
+`profileContext` belong to `useSkill` execution policy and must all be `false`.
+The run is genuinely profile-free: it creates no Agent session or transcript,
+loads no profile or memory, and exposes no chat/agent tools.
+
+`registerSkill(name, { result })` registers an app-local Skill. The Skill's
+`SKILL.md` remains the authoritative prompt, so v1 has no inline prompt or
+prompt override.
+
+`useSkill(model, skill, options)` declares an operation. It is not an async
+function and cannot be called from template code. It binds:
+
+- Skill parameter names to input states;
+- one output state;
+- the fixed profile-free execution policy.
+
+## Triggers
+
+A button binds directly to an operation:
+
+```ts
+Button('Translate', { trigger: translate });
+```
+
+An automatic trigger is declarative:
+
+```ts
+trigger(translate, {
+  onChange: [source, targetLanguage],
+  debounce: 1_000,
+  concurrency: 'latest',
+});
+```
+
+`debounce` is milliseconds, defaults to `0`, and is capped at 60 seconds. v1 concurrency is always
+`latest`: a new matching change cancels a pending timer or in-flight provider
+request for the same operation, and a stale result cannot overwrite newer
+state. Manual and automatic triggers use the same operation path.
+
+Each trigger runs exactly one Skill with one model. SkillApp does not support
+operation chaining, branching, loops, local actions, or effectful tools.
+
+## Structured result contract
+
+Renderers never consume raw model output. `TextResult({ trim: true })` asks the
+runtime adapter to trim the completed provider text and normalize it as:
+
+```json
+{
+  "status": "ok",
+  "data": {
+    "text": "Good morning."
+  },
+  "meta": {
+    "engine": "ollama",
+    "model": "maternion/hy-mt2:1.8b",
+    "durationMs": 830,
+    "usage": {
+      "totalTokens": 44
+    }
+  }
 }
-output = "translated_text"
-
-[execution]
-think = false
-memory = false
-profile_context = false
-
-[permissions]
-provider_calls = true
-files = "none"
-shell = false
-network = false
-export = false
 ```
 
-The repository fixture lives at
-`examples/apps/translator/app.toml`; its actor Skill remains under
-`examples/profiles/app_tester/skills/translate/SKILL.md`.
+Failures use the same envelope:
 
-## Actors
-
-Each `[[actors]]` entry has:
-
-| Key | Required | Meaning |
-| --- | --- | --- |
-| `name` | yes | App-local snake_case actor identifier |
-| `profile` | yes | Marifold profile resolved when an action runs |
-| `label` | no | Human-readable actor label |
-
-Multiple actors can use different providers, models, instructions, memories,
-and Skills. Missing profiles or Skills do not hide the App from the catalog;
-the affected action fails with the profile or Skill error when invoked.
-
-## Variables
-
-Variables use a snake_case `name`, a `type` (`string`, `number`, `boolean`, or
-`enum`), and a `role` (`input`, `output`, or `state`). Optional fields are
-`label`, `required`, `default`, and `options` for enums.
-
-Renderers may submit input and state variables. Output variables are
-server-owned action results and cannot be forged by the client.
-
-## Layout
-
-The portable v0 layout components are:
-
-- Containers: `row`, `column`, `tabs`
-- Content: `text`, `spacer`, `preview`
-- Inputs: `text_input`, `textarea`, `select`, `file_picker`
-- Actions: `button`, `download_button`
-
-`row` and `column` use `children`; `tabs` uses a two-dimensional `tabs` array.
-Layout depth is capped at four, tabs cannot nest, and a definition may contain
-at most 100 layout items. Supported presentation fields include `label`,
-`show_label`, `gap`, `grow`, `responsive = "stack"`, and preview
-`format = "text" | "markdown"`.
-
-## Actions
-
-v0 supports only server-owned Skill actions:
-
-```toml
-[[actions]]
-name = "polish"
-kind = "skill"
-actor = "optimizer"
-skill = "email-polisher"
-arguments = { draft = "{{draft}}" }
-output = "polished_draft"
+```json
+{
+  "status": "error",
+  "error": {
+    "code": "PROVIDER_ERROR",
+    "message": "..."
+  }
+}
 ```
 
-Action arguments may contain typed literals and `{{variable}}` placeholders.
-The server resolves the declared actor profile and then resolves that profile's
-Skill with the normal profile-over-global precedence.
+The model is not required to emit JSON or XML tags. A future result adapter can
+normalize JSON, lists, files, or images while preserving this outer contract.
 
-Only chat-mode Skills run in App v0. Agent-mode or other effectful actions are
-rejected until Apps have their own approval-aware run contract. In particular,
-a future Postman actor cannot silently send email through this chat action
-endpoint.
+## Components
 
-## Execution and history
+SkillApp components are semantic, form-oriented controls with Marifold-owned
+appearance. They do not accept HTML, CSS, classes, arbitrary styles, or event
+callbacks.
 
-| Key | Default | Meaning |
-| --- | --- | --- |
-| `think` | `false` | Enable the actor profile's provider thinking mode |
-| `memory` | `false` | Inject actor profile memory |
-| `profile_context` | `false` | Inject actor PROFILE/RULES/CUSTOM context |
+v1 supports:
 
-App actions never replay or write Agent sessions. There is deliberately no
-`history` field in `marifold.app.v0`; App-specific audit history can be added
-later without polluting Agent transcripts.
+- layout: `App`, `Row`, `Column`, `Spacer`;
+- form: `Textarea(label, state, options)` and
+  `Select(label, state, { options, ... })`;
+- action: `Button(label, { trigger, emphasis })`.
 
-## Permissions
+Form components always require a non-empty label. `showLabel: false` hides the
+visual label without reserving layout space while retaining an accessible
+label for native renderers. Supported controlled presentation options include
+`grow`, `gap`, `responsive: "stack"`, `placeholder`, `editable`, `copyable`,
+and button `emphasis`.
 
-`provider_calls` gates Skill actions. `files`, `shell`, `network`, and `export`
-remain explicit capability declarations for portable components and future
-approval-aware actions. Defaults are provider calls allowed, files/network/
-shell denied, and export allowed. A declaration never bypasses Marifold's
-runtime approval boundary.
+The renderer owns app chrome rather than the template. The Web renderer keeps
+the app version and an **Activity** control in a footer fixed to the bottom of
+the App workspace. Activity opens a bottom drawer for completed runs, genuine
+warnings and errors, response time, and token usage. Expected idle states such
+as a missing required input do not create Activity entries. Native renderers
+should preserve the same distinction even when their chrome differs.
+
+## Service and native-renderer contract
+
+Catalog routes return normalized `marifold.skillapp.v1` definitions:
+
+| Route | Purpose |
+| --- | --- |
+| `GET /v1/apps` | List normalized definitions |
+| `GET /v1/apps/:name` | Read one normalized definition |
+| `POST /v1/apps/:name/instances` | Create ephemeral v1 state |
+| `PATCH /v1/app-instances/:id/state` | Apply user state and matching automatic triggers |
+| `POST /v1/app-instances/:id/operations/:operation` | Run a button-bound operation |
+| `DELETE /v1/app-instances/:id` | Cancel work and release the instance |
+
+The instance mutation response contains `status` (`idle`, `completed`, or
+`superseded`), the complete state snapshot, and optional `operation`, `reason`,
+and structured Skill result fields. This JSON is the middle layer shared by
+Web, SwiftUI, and other future renderers. Idle instances expire after 30
+minutes; renderers should also delete them when their App view closes.

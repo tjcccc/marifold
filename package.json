@@ -1,6 +1,6 @@
 {
   "name": "@marifold/workspace",
-  "version": "0.58.1",
+  "version": "0.59.0",
   "private": true,
   "description": "Marifold local-first personal AI workspace",
   "license": "GPL-3.0-only",
@@ -18,6 +18,7 @@
     "marifold": "node packages/cli/dist/index.js"
   },
   "devDependencies": {
+    "@marifold/core": "workspace:*",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^24.13.3",
     "typescript": "^7.0.2",

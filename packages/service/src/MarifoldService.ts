@@ -107,6 +107,7 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
   (server as ServiceWithBridge).marifoldTelegram = telegramBridge ? { profile: telegramBridge.profile } : undefined;
 
   const runRegistry = runtime.createRunRegistry(message => server.log.info(message));
+  const skillAppInstances = runtime.createSkillAppInstanceRegistry();
   // Plain /ask and /chat/stream requests are not RunRegistry entries, but they
   // can still persist a final exchange. Keep session-scoped requests visible
   // to destructive history routes so a late completion cannot recreate a
@@ -145,6 +146,7 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
     telegramBridge?.stop();
     scheduler?.stop();
     runRegistry.close();
+    skillAppInstances.close();
     runtime.close();
   });
 
@@ -251,8 +253,8 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
     };
   });
 
-  // App TOML stays server-owned. Every renderer receives the same validated,
-  // normalized JSON contract and can only submit typed state.
+  // SkillApp source stays server-owned. Every renderer receives the same
+  // statically compiled JSON contract and can only submit typed state.
   server.get('/v1/apps', async () => ({
     ok: true,
     apps: runtime.listApps(),
@@ -275,33 +277,40 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
     return { ok: true, app };
   });
 
+  // SkillApps are statically compiled templates with ephemeral service-owned
+  // state. Both buttons and on-change triggers execute the same declared
+  // model + app-local Skill operation and return a normalized result.
   server.post<{
-    Params: { name: string; action: string };
-  }>('/v1/apps/:name/actions/:action/stream', async (request, reply) => {
-    const body = objectBody(request.body);
-    const values = objectBody(body.values);
-    const action = runtime.resolveAppAction(
-      request.params.name,
-      request.params.action,
-      values,
-    );
-    if (action.mode && action.mode !== 'chat') {
-      throw MarifoldError.appInvalid(
-        `App v0 only supports chat-mode skills; '${action.name}' uses '${action.mode}'.`,
-      );
-    }
-
-    await streamChat(reply, runtime, {
-      prompt: action.prompt,
-      userTurn: action.userTurn,
-      instructions: action.instructions,
-      profile: action.profile,
-      memories: action.execution.memory,
-      think: action.execution.think,
-      profileContext: action.execution.profileContext,
-      chatTools: false,
-    });
+    Params: { name: string };
+  }>('/v1/apps/:name/instances', async (request, reply) => {
+    const instance = skillAppInstances.create(request.params.name);
+    reply.status(201);
+    return { ok: true, instance };
   });
+
+  server.patch<{
+    Params: { id: string };
+  }>('/v1/app-instances/:id/state', async request => {
+    const body = objectBody(request.body);
+    return {
+      ok: true,
+      ...(await skillAppInstances.update(request.params.id, objectBody(body.values))),
+    };
+  });
+
+  server.post<{
+    Params: { id: string; operation: string };
+  }>('/v1/app-instances/:id/operations/:operation', async request => ({
+    ok: true,
+    ...(await skillAppInstances.run(request.params.id, request.params.operation)),
+  }));
+
+  server.delete<{
+    Params: { id: string };
+  }>('/v1/app-instances/:id', async request => ({
+    ok: true,
+    deleted: skillAppInstances.delete(request.params.id),
+  }));
 
   server.get('/v1/models', async () => ({
     ok: true,

@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent, ReactNode } from 'react';
 import type { ApiClient } from '../../api/client';
-import type { AppDefinition } from '../../api/types';
+import type { SkillAppDefinition } from '../../api/types';
 import { Avatar } from '../../components/Avatar';
 import { WorkspaceSidebar } from '../agent/WorkspaceSidebar';
 import styles from '../agent/ProfileSidebar.module.css';
@@ -9,7 +9,7 @@ import appStyles from './AppsSidebar.module.css';
 
 export interface AppsSidebarProps {
   client: ApiClient;
-  apps: AppDefinition[];
+  apps: SkillAppDefinition[];
   selected?: string;
   busy?: boolean;
   loading?: boolean;

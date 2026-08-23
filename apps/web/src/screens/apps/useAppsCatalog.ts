@@ -2,11 +2,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { listApps } from '../../api/apps';
 import type { ApiClient } from '../../api/client';
 import { MarifoldApiError } from '../../api/client';
-import type { AppDefinition } from '../../api/types';
+import type { SkillAppDefinition } from '../../api/types';
 
 export interface AppsCatalog {
-  apps: AppDefinition[];
-  selected?: AppDefinition;
+  apps: SkillAppDefinition[];
+  selected?: SkillAppDefinition;
   selectedName?: string;
   select: (name: string) => void;
   loading: boolean;
@@ -18,7 +18,7 @@ export function useAppsCatalog(
   client: ApiClient,
   onUnauthorized: () => void,
 ): AppsCatalog {
-  const [apps, setApps] = useState<AppDefinition[]>([]);
+  const [apps, setApps] = useState<SkillAppDefinition[]>([]);
   const [selectedName, setSelectedName] = useState<string>();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>();

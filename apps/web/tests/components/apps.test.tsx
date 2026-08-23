@@ -2,8 +2,8 @@
 import { useState } from 'react';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { ApiClient, StreamInit } from '../../src/api/client';
-import type { AppDefinition } from '../../src/api/types';
+import type { ApiClient } from '../../src/api/client';
+import type { SkillAppDefinition } from '../../src/api/types';
 import { ResizableSidebar } from '../../src/components/ResizableSidebar';
 import { AppsSidebar, AppsSidebarContent } from '../../src/screens/apps/AppsSidebar';
 import { AppsScreen } from '../../src/screens/apps/AppsScreen';
@@ -20,88 +20,60 @@ afterEach(() => {
 
 const noop = () => {};
 
-const translator: AppDefinition = {
-  schema: 'marifold.app.v0',
+const skillTranslator: SkillAppDefinition = {
+  schema: 'marifold.skillapp.v1',
   app: {
     name: 'translator',
     title: 'Marifold Translation',
     version: '1.0.0',
-    description: 'Translate focused text.',
+    description: 'Translate focused text with a dedicated model.',
   },
-  actors: [{
-    name: 'translator',
-    profile: 'app_tester',
-  }],
-  variables: [
-    {
-      name: 'source_text',
-      type: 'string',
-      role: 'input',
-      label: 'Source text',
-      required: true,
-    },
-    {
-      name: 'target_language',
-      type: 'enum',
-      role: 'input',
-      label: 'Translate to',
-      default: 'English',
-      options: ['English', 'Japanese'],
-    },
-    {
-      name: 'translated_text',
-      type: 'string',
-      role: 'output',
-      label: 'Translation',
-    },
+  states: [
+    { name: 'source', initial: '' },
+    { name: 'targetLanguage', initial: 'English' },
+    { name: 'result', initial: '' },
   ],
+  models: [{
+    name: 'translationModel',
+    provider: 'ollama',
+    model: 'maternion/hy-mt2:1.8b',
+    think: false,
+  }],
+  skills: [{ name: 'translate', result: { kind: 'text', trim: true } }],
+  operations: [{
+    name: 'translate',
+    model: 'translationModel',
+    skill: 'translate',
+    parameters: { source_text: 'source', target_language: 'targetLanguage' },
+    requiredInputs: ['source', 'targetLanguage'],
+    output: 'result',
+    execution: { memory: false, history: false, profileContext: false },
+  }],
+  triggers: [],
   layout: [
     {
       component: 'row',
-      children: [
-        { component: 'select', bind: 'target_language', showLabel: false, grow: true },
-      ],
+      children: [{
+        component: 'select',
+        label: 'Translate to',
+        bind: 'targetLanguage',
+        options: ['English', 'Japanese'],
+        grow: true,
+      }],
     },
     {
       component: 'row',
       responsive: 'stack',
       children: [
-        { component: 'textarea', bind: 'source_text', grow: true },
-        { component: 'preview', bind: 'translated_text', format: 'markdown', grow: true },
+        { component: 'textarea', label: 'Input', bind: 'source', editable: true, grow: true },
+        { component: 'textarea', label: 'Result', bind: 'result', editable: false, copyable: true, grow: true },
       ],
     },
     {
       component: 'row',
-      children: [
-        { component: 'spacer' },
-        { component: 'button', action: 'translate', label: 'Translate' },
-        { component: 'spacer' },
-      ],
+      children: [{ component: 'button', label: 'Translate', trigger: 'translate', emphasis: 'primary' }],
     },
   ],
-  actions: [{
-    name: 'translate',
-    kind: 'skill',
-    actor: 'translator',
-    skill: 'translate',
-    arguments: {
-      source_text: '{{source_text}}',
-      target_language: '{{target_language}}',
-    },
-    output: 'translated_text',
-  }],
-  execution: {
-    think: false,
-    memory: false,
-    profileContext: false,
-  },
-  permissions: {
-    providerCalls: true,
-    files: 'none',
-    shell: false,
-    network: false,
-    export: false,
-  },
 };
 
 function AppsHarness({ client }: { client: ApiClient }) {
@@ -132,52 +104,104 @@ function AppsHarness({ client }: { client: ApiClient }) {
 }
 
 describe('AppsScreen', () => {
-  it('renders a normalized App and streams its output with metrics', async () => {
-    const request = vi.fn(async () => ({ ok: true, apps: [translator] }));
-    const stream = vi.fn(async (_path: string, _init?: StreamInit) => new Response([
-      'event: chunk\ndata: {"text":"おはよう"}\n\n',
-      'event: done\ndata: {"latencyMs":1800,"usage":{"totalTokens":44}}\n\n',
-    ].join(''), { status: 200 }));
+  it('runs a SkillApp, clears missing-input output, and keeps metrics in Activity', async () => {
+    let state = { source: '', targetLanguage: 'English', result: '' };
+    const request = vi.fn(async (method: string, path: string, body?: unknown) => {
+      if (method === 'GET' && path === '/v1/apps') return { ok: true, apps: [skillTranslator] };
+      if (method === 'POST' && path === '/v1/apps/translator/instances') {
+        return { ok: true, instance: { id: 'app_test', appName: 'translator', state } };
+      }
+      if (method === 'PATCH' && path === '/v1/app-instances/app_test/state') {
+        state = { ...state, ...((body as { values: Partial<typeof state> }).values) };
+        if (!state.source.trim()) {
+          state = { ...state, result: '' };
+          return {
+            ok: true,
+            status: 'idle',
+            reason: 'missing_required_input',
+            operation: 'translate',
+            instance: { id: 'app_test', appName: 'translator', state },
+          };
+        }
+        return { ok: true, status: 'idle', instance: { id: 'app_test', appName: 'translator', state } };
+      }
+      if (method === 'POST' && path === '/v1/app-instances/app_test/operations/translate') {
+        if (state.source === 'Bad') {
+          return {
+            ok: true,
+            status: 'completed',
+            operation: 'translate',
+            instance: { id: 'app_test', appName: 'translator', state },
+            result: {
+              status: 'error',
+              error: { code: 'PROVIDER_ERROR', message: 'Model unavailable.' },
+            },
+          };
+        }
+        state = { ...state, result: 'おはよう' };
+        return {
+          ok: true,
+          status: 'completed',
+          operation: 'translate',
+          instance: { id: 'app_test', appName: 'translator', state },
+          result: {
+            status: 'ok',
+            data: { text: 'おはよう' },
+            meta: { engine: 'ollama', model: 'maternion/hy-mt2:1.8b', durationMs: 830, usage: { totalTokens: 12 } },
+          },
+        };
+      }
+      if (method === 'DELETE' && path === '/v1/app-instances/app_test') return { ok: true, deleted: true };
+      throw new Error(`Unexpected request: ${method} ${path}`);
+    });
     const client: ApiClient = {
       baseUrl: '',
       request: request as ApiClient['request'],
-      stream,
+      stream: async () => new Response(),
       blob: async () => undefined,
     };
 
     render(<AppsHarness client={client} />);
     expect(await screen.findByRole('heading', { name: 'Marifold Translation' })).toBeTruthy();
-    expect(request).toHaveBeenCalledWith('GET', '/v1/apps');
-    expect(screen.getByLabelText('Marifold')).toBeTruthy();
-    const appSearch = screen.getByLabelText('Search apps') as HTMLInputElement;
-    fireEvent.change(appSearch, { target: { value: 'missing app' } });
-    expect(screen.getByText('No matching apps.')).toBeTruthy();
-    fireEvent.keyDown(appSearch, { key: 'Escape' });
-    expect(appSearch.value).toBe('');
-    const separator = screen.getByRole('separator', { name: 'Resize Apps sidebar' });
-    expect(separator.getAttribute('aria-valuenow')).toBe('256');
-    fireEvent.keyDown(separator, { key: 'ArrowRight' });
-    expect(localStorage.getItem('marifold.sidebarWidth')).toBe('264');
-    expect(screen.getByText('Translate to').className).toContain('visuallyHidden');
+    await waitFor(() => expect(request).toHaveBeenCalledWith('POST', '/v1/apps/translator/instances'));
+    expect(screen.getByText('v1.0.0')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Translate' }).hasAttribute('disabled')).toBe(true);
+    const source = screen.getByLabelText('Input');
+    const result = screen.getAllByRole('textbox')[1] as HTMLTextAreaElement;
+    expect(result.hasAttribute('readonly')).toBe(true);
+    expect(screen.getByRole('button', { name: 'Copy' })).toBeTruthy();
 
-    fireEvent.change(screen.getByLabelText('Source text'), { target: { value: 'Good morning' } });
-    fireEvent.change(screen.getByLabelText('Translate to'), { target: { value: 'Japanese' } });
+    fireEvent.change(source, { target: { value: 'Good morning' } });
+    await waitFor(() => expect(request).toHaveBeenCalledWith(
+      'PATCH',
+      '/v1/app-instances/app_test/state',
+      { values: { source: 'Good morning' } },
+    ));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Translate' }).hasAttribute('disabled')).toBe(false));
     fireEvent.click(screen.getByRole('button', { name: 'Translate' }));
 
-    expect(await screen.findByText('おはよう')).toBeTruthy();
-    await waitFor(() => expect(screen.getByText('1.8s · 44 tokens')).toBeTruthy());
-    expect(stream).toHaveBeenCalledOnce();
-    expect(stream.mock.calls[0][0]).toBe('/v1/apps/translator/actions/translate/stream');
-    expect(stream.mock.calls[0][1]?.body).toMatchObject({
-      values: {
-        source_text: 'Good morning',
-        target_language: 'Japanese',
-      },
-    });
-    expect(stream.mock.calls[0][1]?.body).not.toHaveProperty('profile');
-    expect(stream.mock.calls[0][1]?.body).not.toHaveProperty('sessionId');
-    expect(stream.mock.calls[0][1]?.body).not.toHaveProperty('prompt');
-    expect(stream.mock.calls[0][1]?.body).not.toHaveProperty('execution');
+    await waitFor(() => expect(result.value).toBe('おはよう'));
+    expect(screen.queryByText('0.8s · 12 tokens')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /^Activity/ }));
+    expect(screen.getByRole('region', { name: 'App activity' })).toBeTruthy();
+    expect(screen.getByText('Translate completed')).toBeTruthy();
+    expect(screen.getByText('0.8s · 12 tokens')).toBeTruthy();
+    expect(request).toHaveBeenCalledWith(
+      'POST',
+      '/v1/app-instances/app_test/operations/translate',
+    );
+
+    fireEvent.change(source, { target: { value: '' } });
+    await waitFor(() => expect(result.value).toBe(''));
+    expect(screen.getByRole('button', { name: 'Translate' }).hasAttribute('disabled')).toBe(true);
+    expect(screen.queryByText(/missing required Skill values/i)).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    fireEvent.change(source, { target: { value: 'Bad' } });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Translate' }).hasAttribute('disabled')).toBe(false));
+    fireEvent.click(screen.getByRole('button', { name: 'Translate' }));
+    expect(await screen.findByText('Model unavailable.')).toBeTruthy();
+    expect(screen.getByRole('region', { name: 'App activity' })).toBeTruthy();
   });
 
   it('swaps only the catalog body while keeping shared sidebar chrome mounted', () => {
@@ -207,7 +231,7 @@ describe('AppsScreen', () => {
       <WorkspaceSidebar ariaLabel="Apps" footer={footer} showBrand>
         <AppsSidebarContent
           client={client}
-          apps={[translator]}
+          apps={[skillTranslator]}
           selected="translator"
           onSelect={noop}
         />

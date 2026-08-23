@@ -2,6 +2,26 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-08-23 — v0.59.0 — Model-driven SkillApps
+
+- Added restricted, statically compiled `skillapp.ts` templates with explicit
+  models, app-local Skills, string state bindings, semantic form components,
+  direct button operations, and debounced latest-wins state triggers.
+- Added profile-free SkillApp execution and a structured text result contract;
+  runs load no profile, memory, history, Agent transcript, or tools.
+- Added ephemeral service-owned App instances and Web rendering for the same
+  normalized contract a future SwiftUI client can consume.
+- Treats empty required Skill inputs as an idle form state: pending work is
+  cancelled, stale output is cleared, and operation buttons are disabled.
+- Added a fixed App footer with version and an Activity drawer for runs, real
+  warnings/errors, response time, and token usage.
+- Removed the unreleased `marifold.app.v0` TOML runtime, action endpoint,
+  renderer, schema, examples, and tests; `skillapp.ts` is the only App format.
+- Verified the full workspace typecheck/build/test gate (626 tests: core 308,
+  service 58, TUI 59, CLI 19, Web 182).
+- Version 0.58.1 → 0.59.0 across all packages + CLI `.version`.
+- Released as v0.59.0.
+
 ## 2026-08-22 — v0.58.1 — Optional-token private service access
 
 - Kept bearer authentication optional for `--host 0.0.0.0` and removed

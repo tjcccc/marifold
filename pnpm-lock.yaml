@@ -8,6 +8,9 @@ importers:
 
   .:
     devDependencies:
+      '@marifold/core':
+        specifier: workspace:*
+        version: link:packages/core
       '@types/better-sqlite3':
         specifier: ^7.6.13
         version: 7.6.13
@@ -112,6 +115,9 @@ importers:
       smol-toml:
         specifier: ^1.7.0
         version: 1.7.0
+      typescript-compiler:
+        specifier: npm:typescript@^6.0.2
+        version: typescript@6.0.3
       undici:
         specifier: ^7.28.0
         version: 7.28.0
@@ -1433,6 +1439,11 @@ packages:
     resolution: {integrity: sha512-1URUxUqfHFM1c+zfSPsa3gnkO7Aq21qyH75SIduNYz4SzY964rn1X2vCMQaHSHhktiw+0kPa2iyb6PUpXqB6Vg==}
     engines: {node: '>=20'}
 
+  typescript@6.0.3:
+    resolution: {integrity: sha512-y2TvuxSZPDyQakkFRPZHKFm+KKVqIisdg9/CZwm9ftvKXLP8NRWj38/ODjNbr43SsoXqNuAisEf1GdCxqWcdBw==}
+    engines: {node: '>=14.17'}
+    hasBin: true
+
   typescript@7.0.2:
     resolution: {integrity: sha512-8FYau96o3NKOhbjKi/qNvG/W5jhzxkbdm5sj9AbZ/5T5sWqn3hJgLfGx27sRKZWTvyzCP8dLRBTf5tBTSRVUNA==}
     engines: {node: '>=16.20.0'}
@@ -2642,6 +2653,8 @@ snapshots:
   type-fest@5.7.0:
     dependencies:
       tagged-tag: 1.0.0
+
+  typescript@6.0.3: {}
 
   typescript@7.0.2:
     optionalDependencies:

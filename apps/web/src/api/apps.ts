@@ -1,70 +1,59 @@
 import type { ApiClient } from './client';
-import { parseSse } from './sse';
 import type {
-  ChatStreamEvent,
-  AppDefinition,
-  AppVariableValue,
+  SkillAppDefinition,
+  SkillAppInstanceSnapshot,
+  SkillAppMutationResult,
 } from './types';
 
 export async function listApps(
   client: ApiClient,
-): Promise<AppDefinition[]> {
-  const payload = await client.request<{ ok: true; apps: AppDefinition[] }>(
+): Promise<SkillAppDefinition[]> {
+  const payload = await client.request<{ ok: true; apps: SkillAppDefinition[] }>(
     'GET',
     '/v1/apps',
   );
   return payload.apps;
 }
 
-export async function* streamAppAction(
+export async function createSkillAppInstance(
   client: ApiClient,
   appName: string,
-  actionName: string,
-  request: {
-    values: Record<string, AppVariableValue>;
-  },
-  signal?: AbortSignal,
-): AsyncGenerator<ChatStreamEvent, void, unknown> {
-  const response = await client.stream(
-    `/v1/apps/${encodeURIComponent(appName)}/actions/${encodeURIComponent(actionName)}/stream`,
-    { method: 'POST', body: request, signal },
+): Promise<SkillAppInstanceSnapshot> {
+  const payload = await client.request<{ ok: true; instance: SkillAppInstanceSnapshot }>(
+    'POST',
+    `/v1/apps/${encodeURIComponent(appName)}/instances`,
   );
-  let finished = false;
-  for await (const frame of parseSse(response.body!)) {
-    if (frame.event === 'chunk') {
-      const text = (frame.data as { text?: unknown } | undefined)?.text;
-      if (typeof text === 'string') yield { type: 'chunk', text };
-    } else if (frame.event === 'reasoning') {
-      const text = (frame.data as { text?: unknown } | undefined)?.text;
-      if (typeof text === 'string') yield { type: 'reasoning', text };
-    } else if (frame.event === 'error') {
-      const body = frame.data as { code?: unknown; message?: unknown } | undefined;
-      yield {
-        type: 'error',
-        code: typeof body?.code === 'string' ? body.code : 'STREAM_ERROR',
-        message: typeof body?.message === 'string' ? body.message : 'App action failed.',
-      };
-    } else if (frame.event === 'done') {
-      const body = frame.data as {
-        usage?: { totalTokens?: unknown };
-        latencyMs?: unknown;
-      } | undefined;
-      const totalTokens = body?.usage?.totalTokens;
-      finished = true;
-      yield {
-        type: 'done',
-        ...(typeof body?.latencyMs === 'number' && Number.isFinite(body.latencyMs)
-          ? { latencyMs: body.latencyMs }
-          : {}),
-        ...(typeof totalTokens === 'number' && Number.isFinite(totalTokens)
-          ? { usage: { totalTokens } }
-          : {}),
-      };
-      return;
-    }
-  }
-  if (!finished && !signal?.aborted) {
-    yield { type: 'error', code: 'STREAM_INTERRUPTED', message: 'The App stream ended before completing.' };
-    yield { type: 'done' };
-  }
+  return payload.instance;
+}
+
+export async function updateSkillAppState(
+  client: ApiClient,
+  instanceId: string,
+  values: Record<string, string>,
+): Promise<SkillAppMutationResult> {
+  const payload = await client.request<{ ok: true } & SkillAppMutationResult>(
+    'PATCH',
+    `/v1/app-instances/${encodeURIComponent(instanceId)}/state`,
+    { values },
+  );
+  return payload;
+}
+
+export async function runSkillAppOperation(
+  client: ApiClient,
+  instanceId: string,
+  operationName: string,
+): Promise<SkillAppMutationResult> {
+  const payload = await client.request<{ ok: true } & SkillAppMutationResult>(
+    'POST',
+    `/v1/app-instances/${encodeURIComponent(instanceId)}/operations/${encodeURIComponent(operationName)}`,
+  );
+  return payload;
+}
+
+export async function deleteSkillAppInstance(
+  client: ApiClient,
+  instanceId: string,
+): Promise<void> {
+  await client.request('DELETE', `/v1/app-instances/${encodeURIComponent(instanceId)}`);
 }

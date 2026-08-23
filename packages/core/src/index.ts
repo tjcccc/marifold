@@ -242,36 +242,64 @@ export type {
   SkillScope,
   SkillStoreOptions,
 } from './skill';
-export {
-  APP_SCHEMA,
-  DEFAULT_APP_EXECUTION,
-  DEFAULT_APP_PERMISSIONS,
-} from './app/AppSchema';
-export type {
-  AppAction,
-  AppActionKind,
-  AppActor,
-  AppComponent,
-  AppDefinition,
-  AppExecution,
-  AppFilesPermission,
-  AppInfo,
-  AppLayoutItem,
-  AppLayoutGap,
-  AppPermissions,
-  AppResponsiveBehavior,
-  AppVariable,
-  AppVariableRole,
-  AppVariableType,
-  AppVariableValue,
-} from './app/AppSchema';
-export { validateApp, validateAppToml } from './app/AppValidator';
-export type { AppValidationResult } from './app/AppValidator';
 export { AppStore } from './app/AppStore';
+export { SkillAppInstanceRegistry } from './app/SkillAppInstanceRegistry';
+export type { SkillAppInstanceRuntime } from './app/SkillAppInstanceRegistry';
+export { resolveSkillAppOperation } from './app/SkillAppResolver';
+export type { ResolvedSkillAppOperation } from './app/SkillAppResolver';
+export { compileSkillApp } from './app/SkillAppCompiler';
 export {
-  resolveAppAction,
-  type ResolvedAppAction,
-} from './app/AppActionResolver';
+  App,
+  Button,
+  Column,
+  Row,
+  Select,
+  Spacer,
+  State,
+  Textarea,
+  TextResult,
+  defineSkillApp,
+  registerModel,
+  registerSkill,
+  trigger,
+  useSkill,
+} from './app/SkillAppDsl';
+export type {
+  ComponentReference,
+  ModelReference,
+  OperationReference,
+  SkillAppTemplate,
+  SkillReference,
+  StateReference,
+  TextResultReference,
+} from './app/SkillAppDsl';
+export { SKILL_APP_SCHEMA } from './app/SkillAppSchema';
+export type {
+  SkillAppButtonEmphasis,
+  SkillAppComponent,
+  SkillAppConcurrency,
+  SkillAppDefinition,
+  SkillAppErrorResult,
+  SkillAppExecution,
+  SkillAppInstanceSnapshot,
+  SkillAppInfo,
+  SkillAppLayoutGap,
+  SkillAppLayoutItem,
+  SkillAppModelDefinition,
+  SkillAppMutationResult,
+  SkillAppMutationReason,
+  SkillAppMutationStatus,
+  SkillAppOperationDefinition,
+  SkillAppResult,
+  SkillAppResultMeta,
+  SkillAppResponsiveBehavior,
+  SkillAppSkillDefinition,
+  SkillAppStateDefinition,
+  SkillAppStateValue,
+  SkillAppSuccessResult,
+  SkillAppTextResultDefinition,
+  SkillAppTriggerDefinition,
+} from './app/SkillAppSchema';
 export { Workspace } from './workspace/Workspace';
 export { WorkspaceInitializer } from './workspace/WorkspaceInitializer';
 export type {
