@@ -111,17 +111,24 @@ export function CreateProfileSheet(props: CreateProfileSheetProps) {
             accept="image/png,image/jpeg,image/webp"
             onChange={event => void pickAvatar(event.target.files?.[0])}
           />
-          <input
-            className={styles.nameInput}
-            placeholder="profile-name"
-            value={name}
-            autoFocus
-            onChange={event => setName(event.target.value)}
-            onKeyDown={event => {
-              if (event.key === 'Enter') submit();
-              if (event.key === 'Escape') props.onClose();
-            }}
-          />
+          <div className={styles.nameField}>
+            <input
+              className={styles.nameInput}
+              aria-label="Profile name"
+              aria-describedby="new-profile-name-rules"
+              placeholder="profile-name"
+              value={name}
+              autoFocus
+              onChange={event => setName(event.target.value)}
+              onKeyDown={event => {
+                if (event.key === 'Enter') submit();
+                if (event.key === 'Escape') props.onClose();
+              }}
+            />
+            <div id="new-profile-name-rules" className={styles.nameRules}>
+              Letters, numbers, underscores, and hyphens only. No spaces.
+            </div>
+          </div>
         </div>
 
         <div className={styles.fieldRow}>

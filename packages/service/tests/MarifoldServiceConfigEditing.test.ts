@@ -28,6 +28,7 @@ describe('config editing routes', () => {
         method: 'PATCH',
         url: '/v1/profiles/writer',
         payload: {
+          displayName: 'Writing Partner',
           mode: 'chat',
           provider: 'ollama',
           model: 'codellama',
@@ -39,6 +40,7 @@ describe('config editing routes', () => {
       });
       expect(patched.statusCode).toBe(200);
       const settings = patched.json().profile.settings;
+      expect(patched.json().profile.displayName).toBe('Writing Partner');
       expect(settings).toMatchObject({
         mode: 'chat', provider: 'ollama', model: 'codellama',
         memories: false, think: true, sessionContextTurns: 5,
@@ -49,10 +51,19 @@ describe('config editing routes', () => {
       const cleared = await server.inject({
         method: 'PATCH',
         url: '/v1/profiles/writer',
-        payload: { provider: null, model: null, think: null, sessionContextTurns: null, approval: { shell: null } },
+        payload: {
+          displayName: null,
+          provider: null,
+          model: null,
+          think: null,
+          sessionContextTurns: null,
+          approval: { shell: null },
+        },
       });
       expect(cleared.statusCode).toBe(200);
       const after = cleared.json().profile.settings;
+      expect(cleared.json().profile.displayName).toBe('writer');
+      expect(after.displayName).toBeUndefined();
       expect(after.provider).toBeUndefined();
       expect(after.model).toBeUndefined();
       expect(after.think).toBeUndefined();
@@ -239,7 +250,11 @@ describe('config editing routes', () => {
     try {
       const created = await server.inject({ method: 'POST', url: '/v1/profiles', payload: { name: 'scribe' } });
       expect(created.statusCode).toBe(201);
-      expect(created.json().profile).toMatchObject({ name: 'scribe', source: 'directory' });
+      expect(created.json().profile).toMatchObject({
+        name: 'scribe',
+        displayName: 'scribe',
+        source: 'directory',
+      });
       expect(fs.existsSync(path.join(loadedConfig.config.paths.profilesDir, 'scribe', 'PROFILE.md'))).toBe(true);
 
       const listed = await server.inject({ method: 'GET', url: '/v1/profiles' });

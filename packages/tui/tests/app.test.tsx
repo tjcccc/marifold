@@ -34,7 +34,10 @@ afterEach(() => {
 describe('App', () => {
   it('mounts, shows the header, and handles code-only commands incl. mode switch', async () => {
     const { runtime, loadedConfig } = workspace();
-    const initial = { profile: 'default', provider: 'ollama', model: 'test-model', think: false, cwd: '/tmp/work', version: '0.0.0-test' };
+    const initial = {
+      profile: 'default', displayName: 'Display Name', provider: 'ollama', model: 'test-model',
+      think: false, cwd: '/tmp/work', version: '0.0.0-test',
+    };
     const { lastFrame, stdin, unmount } = render(
       <App runtime={runtime} loadedConfig={loadedConfig} initial={initial} />,
     );
@@ -42,7 +45,7 @@ describe('App', () => {
 
     // Mounts and renders the header (proves the full wiring renders without throwing).
     expect(lastFrame()).toContain('marifold');
-    expect(lastFrame()).toContain('default');
+    expect(lastFrame()).toContain('Display Name (default)');
     expect(lastFrame()).toContain('agent');
 
     // /status prints into the transcript (not a modal overlay).

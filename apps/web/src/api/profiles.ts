@@ -7,6 +7,8 @@ export type ProfileFileKind = 'profile' | 'rules' | 'custom';
 /** PATCH /v1/profiles/:name body. Absent field = untouched; null = clear the
  * override (inherit again). provider/model must be set together (or both null). */
 export interface ProfilePatchInput {
+  /** Human-readable label; null/blank clears to the profile-name fallback. */
+  displayName?: string | null;
   mode?: ProfileMode;
   provider?: string | null;
   model?: string | null;

@@ -42,6 +42,9 @@ Replace this content with specific guidance for this profile's role.
 export const PROFILE_TOML_STUB = `# profile.toml — per-profile overrides. Every key is optional; uncomment to set.
 # Anything left commented falls back to the global [default] in config.toml.
 
+# Human-readable name shown by clients. Blank or absent = profile name.
+# display_name = "Writing Assistant"
+
 # Provider + model override (set BOTH or NEITHER). Blank = use [default].
 # provider = "ollama"
 # model = "gemma4:e4b"
@@ -138,6 +141,18 @@ export class ProfileManager {
     ];
 
     return { name, path: profileDir, files };
+  }
+
+  /** Persist a human-readable profile label. Blank/undefined clears the
+   * override so clients fall back to the stable profile name. */
+  setDisplayName(name: string, displayName: string | undefined): { name: string; path: string; displayName?: string } {
+    const normalized = normalizeProfileDisplayName(displayName, name);
+    return this.upsertSetting(
+      name,
+      'display_name',
+      normalized === undefined ? undefined : tomlString(normalized),
+      normalized === undefined ? {} : { displayName: normalized },
+    );
   }
 
   setModelOverride(name: string, provider: string, model: string): ProfileModelOverrideResult {
@@ -495,6 +510,18 @@ function assertSafeName(name: string): void {
       name,
     );
   }
+}
+
+export function normalizeProfileDisplayName(value: string | undefined, profileName: string): string | undefined {
+  const normalized = value?.trim();
+  if (!normalized) return undefined;
+  if (/\r|\n/.test(normalized)) {
+    throw MarifoldError.profileInvalid('Profile display name must be a single line.', profileName);
+  }
+  if (normalized.length > 100) {
+    throw MarifoldError.profileInvalid('Profile display name must be 100 characters or fewer.', profileName);
+  }
+  return normalized;
 }
 
 function tomlString(value: string): string {

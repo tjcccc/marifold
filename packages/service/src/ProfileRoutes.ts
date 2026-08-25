@@ -20,6 +20,7 @@ export interface ProfileRouteOptions {
 /** Parsed PATCH /v1/profiles/:name body. For every field: absent = untouched,
  * null = clear the override (inherit again). */
 interface ProfilePatch {
+  displayName?: string | null;
   mode?: 'agent' | 'chat';
   /** Both strings sets the override; both null clears it. */
   model?: { provider: string; model: string } | null;
@@ -121,6 +122,7 @@ export function registerProfileRoutes(
     runtime.getProfile(name); // throws PROFILE_INVALID (400) for unknown names
     const patch = parseProfilePatch(request.body);
 
+    if (patch.displayName !== undefined) runtime.setProfileDisplayName(name, patch.displayName ?? undefined);
     if (patch.mode !== undefined) runtime.setProfileMode(name, patch.mode);
     if (patch.model !== undefined) {
       if (patch.model === null) runtime.setProfileModelOverride(name, undefined, undefined);
@@ -211,6 +213,12 @@ export function registerProfileRoutes(
 function parseProfilePatch(value: unknown): ProfilePatch {
   const body = objectBody(value);
   const patch: ProfilePatch = {};
+
+  if (body.displayName !== undefined) {
+    patch.displayName = body.displayName === null
+      ? null
+      : stringValue(body.displayName, 'displayName');
+  }
 
   if (body.mode !== undefined) {
     const mode = stringValue(body.mode, 'mode');

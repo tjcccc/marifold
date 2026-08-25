@@ -46,6 +46,47 @@ describe('ProfileResolver', () => {
     expect(settings).toEqual({ provider: 'ollama', model: 'codellama', memories: true });
   });
 
+  it('resolves display names from profile.toml and falls back to the profile name', () => {
+    const root = tempDir();
+    const namedDir = path.join(root, 'writer');
+    const plainDir = path.join(root, 'plain');
+    fs.mkdirSync(namedDir, { recursive: true });
+    fs.mkdirSync(plainDir, { recursive: true });
+    fs.writeFileSync(path.join(namedDir, 'profile.toml'), 'display_name = "Writing Partner"\n');
+    fs.writeFileSync(path.join(plainDir, 'profile.toml'), 'memories = true\n');
+
+    const resolver = new ProfileResolver(root);
+    expect(resolver.detail('writer')).toMatchObject({
+      name: 'writer',
+      displayName: 'Writing Partner',
+      settings: { displayName: 'Writing Partner' },
+    });
+    expect(resolver.detail('plain')).toMatchObject({
+      name: 'plain',
+      displayName: 'plain',
+    });
+    expect(resolver.detail('plain').settings.displayName).toBeUndefined();
+  });
+
+  it('persists and clears a display-name override while preserving profile settings', () => {
+    const root = tempDir();
+    const profileDir = path.join(root, 'writer');
+    fs.mkdirSync(profileDir, { recursive: true });
+    fs.writeFileSync(path.join(profileDir, 'profile.toml'), 'memories = false\n');
+
+    const manager = new ProfileManager(root);
+    manager.setDisplayName('writer', '  Writing Partner  ');
+    expect(new ProfileResolver(root).detail('writer')).toMatchObject({
+      displayName: 'Writing Partner',
+      settings: { displayName: 'Writing Partner', memories: false },
+    });
+
+    manager.setDisplayName('writer', '');
+    expect(new ProfileResolver(root).detail('writer')).toMatchObject({ displayName: 'writer' });
+    expect(new ProfileResolver(root).loadSettings('writer').displayName).toBeUndefined();
+    expect(new ProfileResolver(root).loadSettings('writer').memories).toBe(false);
+  });
+
   it('loads profile memory enablement from profile.toml', () => {
     const root = tempDir();
     const profileDir = path.join(root, 'tool');
@@ -303,7 +344,7 @@ describe('ProfileResolver', () => {
     const list = new ProfileResolver(root).list();
 
     expect(profile.name).toBe('default');
-    expect(list).toEqual([{ name: 'default', source: 'built-in' }]);
+    expect(list).toEqual([{ name: 'default', displayName: 'default', source: 'built-in' }]);
   });
 
   it('stores, replaces, flags, and deletes profile avatars', () => {

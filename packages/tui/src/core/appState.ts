@@ -19,6 +19,7 @@ export type TranscriptItem = TranscriptItemData & { id: string };
 
 export interface AppState {
   profile: string;
+  displayName: string;
   provider: string;
   model: string;
   mode: Mode;
@@ -48,6 +49,7 @@ export interface AppState {
 
 export interface InitialAppState {
   profile: string;
+  displayName?: string;
   provider: string;
   model: string;
   cwd: string;
@@ -67,6 +69,7 @@ export function createInitialState(init: InitialAppState): AppState {
   const seeded = (init.transcript ?? []).map((item, index) => ({ ...item, id: `item_${index + 1}` }));
   return {
     profile: init.profile,
+    displayName: init.displayName ?? init.profile,
     provider: init.provider,
     model: init.model,
     mode: init.mode ?? 'agent',
@@ -86,7 +89,7 @@ export function createInitialState(init: InitialAppState): AppState {
 export type AppAction =
   | { type: 'set_mode'; mode: Mode }
   | { type: 'set_model'; provider: string; model: string }
-  | { type: 'set_profile'; profile: string; provider: string; model: string; maxContextTokens?: number }
+  | { type: 'set_profile'; profile: string; displayName?: string; provider: string; model: string; maxContextTokens?: number }
   | { type: 'add_user'; text: string }
   | { type: 'add_item'; item: TranscriptItemData }
   | { type: 'reasoning_delta'; text: string }
@@ -129,6 +132,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       return {
         ...state,
         profile: action.profile,
+        displayName: action.displayName ?? action.profile,
         provider: action.provider,
         model: action.model,
         maxContextTokens: action.maxContextTokens,

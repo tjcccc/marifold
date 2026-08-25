@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ProfilePatchInput } from '../../src/api/profiles';
 import type { MemoryEntry, ProfileDetail } from '../../src/api/types';
+import { CreateProfileSheet } from '../../src/components/CreateProfileSheet';
 import { ProfileSettingsPage } from '../../src/screens/config/ProfileSettingsPage';
 import type { ProfileSettingsPageProps } from '../../src/screens/config/ProfileSettingsPage';
 
@@ -13,8 +14,10 @@ afterEach(() => {
 
 const detail: ProfileDetail = {
   name: 'writer',
+  displayName: 'Writing Partner',
   source: 'directory',
   settings: {
+    displayName: 'Writing Partner',
     memories: true,
     mode: 'agent',
     think: true,
@@ -69,6 +72,7 @@ function renderPage(overrides: Partial<ProfileSettingsPageProps> = {}) {
 describe('ProfileSettingsPage', () => {
   it('renders identity, model, memory entries, and resolved permissions', () => {
     renderPage();
+    expect(screen.getByText('Writing Partner')).toBeTruthy();
     expect(screen.getByText('writer')).toBeTruthy();
     expect(screen.getByText('Prefers en dashes over em dashes.')).toBeTruthy();
 
@@ -86,6 +90,40 @@ describe('ProfileSettingsPage', () => {
     expect(selected?.textContent).toBe('Deny');
 
     expect(screen.getByText('/Users/me/blog')).toBeTruthy();
+  });
+
+  it('shows the stable profile name and saves or clears the display-name override', () => {
+    const unnamedDetail: ProfileDetail = {
+      ...detail,
+      displayName: 'writer',
+      settings: { ...detail.settings, displayName: undefined },
+    };
+    const handlers = renderPage({ detail: unnamedDetail });
+    const input = screen.getByLabelText('Display name') as HTMLInputElement;
+    expect(input.value).toBe('');
+    expect(input.placeholder).toBe('writer');
+
+    fireEvent.change(input, { target: { value: '  Editorial Guide  ' } });
+    fireEvent.click(within(screen.getByRole('region', { name: 'Profile' })).getByRole('button', { name: 'Save' }));
+    expect(handlers.onPatch).toHaveBeenCalledWith({ displayName: 'Editorial Guide' });
+
+    cleanup();
+    const clearPatch = vi.fn();
+    render(
+      <ProfileSettingsPage
+        detail={detail}
+        memories={[]}
+        modelOptions={[]}
+        onPatch={clearPatch}
+        onSaveFile={() => {}}
+        onAddTrustedFolder={() => {}}
+        onRemoveTrustedFolder={() => {}}
+        onMemoryAction={() => {}}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText('Display name'), { target: { value: '' } });
+    fireEvent.click(within(screen.getByRole('region', { name: 'Profile' })).getByRole('button', { name: 'Save' }));
+    expect(clearPatch).toHaveBeenCalledWith({ displayName: null });
   });
 
   it('clicking a permission segment patches the profile override', () => {
@@ -181,6 +219,27 @@ describe('ProfileSettingsPage', () => {
     );
     expect((screen.getByRole('button', { name: 'Remove profile' }) as HTMLButtonElement).disabled).toBe(true);
     expect(screen.getByText('Choose another default profile first.')).toBeTruthy();
+  });
+});
+
+describe('CreateProfileSheet', () => {
+  it('explains and enforces the profile-name character rules', () => {
+    render(
+      <CreateProfileSheet
+        existingNames={[]}
+        modelOptions={[]}
+        busy={false}
+        onSubmit={() => {}}
+        onClose={() => {}}
+      />,
+    );
+    expect(screen.getByText('Letters, numbers, underscores, and hyphens only. No spaces.')).toBeTruthy();
+    const input = screen.getByLabelText('Profile name');
+    expect(input.getAttribute('aria-describedby')).toBe('new-profile-name-rules');
+
+    fireEvent.change(input, { target: { value: 'my profile' } });
+    expect(screen.getByText('Letters, numbers, underscores, and hyphens only.')).toBeTruthy();
+    expect((screen.getByRole('button', { name: 'Create profile' }) as HTMLButtonElement).disabled).toBe(true);
   });
 });
 

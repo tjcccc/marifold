@@ -21,6 +21,16 @@ const CONTENT_TYPES: Record<string, string> = {
   '.txt': 'text/plain; charset=utf-8',
 };
 
+/** Resolve the Web bundle staged beside the compiled service entrypoints. */
+export function resolveBundledWebDir(moduleDir = __dirname): string | undefined {
+  const candidate = path.join(moduleDir, 'web');
+  try {
+    return fs.statSync(path.join(candidate, 'index.html')).isFile() ? candidate : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * Host a built single-page Web UI from `webDir` (hand-rolled on purpose —
  * zero-plugin house style, and the SPA/JSON-404 coordination is easier owned

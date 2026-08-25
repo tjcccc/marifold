@@ -133,10 +133,12 @@ export function AgentScreen(props: AgentScreenProps) {
                 sessions={controller.sessions}
                 selected={controller.sessionId}
                 profileName={controller.profileName}
+                profileDisplayName={controller.profileDetail?.displayName}
                 profileAvatar={(
                   <Avatar
                     client={props.client}
                     name={controller.profileName}
+                    label={controller.profileDetail?.displayName}
                     hasAvatar={controller.profiles.some(
                       profile => profile.name === controller.profileName && profile.avatar !== undefined,
                     )}

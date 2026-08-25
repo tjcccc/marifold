@@ -444,6 +444,11 @@ export class MarifoldRuntime {
     return this.listProfiles();
   }
 
+  /** Persist (or clear) a profile's human-readable label. */
+  setProfileDisplayName(name: string, displayName: string | undefined): void {
+    this.profileManager.setDisplayName(name, displayName);
+  }
+
   /** Persist a profile's default TUI mode to its profile.toml. Returns the
    * mode that was written. */
   setProfileMode(name: string, mode: ProfileMode): ProfileMode {

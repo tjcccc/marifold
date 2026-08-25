@@ -13,6 +13,7 @@ export interface SessionListProps {
   sessions: SessionSummary[];
   selected?: string;
   profileName: string;
+  profileDisplayName?: string;
   profileAvatar?: ReactNode;
   search: string;
   onSearchChange: (value: string) => void;
@@ -54,6 +55,7 @@ export function SessionListContent({
   sessions,
   selected,
   profileName,
+  profileDisplayName = profileName,
   profileAvatar,
   search,
   onSearchChange,
@@ -216,14 +218,14 @@ export function SessionListContent({
           <button
             className={styles.profileAvatarButton}
             type="button"
-            title={`Open profile config for ${profileName}`}
-            aria-label={`Open profile config for ${profileName}`}
+            title={`Open profile config for ${profileDisplayName}`}
+            aria-label={`Open profile config for ${profileDisplayName}`}
             onClick={onConfigureProfile}
           >
             {profileAvatar}
           </button>
         ) : null}
-        <span className={styles.profileName}>{profileName}</span>
+        <span className={styles.profileName}>{profileDisplayName}</span>
       </div>
       <div className={styles.header}>
         <button

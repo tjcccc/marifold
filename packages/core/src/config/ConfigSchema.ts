@@ -162,6 +162,8 @@ export interface LoadedMarifoldConfig {
 export type ProfileMode = 'agent' | 'chat';
 
 export interface ProfileSettings {
+  /** Optional human-readable label. Clients fall back to the profile name. */
+  displayName?: string;
   provider?: string;
   model?: string;
   memories: boolean;
@@ -181,6 +183,8 @@ export interface ProfileSettings {
 
 export interface ProfileSummary {
   name: string;
+  /** Human-readable label resolved from display_name, or name when unset. */
+  displayName: string;
   source: 'directory' | 'json' | 'built-in';
   path?: string;
   /** Sidebar-only display state, stored separately from profile instructions. */

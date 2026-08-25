@@ -218,7 +218,7 @@ describe('AppsScreen', () => {
       <WorkspaceSidebar ariaLabel="Profiles" footer={footer} showBrand>
         <ProfileSidebarContent
           client={client}
-          profiles={[{ name: 'default', source: 'directory' }]}
+          profiles={[{ name: 'default', displayName: 'default', source: 'directory' }]}
           onSelect={noop}
         />
       </WorkspaceSidebar>,

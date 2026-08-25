@@ -312,6 +312,7 @@ describe('Desktop workspace sidebar', () => {
     render(
       <SessionList
         profileName="prompt-maker"
+        profileDisplayName="Prompt Maker"
         profileAvatar={<span>Profile portrait</span>}
         sessions={[{
           id: 'session_1',
@@ -337,7 +338,7 @@ describe('Desktop workspace sidebar', () => {
       />,
     );
     fireEvent.click(screen.getByLabelText('Back to profiles'));
-    fireEvent.click(screen.getByLabelText('Open profile config for prompt-maker'));
+    fireEvent.click(screen.getByLabelText('Open profile config for Prompt Maker'));
     fireEvent.click(screen.getByTitle('New session'));
     fireEvent.click(screen.getByText('Portrait prompt'));
     expect(onBack).toHaveBeenCalledOnce();
@@ -347,7 +348,7 @@ describe('Desktop workspace sidebar', () => {
     const backRow = screen.getByLabelText('Back to profiles').parentElement;
     expect(backRow?.textContent).not.toContain('Profile portrait');
     const portrait = screen.getByText('Profile portrait');
-    const profileName = screen.getByText('prompt-maker');
+    const profileName = screen.getByText('Prompt Maker');
     const sessionsHeading = screen.getByText('Sessions');
     expect(screen.getByText('marifold')).toBeTruthy();
     expect(portrait.compareDocumentPosition(profileName) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();

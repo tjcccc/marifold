@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createMarifoldService } from '../src';
+import { resolveBundledWebDir } from '../src/StaticRoutes';
 import { cleanupTempDirs, fixtureLoadedConfig, tempDir } from './helpers';
 
 afterEach(() => {
@@ -21,6 +22,12 @@ function webDirFixture(): string {
 }
 
 describe('MarifoldService static hosting', () => {
+  it('resolves a Web bundle staged beside the compiled service', () => {
+    const webDir = webDirFixture();
+    expect(resolveBundledWebDir(path.dirname(webDir))).toBe(webDir);
+    expect(resolveBundledWebDir(tempDir())).toBeUndefined();
+  });
+
   it('serves the shell, hashed assets, and the SPA fallback', async () => {
     const server = createMarifoldService({
       loadedConfig: fixtureLoadedConfig(tempDir()),

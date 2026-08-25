@@ -26,13 +26,21 @@ describe('profile write api', () => {
   it('updateProfile PATCHes the dotted route with the patch body', async () => {
     const mock = stubFetch({ ok: true, profile: { name: 'writer' } });
     const client = createApiClient({ baseUrl: 'http://x.test' });
-    const profile = await updateProfile(client, 'writer', { mode: 'chat', approval: { shell: null } });
+    const profile = await updateProfile(client, 'writer', {
+      displayName: 'Writing Partner',
+      mode: 'chat',
+      approval: { shell: null },
+    });
     expect(profile).toMatchObject({ name: 'writer' });
 
     const [url, init] = mock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe('http://x.test/v1/profiles/writer');
     expect(init.method).toBe('PATCH');
-    expect(JSON.parse(String(init.body))).toEqual({ mode: 'chat', approval: { shell: null } });
+    expect(JSON.parse(String(init.body))).toEqual({
+      displayName: 'Writing Partner',
+      mode: 'chat',
+      approval: { shell: null },
+    });
   });
 
   it('putProfileFile PUTs the content; removeTrustedFolder DELETEs with a body', async () => {

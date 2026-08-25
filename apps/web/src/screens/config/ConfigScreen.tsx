@@ -338,11 +338,12 @@ export function ConfigScreen({
               <Avatar
                 client={client}
                 name={profile.name}
+                label={profile.displayName}
                 hasAvatar={profile.avatar !== undefined}
                 size={26}
                 version={avatarVersion}
               />
-              <span className={styles.itemName}>{profile.name}</span>
+              <span className={styles.itemName}>{profile.displayName}</span>
             </button>
           ))}
         </nav>
@@ -396,6 +397,7 @@ export function ConfigScreen({
                 <Avatar
                   client={client}
                   name={detail.name}
+                  label={detail.displayName}
                   hasAvatar={detail.avatar !== undefined}
                   size={120}
                   version={avatarVersion}
@@ -410,7 +412,11 @@ export function ConfigScreen({
                 });
               }}
               onPatch={(patch: ProfilePatchInput) => {
-                if (item) void mutate(() => updateProfile(client, item, patch));
+                if (item) {
+                  void mutate(() => updateProfile(client, item, patch)).then(() => {
+                    if (patch.displayName !== undefined) void refreshProfiles();
+                  });
+                }
               }}
               onSaveFile={(file: ProfileFileKind, content: string) => {
                 if (item) void mutate(() => putProfileFile(client, item, file, content));

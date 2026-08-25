@@ -39,6 +39,10 @@ describe('marifold service lifecycle', () => {
       ok: true,
       service: 'marifold',
     });
+    const webShell = await fetch(address!);
+    expect(webShell.status).toBe(200);
+    expect(webShell.headers.get('content-type')).toContain('text/html');
+    expect(await webShell.text()).toContain('<title>marifold</title>');
 
     const port = new URL(address!).port;
     const duplicate = startService(cliEntry, configPath, port);

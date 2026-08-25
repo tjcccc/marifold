@@ -1,6 +1,6 @@
 {
   "name": "@marifold/service",
-  "version": "0.59.0",
+  "version": "0.60.0",
   "description": "Local HTTP service for Marifold",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -8,7 +8,8 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && pnpm --dir ../../apps/web run build && node scripts/stage-web.mjs",
+    "prepack": "pnpm run build",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },

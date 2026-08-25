@@ -54,6 +54,7 @@ export function ProfileSettingsPage(props: ProfileSettingsPageProps) {
     ? `${detail.settings.provider}/${detail.settings.model}`
     : '';
   const [newFolder, setNewFolder] = useState('');
+  const [displayName, setDisplayName] = useState(detail.settings.displayName ?? '');
   const [cropFile, setCropFile] = useState<File | undefined>();
   const [removeOpen, setRemoveOpen] = useState(false);
   const [removeName, setRemoveName] = useState('');
@@ -70,6 +71,10 @@ export function ProfileSettingsPage(props: ProfileSettingsPageProps) {
     setRemoveOpen(false);
     setRemoveName('');
   }, [detail.name]);
+
+  useEffect(() => {
+    setDisplayName(detail.settings.displayName ?? '');
+  }, [detail.name, detail.settings.displayName]);
 
   useEffect(() => {
     if (!removeOpen) return;
@@ -112,7 +117,7 @@ export function ProfileSettingsPage(props: ProfileSettingsPageProps) {
 
   const avatarNode = props.avatar ?? (
     <span className={styles.avatar} aria-hidden>
-      {detail.name.slice(0, 1).toUpperCase()}
+      {detail.displayName.slice(0, 1).toUpperCase()}
     </span>
   );
 
@@ -138,7 +143,7 @@ export function ProfileSettingsPage(props: ProfileSettingsPageProps) {
           <div className={styles.avatarButton}>{avatarNode}</div>
         )}
         <div className={styles.identityText}>
-          <div className={styles.name}>{detail.name}</div>
+          <div className={styles.name}>{detail.displayName}</div>
           <div className={styles.identitySub}>
             {detail.source} profile
             {detail.settings.think ? ' · thinking on' : ''}
@@ -172,6 +177,46 @@ export function ProfileSettingsPage(props: ProfileSettingsPageProps) {
           }}
         />
       ) : null}
+
+      <section className={styles.group} aria-label="Profile">
+        <div className={styles.groupTitle}>Profile</div>
+        <div className={styles.card}>
+          <div className={styles.rowLine}>
+            <span className={styles.rowLabel}>Profile name</span>
+            <code className={styles.profileName}>{detail.name}</code>
+          </div>
+          <div className={styles.rowLine}>
+            <label className={styles.rowLabel} htmlFor="profile-display-name">Display name</label>
+            <div className={styles.fieldEdit}>
+              <input
+                id="profile-display-name"
+                className={styles.input}
+                value={displayName}
+                placeholder={detail.name}
+                maxLength={100}
+                disabled={busy}
+                onChange={event => setDisplayName(event.target.value)}
+                onKeyDown={event => {
+                  if (event.key === 'Escape') setDisplayName(detail.settings.displayName ?? '');
+                }}
+              />
+              {displayName.trim() !== (detail.settings.displayName ?? '') ? (
+                <button
+                  type="button"
+                  className={styles.saveAction}
+                  disabled={busy}
+                  onClick={() => props.onPatch({ displayName: displayName.trim() || null })}
+                >
+                  Save
+                </button>
+              ) : null}
+            </div>
+          </div>
+        </div>
+        <div className={styles.groupHint}>
+          Profile names use letters, numbers, underscores, and hyphens only. Display names are shown throughout the Web UI; blank uses the profile name.
+        </div>
+      </section>
 
       <section className={styles.group} aria-label="Model">
         <div className={styles.groupTitle}>Model</div>

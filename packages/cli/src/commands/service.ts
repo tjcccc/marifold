@@ -145,8 +145,12 @@ async function runService(
     if (result.telegram) {
       process.stdout.write(`Telegram bridge active (profile ${result.telegram.profile}).\n`);
     }
-    const servedWebDir = webDir ?? loadedConfig.config.service?.webDir;
-    if (servedWebDir) process.stdout.write(`Web UI: serving ${servedWebDir}\n`);
+    const configuredWebDir = webDir ?? loadedConfig.config.service?.webDir;
+    if (configuredWebDir) {
+      process.stdout.write(`Web UI: serving ${configuredWebDir}\n`);
+    } else if (result.webDir) {
+      process.stdout.write(`Web UI: ${result.address}\n`);
+    }
     if (security.token) process.stdout.write('Auth: bearer token required on /v1 (exempt: /health, static).\n');
     if (options.host && !['127.0.0.1', 'localhost', '::1'].includes(options.host)) {
       process.stdout.write('Access: private networks only (LAN, link-local, and Tailscale).\n');

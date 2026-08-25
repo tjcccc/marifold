@@ -94,6 +94,7 @@ export async function runTui(options: RunTuiOptions): Promise<void> {
 
     const initial = {
       profile: settings.profile,
+      displayName: runtime.getProfile(settings.profile).displayName,
       provider: settings.provider,
       model: settings.model,
       think: settings.think,

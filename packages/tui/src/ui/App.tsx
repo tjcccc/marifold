@@ -44,6 +44,7 @@ export interface AppProps {
   loadedConfig: LoadedMarifoldConfig;
   initial: {
     profile: string;
+    displayName?: string;
     provider: string;
     model: string;
     think: boolean;
@@ -75,6 +76,7 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
     appReducer,
     createInitialState({
       profile: initial.profile,
+      ...(initial.displayName ? { displayName: initial.displayName } : {}),
       provider: initial.provider,
       model: initial.model,
       cwd: initial.cwd,
@@ -197,9 +199,9 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
     }
   }, [notify, initial.sessionId]);
 
-  const refreshSkills = useCallback(() => {
+  const refreshSkills = useCallback((profile = stateRef.current.profile) => {
     try {
-      setSkillItems(runtime.listSkills(stateRef.current.profile).map(skill => ({ name: skill.name, hint: skill.description })));
+      setSkillItems(runtime.listSkills(profile).map(skill => ({ name: skill.name, hint: skill.description })));
     } catch {
       setSkillItems([]);
     }
@@ -751,6 +753,7 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
       dispatch({
         type: 'set_profile',
         profile: settings.profile,
+        displayName: runtime.getProfile(settings.profile).displayName,
         provider: settings.provider,
         model: settings.model,
         maxContextTokens: settings.maxContextTokens ?? loadedConfig.config.default.maxContextTokens,
@@ -762,7 +765,7 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
       dispatch({ type: 'new_session', sessionId: undefined });
       sessionGrantsRef.current.clear();
       sessionTrustedFoldersRef.current.clear();
-      refreshSkills();
+      refreshSkills(settings.profile);
       notify(`Switched to profile: ${settings.profile} · ${settings.provider}/${settings.model} · ${settings.mode} (new session)`, 'info');
     } catch (error) {
       notify(`Could not switch profile: ${errorText(error)}`, 'error');

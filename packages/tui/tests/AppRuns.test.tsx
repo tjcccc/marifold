@@ -21,18 +21,24 @@ function makeRuntime(opts: {
   agentRun?: (call: RunnerCall) => AsyncGenerator<unknown>;
   sessions?: SessionSummary[];
   sessionDetail?: SessionDetail;
+  skillsByProfile?: Record<string, Array<{ name: string; description: string }>>;
 } = {}) {
   const runSpy = vi.fn();
   const streamSpy = vi.fn();
   const listSessionsSpy = vi.fn(() => opts.sessions ?? []);
+  const listSkillsSpy = vi.fn((profile: string) => opts.skillsByProfile?.[profile] ?? []);
 
   const defaultRun = async function* (): AsyncGenerator<unknown> {
     yield { type: 'done', taskId: 't', status: 'completed' };
   };
 
   const runtime = {
-    listSkills: () => [],
-    listProfiles: () => [{ name: 'default' }],
+    listSkills: listSkillsSpy,
+    listProfiles: () => [
+      { name: 'default', displayName: 'default', source: 'directory' },
+      { name: 'helper', displayName: 'Helper', source: 'directory' },
+    ],
+    getProfile: (name: string) => ({ name, displayName: name === 'helper' ? 'Helper' : name }),
     listSessions: listSessionsSpy,
     getSession: (id: string) => opts.sessionDetail?.id === id ? opts.sessionDetail : undefined,
     resolveSettings: ({ profile }: { profile: string }) => ({ profile, provider: 'p', model: 'm', mode: 'agent' as Mode, think: false }),
@@ -51,7 +57,7 @@ function makeRuntime(opts: {
     },
   };
 
-  return { runtime: runtime as unknown as MarifoldRuntime, runSpy, streamSpy, listSessionsSpy };
+  return { runtime: runtime as unknown as MarifoldRuntime, runSpy, streamSpy, listSessionsSpy, listSkillsSpy };
 }
 
 const config = {
@@ -72,6 +78,29 @@ function initial(mode: Mode) {
 const delay = () => new Promise(resolve => setTimeout(resolve, 30));
 
 describe('App run routing', () => {
+  it('refreshes skill completions from the newly selected profile', async () => {
+    const { runtime, listSkillsSpy } = makeRuntime({
+      skillsByProfile: {
+        default: [{ name: 'default-skill', description: 'Default profile skill' }],
+        helper: [{ name: 'helper-skill', description: 'Helper profile skill' }],
+      },
+    });
+    const { stdin, lastFrame, unmount } = render(
+      <App runtime={runtime} loadedConfig={config} initial={initial('agent')} />,
+    );
+    await delay();
+
+    stdin.write('/profile helper');
+    await delay();
+    stdin.write('\r');
+    await vi.waitFor(() => expect(listSkillsSpy).toHaveBeenCalledWith('helper'));
+
+    stdin.write('$');
+    await vi.waitFor(() => expect(lastFrame()).toContain('helper-skill'));
+    expect(lastFrame()).not.toContain('default-skill');
+    unmount();
+  });
+
   it('seeds the context gauge from the launch budget (inherited from config/profile)', async () => {
     const { runtime } = makeRuntime();
     const { lastFrame, unmount } = render(

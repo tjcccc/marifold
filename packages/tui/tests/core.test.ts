@@ -159,7 +159,11 @@ describe('appReducer', () => {
     expect(state.maxContextTokens).toBe(24000);
 
     // Switching profile applies the new profile's budget and resets usage.
-    state = appReducer({ ...state, contextTokens: 5000 }, { type: 'set_profile', profile: 'p2', provider: 'x', model: 'm', maxContextTokens: 8000 });
+    state = appReducer(
+      { ...state, contextTokens: 5000 },
+      { type: 'set_profile', profile: 'p2', displayName: 'Profile Two', provider: 'x', model: 'm', maxContextTokens: 8000 },
+    );
+    expect(state.displayName).toBe('Profile Two');
     expect(state.maxContextTokens).toBe(8000);
     expect(state.contextTokens).toBeUndefined();
   });

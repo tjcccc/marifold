@@ -59,12 +59,13 @@ no CORS entry.
 ## Production
 
 ```sh
-pnpm --filter @marifold/web build
-marifold service --web-dir apps/web/dist        # or [service].web_dir in config.toml
+marifold service # npm installs serve the bundled Web UI at http://127.0.0.1:32140
 ```
 
 Served same-origin, no CORS configuration needed; with a token configured,
-auth covers `/v1/*` while the shell stays reachable.
+auth covers `/v1/*` while the shell stays reachable. Source builds stage this
+app into `@marifold/service`; `[service].web_dir` or `--web-dir` remains an
+override for a different built bundle.
 
 ## Attachments
 

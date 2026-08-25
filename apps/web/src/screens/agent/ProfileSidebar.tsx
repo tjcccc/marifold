@@ -63,8 +63,8 @@ export function ProfileSidebarContent({
     const terms = normalizeSearch(search).split(' ').filter(Boolean);
     if (terms.length === 0) return profiles;
     return profiles.filter(profile => {
-      const name = normalizeSearch(profile.name);
-      return terms.every(term => name.includes(term));
+      const identity = normalizeSearch(`${profile.displayName} ${profile.name}`);
+      return terms.every(term => identity.includes(term));
     });
   }, [profiles, search]);
 
@@ -189,10 +189,16 @@ export function ProfileSidebarContent({
                 className={styles.rowMain}
                 onClick={() => onSelect(profile.name)}
               >
-                <Avatar client={client} name={profile.name} hasAvatar={profile.avatar !== undefined} size={40} />
+                <Avatar
+                  client={client}
+                  name={profile.name}
+                  label={profile.displayName}
+                  hasAvatar={profile.avatar !== undefined}
+                  size={40}
+                />
                 <span className={styles.meta}>
                   <span className={styles.nameLine}>
-                    <span className={styles.name}>{profile.name}</span>
+                    <span className={styles.name}>{profile.displayName}</span>
                     {profile.pinned ? (
                       <span className={styles.pinIndicator} title="Pinned"><PinGlyph /></span>
                     ) : null}
@@ -214,8 +220,8 @@ export function ProfileSidebarContent({
               {onSetPinned || onConfigure ? (
                 <button
                   className={styles.moreButton}
-                  title={`Profile actions for ${profile.name}`}
-                  aria-label={`Profile actions for ${profile.name}`}
+                  title={`Profile actions for ${profile.displayName}`}
+                  aria-label={`Profile actions for ${profile.displayName}`}
                   aria-haspopup="menu"
                   aria-expanded={menu?.profile.name === profile.name}
                   onClick={event => toggleMenu(profile, event.currentTarget)}
@@ -233,7 +239,7 @@ export function ProfileSidebarContent({
           ref={menuRef}
           className={styles.actionMenu}
           role="menu"
-          aria-label={`Actions for ${menu.profile.name}`}
+          aria-label={`Actions for ${menu.profile.displayName}`}
           style={{ top: menu.top, left: menu.left }}
         >
           {onSetPinned ? (

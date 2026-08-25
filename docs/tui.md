@@ -21,6 +21,9 @@ the TUI prints a hint and exits instead of starting Ink.
 The launch directory is the working directory: `cd ~/notes && marifold` treats
 `~/notes` as the workspace. `~/.marifold` stays the config/state home. Profiles
 are identities (model + rules + memory + skills), not workspaces.
+The startup header shows the human-readable profile label together with its
+stable name as `Display Name (profile_name)`; when no display label is set,
+the profile name fills both positions (for example, `default (default)`).
 
 When no profile resolves a provider/model (e.g. before configuring a default),
 the bare launch shows a profile picker; otherwise it goes straight to the

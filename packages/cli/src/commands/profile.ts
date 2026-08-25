@@ -98,7 +98,7 @@ export function registerProfileCommand(program: Command, printer: ConsolePrinter
   profile
     .command('init')
     .description('Scaffold a new profile directory.')
-    .argument('[name]', 'Profile name.')
+    .argument('[name]', 'Profile name (letters, numbers, underscores, and hyphens only).')
     .action(async (name: string | undefined) => {
       const prompt = new InteractivePrompt();
       try {
@@ -121,7 +121,7 @@ export function registerProfileCommand(program: Command, printer: ConsolePrinter
     .command('rename')
     .description('Rename a stored profile.')
     .argument('<from>', 'Current profile name.')
-    .argument('<to>', 'New profile name.')
+    .argument('<to>', 'New profile name (letters, numbers, underscores, and hyphens only).')
     .action((from: string, to: string) => {
       try {
         const loadedConfig = loadConfig(program);

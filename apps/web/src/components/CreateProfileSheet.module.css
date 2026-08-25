@@ -68,8 +68,16 @@
   display: none;
 }
 
-.nameInput {
+.nameField {
   flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.nameInput {
+  width: 100%;
   min-width: 0;
   border: 1px solid var(--separator);
   border-radius: var(--radius-md);
@@ -81,6 +89,11 @@
 
 .nameInput:focus {
   border-color: var(--brand-fill);
+}
+
+.nameRules {
+  font-size: 11.5px;
+  color: var(--text-3);
 }
 
 .fieldRow {

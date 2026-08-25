@@ -10,6 +10,7 @@ afterEach(cleanup);
 
 const profile: ProfileDetail = {
   name: 'prompt-maker',
+  displayName: 'Prompt Maker',
   source: 'directory',
   settings: { memories: true, mode: 'agent' },
   files: {

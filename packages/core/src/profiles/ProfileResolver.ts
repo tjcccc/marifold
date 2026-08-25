@@ -5,7 +5,7 @@ import { Profile, ProfileLoader } from '@priest-ai/core';
 import { MarifoldError } from '../errors/MarifoldError';
 import { ProfileDetail, ProfileFileSummary, ProfileMode, ProfileSettings, ProfileSummary } from '../config/ConfigSchema';
 import { parsePartialAgentConfig } from '../config/ConfigLoader';
-import { findProfileAvatar } from './ProfileManager';
+import { findProfileAvatar, normalizeProfileDisplayName } from './ProfileManager';
 
 const SAFE_PROFILE_NAME = /^[A-Za-z0-9_-]+$/;
 
@@ -40,6 +40,10 @@ export class ProfileResolver implements ProfileLoader {
     if (!fs.existsSync(profileToml)) return { memories: true };
 
     const raw = this.readToml(profileToml);
+    const displayName = normalizeProfileDisplayName(
+      optionalString(raw.display_name, `${name}.profile.toml display_name`),
+      name,
+    );
     const provider = optionalString(raw.provider, `${name}.profile.toml provider`);
     const model = optionalString(raw.model, `${name}.profile.toml model`);
     const memories = optionalBoolean(raw.memories, `${name}.profile.toml memories`) ?? true;
@@ -60,7 +64,7 @@ export class ProfileResolver implements ProfileLoader {
         name,
       );
     }
-    return { provider, model, memories, mode: rawMode as ProfileMode | undefined, maxContextTokens, sessionContextTurns, think, agent };
+    return { displayName, provider, model, memories, mode: rawMode as ProfileMode | undefined, maxContextTokens, sessionContextTurns, think, agent };
   }
 
   list(): ProfileSummary[] {
@@ -70,13 +74,19 @@ export class ProfileResolver implements ProfileLoader {
         if (entry.isDirectory() && SAFE_PROFILE_NAME.test(entry.name)) {
           const profilePath = path.join(this.profilesDir, entry.name);
           if (isProfileDirectory(profilePath)) {
-            profiles.set(entry.name, { name: entry.name, source: 'directory', path: profilePath });
+            profiles.set(entry.name, {
+              name: entry.name,
+              displayName: this.resolveDisplayName(entry.name),
+              source: 'directory',
+              path: profilePath,
+            });
           }
         } else if (entry.isFile() && entry.name.endsWith('.json')) {
           const name = entry.name.slice(0, -'.json'.length);
           if (SAFE_PROFILE_NAME.test(name) && !profiles.has(name)) {
             profiles.set(name, {
               name,
+              displayName: name,
               source: 'json',
               path: path.join(this.profilesDir, entry.name),
             });
@@ -86,7 +96,7 @@ export class ProfileResolver implements ProfileLoader {
     }
 
     if (!profiles.has('default')) {
-      profiles.set('default', { name: 'default', source: 'built-in' });
+      profiles.set('default', { name: 'default', displayName: 'default', source: 'built-in' });
     }
 
     // Avatars live in the profile dir regardless of source — even the built-in
@@ -183,6 +193,16 @@ export class ProfileResolver implements ProfileLoader {
       throw new Error('TOML root must be an object.');
     } catch (error) {
       throw MarifoldError.profileInvalid(`Could not read profile config ${filePath}: ${String(error)}`, path.basename(path.dirname(filePath)));
+    }
+  }
+
+  /** Keep profile listing resilient to unrelated invalid settings; opening the
+   * profile detail still reports the underlying profile.toml error. */
+  private resolveDisplayName(name: string): string {
+    try {
+      return this.loadSettings(name).displayName ?? name;
+    } catch {
+      return name;
     }
   }
 

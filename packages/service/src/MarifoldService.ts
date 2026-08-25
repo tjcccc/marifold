@@ -20,7 +20,7 @@ import {
 import { registerProfileRoutes } from './ProfileRoutes';
 import { registerRunRoutes } from './RunRoutes';
 import { registerSecurity, resolveSecurityOptions } from './Security';
-import { registerStaticRoutes } from './StaticRoutes';
+import { registerStaticRoutes, resolveBundledWebDir } from './StaticRoutes';
 import { SSE_HEADERS, startSseHeartbeat, writeSse } from './Sse';
 import {
   JsonObject,
@@ -61,6 +61,8 @@ export interface MarifoldServiceStartResult {
   address: string;
   host: string;
   port: number;
+  /** Effective hosted Web UI directory, including the packaged default. */
+  webDir?: string;
   /** Present when the Telegram bridge started inside this service. */
   telegram?: { profile: string };
 }
@@ -139,7 +141,7 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
       || runRegistry.list().some(run => run.profile === profile && run.finishedAt === undefined),
   });
 
-  const webDir = options.web?.dir ?? options.loadedConfig.config.service?.webDir;
+  const webDir = resolveServiceWebDir(options);
   if (webDir) registerStaticRoutes(server, webDir);
 
   server.addHook('onClose', async () => {
@@ -610,10 +612,18 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
 export async function startMarifoldService(options: MarifoldServiceStartOptions): Promise<MarifoldServiceStartResult> {
   const host = options.host ?? DEFAULT_HOST;
   const port = options.port ?? DEFAULT_PORT;
-  const server = createMarifoldService({ ...options, host });
+  const webDir = resolveServiceWebDir(options);
+  const server = createMarifoldService({ ...options, host, web: { dir: webDir } });
   try {
     const address = await server.listen({ host, port });
-    return { server, address, host, port, telegram: (server as ServiceWithBridge).marifoldTelegram };
+    return {
+      server,
+      address,
+      host,
+      port,
+      ...(webDir ? { webDir } : {}),
+      telegram: (server as ServiceWithBridge).marifoldTelegram,
+    };
   } catch (error) {
     // createMarifoldService starts the scheduler/runtime before listen().
     // Always run Fastify's onClose hooks when binding fails, otherwise an
@@ -627,6 +637,12 @@ export async function startMarifoldService(options: MarifoldServiceStartOptions)
     }
     throw error;
   }
+}
+
+function resolveServiceWebDir(options: MarifoldServiceOptions): string | undefined {
+  return options.web?.dir
+    ?? options.loadedConfig.config.service?.webDir
+    ?? resolveBundledWebDir();
 }
 
 async function streamChat(reply: FastifyReply, runtime: MarifoldRuntime, request: MarifoldRunRequest): Promise<void> {

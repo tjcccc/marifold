@@ -2,6 +2,27 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-08-25 — v0.60.0 — Profile display names and npm packaging
+
+- Added optional per-profile display names in `profile.toml`, with the stable
+  profile name as the default for existing and newly created profiles.
+- Showed display names throughout the Web profile and session surfaces, with an
+  editable display-name field above model settings and explicit profile-name
+  rules in Web creation/settings, CLI help, and API documentation.
+- Showed `Display Name (profile_name)` in the TUI header and fixed profile
+  switching so `$skill` completion immediately reloads the selected profile's
+  skill catalog.
+- Bundled the production Web UI into `@marifold/service`, so one
+  `npm install -g marifold` includes the CLI, TUI, service, and Web UI and the
+  service hosts the Web UI without a manual `web_dir`.
+- Added core, service, Web, and TUI regressions for persistence, fallback,
+  editing, rendering, naming guidance, and switched-profile skill completion.
+- Verified 128 CLI command checks and the full workspace typecheck/build/test
+  gate (632 tests: core 310, service 59, TUI 60, CLI 19, Web 184), plus the
+  npm tarball contents and recursive publication dry run.
+- Version 0.59.0 → 0.60.0 across all packages + CLI `.version`.
+- Prepared v0.60.0 for npm publication.
+
 ## 2026-08-23 — v0.59.0 — Model-driven SkillApps
 
 - Added restricted, statically compiled `skillapp.ts` templates with explicit

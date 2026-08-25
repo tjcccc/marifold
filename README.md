@@ -100,8 +100,23 @@ Web search uses DuckDuckGo scraping by default, which requires no API key but ca
 
 ## Setup
 
-Marifold requires Node.js 24 LTS. The repository's `.nvmrc` pins the current
-LTS patch, and `packageManager` pins the compatible pnpm release.
+Marifold requires Node.js 24 LTS. Install the published CLI globally; this one
+package brings the TUI, service, and bundled Web UI:
+
+```bash
+npm install -g marifold
+marifold init
+```
+
+Run `marifold` for the TUI, or start the service and open the Web UI at
+`http://127.0.0.1:32140`:
+
+```bash
+marifold service start --daemon
+```
+
+For source development, the repository's `.nvmrc` pins the current LTS patch,
+and `packageManager` pins the compatible pnpm release.
 
 Install and build:
 
@@ -111,7 +126,7 @@ pnpm install
 pnpm build
 ```
 
-After installing or linking the packaged `marifold` binary, create local configuration:
+After building or linking the source workspace, create local configuration:
 
 ```bash
 marifold init
@@ -246,6 +261,11 @@ marifold service --host 127.0.0.1 --port 32140
 marifold service --host 0.0.0.0
 ```
 
+Profile names are stable filesystem- and URL-safe identifiers: use ASCII
+letters, numbers, underscores, and hyphens only (`[A-Za-z0-9_-]+`). Spaces and
+other characters are rejected. Use the optional profile display name for a
+human-readable label with spaces or Unicode.
+
 The packaged binary name is `marifold`.
 
 Inside `marifold chat`, use `/help` for chat commands. End a line with `\` to continue a multiline message.
@@ -343,7 +363,7 @@ For `openai-compatible`, `base_url` may be the API root such as `https://api.ope
 
 `marifold init` accepts `--provider`, `--provider-type`, `--model`, `--base-url`, `--api-key-env`, `--profiles-dir`, `--sessions-db`, `--tasks-dir`, and `--force`. Non-Ollama providers require `--model`; custom OpenAI-compatible providers also require `--base-url`.
 
-`marifold service` and `marifold service start` start the same foreground Fastify HTTP service, bound to `127.0.0.1:32140` by default. `marifold service start --daemon` runs it in the background; `marifold service restart` gracefully replaces the running process in the same foreground or daemon mode and reuses its config path, host, port, working directory, logging, CORS origins, Web directory, and token source. `marifold status` reports the managed process and its loopback/private access mode, `marifold status --logs` includes its latest 100 log lines, and `marifold service stop` performs a graceful stop. State and the daemon log live under `~/.marifold/service/`, and stale state is cleaned automatically. Only one managed service instance can run at a time, including foreground starts. Restart metadata never contains the bearer token: a configured token or token-environment name is resolved again, while a service originally started with raw `--token` requires `marifold service restart --token <token>`. A service already running from a version without restart metadata must be stopped and started once before it can be restarted. `--host 0.0.0.0` listens on every interface, but Marifold always accepts only direct loopback, private LAN, link-local, IPv6 ULA, and Tailscale/CGNAT (`100.64.0.0/10`) peers; bearer authentication is optional and never widens that network boundary. A specific LAN or Tailscale bind address further narrows the interfaces exposed. Launch state from an older public-mode service is marked `legacy-public`; restarting it drops that obsolete mode and enforces private-network filtering. Ctrl+C/SIGTERM performs graceful cleanup and exits; shutdown is forced after five seconds or immediately on a second signal. A bind failure also closes the newly created runtime instead of leaving a background process alive. `--log` enables Fastify request logging: it prints in the foreground or is captured in the daemon log. The API surface is `/health` and `/v1/*` routes for app clients: sanitized config/provider/model views, profiles, memories, sessions, ask/chat, SSE streaming chat, task state, read-only schedules, live agent runs (`POST /v1/runs`, a resumable SSE `AgentEvent` stream, and clarification/approval/steer/cancel routes), and config-editing writes (`PATCH /v1/config` with CLI `config set` parity, per-profile settings/files/trusted-folders/memory-forget routes). The full wire contract is documented in [docs/service-api.md](docs/service-api.md).
+`marifold service` and `marifold service start` start the same foreground Fastify HTTP service, bound to `127.0.0.1:32140` by default. The npm package serves its bundled Web UI at that address automatically; `[service].web_dir` or `--web-dir` can replace it with another built directory. `marifold service start --daemon` runs it in the background; `marifold service restart` gracefully replaces the running process in the same foreground or daemon mode and reuses its config path, host, port, working directory, logging, CORS origins, Web directory, and token source. `marifold status` reports the managed process and its loopback/private access mode, `marifold status --logs` includes its latest 100 log lines, and `marifold service stop` performs a graceful stop. State and the daemon log live under `~/.marifold/service/`, and stale state is cleaned automatically. Only one managed service instance can run at a time, including foreground starts. Restart metadata never contains the bearer token: a configured token or token-environment name is resolved again, while a service originally started with raw `--token` requires `marifold service restart --token <token>`. A service already running from a version without restart metadata must be stopped and started once before it can be restarted. `--host 0.0.0.0` listens on every interface, but Marifold always accepts only direct loopback, private LAN, link-local, IPv6 ULA, and Tailscale/CGNAT (`100.64.0.0/10`) peers; bearer authentication is optional and never widens that network boundary. A specific LAN or Tailscale bind address further narrows the interfaces exposed. Launch state from an older public-mode service is marked `legacy-public`; restarting it drops that obsolete mode and enforces private-network filtering. Ctrl+C/SIGTERM performs graceful cleanup and exits; shutdown is forced after five seconds or immediately on a second signal. A bind failure also closes the newly created runtime instead of leaving a background process alive. `--log` enables Fastify request logging: it prints in the foreground or is captured in the daemon log. The API surface is `/health` and `/v1/*` routes for app clients: sanitized config/provider/model views, profiles, memories, sessions, ask/chat, SSE streaming chat, task state, read-only schedules, live agent runs (`POST /v1/runs`, a resumable SSE `AgentEvent` stream, and clarification/approval/steer/cancel routes), and config-editing writes (`PATCH /v1/config` with CLI `config set` parity, per-profile settings/files/trusted-folders/memory-forget routes). The full wire contract is documented in [docs/service-api.md](docs/service-api.md).
 
 The optional `[service]` section configures API access for browser clients:
 
@@ -426,11 +446,10 @@ the same service root and bearer token.
 `apps/web` is the browser client (Vite + React, see [apps/web/README.md](apps/web/README.md)): the Agent screen renders chat and live agent runs — plan, tool activity, the approval sheet (Allow once / Always allow / Trust folder / Deny), mid-run steering, cancel, catch-up replay, durable response time/token/cost footers, response/code copying, lazily loaded authenticated image galleries, local Office-file text extraction, scalable profile search, durable session rename/pin/archive/delete actions, server-backed session search, per-session drafts, and history-aware prompt editing that regenerates the selected exchange in place without deleting later turns. Config edits profiles, providers, models, global agent defaults, web search, appearance, and the local service. The current browser shell intentionally targets desktop widths (900 px and above); a dedicated mobile navigation design remains future work.
 
 ```sh
-pnpm --filter @marifold/web build
-marifold service --web-dir apps/web/dist   # serves the app at http://127.0.0.1:32140
+marifold service   # serves the bundled app at http://127.0.0.1:32140
 ```
 
-For development: `marifold service --cors-origin http://127.0.0.1:5173` + `pnpm --filter @marifold/web dev`. Set `[service].web_dir` in config.toml to host it permanently.
+For development: `marifold service --cors-origin http://127.0.0.1:5173` + `pnpm --filter @marifold/web dev`. Build with `pnpm --filter @marifold/web build`; `[service].web_dir` or `--web-dir` overrides the bundled production app.
 
 `marifold config export <file>` writes config, profile files, memory files, and optional sessions into a local JSON backup. Treat backups as sensitive if your config contains saved `api_key` or `oauth_token` values.
 
@@ -511,6 +530,7 @@ All keys are optional. An absent key inherits the global `[default]` value (wher
 
 | Key | Type | Default | Effect |
 |-----|------|---------|--------|
+| `display_name` | string | profile name | Optional human-readable label shown by clients. Blank or absent keeps the stable profile name as the display fallback. |
 | `provider` | string | inherits `[default].provider` | Provider override. Must be set **together with** `model` (both or neither). |
 | `model` | string | inherits `[default].model` | Model override. Must be set together with `provider`. |
 | `memories` | boolean | `true` | Load profile memory for this profile. Set `false` for tool profiles. Per-run `--no-memories` disables it for one `ask`/`chat`. |
@@ -524,6 +544,7 @@ All keys are optional. An absent key inherits the global `[default]` value (wher
 Example:
 
 ```toml
+display_name = "Writing Partner"
 provider = "bailian"
 model = "qwen3.6-plus"
 mode = "chat"

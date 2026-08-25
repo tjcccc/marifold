@@ -5,7 +5,10 @@ import styles from './Avatar.module.css';
 
 export interface AvatarProps {
   client: ApiClient;
+  /** Stable profile id used for the avatar route. */
   name: string;
+  /** Human-readable label used for alt text and the fallback initial. */
+  label?: string;
   /** ProfileSummary.avatar presence — skips the fetch when there is none. */
   hasAvatar: boolean;
   size?: number;
@@ -15,7 +18,7 @@ export interface AvatarProps {
 
 /** Profile avatar: the stored image (fetched with auth → blob URL, since
  * `<img src>` can't carry a bearer token) or a marigold initial circle. */
-export function Avatar({ client, name, hasAvatar, size = 32, version = 0 }: AvatarProps) {
+export function Avatar({ client, name, label = name, hasAvatar, size = 32, version = 0 }: AvatarProps) {
   const [url, setUrl] = useState<string | undefined>();
 
   useEffect(() => {
@@ -43,7 +46,7 @@ export function Avatar({ client, name, hasAvatar, size = 32, version = 0 }: Avat
 
   const dimension = { width: size, height: size };
   if (url) {
-    return <img className={styles.image} style={dimension} src={url} alt={`${name} avatar`} />;
+    return <img className={styles.image} style={dimension} src={url} alt={`${label} avatar`} />;
   }
   return (
     <span
@@ -51,7 +54,7 @@ export function Avatar({ client, name, hasAvatar, size = 32, version = 0 }: Avat
       style={{ ...dimension, fontSize: Math.round(size * 0.44) }}
       aria-hidden
     >
-      {name.slice(0, 1).toUpperCase()}
+      {label.slice(0, 1).toUpperCase()}
     </span>
   );
 }

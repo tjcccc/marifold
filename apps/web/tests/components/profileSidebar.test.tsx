@@ -19,24 +19,28 @@ const client: ApiClient = {
 };
 
 const profiles = [
-  { name: 'default', source: 'directory' as const },
+  { name: 'default', displayName: 'default', source: 'directory' as const },
   {
-    name: 'Research Lab',
+    name: 'research-lab',
+    displayName: 'Research Lab',
     source: 'directory' as const,
     preview: 'The latest research response',
     updatedAt: '2026-07-24T08:00:00.000Z',
   },
-  { name: 'travel-project', source: 'directory' as const },
+  { name: 'travel-project', displayName: 'Trip Planner', source: 'directory' as const },
 ];
 
 describe('ProfileSidebar search', () => {
-  it('filters profile names case-insensitively and reports no matches', () => {
+  it('filters display and stable profile names case-insensitively and reports no matches', () => {
     render(<ProfileSidebar client={client} profiles={profiles} onSelect={() => {}} />);
     const search = screen.getByLabelText('Search profiles');
 
     fireEvent.change(search, { target: { value: 'RESEARCH' } });
     expect(screen.getByRole('button', { name: /Research Lab/ })).toBeTruthy();
-    expect(screen.queryByRole('button', { name: /travel-project/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Trip Planner/ })).toBeNull();
+
+    fireEvent.change(search, { target: { value: 'travel-project' } });
+    expect(screen.getByRole('button', { name: /Trip Planner/ })).toBeTruthy();
 
     fireEvent.change(search, { target: { value: 'missing' } });
     expect(screen.getByText('No matching profiles.')).toBeTruthy();
@@ -49,7 +53,7 @@ describe('ProfileSidebar search', () => {
 
     fireEvent.change(search, { target: { value: 'travel' } });
     fireEvent.keyDown(search, { key: 'ArrowDown' });
-    const result = screen.getByRole('button', { name: /travel-project/ });
+    const result = screen.getByRole('button', { name: /Trip Planner/ });
     expect(document.activeElement).toBe(result);
     fireEvent.click(result);
     expect(onSelect).toHaveBeenCalledWith('travel-project');
@@ -80,10 +84,10 @@ describe('ProfileSidebar search', () => {
 
     fireEvent.click(screen.getByLabelText('Profile actions for Research Lab'));
     fireEvent.click(screen.getByRole('menuitem', { name: 'Pin' }));
-    await waitFor(() => expect(onSetPinned).toHaveBeenCalledWith('Research Lab', true));
+    await waitFor(() => expect(onSetPinned).toHaveBeenCalledWith('research-lab', true));
 
     fireEvent.click(screen.getByLabelText('Profile actions for Research Lab'));
     fireEvent.click(screen.getByRole('menuitem', { name: 'Config' }));
-    expect(onConfigure).toHaveBeenCalledWith('Research Lab');
+    expect(onConfigure).toHaveBeenCalledWith('research-lab');
   });
 });
