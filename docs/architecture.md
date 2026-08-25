@@ -1,6 +1,6 @@
 # Architecture
 
-Marifold v0.14.0 adds the TUI — an Ink/React terminal app (`packages/tui`) that is the primary interactive surface — on top of the v0.13.0 pre-TUI foundation: the basic agent loop (v0.11.0), chat parity (v0.12.0), the early declarative App spec, and scheduled task execution (v0.13.0). It provides a TypeScript CLI for priests-style profile chat, one-shot requests, an approval-aware agent loop, workspace initialization, chat resume behavior, saved model options, model validation, structured profile memory, thinking mode controls, OAuth provider setup, GitHub Copilot Responses API routing, config backup/import, local management commands, a default-loopback Fastify service API with authenticated opt-in remote binding, an ephemeral task-state subsystem, and the `marifold.skill.v0` skill primitive.
+marifold v0.14.0 adds the TUI — an Ink/React terminal app (`packages/tui`) that is the primary interactive surface — on top of the v0.13.0 pre-TUI foundation: the basic agent loop (v0.11.0), chat parity (v0.12.0), the early declarative App spec, and scheduled task execution (v0.13.0). It provides a TypeScript CLI for priests-style profile chat, one-shot requests, an approval-aware agent loop, workspace initialization, chat resume behavior, saved model options, model validation, structured profile memory, thinking mode controls, OAuth provider setup, GitHub Copilot Responses API routing, config backup/import, local management commands, a default-loopback Fastify service API with authenticated opt-in remote binding, an ephemeral task-state subsystem, and the `marifold.skill.v0` skill primitive.
 
 ## Current Scope
 
@@ -17,9 +17,9 @@ apps/web -> packages/service (HTTP only; types type-only from packages/core)
 
 `packages/service` owns HTTP transport only. It starts a Fastify server, parses JSON requests, returns sanitized responses, streams chat chunks through SSE, and delegates behavior to `packages/core`.
 
-`packages/core` owns Marifold runtime abstractions, workspace paths, TOML config loading, profile resolution, profile memory storage/selection/control-block application, the agent subsystem (`src/agent`), task-state persistence, session resolution, provider adapter creation, and the bridge to `@priest-ai/core`.
+`packages/core` owns marifold runtime abstractions, workspace paths, TOML config loading, profile resolution, profile memory storage/selection/control-block application, the agent subsystem (`src/agent`), task-state persistence, session resolution, provider adapter creation, and the bridge to `@priest-ai/core`.
 
-`@priest-ai/core` remains Marifold-agnostic. Marifold depends on it; it does not know about Marifold. Since 2.4 it carries the model-side agent primitives — native tool-call transport, the `runWithTools` loop helper, structured stream events, cancellation, and image input. In 2.8 it also owns the OpenAI Responses transport, provider-neutral reasoning configuration, safe reasoning summaries, opaque continuation, and cached/reasoning token accounting. Marifold owns concrete tools, approval policy, task state, and rendering. Priest owns talking to models; Marifold owns acting on the world.
+`@priest-ai/core` remains marifold-agnostic. marifold depends on it; it does not know about marifold. Since 2.4 it carries the model-side agent primitives — native tool-call transport, the `runWithTools` loop helper, structured stream events, cancellation, and image input. In 2.8 it also owns the OpenAI Responses transport, provider-neutral reasoning configuration, safe reasoning summaries, opaque continuation, and cached/reasoning token accounting. marifold owns concrete tools, approval policy, task state, and rendering. Priest owns talking to models; marifold owns acting on the world.
 
 ## Current Boundaries
 
@@ -32,7 +32,7 @@ The agent subsystem lives in `packages/core/src/agent`:
 - `RunWorkspace` creates a private capability set under `~/.marifold/runs/<run-id>/`: internal runtime-home state, staged read-only attachments, work/output/temp/cache, and `.venv`. Upload names are sanitized, local/embedded images are copied into `input/`, and the agent sees an ID/name/type/size manifest rather than eagerly receiving every attachment. This keeps image tokens lazy across stateless tool iterations. User-facing `~`/`$HOME` retain normal account-home semantics; the sandbox separately denies broad home access and reopens only explicit capabilities. The active profile and configured global skill directories are added as narrow read-only roots when they resolve inside the user's home; they never become write roots, and external configured paths remain approval-gated. Shell execution goes through `ScopedProcess`; macOS uses Seatbelt and unsupported platforms fail closed instead of falling back to the host. Shell network is denied, filesystem writes are allowlisted, global runtime/package directories stay read-only, and common host-control channels (unrelated signals, Apple Events, clipboard, Launch Services mutation, keychain IPC) are denied.
 - `python_package_install` is the only network-enabled process path. It accepts registry requirement names only, invokes `uv` into the per-run `.venv`, always requires one-time approval, and mounts only disposable environment directories so package build hooks cannot read user inputs or a selected repository.
 - `ApprovalPolicy` maps tool kinds (`read`, `write`, `shell`, `network`, `delegate`) to `allow`/`ask`/`deny` from the optional `[agent]` config section. `ask` requires the caller-supplied `ApprovalHandler`; unattended runs degrade `ask` to deny.
-- Tool calling is native-first through `@priest-ai/core` 3.0. Responses and Anthropic tool loops carry opaque reasoning continuation back to the same provider while exposing only safe summary text to Marifold renderers. In `auto` mode, a provider that rejects tools switches the run to control-block mode: prompt-embedded `<tool_call>` blocks parsed with the same pattern as the memory control blocks, so the loop works on small local models too.
+- Tool calling is native-first through `@priest-ai/core` 3.0. Responses and Anthropic tool loops carry opaque reasoning continuation back to the same provider while exposing only safe summary text to marifold renderers. In `auto` mode, a provider that rejects tools switches the run to control-block mode: prompt-embedded `<tool_call>` blocks parsed with the same pattern as the memory control blocks, so the loop works on small local models too.
 - Agent runs bypass the chat memory pipeline. Hidden `<memory_save>`/`<memory_forget>` blocks are stripped from agent output and their payloads discarded; task state is never promoted into profile memory.
 - Interactive agent sessions persist one clean user→assistant pair per append-only run. Successful runs store the final answer; failed or cancelled runs store a concise terminal outcome so submitted prompts survive resume without exposing raw tool-loop framing. Failed historical regenerations do not replace the prior successful exchange.
 
@@ -77,15 +77,15 @@ profiles/default/
     auto_short.jsonl
 ```
 
-Marifold owns the profile memory file meaning and passes selected memory to `@priest-ai/core` through `PriestRequest.memory`. The memory path can be disabled per profile through `profile.toml` or per run through `--no-memories`. When enabled, Marifold injects memory policy instructions, strips hidden `<memory_save>` and `<memory_forget>` blocks from visible output and saved session history, applies JSONL mutations after the turn, applies conservative prompt fallback extraction, applies prompt-driven forgets, and trims low-priority short-term memory.
+marifold owns the profile memory file meaning and passes selected memory to `@priest-ai/core` through `PriestRequest.memory`. The memory path can be disabled per profile through `profile.toml` or per run through `--no-memories`. When enabled, marifold injects memory policy instructions, strips hidden `<memory_save>` and `<memory_forget>` blocks from visible output and saved session history, applies JSONL mutations after the turn, applies conservative prompt fallback extraction, applies prompt-driven forgets, and trims low-priority short-term memory.
 
 Structured memory is stored in JSONL under profile directories. The current memory subsystem is integrated inside `packages/core/src/memory`, but it is intentionally package-shaped: schema, persistence, selection, prompt/control extraction, and policy remain separated enough to extract into a future `@marifold/memory` package once agent/task memory requirements settle.
 
 Memory is context, not authority. Human-authored profile files and the current user message outrank memory. Normal recall includes priority `0..3`, thinking mode includes priority `0..10`, and simple greetings include only priority `0` memories.
 
-Thinking mode is a provider option selected by Marifold and only forwarded to known compatible providers. It does not change context assembly or introduce agent behavior.
+Thinking mode is a provider option selected by marifold and only forwarded to known compatible providers. It does not change context assembly or introduce agent behavior.
 
-SQLite session continuity is reused from `@priest-ai/core`. Marifold-owned
+SQLite session continuity is reused from `@priest-ai/core`. marifold-owned
 metadata stays in companion tables in that same database:
 `marifold_session_display` holds session title/pin/archive state,
 `marifold_profile_display` holds profile pin state,

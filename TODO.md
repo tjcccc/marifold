@@ -15,7 +15,7 @@
 ## fx-inspired reliability backlog (reviewed 2026-08-20)
 
 These items borrow bounded contracts and lifecycle discipline from `fx` without
-changing Marifold's product direction. Marifold remains a local-first personal
+changing marifold's product direction. marifold remains a local-first personal
 AI workspace and coordinator, not a heavyweight coding agent or general agent
 SDK.
 
@@ -24,7 +24,7 @@ SDK.
 - **Minimal context provenance and omission tracing.** Centralize the duplicated
   chat/agent request assembly and retain a stable source id, target Priest lane,
   lifetime, and omission reason before projecting into today's `context`,
-  `memory`, `userContext`, session, image, and `toolExchange` fields. Marifold
+  `memory`, `userContext`, session, image, and `toolExchange` fields. marifold
   owns product source/trust policy; `@priest-ai/core` continues to own provider
   message projection, token budgeting, and any provider cache semantics. Start
   only with tracing and deterministic projection—do not create a competing
@@ -36,7 +36,7 @@ SDK.
 
 ### Design with the first real consumer
 
-- **External-agent aliases.** Define a capability-negotiated Marifold contract
+- **External-agent aliases.** Define a capability-negotiated marifold contract
   for session creation/attachment, prompts, semantic events, permission requests,
   cancellation, close, and result/artifact handoff. Use ACP v1 as one adapter
   when the first real external coding agent supports it; do not make ACP the
@@ -63,7 +63,7 @@ SDK.
 ### Non-goals
 
 - No Zig rewrite, binary-size program, Unix-shell-centered product, browser-local
-  full agent runtime, public embeddable Marifold SDK, universal Agent Host callback
+  full agent runtime, public embeddable marifold SDK, universal Agent Host callback
   table, full durable subagent manager, or copied `fx` sandbox defaults.
 
 ## Current Plan
@@ -79,7 +79,7 @@ SDK.
 
 ## Completed in v0.8.0
 
-- `model rm <provider/model>`: remove a saved Marifold model option from `[models].options`; do not delete provider-owned model files.
+- `model rm <provider/model>`: remove a saved marifold model option from `[models].options`; do not delete provider-owned model files.
 - `model validate --all`: validate every saved model option plus global/profile defaults.
 - `config export <file>` / `config import <file>`: backup and restore local config, profiles, memories, and optional sessions.
 - `profile rename <from> <to>` and `profile delete <name>`: local profile management with safe confirmations.
@@ -202,7 +202,7 @@ Design conclusions from product discussion (2026-06-22). Captured for later; not
 
 ## Product Outlook
 
-- Marifold should be a lightweight local-first personal AI workspace, not a direct competitor to heavyweight all-round agents.
+- marifold should be a lightweight local-first personal AI workspace, not a direct competitor to heavyweight all-round agents.
 - Heavy coding and complex autonomous work can be delegated to external-agent aliases when tools such as Codex or Claude Code are a better fit.
 - The core user value is profile-based continuity, memory, focused skill apps, and choosing the right model or agent for each task.
 - See [docs/vision.md](docs/vision.md) for the fuller product direction.
@@ -213,4 +213,4 @@ Design conclusions from product discussion (2026-06-22). Captured for later; not
 - Build the service API before UI/client work, but do not turn it into a large platform before the stable chat, memory, session, and task-state surfaces are proven.
 - Build the basic CLI agent before investing in full UI polish, so agent behavior can shape task state and permission boundaries.
 - Defer `/search`, image, Web UI, Apple clients, provider-owned model deletion, and broad agentic tool loops until the service/task foundation is predictable.
-- Marifold can remove saved model references from its config, but should not delete actual local provider model files such as Ollama blobs.
+- marifold can remove saved model references from its config, but should not delete actual local provider model files such as Ollama blobs.

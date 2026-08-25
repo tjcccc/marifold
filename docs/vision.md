@@ -1,12 +1,12 @@
 # Vision
 
-Marifold is a local-first personal AI workspace for everyday AI work, profile-based continuity, skill apps, and multi-agent composition.
+marifold is a local-first personal AI workspace for everyday AI work, profile-based continuity, skill apps, and multi-agent composition.
 
-Marifold should not try to become another all-round heavyweight agent like Codex, Claude Code, or other mainstream agent apps. Those tools will keep becoming more capable, and a single-developer project should not compete with them on raw agent power. Marifold should instead make smaller, repeated, personal AI tasks lighter and better organized, then call stronger external agents when the task actually needs them.
+marifold should not try to become another all-round heavyweight agent like Codex, Claude Code, or other mainstream agent apps. Those tools will keep becoming more capable, and a single-developer project should not compete with them on raw agent power. marifold should instead make smaller, repeated, personal AI tasks lighter and better organized, then call stronger external agents when the task actually needs them.
 
 ## Product Position
 
-Marifold is the personal coordinator around AI work:
+marifold is the personal coordinator around AI work:
 
 - Native profiles handle lightweight chat, ask, memory, provider routing, and focused skills.
 - Skill apps provide small GUI surfaces for repeatable tasks.
@@ -21,11 +21,11 @@ Profiles are the main unit of identity and continuity. A profile can have its ow
 
 Native profiles talk directly to configured model providers.
 
-Alias profiles point to external agents or commands, such as Codex or Claude Code. They allow Marifold to launch, wrap, delegate to, or compose with tools that are already strong at specialized tasks.
+Alias profiles point to external agents or commands, such as Codex or Claude Code. They allow marifold to launch, wrap, delegate to, or compose with tools that are already strong at specialized tasks.
 
 Skills are reusable capabilities. A skill should not only be a prompt; it can become a structured interface with inputs, variables, actions, and outputs.
 
-Apps are GUI surfaces generated from safe schemas. Marifold owns rendering, validation, permissions, state, result normalization, and provider calls instead of executing definition files as arbitrary code.
+Apps are GUI surfaces generated from safe schemas. marifold owns rendering, validation, permissions, state, result normalization, and provider calls instead of executing definition files as arbitrary code.
 
 Workflows connect profiles, Skills, Apps, models, and external agents into multi-step jobs.
 

@@ -1,6 +1,6 @@
 # Project Notes
 
-Marifold is a local-first personal AI workspace: profile-based chat and an
+marifold is a local-first personal AI workspace: profile-based chat and an
 approval-aware agent, plus scheduling and a service API. Both chat and agent
 talk to models **through `@priest-ai/core`** (the priest protocol SDK);
 marifold owns acting on the world (tools, approval, task state, scheduling).

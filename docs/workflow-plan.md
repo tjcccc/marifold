@@ -1,13 +1,13 @@
 # Workflow Composition — Ongoing Design Plan
 
-This is a living design document for Marifold's future multi-profile and
+This is a living design document for marifold's future multi-profile and
 multi-model workflow system. It records the current direction and open
 questions; it is not an implementation commitment or a frozen schema.
 
 ## Product boundary
 
-Workflows should make Marifold a lightweight orchestration layer for profiles,
-models, Skills, and Apps. They should not turn Marifold into a heavyweight
+Workflows should make marifold a lightweight orchestration layer for profiles,
+models, Skills, and Apps. They should not turn marifold into a heavyweight
 coding agent or project/goal manager. Long-running repository work remains a
 better fit for tools such as Codex and Claude Code.
 
@@ -170,7 +170,7 @@ Each node should receive:
   explicit node override;
 - only its declared skills and upstream inputs;
 - a node-specific workspace;
-- the normal Marifold approval and filesystem policies.
+- the normal marifold approval and filesystem policies.
 
 Node history must be isolated. A downstream profile must not inherit an
 upstream transcript, cached skill instructions, or unrelated conversation

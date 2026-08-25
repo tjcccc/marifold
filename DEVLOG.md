@@ -2,6 +2,17 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-08-25 — v0.60.1 — Lowercase marifold branding
+
+- Standardized the human-facing `marifold` brand in lowercase across the main
+  README, project guidance, development notes, product documentation, example
+  profile, and Web concept document.
+- Preserved case-sensitive code identifiers and the exact historical CLI output
+  quoted in this log.
+- Verified the documentation casing inventory, `git diff --check`, workspace
+  typecheck, and build.
+- Version 0.60.0 → 0.60.1 across all packages + CLI `.version`.
+
 ## 2026-08-25 — v0.60.0 — Profile display names and npm packaging
 
 - Added optional per-profile display names in `profile.toml`, with the stable
@@ -146,7 +157,7 @@ Cross-session development log. Newest first. Keep entries short: what shipped, w
 - Aligned the live agent contract, README, architecture/service documentation, TODOs, and `.projnavi` notes with the post-v0.24.2 runtime: observable checks run through ordinary tools inside the loop, with no separate model self-grading call. The legacy `AgentEvent.verification` variant remains deprecated compatibility surface, while the generic TaskStore event name is reserved for explicit evidence from future producers.
 - Added focused-check guidance to ordinary agent context and standardized every built-in tool description on explicit “When to use” / “When NOT to use” affordances without changing permission or execution policy.
 - Removed stale scripted verification responses, added a regression covering all seven built-in tool descriptions, and tightened the optional provider-backed agent eval around direct-answer and dedicated file-tool selection.
-- Recorded the deferred context, Workflow, external-agent/ACP, MCP, checkpoint, and durable-process work in `TODO.md` with product triggers, ownership boundaries, and explicit non-goals. Marifold remains a lightweight local-first personal AI workspace, not a heavyweight coding agent or general agent SDK.
+- Recorded the deferred context, Workflow, external-agent/ACP, MCP, checkpoint, and durable-process work in `TODO.md` with product triggers, ownership boundaries, and explicit non-goals. marifold remains a lightweight local-first personal AI workspace, not a heavyweight coding agent or general agent SDK.
 - Verified `scripts/agent-eval.mjs` syntax plus the full workspace typecheck/build/test gate (607 tests: core 305, service 55, TUI 58, CLI 14, Web 175). The optional live-provider agent eval was not run because it requires a configured model.
 - Released as v0.55.0.
 
@@ -175,7 +186,7 @@ Cross-session development log. Newest first. Keep entries short: what shipped, w
 
 - Kept `127.0.0.1:32140` as the default while allowing explicit non-loopback `--host` values only when bearer authentication resolves from config or CLI flags.
 - Allowed the hosted Web UI to call the API same-origin through a LAN or Tailscale IP without a redundant Connection URL or CORS entry; cross-origin browsers remain exact-allowlist gated.
-- Replaced the one-off Web connection fields with named Marifold servers: **This server** stays same-origin, remote entries retain independent URLs/tokens, and activation requires a compatible `/v1/status` response.
+- Replaced the one-off Web connection fields with named marifold servers: **This server** stays same-origin, remote entries retain independent URLs/tokens, and activation requires a compatible `/v1/status` response.
 - Remounted the Web data surface on connection changes and namespaced last Agent routes and drafts by server so profiles, sessions, and in-flight state cannot carry across a switch.
 - Added a two-service Chromium regression that switches from the local fixture to a token-protected remote service and back.
 - Documented direct `--host 0.0.0.0` access, its all-interface exposure, and the narrower specific-address option.
@@ -186,10 +197,10 @@ Cross-session development log. Newest first. Keep entries short: what shipped, w
 
 - Fixed bundle-free Skill and App prompts so they no longer advertise a nonexistent `vars.toml` or unavailable `read_file` action; actual bundled skills now name only the files they carry.
 - Replaced the unreleased profile-scoped SkillApp prototype with `marifold.app.v0`: global `<apps_dir>/<name>/app.toml` bundles, explicit multi-profile actors, `/v1/apps`, actor-owned Skill resolution, and App actions that never replay or write Agent transcripts.
-- Kept Agent and Apps inside one persistent Web workspace shell: switching tabs replaces only the sidebar catalog body and right-pane content, so the Marifold brand, system footer, sidebar width/visibility, and header controls do not remount.
+- Kept Agent and Apps inside one persistent Web workspace shell: switching tabs replaces only the sidebar catalog body and right-pane content, so the marifold brand, system footer, sidebar width/visibility, and header controls do not remount.
 - Reused the complete Agent profile-sidebar and thread-header chrome for Apps: `Search apps`, avatar-style rows, selected state, the same resizable width as Profiles, and the same full-width sidebar toggle beside the `Apps` title. The Apps pane renders no profile/session list, transcript, or composer.
 - Verified the App replacement with the full workspace typecheck/build/test gate (573 tests), a two-actor service regression, and a headed Chromium pass across direct `/apps` loading plus Agent → Apps navigation.
-- Adopted published `@priest-ai/core` 3.0.0 and delegated OpenAI-compatible Responses transport to its provider implementation while retaining Marifold-owned routing, OAuth headers, proxy selection, and ChatGPT's SSE-only behavior.
+- Adopted published `@priest-ai/core` 3.0.0 and delegated OpenAI-compatible Responses transport to its provider implementation while retaining marifold-owned routing, OAuth headers, proxy selection, and ChatGPT's SSE-only behavior.
 - Replaced product-side `think` branching with Priest's provider-neutral reasoning configuration where supported; Bailian-compatible legacy options remain isolated at the compatibility edge.
 - Preserved safe reasoning summaries, opaque continuation across tool turns, and cached/reasoning usage through core, CLI, TUI, service SSE, and Web renderers without exposing private provider traces.
 - Fixed the TUI's two-column prompt gutter under wrapping pressure: submitted prompts retain the space after `>`, while live-input continuation lines no longer inherit a separator space that lands exactly on the automatic wrap boundary.
@@ -199,7 +210,7 @@ Cross-session development log. Newest first. Keep entries short: what shipped, w
 - Aligned `better-sqlite3` 13.0.1 with Priest so one native SQLite implementation owns session databases; loading majors 11 and 13 in the same process produced corruption symptoms. The production dependency audit now reports zero advisories.
 - Added guarded provider removal to Web Config and the service API: typed confirmation clears local credentials/config plus saved model options, while global-default and profile-override references block deletion. `marifold provider reauth` now replaces GitHub Copilot, ChatGPT, or xAI OAuth credentials without deleting provider settings/models; Web Config exposes the copyable host-local command. Expired OAuth access tokens trigger fresh setup, and the Service page correctly reports environment-resolved bearer authentication.
 - Added completion metadata to plain Web chat streams: successful `done` events carry end-to-end latency and provider-reported usage, and chat responses now show the same time, token, reasoning, and estimated-cost footer as agent responses.
-- Persisted unified chat/agent response metrics in a Marifold-owned SQLite companion table keyed by stable session/user-turn ordinal. Reloaded transcripts retain timing, provider/model, thinking, token/cache/reasoning, and estimated-cost data; edit, rename, truncate, clear, and delete lifecycle operations keep metrics aligned for future statistics.
+- Persisted unified chat/agent response metrics in a marifold-owned SQLite companion table keyed by stable session/user-turn ordinal. Reloaded transcripts retain timing, provider/model, thinking, token/cache/reasoning, and estimated-cost data; edit, rename, truncate, clear, and delete lifecycle operations keep metrics aligned for future statistics.
 - Added the first App MVP: global TOML bundle discovery, normalized service-owned definitions, renderer-neutral nested row/column layouts, typed state, streamed chat-mode actor Skill actions, and a generic Web Apps renderer. Per-app `think`, `memory`, and `profile_context` controls default off for focused low-cost runs.
 - Added an `app_tester` actor profile using `xai/grok-4.5` with a global translation App. Credentials remain outside the fixture, and automated coverage substitutes a fake provider while verifying actor/Skill resolution, context suppression, SSE output, Web rendering, and transcript isolation.
 - Added visually hideable-but-accessible form labels and a flexible `spacer` layout component, then moved the translator's language selector above the editors and centered its action with `spacer → button → spacer`.
@@ -250,7 +261,7 @@ Cross-session development log. Newest first. Keep entries short: what shipped, w
 - Web transcript images now survive session reloads as display-only attachments, open in a large dimmed preview, and support previous/next navigation for multi-image messages. Composer attachment thumbnails use the same preview before submission; none of these display assets are injected into later model context.
 - Historical user prompts now expose hover-only copy/edit actions. Editing regenerates the selected user→assistant exchange from only its preceding context and replaces it in place, preserving all later exchanges and stable transcript order instead of truncating the session or appending a misleading new turn.
 - Added ChatGPT-style response and fenced-code copying, code-block language headers, 16 px transcript text, 14 px sidebar text, and a title-only thread header. Composer fixes prevent Enter during CJK IME composition from submitting and keep the caret/typed closing fence visible after pasting long JSON/code.
-- Session rows now expose Rename, Pin/Unpin, and confirmed Delete actions. Custom titles and pin state persist in a Marifold-owned companion table so a later Priest model save cannot overwrite them; pinned rows sort first without changing transcript recency or `--resume last`.
+- Session rows now expose Rename, Pin/Unpin, and confirmed Delete actions. Custom titles and pin state persist in a marifold-owned companion table so a later Priest model save cannot overwrite them; pinned rows sort first without changing transcript recency or `--resume last`.
 - Extended the service/core contract for display-only image replay, in-place historical exchange replacement, and sidebar display metadata. Updated the API documentation and added regression coverage across core, service, Web state, controller, input, transcript, and component flows.
 - Verified with the full workspace `typecheck && build && test` gate (496 tests: core 258, service 40, TUI 50, CLI 10, Web 138). The rebuilt loopback service passed `/health`; live visual browser automation was unavailable in this environment, while the interaction-level component tests passed.
 
@@ -263,8 +274,8 @@ Cross-session development log. Newest first. Keep entries short: what shipped, w
 ## 2026-07-22 — v0.47.0 — macOS-style Web application shell
 
 - Replaced the full-width management-style header with a desktop application frame: one primary sidebar and a contextual toolbar owned by the right workspace. The sidebar starts at 256 px, is pointer- and keyboard-resizable from 200 px to 40% of the workspace, and persists the user's width across Agent, Apps, and Settings. Agent/Apps switches only the right content and preserves the active profile/session context.
-- Refined that desktop frame after visual review: the thread toolbar is now a single title row with Agent/Apps at the trailing edge, the root Marifold identity is larger, and Connection opens as a centered modal sheet instead of an unrelated top-right popover.
-- The primary sidebar is a navigation stack instead of two simultaneous columns. Its root shows the Marifold identity and profiles; choosing a profile slides forward to its sessions, with an explicit back control and a large profile avatar above the Sessions heading instead of a small avatar in the back row. Connection, appearance, and Settings remain fixed at the bottom in both states.
+- Refined that desktop frame after visual review: the thread toolbar is now a single title row with Agent/Apps at the trailing edge, the root marifold identity is larger, and Connection opens as a centered modal sheet instead of an unrelated top-right popover.
+- The primary sidebar is a navigation stack instead of two simultaneous columns. Its root shows the marifold identity and profiles; choosing a profile slides forward to its sessions, with an explicit back control and a large profile avatar above the Sessions heading instead of a small avatar in the back row. Connection, appearance, and Settings remain fixed at the bottom in both states.
 - Settings now opens as a dedicated system surface and returns to the previous agent route; that route also survives Apps/Settings reloads for continuity. Windows below 900 px show an explicit desktop-width notice instead of an incomplete mobile layout.
 - The root Agent route now stays on the profile picker instead of automatically opening the configured default profile; explicit profile/session links still open their requested destination.
 - Web navigation now uses clean History API paths such as `/agent`, `/apps`, and `/config/profiles/default`; the service's existing extensionless-route fallback keeps direct loads working, while old `#/…` bookmarks migrate to their canonical clean URL on load.
@@ -290,7 +301,7 @@ Cross-session development log. Newest first. Keep entries short: what shipped, w
 
 - Fixed Fedora's Del (`ESC[3~`) in the TUI composer so it forward-deletes the character under the cursor; Backspace continues to delete the character before it, including the macOS `0x7f` byte.
 - Added canonical `/resume` with a recent-session picker showing conversation preview, recency, turn count, and the current session. The existing `/session` form remains a compatibility alias, and command aliases are now discoverable in autocomplete.
-- Copy-on-select remains terminal-owned by design: native terminal scrollback does not expose selection text or selection events to an inline Ink application, so Marifold keeps the deterministic `/copy` command rather than adding a non-portable toggle.
+- Copy-on-select remains terminal-owned by design: native terminal scrollback does not expose selection text or selection events to an inline Ink application, so marifold keeps the deterministic `/copy` command rather than adding a non-portable toggle.
 - Verified: full workspace `typecheck && build && test` gate green (439 tests: core 246, service 38, TUI 47, CLI 10, web 98). Real Fedora terminal smoke remains recommended for the Del escape sequence.
 
 ## 2026-07-16 — v0.45.0 — Lazy built-in skill-manager guide

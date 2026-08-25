@@ -1,6 +1,6 @@
-# Marifold
+# marifold
 
-Marifold is a local-first personal AI workspace for profiles, chats, skills, mini apps, workflows, and external agents.
+marifold is a local-first personal AI workspace for profiles, chats, skills, mini apps, workflows, and external agents.
 
 The primary surface is the **TUI** — an Ink/React terminal app launched by bare `marifold`. It's agent-first (with a `/chat` mode), rendering chat and agent-event streams with `/` commands, `$skill` invocation, an approval modal, `/btw` mid-run steering, a skills manager, a profile-aware header, and session resume (`--resume`). Skills (`marifold.skill.v0`, run via `$name`) execute as agentic tools: the skill body is authoritative instructions and, in agent mode, the model reads the skill's own bundled files (e.g. a `vars.toml`) to do its work. `marifold init` and `marifold provider add` walk you through choosing a provider/model interactively.
 
@@ -8,12 +8,12 @@ Underneath sits an approval-aware agent loop with native provider tool calling a
 
 For product direction and future scope, see [docs/vision.md](docs/vision.md) and [docs/roadmap.md](docs/roadmap.md). For the terminal app, see [docs/tui.md](docs/tui.md).
 
-## What Marifold Supports
+## What marifold Supports
 
 - Onboarding: `marifold init` writes config and interactively picks a provider/model (so a first run never points at a model you don't have); `marifold provider add` configures a provider (including pointing Ollama at a remote/Tailscale server); running `marifold` before `init` prints a clear hint instead of failing.
 - Session resume: `marifold --resume` (most recent) or `--resume <id>` replays the conversation; the in-TUI `/resume` picker resumes too (`/session` remains an alias). Agent/skill runs persist one clean turn (your invocation → the final answer, or a clear failed/cancelled outcome when no final answer was produced).
 - Skills as agentic tools: `$name [args]` resolves the selected profile/global skill directly, expands its variables, and runs its authoritative instructions without leaking earlier skill-turn history. The original `$name …` invocation remains in durable history. In agent mode, bundled files (e.g. `vars.toml` for `#name` fragments) are available through `read_file`; a skill's run mode follows the session unless it declares `mode:`.
-- Built-in skill-management guidance: ordinary agent prompts that mention skills receive the active profile and configured global skill paths, so TUI, CLI, service, and Web UI agent runs update Marifold skills instead of creating another tool's skill directory in the workspace.
+- Built-in skill-management guidance: ordinary agent prompts that mention skills receive the active profile and configured global skill paths, so TUI, CLI, service, and Web UI agent runs update marifold skills instead of creating another tool's skill directory in the workspace.
 - The TUI: launch with bare `marifold` (or `marifold --profile <name>`); agent mode by default, `/chat` for chat.
 - Input grammar: plain text → agent/chat, `/command` → app-executed action, `$skill [args]` → model-backed skill.
 - `/` commands: `/help` `/exit` `/new` `/agent` `/chat` `/model` `/profile` `/resume` `/think` `/clear` `/stop` `/btw` `/permissions` `/skills` `/install-skill` `/doctor`, plus `/read` `/image` `/attach-original` `/remember` `/forget` `/delete-memory`.
@@ -44,10 +44,10 @@ For product direction and future scope, see [docs/vision.md](docs/vision.md) and
 - Automatic control-block tool fallback (`<tool_call>` prompt blocks) for models without native tool support, plus `--tool-mode auto|native|control-block`.
 - Built-in agent tools: attachment-scoped `inspect_attachment`, `read_file`, `write_file`, isolated `shell_exec`, per-run `python_package_install`, `ask_profile` (one-shot delegation to another profile/model), and optional `ask_user` clarification checkpoints with single- or multi-select choices. The agent is instructed to ask only when essential information is missing; otherwise it proceeds with reasonable assumptions.
 - Per-profile approval policy per tool kind (`allow`/`ask`/`deny`), overriding a global `[agent]` default, with an Allow-once / Trust / Deny prompt, `--yes`, and unattended ask-degrades-to-deny behavior.
-- Capability-scoped run workspace: each run receives private `~/.marifold/runs/<run-id>/` runtime-state, input, work, output, temp, cache, and `.venv` directories; user-facing `~` and `$HOME` still mean the account home. Shell processes can read/write only the selected working folder, trusted folders, and the private run directories. The active profile and configured global skill directories are exposed as narrow read-only roots so skills can inspect their own bundled files without exposing other Marifold state. There is no unrestricted fallback when a platform sandbox is unavailable.
+- Capability-scoped run workspace: each run receives private `~/.marifold/runs/<run-id>/` runtime-state, input, work, output, temp, cache, and `.venv` directories; user-facing `~` and `$HOME` still mean the account home. Shell processes can read/write only the selected working folder, trusted folders, and the private run directories. The active profile and configured global skill directories are exposed as narrow read-only roots so skills can inspect their own bundled files without exposing other marifold state. There is no unrestricted fallback when a platform sandbox is unavailable.
 - Agent runs bypass profile memory: hidden memory control blocks are stripped and discarded, and task state is never promoted into profile memory.
 - Provider-backed agent eval through `pnpm agent-eval -- --provider ollama --model qwen3.5:9b`.
-- Marifold-branded CLI.
+- marifold-branded CLI.
 - One-shot request-response.
 - Interactive chat.
 - Chat session resume with `--resume` or `--resume last`.
@@ -58,7 +58,7 @@ For product direction and future scope, see [docs/vision.md](docs/vision.md) and
 - Basic provider/model configuration.
 - Saved provider/model options through `[models].options`.
 - Adding provider/model options from the CLI.
-- Removing saved provider/model options from Marifold config without deleting provider-owned model files.
+- Removing saved provider/model options from marifold config without deleting provider-owned model files.
 - Interactive provider/model selection with OAuth setup for GitHub Copilot and ChatGPT-style providers.
 - GitHub Copilot chat through `/chat/completions` and Responses API routing for models such as `gpt-5.4-mini`.
 - Live model listing for Ollama and OpenAI-compatible providers where the endpoint is reachable.
@@ -89,18 +89,18 @@ For product direction and future scope, see [docs/vision.md](docs/vision.md) and
 - Task API routes for objective, status, plan, events, summary, next action, and profile/session references.
 - Automated CLI command smoke checks through `pnpm command-test`.
 - Provider-backed memory eval script through `pnpm memory-eval -- --provider ollama --model gemma4:e4b`.
-- SQLite session continuity through `@priest-ai/core`, with Marifold-owned durable response timing, model, token, reasoning, cache, and estimated-cost metadata for chat and agent exchanges.
-- A thin Marifold runtime wrapper around `@priest-ai/core`.
+- SQLite session continuity through `@priest-ai/core`, with marifold-owned durable response timing, model, token, reasoning, cache, and estimated-cost metadata for chat and agent exchanges.
+- A thin marifold runtime wrapper around `@priest-ai/core`.
 
 ## Non-goals
 
-Marifold does not yet include semantic/vector retrieval, memory encryption, approval-aware effectful App actions, advanced App components, Workflow, Apple apps, external-agent aliases, or provider-owned model deletion.
+marifold does not yet include semantic/vector retrieval, memory encryption, approval-aware effectful App actions, advanced App components, Workflow, Apple apps, external-agent aliases, or provider-owned model deletion.
 
 Web search uses DuckDuckGo scraping by default, which requires no API key but can be blocked by DuckDuckGo's anomaly detection on some networks. Errors surface clearly in `/search` output and tool results, and the `SearchBackend` interface is pluggable for alternative engines.
 
 ## Setup
 
-Marifold requires Node.js 24 LTS. Install the published CLI globally; this one
+marifold requires Node.js 24 LTS. Install the published CLI globally; this one
 package brings the TUI, service, and bundled Web UI:
 
 ```bash
@@ -183,7 +183,7 @@ marifold agent --profile coder --max-iterations 10 "Count the .md files in this 
 marifold agent --tool-mode control-block --yes "Write a haiku into haiku.txt"
 
 marifold ask "Hello"
-marifold ask --profile default "Explain Marifold in one sentence."
+marifold ask --profile default "Explain marifold in one sentence."
 marifold ask --no-memories "Format this JSON"
 marifold ask --think true "Solve step by step."
 marifold ask --image ./photo.jpg "What is in this image?"
@@ -359,11 +359,11 @@ Supported provider adapter types:
 
 The `model add` picker is seeded from the priests provider registry: Ollama, llama.cpp, LM Studio, Rapid-MLX, OpenAI, Anthropic, Gemini, DeepSeek, Mistral, Groq, Perplexity, Cohere, Together AI, Alibaba Bailian, Alibaba Cloud, MiniMax, Kimi, OpenRouter, GitHub Copilot OAuth, ChatGPT OpenAI OAuth, and custom OpenAI-compatible endpoints.
 
-For `openai-compatible`, `base_url` may be the API root such as `https://api.openai.com`, or a versioned compatibility root such as `https://generativelanguage.googleapis.com/v1beta/openai`. Marifold builds the final `/chat/completions`, `/responses`, and `/models` URLs from it.
+For `openai-compatible`, `base_url` may be the API root such as `https://api.openai.com`, or a versioned compatibility root such as `https://generativelanguage.googleapis.com/v1beta/openai`. marifold builds the final `/chat/completions`, `/responses`, and `/models` URLs from it.
 
 `marifold init` accepts `--provider`, `--provider-type`, `--model`, `--base-url`, `--api-key-env`, `--profiles-dir`, `--sessions-db`, `--tasks-dir`, and `--force`. Non-Ollama providers require `--model`; custom OpenAI-compatible providers also require `--base-url`.
 
-`marifold service` and `marifold service start` start the same foreground Fastify HTTP service, bound to `127.0.0.1:32140` by default. The npm package serves its bundled Web UI at that address automatically; `[service].web_dir` or `--web-dir` can replace it with another built directory. `marifold service start --daemon` runs it in the background; `marifold service restart` gracefully replaces the running process in the same foreground or daemon mode and reuses its config path, host, port, working directory, logging, CORS origins, Web directory, and token source. `marifold status` reports the managed process and its loopback/private access mode, `marifold status --logs` includes its latest 100 log lines, and `marifold service stop` performs a graceful stop. State and the daemon log live under `~/.marifold/service/`, and stale state is cleaned automatically. Only one managed service instance can run at a time, including foreground starts. Restart metadata never contains the bearer token: a configured token or token-environment name is resolved again, while a service originally started with raw `--token` requires `marifold service restart --token <token>`. A service already running from a version without restart metadata must be stopped and started once before it can be restarted. `--host 0.0.0.0` listens on every interface, but Marifold always accepts only direct loopback, private LAN, link-local, IPv6 ULA, and Tailscale/CGNAT (`100.64.0.0/10`) peers; bearer authentication is optional and never widens that network boundary. A specific LAN or Tailscale bind address further narrows the interfaces exposed. Launch state from an older public-mode service is marked `legacy-public`; restarting it drops that obsolete mode and enforces private-network filtering. Ctrl+C/SIGTERM performs graceful cleanup and exits; shutdown is forced after five seconds or immediately on a second signal. A bind failure also closes the newly created runtime instead of leaving a background process alive. `--log` enables Fastify request logging: it prints in the foreground or is captured in the daemon log. The API surface is `/health` and `/v1/*` routes for app clients: sanitized config/provider/model views, profiles, memories, sessions, ask/chat, SSE streaming chat, task state, read-only schedules, live agent runs (`POST /v1/runs`, a resumable SSE `AgentEvent` stream, and clarification/approval/steer/cancel routes), and config-editing writes (`PATCH /v1/config` with CLI `config set` parity, per-profile settings/files/trusted-folders/memory-forget routes). The full wire contract is documented in [docs/service-api.md](docs/service-api.md).
+`marifold service` and `marifold service start` start the same foreground Fastify HTTP service, bound to `127.0.0.1:32140` by default. The npm package serves its bundled Web UI at that address automatically; `[service].web_dir` or `--web-dir` can replace it with another built directory. `marifold service start --daemon` runs it in the background; `marifold service restart` gracefully replaces the running process in the same foreground or daemon mode and reuses its config path, host, port, working directory, logging, CORS origins, Web directory, and token source. `marifold status` reports the managed process and its loopback/private access mode, `marifold status --logs` includes its latest 100 log lines, and `marifold service stop` performs a graceful stop. State and the daemon log live under `~/.marifold/service/`, and stale state is cleaned automatically. Only one managed service instance can run at a time, including foreground starts. Restart metadata never contains the bearer token: a configured token or token-environment name is resolved again, while a service originally started with raw `--token` requires `marifold service restart --token <token>`. A service already running from a version without restart metadata must be stopped and started once before it can be restarted. `--host 0.0.0.0` listens on every interface, but marifold always accepts only direct loopback, private LAN, link-local, IPv6 ULA, and Tailscale/CGNAT (`100.64.0.0/10`) peers; bearer authentication is optional and never widens that network boundary. A specific LAN or Tailscale bind address further narrows the interfaces exposed. Launch state from an older public-mode service is marked `legacy-public`; restarting it drops that obsolete mode and enforces private-network filtering. Ctrl+C/SIGTERM performs graceful cleanup and exits; shutdown is forced after five seconds or immediately on a second signal. A bind failure also closes the newly created runtime instead of leaving a background process alive. `--log` enables Fastify request logging: it prints in the foreground or is captured in the daemon log. The API surface is `/health` and `/v1/*` routes for app clients: sanitized config/provider/model views, profiles, memories, sessions, ask/chat, SSE streaming chat, task state, read-only schedules, live agent runs (`POST /v1/runs`, a resumable SSE `AgentEvent` stream, and clarification/approval/steer/cancel routes), and config-editing writes (`PATCH /v1/config` with CLI `config set` parity, per-profile settings/files/trusted-folders/memory-forget routes). The full wire contract is documented in [docs/service-api.md](docs/service-api.md).
 
 The optional `[service]` section configures API access for browser clients:
 
@@ -377,12 +377,12 @@ With no token resolved, auth is off; loopback and private-network access remain 
 
 ### Service token workflow
 
-The bearer token is an optional, user-chosen shared secret for Marifold's
-`/v1/*` API. It is not a model-provider token, Marifold does not issue one,
+The bearer token is an optional, user-chosen shared secret for marifold's
+`/v1/*` API. It is not a model-provider token, marifold does not issue one,
 and the API intentionally never reveals its value.
 
 On the machine that runs the service, generate a strong token and keep it in
-the environment used to start Marifold:
+the environment used to start marifold:
 
 ```sh
 openssl rand -hex 32
@@ -413,7 +413,7 @@ marifold service --host 0.0.0.0
 Then open `http://<service-host-ip>:32140`. The hosted Web UI and API are
 already same-origin. If a token is configured, enter it in the Web UI
 Connection sheet. Binding `0.0.0.0` opens the port on every active interface,
-but Marifold rejects source addresses outside its private ranges. Pass the
+but marifold rejects source addresses outside its private ranges. Pass the
 host's specific Tailscale or LAN address when narrower interface exposure is
 desired.
 
@@ -426,7 +426,7 @@ defense in depth. See
 security behavior.
 
 Alternatively, keep using a locally hosted Web UI and point it at another
-Marifold service: open **Connection**, choose **Add server**, name it, and enter
+marifold service: open **Connection**, choose **Add server**, name it, and enter
 the remote root URL (for example `http://<mac-mini-tailscale-ip>:32140`) plus
 that server's bearer token. Switching entries remounts the workspace against
 the selected service; profiles, sessions, routes, and drafts do not leak across
@@ -453,17 +453,17 @@ For development: `marifold service --cors-origin http://127.0.0.1:5173` + `pnpm 
 
 `marifold config export <file>` writes config, profile files, memory files, and optional sessions into a local JSON backup. Treat backups as sensitive if your config contains saved `api_key` or `oauth_token` values.
 
-`marifold model add` stores provider/model choices in `[models].options`. With no arguments it starts an interactive provider picker, prompts for OAuth/manual credentials for OAuth providers such as GitHub Copilot and ChatGPT when no usable credential exists, then shows live provider models when Marifold can list them. The ChatGPT picker queries the signed-in account's Codex model catalog and offers its current list-visible, API-supported models; if that catalog cannot be reached, Marifold falls back to its small known-model list and still permits a custom id. An expired saved access credential is not treated as usable, so setup can start a fresh sign-in when refresh fails. Saved credentials use local `[providers.<name>]` fields such as `api_key`, `oauth_token`, and `api_key_expires_at`; existing `api_key_env` configs still work and environment variables take precedence at runtime. The positional `marifold model add <provider> <model>` form remains available for scripts. `marifold provider <name> list` asks the provider for live model names when Marifold knows how to query that provider type.
+`marifold model add` stores provider/model choices in `[models].options`. With no arguments it starts an interactive provider picker, prompts for OAuth/manual credentials for OAuth providers such as GitHub Copilot and ChatGPT when no usable credential exists, then shows live provider models when marifold can list them. The ChatGPT picker queries the signed-in account's Codex model catalog and offers its current list-visible, API-supported models; if that catalog cannot be reached, marifold falls back to its small known-model list and still permits a custom id. An expired saved access credential is not treated as usable, so setup can start a fresh sign-in when refresh fails. Saved credentials use local `[providers.<name>]` fields such as `api_key`, `oauth_token`, and `api_key_expires_at`; existing `api_key_env` configs still work and environment variables take precedence at runtime. The positional `marifold model add <provider> <model>` form remains available for scripts. `marifold provider <name> list` asks the provider for live model names when marifold knows how to query that provider type.
 
-`marifold provider reauth <provider>` explicitly replaces saved credentials for the Marifold-managed OAuth providers `github_copilot`, `chatgpt`, and `xai`. It preserves the provider's proxy and other transport configuration plus every saved model choice. Run it on the machine hosting Marifold so browser/device callbacks return to the correct host.
+`marifold provider reauth <provider>` explicitly replaces saved credentials for the marifold-managed OAuth providers `github_copilot`, `chatgpt`, and `xai`. It preserves the provider's proxy and other transport configuration plus every saved model choice. Run it on the machine hosting marifold so browser/device callbacks return to the correct host.
 
-For GitHub Copilot, Marifold offers models compatible with the current chat adapters. Models such as `gpt-5.4` use `/chat/completions`; responses-only models such as `gpt-5.4-mini` use `/responses`.
+For GitHub Copilot, marifold offers models compatible with the current chat adapters. Models such as `gpt-5.4` use `/chat/completions`; responses-only models such as `gpt-5.4-mini` use `/responses`.
 
-For GitHub Copilot OAuth, Marifold refreshes the short-lived Copilot IDE token from the saved `oauth_token` before provider requests when the saved token is expired or close to expiry. Pasted Copilot IDE tokens without an `oauth_token` cannot be refreshed automatically.
+For GitHub Copilot OAuth, marifold refreshes the short-lived Copilot IDE token from the saved `oauth_token` before provider requests when the saved token is expired or close to expiry. Pasted Copilot IDE tokens without an `oauth_token` cannot be refreshed automatically.
 
-`marifold model rm <provider/model>` removes a saved model option from Marifold config. It does not delete provider-owned model files, pull caches, or remote model access.
+`marifold model rm <provider/model>` removes a saved model option from marifold config. It does not delete provider-owned model files, pull caches, or remote model access.
 
-Web Config can remove a non-default provider after typed confirmation. Removal deletes that provider's local configuration, saved credentials, and Marifold model options; it does not revoke a remote account or delete provider-owned models. Clear any profile model overrides that reference the provider first. OAuth provider pages expose **Re-authenticate…** with the exact host-local `marifold provider reauth <provider>` command.
+Web Config can remove a non-default provider after typed confirmation. Removal deletes that provider's local configuration, saved credentials, and marifold model options; it does not revoke a remote account or delete provider-owned models. Clear any profile model overrides that reference the provider first. OAuth provider pages expose **Re-authenticate…** with the exact host-local `marifold provider reauth <provider>` command.
 
 `marifold model validate` validates the default or profile-resolved provider/model. It checks configured provider access and uses live model lists for Ollama and OpenAI-compatible providers when reachable. `marifold model validate --all` validates every saved model option plus global and profile-specific defaults.
 
@@ -471,13 +471,13 @@ Web Config can remove a non-default provider after typed confirmation. Removal d
 
 `[memory].context_limit` caps the combined memory text injected into one provider request. Set it to `0` for unlimited memory injection. `[memory].size_limit` caps `memories/auto_short.jsonl`; low-priority short-term entries are trimmed first while priority `0` entries are preserved where possible.
 
-`[default].think` controls default thinking mode. Marifold sends Priest's provider-neutral reasoning configuration to Ollama, Anthropic, ChatGPT, and Responses-only GitHub Copilot models. The legacy raw `think` option remains only for `bailian` and `alibaba_cloud`. When a provider returns a safe reasoning summary, Marifold renders it separately from the answer; opaque provider continuation data is replayed to the provider but never exposed as text.
+`[default].think` controls default thinking mode. marifold sends Priest's provider-neutral reasoning configuration to Ollama, Anthropic, ChatGPT, and Responses-only GitHub Copilot models. The legacy raw `think` option remains only for `bailian` and `alibaba_cloud`. When a provider returns a safe reasoning summary, marifold renders it separately from the answer; opaque provider continuation data is replayed to the provider but never exposed as text.
 
 `[default]` also holds the conversation-context controls. `max_context_tokens` (budget that triggers summary compaction near ~80%; `0` disables it) and `session_context_turns` (hard cap on recent turns the model sees each turn — `"all"`/absent means no cap) are inherited by profiles and overridable per-profile in `profile.toml`. `compaction_keep_turns` (recent turns kept verbatim when compacting; defaults to 6) is global-only. See the `profile.toml` properties table below for the per-profile form.
 
 The `[web_search]` section is optional. `enabled = true` lets the model call `web_search` (and `read_file`, when read policy is `allow`) during chat turns through a bounded tool loop; the explicit `/search` command works regardless of this flag. Intermediate tool turns are turn-local — sessions store only your prompt and the final answer, and memory updates apply only from the final response.
 
-For ChatGPT OAuth (`marifold model add chatgpt`), Marifold refreshes the expired API credential from the saved refresh token before provider requests, persisting the rotated refresh token — matching the GitHub Copilot refresh behavior.
+For ChatGPT OAuth (`marifold model add chatgpt`), marifold refreshes the expired API credential from the saved refresh token before provider requests, persisting the rotated refresh token — matching the GitHub Copilot refresh behavior.
 
 The `[agent]` section is optional; defaults apply when it is absent. `[agent.approval]` sets per-tool-kind policy (`allow`, `ask`, or `deny`) for `read`, `write`, `shell`, `network`, and `delegate` tools. In interactive runs, `ask` prompts; in unattended runs (no approval handler), `ask` degrades to deny. `tool_mode = "auto"` uses native provider tool calling and falls back to prompt control blocks when the provider rejects tools.
 
@@ -491,7 +491,7 @@ Each agent run creates `~/.marifold/runs/<run-id>/` with isolated runtime-state,
 
 `marifold agent "<objective>"` runs a basic agent loop: the model optionally produces a short plan, iterates with tools (file read/write, shell, profile delegation), performs focused observable checks through those same tools when the task needs them, and writes a summary. It does not make a separate self-grading model call. Progress persists as ephemeral task state under `[paths].tasks_dir` — inspectable via the task service routes — and is never promoted into profile memory.
 
-The `ask_profile` tool lets the agent delegate a one-shot subtask to another profile (and that profile's provider/model), which is Marifold's minimal form of multi-model orchestration. Delegated requests are plain asks without tools, so delegation depth is structurally one.
+The `ask_profile` tool lets the agent delegate a one-shot subtask to another profile (and that profile's provider/model), which is marifold's minimal form of multi-model orchestration. Delegated requests are plain asks without tools, so delegation depth is structurally one.
 
 Cancel a run with Ctrl+C; the task is marked `cancelled`. Runs stopped at the iteration cap are marked `failed`. Tool denials and failed checks are returned to the model inside the normal loop so it can adapt or report the unresolved limitation.
 
@@ -508,7 +508,7 @@ Each run creates a task tagged `scheduled` and records `lastTaskId`/`lastResultS
 
 ## Profiles
 
-Marifold loads priests-style profile directories:
+marifold loads priests-style profile directories:
 
 ```text
 profiles/default/
@@ -555,12 +555,12 @@ session_context_turns = 5
 
 Memory is context, not authority. Human-authored profile files and the current user message outrank memory. Prompt injection receives compact grouped memory blocks rather than raw JSON.
 
-Marifold creates memory files for existing profiles when memory is first prepared, read, or written. When memory is on, Marifold asks the model to emit hidden memory control blocks for useful saves or forgets, strips those blocks from visible replies and session history, applies JSONL updates after the turn, applies conservative prompt fallback extraction, applies prompt-driven forgets, and trims low-priority short-term memory. Recall uses priority cutoffs: normal mode recalls priority `0..3`, thinking mode recalls priority `0..10`, and simple greetings recall only priority `0`.
+marifold creates memory files for existing profiles when memory is first prepared, read, or written. When memory is on, marifold asks the model to emit hidden memory control blocks for useful saves or forgets, strips those blocks from visible replies and session history, applies JSONL updates after the turn, applies conservative prompt fallback extraction, applies prompt-driven forgets, and trims low-priority short-term memory. Recall uses priority cutoffs: normal mode recalls priority `0..3`, thinking mode recalls priority `0..10`, and simple greetings recall only priority `0`.
 
-Marifold also reads legacy Markdown memory files in `memories/user.md`, `memories/preferences.md`, `memories/notes.md`, and `memories/auto_short.md` as read-only fallback prompt context.
+marifold also reads legacy Markdown memory files in `memories/user.md`, `memories/preferences.md`, `memories/notes.md`, and `memories/auto_short.md` as read-only fallback prompt context.
 
 ## Relationship to priest-typescript
 
-Marifold depends on `@priest-ai/core` for provider calls, streaming, native tool-call transport, context assembly, and SQLite-backed session continuity. Priest owns everything about talking to models; Marifold owns everything about acting on the world.
+marifold depends on `@priest-ai/core` for provider calls, streaming, native tool-call transport, context assembly, and SQLite-backed session continuity. Priest owns everything about talking to models; marifold owns everything about acting on the world.
 
-Marifold owns the product-level layer: CLI commands, Marifold config, priests-style profile directory loading, profile memory selection, concrete agent tools, approval policy, task state, and user-facing runtime behavior.
+marifold owns the product-level layer: CLI commands, marifold config, priests-style profile directory loading, profile memory selection, concrete agent tools, approval policy, task state, and user-facing runtime behavior.

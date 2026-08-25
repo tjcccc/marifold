@@ -1,4 +1,4 @@
-# Marifold Service API (v1)
+# marifold Service API (v1)
 
 The HTTP contract for `marifold service` — the local API every app client
 (Web UI first, desktop/mobile later) is built on. One service process powers
@@ -42,7 +42,7 @@ cors_origins = ["http://127.0.0.1:5173"]
 
 Failures return `401` with error code `UNAUTHORIZED`.
 
-The bearer token is a user-chosen shared secret, not a credential Marifold
+The bearer token is a user-chosen shared secret, not a credential marifold
 issues or exposes through the API. Generate and store it on the service host,
 preferably through `token_env`, then enter the same value in the client. The
 sanitized Config screen intentionally reports only whether a token is present.
@@ -71,7 +71,7 @@ This private service contract is suitable for a future native iOS client. An
 iPhone on the same LAN, or connected to the service host through Tailscale,
 uses the host's private address and can optionally send the bearer token.
 
-A Web UI hosted by another Marifold instance can instead save this endpoint as
+A Web UI hosted by another marifold instance can instead save this endpoint as
 a named Connection. That is a cross-origin browser request, so this service
 must allow the shell's exact origin in `cors_origins`. Native app clients send
 the bearer token but are not subject to browser CORS.
@@ -231,7 +231,7 @@ direct skill runs use it to retain the original `$skill …` invocation. With
 `isolated: true`, a chat turn does not replay the session to the model, but its
 clean user/assistant pair is still appended to that durable session.
 `profileContext: false` omits PROFILE/RULES/CUSTOM text while retaining
-request-scoped instructions and Marifold's minimal runtime framing. App routes
+request-scoped instructions and marifold's minimal runtime framing. App routes
 set this server-side from the definition; ordinary clients should not
 use it as a way to bypass profile policy accidentally.
 Embedded/URL image sources are retained beside their user turn so clients can

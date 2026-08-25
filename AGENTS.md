@@ -2,7 +2,7 @@
 
 ## Project
 
-Marifold is a local-first personal AI workspace for profiles, chats, skills, mini apps, workflows, and external agents.
+marifold is a local-first personal AI workspace for profiles, chats, skills, mini apps, workflows, and external agents.
 
 v0.35.x implements the TypeScript CLI + TUI foundation, priests-style structured profile memory, an approval-aware agent loop (native tool calling plus a control-block fallback), chat tool parity (web search, file reading, images), markdown skills, scheduled unattended runs, the Telegram channel, and a loopback-only Fastify service API with optional bearer auth, a CORS origin allowlist, and live agent-run routes (SSE `AgentEvent` stream, approval/steer/cancel POSTs) documented in `docs/service-api.md`.
 
@@ -24,7 +24,7 @@ v0.51.x resolves direct `$skill` invocations in core with history-isolated execu
 
 v0.52.x introduced the original App MVP. The current unreleased replacement is model-driven `marifold.skillapp.v1`: restricted, statically compiled `~/.marifold/apps/<name>/skillapp.ts` templates, app-local Skills, explicit models, service-owned form state, renderer-neutral layouts/results, and profile-free execution. The earlier profile-driven TOML runtime has been removed.
 
-v0.53.x enables bearer-protected non-loopback service binding for trusted LAN or tailnet access. The Web shell keeps named same-origin or remote Marifold servers with independent tokens and remounts its data views when the active connection changes.
+v0.53.x enables bearer-protected non-loopback service binding for trusted LAN or tailnet access. The Web shell keeps named same-origin or remote marifold servers with independent tokens and remounts its data views when the active connection changes.
 
 v0.54.x adds optional model-authored clarification questions through one renderer-neutral interaction contract, with batched standalone question interfaces in the TUI and Web UI. It also restores normal user-home semantics for `~` and `$HOME` while retaining capability-scoped run isolation.
 
@@ -54,12 +54,12 @@ The service defaults to loopback. Explicit non-loopback binds accept only direct
 - Agent runs must not write profile memory; task state stays ephemeral.
 - `apps/web` contains the browser UI — a second renderer of the same contracts the TUI renders. All data flows over the service HTTP API; `src/api/types.ts` is the only file that may import from `@marifold/core`, and only with `import type`.
 - Raw provider `api_key` values never cross the wire: service routes expose env-var names and boolean presence flags only; key values are edited via the CLI or config file.
-- Marifold is permanently a personal, single-owner BYOK/BYO-auth agent. Remote access connects that owner's devices; never add multi-tenant accounts, credential pooling, subscription/API relays, quota resale, or public-internet service exposure.
+- marifold is permanently a personal, single-owner BYOK/BYO-auth agent. Remote access connects that owner's devices; never add multi-tenant accounts, credential pooling, subscription/API relays, quota resale, or public-internet service exposure.
 - Do not expand SkillApp beyond the documented `marifold.skillapp.v1` contract or implement Workflow, Apple apps, external-agent aliases, effectful App actions, or provider-owned model deletion until that area is explicitly in scope.
 
 ## Versioning
 
-- Marifold uses Semantic Versioning. The authoritative version sites are the root `package.json`, `packages/cli/package.json`, `packages/core/package.json`, `packages/service/package.json`, `packages/tui/package.json`, `apps/web/package.json`, and the `.version(...)` value in `packages/cli/src/index.ts`; keep all seven synchronized.
+- marifold uses Semantic Versioning. The authoritative version sites are the root `package.json`, `packages/cli/package.json`, `packages/core/package.json`, `packages/service/package.json`, `packages/tui/package.json`, `apps/web/package.json`, and the `.version(...)` value in `packages/cli/src/index.ts`; keep all seven synchronized.
 - For a release checkpoint, update the matching `DEVLOG.md` heading and refresh `pnpm-lock.yaml` with pnpm when the manifest changes affect it.
 
 ## Validation

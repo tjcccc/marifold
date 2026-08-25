@@ -7,7 +7,7 @@ job. Their core operation is deliberately narrow:
 > explicitly registered model, normalize the response, and bind it to output
 > state.
 
-`skillapp.ts` is an authoring format, not an application runtime. Marifold
+`skillapp.ts` is an authoring format, not an application runtime. marifold
 statically inspects its TypeScript syntax and compiles it to renderer-neutral
 JSON. It never imports or executes the file. The Web UI renders that JSON now;
 a macOS client can render the same component and state contract with SwiftUI
@@ -99,7 +99,7 @@ trigger(translate, {
 export default defineSkillApp({
   app: {
     name: 'translator',
-    title: 'Marifold Translation',
+    title: 'marifold Translation',
     version: '1.0.0',
     description: 'Translate text with a dedicated local model.',
   },
@@ -172,7 +172,7 @@ bound to that state to refresh.
 
 Required inputs are derived from required, default-less variables in the
 operation's `SKILL.md`. When any such bound state is empty or whitespace,
-Marifold treats the operation as not ready: it cancels pending work, clears the
+marifold treats the operation as not ready: it cancels pending work, clears the
 bound output, returns an idle mutation with
 `reason: "missing_required_input"`, and disables buttons for that operation.
 This is ordinary form state, not a warning or error.
@@ -184,7 +184,7 @@ introducing arbitrary template code.
 ## Models, Skills, and operations
 
 `registerModel("provider/model", options)` splits on the first slash. The
-provider must already exist in Marifold configuration; the remainder is passed
+provider must already exist in marifold configuration; the remainder is passed
 as the provider's model ID, so model IDs may contain additional slashes.
 
 v1 model options contain `think` only. `memory`, `history`, and
@@ -268,7 +268,7 @@ normalize JSON, lists, files, or images while preserving this outer contract.
 
 ## Components
 
-SkillApp components are semantic, form-oriented controls with Marifold-owned
+SkillApp components are semantic, form-oriented controls with marifold-owned
 appearance. They do not accept HTML, CSS, classes, arbitrary styles, or event
 callbacks.
 

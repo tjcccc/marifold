@@ -1,6 +1,6 @@
 # @marifold/web
 
-The Marifold Web UI — a browser client over the service API (`docs/service-api.md`),
+The marifold Web UI — a browser client over the service API (`docs/service-api.md`),
 rendering the same contracts the TUI renders. Design reference:
 `docs/design/marifold-web-concept.dc.html` (marigold `#EAA221` system, light + dark).
 
@@ -43,10 +43,10 @@ token, set it in the app through the sidebar's Connection sheet.
 
 ## Server connections
 
-The Connection sheet keeps a named list of Marifold services. **This server**
+The Connection sheet keeps a named list of marifold services. **This server**
 uses the origin that delivered the Web UI; additional entries use an explicit
 HTTP(S) service root and their own bearer token. A candidate is saved and made
-active only after its `/v1/status` response identifies a compatible Marifold v1
+active only after its `/v1/status` response identifies a compatible marifold v1
 service. Switching servers remounts the data-owning screens and namespaces the
 last Agent route and composer drafts by server, preventing one server's
 profiles or sessions from remaining in another server's workspace.
@@ -71,7 +71,7 @@ override for a different built bundle.
 
 The composer accepts images, plain-text/code files, and modern Microsoft Office
 files: Word `.docx`, Excel `.xlsx`, and PowerPoint `.pptx`. Office files are
-OOXML ZIP archives; Marifold opens them locally in the browser, extracts text
+OOXML ZIP archives; marifold opens them locally in the browser, extracts text
 with useful paragraph/slide/sheet structure, and inlines that text into the model
 prompt. In chat mode the original binary stays in the browser. In agent mode it
 is additionally staged by the local service as a read-only file in the private
@@ -90,7 +90,7 @@ the original `$skill …` text in the transcript.
 The Apps view renders global `~/.marifold/apps/<name>/skillapp.ts` bundles from
 the service's normalized JSON contract. Agent and Apps share one persistent
 desktop shell: switching tabs changes only the sidebar catalog body and
-right-pane content, preserving the Marifold brand, system footer, sidebar
+right-pane content, preserving the marifold brand, system footer, sidebar
 width/visibility, and header controls. Apps renders no profile/session list,
 transcript, or composer. It supports semantic row/column form layouts,
 service-owned state, direct buttons, and debounced latest-wins operations over
@@ -121,7 +121,7 @@ touching provider-owned models or remote accounts. OAuth provider pages expose
 a **Re-authenticate…** dialog with a copyable
 `marifold provider reauth <provider>` command. The command runs on the
 service host because a remotely forwarded browser's loopback callback points at
-the client machine, not the Mac hosting Marifold.
+the client machine, not the Mac hosting marifold.
 
 Completed chat and agent responses show a shared time/token/reasoning/cost
 footer. The service persists those content-free metrics by session and stable

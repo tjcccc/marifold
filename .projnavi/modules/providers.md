@@ -1,6 +1,6 @@
 # Providers / priest boundary Module
 
-Marifold talks to models only through `@priest-ai/core`. The one provider marifold implements itself is the OpenAI-compatible adapter, because of Copilot's Responses API.
+marifold talks to models only through `@priest-ai/core`. The one provider marifold implements itself is the OpenAI-compatible adapter, because of Copilot's Responses API.
 
 Use this note for: provider routing, GitHub Copilot, the Responses API path, tool wire-format mapping, credential refresh, or the provider registry.
 
