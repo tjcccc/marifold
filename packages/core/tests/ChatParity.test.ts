@@ -334,7 +334,13 @@ describe('chat tool loop', () => {
     }));
 
     const config = baseConfig(dir, {
-      default: { provider: 'chatgpt', model: 'gpt-5.6-sol', profile: 'default', think: false },
+      default: {
+        provider: 'chatgpt',
+        model: 'gpt-5.6-sol',
+        profile: 'default',
+        think: false,
+        maxOutputTokens: 256,
+      },
       models: { options: ['chatgpt/gpt-5.6-sol'] },
       providers: {
         chatgpt: {
@@ -352,6 +358,7 @@ describe('chat tool loop', () => {
         memories: false,
       }))).toBe('Current answer.');
       expect(bodies[0].tools).toEqual([{ type: 'web_search' }]);
+      expect(bodies[0]).not.toHaveProperty('max_output_tokens');
       expect(JSON.stringify(bodies[0].input)).toContain('Provider-hosted web search is available');
     } finally {
       runtime.close();

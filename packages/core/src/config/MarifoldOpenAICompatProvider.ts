@@ -184,6 +184,11 @@ export class MarifoldOpenAICompatProvider implements ProviderAdapter {
     const nativeWebSearch = providerOptions[NATIVE_WEB_SEARCH_COMPAT_OPTION] === true;
     delete providerOptions['think'];
     delete providerOptions[NATIVE_WEB_SEARCH_COMPAT_OPTION];
+    // The public OpenAI Responses API accepts max_output_tokens, but the
+    // ChatGPT subscription Codex backend rejects it as an unsupported field.
+    // Keep the limit for Copilot/standard Responses routes and omit it only at
+    // this subscription-specific transport boundary.
+    if (this.options.providerName === 'chatgpt') delete providerOptions['max_output_tokens'];
 
     // Priest 3.1 forwards providerTools and combines them with function tools.
     // Keep Marifold releases built against 3.0.x functional until that SDK is
@@ -204,6 +209,9 @@ export class MarifoldOpenAICompatProvider implements ProviderAdapter {
     }
     return {
       ...config,
+      maxOutputTokens: this.options.providerName === 'chatgpt'
+        ? undefined
+        : config.maxOutputTokens,
       reasoning: config.reasoning ?? (legacyThink === true
         ? { enabled: true, effort: 'high' }
         : undefined),

@@ -2,6 +2,18 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-08-26 — v0.62.0 — npm self-update and ChatGPT output compatibility
+
+- Added `marifold update` as a direct, cross-platform wrapper around
+  `npm install --global marifold@latest`, with normal CLI error handling and a
+  service-restart reminder.
+- Omitted `max_output_tokens` only for the ChatGPT subscription Codex backend,
+  which rejects the public Responses field, while preserving the configured
+  limit for standard Responses and GitHub Copilot routes.
+- Verified core/CLI typecheck + build, all 316 core tests, all 26 CLI tests,
+  and 129 command checks; documented both behaviors.
+- Version 0.61.0 → 0.62.0 across all packages + CLI `.version`.
+
 ## 2026-08-26 — v0.61.0 — Service access, provider onboarding, and native search
 
 - Made foreground, daemon, and status output show usable loopback/private entry

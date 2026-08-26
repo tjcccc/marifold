@@ -108,6 +108,15 @@ npm install -g marifold
 marifold init
 ```
 
+Update an npm-installed copy to the package on npm's `latest` dist-tag:
+
+```bash
+marifold update
+```
+
+This is equivalent to `npm install --global marifold@latest`. Restart a running
+service afterward so its background process uses the newly installed version.
+
 Run `marifold` for the TUI, or start the service and open the Web UI at
 `http://127.0.0.1:32140`:
 
@@ -260,6 +269,8 @@ marifold status --logs
 marifold service stop
 marifold service --host 127.0.0.1 --port 32140
 marifold service --host 0.0.0.0
+
+marifold update
 ```
 
 Profile names are stable filesystem- and URL-safe identifiers: use ASCII
@@ -478,7 +489,7 @@ Web Config can remove a non-default provider after typed confirmation. Removal d
 
 The `[web_search]` section is optional and configures only Marifold's fallback search. A model/provider with hosted search uses that capability first even when `enabled = false`; ChatGPT Responses is the initial supported route. Otherwise, `enabled = true` exposes Marifold's `web_search` tool (and `read_file`, when read policy is `allow`) through a bounded tool loop. When neither hosted nor fallback search is available, the model is explicitly instructed to say it cannot access web search instead of implying that it searched. The agent `network` policy can still disable both paths; unattended runs expose hosted search only when their effective network policy is `allow`. Provider-hosted search is part of the model request and does not emit Marifold's per-search approval event. The explicit `/search` command works regardless of this flag. Intermediate caller-tool turns are turn-local — sessions store only your prompt and the final answer, and memory updates apply only from the final response.
 
-For ChatGPT OAuth (`marifold model add chatgpt`), marifold refreshes the expired API credential from the saved refresh token before provider requests, persisting the rotated refresh token — matching the GitHub Copilot refresh behavior.
+For ChatGPT OAuth (`marifold model add chatgpt`), marifold refreshes the expired API credential from the saved refresh token before provider requests, persisting the rotated refresh token — matching the GitHub Copilot refresh behavior. The ChatGPT subscription Codex backend rejects the public Responses `max_output_tokens` field, so marifold omits `[default].max_output_tokens` on that route while preserving it for providers that support it.
 
 The `[agent]` section is optional; defaults apply when it is absent. `[agent.approval]` sets per-tool-kind policy (`allow`, `ask`, or `deny`) for `read`, `write`, `shell`, `network`, and `delegate` tools. In interactive runs, `ask` prompts; in unattended runs (no approval handler), `ask` degrades to deny. `tool_mode = "auto"` uses native provider tool calling and falls back to prompt control blocks when the provider rejects tools.
 
