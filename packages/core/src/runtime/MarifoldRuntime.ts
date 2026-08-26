@@ -5,7 +5,9 @@ import { buildHistoryContext } from '../agent/AgentHistory';
 import { ApprovalMode, MarifoldAgentConfig, ToolKind, resolveAgentConfig } from '../agent/ApprovalPolicy';
 import { DelegateTool } from '../agent/tools/DelegateTool';
 import { PythonPackageTool } from '../agent/tools/PythonPackageTool';
+import { ReadAttachmentTool } from '../agent/tools/ReadAttachmentTool';
 import { ReadFileTool } from '../agent/tools/ReadFileTool';
+import { SearchAttachmentTool } from '../agent/tools/SearchAttachmentTool';
 import { ShellExecTool } from '../agent/tools/ShellExecTool';
 import { WebSearchTool } from '../agent/tools/WebSearchTool';
 import { AskUserTool } from '../agent/tools/AskUserTool';
@@ -841,6 +843,8 @@ export class MarifoldRuntime {
     const registry = new ToolRegistry();
     registry.register(new AskUserTool());
     registry.register(new InspectAttachmentTool());
+    registry.register(new ReadAttachmentTool());
+    registry.register(new SearchAttachmentTool());
     registry.register(new ReadFileTool());
     registry.register(new WriteFileTool());
     registry.register(new ShellExecTool());

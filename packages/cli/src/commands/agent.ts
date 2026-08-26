@@ -118,6 +118,9 @@ function renderAgentEvent(event: AgentEvent, style: TerminalStyle): void {
     case 'tool_result':
       process.stdout.write(`${event.isError ? style.red(`tool! ${event.summary}`) : style.dim(`tool< ${event.summary}`)}\n`);
       break;
+    case 'artifact':
+      process.stdout.write(`${style.bold('file:')} ${event.artifact.name} (${formatBytes(event.artifact.size)})\n`);
+      break;
     case 'verification':
       process.stdout.write(`${event.passed ? style.dim(`verified: ${event.notes}`) : style.yellow(`not verified: ${event.notes}`)}\n`);
       break;
@@ -128,6 +131,12 @@ function renderAgentEvent(event: AgentEvent, style: TerminalStyle): void {
       process.stdout.write(`${style.bold(`done: ${event.status}`)}${event.summary ? `\n${event.summary}` : ''}\n`);
       break;
   }
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KiB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MiB`;
 }
 
 function parsePositiveInteger(value: string): number {

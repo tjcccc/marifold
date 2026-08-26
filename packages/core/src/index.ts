@@ -36,6 +36,24 @@ export type {
 } from './agent/ToolRegistry';
 export { AskUserTool } from './agent/tools/AskUserTool';
 export { InspectAttachmentTool } from './agent/tools/InspectAttachmentTool';
+export { ReadAttachmentTool } from './agent/tools/ReadAttachmentTool';
+export { SearchAttachmentTool } from './agent/tools/SearchAttachmentTool';
+export {
+  ATTACHMENT_PREVIEW_CHARS,
+  DEFAULT_ATTACHMENT_READ_CHARS,
+  MAX_ATTACHMENT_READ_CHARS,
+  DEFAULT_ATTACHMENT_SEARCH_RESULTS,
+  MAX_ATTACHMENT_SEARCH_RESULTS,
+  AttachmentResource,
+  formatAttachmentSearch,
+  isTextAttachment,
+} from './agent/AttachmentResources';
+export type {
+  AttachmentInspection,
+  AttachmentReadResult,
+  AttachmentSearchMatch,
+  AttachmentSearchResult,
+} from './agent/AttachmentResources';
 export { DelegateTool } from './agent/tools/DelegateTool';
 export type { DelegateAskRequest, DelegateAskResult, DelegateToolDeps } from './agent/tools/DelegateTool';
 export { PythonPackageTool } from './agent/tools/PythonPackageTool';
@@ -76,6 +94,13 @@ export type {
   StagedRunAttachment,
   StagedRunFile,
 } from './agent/RunWorkspace';
+export {
+  MAX_RUN_ARTIFACTS,
+  MAX_RUN_ARTIFACT_BYTES,
+  listRunArtifacts,
+  resolveRunArtifact,
+} from './agent/RunArtifacts';
+export type { RunArtifact, ResolvedRunArtifact } from './agent/RunArtifacts';
 export { DuckDuckGoBackend } from './search/DuckDuckGoBackend';
 export { FirecrawlBackend } from './search/FirecrawlBackend';
 export type { FirecrawlBackendOptions } from './search/FirecrawlBackend';

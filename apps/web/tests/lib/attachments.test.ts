@@ -9,6 +9,7 @@ import {
   capViolation,
   classifyFile,
   inlineTextAttachments,
+  modelPromptWithAttachments,
   optimizeBrowserImage,
   prepareFiles,
   splitInlineTextAttachments,
@@ -203,6 +204,13 @@ describe('inlineTextAttachments', () => {
 
   it('returns the prompt untouched without text files', () => {
     expect(inlineTextAttachments('Just this.', [])).toBe('Just this.');
+  });
+
+  it('keeps readable file contents out of Agent model prompts while Chat inlines them', () => {
+    const files = [{ name: 'large.csv', content: 'name,total\nNorth,42' }];
+
+    expect(modelPromptWithAttachments('Join these files.', files, 'agent')).toBe('Join these files.');
+    expect(modelPromptWithAttachments('Join these files.', files, 'chat')).toContain('North,42');
   });
 
   it('round-trips multiple attachments without exposing their content in the display prompt', () => {

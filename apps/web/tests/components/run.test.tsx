@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 // Auto-cleanup hooks into vitest globals, which this workspace doesn't enable.
 afterEach(cleanup);
 import type { RunApprovalAction } from '../../src/api/types';
+import type { ApiClient } from '../../src/api/client';
 import { ResizableSidebar } from '../../src/components/ResizableSidebar';
 import { SidebarSystemFooter } from '../../src/components/SidebarChrome';
 import type { RunCardState } from '../../src/state/thread';
@@ -31,6 +32,7 @@ function cardFixture(partial: Partial<RunCardState> = {}): RunCardState {
     steering: ['keep it under one page'],
     denials: [],
     errors: [],
+    artifacts: [],
     collapsed: false,
     ...partial,
     inputResponses: partial.inputResponses ?? [],
@@ -46,6 +48,29 @@ describe('RunCard', () => {
     expect(screen.getByText('Guidance applied — “keep it under one page”')).toBeTruthy();
     fireEvent.click(screen.getByText('Cancel'));
     expect(onCancel).toHaveBeenCalledOnce();
+  });
+
+  it('downloads generated artifacts through the authenticated API client', async () => {
+    const blob = vi.fn(async () => new Blob(['report'], { type: 'application/pdf' }));
+    const client = { blob } as unknown as ApiClient;
+    const createObjectURL = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:report');
+    const revokeObjectURL = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+    const run = cardFixture({
+      status: 'completed',
+      collapsed: true,
+      artifacts: [{ id: 'artifact_1', name: 'reports/report.pdf', mediaType: 'application/pdf', size: 6 }],
+    });
+
+    render(<RunCard client={client} run={run} onCancel={() => {}} onAnswer={() => {}} onToggle={() => {}} />);
+    expect(screen.getByRole('button', { name: /Download report\.pdf/ })).toBeTruthy();
+    expect(screen.queryByText('Guidance applied — “keep it under one page”')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /report\.pdf/ }));
+
+    await waitFor(() => expect(blob).toHaveBeenCalledWith('/v1/runs/run_1/artifacts/artifact_1'));
+    expect(createObjectURL).toHaveBeenCalled();
+    expect(click).toHaveBeenCalled();
+    await waitFor(() => expect(revokeObjectURL).toHaveBeenCalledWith('blob:report'));
   });
 
   it('raises the approval sheet and dispatches each action', () => {
@@ -627,6 +652,64 @@ describe('ThreadView', () => {
     expect(screen.getByText('Checking the skill files.').closest('[data-run-phase="progress"]')).toBeTruthy();
     expect(screen.getByText('The final prompt.').closest('[data-run-phase="final"]')).toBeTruthy();
     expect(screen.getAllByText('2s · 512 tokens')).toHaveLength(1);
+  });
+
+  it('resolves model-authored sandbox links through the same-run artifact API', async () => {
+    const blob = vi.fn(async () => new Blob(['workbook']));
+    const client = { blob } as unknown as ApiClient;
+    const createObjectURL = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:workbook');
+    const revokeObjectURL = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+    const artifact = {
+      id: 'artifact_1',
+      name: 'reports/joined.xlsx',
+      mediaType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      size: 8,
+    };
+    render(
+      <ThreadView
+        client={client}
+        items={[
+          { id: 'run', kind: 'run', run: cardFixture({ status: 'completed', collapsed: true, artifacts: [artifact] }) },
+          {
+            id: 'answer',
+            kind: 'assistant',
+            runId: 'run_1',
+            runPhase: 'final',
+            markdown: '[Download workbook](sandbox:/Users/me/.marifold/runs/run_1/output/reports/joined.xlsx)',
+          },
+        ]}
+        onCancelRun={() => {}}
+        onAnswerApproval={() => {}}
+        onToggleRun={() => {}}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Download workbook' }));
+    await waitFor(() => expect(blob).toHaveBeenCalledWith('/v1/runs/run_1/artifacts/artifact_1'));
+    expect(createObjectURL).toHaveBeenCalled();
+    expect(click).toHaveBeenCalled();
+    await waitFor(() => expect(revokeObjectURL).toHaveBeenCalledWith('blob:workbook'));
+    expect(screen.queryByText(/sandbox:\//)).toBeNull();
+  });
+
+  it('keeps unmatched sandbox targets inert and hides their host paths', () => {
+    render(
+      <ThreadView
+        items={[{
+          id: 'answer',
+          kind: 'assistant',
+          markdown: '[Private file](sandbox:/Users/me/private.txt)',
+        }]}
+        onCancelRun={() => {}}
+        onAnswerApproval={() => {}}
+        onToggleRun={() => {}}
+      />,
+    );
+
+    expect(screen.getByText('Private file')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Private file' })).toBeNull();
+    expect(screen.queryByText(/Users\/me/)).toBeNull();
   });
 
   it('renders assistant pipe tables as semantic HTML tables', () => {

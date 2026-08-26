@@ -512,6 +512,42 @@ Transform {{text}} into the final prompt.
     }
   });
 
+  it('streams generated artifacts and serves them through the authenticated run route', async () => {
+    stubProvider([
+      toolCall('shell_exec', { command: 'printf generated > "$MARIFOLD_OUTPUT_DIR/report.txt"' }),
+      'Created the report.',
+    ]);
+    const { server, base } = await startServer();
+    try {
+      const { run } = await (await postJson(base, '/v1/runs', {
+        objective: 'Create a report file.',
+        cwd: tempDir(),
+      })).json();
+      const frames = sseFrames(await fetch(`${base}/v1/runs/${run.id}/events`));
+      const { matched: approval } = await pullFrames(frames, frame => frame.event === 'approval_request');
+      const requestId = (approval!.data as { request: { id: string } }).request.id;
+      await postJson(base, `/v1/runs/${run.id}/approvals/${requestId}`, { action: 'once' });
+
+      const { seen } = await pullFrames(frames, frame => frame.event === 'done');
+      const artifactFrame = seen.find(frame => frame.event === 'artifact');
+      expect(artifactFrame?.data).toMatchObject({
+        artifact: { name: 'report.txt', mediaType: 'text/plain; charset=utf-8', size: 9 },
+      });
+      const artifactId = (artifactFrame!.data as { artifact: { id: string } }).artifact.id;
+
+      const download = await fetch(`${base}/v1/runs/${run.id}/artifacts/${artifactId}`);
+      expect(download.status).toBe(200);
+      expect(download.headers.get('content-type')).toContain('text/plain');
+      expect(download.headers.get('content-disposition')).toContain('report.txt');
+      expect(await download.text()).toBe('generated');
+
+      const record = await (await fetch(`${base}/v1/runs/${run.id}`)).json();
+      expect(record.run.artifacts).toEqual([expect.objectContaining({ id: artifactId, name: 'report.txt' })]);
+    } finally {
+      await server.close();
+    }
+  });
+
   it('replays events with Last-Event-ID and in full for late subscribers', async () => {
     stubProvider(['All done.']);
     const { server, base } = await startServer();

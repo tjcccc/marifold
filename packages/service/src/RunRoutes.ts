@@ -1,3 +1,5 @@
+import * as fs from 'fs';
+import * as path from 'path';
 import { FastifyInstance, FastifyReply } from 'fastify';
 import { MarifoldError, RunApprovalAction, RunRegistry, RunStartInput } from '@marifold/core';
 import { SSE_HEADERS, startSseHeartbeat, writeSse, writeSseRetry } from './Sse';
@@ -34,6 +36,17 @@ export function registerRunRoutes(server: FastifyInstance, registry: RunRegistry
     ok: true,
     run: registry.require(request.params.id),
   }));
+
+  server.get<{ Params: { id: string; artifactId: string } }>(
+    '/v1/runs/:id/artifacts/:artifactId',
+    async (request, reply) => {
+      const artifact = registry.requireArtifact(request.params.id, request.params.artifactId);
+      reply.header('content-type', artifact.mediaType);
+      reply.header('content-length', String(artifact.size));
+      reply.header('content-disposition', attachmentDisposition(path.basename(artifact.name)));
+      return reply.send(fs.createReadStream(artifact.path));
+    },
+  );
 
   server.get<{ Params: { id: string }; Querystring: { after?: string; access_token?: string } }>(
     '/v1/runs/:id/events',
@@ -78,6 +91,11 @@ export function registerRunRoutes(server: FastifyInstance, registry: RunRegistry
     reply.status(202);
     return { ok: true, status };
   });
+}
+
+function attachmentDisposition(name: string): string {
+  const fallback = name.replace(/[^\x20-\x7E]/g, '_').replace(/["\\]/g, '_') || 'artifact';
+  return `attachment; filename="${fallback}"; filename*=UTF-8''${encodeURIComponent(name)}`;
 }
 
 async function streamRunEvents(

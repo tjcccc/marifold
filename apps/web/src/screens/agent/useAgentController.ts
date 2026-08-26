@@ -37,6 +37,7 @@ import {
   fileToBase64,
   inlineTextAttachments,
   MAX_TOTAL_BYTES,
+  modelPromptWithAttachments,
   officeKindForFile,
   prepareFiles,
   splitInlineTextAttachments,
@@ -204,7 +205,8 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
     });
   }, []);
 
-  /** Attach running runs of this session; banner recently finished ones. */
+  /** Attach running runs of this session; restore finished deliverables and
+   * banner other recently finished runs. */
   const catchUpRuns = useCallback(
     async (forSession: string) => {
       const runs = await listRuns(client);
@@ -699,7 +701,16 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
           inspectionText: item.content,
         };
       }));
-      const prompt = inlineTextAttachments(skill?.prompt ?? trimmed, textFiles);
+      // Chat has no local attachment tools, so readable files remain inline for
+      // parity. Agent runs stage every file behind bounded attachment tools;
+      // inlining the same document here would duplicate it in model context
+      // and defeats lazy handling for large Office/text inputs.
+      const prompt = modelPromptWithAttachments(skill?.prompt ?? trimmed, textFiles, mode);
+      // Keep the existing durable hidden attachment markers for historical
+      // edit/resend without putting them in the current Agent model request.
+      const durableUserTurn = mode === 'agent' && !skill && textFiles.length > 0
+        ? inlineTextAttachments(trimmed, textFiles)
+        : undefined;
       const bubbleAttachments: UserAttachment[] = pending.map(item => {
         if (item.kind === 'image') {
           return { kind: 'image', name: item.name, previewUrl: `data:${item.mediaType};base64,${item.data}` };
@@ -793,7 +804,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
             userTurn: skill.userTurn,
             instructions: skill.instructions,
             lean: true,
-          } : {}),
+          } : durableUserTurn ? { userTurn: durableUserTurn } : {}),
           profile: profileName,
           sessionId: sid,
           replaceUserTurnIndex: options.replaceUserTurnIndex,

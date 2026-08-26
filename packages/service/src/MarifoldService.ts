@@ -908,6 +908,7 @@ function statusCodeForError(error: MarifoldError): number {
     || error.code === 'SKILL_NOT_FOUND'
     || error.code === 'APP_NOT_FOUND'
     || error.code === 'RUN_NOT_FOUND'
+    || error.code === 'ARTIFACT_NOT_FOUND'
     || error.code === 'APPROVAL_NOT_FOUND'
     || error.code === 'USER_INPUT_NOT_FOUND'
   ) {

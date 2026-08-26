@@ -101,6 +101,15 @@
   text-decoration: underline;
 }
 
+.downloadLink {
+  display: inline;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+
 .quote {
   margin: 10px 0;
   padding: 2px 0 2px 14px;

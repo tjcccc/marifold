@@ -45,6 +45,12 @@ export function agentEventToItems(event: AgentEvent): TranscriptItemData[] {
         isError: event.isError,
         callId: event.callId,
       }];
+    case 'artifact':
+      return [{
+        kind: 'notice',
+        tone: 'info',
+        text: `Generated file: ${event.artifact.name} (${formatBytes(event.artifact.size)})`,
+      }];
     case 'approval_decision':
       // Approvals show in the modal; only surface denials in the transcript.
       return event.approved
@@ -76,4 +82,10 @@ export function agentEventToItems(event: AgentEvent): TranscriptItemData[] {
     default:
       return [];
   }
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KiB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MiB`;
 }

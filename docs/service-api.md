@@ -119,7 +119,7 @@ Every non-2xx response uses one envelope:
 | `NETWORK_FORBIDDEN` | 403 | Public source address rejected by private-network mode |
 | `ORIGIN_FORBIDDEN` | 403 | Disallowed browser origin or Host for the active bind scope |
 | `NOT_FOUND` | 404 | Unknown route |
-| `TASK_NOT_FOUND`, `SESSION_NOT_FOUND`, `SCHEDULE_NOT_FOUND`, `RUN_NOT_FOUND`, `APPROVAL_NOT_FOUND`, `USER_INPUT_NOT_FOUND`, `CONFIG_FILE_NOT_FOUND` | 404 | Unknown resource |
+| `TASK_NOT_FOUND`, `SESSION_NOT_FOUND`, `SCHEDULE_NOT_FOUND`, `RUN_NOT_FOUND`, `ARTIFACT_NOT_FOUND`, `APPROVAL_NOT_FOUND`, `USER_INPUT_NOT_FOUND`, `CONFIG_FILE_NOT_FOUND` | 404 | Unknown resource |
 | `PROVIDER_ERROR` | 502 | Upstream provider rejected the request or returned no usable response |
 | `RUN_LIMIT_EXCEEDED` | 429 | Too many active agent runs (default limit 5) |
 | anything else | 500 | Internal error |
@@ -364,10 +364,14 @@ accepts JSON bodies up to 25 MiB to make room for base64 payloads. Returns the *
 `files` contains original file bytes for agent tools, limited to 16 MiB
 aggregate with local/embedded images. Files are name-sanitized and staged
 read-only under the private run's `input/` directory. Optional
-`inspectionText` is a bounded (256 KiB) client-supplied preview for formats such
-as DOCX/XLSX/PPTX. The model receives an opaque attachment manifest;
-`inspect_attachment` returns image input, bounded text, or safe binary metadata
-and the run-scoped path, never arbitrary host-file access.
+`inspectionText` is a bounded (256 KiB) client-supplied readable view for
+formats such as DOCX/XLSX/PPTX. The model receives an opaque attachment
+manifest. `inspect_attachment` returns metadata, the authoritative run-scoped
+path, capabilities, and at most an 8k-character preview; `read_attachment`
+returns at most 20k characters from a selected offset and `search_attachment`
+returns at most 20 literal line matches. Complete-file transformations use
+local tools against the read-only path and write to `$MARIFOLD_OUTPUT_DIR`.
+The full document never needs to enter model context.
 
 For a resolved skill, `objective` carries the model-facing prompt,
 `instructions` carries the resolved body, and `userTurn` carries the original
@@ -408,10 +412,16 @@ the agent within those capabilities.
 | `GET /v1/runs` | All live + recently finished RunRecords, newest first |
 | `GET /v1/runs/:id` | One RunRecord (poll `pendingUserInputs` / `pendingApprovals` if not using SSE) |
 | `GET /v1/runs/:id/events` | Resumable SSE of AgentEvents (below) |
+| `GET /v1/runs/:id/artifacts/:artifactId` | Authenticated download for one regular file emitted from the run output directory. Returns `ARTIFACT_NOT_FOUND` after expiry or for an unknown ID |
 | `POST /v1/runs/:id/inputs/:requestId` | Submit every answer for one clarification checkpoint (below) |
 | `POST /v1/runs/:id/approvals/:requestId` | Answer an approval (below) |
 | `POST /v1/runs/:id/steer` `{ "text": "..." }` → 202 | Queue mid-run guidance; applied before the next model turn, echoed as a `steering` event |
 | `POST /v1/runs/:id/cancel` → 202 | Idempotent; returns current `status`. Unblocks a pending clarification or approval immediately; the run finishes `cancelled` |
+
+Web clients treat the `artifact` event as authoritative. A model-authored
+`sandbox:` Markdown target is only a presentation hint: it may resolve to an
+exact filename in the same run's artifact list, then download by opaque ID.
+Clients must never fetch or navigate directly to the host path in that target.
 
 #### The AgentEvent stream
 
@@ -443,6 +453,8 @@ core — the same contract the TUI renders):
   "answers": [{ "questionId": "style", "optionIds": ["apple", "material"],
                 "value": "Apple, Material" }] } }
 { "type": "tool_result", "callId": "call_0", "tool": "write_file", "summary": "wrote 12B to /tmp/x", "isError": false }
+{ "type": "artifact", "artifact": { "id": "8d1f...", "name": "report.xlsx",
+  "mediaType": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "size": 18432 } }
 { "type": "error", "code": "...", "message": "..." }
 { "type": "done",  "taskId": "task_x", "status": "completed", "summary": "...",
   "usage": { "inputTokens": 900, "outputTokens": 120, "totalTokens": 1020,

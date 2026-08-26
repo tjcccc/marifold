@@ -34,6 +34,10 @@ v0.58.x adds lazy, attachment-scoped agent inspection for images, readable docum
 
 v0.58.1 makes bearer authentication optional for private-network service access and removes the public-access override. Every non-loopback bind permanently filters direct peers and Host values to private LAN, link-local, Tailscale/CGNAT, and private IPv6 networks for single-owner access from personal devices, including a future iOS client.
 
+v0.61–v0.62.x add usable foreground/daemon service entry URLs, Web provider onboarding, native-first/fallback web search, `marifold update`, and ChatGPT subscription compatibility for unsupported Responses output-token fields.
+
+v0.63.x keeps original uploads staged read-only and out of Agent prompts. `inspect_attachment`, `read_attachment`, and `search_attachment` expose bounded model views; complete document operations use isolated local programs against the staged path. Regular files under the run output directory become renderer-neutral artifacts and authenticated Web downloads. Preserve this provider-independent resource boundary for Office files, PDFs, ebooks, archives, and future formats.
+
 The service defaults to loopback. Explicit non-loopback binds accept only direct private LAN, link-local, IPv6 ULA, and Tailscale peers. Same-origin hosted Web access needs no CORS entry.
 
 ## Stack

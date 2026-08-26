@@ -21,6 +21,7 @@ export type MarifoldErrorCode =
   | 'APP_INVALID'
   | 'APP_NOT_FOUND'
   | 'RUN_NOT_FOUND'
+  | 'ARTIFACT_NOT_FOUND'
   | 'APPROVAL_NOT_FOUND'
   | 'USER_INPUT_NOT_FOUND'
   | 'RUN_LIMIT_EXCEEDED'
@@ -146,6 +147,14 @@ export class MarifoldError extends Error {
 
   static runNotFound(runId: string): MarifoldError {
     return new MarifoldError('RUN_NOT_FOUND', `Run not found: ${runId}`, { runId });
+  }
+
+  static artifactNotFound(runId: string, artifactId: string): MarifoldError {
+    return new MarifoldError(
+      'ARTIFACT_NOT_FOUND',
+      `Artifact not found: ${artifactId}`,
+      { runId, artifactId },
+    );
   }
 
   static approvalNotFound(requestId: string): MarifoldError {

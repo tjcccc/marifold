@@ -197,6 +197,7 @@ describe('threadReducer', () => {
         { type: 'tool_result', callId: 'c1', tool: 'read_file', summary: 'read 1.2KB', isError: false },
         { type: 'step', taskId: 'task_9', stepId: 's1', text: 'Read', status: 'completed' },
         { type: 'text', text: 'All done.', phase: 'final' },
+        { type: 'artifact', artifact: { id: 'artifact123', name: 'report.pdf', mediaType: 'application/pdf', size: 42 } },
         { type: 'done', taskId: 'task_9', status: 'completed', summary: 'Done', usage: { inputTokens: 10, outputTokens: 5 } },
       ]),
     );
@@ -206,12 +207,15 @@ describe('threadReducer', () => {
       status: 'completed',
       summary: 'Done',
       collapsed: true,
-      lastSeq: 9,
+      lastSeq: 10,
     });
     expect(run.rows).toEqual([
       { callId: 'c1', tool: 'read_file', kind: 'read', summary: 'read 1.2KB', phase: 'done', isError: false },
     ]);
     expect(run.plan?.[0].status).toBe('completed');
+    expect(run.artifacts).toEqual([
+      { id: 'artifact123', name: 'report.pdf', mediaType: 'application/pdf', size: 42 },
+    ]);
     // Progress commentary and the final answer stay distinct so renderers can
     // mute only the former. The previous progress cursor closes immediately.
     const prose = state.items.filter(i => i.kind === 'assistant');
@@ -360,6 +364,23 @@ describe('threadReducer', () => {
     expect(state.catchUp).toHaveLength(1); // dedup
     state = reduce(state, { type: 'dismiss_catch_up' });
     expect(state.catchUp).toEqual([]);
+  });
+
+  it('restores generated-file downloads immediately instead of hiding them in catch-up', () => {
+    const finished: RunRecord = {
+      ...record,
+      id: 'run_artifact',
+      status: 'completed',
+      artifacts: [{ id: 'artifact_1', name: 'empty.txt', mediaType: 'text/plain', size: 0 }],
+    };
+    const state = reduce(createThreadState(), { type: 'catch_up', runs: [finished] });
+
+    expect(state.catchUp).toEqual([]);
+    expect(card(state, 'run_artifact')).toMatchObject({
+      status: 'completed',
+      collapsed: true,
+      artifacts: finished.artifacts,
+    });
   });
 
   it('toggle_run_details flips collapsed', () => {

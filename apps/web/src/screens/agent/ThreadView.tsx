@@ -8,6 +8,7 @@ import type { PreviewImage } from '../../components/ImagePreviewDialog';
 import type { RunApprovalAction, UserInputSubmission } from '../../api/types';
 import { splitLeading } from '../../lib/commandSyntax';
 import { formatCostUSD, formatDuration, formatRunDuration, formatTokens } from '../../lib/format';
+import { artifactForSandboxHref, downloadRunArtifact } from '../../lib/runArtifacts';
 import type { ResponseMetaState, RunCardState, ThreadItem, UserAttachment } from '../../state/thread';
 import { hasRunActivity, isTrivialRun } from '../../state/thread';
 import { RunCard } from './RunCard';
@@ -229,7 +230,7 @@ function ThreadItemView({
       const copyable = !secondary && !item.streaming && item.markdown.trim().length > 0;
       return (
         <div className={styles.assistant} data-run-phase={item.runPhase}>
-          <Markdown source={item.markdown} muted={secondary} />
+          <AssistantMarkdown source={item.markdown} muted={secondary} run={run} client={client} />
           {item.streaming ? <span className={styles.cursor} aria-hidden /> : null}
           {meta || copyable ? (
             <div className={styles.responseFooter}>
@@ -279,6 +280,7 @@ function ThreadItemView({
       }
       return (
         <RunCard
+          client={client}
           run={run}
           onCancel={() => onCancelRun(run.runId)}
           onAnswer={(requestId, action) => onAnswerApproval(run.runId, requestId, action)}
@@ -288,6 +290,37 @@ function ThreadItemView({
       );
     }
   }
+}
+
+function AssistantMarkdown({
+  source,
+  muted,
+  run,
+  client,
+}: {
+  source: string;
+  muted: boolean;
+  run?: RunCardState;
+  client?: ApiClient;
+}) {
+  const [downloadError, setDownloadError] = useState<string>();
+  const resolveSandboxLink = (href: string): (() => void) | undefined => {
+    if (!run || !client) return undefined;
+    const artifact = artifactForSandboxHref(href, run.runId, run.artifacts);
+    if (!artifact) return undefined;
+    return () => {
+      setDownloadError(undefined);
+      void downloadRunArtifact(client, run.runId, artifact).catch(error => {
+        setDownloadError(error instanceof Error ? error.message : String(error));
+      });
+    };
+  };
+  return (
+    <>
+      <Markdown source={source} muted={muted} resolveSandboxLink={resolveSandboxLink} />
+      {downloadError ? <div className={styles.downloadError}>{downloadError}</div> : null}
+    </>
+  );
 }
 
 function officeAttachmentGlyph(kind: UserAttachment['officeKind']): string {

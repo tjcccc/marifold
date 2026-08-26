@@ -158,6 +158,17 @@ export function inlineTextAttachments(prompt: string, files: Array<{ name: strin
   return [prompt, ...blocks].join('\n\n');
 }
 
+/** Chat must inline readable files because it has no local attachment tools.
+ * Agent mode stages the same files and keeps their contents out of the model
+ * objective; attachment tools provide bounded views instead. */
+export function modelPromptWithAttachments(
+  prompt: string,
+  files: Array<{ name: string; content: string }>,
+  mode: 'chat' | 'agent',
+): string {
+  return mode === 'chat' ? inlineTextAttachments(prompt, files) : prompt;
+}
+
 export interface SplitInlineAttachments {
   prompt: string;
   files: Array<{ name: string; content: string }>;

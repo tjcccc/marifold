@@ -6,7 +6,9 @@ import { AskUserTool } from '../src/agent/tools/AskUserTool';
 import { DelegateTool } from '../src/agent/tools/DelegateTool';
 import { InspectAttachmentTool } from '../src/agent/tools/InspectAttachmentTool';
 import { PythonPackageTool } from '../src/agent/tools/PythonPackageTool';
+import { ReadAttachmentTool } from '../src/agent/tools/ReadAttachmentTool';
 import { ReadFileTool } from '../src/agent/tools/ReadFileTool';
+import { SearchAttachmentTool } from '../src/agent/tools/SearchAttachmentTool';
 import { ShellExecTool } from '../src/agent/tools/ShellExecTool';
 import { WebSearchTool } from '../src/agent/tools/WebSearchTool';
 import { isInsideWorkspace, WriteFileTool } from '../src/agent/tools/WriteFileTool';
@@ -77,6 +79,8 @@ describe('ToolRegistry', () => {
     const tools = [
       new AskUserTool(),
       new InspectAttachmentTool(),
+      new ReadAttachmentTool(),
+      new SearchAttachmentTool(),
       new ReadFileTool(),
       new WriteFileTool(),
       new ShellExecTool(),
@@ -120,7 +124,7 @@ describe('InspectAttachmentTool', () => {
     expect(new InspectAttachmentTool().assessRisk()).toEqual({ escalate: false, trusted: true });
   });
 
-  it('returns bounded extracted document text and rejects unknown IDs', async () => {
+  it('returns a bounded document preview with the authoritative run path and rejects unknown IDs', async () => {
     const home = tempDir();
     const cwd = path.join(home, 'repo');
     fs.mkdirSync(cwd);
@@ -133,19 +137,57 @@ describe('InspectAttachmentTool', () => {
         name: 'budget.xlsx',
         mediaType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         data: Buffer.from('binary-workbook').toString('base64'),
-        inspectionText: 'Sheet: Budget\nA1: Revenue',
+        inspectionText: `Sheet: Budget\nA1: Revenue\n${'row data\n'.repeat(2_000)}`,
       }],
     });
     const tool = new InspectAttachmentTool();
-    const ctx: ToolExecutionContext = { cwd, outputLimit: 20, workspace };
+    const ctx: ToolExecutionContext = { cwd, outputLimit: 100000, workspace };
 
     const inspected = await tool.execute({ attachment_id: 'attachment-1' }, ctx);
     expect(inspected.content).toContain('Sheet');
-    expect(inspected.content).toContain('truncated');
+    expect(inspected.content).toContain(`Read-only run path: ${workspace.attachments[0].path}`);
+    expect(inspected.content).toContain('preview bounded');
+    expect(inspected.content.length).toBeLessThan(10_000);
 
     const missing = await tool.execute({ attachment_id: '../../etc/passwd' }, ctx);
     expect(missing.isError).toBe(true);
     expect(missing.content).toContain('Available attachment IDs: attachment-1');
+  });
+
+  it('reads bounded ranges and searches readable attachment views', async () => {
+    const home = tempDir();
+    const cwd = path.join(home, 'repo');
+    fs.mkdirSync(cwd);
+    const workspace = createRunWorkspace({
+      id: 'tool_attachment_resource',
+      cwd,
+      runsDir: path.join(home, '.marifold', 'runs'),
+      userHome: home,
+      files: [{
+        name: 'report.pdf',
+        mediaType: 'application/pdf',
+        data: Buffer.from('pdf').toString('base64'),
+        inspectionText: 'Chapter 1\nAlpha\nChapter 2\nNeedle result\nChapter 3',
+      }],
+    });
+    const ctx: ToolExecutionContext = { cwd, outputLimit: 100000, workspace };
+
+    const read = await new ReadAttachmentTool().execute(
+      { attachment_id: 'attachment-1', start: 10, max_chars: 12 },
+      ctx,
+    );
+    expect(read.isError).toBeFalsy();
+    expect(read.content).toContain('Characters 10-22');
+    expect(read.content).toContain('[more available; continue with start=22]');
+
+    const search = await new SearchAttachmentTool().execute(
+      { attachment_id: 'attachment-1', query: 'needle' },
+      ctx,
+    );
+    expect(search.isError).toBeFalsy();
+    expect(search.content).toContain('Line 4: Needle result');
+    expect(new ReadAttachmentTool().assessRisk()).toEqual({ escalate: false, trusted: true });
+    expect(new SearchAttachmentTool().assessRisk()).toEqual({ escalate: false, trusted: true });
   });
 });
 

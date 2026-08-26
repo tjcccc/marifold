@@ -168,6 +168,54 @@
   white-space: nowrap;
 }
 
+.artifacts {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 2px;
+}
+
+.artifact {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 9px;
+  border: 1px solid var(--separator);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  color: var(--brand-text);
+  font-size: 12.5px;
+  text-align: left;
+}
+
+.artifact:hover:not(:disabled) {
+  border-color: var(--brand-fill);
+}
+
+.artifact:disabled {
+  opacity: 0.55;
+}
+
+.artifactName {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-1);
+}
+
+.artifactAction {
+  color: var(--brand-text);
+  font-weight: 600;
+}
+
+.artifactSize {
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+
 .steeringPill {
   align-self: flex-start;
   font-size: 12px;

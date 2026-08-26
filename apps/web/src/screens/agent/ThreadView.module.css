@@ -221,6 +221,12 @@
   align-self: stretch;
 }
 
+.downloadError {
+  margin-top: 4px;
+  color: var(--danger);
+  font-size: 12px;
+}
+
 .cursor {
   display: inline-block;
   width: 7px;

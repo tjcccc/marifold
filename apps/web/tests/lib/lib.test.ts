@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { formatDuration, formatElapsed, formatRelativeTime, formatTokens } from '../../src/lib/format';
 import { formatPath, parseLegacyHash, parsePath } from '../../src/lib/route';
 import { parseInline, parseMarkdown } from '../../src/lib/markdown';
+import { artifactForSandboxHref } from '../../src/lib/runArtifacts';
 import { withPendingSession } from '../../src/lib/sessionSummaries';
 import { resolveEffectivePermissions } from '../../src/lib/permissions';
 
@@ -98,8 +99,8 @@ describe('markdown', () => {
     expect(blocks[4]).toMatchObject({ ordered: true });
   });
 
-  it('parses inline code, bold, italic, and http links only', () => {
-    const nodes = parseInline('mix `code` **bold** *em* [site](https://x.dev) [evil](javascript:alert(1))');
+  it('parses inline formatting, safe web links, and renderer-resolved sandbox links', () => {
+    const nodes = parseInline('mix `code` **bold** *em* [site](https://x.dev) [file](sandbox:/runs/run_1/output/report.xlsx) [evil](javascript:alert(1))');
     expect(nodes).toEqual([
       { type: 'text', text: 'mix ' },
       { type: 'code', text: 'code' },
@@ -109,6 +110,8 @@ describe('markdown', () => {
       { type: 'em', children: [{ type: 'text', text: 'em' }] },
       { type: 'text', text: ' ' },
       { type: 'link', href: 'https://x.dev', children: [{ type: 'text', text: 'site' }] },
+      { type: 'text', text: ' ' },
+      { type: 'link', href: 'sandbox:/runs/run_1/output/report.xlsx', children: [{ type: 'text', text: 'file' }] },
       { type: 'text', text: ' [evil](javascript:alert(1))' },
     ]);
   });
@@ -185,6 +188,28 @@ describe('markdown', () => {
     const blocks = parseMarkdown('| one | two |\n| -- | nope |\n| a | b |');
     expect(blocks).toHaveLength(1);
     expect(blocks[0].type).toBe('paragraph');
+  });
+});
+
+describe('sandbox artifact links', () => {
+  const artifacts = [{ id: 'artifact_1', name: 'reports/joined.xlsx', mediaType: 'application/octet-stream', size: 8 }];
+
+  it('matches only an exact artifact name published by the same run', () => {
+    expect(artifactForSandboxHref(
+      'sandbox:/Users/me/.marifold/runs/run_1/output/reports/joined.xlsx',
+      'run_1',
+      artifacts,
+    )).toEqual(artifacts[0]);
+    expect(artifactForSandboxHref(
+      'sandbox:/Users/me/.marifold/runs/run_2/output/reports/joined.xlsx',
+      'run_1',
+      artifacts,
+    )).toBeUndefined();
+    expect(artifactForSandboxHref(
+      'sandbox:/Users/me/.marifold/runs/run_1/output/reports/%2E%2E/private.txt',
+      'run_1',
+      artifacts,
+    )).toBeUndefined();
   });
 });
 

@@ -29,7 +29,8 @@ import {
   parseControlBlockCalls,
 } from './ControlBlockTools';
 import { createRunWorkspace, RunFileInput, RunWorkspace } from './RunWorkspace';
-import { ToolRegistry } from './ToolRegistry';
+import { listRunArtifacts } from './RunArtifacts';
+import { capToolOutput, ToolRegistry } from './ToolRegistry';
 import type { EffectfulAgentTool, ToolExecutionContext, UserInputAgentTool } from './ToolRegistry';
 import type { UserInputHandler } from './UserInput';
 import type { ResponseMetrics } from '../sessions/ResponseMetrics';
@@ -153,6 +154,11 @@ export interface AgentRunnerDeps {
 
 /** Char budget for the injected history window when no profile budget is set. */
 const HISTORY_BUDGET_DEFAULT_CHARS = 16000;
+/** Tool output is operational context, not a document transport. Bound each
+ * result and the accumulated turn-local exchange independently so several
+ * successful reads cannot overflow the next provider request. */
+const MODEL_TOOL_RESULT_MAX_CHARS = 24_000;
+const MODEL_TOOL_EXCHANGE_MAX_CHARS = 64_000;
 
 interface LoopState {
   mode: Exclude<AgentToolMode, 'auto'>;
@@ -398,7 +404,7 @@ export class AgentRunner {
           const message = response.error?.message ?? 'Provider call failed.';
           yield { type: 'error', code: response.error?.code ?? 'PROVIDER_ERROR', message };
           await persistSessionTurn(failedSessionOutcome(message), 'failed');
-          yield* this.finish(task.id, 'failed', undefined, 'Retry the run once the provider issue is resolved.', usage);
+          yield* this.finish(task.id, 'failed', undefined, 'Retry the run once the provider issue is resolved.', usage, workspace);
           return;
         }
 
@@ -439,7 +445,7 @@ export class AgentRunner {
           failedSessionOutcome(`Stopped at the iteration cap of ${maxIterations} before completing the objective.`),
           'failed',
         );
-        yield* this.finish(task.id, 'failed', 'Stopped at the iteration cap before completing the objective.', 'Re-run with a higher iteration cap or a narrower objective.', usage);
+        yield* this.finish(task.id, 'failed', 'Stopped at the iteration cap before completing the objective.', 'Re-run with a higher iteration cap or a narrower objective.', usage, workspace);
         return;
       }
 
@@ -452,18 +458,18 @@ export class AgentRunner {
       // self-grade unreliably — so it was pure token overhead. Real checks belong
       // in tools the agent runs inside the loop, not a final self-assessment.
       this.completePlanSteps(task.id, true);
-      yield* this.finish(task.id, 'completed', finalText, undefined, usage);
+      yield* this.finish(task.id, 'completed', finalText, undefined, usage, workspace);
     } catch (error) {
       if (error instanceof AbortedError || (options.signal?.aborted ?? false)) {
         this.deps.taskStore.appendEvent(task.id, { kind: 'note', message: 'Run cancelled by the user.' });
         await persistSessionTurn('Run cancelled before a final response was produced.', 'cancelled');
-        yield* this.finish(task.id, 'cancelled', undefined, 'Resume by starting a new run with the same objective.', usage);
+        yield* this.finish(task.id, 'cancelled', undefined, 'Resume by starting a new run with the same objective.', usage, workspace);
         return;
       }
       const message = error instanceof Error ? error.message : String(error);
       yield { type: 'error', code: 'AGENT_RUN_ERROR', message };
       await persistSessionTurn(failedSessionOutcome(message), 'failed');
-      yield* this.finish(task.id, 'failed', undefined, message, usage);
+      yield* this.finish(task.id, 'failed', undefined, message, usage, workspace);
     }
   }
 
@@ -683,10 +689,13 @@ export class AgentRunner {
     appendObservation = true,
   ): void {
     this.trace({ kind: 'tool_result', tool: call.name, chars: content.length, isError });
+    const modelContent = capToolOutput(content, MODEL_TOOL_RESULT_MAX_CHARS);
     if (state.mode === 'native') {
-      state.exchange.push({ kind: 'tool_result', toolCallId: call.id, name: call.name, content, isError });
+      state.exchange.push({ kind: 'tool_result', toolCallId: call.id, name: call.name, content: modelContent, isError });
+      compactNativeToolExchange(state.exchange);
     } else {
-      state.transcript.push(formatControlBlockResult(call, content, isError));
+      state.transcript.push(formatControlBlockResult(call, modelContent, isError));
+      compactControlBlockTranscript(state.transcript);
     }
     state.toolSummaries.push(`${isError ? '[error] ' : ''}${summary}`);
     if (appendObservation) {
@@ -771,14 +780,14 @@ export class AgentRunner {
           ...workspace.attachments.map(attachment => (
             `- ${attachment.id}: ${attachment.name} (${attachment.mediaType}, ${formatAttachmentBytes(attachment.size)})`
           )),
-          'Attachments are not embedded in this agent prompt. Use inspect_attachment with an attachment ID when their contents matter. You may inspect independent attachments in parallel with other read-only tool calls.',
+          'Attachments are not embedded in this agent prompt. Start with inspect_attachment for metadata, a small preview, and the read-only run path. Use search_attachment and bounded read_attachment ranges for understanding. For joins, conversions, edits, extraction, or other complete-file operations, run a local format-specific program against the read-only path and write deliverables to $MARIFOLD_OUTPUT_DIR; never pull the complete file through model context. You may inspect independent attachments in parallel with other read-only tool calls.',
         ].join('\n')
       : 'No attachments were uploaded for this run.';
     const workspaceContext = [
       `Working directory: ${workspace.cwd}. Relative tool paths resolve against it.`,
       `User home: ${workspace.userHome}. In tool paths and shell commands, ~ refers to this directory.`,
       `Isolated run directory: ${workspace.rootDir}. Its internal runtime home is ${workspace.homeDir}.`,
-      `${attachments}\nHonor explicit destination paths from the user; otherwise write generated deliverables to ${workspace.outputDir}. Temporary scripts and environments belong in ${workspace.workDir}.`,
+      `${attachments}\nHonor explicit destination paths from the user; otherwise write generated deliverables to ${workspace.outputDir}. Regular output files are published to clients automatically, so mention their filenames normally and do not invent sandbox:, file:, or host-path download links. Temporary scripts and environments belong in ${workspace.workDir}.`,
       ...(this.deps.registry.get('ask_user')?.kind === 'interaction' ? [
         'ask_user is optional. Use it only when essential information is missing and a reasonable assumption could materially change the result. Otherwise proceed. Batch all currently known questions into one call, and call it without other tools in that response.',
       ] : []),
@@ -789,7 +798,7 @@ export class AgentRunner {
     if (lean) {
       const context = [...(instructions ?? [])];
       context.push(
-        `${webSearchContext}\n${workspaceContext}\nUse inspect_attachment when the skill depends on an uploaded attachment. Use read_file only if the instructions reference a bundled file (e.g. vars.toml). Resolve required inputs, then reply with ONLY the final output the instructions define — no plan, preamble, reasoning, or commentary.`,
+        `${webSearchContext}\n${workspaceContext}\nUse inspect_attachment when the skill depends on an uploaded attachment, then use bounded attachment search/read or local processing as appropriate. Use read_file only if the instructions reference a bundled file (e.g. vars.toml). Resolve required inputs, then reply with ONLY the final output the instructions define — no plan, preamble, reasoning, or commentary.`,
       );
       if (state.mode === 'control-block') {
         context.push(buildControlBlockInstructions(toolDefinitions));
@@ -885,12 +894,18 @@ export class AgentRunner {
     summary?: string,
     nextAction?: string,
     usage?: AgentUsage,
+    workspace?: RunWorkspace,
   ): AsyncGenerator<AgentEvent, void, unknown> {
     const updated: TaskState = this.deps.taskStore.update(taskId, {
       status,
       ...(summary ? { summary: truncate(summary, 2000) } : {}),
       ...(nextAction ? { nextAction: truncate(nextAction, 500) } : {}),
     });
+    if (workspace) {
+      for (const artifact of listRunArtifacts(workspace)) {
+        yield { type: 'artifact', artifact };
+      }
+    }
     yield { type: 'status', taskId, status: updated.status };
     yield {
       type: 'done',
@@ -903,6 +918,33 @@ export class AgentRunner {
 
   private assertNotAborted(signal?: AbortSignal): void {
     if (signal?.aborted) throw new AbortedError();
+  }
+}
+
+function compactNativeToolExchange(exchange: ToolExchangeTurn[]): void {
+  let total = exchange.reduce((sum, turn) => (
+    sum + (turn.kind === 'tool_result' ? turn.content.length : (turn.text?.length ?? 0))
+  ), 0);
+  if (total <= MODEL_TOOL_EXCHANGE_MAX_CHARS) return;
+
+  for (let index = 0; index < exchange.length && total > MODEL_TOOL_EXCHANGE_MAX_CHARS; index += 1) {
+    const turn = exchange[index];
+    if (turn.kind !== 'tool_result' || turn.content.startsWith('[Earlier tool result compacted')) continue;
+    const replacement = `[Earlier tool result compacted: ${turn.name}; ${turn.content.length.toLocaleString('en-US')} characters omitted. Re-run a bounded read or search if the details are still needed.]`;
+    total -= turn.content.length - replacement.length;
+    exchange[index] = { ...turn, content: replacement };
+  }
+}
+
+function compactControlBlockTranscript(transcript: string[]): void {
+  let total = transcript.reduce((sum, turn) => sum + turn.length, 0);
+  if (total <= MODEL_TOOL_EXCHANGE_MAX_CHARS) return;
+  for (let index = 0; index < transcript.length - 1 && total > MODEL_TOOL_EXCHANGE_MAX_CHARS; index += 1) {
+    const turn = transcript[index];
+    if (turn.startsWith('[Earlier control-block turn compacted')) continue;
+    const replacement = `[Earlier control-block turn compacted; ${turn.length.toLocaleString('en-US')} characters omitted.]`;
+    total -= turn.length - replacement.length;
+    transcript[index] = replacement;
   }
 }
 

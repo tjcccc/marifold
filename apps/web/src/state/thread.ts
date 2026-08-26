@@ -4,6 +4,7 @@ import type {
   AgentUsage,
   ApprovalRequest,
   RunRecord,
+  RunArtifact,
   TaskStatus,
   TaskStepStatus,
   UserInputRequest,
@@ -49,6 +50,7 @@ export interface RunCardState {
   errors: Array<{ code: string; message: string }>;
   summary?: string;
   usage?: AgentUsage;
+  artifacts: RunArtifact[];
   /** Finished cards fold to the footer; toggled by "Show". */
   collapsed: boolean;
 }
@@ -161,6 +163,7 @@ export function hasRunActivity(run: RunCardState): boolean {
     run.steering.length > 0 ||
     run.denials.length > 0 ||
     run.errors.length > 0 ||
+    run.artifacts.length > 0 ||
     run.approval !== undefined ||
     run.userInput !== undefined ||
     run.inputResponses.length > 0
@@ -332,13 +335,24 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
       return updateRun(state, action.runId, run => ({ ...run, collapsed: !run.collapsed }));
 
     case 'catch_up': {
-      const unseen = action.runs.filter(
-        run => !findRunItem(state, run.id)
-          && !state.discardedRunIds.includes(run.id)
-          && !state.catchUp.some(existing => existing.id === run.id),
-      );
-      if (unseen.length === 0) return state;
-      return { ...state, catchUp: [...state.catchUp, ...unseen] };
+      let next = state;
+      const bannerRuns: RunRecord[] = [];
+      for (const run of action.runs) {
+        if (findRunItem(next, run.id)
+          || next.discardedRunIds.includes(run.id)
+          || next.catchUp.some(existing => existing.id === run.id)) continue;
+        if ((run.artifacts?.length ?? 0) > 0) {
+          // Deliverables are user-facing session results, not optional run
+          // diagnostics. Restore their compact card immediately so a page
+          // reload never hides downloads behind the catch-up banner.
+          next = insertRunCard(next, { kind: 'run', run: cardFromRecord(run) });
+        } else {
+          bannerRuns.push(run);
+        }
+      }
+      return bannerRuns.length > 0
+        ? { ...next, catchUp: [...next.catchUp, ...bannerRuns] }
+        : next;
     }
 
     case 'dismiss_catch_up':
@@ -512,6 +526,16 @@ function applyRunEvent(state: ThreadState, runId: string, seq: number, event: Ag
         ...run,
         lastSeq: seq,
         errors: [...run.errors, { code: event.code, message: event.message }],
+      }));
+      break;
+
+    case 'artifact':
+      next = updateRun(next, runId, run => ({
+        ...run,
+        lastSeq: seq,
+        artifacts: run.artifacts.some(artifact => artifact.id === event.artifact.id)
+          ? run.artifacts
+          : [...run.artifacts, event.artifact],
       }));
       break;
 
@@ -705,6 +729,7 @@ function cardFromRecord(record: RunRecord): RunCardState {
     finishedAt: record.finishedAt,
     summary: record.summary,
     usage: record.usage,
+    artifacts: [...(record.artifacts ?? [])],
     userInput: record.pendingUserInputs[0],
     collapsed: record.status !== 'running',
   };
@@ -717,6 +742,7 @@ function emptyCard(runId: string): RunCardState {
     lastSeq: 0,
     startedAt: new Date().toISOString(),
     rows: [],
+    artifacts: [],
     inputResponses: [],
     steering: [],
     denials: [],

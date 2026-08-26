@@ -4,7 +4,10 @@ import type { ImageInput } from '@priest-ai/core';
 import { AgentEvent, AgentUsage } from '../agent/AgentEvents';
 import { AgentRunner } from '../agent/AgentRunner';
 import { ApprovalDecision, ApprovalMode, ApprovalRequest, ToolKind } from '../agent/ApprovalPolicy';
+import { RUN_WORKSPACE_RETENTION_MS } from '../agent/RunWorkspace';
 import type { RunFileInput } from '../agent/RunWorkspace';
+import { resolveRunArtifact } from '../agent/RunArtifacts';
+import type { ResolvedRunArtifact, RunArtifact } from '../agent/RunArtifacts';
 import { isInsideAny } from '../agent/tools/WriteFileTool';
 import { MarifoldError } from '../errors/MarifoldError';
 import { TaskStatus } from '../tasks/TaskStore';
@@ -16,7 +19,7 @@ import {
 
 const DEFAULT_APPROVAL_TIMEOUT_MS = 5 * 60 * 1000;
 const DEFAULT_USER_INPUT_TIMEOUT_MS = 30 * 60 * 1000;
-const DEFAULT_FINISHED_RUN_TTL_MS = 5 * 60 * 1000;
+const DEFAULT_FINISHED_RUN_TTL_MS = RUN_WORKSPACE_RETENTION_MS;
 const DEFAULT_MAX_ACTIVE_RUNS = 5;
 const DEFAULT_MAX_BUFFERED_EVENTS = 10_000;
 const MAX_RETAINED_FINISHED_RUNS = 50;
@@ -88,6 +91,8 @@ export interface RunRecord {
   finishedAt?: string;
   summary?: string;
   usage?: AgentUsage;
+  /** Generated files for this run. Absent on records from pre-artifact services. */
+  artifacts?: RunArtifact[];
   /** Sequence number of the newest buffered event (0 = none yet). */
   eventCount: number;
   pendingApprovals: ApprovalRequest[];
@@ -124,6 +129,7 @@ interface ActiveRun {
   finishedAt?: string;
   summary?: string;
   usage?: AgentUsage;
+  artifacts: RunArtifact[];
   finished: boolean;
   buffer: SequencedEvent[];
   firstSeq: number;
@@ -188,6 +194,7 @@ export class RunRegistry {
       steeringQueue: [],
       grantedKinds: new Set(),
       trustedFolders: [],
+      artifacts: [],
       waiters: [],
     };
     this.runs.set(run.id, run);
@@ -216,6 +223,17 @@ export class RunRegistry {
     return [...this.runs.values()]
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
       .map(run => this.toRecord(run));
+  }
+
+  requireArtifact(runId: string, artifactId: string): ResolvedRunArtifact {
+    const run = this.runs.get(runId);
+    if (!run) throw MarifoldError.runNotFound(runId);
+    if (!run.artifacts.some(artifact => artifact.id === artifactId)) {
+      throw MarifoldError.artifactNotFound(runId, artifactId);
+    }
+    const artifact = resolveRunArtifact(runId, artifactId);
+    if (!artifact) throw MarifoldError.artifactNotFound(runId, artifactId);
+    return artifact;
   }
 
   /** Replay buffered events past `afterSeq`, then follow live ones. Returns
@@ -376,6 +394,10 @@ export class RunRegistry {
       run.summary = event.summary;
       run.usage = event.usage;
       this.finish(run, event.status);
+    } else if (event.type === 'artifact') {
+      if (!run.artifacts.some(artifact => artifact.id === event.artifact.id)) {
+        run.artifacts.push(event.artifact);
+      }
     } else if (event.type === 'status') {
       run.status = event.status;
     }
@@ -505,6 +527,7 @@ export class RunRegistry {
       finishedAt: run.finishedAt,
       summary: run.summary,
       usage: run.usage,
+      artifacts: [...run.artifacts],
       eventCount: run.lastSeq,
       pendingApprovals: [...this.pending.values()]
         .filter(entry => entry.runId === run.id)

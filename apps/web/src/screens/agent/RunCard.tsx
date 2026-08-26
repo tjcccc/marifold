@@ -1,12 +1,15 @@
 import { useEffect, useState } from 'react';
+import type { ApiClient } from '../../api/client';
 import type { RunApprovalAction, UserInputSubmission } from '../../api/types';
 import { formatElapsed, formatRunDuration } from '../../lib/format';
+import { downloadRunArtifact } from '../../lib/runArtifacts';
 import type { RunCardState } from '../../state/thread';
 import { ApprovalSheet } from './ApprovalSheet';
 import { QuestionSheet } from './QuestionSheet';
 import styles from './RunCard.module.css';
 
 export interface RunCardProps {
+  client?: ApiClient;
   run: RunCardState;
   onCancel: () => void;
   onAnswer: (requestId: string, action: RunApprovalAction) => void;
@@ -17,9 +20,26 @@ export interface RunCardProps {
 /** A live agent run inline in the thread (design "THE RUN" + 1b edge states):
  * status line with elapsed + Cancel, plan checklist, folding tool rows,
  * steering pills, the approval sheet, and the collapsed ✓ footer. */
-export function RunCard({ run, onCancel, onAnswer, onSubmitInput, onToggle }: RunCardProps) {
+export function RunCard({ client, run, onCancel, onAnswer, onSubmitInput, onToggle }: RunCardProps) {
   const running = run.status === 'running';
   const showDetails = running || !run.collapsed;
+  const [downloading, setDownloading] = useState<string>();
+  const [artifactError, setArtifactError] = useState<string>();
+
+  async function downloadArtifact(id: string, name: string): Promise<void> {
+    if (!client) return;
+    setDownloading(id);
+    setArtifactError(undefined);
+    try {
+      const artifact = run.artifacts.find(candidate => candidate.id === id);
+      if (!artifact) throw new Error(`Generated file not found: ${name}`);
+      await downloadRunArtifact(client, run.runId, artifact);
+    } catch (error) {
+      setArtifactError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setDownloading(undefined);
+    }
+  }
 
   return (
     <div className={running ? styles.cardRunning : styles.card}>
@@ -111,6 +131,29 @@ export function RunCard({ run, onCancel, onAnswer, onSubmitInput, onToggle }: Ru
         </div>
       ) : null}
 
+      {/* Deliverables are the result of the run, not diagnostic activity.
+       * Keep them available when a finished run's details are collapsed. */}
+      {run.artifacts.length > 0 ? (
+        <div className={styles.artifacts} aria-label="Generated files">
+          {run.artifacts.map(artifact => (
+            <button
+              key={artifact.id}
+              className={styles.artifact}
+              aria-label={`Download ${artifact.name.split('/').at(-1) || artifact.name}`}
+              disabled={!client || downloading === artifact.id}
+              onClick={() => void downloadArtifact(artifact.id, artifact.name)}
+            >
+              <span aria-hidden>↓</span>
+              <span className={styles.artifactAction}>Download</span>
+              <span className={styles.artifactName}>{artifact.name}</span>
+              <span className={styles.artifactSize}>{formatBytes(artifact.size)}</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+
+      {artifactError ? <div className={styles.error}>{artifactError}</div> : null}
+
       {run.approval ? (
         <ApprovalSheet
           request={run.approval}
@@ -181,15 +224,17 @@ function statusGlyphClass(run: RunCardState): string {
 function footerText(run: RunCardState): string {
   const toolCount = run.rows.length;
   const tools = toolCount > 0 ? ` · ${toolCount} tool ${toolCount === 1 ? 'action' : 'actions'}` : '';
+  const fileCount = run.artifacts.length;
+  const files = fileCount > 0 ? ` · ${fileCount} generated ${fileCount === 1 ? 'file' : 'files'}` : '';
   switch (run.status) {
     case 'completed':
-      return `Ran ${durationText(run)}${tools}`;
+      return `Ran ${durationText(run)}${tools}${files}`;
     case 'cancelled':
-      return `Cancelled after ${durationText(run)}${tools}`;
+      return `Cancelled after ${durationText(run)}${tools}${files}`;
     case 'failed':
-      return `Failed after ${durationText(run)}${tools}`;
+      return `Failed after ${durationText(run)}${tools}${files}`;
     case 'blocked':
-      return `Blocked${run.summary ? ` — ${run.summary}` : ''}${tools}`;
+      return `Blocked${run.summary ? ` — ${run.summary}` : ''}${tools}${files}`;
     default:
       return run.status;
   }
@@ -197,4 +242,10 @@ function footerText(run: RunCardState): string {
 
 function durationText(run: RunCardState): string {
   return formatRunDuration(run.startedAt, run.finishedAt);
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }

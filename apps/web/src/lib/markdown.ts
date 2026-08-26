@@ -4,7 +4,8 @@
  * elements, so no HTML string ever reaches innerHTML. Coverage matches what
  * models actually emit in chat: headings, paragraphs, fenced code, lists,
  * blockquotes, horizontal rules, pipe tables, inline code/bold/italic, and
- * http(s) links (anything else stays text).
+ * http(s) links and renderer-resolved sandbox artifact links (anything else
+ * stays text).
  */
 export type InlineNode =
   | { type: 'text'; text: string }
@@ -213,7 +214,7 @@ function listItem(line: string): { ordered: boolean; text: string } | undefined 
 }
 
 const INLINE_PATTERN =
-  /((?: {2,}|\\)\n)|(`[^`]+`)|(\*\*[^*]+\*\*)|(\*[^*\s][^*]*\*)|(\[[^\]]+\]\((https?:\/\/[^\s)]+)\))/;
+  /((?: {2,}|\\)\n)|(`[^`]+`)|(\*\*[^*]+\*\*)|(\*[^*\s][^*]*\*)|(\[[^\]]+\]\(((?:https?:\/\/|sandbox:)[^\s)]+)\))/;
 
 export function parseInline(text: string): InlineNode[] {
   const nodes: InlineNode[] = [];
@@ -235,7 +236,8 @@ export function parseInline(text: string): InlineNode[] {
     } else if (token.startsWith('*')) {
       nodes.push({ type: 'em', children: parseInline(token.slice(1, -1)) });
     } else {
-      // [label](https://…) — only http(s) becomes a link; the pattern enforces it.
+      // sandbox: targets are inert unless the renderer resolves them through
+      // an artifact published for the same run.
       const label = token.slice(1, token.indexOf(']'));
       const href = match[6];
       nodes.push({ type: 'link', href, children: parseInline(label) });

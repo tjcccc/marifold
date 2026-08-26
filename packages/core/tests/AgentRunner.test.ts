@@ -687,6 +687,57 @@ describe('AgentRunner', () => {
     expect(fs.existsSync(target)).toBe(false);
   });
 
+  it('bounds individual and accumulated tool results before the next provider request', async () => {
+    const engine = new ScriptedEngine([
+      response({ toolCalls: [{ id: 'large_1', name: 'read_file', arguments: { path: 'one' } }] }),
+      response({ toolCalls: [{ id: 'large_2', name: 'read_file', arguments: { path: 'two' } }] }),
+      response({ toolCalls: [{ id: 'large_3', name: 'read_file', arguments: { path: 'three' } }] }),
+      response({ text: 'Done.' }),
+    ]);
+    const { runner } = makeRunner(engine, [fakeTool({
+      execute: async () => ({ content: `HEAD${'x'.repeat(50_000)}TAIL` }),
+    })]);
+
+    await collect(runner.run({ objective: 'Inspect three large results.', cwd: tempDir() }));
+
+    const exchange = engine.requests[3].toolExchange ?? [];
+    const results = exchange.filter(turn => turn.kind === 'tool_result');
+    expect(results).toHaveLength(3);
+    expect(results[0].content).toContain('Earlier tool result compacted');
+    expect(results[1].content.length).toBeLessThan(25_000);
+    expect(results[2].content.length).toBeLessThan(25_000);
+    expect(exchange.reduce((sum, turn) => (
+      sum + (turn.kind === 'tool_result' ? turn.content.length : (turn.text?.length ?? 0))
+    ), 0)).toBeLessThanOrEqual(64_000);
+  });
+
+  it('emits generated output files as artifacts before completing', async () => {
+    const engine = new ScriptedEngine([
+      response({ toolCalls: [{ id: 'make_file', name: 'make_file', arguments: {} }] }),
+      response({ text: 'Created the workbook.' }),
+    ]);
+    const { runner } = makeRunner(engine, [fakeTool({
+      name: 'make_file',
+      execute: async (_input, ctx) => {
+        fs.writeFileSync(path.join(ctx.workspace!.outputDir, 'joined.xlsx'), 'workbook');
+        return { content: 'created joined.xlsx' };
+      },
+    })]);
+
+    const events = await collect(runner.run({ objective: 'Create a workbook.', cwd: tempDir() }));
+    const artifact = events.find((event): event is Extract<AgentEvent, { type: 'artifact' }> => (
+      event.type === 'artifact'
+    ));
+    expect(artifact?.artifact).toMatchObject({
+      name: 'joined.xlsx',
+      mediaType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      size: 8,
+    });
+    expect(events.findIndex(event => event.type === 'artifact')).toBeLessThan(
+      events.findIndex(event => event.type === 'done'),
+    );
+  });
+
   it('denies ask-mode tools on unattended runs without executing', async () => {
     let executed = 0;
     const engine = new ScriptedEngine([

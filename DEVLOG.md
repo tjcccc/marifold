@@ -2,6 +2,27 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-08-26 — v0.63.0 — Local document workspace and generated artifacts
+
+- Replaced eager Agent document injection with immutable staged resources:
+  compact inspection, bounded range reads, local search, and authoritative
+  read-only paths for complete-file processing across document formats.
+- Capped individual/accumulated model-visible tool results so several
+  successful attachment operations cannot overflow the next provider request.
+- Exposed regular run outputs as renderer-neutral artifacts with containment,
+  symlink, count, and size checks plus authenticated Web downloads.
+- Resolved model-authored `sandbox:` Markdown links only through same-run
+  artifact IDs, keeping host paths inert while preserving inline downloads.
+- Kept generated-file download buttons visible when completed run activity is
+  collapsed, so deliverables never hide behind the `Show` diagnostics toggle.
+- Rehydrated recent artifact-bearing runs directly into their session after a
+  page reload instead of requiring the catch-up banner's `Show` action.
+- Kept Chat-mode text inlining and durable Web attachment edit/resend markers
+  while removing their duplicate copy from the current Agent objective.
+- Verified the full workspace typecheck/build gate, all 661 tests, 129 CLI
+  command checks, and the authenticated download flow in a real browser.
+- Version 0.62.0 → 0.63.0 across all packages + CLI `.version`.
+
 ## 2026-08-26 — v0.62.0 — npm self-update and ChatGPT output compatibility
 
 - Added `marifold update` as a direct, cross-platform wrapper around
