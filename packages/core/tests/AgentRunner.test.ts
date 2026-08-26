@@ -142,6 +142,63 @@ describe('AgentRunner', () => {
     expect(context).toContain('Use write_file for an explicit output path elsewhere');
   });
 
+  it('prefers provider-hosted search and hides the Marifold fallback tool', async () => {
+    const engine = new ScriptedEngine([response({ text: 'Current answer.' })]);
+    const { runner } = makeRunner(
+      engine,
+      [fakeTool({ name: 'web_search', kind: 'network' }), fakeTool({ name: 'read_file' })],
+      {},
+      {
+        prepareEngine: async () => ({
+          engine,
+          config: { provider: 'chatgpt', model: 'gpt-5.6-sol' },
+          webSearchMode: 'native',
+          providerTools: [{ type: 'web_search' }],
+        }),
+      },
+    );
+
+    await collect(runner.run({ objective: 'Search for something current.', cwd: tempDir() }));
+
+    const request = engine.requests[0] as PriestRequest & { providerTools?: Array<{ type: string }> };
+    expect(request.providerTools).toEqual([{ type: 'web_search' }]);
+    expect(request.tools?.map(tool => tool.name)).toEqual(['read_file']);
+    expect((request.context ?? []).join('\n')).toContain('Provider-hosted web search is available');
+  });
+
+  it('does not expose provider-hosted search when an unattended run lacks network allow', async () => {
+    const engine = new ScriptedEngine([response({ text: 'Search is unavailable.' })]);
+    const { runner } = makeRunner(
+      engine,
+      [fakeTool({ name: 'web_search', kind: 'network' }), fakeTool({ name: 'read_file' })],
+      { approval: { network: 'ask' }, unattended: { network: 'ask' } },
+      {
+        prepareEngine: async () => ({
+          engine,
+          config: {
+            provider: 'chatgpt',
+            model: 'gpt-5.6-sol',
+            providerOptions: { marifold_native_web_search: true },
+          },
+          webSearchMode: 'native',
+          providerTools: [{ type: 'web_search' }],
+        }),
+      },
+    );
+
+    await collect(runner.run({
+      objective: 'Search for something current.',
+      cwd: tempDir(),
+      unattended: true,
+    }));
+
+    const request = engine.requests[0] as PriestRequest & { providerTools?: Array<{ type: string }> };
+    expect(request.providerTools).toBeUndefined();
+    expect(request.config.providerOptions).toBeUndefined();
+    expect(request.tools?.map(tool => tool.name)).toEqual(['read_file']);
+    expect((request.context ?? []).join('\n')).toContain('Web search is unavailable');
+  });
+
   it('pauses for optional structured user input and continues with the answers', async () => {
     const engine = new ScriptedEngine([
       response({

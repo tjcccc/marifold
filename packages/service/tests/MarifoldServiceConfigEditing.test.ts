@@ -405,6 +405,63 @@ describe('config editing routes', () => {
     }
   });
 
+  it('lists the CLI provider catalog and adds a registry provider atomically', async () => {
+    const loadedConfig = fixtureLoadedConfig(tempDir());
+    const server = createMarifoldService({ loadedConfig, scheduler: false });
+    try {
+      const catalog = await server.inject({ method: 'GET', url: '/v1/providers/catalog' });
+      expect(catalog.statusCode).toBe(200);
+      expect(catalog.json().providers[0]).toMatchObject({
+        name: 'ollama',
+        label: 'Ollama (local)',
+        kind: 'local',
+        type: 'ollama',
+        defaultBaseUrl: 'http://localhost:11434',
+      });
+      expect(catalog.json().providers.at(-1)).toMatchObject({
+        name: 'custom',
+        label: 'Custom OpenAI-compatible endpoint',
+      });
+
+      const added = await server.inject({
+        method: 'POST',
+        url: '/v1/providers',
+        payload: {
+          name: 'gemini',
+          proxy: 'http://127.0.0.1:7890',
+          apiKey: 'raw-secret-must-be-ignored',
+        },
+      });
+      expect(added.statusCode).toBe(201);
+      expect(added.json().config.providers.gemini).toMatchObject({
+        type: 'openai-compatible',
+        baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
+        apiKeyEnv: 'GEMINI_API_KEY',
+        proxy: 'http://127.0.0.1:7890',
+        hasApiKey: false,
+      });
+      expect(fs.readFileSync(loadedConfig.configPath, 'utf-8')).not.toContain('raw-secret');
+
+      const duplicate = await server.inject({
+        method: 'POST',
+        url: '/v1/providers',
+        payload: { name: 'gemini' },
+      });
+      expect(duplicate.statusCode).toBe(400);
+      expect(duplicate.json().error.message).toMatch(/already configured/);
+
+      const incomplete = await server.inject({
+        method: 'POST',
+        url: '/v1/providers',
+        payload: { name: 'custom' },
+      });
+      expect(incomplete.statusCode).toBe(400);
+      expect(incomplete.json().error.message).toMatch(/requires a server URL/);
+    } finally {
+      await server.close();
+    }
+  });
+
   it('removes provider config, credentials, and saved models with reference guards', async () => {
     const loadedConfig = fixtureLoadedConfig(tempDir());
     loadedConfig.config.providers.xai = {

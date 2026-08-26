@@ -1,0 +1,267 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: color-mix(in srgb, #000 36%, transparent);
+  backdrop-filter: blur(1px);
+}
+
+.sheet {
+  width: min(520px, 100%);
+  max-height: min(680px, calc(100vh - 48px));
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--separator);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sheet);
+}
+
+.header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid var(--separator-soft);
+}
+
+.title {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.subtitle {
+  margin-top: 3px;
+  color: var(--text-3);
+  font-size: 12px;
+}
+
+.close {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 7px;
+  color: var(--text-2);
+  font-size: 20px;
+  line-height: 1;
+}
+
+.close:hover {
+  color: var(--text);
+  background: var(--surface-2);
+}
+
+.close:disabled {
+  opacity: 0.45;
+}
+
+.catalog {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.providerOption {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 9px 12px;
+  border-radius: var(--radius-md);
+  text-align: left;
+}
+
+.providerOption:hover:not(:disabled),
+.providerOption:focus-visible {
+  background: var(--brand-tint);
+}
+
+.providerOption:disabled {
+  cursor: default;
+}
+
+.optionText {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+}
+
+.optionName {
+  flex: 0 0 126px;
+  overflow: hidden;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.optionLabel {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-2);
+  font-size: 12.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kind,
+.configured {
+  flex: 0 0 auto;
+  color: var(--text-3);
+  font-size: 11px;
+}
+
+.configured {
+  color: var(--brand-text);
+}
+
+.providerOption:disabled .optionName,
+.providerOption:disabled .optionLabel {
+  color: var(--text-3);
+}
+
+.empty {
+  padding: 28px 16px;
+  color: var(--text-3);
+  font-size: 13px;
+  text-align: center;
+}
+
+.setup {
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px 20px 20px;
+}
+
+.back {
+  align-self: flex-start;
+  color: var(--brand-text);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.metadata {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+  gap: 7px 14px;
+  padding: 11px 12px;
+  color: var(--text-3);
+  background: var(--surface-2);
+  border-radius: var(--radius-md);
+  font-size: 12px;
+}
+
+.metadata code,
+.metadata span:nth-child(4) {
+  color: var(--text-2);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--text-2);
+  font-size: 12.5px;
+  font-weight: 550;
+}
+
+.field input {
+  width: 100%;
+  padding: 8px 10px;
+  color: var(--text);
+  background: var(--content);
+  border: 1px solid var(--separator);
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-weight: 400;
+  outline: none;
+}
+
+.field input:focus {
+  border-color: var(--brand-fill);
+}
+
+.field small {
+  color: var(--text-3);
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.field > small {
+  color: var(--danger);
+}
+
+.hint {
+  color: var(--text-3);
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+
+.problem {
+  color: var(--danger);
+  font-size: 12.5px;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.cancel,
+.add {
+  padding: 7px 14px;
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.cancel {
+  color: var(--text-2);
+  background: var(--surface-2);
+}
+
+.add {
+  color: var(--on-brand);
+  background: var(--brand-fill);
+  box-shadow: 0 1px 3px var(--brand-shadow);
+}
+
+.cancel:disabled,
+.add:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+@media (max-width: 560px) {
+  .backdrop {
+    padding: 12px;
+  }
+
+  .sheet {
+    max-height: calc(100vh - 24px);
+  }
+
+  .optionName {
+    flex-basis: 108px;
+  }
+
+  .kind,
+  .configured {
+    display: none;
+  }
+}

@@ -43,12 +43,12 @@ export interface MarifoldMemoryConfig {
 export type WebSearchProvider = 'duckduckgo' | 'firecrawl';
 
 export interface MarifoldWebSearchConfig {
-  /** Master switch for the model-initiated web_search tool, in both chat and
-   * agent mode — the model decides when to search. Agent calls additionally
-   * honor the `network` approval policy. */
+  /** Enables Marifold's caller-executed fallback web_search tool in chat and
+   * agent mode. Provider-hosted search remains available when supported.
+   * Agent calls additionally honor the `network` approval policy. */
   enabled: boolean;
   maxResults: number;
-  /** Active search backend. Defaults to the keyless DuckDuckGo floor;
+  /** Active fallback backend. Defaults to the keyless DuckDuckGo floor;
    * `firecrawl` adds AI-ready scraped results (BYOK). */
   provider: WebSearchProvider;
   /** Env var holding the provider's API key. Preferred over `apiKey` so the

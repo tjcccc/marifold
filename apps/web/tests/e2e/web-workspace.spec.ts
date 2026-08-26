@@ -177,8 +177,8 @@ test('session dialogs and global settings are keyboard-operable', async ({ page 
 
   await page.getByRole('button', { name: 'Web search' }).click();
   await expect(page.getByText('Web search', { exact: true }).last()).toBeVisible();
-  await page.getByRole('radiogroup', { name: 'Web-search tool' }).getByRole('radio', { name: 'On' }).click();
-  await expect(page.getByRole('radiogroup', { name: 'Web-search tool' }).getByRole('radio', { name: 'On' }))
+  await page.getByRole('radiogroup', { name: 'Marifold fallback' }).getByRole('radio', { name: 'On' }).click();
+  await expect(page.getByRole('radiogroup', { name: 'Marifold fallback' }).getByRole('radio', { name: 'On' }))
     .toHaveAttribute('aria-checked', 'true');
 
   await page.getByRole('button', { name: 'Appearance', exact: true }).click();

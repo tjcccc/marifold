@@ -45,10 +45,24 @@ describe('service process state', () => {
     });
     expect(() => claimServiceProcess('daemon', '/tmp/config.toml', paths)).toThrow('already running');
 
-    markServiceProcessRunning(owner, 'http://127.0.0.1:32140', paths);
+    markServiceProcessRunning(owner, {
+      address: 'http://127.0.0.1:32140',
+      startup: {
+        telegramProfile: 'messenger',
+        webDir: '/tmp/web',
+        authRequired: true,
+        corsOrigins: ['https://example.test'],
+      },
+    }, paths);
     expect(getActiveServiceProcess(paths)).toMatchObject({
       status: 'running',
       address: 'http://127.0.0.1:32140',
+      startup: {
+        telegramProfile: 'messenger',
+        webDir: '/tmp/web',
+        authRequired: true,
+        corsOrigins: ['https://example.test'],
+      },
     });
 
     releaseServiceProcess(owner, paths);

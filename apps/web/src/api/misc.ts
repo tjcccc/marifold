@@ -49,6 +49,33 @@ export async function getProviderStatus(client: ApiClient): Promise<ProviderStat
   return body.providers;
 }
 
+export interface ProviderCatalogEntry {
+  name: string;
+  label: string;
+  kind: 'local' | 'api' | 'oauth';
+  type: 'ollama' | 'openai-compatible' | 'anthropic';
+  defaultBaseUrl?: string;
+  apiKeyEnv?: string;
+}
+
+export async function getProviderCatalog(client: ApiClient): Promise<ProviderCatalogEntry[]> {
+  const body = await client.request<{ providers: ProviderCatalogEntry[] }>('GET', '/v1/providers/catalog');
+  return body.providers;
+}
+
+export interface AddProviderInput {
+  name: string;
+  baseUrl?: string;
+  apiKeyEnv?: string;
+  proxy?: string;
+}
+
+/** Add one provider from the same registry used by the CLI picker. */
+export async function addProvider(client: ApiClient, input: AddProviderInput): Promise<PublicConfig> {
+  const body = await client.request<{ config: PublicConfig }>('POST', '/v1/providers', input);
+  return body.config;
+}
+
 export interface RemoveProviderResult {
   removed: boolean;
   removedModels: string[];

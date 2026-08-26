@@ -114,7 +114,11 @@ type the exact profile name in the destructive dialog before its final action
 enables. Removal deletes the profile directory (instructions, memories, skills,
 and avatar) but preserves its SQLite conversation history.
 
-Provider Config uses the same typed-confirmation pattern. A provider cannot be
+The Providers column's `+` action opens a modal backed by the same ordered
+registry as `marifold provider add`. Selecting an entry pre-fills its type,
+server URL, and API-key environment-variable name; the browser never accepts
+or transmits a raw key. Provider Config uses the same typed-confirmation
+pattern for removal. A provider cannot be
 removed while it is the global default or referenced by a profile override.
 Removal clears its local credentials/config and saved model options without
 touching provider-owned models or remote accounts. OAuth provider pages expose

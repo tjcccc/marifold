@@ -31,9 +31,24 @@ export interface ServiceProcessState {
   startedAt: string;
   configPath: string;
   address?: string;
+  /** Confirmed non-secret runtime details copied from the child process so a
+   * daemon launcher can print the same useful summary as a foreground start. */
+  startup?: ServiceStartupDetails;
   /** Non-secret launch details used by `marifold service restart`. Older state
    * files omit this and remain readable for status/stop compatibility. */
   launch?: ServiceLaunchOptions;
+}
+
+export interface ServiceStartupDetails {
+  telegramProfile?: string;
+  webDir?: string;
+  authRequired: boolean;
+  corsOrigins: string[];
+}
+
+export interface ServiceReadyState {
+  address: string;
+  startup: ServiceStartupDetails;
 }
 
 export interface ServiceProcessPaths {
@@ -93,7 +108,7 @@ export function claimServiceProcess(
 
 export function markServiceProcessRunning(
   owner: ServiceProcessState,
-  address: string,
+  ready: ServiceReadyState,
   paths = serviceProcessPaths(),
 ): ServiceProcessState {
   return withStateLock(paths, () => {
@@ -101,7 +116,12 @@ export function markServiceProcessRunning(
     if (!current || current.instanceId !== owner.instanceId) {
       throw new Error('Marifold service ownership changed while it was starting.');
     }
-    const running: ServiceProcessState = { ...current, status: 'running', address };
+    const running: ServiceProcessState = {
+      ...current,
+      status: 'running',
+      address: ready.address,
+      startup: ready.startup,
+    };
     writeStateFile(paths.state, running);
     return running;
   });
@@ -242,7 +262,18 @@ function isServiceProcessState(value: unknown): value is ServiceProcessState {
     && typeof state.startedAt === 'string'
     && typeof state.configPath === 'string'
     && (state.address === undefined || typeof state.address === 'string')
+    && (state.startup === undefined || isServiceStartupDetails(state.startup))
     && (state.launch === undefined || isServiceLaunchOptions(state.launch));
+}
+
+function isServiceStartupDetails(value: unknown): value is ServiceStartupDetails {
+  if (!value || typeof value !== 'object') return false;
+  const startup = value as Record<string, unknown>;
+  return (startup.telegramProfile === undefined || typeof startup.telegramProfile === 'string')
+    && (startup.webDir === undefined || typeof startup.webDir === 'string')
+    && typeof startup.authRequired === 'boolean'
+    && Array.isArray(startup.corsOrigins)
+    && startup.corsOrigins.every(origin => typeof origin === 'string');
 }
 
 function isServiceLaunchOptions(value: unknown): value is ServiceLaunchOptions {

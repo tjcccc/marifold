@@ -218,6 +218,42 @@ sessions_db = "${dir}/sessions.db"
     expect(updated.config.models.options).toContain('openai/gpt-4o-mini');
   });
 
+  it('adds provider registry defaults without accepting raw credentials', () => {
+    const dir = tempDir();
+    const configPath = path.join(dir, 'config.toml');
+    fs.writeFileSync(configPath, `
+[default]
+profile = "default"
+think = false
+
+[models]
+options = []
+
+[memory]
+size_limit = 50000
+context_limit = 2400
+
+[paths]
+profiles_dir = "${dir}/profiles"
+sessions_db = "${dir}/sessions.db"
+`);
+
+    const manager = new ConfigManager(new ConfigLoader().load({ configPath }));
+    manager.addProvider('gemini', { proxy: '  http://127.0.0.1:7890  ' });
+    expect(manager.config.providers.gemini).toEqual({
+      type: 'openai-compatible',
+      baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
+      apiKeyEnv: 'GEMINI_API_KEY',
+      proxy: 'http://127.0.0.1:7890',
+    });
+    expect(() => manager.addProvider('custom')).toThrow(/requires a server URL/);
+    expect(() => manager.addProvider('unknown')).toThrow(/Unknown provider/);
+
+    const saved = fs.readFileSync(configPath, 'utf-8');
+    expect(saved).toContain('[providers.gemini]');
+    expect(saved).not.toContain('api_key =');
+  });
+
   it('removes a non-default provider with its credentials and model options', () => {
     const dir = tempDir();
     const configPath = path.join(dir, 'config.toml');

@@ -5,6 +5,11 @@ import {
   readRecentServiceLog,
   serviceProcessPaths,
 } from '../service/ServiceProcess';
+import {
+  formatServiceAvailability,
+  isLoopbackServiceHost,
+  serviceEntryUrls,
+} from '../service/ServiceOutput';
 
 interface StatusOptions {
   logs?: boolean;
@@ -26,9 +31,11 @@ export function registerStatusCommand(program: Command, printer: ConsolePrinter)
           process.stdout.write(`PID:     ${state.pid}\n`);
           process.stdout.write(`Mode:    ${state.mode}\n`);
           process.stdout.write(`Started: ${state.startedAt}\n`);
-          if (state.address) process.stdout.write(`Address: ${state.address}\n`);
+          if (state.address) {
+            process.stdout.write(`${formatServiceAvailability(serviceEntryUrls(state.address, state.launch?.host))}\n`);
+          }
           if (state.launch) {
-            const loopback = ['127.0.0.1', 'localhost', '::1'].includes(state.launch.host);
+            const loopback = isLoopbackServiceHost(state.launch.host);
             const access = state.launch.publicAccess ? 'legacy-public' : loopback ? 'loopback' : 'private';
             process.stdout.write(`Access:  ${access}\n`);
             if (state.launch.publicAccess) {

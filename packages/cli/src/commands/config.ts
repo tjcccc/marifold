@@ -115,12 +115,12 @@ export function registerConfigCommand(program: Command, printer: ConsolePrinter)
 
   config
     .command('search')
-    .description('Configure the web-search provider the model uses (duckduckgo or firecrawl).')
-    .option('--provider <name>', 'duckduckgo, firecrawl, or off.')
+    .description("Configure Marifold's fallback web search (duckduckgo or firecrawl).")
+    .option('--provider <name>', 'Fallback provider: duckduckgo, firecrawl, or off.')
     .option('--api-key-env <name>', 'Env var holding the Firecrawl API key (preferred over storing it).')
     .option('--scrape', 'Firecrawl: scrape each result into markdown (costs more).')
-    .option('--enable', 'Enable model-initiated search.')
-    .option('--disable', 'Disable model-initiated search.')
+    .option('--enable', 'Enable Marifold fallback search.')
+    .option('--disable', 'Disable Marifold fallback search; provider-hosted search remains available.')
     .action(async (options: ConfigSearchOptions) => {
       let prompt: InteractivePrompt | undefined;
       try {
@@ -186,10 +186,10 @@ async function searchUpdateInteractive(
   getPrompt: () => InteractivePrompt,
   style: TerminalStyle,
 ): Promise<Partial<MarifoldWebSearchConfig>> {
-  const provider = await pickOption(getPrompt, style, 'Web search provider:', [
+  const provider = await pickOption(getPrompt, style, 'Fallback web search provider:', [
     { label: 'DuckDuckGo — keyless, best-effort (default)', value: 'duckduckgo' as const },
     { label: 'Firecrawl — AI-ready results (needs an API key)', value: 'firecrawl' as const },
-    { label: 'Off — disable model-initiated search', value: 'off' as const },
+    { label: 'Off — disable only Marifold fallback search', value: 'off' as const },
   ]);
   if (provider === 'off') return { enabled: false };
   if (provider === 'duckduckgo') return { provider: 'duckduckgo', enabled: true };
@@ -242,7 +242,7 @@ async function readLine(prompt: InteractivePrompt, style: TerminalStyle, label: 
 
 function printSearchSummary(config: MarifoldWebSearchConfig | undefined): void {
   if (!config) return;
-  process.stdout.write(`Web search: ${config.provider}${config.enabled ? '' : ' (model-initiated search off)'}\n`);
+  process.stdout.write(`Fallback web search: ${config.provider}${config.enabled ? '' : ' (off; provider-hosted search unaffected)'}\n`);
   if (config.provider === 'firecrawl') {
     const key = config.apiKeyEnv ? `env ${config.apiKeyEnv}` : config.apiKey ? 'stored in config' : 'keyless (rate-limited)';
     process.stdout.write(`  key: ${key}\n  scrape: ${config.scrape ? 'on' : 'off'}\n`);

@@ -31,6 +31,14 @@ export class ProviderFactory {
     }
   }
 
+  /** Provider/model capabilities exposed by the concrete adapter route. The
+   * ChatGPT subscription route uses Priest's OpenAI Responses adapter; other
+   * OpenAI-compatible entries currently use Chat Completions. */
+  supportsNativeWebSearch(providerName: string): boolean {
+    return providerName === 'chatgpt'
+      && this.config.providers[providerName]?.type === 'openai-compatible';
+  }
+
   private requireBaseUrl(providerName: string, provider: MarifoldProviderConfig): string {
     if (provider.baseUrl) return provider.baseUrl;
     throw MarifoldError.configInvalid(`Provider '${providerName}' requires base_url.`, { provider: providerName });

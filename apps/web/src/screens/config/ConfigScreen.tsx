@@ -3,15 +3,18 @@ import type { ApiClient } from '../../api/client';
 import { MarifoldApiError } from '../../api/client';
 import type { ModelsView, ProviderStatusEntry } from '../../api/misc';
 import {
+  addProvider,
   addModel,
   getConfig,
   getModels,
+  getProviderCatalog,
   getProviderStatus,
   removeModel,
   removeProvider,
   setConfigValue,
   setDefaultModel,
 } from '../../api/misc';
+import type { AddProviderInput, ProviderCatalogEntry } from '../../api/misc';
 import {
   addTrustedFolder,
   createProfileWithSetup,
@@ -29,6 +32,7 @@ import {
 import type { CreateProfileInput, ProfileFileKind, ProfilePatchInput } from '../../api/profiles';
 import type { MemoryEntry, ProfileDetail, ProfileSummary, PublicConfig } from '../../api/types';
 import { Avatar } from '../../components/Avatar';
+import { AddProviderSheet } from '../../components/AddProviderSheet';
 import { CreateProfileSheet } from '../../components/CreateProfileSheet';
 import { ResizableSidebar } from '../../components/ResizableSidebar';
 import { SidebarBrand, SidebarSystemFooter } from '../../components/SidebarChrome';
@@ -88,6 +92,7 @@ export function ConfigScreen({
   const [config, setConfig] = useState<PublicConfig | undefined>();
   const [models, setModels] = useState<ModelsView | undefined>();
   const [providerStatus, setProviderStatus] = useState<ProviderStatusEntry[] | undefined>();
+  const [providerCatalog, setProviderCatalog] = useState<ProviderCatalogEntry[] | undefined>();
   const [detail, setDetail] = useState<ProfileDetail | undefined>();
   const [memories, setMemories] = useState<MemoryEntry[]>([]);
   const [problem, setProblem] = useState<string | undefined>();
@@ -96,6 +101,9 @@ export function ConfigScreen({
   const [createOpen, setCreateOpen] = useState(false);
   const [createBusy, setCreateBusy] = useState(false);
   const [createError, setCreateError] = useState<string | undefined>();
+  const [providerAddOpen, setProviderAddOpen] = useState(false);
+  const [providerAddBusy, setProviderAddBusy] = useState(false);
+  const [providerAddError, setProviderAddError] = useState<string | undefined>();
 
   const go = useCallback(
     (nextSection: ConfigSection, nextItem?: string) =>
@@ -180,6 +188,20 @@ export function ConfigScreen({
     if (section === 'providers' && providerStatus === undefined) void refreshProviderStatus();
   }, [section, providerStatus, refreshProviderStatus]);
 
+  const refreshProviderCatalog = useCallback(async () => {
+    try {
+      setProviderCatalog(await getProviderCatalog(client));
+      setProviderAddError(undefined);
+    } catch (error) {
+      if (error instanceof MarifoldApiError && error.code === 'UNAUTHORIZED') onUnauthorized();
+      else setProviderAddError(error instanceof Error ? error.message : String(error));
+    }
+  }, [client, onUnauthorized]);
+
+  useEffect(() => {
+    if (section === 'providers' && providerCatalog === undefined) void refreshProviderCatalog();
+  }, [section, providerCatalog, refreshProviderCatalog]);
+
   /** Run one profile write; the fresh ProfileDetail replaces local state. */
   const mutate = useCallback(
     async (write: () => Promise<ProfileDetail>) => {
@@ -228,6 +250,22 @@ export function ConfigScreen({
       setCreateError(error instanceof Error ? error.message : String(error));
     } finally {
       setCreateBusy(false);
+    }
+  }
+
+  async function submitAddProvider(input: AddProviderInput): Promise<void> {
+    setProviderAddBusy(true);
+    setProviderAddError(undefined);
+    try {
+      setConfig(await addProvider(client, input));
+      setProviderStatus(undefined);
+      setProviderAddOpen(false);
+      go('providers', input.name);
+    } catch (error) {
+      if (error instanceof MarifoldApiError && error.code === 'UNAUTHORIZED') onUnauthorized();
+      else setProviderAddError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setProviderAddBusy(false);
     }
   }
 
@@ -353,6 +391,18 @@ export function ConfigScreen({
         <nav className={styles.items} aria-label="Providers">
           <div className={styles.itemsHeader}>
             <span>Providers</span>
+            <button
+              className={styles.newButton}
+              aria-label="Add provider"
+              title="Add provider"
+              onClick={() => {
+                setProviderAddError(undefined);
+                setProviderAddOpen(true);
+                if (providerCatalog === undefined) void refreshProviderCatalog();
+              }}
+            >
+              +
+            </button>
           </div>
           {providerEntries.map(name => {
             const status = providerStatus?.find(entry => entry.name === name);
@@ -460,14 +510,6 @@ export function ConfigScreen({
             busy={busy}
             onSaveField={(name, key, value) => void writeConfig(`providers.${name}.${key}`, value)}
             onRefreshStatus={() => void refreshProviderStatus()}
-            onAddProvider={async input => {
-              await writeConfig(`providers.${input.name}.type`, input.type);
-              if (input.baseUrl) await writeConfig(`providers.${input.name}.base_url`, input.baseUrl);
-              if (input.apiKeyEnv) await writeConfig(`providers.${input.name}.api_key_env`, input.apiKeyEnv);
-              if (input.proxy) await writeConfig(`providers.${input.name}.proxy`, input.proxy);
-              setProviderStatus(undefined); // re-probe with the new entry
-              go('providers', input.name);
-            }}
             onRemoveProvider={() => void removeSelectedProvider()}
             deleteDisabledReason={
               item === config?.default.provider
@@ -556,6 +598,21 @@ export function ConfigScreen({
           error={createError}
           onSubmit={input => void submitCreateProfile(input)}
           onClose={() => setCreateOpen(false)}
+        />
+      ) : null}
+
+      {providerAddOpen ? (
+        <AddProviderSheet
+          catalog={providerCatalog}
+          existingNames={providerEntries}
+          busy={providerAddBusy}
+          error={providerAddError}
+          onSubmit={input => void submitAddProvider(input)}
+          onClose={() => {
+            if (providerAddBusy) return;
+            setProviderAddOpen(false);
+            setProviderAddError(undefined);
+          }}
         />
       ) : null}
     </div>

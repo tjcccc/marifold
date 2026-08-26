@@ -32,8 +32,8 @@ describe('marifold service lifecycle', () => {
 
     const configPath = fixtureConfig();
     const first = startService(cliEntry, configPath);
-    const firstOutput = await waitForOutput(first, /Marifold service listening at (http:\/\/127\.0\.0\.1:\d+)/);
-    const address = firstOutput.match(/Marifold service listening at (http:\/\/127\.0\.0\.1:\d+)/)?.[1];
+    const firstOutput = await waitForOutput(first, /Marifold service available at (http:\/\/127\.0\.0\.1:\d+)/);
+    const address = firstOutput.match(/Marifold service available at (http:\/\/127\.0\.0\.1:\d+)/)?.[1];
     expect(address).toBeDefined();
     expect(await fetch(`${address}/health`).then(response => response.json())).toMatchObject({
       ok: true,
@@ -73,14 +73,17 @@ describe('marifold service lifecycle', () => {
     const configPath = fixtureConfig();
     const started = await runCli(cliEntry, configPath, ['service', 'start', '--daemon', '--port', '0', '--log'], 12_000);
     expect(started.code).toBe(0);
+    expect(started.output).toMatch(/Marifold service available at http:\/\/127\.0\.0\.1:\d+/);
     expect(started.output).toMatch(/Marifold service started in background \(PID \d+\)/);
+    expect(started.output).not.toContain('Web UI: serving');
+    expect(started.output).not.toContain('CORS: allowing');
     const startedPid = Number(started.output.match(/PID (\d+)/)?.[1]);
 
     const status = await runCli(cliEntry, configPath, ['status']);
     expect(status.code).toBe(0);
     expect(status.output).toContain('Mode:    daemon');
     expect(status.output).toContain('Access:  loopback');
-    const address = status.output.match(/Address: (http:\/\/127\.0\.0\.1:\d+)/)?.[1];
+    const address = status.output.match(/Marifold service available at (http:\/\/127\.0\.0\.1:\d+)/)?.[1];
     expect(address).toBeDefined();
     expect(await fetch(`${address}/health`).then(response => response.json())).toMatchObject({
       ok: true,
@@ -88,11 +91,11 @@ describe('marifold service lifecycle', () => {
     });
 
     const logPath = path.join(serviceStateDir(configPath), 'service.log');
-    await waitForFileOutput(logPath, /Marifold service listening at/);
+    await waitForFileOutput(logPath, /Marifold service available at/);
     const loggedStatus = await runCli(cliEntry, configPath, ['status', '--logs']);
     expect(loggedStatus.code).toBe(0);
     expect(loggedStatus.output).toContain('Recent logs (last 100 lines):');
-    expect(loggedStatus.output).toContain('Marifold service listening at');
+    expect(loggedStatus.output).toContain('Marifold service available at');
 
     const restarted = await runCli(cliEntry, configPath, ['service', 'restart'], 12_000);
     expect(restarted.code).toBe(0);
@@ -104,7 +107,7 @@ describe('marifold service lifecycle', () => {
     const restartedStatus = await runCli(cliEntry, configPath, ['status']);
     expect(restartedStatus.code).toBe(0);
     expect(restartedStatus.output).toContain('Mode:    daemon');
-    const restartedAddress = restartedStatus.output.match(/Address: (http:\/\/127\.0\.0\.1:\d+)/)?.[1];
+    const restartedAddress = restartedStatus.output.match(/Marifold service available at (http:\/\/127\.0\.0\.1:\d+)/)?.[1];
     expect(restartedAddress).toBeDefined();
     expect(await fetch(`${restartedAddress}/health`).then(response => response.json())).toMatchObject({
       ok: true,
@@ -145,8 +148,13 @@ describe('marifold service lifecycle', () => {
 
     const started = await runCli(cliEntry, configPath, [
       'service', 'start', '--daemon', '--host', '0.0.0.0', '--port', '0', '--token', token,
+      '--cors-origin', 'http://127.0.0.1:5173', '--verbose',
     ], 12_000);
     expect(started.code).toBe(0);
+    expect(started.output).toMatch(/Marifold service available at:\n  http:\/\/127\.0\.0\.1:\d+/);
+    expect(started.output).toMatch(/Bind: http:\/\/0\.0\.0\.0:\d+/);
+    expect(started.output).toContain('Web UI: serving');
+    expect(started.output).toContain('CORS: allowing http://127.0.0.1:5173');
 
     const statePath = path.join(serviceStateDir(configPath), 'state.json');
     let stateText = fs.readFileSync(statePath, 'utf8');
@@ -174,6 +182,10 @@ describe('marifold service lifecycle', () => {
     const restarted = await runCli(cliEntry, configPath, ['service', 'restart', '--token', token], 12_000);
     expect(restarted.code).toBe(0);
     expect(restarted.output).toContain('Restarting...');
+    expect(restarted.output).toContain('Marifold service available at:');
+    expect(restarted.output).not.toContain('Bind:');
+    expect(restarted.output).not.toContain('Web UI: serving');
+    expect(restarted.output).not.toContain('CORS: allowing');
     stateText = fs.readFileSync(statePath, 'utf8');
     expect(stateText).not.toContain(token);
     expect(JSON.parse(stateText).launch).not.toHaveProperty('publicAccess');

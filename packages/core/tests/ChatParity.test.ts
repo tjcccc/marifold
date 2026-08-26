@@ -246,6 +246,53 @@ describe('chat tool loop', () => {
     }
   });
 
+  it('executes the Marifold fallback in the non-streaming ask path', async () => {
+    const dir = tempDir();
+    const queries: string[] = [];
+    const backend: SearchBackend = {
+      search: async query => {
+        queries.push(query);
+        return [{ title: 'Result', url: 'https://example.com', snippet: 'Fresh fact.' }];
+      },
+    };
+    const bodies: Array<Record<string, unknown>> = [];
+    let call = 0;
+    vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      bodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+      call += 1;
+      if (call === 1) {
+        return new Response(JSON.stringify({
+          message: {
+            content: '',
+            tool_calls: [{
+              function: { name: 'web_search', arguments: { query: 'marifold current' } },
+            }],
+          },
+          done: true,
+          done_reason: 'stop',
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+      return ollamaJsonResponse('Here is the current answer.');
+    }));
+
+    const runtime = runtimeFor(dir, baseConfig(dir, {
+      webSearch: { enabled: true, provider: 'duckduckgo', maxResults: 3 },
+    }), backend);
+    try {
+      const response = await runtime.ask({
+        prompt: 'Find current Marifold information.',
+        memories: false,
+      });
+      expect(response.ok).toBe(true);
+      expect(response.text).toBe('Here is the current answer.');
+      expect(queries).toEqual(['marifold current']);
+      expect(bodies[0].tools).toBeDefined();
+      expect(JSON.stringify(bodies[1].messages)).toContain('Fresh fact.');
+    } finally {
+      runtime.close();
+    }
+  });
+
   it('does not advertise tools when web search is disabled', async () => {
     const dir = tempDir();
     const bodies: Array<Record<string, unknown>> = [];
@@ -262,6 +309,92 @@ describe('chat tool loop', () => {
       const text = await collectStream(runtime.stream({ prompt: 'Hello', memories: false }));
       expect(text).toBe('plain');
       expect(bodies[0].tools).toBeUndefined();
+      const messages = bodies[0].messages as Array<Record<string, unknown>>;
+      expect(messages[0].content).toContain('Web search is unavailable for this run');
+    } finally {
+      runtime.close();
+    }
+  });
+
+  it('uses ChatGPT hosted web search while the Marifold fallback is disabled', async () => {
+    const dir = tempDir();
+    const bodies: Array<Record<string, unknown>> = [];
+    vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      bodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+      return responsesSse([
+        { type: 'response.output_text.delta', delta: 'Current answer.' },
+        {
+          type: 'response.completed',
+          response: {
+            status: 'completed',
+            output: [{ type: 'message', content: [{ type: 'output_text', text: 'Current answer.' }] }],
+          },
+        },
+      ]);
+    }));
+
+    const config = baseConfig(dir, {
+      default: { provider: 'chatgpt', model: 'gpt-5.6-sol', profile: 'default', think: false },
+      models: { options: ['chatgpt/gpt-5.6-sol'] },
+      providers: {
+        chatgpt: {
+          type: 'openai-compatible',
+          baseUrl: 'https://chatgpt.com/backend-api/codex',
+          apiKey: 'test-access-token',
+        },
+      },
+      webSearch: { enabled: false, provider: 'duckduckgo', maxResults: 5 },
+    });
+    const runtime = runtimeFor(dir, config);
+    try {
+      expect(await collectStream(runtime.stream({
+        prompt: 'Search for something current.',
+        memories: false,
+      }))).toBe('Current answer.');
+      expect(bodies[0].tools).toEqual([{ type: 'web_search' }]);
+      expect(JSON.stringify(bodies[0].input)).toContain('Provider-hosted web search is available');
+    } finally {
+      runtime.close();
+    }
+  });
+
+  it('prefers hosted search over the configured fallback without dropping unrelated chat tools', async () => {
+    const dir = tempDir();
+    const bodies: Array<Record<string, unknown>> = [];
+    vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      bodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+      return responsesSse([
+        { type: 'response.output_text.delta', delta: 'Done.' },
+        {
+          type: 'response.completed',
+          response: {
+            status: 'completed',
+            output: [{ type: 'message', content: [{ type: 'output_text', text: 'Done.' }] }],
+          },
+        },
+      ]);
+    }));
+
+    const config = baseConfig(dir, {
+      default: { provider: 'chatgpt', model: 'gpt-5.6-sol', profile: 'default', think: false },
+      models: { options: ['chatgpt/gpt-5.6-sol'] },
+      providers: {
+        chatgpt: {
+          type: 'openai-compatible',
+          baseUrl: 'https://chatgpt.com/backend-api/codex',
+          apiKey: 'test-access-token',
+        },
+      },
+      webSearch: { enabled: true, provider: 'duckduckgo', maxResults: 5 },
+    });
+    const runtime = runtimeFor(dir, config);
+    try {
+      expect(await collectStream(runtime.stream({ prompt: 'Search the web.', memories: false }))).toBe('Done.');
+      expect(bodies[0].tools).toEqual([
+        { type: 'web_search' },
+        expect.objectContaining({ type: 'function', name: 'read_file' }),
+      ]);
+      expect(JSON.stringify(bodies[0].tools)).not.toContain('"name":"web_search"');
     } finally {
       runtime.close();
     }

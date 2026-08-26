@@ -8,14 +8,6 @@ import styles from './SystemPages.module.css';
 const PROVIDER_TYPES = ['ollama', 'openai-compatible', 'anthropic'] as const;
 const OAUTH_PROVIDERS = new Set(['github_copilot', 'chatgpt', 'xai']);
 
-export interface AddProviderInput {
-  name: string;
-  type: string;
-  baseUrl?: string;
-  apiKeyEnv?: string;
-  proxy?: string;
-}
-
 export interface ProvidersPageProps {
   selected?: string;
   config?: PublicConfig;
@@ -25,7 +17,6 @@ export interface ProvidersPageProps {
    * Raw api_key values are deliberately not editable here (CLI/file only). */
   onSaveField: (name: string, key: string, value: string) => void;
   onRefreshStatus: () => void;
-  onAddProvider: (input: AddProviderInput) => Promise<void>;
   onRemoveProvider: () => void;
   deleteDisabledReason?: string;
 }
@@ -37,7 +28,6 @@ export function ProvidersPage(props: ProvidersPageProps) {
   const [baseUrl, setBaseUrl] = useState<string | undefined>();
   const [apiKeyEnv, setApiKeyEnv] = useState<string | undefined>();
   const [proxy, setProxy] = useState<string | undefined>();
-  const [adding, setAdding] = useState(false);
   const [reauthOpen, setReauthOpen] = useState(false);
   const [removeOpen, setRemoveOpen] = useState(false);
   const [removeName, setRemoveName] = useState('');
@@ -57,7 +47,6 @@ export function ProvidersPage(props: ProvidersPageProps) {
     setBaseUrl(undefined);
     setApiKeyEnv(undefined);
     setProxy(undefined);
-    setAdding(false);
     setReauthOpen(false);
     setRemoveOpen(false);
     setRemoveName('');
@@ -99,17 +88,6 @@ export function ProvidersPage(props: ProvidersPageProps) {
       returnFocus?.focus();
     };
   }, [removeOpen, reauthOpen]);
-
-  if (adding) {
-    return (
-      <AddProviderForm
-        busy={props.busy}
-        existing={Object.keys(props.config?.providers ?? {})}
-        onSubmit={input => void props.onAddProvider(input).then(() => setAdding(false))}
-        onCancel={() => setAdding(false)}
-      />
-    );
-  }
 
   if (!props.selected || !provider) {
     return <div className={styles.empty}>Select a provider.</div>;
@@ -157,9 +135,6 @@ export function ProvidersPage(props: ProvidersPageProps) {
           ) : null}
           <button className={styles.linkAction} onClick={props.onRefreshStatus} disabled={props.busy}>
             Refresh status
-          </button>
-          <button className={styles.linkAction} onClick={() => setAdding(true)} disabled={props.busy}>
-            Add provider…
           </button>
         </div>
       </header>
@@ -407,89 +382,6 @@ export function ProvidersPage(props: ProvidersPageProps) {
         </div>,
         document.body,
       ) : null}
-    </div>
-  );
-}
-
-function AddProviderForm({
-  busy,
-  existing,
-  onSubmit,
-  onCancel,
-}: {
-  busy: boolean;
-  existing: string[];
-  onSubmit: (input: AddProviderInput) => void;
-  onCancel: () => void;
-}) {
-  const [name, setName] = useState('');
-  const [type, setType] = useState<string>('openai-compatible');
-  const [baseUrl, setBaseUrl] = useState('');
-  const [apiKeyEnv, setApiKeyEnv] = useState('');
-  const [proxy, setProxy] = useState('');
-
-  const trimmed = name.trim();
-  const problem =
-    trimmed.length > 0 && !/^[A-Za-z0-9_-]+$/.test(trimmed)
-      ? 'Letters, numbers, underscores, and hyphens only.'
-      : existing.includes(trimmed)
-        ? `'${trimmed}' already exists.`
-        : undefined;
-
-  return (
-    <div className={styles.page}>
-      <header className={styles.pageHeader}>
-        <div className={styles.pageTitle}>Add provider</div>
-      </header>
-      <section className={styles.card}>
-        <div className={styles.fieldRow}>
-          <span className={styles.fieldLabel}>Name</span>
-          <input className={styles.input} value={name} placeholder="myremote" autoFocus onChange={event => setName(event.target.value)} />
-        </div>
-        <div className={styles.fieldRow}>
-          <span className={styles.fieldLabel}>Type</span>
-          <select className={styles.select} value={type} onChange={event => setType(event.target.value)}>
-            {PROVIDER_TYPES.map(candidate => (
-              <option key={candidate} value={candidate}>
-                {candidate}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className={styles.fieldRow}>
-          <span className={styles.fieldLabel}>Base URL</span>
-          <input className={styles.input} value={baseUrl} placeholder="https://llm.example.com/v1" onChange={event => setBaseUrl(event.target.value)} />
-        </div>
-        <div className={styles.fieldRow}>
-          <span className={styles.fieldLabel}>API key env</span>
-          <input className={styles.input} value={apiKeyEnv} placeholder="MYREMOTE_API_KEY" onChange={event => setApiKeyEnv(event.target.value)} />
-        </div>
-        <div className={styles.fieldRow}>
-          <span className={styles.fieldLabel}>Proxy</span>
-          <input className={styles.input} value={proxy} placeholder="http://127.0.0.1:7890 — blank = direct" onChange={event => setProxy(event.target.value)} />
-        </div>
-      </section>
-      {problem ? <div className={styles.problem}>{problem}</div> : null}
-      <div className={styles.formActions}>
-        <button className={styles.cancelAction} onClick={onCancel} disabled={busy}>
-          Cancel
-        </button>
-        <button
-          className={styles.primaryAction}
-          disabled={busy || trimmed.length === 0 || problem !== undefined}
-          onClick={() =>
-            onSubmit({
-              name: trimmed,
-              type,
-              ...(baseUrl.trim() ? { baseUrl: baseUrl.trim() } : {}),
-              ...(apiKeyEnv.trim() ? { apiKeyEnv: apiKeyEnv.trim() } : {}),
-              ...(proxy.trim() ? { proxy: proxy.trim() } : {}),
-            })
-          }
-        >
-          Add provider
-        </button>
-      </div>
     </div>
   );
 }

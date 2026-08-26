@@ -15,6 +15,7 @@ import { AgentTool, ToolRegistry } from '../agent/ToolRegistry';
 import { ChatGptRefreshedTokens, refreshChatGptAccessToken } from '../config/ChatGptTokenRefresh';
 import { XaiRefreshedTokens, refreshXaiAccessToken } from '../config/XaiTokenRefresh';
 import { ConfigManager } from '../config/ConfigManager';
+import type { ConfigAddProviderOptions } from '../config/ConfigManager';
 import { LoadedMarifoldConfig, ProfileDetail, ProfileMode, ProfileSummary, ProviderType, resolveWebSearchConfig, SessionDetail, SessionSummary } from '../config/ConfigSchema';
 import { ProviderInspector } from '../config/ProviderInspector';
 import type { ProviderModelList, ProviderStatus } from '../config/ProviderInspector';
@@ -67,13 +68,15 @@ import { SkillAppInstanceRegistry } from '../app/SkillAppInstanceRegistry';
 import { TaskStore } from '../tasks/TaskStore';
 import { defaultAppsDir, defaultSchedulesDir, defaultSkillsDir } from '../workspace/WorkspacePaths';
 import type { TaskCreateInput, TaskEventInput, TaskListOptions, TaskState, TaskSummary, TaskUpdateInput } from '../tasks/TaskStore';
-import { MarifoldAskResponse, MarifoldResolvedSettings, MarifoldRunRequest } from './MarifoldTypes';
+import { MarifoldAskResponse, MarifoldProviderToolDefinition, MarifoldResolvedSettings, MarifoldRunRequest, MarifoldWebSearchMode } from './MarifoldTypes';
 
 // Older OpenAI-compatible gateways still take a raw `{think}` body option.
 // Priest 2.8 owns neutral reasoning for Ollama, Anthropic, and Responses.
 const LEGACY_THINK_PROVIDER_NAMES = new Set(['bailian', 'alibaba_cloud']);
 const CHAT_TOOL_MAX_ITERATIONS = 3;
 const EDIT_HISTORY_BUDGET_DEFAULT_CHARS = 16_000;
+const NATIVE_WEB_SEARCH_COMPAT_OPTION = 'marifold_native_web_search';
+const WEB_SEARCH_UNAVAILABLE_CONTEXT = 'Web search is unavailable for this run. If the user asks you to browse or search the web, or their question requires current information, say clearly that you cannot access web search; do not imply that you searched.';
 
 export interface MarifoldRuntimeOptions {
   loadedConfig: LoadedMarifoldConfig;
@@ -135,32 +138,73 @@ export class MarifoldRuntime {
     );
     const memoryOn = this.memoryEnabled(settings.profile, request.memories);
     const memory = this.memoryForRequest(settings.profile, request.memories, request.prompt, settings.think);
-    const response = await engine.run({
-      config: this.toPriestConfig(settings),
+    const webSearchMode = this.resolveWebSearchMode(settings, request.chatTools !== false);
+    const chatTools = this.chatTools(request, webSearchMode);
+    const priestRequest: PriestRequest & { providerTools?: MarifoldProviderToolDefinition[] } = {
+      config: this.toPriestConfig(settings, webSearchMode === 'native'),
       profile: settings.profile,
       prompt: request.prompt,
       session: request.sessionId && !replacing && !isolated
         ? { id: request.sessionId, createIfMissing: true }
         : undefined,
       context: [
-        ...this.runtimeContext(memory, request.prompt, memoryOn),
+        ...this.runtimeContext(memory, request.prompt, memoryOn, webSearchMode),
         ...this.editHistoryContext(request, settings),
         ...(request.instructions ?? []),
       ],
       memory,
       images: preparedImages.images.length > 0 ? preparedImages.images : undefined,
       userContext: request.userContext,
-    });
-    const stripped = stripMemoryControls(response.text ?? '');
+      providerTools: this.providerToolsFor(webSearchMode),
+    };
+    const exchange: ToolExchangeTurn[] = [];
+    const maxIterations = chatTools ? CHAT_TOOL_MAX_ITERATIONS : 1;
+    let response: PriestResponse | undefined;
+    let aggregateUsage: UsageInfo | undefined;
+
+    // Keep the non-streaming CLI/service path at parity with stream(): a model
+    // without hosted search can call Marifold's configured fallback, then see
+    // the turn-local result before producing its final answer.
+    for (let iteration = 0; iteration < maxIterations; iteration += 1) {
+      const lastIteration = iteration === maxIterations - 1;
+      response = await engine.run({
+        ...priestRequest,
+        ...(chatTools && !lastIteration ? { tools: chatTools.definitions } : {}),
+        ...(exchange.length > 0 ? { toolExchange: exchange } : {}),
+      }, request.signal ? { signal: request.signal } : undefined);
+      aggregateUsage = sumUsage(aggregateUsage, response.usage);
+      if (!response.ok || !chatTools || !response.toolCalls?.length) break;
+
+      exchange.push({
+        kind: 'assistant',
+        text: response.text,
+        toolCalls: response.toolCalls,
+        ...(response.reasoning ? { reasoning: response.reasoning } : {}),
+      });
+      for (const call of response.toolCalls) {
+        const result = await chatTools.execute(call.name, call.arguments);
+        exchange.push({
+          kind: 'tool_result',
+          toolCallId: call.id,
+          name: call.name,
+          content: result.content,
+          isError: result.isError,
+        });
+      }
+    }
+
+    // maxIterations is clamped above and therefore always produces a response.
+    const finalResponse = response!;
+    const stripped = stripMemoryControls(finalResponse.text ?? '');
     const userTurn = request.userTurn ?? request.prompt;
     const responseMetrics = completedResponseMetrics(
       'chat',
       settings,
       startedAt,
       startedAtMs,
-      response.usage,
+      aggregateUsage,
     );
-    if (response.ok && request.sessionId) {
+    if (finalResponse.ok && request.sessionId) {
       if (request.replaceUserTurnIndex !== undefined) {
         this.replaceEditedExchange(
           request.sessionId,
@@ -186,17 +230,19 @@ export class MarifoldRuntime {
         this.sessionResolver.saveLastResponseMetrics(request.sessionId, responseMetrics);
       }
     }
-    if (response.ok && memoryOn) {
+    if (finalResponse.ok && memoryOn) {
       this.applyTurnMemory(settings.profile, request.prompt, stripped, request.sessionId);
     }
 
     return {
-      ok: response.ok,
+      ok: finalResponse.ok,
       text: stripped.text,
       settings,
-      latencyMs: response.ok ? responseMetrics.latencyMs : response.execution.latencyMs,
-      session: response.session,
-      error: response.error ? { code: response.error.code, message: response.error.message } : undefined,
+      latencyMs: finalResponse.ok ? responseMetrics.latencyMs : finalResponse.execution.latencyMs,
+      session: finalResponse.session,
+      error: finalResponse.error
+        ? { code: finalResponse.error.code, message: finalResponse.error.message }
+        : undefined,
     };
   }
 
@@ -224,26 +270,29 @@ export class MarifoldRuntime {
     );
     const memoryOn = this.memoryEnabled(settings.profile, request.memories);
     const memory = this.memoryForRequest(settings.profile, request.memories, request.prompt, settings.think);
-    const chatTools = this.chatTools(request);
+    const webSearchMode = this.resolveWebSearchMode(settings, request.chatTools !== false);
+    const chatTools = this.chatTools(request, webSearchMode);
 
-    const baseRequest: PriestRequest = {
-      config: this.toPriestConfig(settings),
+    const baseRequest: PriestRequest & { providerTools?: MarifoldProviderToolDefinition[] } = {
+      config: this.toPriestConfig(settings, webSearchMode === 'native'),
       profile: settings.profile,
       prompt: request.prompt,
       session: request.sessionId && !replacing && !isolated
         ? { id: request.sessionId, createIfMissing: true }
         : undefined,
       context: [
-        ...this.runtimeContext(memory, request.prompt, memoryOn),
+        ...this.runtimeContext(memory, request.prompt, memoryOn, webSearchMode),
         ...this.editHistoryContext(request, settings),
         ...(request.instructions ?? []),
       ],
       memory,
       images: preparedImages.images.length > 0 ? preparedImages.images : undefined,
       userContext: request.userContext,
+      providerTools: this.providerToolsFor(webSearchMode),
     };
 
-    // Model-initiated tool loop (web_search/read_file) when [web_search].enabled.
+    // Caller-executed fallback/read loop. Provider-hosted search is carried
+    // separately and does not enter Marifold's tool exchange.
     // Intermediate tool-call turns are turn-local; the engine persists the
     // session only on the loop's final response, and memory payloads are
     // applied only from that final response.
@@ -566,6 +615,16 @@ export class MarifoldRuntime {
     return new ProviderInspector(this.options.loadedConfig).listModels(provider);
   }
 
+  /** Add one registry provider for app clients. Existing entries must be
+   * edited through the config surface so an accidental double-submit cannot
+   * silently replace their connection settings. */
+  addProvider(provider: string, options: ConfigAddProviderOptions = {}): void {
+    if (this.options.loadedConfig.config.providers[provider]) {
+      throw MarifoldError.configInvalid(`Provider '${provider}' is already configured.`);
+    }
+    new ConfigManager(this.options.loadedConfig).addProvider(provider, options);
+  }
+
   /** Add a saved provider/model option (creating/updating the provider entry;
    * secrets are not part of this surface — CLI/file only). */
   addModelOption(provider: string, model: string, options: { type?: ProviderType; baseUrl?: string; apiKeyEnv?: string } = {}): void {
@@ -707,12 +766,15 @@ export class MarifoldRuntime {
       resolveSettings: request => this.resolveSettings(request),
       prepareEngine: async settings => {
         await this.refreshProviderCredentialsIfNeeded(settings.provider);
+        const webSearchMode = this.resolveWebSearchMode(settings);
         return {
           // No engine-level session store: priest would otherwise persist the
           // raw per-iteration `Objective:`/tool framing (and duplicates). The
           // runner instead persists one clean turn pair via `persistTurn` below.
           engine: this.createEngine(settings.provider, false),
-          config: this.toPriestConfig(settings),
+          config: this.toPriestConfig(settings, webSearchMode === 'native'),
+          webSearchMode,
+          providerTools: this.providerToolsFor(webSearchMode),
         };
       },
       prepareImages: async (images, optimize) => (await prepareImageInputs(images, { optimize })).images,
@@ -783,8 +845,8 @@ export class MarifoldRuntime {
     registry.register(new WriteFileTool());
     registry.register(new ShellExecTool());
     registry.register(new PythonPackageTool());
-    // web_search joins the agent's toolset when search is enabled and the
-    // network isn't denied — so the model can look things up on its own.
+    // Marifold fallback web_search joins the registry when configured. Runs
+    // with provider-hosted search filter it out before advertising tools.
     const webSearch = resolveWebSearchConfig(this.options.loadedConfig.config.webSearch);
     const approval = this.resolveAgentConfigForProfile(profile).approval;
     if (webSearch.enabled && approval.network !== 'deny') {
@@ -1149,22 +1211,20 @@ export class MarifoldRuntime {
     }
   }
 
-  /**
-   * Model-initiated tools for chat turns. Opt-in via [web_search].enabled;
-   * web_search joins unless network policy is deny, read_file joins only when
-   * read policy is allow.
-   */
-  private chatTools(request: MarifoldRunRequest): {
+  /** Caller-executed tools for chat turns. Marifold web_search is advertised
+   * only in fallback mode; provider-hosted search travels separately. */
+  private chatTools(request: MarifoldRunRequest, webSearchMode: MarifoldWebSearchMode): {
     definitions: ToolDefinition[];
     execute: (name: string, args: Record<string, JSONValue>) => Promise<{ content: string; isError?: boolean }>;
   } | undefined {
+    if (request.chatTools === false) return undefined;
     const webSearch = resolveWebSearchConfig(this.options.loadedConfig.config.webSearch);
-    if (!webSearch.enabled || request.chatTools === false) return undefined;
+    if (!webSearch.enabled && webSearchMode !== 'fallback') return undefined;
 
     const agentConfig = this.resolveAgentConfigForProfile(request.profile);
     const approval = agentConfig.approval;
     const tools: AgentTool[] = [];
-    if (approval.network !== 'deny') tools.push(new WebSearchTool(this.searchBackend, webSearch.maxResults));
+    if (webSearchMode === 'fallback') tools.push(new WebSearchTool(this.searchBackend, webSearch.maxResults));
     if (approval.read === 'allow') tools.push(new ReadFileTool());
     if (tools.length === 0) return undefined;
 
@@ -1184,10 +1244,16 @@ export class MarifoldRuntime {
     };
   }
 
-  private toPriestConfig(settings: MarifoldResolvedSettings): PriestConfig {
+  private toPriestConfig(settings: MarifoldResolvedSettings, nativeWebSearch = false): PriestConfig {
     const { config } = this.options.loadedConfig;
     const provider = config.providers[settings.provider];
     const neutralReasoning = this.supportsNeutralReasoning(settings.provider, settings.model);
+    const providerOptions: Record<string, JSONValue> = {};
+    if (LEGACY_THINK_PROVIDER_NAMES.has(settings.provider)) providerOptions['think'] = settings.think;
+    // Compatibility bridge for Priest 3.0.x. Priest 3.1 reads providerTools
+    // directly; Marifold's Responses wrapper consumes and removes this marker
+    // when an older engine does not forward that additive request field.
+    if (nativeWebSearch) providerOptions[NATIVE_WEB_SEARCH_COMPAT_OPTION] = true;
     return {
       provider: settings.provider,
       model: settings.model,
@@ -1205,9 +1271,7 @@ export class MarifoldRuntime {
         : neutralReasoning && settings.think
           ? { enabled: true, effort: 'high', summary: 'auto' }
           : undefined,
-      providerOptions: LEGACY_THINK_PROVIDER_NAMES.has(settings.provider)
-        ? { think: settings.think }
-        : undefined,
+      providerOptions: Object.keys(providerOptions).length > 0 ? providerOptions : undefined,
     };
   }
 
@@ -1242,8 +1306,35 @@ export class MarifoldRuntime {
     });
   }
 
-  private runtimeContext(memory: string[], prompt: string, memoryOn: boolean): string[] {
+  private resolveWebSearchMode(
+    settings: Pick<MarifoldResolvedSettings, 'profile' | 'provider' | 'model'>,
+    modelToolsEnabled = true,
+  ): MarifoldWebSearchMode {
+    if (!modelToolsEnabled) return 'unavailable';
+    const approval = this.resolveAgentConfigForProfile(settings.profile).approval;
+    if (approval.network === 'deny') return 'unavailable';
+    if (this.providerFactory.supportsNativeWebSearch(settings.provider)) return 'native';
+    return resolveWebSearchConfig(this.options.loadedConfig.config.webSearch).enabled
+      ? 'fallback'
+      : 'unavailable';
+  }
+
+  private providerToolsFor(mode: MarifoldWebSearchMode): MarifoldProviderToolDefinition[] | undefined {
+    return mode === 'native' ? [{ type: 'web_search' }] : undefined;
+  }
+
+  private runtimeContext(
+    memory: string[],
+    prompt: string,
+    memoryOn: boolean,
+    webSearchMode: MarifoldWebSearchMode,
+  ): string[] {
     const context = ['Running inside Marifold.'];
+    if (webSearchMode === 'native') {
+      context.push('Provider-hosted web search is available for this run. Use it for web or current-information requests; Marifold fallback search is not exposed while native search is available.');
+    } else if (webSearchMode === 'unavailable') {
+      context.push(WEB_SEARCH_UNAVAILABLE_CONTEXT);
+    }
     if (memoryOn) {
       context.push('Profile memory is app-owned context. Current user messages and profile rules outrank memory.');
       if (shouldInjectMemoryInstructions(prompt)) context.push(buildMemoryInstructions());

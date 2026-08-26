@@ -13,9 +13,16 @@ import {
   releaseServiceProcess,
   ServiceLaunchOptions,
   ServiceProcessState,
+  ServiceStartupDetails,
   serviceProcessPaths,
   stopActiveServiceProcess,
 } from '../service/ServiceProcess';
+import {
+  formatServiceAvailability,
+  isLoopbackServiceHost,
+  serviceBindUrl,
+  serviceEntryUrls,
+} from '../service/ServiceOutput';
 import { loadConfig } from './RuntimeFactory';
 
 interface ServiceOptions {
@@ -23,6 +30,7 @@ interface ServiceOptions {
   port?: string;
   log?: boolean;
   daemon?: boolean;
+  verbose?: boolean;
   token?: string;
   tokenEnv?: string;
   corsOrigin?: string[];
@@ -33,6 +41,7 @@ interface ServiceOptions {
 
 interface ServiceRestartOptions {
   token?: string;
+  verbose?: boolean;
 }
 
 const SHUTDOWN_GRACE_MS = 5_000;
@@ -80,6 +89,7 @@ export function registerServiceCommand(program: Command, printer: ConsolePrinter
     .command('restart')
     .description('Restart the managed service with its previous launch options.')
     .option('--token <token>', 'Raw bearer token required again when the previous start used --token.')
+    .option('--verbose', 'Show technical service details.')
     .action(async (options: ServiceRestartOptions) => {
       await restartService(program, printer, options);
     });
@@ -99,6 +109,7 @@ function addServiceOptions(command: Command, allowDaemon = false): Command {
       [] as string[],
     )
     .option('--web-dir <dir>', 'Host the built Web UI from this directory (overrides [service].web_dir).');
+  command.option('--verbose', 'Show technical service details.');
   if (allowDaemon) command.option('--daemon', 'Run the service in the background.');
   return command;
 }
@@ -139,25 +150,23 @@ async function runService(
       cors: { origins: corsOrigins },
       web: { dir: webDir },
     });
-    markServiceProcessRunning(owner, result.address);
+    const startup = {
+      ...(result.telegram ? { telegramProfile: result.telegram.profile } : {}),
+      ...(result.webDir ? { webDir: result.webDir } : {}),
+      authRequired: Boolean(security.token),
+      corsOrigins: security.corsOrigins,
+    };
+    markServiceProcessRunning(owner, { address: result.address, startup });
 
-    process.stdout.write(`Marifold service listening at ${result.address}\n`);
-    if (result.telegram) {
-      process.stdout.write(`Telegram bridge active (profile ${result.telegram.profile}).\n`);
-    }
-    const configuredWebDir = webDir ?? loadedConfig.config.service?.webDir;
-    if (configuredWebDir) {
-      process.stdout.write(`Web UI: serving ${configuredWebDir}\n`);
-    } else if (result.webDir) {
-      process.stdout.write(`Web UI: ${result.address}\n`);
-    }
-    if (security.token) process.stdout.write('Auth: bearer token required on /v1 (exempt: /health, static).\n');
-    if (options.host && !['127.0.0.1', 'localhost', '::1'].includes(options.host)) {
-      process.stdout.write('Access: private networks only (LAN, link-local, and Tailscale).\n');
-    }
-    if (security.corsOrigins.length > 0) {
-      process.stdout.write(`CORS: allowing ${security.corsOrigins.join(', ')}\n`);
-    }
+    printServiceAvailability(result.address, result.host);
+    printServiceDetails({
+      startup,
+      host: result.host,
+      address: result.address,
+      configPath: loadedConfig.configPath,
+      requestLogging: Boolean(options.log),
+      verbose: Boolean(options.verbose),
+    });
     if (mode === 'foreground') process.stdout.write('Press Ctrl+C to stop.\n');
     await waitForShutdown({
       close: result.server.close.bind(result.server),
@@ -209,7 +218,18 @@ async function startDaemon(
 
     const state = await waitForDaemonStart(daemon, DAEMON_START_TIMEOUT_MS);
     daemon.unref();
+    if (state.address) printServiceAvailability(state.address, state.launch?.host);
     process.stdout.write(`Marifold service started in background (PID ${state.pid}).\n`);
+    if (state.address && state.startup) {
+      printServiceDetails({
+        startup: state.startup,
+        host: state.launch?.host ?? new URL(state.address).hostname,
+        address: state.address,
+        configPath: state.configPath,
+        requestLogging: Boolean(state.launch?.log),
+        verbose: Boolean(options.verbose),
+      });
+    }
     process.stdout.write(`Log: ${paths.log}\n`);
   } catch (error) {
     printer.printError(error);
@@ -224,6 +244,7 @@ function buildDaemonArgs(configPath: string, options: ServiceOptions): string[] 
   args.push('--host', options.host ?? '127.0.0.1');
   args.push('--port', options.port ?? '32140');
   if (options.log) args.push('--log');
+  if (options.verbose) args.push('--verbose');
   if (options.token) {
     args.push('--token-env', DAEMON_TOKEN_ENV);
   } else if (options.tokenEnv) {
@@ -248,7 +269,7 @@ async function restartService(
       );
     }
 
-    const options = serviceOptionsForRestart(active.launch, restartOptions.token);
+    const options = serviceOptionsForRestart(active.launch, restartOptions.token, restartOptions.verbose);
     if (!fs.existsSync(active.launch.cwd)) {
       throw new Error(`Previous service working directory no longer exists: ${active.launch.cwd}`);
     }
@@ -285,7 +306,7 @@ function serviceLaunchOptions(options: ServiceOptions, rawToken: boolean): Servi
   };
 }
 
-function serviceOptionsForRestart(launch: ServiceLaunchOptions, token?: string): ServiceOptions {
+function serviceOptionsForRestart(launch: ServiceLaunchOptions, token?: string, verbose?: boolean): ServiceOptions {
   if (launch.tokenSource === 'raw' && !token) {
     throw MarifoldError.configInvalid(
       'The service was started with --token. Restart it with marifold service restart --token <token>.',
@@ -296,11 +317,46 @@ function serviceOptionsForRestart(launch: ServiceLaunchOptions, token?: string):
     port: launch.port,
     cwd: launch.cwd,
     log: launch.log,
+    verbose,
     corsOrigin: [...launch.corsOrigins],
     webDir: launch.webDir,
     ...(token ? { token } : {}),
     ...(!token && launch.tokenSource === 'env' && launch.tokenEnv ? { tokenEnv: launch.tokenEnv } : {}),
   };
+}
+
+interface ServiceDetailsOptions {
+  startup: ServiceStartupDetails;
+  host: string;
+  address: string;
+  configPath: string;
+  requestLogging: boolean;
+  verbose: boolean;
+}
+
+function printServiceAvailability(address: string, host?: string): void {
+  process.stdout.write(`${formatServiceAvailability(serviceEntryUrls(address, host))}\n`);
+}
+
+function printServiceDetails(options: ServiceDetailsOptions): void {
+  if (options.startup.telegramProfile) {
+    process.stdout.write(`Telegram bridge active (profile ${options.startup.telegramProfile}).\n`);
+  }
+  if (options.startup.authRequired) {
+    process.stdout.write('Auth: bearer token required on /v1 (exempt: /health, static).\n');
+  }
+  if (!isLoopbackServiceHost(options.host)) {
+    process.stdout.write('Access: private networks only (LAN, link-local, and Tailscale).\n');
+  }
+  if (!options.verbose) return;
+
+  process.stdout.write(`Bind: ${serviceBindUrl(options.address, options.host)}\n`);
+  if (options.startup.webDir) process.stdout.write(`Web UI: serving ${options.startup.webDir}\n`);
+  if (options.startup.corsOrigins.length > 0) {
+    process.stdout.write(`CORS: allowing ${options.startup.corsOrigins.join(', ')}\n`);
+  }
+  process.stdout.write(`Config: ${options.configPath}\n`);
+  process.stdout.write(`HTTP request logging: ${options.requestLogging ? 'enabled' : 'disabled'}\n`);
 }
 
 function loadServiceConfig(program: Command, configPath?: string) {

@@ -2,6 +2,7 @@ import fastify, { FastifyInstance, FastifyReply } from 'fastify';
 import {
   type AgentUsage,
   LoadedMarifoldConfig,
+  listProviderRegistry,
   MarifoldError,
   resolveAgentConfig,
   resolveWebSearchConfig,
@@ -209,6 +210,34 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
         ...publicProvider(provider),
       })),
   }));
+
+  // The same ordered provider catalog that backs `marifold provider add`.
+  // Only setup metadata crosses the wire; known-model lists have their own
+  // live/fallback routes and credentials are never part of this response.
+  server.get('/v1/providers/catalog', async () => ({
+    ok: true,
+    providers: listProviderRegistry().map(provider => ({
+      name: provider.name,
+      label: provider.label,
+      kind: provider.kind,
+      type: provider.type,
+      ...(provider.defaultBaseUrl ? { defaultBaseUrl: provider.defaultBaseUrl } : {}),
+      ...(provider.apiKeyEnv ? { apiKeyEnv: provider.apiKeyEnv } : {}),
+    })),
+  }));
+
+  // Add one registry provider with shared CLI defaults. Raw keys/tokens are
+  // intentionally ignored: browser clients may store env-var names only.
+  server.post('/v1/providers', async (request, reply) => {
+    const body = objectBody(request.body);
+    runtime.addProvider(requiredString(body.name, 'name').trim(), {
+      ...optionalStringField('baseUrl', body.baseUrl),
+      ...optionalStringField('apiKeyEnv', body.apiKeyEnv),
+      ...optionalStringField('proxy', body.proxy),
+    });
+    reply.status(201);
+    return { ok: true, config: publicConfig(options.loadedConfig, Boolean(security.token)) };
+  });
 
   // Live reachability probe for every provider (CLI `provider status`).
   // Sanitized: key/token presence booleans and env-var *names* only.

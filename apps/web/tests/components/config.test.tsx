@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ProfilePatchInput } from '../../src/api/profiles';
 import type { MemoryEntry, ProfileDetail } from '../../src/api/types';
+import { AddProviderSheet } from '../../src/components/AddProviderSheet';
 import { CreateProfileSheet } from '../../src/components/CreateProfileSheet';
 import { ProfileSettingsPage } from '../../src/screens/config/ProfileSettingsPage';
 import type { ProfileSettingsPageProps } from '../../src/screens/config/ProfileSettingsPage';
@@ -292,7 +293,6 @@ describe('ProvidersPage', () => {
         busy={false}
         onSaveField={onSaveField}
         onRefreshStatus={() => {}}
-        onAddProvider={async () => {}}
         onRemoveProvider={() => {}}
       />,
     );
@@ -321,7 +321,6 @@ describe('ProvidersPage', () => {
         busy={false}
         onSaveField={() => {}}
         onRefreshStatus={() => {}}
-        onAddProvider={async () => {}}
         onRemoveProvider={onRemoveProvider}
       />,
     );
@@ -354,7 +353,6 @@ describe('ProvidersPage', () => {
         busy={false}
         onSaveField={() => {}}
         onRefreshStatus={() => {}}
-        onAddProvider={async () => {}}
         onRemoveProvider={() => {}}
       />,
     );
@@ -364,6 +362,144 @@ describe('ProvidersPage', () => {
     expect(within(dialog).getByText('marifold provider reauth xai')).toBeTruthy();
     expect(within(dialog).getByRole('button', { name: 'Copy re-authentication command' })).toBeTruthy();
     expect(within(dialog).getByText(/saved model choices are preserved/)).toBeTruthy();
+  });
+});
+
+describe('AddProviderSheet', () => {
+  const catalog = [
+    {
+      name: 'ollama',
+      label: 'Ollama (local)',
+      kind: 'local' as const,
+      type: 'ollama' as const,
+      defaultBaseUrl: 'http://localhost:11434',
+    },
+    {
+      name: 'openai',
+      label: 'OpenAI',
+      kind: 'api' as const,
+      type: 'openai-compatible' as const,
+      defaultBaseUrl: 'https://api.openai.com',
+      apiKeyEnv: 'OPENAI_API_KEY',
+    },
+    {
+      name: 'custom',
+      label: 'Custom OpenAI-compatible endpoint',
+      kind: 'api' as const,
+      type: 'openai-compatible' as const,
+    },
+  ];
+
+  it('selects from the CLI catalog, applies defaults, and submits only non-secret setup fields', () => {
+    const onSubmit = vi.fn();
+    render(
+      <AddProviderSheet
+        catalog={catalog}
+        existingNames={['ollama']}
+        busy={false}
+        onSubmit={onSubmit}
+        onClose={() => {}}
+      />,
+    );
+
+    const dialog = screen.getByRole('dialog', { name: 'Add provider' });
+    expect((within(dialog).getByText('Ollama (local)').closest('button') as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(within(dialog).getByText('OpenAI').closest('button')!);
+
+    const serverUrl = within(dialog).getByLabelText('Server URL') as HTMLInputElement;
+    const apiKeyEnv = within(dialog).getByLabelText('API key environment variable') as HTMLInputElement;
+    expect(serverUrl.value).toBe('https://api.openai.com');
+    expect(apiKeyEnv.value).toBe('OPENAI_API_KEY');
+    fireEvent.change(within(dialog).getByLabelText(/Proxy/), { target: { value: '  http://127.0.0.1:7890  ' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add openai' }));
+
+    expect(onSubmit).toHaveBeenCalledWith({
+      name: 'openai',
+      baseUrl: 'https://api.openai.com',
+      apiKeyEnv: 'OPENAI_API_KEY',
+      proxy: 'http://127.0.0.1:7890',
+    });
+  });
+
+  it('requires custom connection fields and closes with Escape', () => {
+    const onClose = vi.fn();
+    render(
+      <AddProviderSheet
+        catalog={catalog}
+        existingNames={[]}
+        busy={false}
+        onSubmit={() => {}}
+        onClose={onClose}
+      />,
+    );
+    fireEvent.click(screen.getByText('Custom OpenAI-compatible endpoint').closest('button')!);
+    expect((screen.getByRole('button', { name: 'Add custom' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText('A server URL is required.')).toBeTruthy();
+    expect(screen.getByText('An environment-variable name is required.')).toBeTruthy();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+});
+
+describe('ConfigScreen provider creation', () => {
+  it('places the add action in the Providers list header and opens the shared catalog', async () => {
+    const { ConfigScreen } = await import('../../src/screens/config/ConfigScreen');
+    const request = vi.fn(async (_method: string, path: string) => {
+      if (path === '/v1/profiles') return { profiles: [] };
+      if (path === '/v1/config') {
+        return {
+          config: {
+            default: { profile: 'default', provider: 'ollama', model: 'gemma4:e4b' },
+            models: { options: ['ollama/gemma4:e4b'] },
+            providers: { ollama: { type: 'ollama', baseUrl: 'http://localhost:11434' } },
+          },
+        };
+      }
+      if (path === '/v1/models') {
+        return { default: { provider: 'ollama', model: 'gemma4:e4b' }, options: ['ollama/gemma4:e4b'] };
+      }
+      if (path === '/v1/providers/status') return { providers: [] };
+      if (path === '/v1/providers/catalog') {
+        return {
+          providers: [{
+            name: 'openai',
+            label: 'OpenAI',
+            kind: 'api',
+            type: 'openai-compatible',
+            defaultBaseUrl: 'https://api.openai.com',
+            apiKeyEnv: 'OPENAI_API_KEY',
+          }],
+        };
+      }
+      throw new Error(`Unexpected request: ${path}`);
+    });
+    const client = {
+      baseUrl: '',
+      request,
+      stream: async () => { throw new Error('unused'); },
+      blob: async () => undefined,
+    };
+
+    render(
+      <ConfigScreen
+        client={client as never}
+        route={{ view: 'config', section: 'providers', item: 'ollama' }}
+        navigate={() => {}}
+        onUnauthorized={() => {}}
+        theme="auto"
+        onThemeChange={() => {}}
+        onOpenConnection={() => {}}
+        onOpenSettings={() => {}}
+        connectionName="This server"
+        onDone={() => {}}
+      />,
+    );
+
+    const add = await screen.findByRole('button', { name: 'Add provider' });
+    fireEvent.click(add);
+    const dialog = await screen.findByRole('dialog', { name: 'Add provider' });
+    expect(within(dialog).getByText('OpenAI')).toBeTruthy();
+    expect(request).toHaveBeenCalledWith('GET', '/v1/providers/catalog');
   });
 });
 
@@ -406,7 +542,7 @@ describe('Global settings pages', () => {
         onSave={onSave}
       />,
     );
-    fireEvent.change(screen.getByLabelText('Provider'), { target: { value: 'firecrawl' } });
+    fireEvent.change(screen.getByLabelText('Fallback provider'), { target: { value: 'firecrawl' } });
     expect(onSave).toHaveBeenCalledWith('provider', 'firecrawl');
     expect(screen.getByText(/configured/).textContent).not.toContain('test-secret');
   });

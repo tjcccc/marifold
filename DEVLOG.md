@@ -2,6 +2,27 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-08-26 — v0.61.0 — Service access, provider onboarding, and native search
+
+- Made foreground, daemon, and status output show usable loopback/private entry
+  URLs, including concrete LAN and Tailscale addresses for wildcard binds.
+- Hid Web UI directory, CORS, raw bind, config, and request-logging details by
+  default, with `--verbose` restoring the technical startup diagnostics.
+- Added a Providers-column `+` action in Web Config using the same ordered
+  registry and safe defaults as `marifold provider add`, without accepting raw
+  API keys in the browser.
+- Made provider-hosted web search native-first for ChatGPT Responses models,
+  independent of Marifold's fallback toggle; other models use the configured
+  DuckDuckGo/Firecrawl fallback or receive an explicit unavailable instruction.
+- Added fallback parity to non-streaming CLI/service requests, preserved
+  unrelated caller tools, and kept unattended hosted search behind explicit
+  network `allow`.
+- Verified 128 CLI command checks, all 8 Chromium workspace tests, and the full
+  workspace typecheck/build/test gate (646 tests: core 316, service 60, TUI 60,
+  CLI 23, Web 187). The upstream Priest TypeScript suite passed all 136 tests
+  plus build, typecheck, and package dry-run validation.
+- Version 0.60.1 → 0.61.0 across all packages + CLI `.version`.
+
 ## 2026-08-25 — v0.60.1 — Lowercase marifold branding
 
 - Standardized the human-facing `marifold` brand in lowercase across the main

@@ -49,7 +49,7 @@ export function registerInitCommand(program: Command, printer: ConsolePrinter): 
     .option('--apps-dir <path>', 'Apps directory.')
     .option('--base-url <url>', 'Provider base URL.')
     .option('--api-key-env <name>', 'Environment variable containing the provider API key.')
-    .option('--search-provider <name>', 'Web search provider: duckduckgo, firecrawl, or off.')
+    .option('--search-provider <name>', 'Fallback web search provider: duckduckgo, firecrawl, or off.')
     .option('--search-api-key-env <name>', 'Env var holding the search provider API key (Firecrawl).')
     .action(async (options: InitOptions) => {
       const rootOptions = program.opts<RootCommandOptions>();
@@ -89,7 +89,7 @@ export function registerInitCommand(program: Command, printer: ConsolePrinter): 
             provider: options.searchProvider,
             apiKeyEnv: options.searchApiKeyEnv,
           }));
-          process.stdout.write(`Web search: ${manager.config.webSearch?.provider ?? 'duckduckgo'}\n`);
+          process.stdout.write(`Fallback web search: ${manager.config.webSearch?.provider ?? 'duckduckgo'}\n`);
         }
       } catch (error) {
         printer.printError(error);
@@ -98,7 +98,7 @@ export function registerInitCommand(program: Command, printer: ConsolePrinter): 
     });
 }
 
-/** Pick a default model (and optionally enable web search) right after init, so
+/** Pick a default model (and optionally enable fallback web search) after init, so
  * a first run never points at a model the user doesn't have. Reuses the same
  * provider/model picker as `marifold model add`/`model default`. */
 async function runInteractiveSetup(program: Command, printer: ConsolePrinter): Promise<void> {
@@ -123,9 +123,9 @@ async function runInteractiveSetup(program: Command, printer: ConsolePrinter): P
     }
     process.stdout.write(style.bold(`Default model: ${provider}/${model}\n`));
 
-    if (await readYesNo(getPrompt(), style, 'Enable web search (DuckDuckGo, no API key)?', false)) {
+    if (await readYesNo(getPrompt(), style, 'Enable fallback web search (DuckDuckGo, no API key)?', false)) {
       manager.updateWebSearch(searchUpdateFromFlags({ provider: 'duckduckgo' }));
-      process.stdout.write('Web search: duckduckgo\n');
+      process.stdout.write('Fallback web search: duckduckgo\n');
     }
 
     process.stdout.write('\nDone. Run `marifold` to start.\n');

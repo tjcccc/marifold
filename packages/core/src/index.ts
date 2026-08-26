@@ -116,7 +116,12 @@ export type {
   ConfigBackupImportResult,
 } from './config/ConfigBackup';
 export { ConfigManager, renderMarifoldConfig } from './config/ConfigManager';
-export type { ConfigRemoveModelResult, ConfigRemoveProviderResult, ConfigSetResult } from './config/ConfigManager';
+export type {
+  ConfigAddProviderOptions,
+  ConfigRemoveModelResult,
+  ConfigRemoveProviderResult,
+  ConfigSetResult,
+} from './config/ConfigManager';
 export { ConfigLoader } from './config/ConfigLoader';
 export { exchangeGitHubTokenForCopilotToken } from './config/GitHubCopilotAuth';
 export type { GitHubCopilotToken } from './config/GitHubCopilotAuth';

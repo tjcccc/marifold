@@ -64,26 +64,17 @@ short: what shipped (one line each), what's next, and what's deliberately deferr
   [`workflow-plan.md`](workflow-plan.md).
 - **Apple clients** and alias profiles for Codex/Claude Code and other external agents.
 
-## Deferred: native (server-side) web search — a priest milestone, not marifold
+## Provider-hosted web search
 
-Today marifold's `web_search` is a **client-side tool** (`WebSearchTool` → Firecrawl/DuckDuckGo):
-marifold runs the search and feeds results back, so it works with **any** tool-calling model,
-local or cloud. That covers all current usage and needs no priest change.
+The native-search foundation is implemented in priest protocol 2.9:
+`provider_tools` is separate from caller-executed function tools, and OpenAI
+Responses maps `{type: "web_search"}` to its hosted tool. Marifold currently
+enables that path for ChatGPT subscription models, prefers it over the
+DuckDuckGo/Firecrawl `WebSearchTool` fallback, and reports search as unavailable
+when neither path exists.
 
-"Native" search means the **model's hosting endpoint searches server-side** (you set a request
-flag; their servers search and return grounded/cited results). That request body is built only
-inside priest's provider adapters, so it can only live in **priest** — "talking to the model" is
-priest's domain.
-
-**The trigger to build it** is *not* "a local model with search" — a local model can't search
-itself (no internet path), so it always uses the client tool. The real trigger is **adopting a
-hosted endpoint that does search server-side and wanting to use it** — e.g. Anthropic's
-`web_search` server tool, OpenAI/Gemini grounding, or **Alibaba Cloud Qwen
-(`bailian`/`alibaba_cloud`) which exposes a server-side search flag** (the one we could actually
-test). Until then, leave priest alone.
-
-**When it's time, scope it tight (don't fan out to all SDKs first):** (1) spec design — how
-`PriestRequest` represents a *provider-executed* tool vs a client tool, and how citations come
-back via streaming events; (2) implement **one** provider and prove it end-to-end through
-marifold's existing `[web_search].provider = "native"` seam; (3) then sync the spec to canonical
-Python `priest`, with the Rust/dotnet/Swift ports trailing a milestone.
+Remaining provider work is deliberately incremental: add and verify Anthropic
+server search, OpenAI API Responses routing, Gemini grounding, and Alibaba
+Cloud Qwen search only when each endpoint can be tested. Citation annotations
+and hosted-search progress events also remain future renderer-contract work;
+the current path preserves final grounded answer text and usage.

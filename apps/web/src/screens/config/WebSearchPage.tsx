@@ -22,22 +22,22 @@ export function WebSearchPage({ search, busy, onSave }: WebSearchPageProps) {
       <header className={styles.pageHeader}>
         <div>
           <div className={styles.pageTitle}>Web search</div>
-          <div className={styles.pageSub}>Configure the model-initiated web-search tool and its backend.</div>
+          <div className={styles.pageSub}>Configure Marifold's fallback search. Supported models use provider-hosted search first, even when this fallback is off.</div>
         </div>
       </header>
 
       <section className={styles.card}>
         <div className={styles.fieldRow}>
-          <span className={styles.fieldLabel}>Web-search tool</span>
+          <span className={styles.fieldLabel}>Marifold fallback</span>
           <Toggle
-            label="Web-search tool"
+            label="Marifold fallback"
             value={search.enabled}
             busy={busy}
             onChange={value => onSave('enabled', String(value))}
           />
         </div>
         <div className={styles.fieldRow}>
-          <label className={styles.fieldLabel} htmlFor="search-provider">Provider</label>
+          <label className={styles.fieldLabel} htmlFor="search-provider">Fallback provider</label>
           <select
             id="search-provider"
             className={styles.select}

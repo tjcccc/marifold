@@ -17,6 +17,10 @@ the HTTP API, the schedule runner, and the Telegram bridge.
   with `marifold service stop`. Restart reuses the previous safe launch options
   and mode. Raw `--token` values are not persisted, so repeat one as
   `marifold service restart --token <token>` when required.
+- **Startup output:** Foreground and background starts print concrete URLs that
+  can be opened. A `--host 0.0.0.0` bind lists the active loopback, private LAN,
+  link-local, and Tailscale IPv4 URLs; use `--verbose` to also show the raw bind,
+  Web UI directory, CORS allowlist, config path, and request-logging state.
 
 ## Authentication
 
@@ -167,6 +171,8 @@ Responses are `{ "ok": true, ... }` unless noted. Bodies are JSON.
 | `GET /v1/config` | Sanitized config — secrets are replaced by `hasApiKey`-style booleans; includes resolved `agent` defaults, sanitized `webSearch`, and the `service` view (`webDir?`, `tokenEnv?`, `corsOrigins`, `hasToken`) |
 | `PATCH /v1/config` | Body `{ key, value }` (both strings) — sets one dotted config key with **exactly** the CLI `config set` routing and validation (`default.*`, `paths.*`, `memory.*`, `agent.*`, `agent.approval.*`, `web_search.*`, `service.*`, `providers.<name>.*`; comma lists and empty-string clearing follow each key's CLI semantics). Returns the sanitized config |
 | `GET /v1/providers` | `providers: [{ name, type, baseUrl?, hasApiKey, hasOauthToken, ... }]` |
+| `GET /v1/providers/catalog` | Ordered non-secret setup catalog shared with `marifold provider add`: `{ providers: [{ name, label, kind, type, defaultBaseUrl?, apiKeyEnv? }] }` |
+| `POST /v1/providers` → 201 | Add one catalog provider atomically with `{ name, baseUrl?, apiKeyEnv?, proxy? }`, applying shared registry defaults. Existing/unknown providers are rejected. Raw keys and OAuth tokens are ignored and never cross this route. Returns the sanitized config |
 | `GET /v1/providers/status` | Live reachability probe per provider (CLI `provider status`): adds `configured`, `reachable` (`null` = not probeable), `models`, `message`. Sanitized — key/token presence booleans and env-var *names* only |
 | `GET /v1/providers/:name/models` | Models the provider serves right now (feeds model pickers): `{ provider, reachable, models, message }`. Never errors — unconfigured/unreachable providers return an empty list with a message |
 | `DELETE /v1/providers/:name` | Remove the provider's local config, stored credentials, and saved model options. Refuses the global default provider and providers referenced by profile overrides. Returns `{ removed, removedModels, config, models }`; provider-owned models and remote accounts are untouched |

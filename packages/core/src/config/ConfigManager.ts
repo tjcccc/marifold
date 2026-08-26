@@ -30,6 +30,12 @@ export interface ConfigRemoveProviderResult extends ConfigSetResult {
   removedModels: string[];
 }
 
+export interface ConfigAddProviderOptions {
+  baseUrl?: string;
+  apiKeyEnv?: string;
+  proxy?: string;
+}
+
 export class ConfigManager {
   constructor(private readonly loadedConfig: LoadedMarifoldConfig) {}
 
@@ -215,6 +221,44 @@ export class ConfigManager {
     this.registerModelOption(provider, model);
     this.save();
     return { configPath: this.configPath, key: 'models.options', value: `${provider}/${model}` };
+  }
+
+  /** Add or reconfigure one provider using the same registry defaults as the
+   * CLI picker and Web catalog. Credentials remain untouched and raw secrets
+   * are deliberately outside this input surface. */
+  addProvider(provider: string, options: ConfigAddProviderOptions = {}): ConfigSetResult {
+    if (!provider) throw MarifoldError.configInvalid('Provider cannot be empty.');
+    const existing = this.config.providers[provider];
+    const registry = getProviderRegistryEntry(provider);
+    if (!registry && !existing) throw MarifoldError.configInvalid(`Unknown provider: ${provider}`);
+
+    const type = existing?.type ?? registry?.type ?? 'openai-compatible';
+    const baseUrl = options.baseUrl === undefined
+      ? existing?.baseUrl ?? registry?.defaultBaseUrl
+      : options.baseUrl.trim();
+    const apiKeyEnv = options.apiKeyEnv === undefined
+      ? existing?.apiKeyEnv ?? registry?.apiKeyEnv
+      : options.apiKeyEnv.trim();
+    if ((type === 'ollama' || type === 'openai-compatible') && !baseUrl) {
+      throw MarifoldError.configInvalid(`Provider '${provider}' requires a server URL.`);
+    }
+    if (registry?.kind === 'api' && !apiKeyEnv) {
+      throw MarifoldError.configInvalid(`Provider '${provider}' requires an API key environment variable name.`);
+    }
+
+    const config: MarifoldProviderConfig = { ...(existing ?? {}), type };
+    if (baseUrl) config.baseUrl = baseUrl.replace(/\/+$/, '');
+    else delete config.baseUrl;
+    if (apiKeyEnv) config.apiKeyEnv = apiKeyEnv;
+    else delete config.apiKeyEnv;
+    if (options.proxy !== undefined) {
+      const proxy = options.proxy.trim();
+      if (proxy) config.proxy = proxy;
+      else delete config.proxy;
+    }
+    this.config.providers[provider] = config;
+    this.save();
+    return { configPath: this.configPath, key: `providers.${provider}`, value: provider };
   }
 
   /** Merge changes into the [web_search] section (undefined keys are left as-is)

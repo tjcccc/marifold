@@ -1,6 +1,11 @@
 import type { ImageInput } from '@priest-ai/core';
 import type { ProfileMode } from '../config/ConfigSchema';
 
+/** How a run can reach the web after provider capability and Marifold fallback
+ * configuration are resolved. */
+export type MarifoldWebSearchMode = 'native' | 'fallback' | 'unavailable';
+export type MarifoldProviderToolDefinition = { type: 'web_search' };
+
 export interface MarifoldRunRequest {
   prompt: string;
   profile?: string;
@@ -29,7 +34,8 @@ export interface MarifoldRunRequest {
    * skill body). Guides the turn like a system directive; not persisted as a
    * conversation turn, so it never pollutes later turns. */
   instructions?: string[];
-  /** Set false to disable model-initiated chat tools for this run even when [web_search].enabled is true. */
+  /** Set false to disable all model-initiated chat tools for this run,
+   * including provider-hosted and Marifold fallback web search. */
   chatTools?: boolean;
   /** Set false to omit PROFILE.md, RULES.md, and CUSTOM.md from the provider
    * request. Runtime safety framing and explicit instructions still apply. */

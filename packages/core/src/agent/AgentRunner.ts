@@ -14,7 +14,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { stripMemoryControls } from '../memory/MemoryControls';
 import { buildHistoryContext, HistoryTurn } from './AgentHistory';
-import { MarifoldResolvedSettings, MarifoldRunRequest } from '../runtime/MarifoldTypes';
+import { MarifoldProviderToolDefinition, MarifoldResolvedSettings, MarifoldRunRequest, MarifoldWebSearchMode } from '../runtime/MarifoldTypes';
 import { TaskState, TaskStatus, TaskStore } from '../tasks/TaskStore';
 import { AgentEvent, AgentUsage } from './AgentEvents';
 import {
@@ -42,6 +42,7 @@ const PLAN_SCHEMA = {
   },
   required: ['title', 'steps'],
 };
+const NATIVE_WEB_SEARCH_COMPAT_OPTION = 'marifold_native_web_search';
 
 export interface AgentRunOptions {
   objective: string;
@@ -116,6 +117,8 @@ export interface AgentEngine {
 export interface AgentEngineContext {
   engine: AgentEngine;
   config: PriestConfig;
+  webSearchMode?: MarifoldWebSearchMode;
+  providerTools?: MarifoldProviderToolDefinition[];
 }
 
 export interface AgentRunnerDeps {
@@ -202,7 +205,25 @@ export class AgentRunner {
         images: await this.deps.prepareImages(runOptions.images, runOptions.originalImages !== true),
       };
     }
-    const { engine: rawEngine, config } = await this.deps.prepareEngine(settings);
+    const preparedEngine = await this.deps.prepareEngine(settings);
+    const { engine: rawEngine } = preparedEngine;
+    let config = preparedEngine.config;
+    let webSearchMode = preparedEngine.webSearchMode ?? 'unavailable';
+    let providerTools = preparedEngine.providerTools;
+    if (runOptions.unattended) {
+      const unattendedApproval = {
+        ...agentConfig.approval,
+        ...(agentConfig.unattended ?? {}),
+      };
+      // Provider-hosted tools cannot pause for Marifold's per-call approval.
+      // In unattended runs, only an explicit network allow may expose them;
+      // ask continues to degrade to deny like every caller-executed tool.
+      if (unattendedApproval.network !== 'allow') {
+        webSearchMode = 'unavailable';
+        providerTools = undefined;
+        config = withoutNativeWebSearchCompat(config);
+      }
+    }
     // Tally token usage across every model call (optional plan + loop turns).
     const usage: AgentUsage = {};
     const engine = withUsageTally(rawEngine, usage);
@@ -311,7 +332,14 @@ export class AgentRunner {
       // config). Adaptive by default: a separate planning call is overhead for
       // the common single-step task, so the model just reasons inline.
       if (options.forcePlan) {
-        const plan = await this.buildPlan(engine, config, settings.profile, runOptions);
+        // Planning never receives provider tools. Strip the Priest 3.0.x
+        // compatibility marker as well so the wrapper cannot infer one.
+        const plan = await this.buildPlan(
+          engine,
+          withoutNativeWebSearchCompat(config),
+          settings.profile,
+          runOptions,
+        );
         const planned = this.deps.taskStore.update(task.id, {
           title: plan.title,
           plan: plan.steps.map((text, index) => ({
@@ -333,7 +361,15 @@ export class AgentRunner {
           yield { type: 'steering', taskId: task.id, text: note };
         }
 
-        const response = await engine.run(this.loopRequest(config, settings.profile, runOptions, state, workspace), {
+        const response = await engine.run(this.loopRequest(
+          config,
+          settings.profile,
+          runOptions,
+          state,
+          workspace,
+          webSearchMode,
+          providerTools,
+        ), {
           signal: options.signal,
         });
         this.trace({
@@ -684,16 +720,20 @@ export class AgentRunner {
     options: AgentRunOptions,
     state: LoopState,
     workspace: RunWorkspace,
+    webSearchMode: MarifoldWebSearchMode,
+    providerTools?: MarifoldProviderToolDefinition[],
   ): PriestRequest {
-    const base: PriestRequest = {
+    const toolDefinitions = this.toolDefinitions(webSearchMode);
+    const base: PriestRequest & { providerTools?: MarifoldProviderToolDefinition[] } = {
       config,
       profile,
       prompt: options.lean
         ? options.objective
         : `Objective: ${options.objective}\n\nUse tools only when the objective genuinely requires reading or writing files, running commands, searching the web, or delegating. Many objectives — greetings, questions, explanations, drafting text — need no tools at all; for those, answer directly from your own knowledge. Do not invent tool calls. When the objective is complete, reply with a short final answer describing the outcome.`,
-      context: this.agentContext(state, workspace, options.instructions, options.lean),
+      context: this.agentContext(state, workspace, webSearchMode, options.instructions, options.lean),
       ...(options.sessionId ? { session: { id: options.sessionId, createIfMissing: true } } : {}),
       ...(state.activeImages.length > 0 ? { images: state.activeImages } : {}),
+      ...(providerTools && providerTools.length > 0 ? { providerTools } : {}),
     };
     const steering = state.steeringNotes.map(
       note => `The user added this guidance while you were working — take it into account: ${note}`,
@@ -701,7 +741,7 @@ export class AgentRunner {
     if (state.mode === 'native') {
       return {
         ...base,
-        tools: this.deps.registry.definitions(),
+        ...(toolDefinitions.length > 0 ? { tools: toolDefinitions } : {}),
         toolExchange: state.exchange,
         ...(steering.length > 0 ? { userContext: steering } : {}),
       };
@@ -712,7 +752,19 @@ export class AgentRunner {
     };
   }
 
-  private agentContext(state: LoopState, workspace: RunWorkspace, instructions?: string[], lean = false): string[] {
+  private agentContext(
+    state: LoopState,
+    workspace: RunWorkspace,
+    webSearchMode: MarifoldWebSearchMode,
+    instructions?: string[],
+    lean = false,
+  ): string[] {
+    const toolDefinitions = this.toolDefinitions(webSearchMode);
+    const webSearchContext = webSearchMode === 'native'
+      ? 'Provider-hosted web search is available for this run. Use it for web/current-information requests; Marifold fallback search is not exposed while native search is available.'
+      : webSearchMode === 'unavailable'
+        ? 'Web search is unavailable for this run. If the objective requires browsing or current information, say clearly that you cannot access web search; do not imply that you searched.'
+        : 'Marifold fallback web search is available through the web_search tool.';
     const attachments = workspace.attachments.length > 0
       ? [
           'Attachments uploaded for this run:',
@@ -737,10 +789,10 @@ export class AgentRunner {
     if (lean) {
       const context = [...(instructions ?? [])];
       context.push(
-        `${workspaceContext}\nUse inspect_attachment when the skill depends on an uploaded attachment. Use read_file only if the instructions reference a bundled file (e.g. vars.toml). Resolve required inputs, then reply with ONLY the final output the instructions define — no plan, preamble, reasoning, or commentary.`,
+        `${webSearchContext}\n${workspaceContext}\nUse inspect_attachment when the skill depends on an uploaded attachment. Use read_file only if the instructions reference a bundled file (e.g. vars.toml). Resolve required inputs, then reply with ONLY the final output the instructions define — no plan, preamble, reasoning, or commentary.`,
       );
       if (state.mode === 'control-block') {
-        context.push(buildControlBlockInstructions(this.deps.registry.definitions()));
+        context.push(buildControlBlockInstructions(toolDefinitions));
       }
       return context;
     }
@@ -748,6 +800,7 @@ export class AgentRunner {
       'You are running as the Marifold agent. Stay focused on the stated objective and keep replies concise.',
       'Prefer answering directly. Reach for a tool only when the objective cannot be completed from your own knowledge — never use a tool just to demonstrate one.',
       'After changing files or producing an observable result, use the narrowest relevant tool for a focused check before claiming success. Report the evidence you actually observed; do not invent results or perform a separate self-grade.',
+      webSearchContext,
       workspaceContext,
     ];
     // Skill instructions are authoritative for this run — lead with them.
@@ -756,9 +809,16 @@ export class AgentRunner {
     // reference earlier turns. Placed after framing, before tool instructions.
     if (state.historyContext) context.push(state.historyContext);
     if (state.mode === 'control-block') {
-      context.push(buildControlBlockInstructions(this.deps.registry.definitions()));
+      context.push(buildControlBlockInstructions(toolDefinitions));
     }
     return context;
+  }
+
+  private toolDefinitions(webSearchMode: MarifoldWebSearchMode) {
+    const definitions = this.deps.registry.definitions();
+    return webSearchMode === 'fallback'
+      ? definitions
+      : definitions.filter(tool => tool.name !== 'web_search');
   }
 
   private extractTurn(response: PriestResponse, state: LoopState): { text: string; calls: ToolCall[] } {
@@ -879,6 +939,16 @@ function formatAttachmentBytes(bytes: number): string {
 
 function truncate(text: string, limit: number): string {
   return text.length <= limit ? text : `${text.slice(0, limit - 3)}...`;
+}
+
+function withoutNativeWebSearchCompat(config: PriestConfig): PriestConfig {
+  if (config.providerOptions?.[NATIVE_WEB_SEARCH_COMPAT_OPTION] !== true) return config;
+  const providerOptions = { ...config.providerOptions };
+  delete providerOptions[NATIVE_WEB_SEARCH_COMPAT_OPTION];
+  return {
+    ...config,
+    providerOptions: Object.keys(providerOptions).length > 0 ? providerOptions : undefined,
+  };
 }
 
 function failedSessionOutcome(message: string): string {

@@ -4,7 +4,6 @@ import {
   getProviderRegistryEntry,
   listProviderRegistry,
   MarifoldError,
-  type MarifoldProviderConfig,
   ProviderInspector,
 } from '@marifold/core';
 import { InteractivePrompt } from '../input/InteractivePrompt';
@@ -133,14 +132,8 @@ export function registerProviderCommand(program: Command, printer: ConsolePrinte
           }
 
           const manager = new ConfigManager(loadedConfig);
-          const config: MarifoldProviderConfig = {
-            ...(existing ?? {}),
-            type,
-            ...(baseUrl ? { baseUrl: baseUrl.replace(/\/+$/, '') } : {}),
-            ...(apiKeyEnv ? { apiKeyEnv } : {}),
-          };
-          manager.config.providers[name] = config;
-          const savedPath = manager.save();
+          const savedPath = manager.addProvider(name, { baseUrl, apiKeyEnv }).configPath;
+          const config = manager.config.providers[name];
 
           process.stdout.write(
             `${existing ? 'Updated' : 'Added'} provider ${name} (${type})${config.baseUrl ? ` → ${config.baseUrl}` : ''}\n`,

@@ -16,6 +16,7 @@ import { openAIChatCompletionsUrl, openAIResponsesUrl } from './OpenAICompatUrls
 import { isGitHubCopilotResponsesModelId } from './ProviderRegistry';
 
 type OpenAICompatEndpoint = 'chat-completions' | 'responses';
+const NATIVE_WEB_SEARCH_COMPAT_OPTION = 'marifold_native_web_search';
 
 interface MarifoldOpenAICompatProviderOptions {
   providerName?: string;
@@ -57,6 +58,12 @@ export class MarifoldOpenAICompatProvider implements ProviderAdapter {
     });
   }
 
+  supportsProviderTool(tool: { type: 'web_search' }, config: PriestConfig): boolean {
+    return this.options.providerName === 'chatgpt'
+      && this.endpointForModel(config.model) === 'responses'
+      && tool.type === 'web_search';
+  }
+
   async complete(
     messages: Message[],
     config: PriestConfig,
@@ -66,7 +73,7 @@ export class MarifoldOpenAICompatProvider implements ProviderAdapter {
     if (this.endpointForModel(config.model) !== 'responses') {
       return this.chatProvider.complete(messages, config, outputSpec, options);
     }
-    const responsesConfig = this.responsesConfig(config);
+    const responsesConfig = this.responsesConfig(config, options);
     // The ChatGPT Codex backend is SSE-only ("Stream must be set to true").
     if (this.options.providerName === 'chatgpt') {
       return this.accumulateResponsesStream(messages, responsesConfig, outputSpec, options);
@@ -94,7 +101,7 @@ export class MarifoldOpenAICompatProvider implements ProviderAdapter {
     if (this.endpointForModel(config.model) === 'responses') {
       yield* this.responsesProvider.streamEvents(
         messages,
-        this.responsesConfig(config),
+        this.responsesConfig(config, options),
         outputSpec,
         options,
       );
@@ -171,10 +178,30 @@ export class MarifoldOpenAICompatProvider implements ProviderAdapter {
   /** Preserve compatibility with Marifold callers that used `{think}` before
    * Priest 2.8 introduced the provider-neutral reasoning field. Raw `think`
    * must never leak into a Responses request. */
-  private responsesConfig(config: PriestConfig): PriestConfig {
+  private responsesConfig(config: PriestConfig, options?: AdapterCallOptions): PriestConfig {
     const providerOptions = { ...(config.providerOptions ?? {}) };
     const legacyThink = providerOptions['think'];
+    const nativeWebSearch = providerOptions[NATIVE_WEB_SEARCH_COMPAT_OPTION] === true;
     delete providerOptions['think'];
+    delete providerOptions[NATIVE_WEB_SEARCH_COMPAT_OPTION];
+
+    // Priest 3.1 forwards providerTools and combines them with function tools.
+    // Keep Marifold releases built against 3.0.x functional until that SDK is
+    // the installed floor by supplying the equivalent Responses wire array.
+    const forwardedProviderTools = (
+      options as (AdapterCallOptions & { providerTools?: Array<{ type: 'web_search' }> }) | undefined
+    )?.providerTools;
+    if (nativeWebSearch && !forwardedProviderTools?.some(tool => tool.type === 'web_search')) {
+      providerOptions['tools'] = [
+        { type: 'web_search' },
+        ...(options?.tools ?? []).map(tool => ({
+          type: 'function',
+          name: tool.name,
+          description: tool.description ?? '',
+          parameters: tool.parameters ?? {},
+        })),
+      ];
+    }
     return {
       ...config,
       reasoning: config.reasoning ?? (legacyThink === true
