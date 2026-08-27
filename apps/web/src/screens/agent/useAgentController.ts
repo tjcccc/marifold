@@ -483,7 +483,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
   );
 
   const newSession = useCallback(() => {
-    if (!profileName || !sessionId || !persistedSessionIds.has(sessionId)) return;
+    if (!profileName || (sessionId && !persistedSessionIds.has(sessionId))) return;
     const id = crypto.randomUUID();
     abortActiveChat();
     followers.stopAll();

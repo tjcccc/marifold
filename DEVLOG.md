@@ -2,6 +2,19 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-08-27 — v0.64.1 — Priest web search and session creation
+
+- Updated `@priest-ai/core` from 3.0.1 to the published 3.1.0 release, which
+  supplies the provider-executed web-search request contract used by Marifold.
+- Fixed the Sessions `+` button on profile routes without a selected session;
+  it now creates the first draft while still protecting an existing unsaved
+  draft from accidental replacement.
+- Added focused controller coverage and verified the corrected empty-session
+  interaction against the running Web UI in Chromium.
+- Verified the full workspace typecheck/build/test gate (676 tests: core 333,
+  service 61, TUI 60, CLI 26, Web 196).
+- Version 0.64.0 → 0.64.1 across all packages + CLI `.version`.
+
 ## 2026-08-27 — v0.64.0 — Protected skill management
 
 - Added compiled, undeletable `$skill-installer` and `$skill-creator` skills to

@@ -46,6 +46,39 @@ describe('useAgentController session lifecycle', () => {
     expect(navigate).not.toHaveBeenCalled();
   });
 
+  it('creates the first draft session from a profile with no selected session', async () => {
+    const client: ApiClient = {
+      baseUrl: '',
+      request: async (method, path) => {
+        if (method === 'GET' && path === '/v1/profiles') return { profiles: [profile] } as never;
+        if (method === 'GET' && path === '/v1/models') return { default: {}, options: [] } as never;
+        if (method === 'GET' && path === '/v1/profiles/prompt-maker') return { profile } as never;
+        if (method === 'GET' && path === '/v1/skills?profile=prompt-maker') return { skills: [] } as never;
+        if (method === 'GET' && path.startsWith('/v1/sessions?')) return { sessions: [] } as never;
+        throw new Error(`Unexpected request: ${method} ${path}`);
+      },
+      stream: async () => new Response(),
+      blob: async () => undefined,
+    };
+    const navigate = vi.fn();
+    const { result } = renderHook(() => useAgentController({
+      client,
+      route: { view: 'agent', profile: 'prompt-maker' },
+      navigate,
+      onUnauthorized: vi.fn(),
+    }));
+
+    await waitFor(() => expect(result.current.profileDetail?.name).toBe('prompt-maker'));
+    act(() => result.current.newSession());
+
+    expect(result.current.sessionId).toEqual(expect.any(String));
+    expect(navigate).toHaveBeenCalledWith({
+      view: 'agent',
+      profile: 'prompt-maker',
+      session: result.current.sessionId,
+    });
+  });
+
   it('aborts a live chat response and closes its partial assistant turn', async () => {
     const chatProfile: ProfileDetail = {
       ...profile,
