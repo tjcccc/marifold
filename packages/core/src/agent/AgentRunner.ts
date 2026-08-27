@@ -732,7 +732,7 @@ export class AgentRunner {
     webSearchMode: MarifoldWebSearchMode,
     providerTools?: MarifoldProviderToolDefinition[],
   ): PriestRequest {
-    const toolDefinitions = this.toolDefinitions(webSearchMode);
+    const toolDefinitions = this.toolDefinitions(webSearchMode, options.instructions);
     const base: PriestRequest & { providerTools?: MarifoldProviderToolDefinition[] } = {
       config,
       profile,
@@ -768,7 +768,7 @@ export class AgentRunner {
     instructions?: string[],
     lean = false,
   ): string[] {
-    const toolDefinitions = this.toolDefinitions(webSearchMode);
+    const toolDefinitions = this.toolDefinitions(webSearchMode, instructions);
     const webSearchContext = webSearchMode === 'native'
       ? 'Provider-hosted web search is available for this run. Use it for web/current-information requests; Marifold fallback search is not exposed while native search is available.'
       : webSearchMode === 'unavailable'
@@ -823,8 +823,11 @@ export class AgentRunner {
     return context;
   }
 
-  private toolDefinitions(webSearchMode: MarifoldWebSearchMode) {
-    const definitions = this.deps.registry.definitions();
+  private toolDefinitions(webSearchMode: MarifoldWebSearchMode, instructions?: string[]) {
+    const exposeSkillManagement = instructions?.some(instruction => instruction.includes('manage_skill')) ?? false;
+    const definitions = this.deps.registry.definitions().filter(
+      tool => tool.name !== 'manage_skill' || exposeSkillManagement,
+    );
     return webSearchMode === 'fallback'
       ? definitions
       : definitions.filter(tool => tool.name !== 'web_search');

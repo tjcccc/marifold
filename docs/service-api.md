@@ -249,6 +249,11 @@ metrics, while truncation/deletion removes the matching companion rows.
 
 ### Skill invocation
 
+**`GET /v1/skills?profile=`** returns the effective skill hints used by `$`
+autocomplete. The merged list includes protected built-ins plus user-managed
+skills after profile-over-global shadowing. Built-in names are reserved and
+cannot be replaced through mutable skill directories.
+
 **`POST /v1/skills/resolve`** resolves one direct invocation before chat or
 agent execution.
 
@@ -263,6 +268,8 @@ body and its exact bundled-file location; clients must not ask the model to
 search for the skill. Unknown skills return 404 `SKILL_NOT_FOUND`; invalid
 invocations return 400 `SKILL_INVALID`. A non-empty `missing` list means the
 client must collect the required variables before starting a run.
+`$skill-installer` and `$skill-creator` resolve with `mode: "agent"`; their
+mutations run through the same per-run approval stream as other write tools.
 
 ### Apps
 

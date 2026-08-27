@@ -50,8 +50,17 @@ describe('MarifoldService', () => {
     try {
       const res = await server.inject({ method: 'GET', url: '/v1/skills' });
       expect(res.statusCode).toBe(200);
-      const echo = res.json().skills.find((skill: { name: string }) => skill.name === 'echo');
+      const skills = res.json().skills as Array<{ name: string; description: string; usage: string }>;
+      const echo = skills.find(skill => skill.name === 'echo');
       expect(echo).toMatchObject({ name: 'echo', description: 'Echo text back.', usage: '$echo <text>' });
+      expect(skills.find(skill => skill.name === 'skill-installer')).toMatchObject({
+        name: 'skill-installer',
+        usage: '$skill-installer [command] [arguments]',
+      });
+      expect(skills.find(skill => skill.name === 'skill-creator')).toMatchObject({
+        name: 'skill-creator',
+        usage: '$skill-creator [request]',
+      });
     } finally {
       await server.close();
     }

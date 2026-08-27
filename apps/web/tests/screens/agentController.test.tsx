@@ -703,4 +703,79 @@ describe('useAgentController session lifecycle', () => {
       expect(assistantTexts).toEqual(['Answer 1', 'Updated answer 2', 'Answer 3']);
     });
   });
+
+  it('keeps a dismissed catch-up run hidden when the session is reopened', async () => {
+    const first: SessionSummary = {
+      id: 'session_first',
+      profileName: 'prompt-maker',
+      createdAt: '2026-07-22T00:00:00.000Z',
+      updatedAt: '2026-07-22T00:00:01.000Z',
+      turnCount: 2,
+      preview: 'First session',
+    };
+    const second: SessionSummary = {
+      ...first,
+      id: 'session_second',
+      createdAt: '2026-07-22T00:01:00.000Z',
+      updatedAt: '2026-07-22T00:01:01.000Z',
+      preview: 'Second session',
+    };
+    const finished: RunRecord = {
+      id: 'run_away',
+      objective: 'An unmatched run',
+      profile: 'prompt-maker',
+      sessionId: first.id,
+      status: 'completed',
+      createdAt: '2026-07-22T00:02:00.000Z',
+      finishedAt: '2026-07-22T00:02:05.000Z',
+      eventCount: 2,
+      pendingApprovals: [],
+      pendingUserInputs: [],
+    };
+    const client: ApiClient = {
+      baseUrl: '',
+      request: async (method, path) => {
+        if (method === 'GET' && path === '/v1/profiles') return { profiles: [profile] } as never;
+        if (method === 'GET' && path === '/v1/models') return { default: {}, options: [] } as never;
+        if (method === 'GET' && path === '/v1/profiles/prompt-maker') return { profile } as never;
+        if (method === 'GET' && path === '/v1/skills?profile=prompt-maker') return { skills: [] } as never;
+        if (method === 'GET' && path === '/v1/sessions?limit=100&profile=prompt-maker&archived=false') {
+          return { sessions: [first, second] } as never;
+        }
+        if (method === 'GET' && (path === `/v1/sessions/${first.id}` || path === `/v1/sessions/${second.id}`)) {
+          const summary = path.endsWith(first.id) ? first : second;
+          return {
+            session: {
+              ...summary,
+              turns: [
+                { role: 'user', content: summary.preview, timestamp: summary.createdAt },
+                { role: 'assistant', content: 'Done.', timestamp: summary.updatedAt },
+              ],
+            },
+          } as never;
+        }
+        if (method === 'GET' && path === '/v1/runs') return { runs: [finished] } as never;
+        throw new Error(`Unexpected request: ${method} ${path}`);
+      },
+      stream: async () => new Response(),
+      blob: async () => undefined,
+    };
+    const { result } = renderHook(() => useAgentController({
+      client,
+      route: { view: 'agent', profile: 'prompt-maker', session: first.id },
+      navigate: vi.fn(),
+      onUnauthorized: vi.fn(),
+    }));
+
+    await waitFor(() => expect(result.current.thread.catchUp.map(run => run.id)).toEqual(['run_away']));
+    act(() => result.current.dismissCatchUp());
+    expect(result.current.thread.catchUp).toEqual([]);
+
+    act(() => result.current.selectSession(second.id));
+    await waitFor(() => expect(result.current.sessionId).toBe(second.id));
+    act(() => result.current.selectSession(first.id));
+    await waitFor(() => expect(result.current.sessionId).toBe(first.id));
+    await waitFor(() => expect(result.current.thread.items).toHaveLength(2));
+    expect(result.current.thread.catchUp).toEqual([]);
+  });
 });

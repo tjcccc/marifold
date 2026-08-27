@@ -243,6 +243,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
                 content: turn.content,
                 ...(turn.responseMetrics ? {
                   responseMeta: {
+                    mode: turn.responseMetrics.mode,
                     startedAt: turn.responseMetrics.startedAt,
                     finishedAt: turn.responseMetrics.finishedAt,
                     latencyMs: turn.responseMetrics.latencyMs,
@@ -1108,15 +1109,21 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
 
   const expandCatchUp = useCallback(
     (run: RunRecord) => {
+      ignoredFinishedRunIdsRef.current.add(run.id);
       dispatch({ type: 'run_created', run: { ...run, status: 'running' } });
       // Replay the finished stream from the start; it closes after done.
       followers.attach(run.id, 0);
-      dispatch({ type: 'dismiss_catch_up' });
+      dispatch({ type: 'dismiss_catch_up', runId: run.id });
     },
     [followers],
   );
 
-  const dismissCatchUp = useCallback(() => dispatch({ type: 'dismiss_catch_up' }), []);
+  const dismissCatchUp = useCallback(() => {
+    for (const run of threadRef.current.catchUp) {
+      ignoredFinishedRunIdsRef.current.add(run.id);
+    }
+    dispatch({ type: 'dismiss_catch_up' });
+  }, []);
 
   return {
     profiles,

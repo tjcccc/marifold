@@ -61,6 +61,8 @@ export { ReadFileTool } from './agent/tools/ReadFileTool';
 export { ShellExecTool } from './agent/tools/ShellExecTool';
 export { WebSearchTool } from './agent/tools/WebSearchTool';
 export { isInsideWorkspace, isInsideAny, WriteFileTool } from './agent/tools/WriteFileTool';
+export { SkillManagementTool } from './agent/tools/SkillManagementTool';
+export type { SkillManagementToolOptions } from './agent/tools/SkillManagementTool';
 export {
   MAX_USER_INPUT_CUSTOM_TEXT,
   MAX_USER_INPUT_OPTIONS,
@@ -261,6 +263,9 @@ export {
   skillUsage,
   tokenizeSkillArgs,
   SkillStore,
+  getBuiltInSkill,
+  isBuiltInSkillName,
+  listBuiltInSkills,
 } from './skill';
 export type {
   MarifoldSkill,

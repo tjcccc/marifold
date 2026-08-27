@@ -56,6 +56,7 @@ export interface RunCardState {
 }
 
 export interface ResponseMetaState {
+  mode?: 'agent' | 'chat';
   startedAt: string;
   finishedAt?: string;
   /** End-to-end service latency for this chat request. */
@@ -145,7 +146,7 @@ export type ThreadAction =
   | { type: 'user_input_failed'; runId: string; message: string; gone?: boolean }
   | { type: 'toggle_run_details'; runId: string }
   | { type: 'catch_up'; runs: RunRecord[] }
-  | { type: 'dismiss_catch_up' }
+  | { type: 'dismiss_catch_up'; runId?: string }
   | { type: 'discard_from'; itemId: string }
   | { type: 'notice'; tone: 'info' | 'warn' | 'error'; text: string };
 
@@ -341,6 +342,16 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
         if (findRunItem(next, run.id)
           || next.discardedRunIds.includes(run.id)
           || next.catchUp.some(existing => existing.id === run.id)) continue;
+        const durableResponseIndex = matchingDurableResponseIndex(next, run);
+        if (durableResponseIndex !== -1) {
+          // The persisted assistant turn is the timeline authority after a
+          // reload. A retained run record is only needed to restore transient
+          // metadata such as generated-file downloads.
+          if ((run.artifacts?.length ?? 0) > 0) {
+            next = insert(next, durableResponseIndex + 1, { kind: 'run', run: cardFromRecord(run) });
+          }
+          continue;
+        }
         if ((run.artifacts?.length ?? 0) > 0) {
           // Deliverables are user-facing session results, not optional run
           // diagnostics. Restore their compact card immediately so a page
@@ -356,7 +367,12 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
     }
 
     case 'dismiss_catch_up':
-      return { ...state, catchUp: [] };
+      return {
+        ...state,
+        catchUp: action.runId
+          ? state.catchUp.filter(run => run.id !== action.runId)
+          : [],
+      };
 
     case 'discard_from': {
       const index = state.items.findIndex(item => item.id === action.itemId);
@@ -699,6 +715,44 @@ function insertRunCard(
 ): ThreadState {
   const replacingIndex = state.items.findIndex(candidate => candidate.kind === 'user' && candidate.replacing);
   return replacingIndex === -1 ? append(state, item) : insert(state, replacingIndex + 1, item);
+}
+
+const RUN_RESPONSE_MATCH_TOLERANCE_MS = 1_000;
+
+/** Match a transient run registry record to the durable assistant exchange it
+ * produced. Registry timestamps bracket the same execution recorded in
+ * response metrics, with only a few milliseconds of persistence overhead. */
+function matchingDurableResponseIndex(state: ThreadState, run: RunRecord): number {
+  const runStartedAt = Date.parse(run.createdAt);
+  const runFinishedAt = run.finishedAt ? Date.parse(run.finishedAt) : undefined;
+  if (!Number.isFinite(runStartedAt)) return -1;
+
+  let bestIndex = -1;
+  let bestDistance = Number.POSITIVE_INFINITY;
+  for (let index = 0; index < state.items.length; index += 1) {
+    const item = state.items[index];
+    if (item.kind !== 'assistant' || !item.responseMeta || item.responseMeta.mode === 'chat') continue;
+    const responseStartedAt = Date.parse(item.responseMeta.startedAt);
+    if (!Number.isFinite(responseStartedAt)) continue;
+    const startDistance = Math.abs(responseStartedAt - runStartedAt);
+    if (startDistance > RUN_RESPONSE_MATCH_TOLERANCE_MS) continue;
+
+    let finishDistance = 0;
+    if (runFinishedAt !== undefined && Number.isFinite(runFinishedAt)) {
+      if (!item.responseMeta.finishedAt) continue;
+      const responseFinishedAt = Date.parse(item.responseMeta.finishedAt);
+      if (!Number.isFinite(responseFinishedAt)) continue;
+      finishDistance = Math.abs(responseFinishedAt - runFinishedAt);
+      if (finishDistance > RUN_RESPONSE_MATCH_TOLERANCE_MS) continue;
+    }
+
+    const distance = startDistance + finishDistance;
+    if (distance < bestDistance) {
+      bestIndex = index;
+      bestDistance = distance;
+    }
+  }
+  return bestIndex;
 }
 
 function findRunItem(state: ThreadState, runId: string): Extract<ThreadItem, { kind: 'run' }> | undefined {

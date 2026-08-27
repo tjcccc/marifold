@@ -89,15 +89,17 @@ prompt.
 
 A skill is a `marifold.skill.v0` markdown file — a YAML frontmatter block with
 the metadata, then a prompt body with declared `{{variables}}`. `mode` is
-optional (`agent` or `chat`, default `chat`). Skills live in
+optional (`agent` or `chat`); when omitted, the skill follows the current
+session mode. User-managed skills live in
 `[paths].skills_dir` (default `~/.marifold/skills`) and in each profile's
 `skills/` directory (profile skills shadow global ones).
 
 Skills are stored as `<name>/SKILL.md` folders (the Claude Code layout).
 `/install-skill` accepts either a single `.md` file (saved as `<name>/SKILL.md`)
 or a skill **folder** containing a `SKILL.md` (e.g. `/install-skill ./translate`),
-which is copied whole. marifold currently only reads `SKILL.md`; bundled files
-travel with the skill for future use.
+which is copied whole. marifold parses `SKILL.md` as the definition; bundled
+files travel with the skill and are available to agent-mode skill runs through
+`read_file` when their instructions reference them.
 
 ```markdown
 ---
@@ -135,11 +137,30 @@ from that scope.
 For ordinary agent prompts that mention skills, marifold lazily attaches its
 built-in `$skill-manager` guide. The guide supplies the active profile and
 configured global skill paths so the agent manages marifold skills instead of
-creating another tool's skill directory in the working folder.
+creating another tool's skill directory in the working folder. It prefers the
+same validated mutation boundary used by the protected built-ins:
 
-There is intentionally no `$new`/`$run`/`$remove` verb. Creating or editing a
-skill is either a direct file edit or done by asking the agent in normal input
-("make a skill that translates to Japanese") — that is model work, not a command.
+```text
+$skill-installer install <local-path> [--global|-g]
+$skill-installer update <name> --from <local-path> [--global|-g]
+$skill-installer remove|uninstall <name> [--global|-g]
+$skill-installer help
+$skill-creator [name and requirements] [--global|-g]
+```
+
+These two skills are compiled into core rather than copied into either mutable
+skill directory. They always appear in `$` completion, cannot be shadowed or
+removed, and do not appear in the scope-specific `/skills` deletion picker.
+`skill-installer` accepts local files and folders only; `/install-skill` retains
+its existing local-path/URL behavior. Every mutation targets exactly one scope,
+defaults to the active profile, validates the resulting `SKILL.md`, and passes
+through normal write approval. Removing a profile copy reports when it reveals
+a shadowed global copy. Creating or managing ordinary skills through direct
+filesystem operations remains supported. `$skill-creator` authors `SKILL.md`
+and model-written bundled documentation in English by default, regardless of
+the request language; only an explicit request to write the skill or its
+documentation in another language overrides that default. The skill's intended
+input/output language remains an independent behavior setting.
 
 A Skill is the shared primitive a graphical **SkillApp** renders as a form
 before running an app-local Skill with its explicitly registered model. Legacy

@@ -2,6 +2,32 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-08-27 — v0.64.0 — Protected skill management
+
+- Added compiled, undeletable `$skill-installer` and `$skill-creator` skills to
+  core listing and direct invocation, while keeping mutable profile/global
+  management views limited to user-owned skills.
+- Added an approval-aware `manage_skill` tool for validated local install,
+  exact-name update, exact-scope removal, and collaborative creation with safe
+  bundled text files. Profile scope is the default user-facing behavior;
+  `--global`/`-g` is explicit, and removals report shadow fallbacks.
+- Reserved both built-in names so user files cannot shadow, update, or remove
+  them. Direct filesystem management remains supported for ordinary skills.
+- Made `$skill-creator` author skill metadata, instructions, examples, and
+  model-written bundled documentation in English by default. The request
+  language no longer implies the documentation language; only an explicit
+  authoring-language request overrides it.
+- Reconciled retained Web run records with durable assistant response metrics:
+  already-rendered completions no longer reappear in the away banner, and
+  restored artifact cards return beside the exchange that produced them.
+- Added focused core regressions for built-in resolution, name protection,
+  creation, scope isolation, updates, removals, local-only sources, and write
+  escalation, plus Web regressions for run-history reconciliation and dismissal.
+- Verified the full workspace typecheck/build/test gate (675 tests: core 333,
+  service 61, TUI 60, CLI 26, Web 195), and reproduced the corrected ordering
+  and post-poll banner state in the reported live conversation.
+- Version 0.63.0 → 0.64.0 across all packages + CLI `.version`.
+
 ## 2026-08-26 — v0.63.0 — Local document workspace and generated artifacts
 
 - Replaced eager Agent document injection with immutable staged resources:

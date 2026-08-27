@@ -43,7 +43,8 @@ This request concerns Marifold skills. Follow these rules for any skill inspecti
 - A skill lives at <skill-directory>/<name>/SKILL.md, with optional bundled files beside SKILL.md. Never create .claude/skills, .agents/skills, or a skills directory in the working directory.
 - Profile skills shadow global skills with the same name. Inspect both exact locations before updating or removing, and change only the intended scope.
 - SKILL.md must contain YAML frontmatter with a lowercase name and a non-empty prompt body. Preserve bundled files unless the user asks to replace the whole skill.
-- Use read_file and write_file with the absolute paths above. Use shell_exec only when copying or removing a skill directory is necessary. Confirm destructive or ambiguous changes; after a change, read back SKILL.md to verify it.`;
+- Prefer the validated manage_skill tool for creation, installation, update, or removal. It always targets exactly one scope and protects Marifold's built-in $skill-installer and $skill-creator. Direct filesystem operations for ordinary user skills remain permissible when the user explicitly requests them.
+- Confirm destructive or ambiguous changes. After any direct filesystem change, read back SKILL.md to verify it.`;
 }
 
 function containsKeyword(text: string, keyword: string): boolean {

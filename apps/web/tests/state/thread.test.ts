@@ -352,35 +352,90 @@ describe('threadReducer', () => {
     expect(state.items.at(-1)).toMatchObject({ kind: 'notice', tone: 'warn' });
   });
 
-  it('catch_up collects only unseen runs and dismisses wholesale', () => {
+  it('catch_up collects only unseen runs and supports selective or wholesale dismissal', () => {
     const finished: RunRecord = { ...record, id: 'run_2', status: 'completed' };
+    const another: RunRecord = { ...record, id: 'run_3', status: 'completed' };
     let state = reduce(
       createThreadState(),
       { type: 'run_created', run: record },
-      { type: 'catch_up', runs: [{ ...record }, finished] },
+      { type: 'catch_up', runs: [{ ...record }, finished, another] },
     );
-    expect(state.catchUp.map(r => r.id)).toEqual(['run_2']); // run_1 already in thread
+    expect(state.catchUp.map(r => r.id)).toEqual(['run_2', 'run_3']); // run_1 already in thread
     state = reduce(state, { type: 'catch_up', runs: [finished] });
-    expect(state.catchUp).toHaveLength(1); // dedup
+    expect(state.catchUp).toHaveLength(2); // dedup
+    state = reduce(state, { type: 'dismiss_catch_up', runId: 'run_2' });
+    expect(state.catchUp.map(r => r.id)).toEqual(['run_3']);
     state = reduce(state, { type: 'dismiss_catch_up' });
     expect(state.catchUp).toEqual([]);
   });
 
-  it('restores generated-file downloads immediately instead of hiding them in catch-up', () => {
+  it('places restored generated files beside their durable response instead of at the tail', () => {
     const finished: RunRecord = {
       ...record,
       id: 'run_artifact',
       status: 'completed',
+      finishedAt: '2026-07-05T10:00:05.010Z',
       artifacts: [{ id: 'artifact_1', name: 'empty.txt', mediaType: 'text/plain', size: 0 }],
     };
-    const state = reduce(createThreadState(), { type: 'catch_up', runs: [finished] });
+    const state = reduce(
+      createThreadState(),
+      {
+        type: 'session_loaded',
+        turns: [
+          { role: 'user', content: 'Write a note.' },
+          {
+            role: 'assistant',
+            content: 'Created empty.txt.',
+            responseMeta: {
+              mode: 'agent',
+              startedAt: '2026-07-05T10:00:00.001Z',
+              finishedAt: '2026-07-05T10:00:05.000Z',
+            },
+          },
+          { role: 'user', content: 'A later request.' },
+          { role: 'assistant', content: 'A later answer.' },
+        ],
+      },
+      { type: 'catch_up', runs: [finished] },
+    );
 
     expect(state.catchUp).toEqual([]);
+    expect(state.items.map(item => item.kind)).toEqual(['user', 'assistant', 'run', 'user', 'assistant']);
     expect(card(state, 'run_artifact')).toMatchObject({
       status: 'completed',
       collapsed: true,
       artifacts: finished.artifacts,
     });
+  });
+
+  it('does not show catch-up for a run already represented by a durable assistant turn', () => {
+    const finished: RunRecord = {
+      ...record,
+      status: 'completed',
+      finishedAt: '2026-07-05T10:00:05.010Z',
+    };
+    const state = reduce(
+      createThreadState(),
+      {
+        type: 'session_loaded',
+        turns: [
+          { role: 'user', content: 'Write a note.' },
+          {
+            role: 'assistant',
+            content: 'Done.',
+            responseMeta: {
+              mode: 'agent',
+              startedAt: '2026-07-05T10:00:00.001Z',
+              finishedAt: '2026-07-05T10:00:05.000Z',
+            },
+          },
+        ],
+      },
+      { type: 'catch_up', runs: [finished] },
+    );
+
+    expect(state.catchUp).toEqual([]);
+    expect(state.items.map(item => item.kind)).toEqual(['user', 'assistant']);
   });
 
   it('toggle_run_details flips collapsed', () => {

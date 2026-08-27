@@ -494,6 +494,28 @@ describe('AgentRunner', () => {
     expect(context).not.toContain('SHOULD-NOT-APPEAR');
   });
 
+  it('advertises manage_skill only when active instructions reference it', async () => {
+    const ordinaryEngine = new ScriptedEngine([response({ text: 'Done.' })]);
+    const ordinary = makeRunner(ordinaryEngine, [
+      fakeTool(),
+      fakeTool({ name: 'manage_skill', kind: 'write' }),
+    ]).runner;
+    await collect(ordinary.run({ objective: 'Answer normally.', instructions: ['ordinary guidance'] }));
+    expect(ordinaryEngine.requests[0].tools?.map(tool => tool.name)).toEqual(['read_file']);
+
+    const skillEngine = new ScriptedEngine([response({ text: 'Done.' })]);
+    const skill = makeRunner(skillEngine, [
+      fakeTool(),
+      fakeTool({ name: 'manage_skill', kind: 'write' }),
+    ]).runner;
+    await collect(skill.run({
+      objective: 'install ./translate',
+      lean: true,
+      instructions: ['Use manage_skill for this validated mutation.'],
+    }));
+    expect(skillEngine.requests[0].tools?.map(tool => tool.name)).toEqual(['read_file', 'manage_skill']);
+  });
+
   it('caps NON-lean history to the last N turns when session_context_turns is set', async () => {
     const engine = new ScriptedEngine([response({ text: 'Saved.' })]);
     const registry = new ToolRegistry();

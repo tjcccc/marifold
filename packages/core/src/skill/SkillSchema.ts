@@ -32,8 +32,8 @@ export interface MarifoldSkill {
   variables: SkillVariable[];
   /** Absolute path the skill was loaded from (set by the loader). */
   source?: string;
-  /** Where the skill came from: a shared skills dir or a profile's skills/. */
-  scope?: 'global' | 'profile';
+  /** Where the skill came from: compiled core, shared skills, or a profile's skills/. */
+  scope?: 'builtin' | 'global' | 'profile';
 }
 
 const VARIABLE_PATTERN = /\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g;

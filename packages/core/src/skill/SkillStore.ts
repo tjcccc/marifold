@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { MarifoldError } from '../errors/MarifoldError';
+import { isBuiltInSkillName } from './BuiltInSkills';
 import { MarifoldSkill } from './SkillSchema';
 import { parseSkill } from './SkillValidator';
 
@@ -42,6 +43,7 @@ export class SkillStore {
 
   get(name: string): MarifoldSkill | undefined {
     assertSafeName(name);
+    if (isBuiltInSkillName(name)) return undefined;
     // Profile takes precedence over global.
     for (const [dir, scope] of this.scopedDirs().reverse()) {
       const skillMd = path.join(dir, name, 'SKILL.md');
@@ -61,6 +63,7 @@ export class SkillStore {
   /** Validate then write a skill into the target scope as `<name>/SKILL.md`. */
   installFromText(text: string, scope: SkillScope = 'global'): MarifoldSkill {
     const skill = parseSkill(text);
+    assertMutableName(skill.name);
     const skillDir = path.join(this.dirForScope(scope), skill.name);
     fs.mkdirSync(skillDir, { recursive: true });
     const skillMd = path.join(skillDir, 'SKILL.md');
@@ -73,13 +76,12 @@ export class SkillStore {
    * folder source is copied whole (bundled files travel, though marifold
    * currently only uses SKILL.md). */
   installFromFile(filePath: string, scope: SkillScope = 'global'): MarifoldSkill {
-    const { skillMd, folder } = resolveSkillSource(filePath);
-    const text = fs.readFileSync(skillMd, 'utf-8');
+    const { skillMd, folder, text, skill } = readSkillSource(filePath);
+    assertMutableName(skill.name);
     if (!folder) return this.installFromText(text, scope);
-    const skill = parseSkill(text, skillMd); // validate before writing
     const destDir = path.join(this.dirForScope(scope), skill.name);
-    fs.rmSync(destDir, { recursive: true, force: true });
-    fs.cpSync(folder, destDir, { recursive: true });
+    assertNonOverlappingFolders(folder, destDir);
+    replaceFolder(folder, destDir);
     return { ...skill, source: path.join(destDir, 'SKILL.md'), scope };
   }
 
@@ -87,7 +89,7 @@ export class SkillStore {
    * from every layer; pass a scope to delete only that layer (e.g. the profile
    * copy, revealing a global one). */
   remove(name: string, scope?: SkillScope): boolean {
-    assertSafeName(name);
+    assertMutableName(name);
     let removed = false;
     for (const [dir, dirScope] of this.scopedDirs()) {
       if (scope !== undefined && dirScope !== scope) continue;
@@ -123,8 +125,11 @@ export class SkillStore {
       if (!entry.isDirectory()) continue;
       const skillMd = path.join(dir, entry.name, 'SKILL.md');
       if (!fs.existsSync(skillMd)) continue;
+      if (isBuiltInSkillName(entry.name)) continue;
       try {
-        skills.push({ ...parseSkill(fs.readFileSync(skillMd, 'utf-8'), skillMd), scope });
+        const skill = parseSkill(fs.readFileSync(skillMd, 'utf-8'), skillMd);
+        if (isBuiltInSkillName(skill.name)) continue;
+        skills.push({ ...skill, scope });
       } catch {
         // Skip unparseable skill folders; get() surfaces the precise error.
       }
@@ -139,18 +144,95 @@ function assertSafeName(name: string): void {
   }
 }
 
+function assertMutableName(name: string): void {
+  assertSafeName(name);
+  if (isBuiltInSkillName(name)) {
+    throw MarifoldError.skillInvalid(`Skill '${name}' is a protected Marifold built-in and cannot be installed, updated, or removed.`);
+  }
+}
+
 /** Resolve an install target to its `SKILL.md` and, for a folder source, the
  * folder to copy: a `.md` file directly, or a `SKILL.md` inside a skill folder. */
-function resolveSkillSource(target: string): { skillMd: string; folder?: string } {
+export interface SkillSource {
+  skillMd: string;
+  folder?: string;
+  text: string;
+  skill: MarifoldSkill;
+}
+
+export function readSkillSource(target: string): SkillSource {
   if (!fs.existsSync(target)) {
     throw MarifoldError.skillInvalid(`Skill not found: ${target}`);
   }
-  if (fs.statSync(target).isDirectory()) {
-    const skillMd = path.join(target, 'SKILL.md');
+  let skillMd = target;
+  let folder: string | undefined;
+  const stat = fs.statSync(target);
+  if (stat.isDirectory()) {
+    skillMd = path.join(target, 'SKILL.md');
     if (!fs.existsSync(skillMd)) {
       throw MarifoldError.skillInvalid(`Skill folder has no SKILL.md: ${target}`);
     }
-    return { skillMd, folder: target };
+    folder = target;
+  } else if (!stat.isFile()) {
+    throw MarifoldError.skillInvalid(`Skill source must be a Markdown file or folder: ${target}`);
   }
-  return { skillMd: target };
+  const text = fs.readFileSync(skillMd, 'utf-8');
+  return {
+    skillMd,
+    ...(folder ? { folder } : {}),
+    text,
+    skill: parseSkill(text, skillMd),
+  };
+}
+
+function assertNonOverlappingFolders(source: string, destination: string): void {
+  const sourcePath = canonicalPath(source);
+  const destinationPath = canonicalPath(destination);
+  if (isInside(sourcePath, destinationPath) || isInside(destinationPath, sourcePath)) {
+    throw MarifoldError.skillInvalid(
+      `Skill source folder overlaps its destination: ${source}`,
+      source,
+    );
+  }
+}
+
+function replaceFolder(source: string, destination: string): void {
+  const parent = path.dirname(destination);
+  fs.mkdirSync(parent, { recursive: true });
+  const stagingRoot = fs.mkdtempSync(path.join(parent, `.${path.basename(destination)}.install-`));
+  const staged = path.join(stagingRoot, 'next');
+  const previous = path.join(stagingRoot, 'previous');
+  let movedPrevious = false;
+  let installed = false;
+  try {
+    // Finish and validate the copy before moving the currently installed skill.
+    fs.cpSync(source, staged, { recursive: true });
+    if (fs.existsSync(destination)) {
+      fs.renameSync(destination, previous);
+      movedPrevious = true;
+    }
+    fs.renameSync(staged, destination);
+    installed = true;
+  } catch (error) {
+    if (movedPrevious && !installed && fs.existsSync(previous) && !fs.existsSync(destination)) {
+      fs.renameSync(previous, destination);
+    }
+    throw error;
+  } finally {
+    fs.rmSync(stagingRoot, { recursive: true, force: true });
+  }
+}
+
+function canonicalPath(value: string): string {
+  const resolved = path.resolve(value);
+  try {
+    return fs.realpathSync(resolved);
+  } catch {
+    return resolved;
+  }
+}
+
+function isInside(target: string, root: string): boolean {
+  const relative = path.relative(root, target);
+  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
 }

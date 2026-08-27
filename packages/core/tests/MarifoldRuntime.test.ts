@@ -22,6 +22,44 @@ afterEach(() => {
 });
 
 describe('MarifoldRuntime', () => {
+  it('exposes protected built-in skills without adding them to mutable scope lists', () => {
+    const dir = tempDir();
+    const config: MarifoldConfig = {
+      default: { provider: 'ollama', model: 'gemma4:e4b', profile: 'default', think: false },
+      models: { options: ['ollama/gemma4:e4b'] },
+      memory: { sizeLimit: 50000, contextLimit: 2400 },
+      paths: {
+        profilesDir: path.join(dir, 'profiles'),
+        skillsDir: path.join(dir, 'skills'),
+        sessionsDb: path.join(dir, 'sessions.db'),
+        tasksDir: path.join(dir, 'tasks'),
+      },
+      providers: { ollama: { type: 'ollama', baseUrl: 'http://localhost:11434' } },
+    };
+    const runtime = new MarifoldRuntime({
+      loadedConfig: { config, configPath: path.join(dir, 'config.toml'), foundConfig: true },
+    });
+
+    try {
+      expect(runtime.listSkills('default').map(skill => skill.name)).toEqual([
+        'skill-creator',
+        'skill-installer',
+      ]);
+      expect(runtime.listSkills('default', 'profile')).toEqual([]);
+      expect(runtime.listSkills('default', 'global')).toEqual([]);
+      expect(runtime.getSkill('skill-creator', 'default')?.scope).toBe('builtin');
+
+      const resolved = runtime.resolveSkillInvocation(
+        '$skill-installer install ./translate --global',
+        'default',
+      );
+      expect(resolved.mode).toBe('agent');
+      expect(resolved.instructions[0]).toContain('install ./translate --global');
+    } finally {
+      runtime.close();
+    }
+  });
+
   it('delegates ask to @priest-ai/core and persists SQLite sessions', async () => {
     const dir = tempDir();
     const config: MarifoldConfig = {

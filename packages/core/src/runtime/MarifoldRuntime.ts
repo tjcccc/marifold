@@ -13,6 +13,7 @@ import { WebSearchTool } from '../agent/tools/WebSearchTool';
 import { AskUserTool } from '../agent/tools/AskUserTool';
 import { InspectAttachmentTool } from '../agent/tools/InspectAttachmentTool';
 import { WriteFileTool } from '../agent/tools/WriteFileTool';
+import { SkillManagementTool } from '../agent/tools/SkillManagementTool';
 import { AgentTool, ToolRegistry } from '../agent/ToolRegistry';
 import { ChatGptRefreshedTokens, refreshChatGptAccessToken } from '../config/ChatGptTokenRefresh';
 import { XaiRefreshedTokens, refreshXaiAccessToken } from '../config/XaiTokenRefresh';
@@ -63,6 +64,7 @@ import {
 } from '../skill/SkillInvocation';
 import type { ResolvedSkillInvocation } from '../skill/SkillInvocation';
 import { buildSkillManagerGuide, mentionsSkills } from '../skill/BuiltInSkillManager';
+import { getBuiltInSkill, listBuiltInSkills } from '../skill/BuiltInSkills';
 import { AppStore } from '../app/AppStore';
 import { resolveSkillAppOperation as resolveSkillAppOperationDefinition } from '../app/SkillAppResolver';
 import type { SkillAppDefinition, SkillAppResult, SkillAppStateValue } from '../app/SkillAppSchema';
@@ -841,6 +843,8 @@ export class MarifoldRuntime {
 
   private createDefaultToolRegistry(profile?: string): ToolRegistry {
     const registry = new ToolRegistry();
+    const { config } = this.options.loadedConfig;
+    const resolvedProfile = profile ?? config.default.profile;
     registry.register(new AskUserTool());
     registry.register(new InspectAttachmentTool());
     registry.register(new ReadAttachmentTool());
@@ -849,6 +853,12 @@ export class MarifoldRuntime {
     registry.register(new WriteFileTool());
     registry.register(new ShellExecTool());
     registry.register(new PythonPackageTool());
+    registry.register(new SkillManagementTool({
+      store: this.createSkillStore(resolvedProfile),
+      profile: resolvedProfile,
+      globalDir: config.paths.skillsDir ?? defaultSkillsDir(),
+      profileDir: path.join(config.paths.profilesDir, resolvedProfile, 'skills'),
+    }));
     // Marifold fallback web_search joins the registry when configured. Runs
     // with provider-hosted search filter it out before advertising tools.
     const webSearch = resolveWebSearchConfig(this.options.loadedConfig.config.webSearch);
@@ -881,11 +891,15 @@ export class MarifoldRuntime {
   }
 
   listSkills(profile?: string, scope?: SkillScope): MarifoldSkill[] {
-    return this.createSkillStore(profile).list(scope);
+    const userSkills = this.createSkillStore(profile).list(scope);
+    if (scope !== undefined) return userSkills;
+    const byName = new Map(userSkills.map(skill => [skill.name, skill]));
+    for (const skill of listBuiltInSkills()) byName.set(skill.name, skill);
+    return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name));
   }
 
   getSkill(name: string, profile?: string): MarifoldSkill | undefined {
-    return this.createSkillStore(profile).get(name);
+    return getBuiltInSkill(name) ?? this.createSkillStore(profile).get(name);
   }
 
   resolveSkillInvocation(input: string, profile?: string): ResolvedSkillInvocation {
@@ -893,7 +907,8 @@ export class MarifoldRuntime {
     if (!parsed) throw MarifoldError.skillInvalid('Expected an invocation beginning with $.');
     const resolvedProfile = profile ?? this.options.loadedConfig.config.default.profile;
     this.profileResolver.loadSettings(resolvedProfile);
-    const skill = this.createSkillStore(resolvedProfile).require(parsed.name);
+    const skill = getBuiltInSkill(parsed.name)
+      ?? this.createSkillStore(resolvedProfile).require(parsed.name);
     return resolveSkillInvocationDefinition(skill, parsed);
   }
 

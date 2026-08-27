@@ -12,8 +12,10 @@ import { SearchAttachmentTool } from '../src/agent/tools/SearchAttachmentTool';
 import { ShellExecTool } from '../src/agent/tools/ShellExecTool';
 import { WebSearchTool } from '../src/agent/tools/WebSearchTool';
 import { isInsideWorkspace, WriteFileTool } from '../src/agent/tools/WriteFileTool';
+import { SkillManagementTool } from '../src/agent/tools/SkillManagementTool';
 import { createRunWorkspace } from '../src/agent/RunWorkspace';
 import { capToolOutput, ToolExecutionContext, ToolRegistry } from '../src/agent/ToolRegistry';
+import { SkillStore } from '../src/skill/SkillStore';
 import {
   ensurePythonEnvironment,
   findExecutable,
@@ -90,6 +92,7 @@ describe('ToolRegistry', () => {
         ask: async () => ({ ok: true, text: '' }),
         listProfileNames: () => [],
       }),
+      skillManagementTool(),
     ];
 
     for (const tool of tools) {
@@ -98,6 +101,136 @@ describe('ToolRegistry', () => {
     }
   });
 });
+
+describe('SkillManagementTool', () => {
+  it('creates a profile skill with bundled files and refuses collisions', async () => {
+    const root = tempDir();
+    const globalDir = path.join(root, 'skills');
+    const profileDir = path.join(root, 'profiles', 'writer', 'skills');
+    const tool = skillManagementTool({ globalDir, profileDir });
+    const content = skillText('draft-helper', 'Draft concise text.');
+
+    const created = await tool.execute({
+      action: 'create',
+      scope: 'profile',
+      name: 'draft-helper',
+      content,
+      files: [{ path: 'references/style.txt', content: 'Concise.' }],
+    }, context(root));
+
+    expect(created.isError, created.content).toBeFalsy();
+    expect(created.content).toContain("profile 'writer'");
+    expect(fs.readFileSync(path.join(profileDir, 'draft-helper', 'SKILL.md'), 'utf-8')).toBe(content);
+    expect(fs.readFileSync(path.join(profileDir, 'draft-helper', 'references', 'style.txt'), 'utf-8')).toBe('Concise.');
+
+    const collision = await tool.execute({
+      action: 'create',
+      scope: 'profile',
+      name: 'draft-helper',
+      content,
+    }, context(root));
+    expect(collision.isError).toBe(true);
+    expect(collision.content).toContain('already exists');
+  });
+
+  it('installs and updates only the exact requested scope', async () => {
+    const root = tempDir();
+    const globalDir = path.join(root, 'skills');
+    const profileDir = path.join(root, 'profiles', 'writer', 'skills');
+    const tool = skillManagementTool({ globalDir, profileDir });
+    const sourceDir = path.join(root, 'source');
+    fs.mkdirSync(sourceDir);
+    fs.writeFileSync(path.join(sourceDir, 'SKILL.md'), skillText('translate', 'Global v1.'));
+
+    const installed = await tool.execute({
+      action: 'install',
+      scope: 'global',
+      source: sourceDir,
+    }, context(root));
+    expect(installed.isError, installed.content).toBeFalsy();
+    expect(fs.readFileSync(path.join(globalDir, 'translate', 'SKILL.md'), 'utf-8')).toContain('Global v1.');
+    expect(fs.existsSync(path.join(profileDir, 'translate', 'SKILL.md'))).toBe(false);
+
+    fs.writeFileSync(path.join(sourceDir, 'SKILL.md'), skillText('translate', 'Global v2.'));
+    const updated = await tool.execute({
+      action: 'update',
+      scope: 'global',
+      name: 'translate',
+      source: sourceDir,
+    }, context(root));
+    expect(updated.isError, updated.content).toBeFalsy();
+    expect(fs.readFileSync(path.join(globalDir, 'translate', 'SKILL.md'), 'utf-8')).toContain('Global v2.');
+  });
+
+  it('reports shadow fallback after removing a profile skill', async () => {
+    const root = tempDir();
+    const globalDir = path.join(root, 'skills');
+    const profileDir = path.join(root, 'profiles', 'writer', 'skills');
+    const store = new SkillStore({ globalDir, profileDir });
+    store.installFromText(skillText('translate', 'Global.'), 'global');
+    store.installFromText(skillText('translate', 'Profile.'), 'profile');
+    const tool = skillManagementTool({ globalDir, profileDir, store });
+
+    const removed = await tool.execute({
+      action: 'remove',
+      scope: 'profile',
+      name: 'translate',
+    }, context(root));
+
+    expect(removed.isError, removed.content).toBeFalsy();
+    expect(removed.content).toContain('global copy');
+    expect(store.get('translate')?.scope).toBe('global');
+  });
+
+  it('protects built-ins, rejects network sources, and escalates every mutation', async () => {
+    const root = tempDir();
+    const globalDir = path.join(root, 'skills');
+    const profileDir = path.join(root, 'profiles', 'writer', 'skills');
+    const tool = skillManagementTool({ globalDir, profileDir });
+
+    const protectedResult = await tool.execute({
+      action: 'remove',
+      scope: 'global',
+      name: 'skill-installer',
+    }, context(root));
+    expect(protectedResult.isError).toBe(true);
+    expect(protectedResult.content).toContain('protected Marifold built-in');
+
+    const network = await tool.execute({
+      action: 'install',
+      scope: 'profile',
+      source: 'https://example.com/SKILL.md',
+    }, context(root));
+    expect(network.isError).toBe(true);
+    expect(network.content).toContain('local files or folders');
+
+    expect(tool.assessRisk({ action: 'remove', scope: 'profile', name: 'translate' }, context(root))).toMatchObject({
+      escalate: true,
+      persistable: false,
+      targetPath: path.join(profileDir, 'translate'),
+    });
+  });
+});
+
+function skillManagementTool(options?: {
+  globalDir?: string;
+  profileDir?: string;
+  store?: SkillStore;
+}): SkillManagementTool {
+  const root = tempDir();
+  const globalDir = options?.globalDir ?? path.join(root, 'skills');
+  const profileDir = options?.profileDir ?? path.join(root, 'profiles', 'writer', 'skills');
+  return new SkillManagementTool({
+    store: options?.store ?? new SkillStore({ globalDir, profileDir }),
+    profile: 'writer',
+    globalDir,
+    profileDir,
+  });
+}
+
+function skillText(name: string, prompt: string): string {
+  return `---\nname: ${name}\ndescription: Test skill.\n---\n\n${prompt}\n`;
+}
 
 describe('InspectAttachmentTool', () => {
   it('opens staged images by opaque attachment ID', async () => {

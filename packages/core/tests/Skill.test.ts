@@ -3,6 +3,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { buildSkillManagerGuide, mentionsSkills } from '../src/skill/BuiltInSkillManager';
+import { getBuiltInSkill, listBuiltInSkills } from '../src/skill/BuiltInSkills';
 import { parseSkill } from '../src/skill/SkillValidator';
 import { renderSkillPrompt, resolveSkillValues } from '../src/skill/SkillTemplater';
 import {
@@ -202,12 +203,90 @@ describe('SkillStore', () => {
     expect(() => store.installFromFile(tempDir())).toThrow(/SKILL\.md/);
   });
 
+  it('rejects a source folder that overlaps its destination without deleting it', () => {
+    const globalDir = tempDir();
+    const store = new SkillStore({ globalDir });
+    store.installFromText(TRANSLATE);
+    const installedDir = path.join(globalDir, 'translate');
+
+    expect(() => store.installFromFile(installedDir)).toThrow(/overlaps its destination/);
+    expect(fs.readFileSync(path.join(installedDir, 'SKILL.md'), 'utf-8')).toContain('Translate text.');
+  });
+
   it('skips unparseable skill folders when listing', () => {
     const dir = tempDir();
     fs.mkdirSync(path.join(dir, 'broken'));
     fs.writeFileSync(path.join(dir, 'broken', 'SKILL.md'), 'no frontmatter here');
     const store = new SkillStore({ globalDir: dir });
     expect(store.list()).toHaveLength(0);
+  });
+
+  it('reserves protected built-in names in mutable stores', () => {
+    const dir = tempDir();
+    const store = new SkillStore({ globalDir: dir });
+    const text = TRANSLATE
+      .replace('name: translate', 'name: skill-installer')
+      .replace('Translate text.', 'Not the built-in.');
+
+    expect(() => store.installFromText(text)).toThrow(/protected Marifold built-in/);
+    expect(() => store.remove('skill-creator', 'global')).toThrow(/protected Marifold built-in/);
+
+    const collision = path.join(dir, 'skill-installer');
+    fs.mkdirSync(collision);
+    fs.writeFileSync(path.join(collision, 'SKILL.md'), text);
+    const disguised = path.join(dir, 'disguised');
+    fs.mkdirSync(disguised);
+    fs.writeFileSync(path.join(disguised, 'SKILL.md'), text);
+    expect(store.list()).toHaveLength(0);
+    expect(store.get('skill-installer')).toBeUndefined();
+  });
+});
+
+describe('protected built-in skills', () => {
+  it('lists the installer and creator as agent-mode built-ins', () => {
+    expect(listBuiltInSkills().map(skill => skill.name)).toEqual([
+      'skill-installer',
+      'skill-creator',
+    ]);
+    expect(getBuiltInSkill('skill-installer')).toMatchObject({
+      mode: 'agent',
+      scope: 'builtin',
+    });
+  });
+
+  it('binds installer subcommands without requiring missing variables', () => {
+    const skill = getBuiltInSkill('skill-installer')!;
+    const resolved = resolveSkillInvocation(
+      skill,
+      parseSkillInvocation('$skill-installer update translate --from ./translate -g')!,
+    );
+
+    expect(resolved.mode).toBe('agent');
+    expect(resolved.missing).toEqual([]);
+    expect(resolved.instructions[0]).toContain('update translate --from ./translate -g');
+    expect(resolved.instructions[0]).toContain('manage_skill');
+  });
+
+  it('turns a bare creator invocation into a clarification-oriented request', () => {
+    const skill = getBuiltInSkill('skill-creator')!;
+    const resolved = resolveSkillInvocation(skill, parseSkillInvocation('$skill-creator')!);
+
+    expect(resolved.missing).toEqual([]);
+    expect(resolved.instructions[0]).toContain('No name or requirements were supplied.');
+    expect(resolved.instructions[0]).toContain('ask_user');
+  });
+
+  it('defaults created skill documentation to English regardless of request language', () => {
+    const skill = getBuiltInSkill('skill-creator')!;
+    const resolved = resolveSkillInvocation(
+      skill,
+      parseSkillInvocation('$skill-creator 创建一个把内容整理成 Markdown 的技能')!,
+    );
+
+    expect(resolved.instructions[0]).toContain('Author the skill documentation in English by default.');
+    expect(resolved.instructions[0]).toContain('request written in Chinese');
+    expect(resolved.instructions[0]).toContain('intended input or output language is a separate behavioral requirement');
+    expect(resolved.instructions[0]).toContain('explicitly asks');
   });
 });
 
@@ -241,5 +320,7 @@ describe('built-in skill manager guide', () => {
     expect(guide).toContain('/tmp/marifold/profiles/writer/skills');
     expect(guide).toContain('/tmp/marifold/shared-skills');
     expect(guide).toContain('Never create .claude/skills');
+    expect(guide).toContain('manage_skill');
+    expect(guide).toContain('$skill-installer');
   });
 });
