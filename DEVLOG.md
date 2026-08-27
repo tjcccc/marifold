@@ -2,6 +2,18 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-08-27 — Deferred Topics and Teams design
+
+- Captured Topics as global shared places for instructions, managed resources,
+  invited Profiles and Teams, and multiple conversations or work runs.
+- Captured Teams as reusable Profile rosters with collaboration policy while
+  preserving private per-Profile memory and existing direct conversations.
+- Defined group chat as a future authored multi-party contract with selective
+  floor routing, first-class silence, per-Profile transcript projection, and
+  bounded Profile-to-Profile turns; implementation remains unscheduled.
+- Verified the documentation diff with `git diff --check`; version unchanged at
+  the user's request.
+
 ## 2026-08-27 — v0.64.1 — Priest web search and session creation
 
 - Updated `@priest-ai/core` from 3.0.1 to the published 3.1.0 release, which
