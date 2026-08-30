@@ -6,7 +6,10 @@ import { MarifoldApiError } from '../../src/api/client';
 import type { ProfileDetail, RunRecord, SessionSummary } from '../../src/api/types';
 import { useAgentController } from '../../src/screens/agent/useAgentController';
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 const profile: ProfileDetail = {
   name: 'prompt-maker',
@@ -72,6 +75,42 @@ describe('useAgentController session lifecycle', () => {
     act(() => result.current.newSession());
 
     expect(result.current.sessionId).toEqual(expect.any(String));
+    expect(navigate).toHaveBeenCalledWith({
+      view: 'agent',
+      profile: 'prompt-maker',
+      session: result.current.sessionId,
+    });
+  });
+
+  it('creates a draft session when randomUUID is unavailable on an insecure origin', async () => {
+    vi.spyOn(crypto, 'randomUUID').mockImplementation(() => {
+      throw new DOMException('randomUUID is unavailable', 'SecurityError');
+    });
+    const client: ApiClient = {
+      baseUrl: '',
+      request: async (method, path) => {
+        if (method === 'GET' && path === '/v1/profiles') return { profiles: [profile] } as never;
+        if (method === 'GET' && path === '/v1/models') return { default: {}, options: [] } as never;
+        if (method === 'GET' && path === '/v1/profiles/prompt-maker') return { profile } as never;
+        if (method === 'GET' && path === '/v1/skills?profile=prompt-maker') return { skills: [] } as never;
+        if (method === 'GET' && path.startsWith('/v1/sessions?')) return { sessions: [] } as never;
+        throw new Error(`Unexpected request: ${method} ${path}`);
+      },
+      stream: async () => new Response(),
+      blob: async () => undefined,
+    };
+    const navigate = vi.fn();
+    const { result } = renderHook(() => useAgentController({
+      client,
+      route: { view: 'agent', profile: 'prompt-maker' },
+      navigate,
+      onUnauthorized: vi.fn(),
+    }));
+
+    await waitFor(() => expect(result.current.profileDetail?.name).toBe('prompt-maker'));
+    act(() => result.current.newSession());
+
+    expect(result.current.sessionId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
     expect(navigate).toHaveBeenCalledWith({
       view: 'agent',
       profile: 'prompt-maker',

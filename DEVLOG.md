@@ -2,6 +2,16 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-08-30 — v0.64.2 — LAN Web session creation
+
+- Fixed new-session creation in Web clients opened over plain HTTP private-LAN
+  addresses, where browsers do not expose secure-context-only `randomUUID()`.
+- Centralized browser-owned UUID generation with Web Crypto and non-secret
+  fallbacks, covering both the Sessions `+` action and first-message bootstrap.
+- Added focused insecure-origin regression coverage and verified all 197 Web
+  tests, workspace typecheck/build, and the corrected flow in real Chromium on
+  a non-loopback HTTP address.
+
 ## 2026-08-27 — Deferred Topics and Teams design
 
 - Captured Topics as global shared places for instructions, managed resources,
