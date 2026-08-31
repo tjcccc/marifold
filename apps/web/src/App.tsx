@@ -2,9 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createApiClient, MarifoldApiError } from './api/client';
 import { getStatus } from './api/misc';
 import { ConnectionPopover } from './components/ConnectionPopover';
-import { MarigoldLogo } from './components/MarigoldLogo';
 import type { WorkspaceView } from './components/WorkspaceTabs';
 import type { Route } from './lib/route';
+import { visualViewportGeometry } from './lib/visualViewport';
 import { AgentScreen } from './screens/agent/AgentScreen';
 import { ConfigScreen } from './screens/config/ConfigScreen';
 import { useRoute } from './screens/useRoute';
@@ -47,6 +47,66 @@ export function App() {
       // In-memory continuity still works when storage is unavailable.
     }
   }, [currentConnection.id, route]);
+
+  useEffect(() => {
+    const viewport = window.visualViewport;
+    const root = document.documentElement;
+    let firstFrame: number | undefined;
+    let secondFrame: number | undefined;
+    let settleTimer: number | undefined;
+
+    const updateViewport = (): void => {
+      const geometry = visualViewportGeometry(viewport, window.innerHeight, window.scrollY);
+      root.style.setProperty('--marifold-viewport-height', `${geometry.height}px`);
+      root.style.setProperty('--marifold-viewport-offset-top', `${geometry.offsetTop}px`);
+    };
+
+    // WebKit may dispatch its viewport event before the keyboard animation has
+    // committed the final offset. Re-read after two paints as well as now.
+    const updateAfterPaint = (): void => {
+      if (firstFrame !== undefined) window.cancelAnimationFrame(firstFrame);
+      if (secondFrame !== undefined) window.cancelAnimationFrame(secondFrame);
+      firstFrame = window.requestAnimationFrame(() => {
+        firstFrame = undefined;
+        secondFrame = window.requestAnimationFrame(() => {
+          secondFrame = undefined;
+          updateViewport();
+        });
+      });
+    };
+
+    const onViewportChange = (): void => {
+      updateViewport();
+      updateAfterPaint();
+    };
+
+    const onEditableFocusChange = (event: FocusEvent): void => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement) || !target.matches('input, textarea, [contenteditable="true"]')) return;
+      onViewportChange();
+      if (settleTimer !== undefined) window.clearTimeout(settleTimer);
+      settleTimer = window.setTimeout(onViewportChange, 400);
+    };
+
+    updateViewport();
+    viewport?.addEventListener('resize', onViewportChange);
+    viewport?.addEventListener('scroll', onViewportChange);
+    window.addEventListener('resize', onViewportChange);
+    document.addEventListener('focusin', onEditableFocusChange);
+    document.addEventListener('focusout', onEditableFocusChange);
+    return () => {
+      viewport?.removeEventListener('resize', onViewportChange);
+      viewport?.removeEventListener('scroll', onViewportChange);
+      window.removeEventListener('resize', onViewportChange);
+      document.removeEventListener('focusin', onEditableFocusChange);
+      document.removeEventListener('focusout', onEditableFocusChange);
+      if (firstFrame !== undefined) window.cancelAnimationFrame(firstFrame);
+      if (secondFrame !== undefined) window.cancelAnimationFrame(secondFrame);
+      if (settleTimer !== undefined) window.clearTimeout(settleTimer);
+      root.style.removeProperty('--marifold-viewport-height');
+      root.style.removeProperty('--marifold-viewport-offset-top');
+    };
+  }, []);
 
   const client = useMemo(
     () => createApiClient(apiSettings(currentConnection)),
@@ -126,6 +186,8 @@ export function App() {
             onOpenSettings={onOpenSettings}
             connectionName={currentConnection.name}
             onDone={() => navigate(settingsReturnRoute.current)}
+            onOpenAgent={() => navigate(lastAgentRoute.current)}
+            onOpenApps={() => navigate({ view: 'apps' })}
           />
         ) : (
           <AgentScreen
@@ -144,11 +206,6 @@ export function App() {
           />
         )}
       </main>
-      <div className={styles.narrowWindow} role="status">
-        <span className={styles.narrowLogo}><MarigoldLogo size={42} /></span>
-        <div className={styles.narrowTitle}>Marifold needs a wider window</div>
-        <div className={styles.narrowHint}>This Web UI is designed for desktop-sized windows.</div>
-      </div>
       {connectionOpen ? (
         <ConnectionPopover
           store={connections}

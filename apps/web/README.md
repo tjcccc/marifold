@@ -67,6 +67,18 @@ auth covers `/v1/*` while the shell stays reachable. Source builds stage this
 app into `@marifold/service`; `[service].web_dir` or `--web-dir` remains an
 override for a different built bundle.
 
+## Mobile layout
+
+Browsers below 900 px use a dedicated touch layout instead of compressing the
+desktop columns. Agent navigation drills from Profiles to Sessions to a
+full-screen conversation; Apps and Config use the same list-to-detail pattern.
+Agent, Apps, and Config share an icon-based bottom tab bar on their root/list
+screens. Config opens a compact action sheet for the active server connection,
+appearance, and full Settings. The mobile shell also includes safe-area
+padding, dynamic visual-viewport sizing and offset alignment for the on-screen keyboard,
+touch-visible actions, and bottom-sheet treatments for compact dialogs. Wider
+windows retain the resizable desktop sidebar and multi-column Config layout.
+
 ## Attachments
 
 The composer accepts images, plain-text/code files, and modern Microsoft Office
@@ -126,6 +138,12 @@ a **Re-authenticate…** dialog with a copyable
 `marifold provider reauth <provider>` command. The command runs on the
 service host because a remotely forwarded browser's loopback callback points at
 the client machine, not the Mac hosting marifold.
+
+Web-search Config selects DuckDuckGo, Firecrawl, or the account-backed Ollama
+Cloud fallback and makes the external Ollama query boundary explicit. Bailian
+and Alibaba Cloud provider pages expose Auto / Responses / Chat / Off native
+search routing; Auto uses the core's conservative model matrix, while the
+explicit modes cover newly released provider models.
 
 Completed chat and agent responses show a shared time/token/reasoning/cost
 footer. The service persists those content-free metrics by session and stable

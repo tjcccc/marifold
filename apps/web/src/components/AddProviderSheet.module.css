@@ -249,11 +249,15 @@
 
 @media (max-width: 560px) {
   .backdrop {
-    padding: 12px;
+    align-items: flex-end;
+    padding: 0;
   }
 
   .sheet {
-    max-height: calc(100vh - 24px);
+    width: 100%;
+    max-height: calc(100dvh - 12px);
+    border-radius: 18px 18px 0 0;
+    padding-bottom: calc(16px + env(safe-area-inset-bottom));
   }
 
   .optionName {
@@ -263,5 +267,11 @@
   .kind,
   .configured {
     display: none;
+  }
+
+  .sheet input,
+  .sheet select {
+    min-height: 44px;
+    font-size: 16px;
   }
 }

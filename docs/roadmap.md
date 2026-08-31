@@ -57,8 +57,8 @@ short: what shipped (one line each), what's next, and what's deliberately deferr
 - **App expansion**: conditional visibility, repeaters, typed artifacts,
   richer design/canvas previews, controlled file export, `$app-creator`, and
   approval-aware effectful actions.
-- **Web UI backlog**: `/v1/events` push channel to replace 10s run polling, a deliberate mobile
-  navigation design, and profile rename/delete UI.
+- **Web UI backlog**: `/v1/events` push channel to replace 10s run polling and profile
+  rename/delete UI.
 - **Workflow composition**: chain native profiles, Skills, Apps, models, and
   external-agent aliases into multi-step flows; the living direction and open questions are in
   [`workflow-plan.md`](workflow-plan.md).
@@ -67,14 +67,18 @@ short: what shipped (one line each), what's next, and what's deliberately deferr
 ## Provider-hosted web search
 
 The native-search foundation is implemented in priest protocol 2.9:
-`provider_tools` is separate from caller-executed function tools, and OpenAI
-Responses maps `{type: "web_search"}` to its hosted tool. Marifold currently
-enables that path for ChatGPT subscription models, prefers it over the
-DuckDuckGo/Firecrawl `WebSearchTool` fallback, and reports search as unavailable
-when neither path exists.
+`provider_tools` is separate from caller-executed function tools, and OpenAI-
+style Responses maps `{type: "web_search"}` to its hosted tool. Marifold enables
+that path for OpenAI API, ChatGPT subscription, xAI/Grok, and verified
+Bailian/Alibaba model families, prefers it over the DuckDuckGo, Firecrawl, or
+Ollama Cloud `WebSearchTool` fallback, and retries once through that fallback
+when the provider rejects hosted search before producing output. Bailian's
+model-aware matrix covers both Responses tools and Chat Completions
+`enable_search`; unknown models remain on fallback unless explicitly
+overridden. It reports search as unavailable when neither path exists.
 
 Remaining provider work is deliberately incremental: add and verify Anthropic
-server search, OpenAI API Responses routing, Gemini grounding, and Alibaba
-Cloud Qwen search only when each endpoint can be tested. Citation annotations
-and hosted-search progress events also remain future renderer-contract work;
-the current path preserves final grounded answer text and usage.
+server search and Gemini grounding only when each endpoint can be tested.
+Citation annotations and hosted-search progress events also remain future
+renderer-contract work; the current path preserves final grounded answer text
+and usage.

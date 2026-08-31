@@ -84,3 +84,33 @@
   font-weight: 400;
   text-transform: capitalize;
 }
+
+@media (max-width: 899px) {
+  .brand,
+  .brandProminent {
+    min-height: calc(64px + env(safe-area-inset-top));
+    padding: calc(12px + env(safe-area-inset-top)) 20px 8px;
+  }
+
+  .brand .wordmark,
+  .brandProminent .wordmark {
+    font-size: 22px;
+  }
+
+  .footer {
+    padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
+    background: var(--canvas);
+  }
+
+  .row,
+  .rowSelected {
+    min-height: 44px;
+    padding: 8px 10px;
+    font-size: 15px;
+  }
+
+  .value {
+    max-width: 132px;
+    font-size: 13px;
+  }
+}

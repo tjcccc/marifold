@@ -505,3 +505,108 @@ button.avatarButton:disabled {
   opacity: 0.45;
   cursor: default;
 }
+
+@media (max-width: 560px) {
+  .page {
+    gap: 18px;
+  }
+
+  .identity {
+    padding-top: 0;
+  }
+
+  .rowLine {
+    min-height: 48px;
+    flex-wrap: wrap;
+    padding: 11px 14px;
+  }
+
+  .rowLabel,
+  .rowValue,
+  .profileName,
+  .memoryText {
+    font-size: 14px;
+  }
+
+  .fieldEdit {
+    width: 100%;
+    flex-basis: 100%;
+  }
+
+  .fieldEdit .input {
+    max-width: none;
+    min-height: 44px;
+    text-align: left;
+  }
+
+  .select,
+  .input,
+  .textarea,
+  .removeConfirmInput {
+    min-height: 44px;
+    font-size: 16px;
+  }
+
+  .segments {
+    width: 100%;
+  }
+
+  .segment,
+  .segmentSelected {
+    min-height: 38px;
+    flex: 1;
+  }
+
+  .smallButton,
+  .smallButtonPrimary,
+  .smallButtonDanger,
+  .saveAction {
+    min-height: 40px;
+    padding-inline: 12px;
+    font-size: 13px;
+  }
+
+  .memoryRow,
+  .folderRow {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .memoryActions {
+    justify-content: flex-end;
+  }
+
+  .folderAdd {
+    flex-direction: column;
+  }
+
+  .dangerCard {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .removeProfileButton {
+    min-height: 44px;
+  }
+
+  .removeBackdrop {
+    align-items: end;
+    padding: 0;
+  }
+
+  .removeDialog {
+    width: 100%;
+    padding: 20px 18px calc(18px + env(safe-area-inset-bottom));
+    border-radius: 18px 18px 0 0;
+  }
+
+  .removeDialogCancel,
+  .removeDialogDelete {
+    min-height: 44px;
+    font-size: 16px;
+  }
+
+  .avatarOverlay {
+    opacity: 1;
+  }
+}

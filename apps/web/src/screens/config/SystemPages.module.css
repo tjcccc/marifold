@@ -141,6 +141,11 @@
   color: var(--text);
 }
 
+.addProviderSelect {
+  width: min(340px, 65%);
+  max-width: none;
+}
+
 .saveAction {
   font-size: 12.5px;
   font-weight: 600;
@@ -432,4 +437,95 @@
 .removeDialogDelete:disabled {
   opacity: 0.45;
   cursor: default;
+}
+
+@media (max-width: 560px) {
+  .page {
+    gap: 16px;
+  }
+
+  .pageHeader {
+    align-items: center;
+  }
+
+  .pageTitle {
+    font-size: 18px;
+  }
+
+  .card {
+    padding-inline: 14px;
+  }
+
+  .fieldRow {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px 0;
+  }
+
+  .fieldLabel,
+  .optionName {
+    font-size: 14px;
+  }
+
+  .fieldEdit {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .fieldStatic {
+    text-align: left;
+  }
+
+  .input,
+  .select {
+    width: 100%;
+    max-width: none;
+    min-height: 44px;
+    font-size: 16px;
+  }
+
+  .saveAction,
+  .linkAction,
+  .removeAction {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .segmented {
+    width: 100%;
+  }
+
+  .segment,
+  .segmentActive {
+    min-height: 38px;
+    flex: 1;
+  }
+
+  .dangerCard {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .dangerAction {
+    min-height: 44px;
+  }
+
+  .removeBackdrop {
+    align-items: end;
+    padding: 0;
+  }
+
+  .removeDialog {
+    width: 100%;
+    padding: 20px 18px calc(18px + env(safe-area-inset-bottom));
+    border-radius: 18px 18px 0 0;
+  }
+
+  .removeConfirmInput,
+  .removeDialogCancel,
+  .removeDialogDelete {
+    min-height: 44px;
+    font-size: 16px;
+  }
 }

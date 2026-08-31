@@ -47,6 +47,7 @@ export function WebSearchPage({ search, busy, onSave }: WebSearchPageProps) {
           >
             <option value="duckduckgo">DuckDuckGo — keyless</option>
             <option value="firecrawl">Firecrawl</option>
+            <option value="ollama">Ollama Cloud</option>
           </select>
         </div>
         <div className={styles.fieldRow}>
@@ -87,6 +88,12 @@ export function WebSearchPage({ search, busy, onSave }: WebSearchPageProps) {
         </div>
       </section>
 
+      {search.provider === 'ollama' ? (
+        <div className={styles.note}>
+          Ollama search is an account-backed cloud service. Queries leave this machine for ollama.com; local Ollama models still call it through Marifold's fallback tool.
+        </div>
+      ) : null}
+
       <section className={styles.card}>
         <div className={styles.cardTitle}>Connection</div>
         <EditableText
@@ -94,7 +101,7 @@ export function WebSearchPage({ search, busy, onSave }: WebSearchPageProps) {
           label="API key env"
           value={keyEnvValue}
           changed={apiKeyEnv !== undefined && apiKeyEnv !== (search.apiKeyEnv ?? '')}
-          placeholder="FIRECRAWL_API_KEY"
+          placeholder={search.provider === 'ollama' ? 'OLLAMA_API_KEY' : 'FIRECRAWL_API_KEY'}
           busy={busy}
           onChange={setApiKeyEnv}
           onSave={() => {

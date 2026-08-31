@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ApiClient } from '../../api/client';
 import { MarifoldApiError } from '../../api/client';
 import type { ModelsView, ProviderStatusEntry } from '../../api/misc';
@@ -34,10 +34,13 @@ import type { MemoryEntry, ProfileDetail, ProfileSummary, PublicConfig } from '.
 import { Avatar } from '../../components/Avatar';
 import { AddProviderSheet } from '../../components/AddProviderSheet';
 import { CreateProfileSheet } from '../../components/CreateProfileSheet';
+import { MobileNavigationBar } from '../../components/MobileNavigationBar';
+import { MobileWorkspaceNavigation } from '../../components/MobileWorkspaceNavigation';
 import { ResizableSidebar } from '../../components/ResizableSidebar';
 import { SidebarBrand, SidebarSystemFooter } from '../../components/SidebarChrome';
 import { fileToBase64 } from '../../lib/attachments';
 import type { ConfigSection, Route } from '../../lib/route';
+import { useMediaQuery } from '../../lib/useMediaQuery';
 import type { ThemePreference } from '../../theme/theme';
 import { ModelsPage } from './ModelsPage';
 import { AgentDefaultsPage } from './AgentDefaultsPage';
@@ -58,6 +61,9 @@ const SECTIONS: Array<{ id: ConfigSection; label: string }> = [
   { id: 'service', label: 'Service' },
 ];
 
+const MOBILE_QUERY = '(max-width: 899px)';
+type MobileConfigLevel = 'sections' | 'items' | 'detail';
+
 export interface ConfigScreenProps {
   client: ApiClient;
   route: Extract<Route, { view: 'config' }>;
@@ -69,6 +75,8 @@ export interface ConfigScreenProps {
   onOpenSettings: () => void;
   connectionName: string;
   onDone: () => void;
+  onOpenAgent: () => void;
+  onOpenApps: () => void;
 }
 
 /** Config — Mail-style columns: sections → the section's items (profiles,
@@ -85,8 +93,11 @@ export function ConfigScreen({
   onOpenSettings,
   connectionName,
   onDone,
+  onOpenAgent,
+  onOpenApps,
 }: ConfigScreenProps) {
   const { section, item } = route;
+  const mobile = useMediaQuery(MOBILE_QUERY);
 
   const [profiles, setProfiles] = useState<ProfileSummary[]>([]);
   const [config, setConfig] = useState<PublicConfig | undefined>();
@@ -104,12 +115,41 @@ export function ConfigScreen({
   const [providerAddOpen, setProviderAddOpen] = useState(false);
   const [providerAddBusy, setProviderAddBusy] = useState(false);
   const [providerAddError, setProviderAddError] = useState<string | undefined>();
+  const [mobileLevel, setMobileLevel] = useState<MobileConfigLevel>(() => item ? 'detail' : 'sections');
+  const previousItem = useRef(item);
 
   const go = useCallback(
     (nextSection: ConfigSection, nextItem?: string) =>
       navigate({ view: 'config', section: nextSection, ...(nextItem ? { item: nextItem } : {}) }),
     [navigate],
   );
+
+  const openSection = useCallback((nextSection: ConfigSection) => {
+    setMobileLevel(nextSection === 'profiles' || nextSection === 'providers' ? 'items' : 'detail');
+    go(nextSection);
+  }, [go]);
+
+  const openItem = useCallback((nextSection: 'profiles' | 'providers', nextItem: string) => {
+    setMobileLevel('detail');
+    go(nextSection, nextItem);
+  }, [go]);
+
+  const leaveDetail = useCallback(() => {
+    if (section === 'profiles' || section === 'providers') {
+      setMobileLevel('items');
+      go(section);
+      return;
+    }
+    setMobileLevel('sections');
+  }, [go, section]);
+
+  useEffect(() => {
+    const priorItem = previousItem.current;
+    previousItem.current = item;
+    if (!mobile) return;
+    if (item) setMobileLevel('detail');
+    else if (priorItem && (section === 'profiles' || section === 'providers')) setMobileLevel('items');
+  }, [item, mobile, section]);
 
   const handleError = useCallback(
     (error: unknown) => {
@@ -144,13 +184,13 @@ export function ConfigScreen({
 
   // Landing on a list section without an item selects a sensible default.
   useEffect(() => {
-    if (item || !config) return;
+    if (mobile || item || !config) return;
     if (section === 'profiles') go('profiles', config.default.profile);
     else if (section === 'providers') {
       const first = Object.keys(config.providers).sort()[0];
       if (first) go('providers', first);
     }
-  }, [section, item, config, go]);
+  }, [section, item, config, go, mobile]);
 
   // Profile detail for the selected profile.
   useEffect(() => {
@@ -278,6 +318,7 @@ export function ConfigScreen({
       setDetail(undefined);
       setMemories([]);
       setProblem(undefined);
+      setMobileLevel('items');
       go('profiles');
     } catch (error) {
       handleError(error);
@@ -295,6 +336,7 @@ export function ConfigScreen({
       setModels(result.models);
       setProviderStatus(undefined);
       setProblem(undefined);
+      setMobileLevel('items');
       go('providers');
     } catch (error) {
       handleError(error);
@@ -320,41 +362,92 @@ export function ConfigScreen({
   );
 
   const providerEntries = config ? Object.keys(config.providers).sort() : [];
+  const sectionLabel = SECTIONS.find(entry => entry.id === section)?.label ?? 'Settings';
+  const detailTitle = section === 'profiles'
+    ? detail?.displayName ?? item ?? 'Profile'
+    : section === 'providers'
+      ? item ?? 'Provider'
+      : sectionLabel;
 
-  return (
-    <div className={styles.layout}>
-      <ResizableSidebar>
-        <nav className={styles.sections} aria-label="Config sections">
+  const sectionsNavigation = (
+    <nav className={styles.sections} aria-label="Config sections">
+      {mobile ? (
+        <MobileNavigationBar title="Settings" />
+      ) : (
+        <>
           <SidebarBrand />
           <div className={styles.settingsHeader}>
             <button className={styles.doneButton} onClick={onDone}>‹ Agent</button>
             <span>Settings</span>
           </div>
-          <div className={styles.sectionRows}>
-            {SECTIONS.map(entry => (
-              <button
-                key={entry.id}
-                className={entry.id === section ? styles.rowSelected : styles.row}
-                onClick={() => go(entry.id)}
-              >
-                {entry.label}
-              </button>
-            ))}
-          </div>
-          <SidebarSystemFooter
-            theme={theme}
-            onThemeChange={onThemeChange}
-            onOpenConnection={onOpenConnection}
-            onOpenSettings={onOpenSettings}
-            connectionName={connectionName}
-            settingsActive
-          />
-        </nav>
-      </ResizableSidebar>
+        </>
+      )}
+      <div className={styles.sectionRows}>
+        {SECTIONS.map(entry => (
+          <button
+            key={entry.id}
+            className={entry.id === section ? styles.rowSelected : styles.row}
+            onClick={() => mobile ? openSection(entry.id) : go(entry.id)}
+          >
+            <span>{entry.label}</span>
+            {mobile ? <ForwardGlyph /> : null}
+          </button>
+        ))}
+      </div>
+      {mobile ? (
+        <MobileWorkspaceNavigation
+          active="config"
+          theme={theme}
+          connectionName={connectionName}
+          onAgent={onOpenAgent}
+          onApps={onOpenApps}
+          onOpenConnection={onOpenConnection}
+          onThemeChange={onThemeChange}
+          onOpenSettings={onOpenSettings}
+        />
+      ) : (
+        <SidebarSystemFooter
+          theme={theme}
+          onThemeChange={onThemeChange}
+          onOpenConnection={onOpenConnection}
+          onOpenSettings={onOpenSettings}
+          connectionName={connectionName}
+          settingsActive
+        />
+      )}
+    </nav>
+  );
 
-      {section === 'profiles' ? (
+  return (
+    <div className={styles.layout}>
+      {mobile ? (
+        mobileLevel === 'sections' ? <div className={styles.mobileLevel}>{sectionsNavigation}</div> : null
+      ) : (
+        <ResizableSidebar>{sectionsNavigation}</ResizableSidebar>
+      )}
+
+      {section === 'profiles' && (!mobile || mobileLevel === 'items') ? (
         <nav className={styles.items} aria-label="Profiles">
-          <div className={styles.itemsHeader}>
+          {mobile ? (
+            <MobileNavigationBar
+              title="Profiles"
+              backLabel="Settings"
+              onBack={() => setMobileLevel('sections')}
+              trailing={(
+                <button
+                  className={styles.mobileAddButton}
+                  type="button"
+                  aria-label="New profile"
+                  onClick={() => {
+                    setCreateError(undefined);
+                    setCreateOpen(true);
+                  }}
+                >
+                  +
+                </button>
+              )}
+            />
+          ) : <div className={styles.itemsHeader}>
             <span>Profiles</span>
             <button
               className={styles.newButton}
@@ -366,12 +459,12 @@ export function ConfigScreen({
             >
               +
             </button>
-          </div>
+          </div>}
           {profiles.map(profile => (
             <button
               key={profile.name}
               className={profile.name === item ? styles.itemRowSelected : styles.itemRow}
-              onClick={() => go('profiles', profile.name)}
+              onClick={() => mobile ? openItem('profiles', profile.name) : go('profiles', profile.name)}
             >
               <Avatar
                 client={client}
@@ -387,9 +480,29 @@ export function ConfigScreen({
         </nav>
       ) : null}
 
-      {section === 'providers' ? (
+      {section === 'providers' && (!mobile || mobileLevel === 'items') ? (
         <nav className={styles.items} aria-label="Providers">
-          <div className={styles.itemsHeader}>
+          {mobile ? (
+            <MobileNavigationBar
+              title="Providers"
+              backLabel="Settings"
+              onBack={() => setMobileLevel('sections')}
+              trailing={(
+                <button
+                  className={styles.mobileAddButton}
+                  type="button"
+                  aria-label="Add provider"
+                  onClick={() => {
+                    setProviderAddError(undefined);
+                    setProviderAddOpen(true);
+                    if (providerCatalog === undefined) void refreshProviderCatalog();
+                  }}
+                >
+                  +
+                </button>
+              )}
+            />
+          ) : <div className={styles.itemsHeader}>
             <span>Providers</span>
             <button
               className={styles.newButton}
@@ -403,14 +516,14 @@ export function ConfigScreen({
             >
               +
             </button>
-          </div>
+          </div>}
           {providerEntries.map(name => {
             const status = providerStatus?.find(entry => entry.name === name);
             return (
               <button
                 key={name}
                 className={name === item ? styles.itemRowSelected : styles.itemRow}
-                onClick={() => go('providers', name)}
+                onClick={() => mobile ? openItem('providers', name) : go('providers', name)}
               >
                 <span
                   className={
@@ -432,7 +545,15 @@ export function ConfigScreen({
         </nav>
       ) : null}
 
-      <div className={styles.page}>
+      {!mobile || mobileLevel === 'detail' ? <div className={styles.page}>
+        {mobile ? (
+          <MobileNavigationBar
+            title={detailTitle}
+            backLabel={section === 'profiles' || section === 'providers' ? sectionLabel : 'Settings'}
+            onBack={leaveDetail}
+          />
+        ) : null}
+        <div className={styles.pageBody}>
         {problem ? <div className={styles.problem}>{problem}</div> : null}
 
         {section === 'profiles' ? (
@@ -588,7 +709,8 @@ export function ConfigScreen({
         {section === 'appearance' ? (
           <AppearancePage theme={theme} onThemeChange={onThemeChange} />
         ) : null}
-      </div>
+        </div>
+      </div> : null}
 
       {createOpen ? (
         <CreateProfileSheet
@@ -616,5 +738,13 @@ export function ConfigScreen({
         />
       ) : null}
     </div>
+  );
+}
+
+function ForwardGlyph() {
+  return (
+    <svg width="8" height="14" viewBox="0 0 8 14" aria-hidden focusable="false">
+      <path d="m1 1 6 6-6 6" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   );
 }

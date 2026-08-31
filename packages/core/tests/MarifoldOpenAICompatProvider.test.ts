@@ -104,6 +104,68 @@ describe('MarifoldOpenAICompatProvider', () => {
     expect(requestUrl).toBe('https://api.githubcopilot.com/chat/completions');
   });
 
+  it('routes xAI native web search through the Responses API', async () => {
+    let requestUrl: string | undefined;
+    let requestHeaders: Record<string, string> | undefined;
+    let requestBody: Record<string, unknown> | undefined;
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      requestUrl = String(input);
+      requestHeaders = init?.headers as Record<string, string>;
+      requestBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      return new Response(JSON.stringify({
+        status: 'completed',
+        output: [{
+          type: 'message',
+          content: [{ type: 'output_text', text: 'Fresh Grok answer.' }],
+        }],
+      }), { status: 200 });
+    }));
+
+    const provider = new MarifoldOpenAICompatProvider('https://api.x.ai/v1', 'xai-token', {
+      providerName: 'xai',
+    });
+    const config = {
+      provider: 'xai',
+      model: 'grok-4.6',
+      maxOutputTokens: 100,
+      providerOptions: { marifold_native_web_search: true },
+    };
+    const result = await provider.complete([{ role: 'user', content: 'What is new?' }], config, undefined, {
+      providerTools: [{ type: 'web_search' }],
+    });
+
+    expect(provider.supportsProviderTool({ type: 'web_search' }, config)).toBe(true);
+    expect(result.text).toBe('Fresh Grok answer.');
+    expect(requestUrl).toBe('https://api.x.ai/v1/responses');
+    expect(requestHeaders).toMatchObject({ Authorization: 'Bearer xai-token' });
+    expect(requestBody).toMatchObject({
+      model: 'grok-4.6',
+      stream: false,
+      max_output_tokens: 100,
+      tools: [{ type: 'web_search' }],
+    });
+  });
+
+  it('keeps ordinary xAI calls on Chat Completions', async () => {
+    let requestUrl: string | undefined;
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      requestUrl = String(input);
+      return new Response(JSON.stringify({
+        choices: [{ message: { content: 'Ordinary answer.' }, finish_reason: 'stop' }],
+      }), { status: 200 });
+    }));
+
+    const provider = new MarifoldOpenAICompatProvider('https://api.x.ai/v1', 'xai-token', {
+      providerName: 'xai',
+    });
+    const config = { provider: 'xai', model: 'grok-4.6' };
+    const result = await provider.complete([{ role: 'user', content: 'Hello' }], config);
+
+    expect(provider.supportsProviderTool({ type: 'web_search' }, config)).toBe(false);
+    expect(result.text).toBe('Ordinary answer.');
+    expect(requestUrl).toBe('https://api.x.ai/v1/chat/completions');
+  });
+
   it('routes ChatGPT subscription calls to the Codex backend with account headers, store:false, and forced streaming', async () => {
     let requestUrl: string | undefined;
     let requestHeaders: Record<string, string> | undefined;

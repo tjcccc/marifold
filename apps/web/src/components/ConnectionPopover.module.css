@@ -227,6 +227,18 @@
 }
 
 @media (max-width: 720px) {
+  .backdrop {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .sheet {
+    width: 100%;
+    max-height: calc(100dvh - 12px);
+    border-radius: 18px 18px 0 0;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
   .body {
     grid-template-columns: 1fr;
     overflow-y: auto;
@@ -236,5 +248,10 @@
     max-height: 180px;
     border-right: 0;
     border-bottom: 1px solid var(--separator);
+  }
+
+  .body input {
+    min-height: 44px;
+    font-size: 16px;
   }
 }

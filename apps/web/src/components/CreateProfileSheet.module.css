@@ -159,3 +159,29 @@
   opacity: 0.5;
   cursor: default;
 }
+
+@media (max-width: 560px) {
+  .backdrop {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .sheet {
+    width: 100%;
+    padding: 20px 18px calc(18px + env(safe-area-inset-bottom));
+    border-radius: 18px 18px 0 0;
+  }
+
+  .nameInput,
+  .modelSelect {
+    min-height: 44px;
+    font-size: 16px;
+  }
+
+  .cancel,
+  .create {
+    min-height: 44px;
+    padding-inline: 18px;
+    font-size: 15px;
+  }
+}

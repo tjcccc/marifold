@@ -111,12 +111,20 @@ export type ChatStreamEvent =
 export interface PublicConfig {
   default: { provider?: string; model?: string; profile: string; think?: boolean };
   models: { options: string[] };
-  providers: Record<string, { type: string; baseUrl?: string; hasApiKey?: boolean; hasOauthToken?: boolean; apiKeyEnv?: string; proxy?: string }>;
+  providers: Record<string, {
+    type: string;
+    baseUrl?: string;
+    hasApiKey?: boolean;
+    hasOauthToken?: boolean;
+    apiKeyEnv?: string;
+    proxy?: string;
+    nativeWebSearch?: 'auto' | 'responses' | 'chat' | 'off';
+  }>;
   agent?: MarifoldAgentConfig;
   webSearch?: {
     enabled: boolean;
     maxResults: number;
-    provider: 'duckduckgo' | 'firecrawl';
+    provider: 'duckduckgo' | 'firecrawl' | 'ollama';
     apiKeyEnv?: string;
     scrape?: boolean;
     proxy?: string;

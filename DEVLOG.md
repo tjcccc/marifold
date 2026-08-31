@@ -2,6 +2,45 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-08-31 — v0.65.0 — Mobile Web workspace and expanded search
+
+- Replaced the below-900-px desktop-width notice with a dedicated mobile Web
+  shell: Profiles → Sessions → Conversation, Apps → App detail, and
+  Settings → Section → Item/Detail drill-down navigation.
+- Added compact iOS-style navigation bars, touch-sized list/actions and forms,
+  responsive App layouts, mobile bottom sheets, safe-area padding, and dynamic
+  visual-viewport correction so the composer follows the iPhone keyboard.
+- Consolidated root mobile navigation into an icon-based Agent / Apps / Config
+  tab bar, with Config opening an anchored Connection / Appearance / Settings
+  sheet. Preserved the resizable desktop workspace and widened the Add Model
+  provider selector without changing other form controls.
+- Extended native-first hosted web search from ChatGPT subscription models to
+  the verified OpenAI API and xAI/Grok Responses routes plus model-aware
+  Bailian/Alibaba Cloud search. Documented newer Qwen/DeepSeek/GLM families use
+  Responses tools, documented Qwen chat families use `enable_search`, and
+  unknown model ids retain fallback search.
+- Added `[providers.<name>].native_web_search = "auto" | "responses" | "chat" |
+  "off"` parsing, persistence, sanitized service exposure, and Bailian Web
+  Config controls for newly released or exceptional models.
+- Added one guarded fallback transition for chat and agent runs: when the
+  provider rejects hosted search before emitting output, the same turn retries
+  through the configured Marifold search tool. Partial provider output is never
+  replayed or duplicated.
+- Added `ollama` as an opt-in fallback backend backed by
+  `https://ollama.com/api/web_search`, with `OLLAMA_API_KEY`, proxy support, a
+  ten-result bound, CLI/Web configuration, and an explicit warning that local
+  Ollama inference remains local while search queries use Ollama Cloud.
+- Kept search requests natural-language and model-initiated; removed stale
+  documentation that claimed the intentionally retired `/search` command was
+  still available.
+- Kept unsupported provider families on the existing Marifold fallback path;
+  Anthropic and Gemini native search remain adapter-specific future work.
+- Added focused capability-matrix, adapter wire, search-backend, configuration,
+  CLI, service, Web, streaming, non-streaming, and agent-loop regression
+  coverage. Verified the full workspace typecheck/build/test gate (705 tests:
+  core 352, service 61, TUI 60, CLI 28, Web 204).
+- Version 0.64.2 → 0.65.0 across all packages + CLI `.version`.
+
 ## 2026-08-30 — v0.64.2 — LAN Web session creation
 
 - Fixed new-session creation in Web clients opened over plain HTTP private-LAN

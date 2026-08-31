@@ -5,6 +5,7 @@ import { parseInline, parseMarkdown } from '../../src/lib/markdown';
 import { artifactForSandboxHref } from '../../src/lib/runArtifacts';
 import { withPendingSession } from '../../src/lib/sessionSummaries';
 import { resolveEffectivePermissions } from '../../src/lib/permissions';
+import { visualViewportGeometry } from '../../src/lib/visualViewport';
 
 describe('route', () => {
   it('round-trips every route shape', () => {
@@ -60,6 +61,24 @@ describe('format', () => {
     expect(formatRelativeTime('2026-07-05T11:10:00Z', now)).toBe('50m ago');
     expect(formatRelativeTime('2026-07-05T03:00:00Z', now)).toBe('9h ago');
     expect(formatRelativeTime('2026-07-04T09:00:00Z', now)).toBe('yesterday');
+  });
+});
+
+describe('visual viewport', () => {
+  it('falls back to the layout viewport when the browser has no visual viewport API', () => {
+    expect(visualViewportGeometry(undefined, 844.4, 0)).toEqual({ height: 844, offsetTop: 0 });
+  });
+
+  it('keeps the mobile shell aligned with a keyboard-panned visual viewport', () => {
+    expect(visualViewportGeometry({ height: 417.4, offsetTop: 326.2, pageTop: 326.2 }, 844, 0))
+      .toEqual({ height: 417, offsetTop: 326 });
+  });
+
+  it('uses pageTop when WebKit publishes a stale offsetTop during keyboard animation', () => {
+    expect(visualViewportGeometry({ height: 417, offsetTop: 280, pageTop: 326 }, 844, 0))
+      .toEqual({ height: 417, offsetTop: 326 });
+    expect(visualViewportGeometry({ height: 700, offsetTop: 0, pageTop: 500 }, 844, 500))
+      .toEqual({ height: 700, offsetTop: 0 });
   });
 });
 

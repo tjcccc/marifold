@@ -1,6 +1,7 @@
 import { MarifoldWebSearchConfig } from '../config/ConfigSchema';
 import { DuckDuckGoBackend } from './DuckDuckGoBackend';
 import { FirecrawlBackend } from './FirecrawlBackend';
+import { OllamaSearchBackend } from './OllamaSearchBackend';
 import { SearchBackend } from './SearchBackend';
 
 /**
@@ -9,11 +10,12 @@ import { SearchBackend } from './SearchBackend';
  * Priority is a config-time selection of ONE backend (not a runtime retry
  * cascade):
  *   - `firecrawl` → FirecrawlBackend (BYOK; AI-ready scraped results)
+ *   - `ollama`    → OllamaSearchBackend (BYOK; Ollama Cloud search)
  *   - else        → DuckDuckGoBackend (keyless best-effort floor)
  *
- * Future tier-1 "native" model search (provider server-side web_search) resolves
- * in priest, not here — marifold would simply skip registering its own
- * web_search tool for such a profile. See docs/roadmap.
+ * Provider-hosted model search resolves separately through the provider/model
+ * capability matrix; Marifold skips registering this caller-executed tool
+ * while that native path is active.
  */
 export function createSearchBackend(config: MarifoldWebSearchConfig): SearchBackend {
   if (config.provider === 'firecrawl') {
@@ -21,6 +23,14 @@ export function createSearchBackend(config: MarifoldWebSearchConfig): SearchBack
       apiKey: config.apiKey,
       apiKeyEnv: config.apiKeyEnv,
       scrape: config.scrape,
+      proxy: config.proxy,
+      maxResults: config.maxResults,
+    });
+  }
+  if (config.provider === 'ollama') {
+    return new OllamaSearchBackend({
+      apiKey: config.apiKey,
+      apiKeyEnv: config.apiKeyEnv,
       proxy: config.proxy,
       maxResults: config.maxResults,
     });

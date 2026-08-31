@@ -102,7 +102,7 @@ export function ModelsPage(props: ModelsPageProps) {
         <div className={styles.fieldRow}>
           <span className={styles.fieldLabel}>Provider</span>
           <select
-            className={styles.select}
+            className={`${styles.select} ${styles.addProviderSelect}`}
             value={addProvider}
             onChange={event => {
               setAddProvider(event.target.value);

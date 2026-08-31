@@ -34,6 +34,7 @@ import { capToolOutput, ToolRegistry } from './ToolRegistry';
 import type { EffectfulAgentTool, ToolExecutionContext, UserInputAgentTool } from './ToolRegistry';
 import type { UserInputHandler } from './UserInput';
 import type { ResponseMetrics } from '../sessions/ResponseMetrics';
+import { isNativeWebSearchCapabilityError } from '../runtime/NativeWebSearch';
 
 const PLAN_SCHEMA = {
   type: 'object',
@@ -44,6 +45,7 @@ const PLAN_SCHEMA = {
   required: ['title', 'steps'],
 };
 const NATIVE_WEB_SEARCH_COMPAT_OPTION = 'marifold_native_web_search';
+const NATIVE_WEB_SEARCH_CHAT_OPTION = 'enable_search';
 
 export interface AgentRunOptions {
   objective: string;
@@ -119,6 +121,7 @@ export interface AgentEngineContext {
   engine: AgentEngine;
   config: PriestConfig;
   webSearchMode?: MarifoldWebSearchMode;
+  webSearchFallbackAvailable?: boolean;
   providerTools?: MarifoldProviderToolDefinition[];
 }
 
@@ -215,6 +218,8 @@ export class AgentRunner {
     const { engine: rawEngine } = preparedEngine;
     let config = preparedEngine.config;
     let webSearchMode = preparedEngine.webSearchMode ?? 'unavailable';
+    let webSearchFallbackAvailable = preparedEngine.webSearchFallbackAvailable ?? false;
+    let nativeWebSearchFallbackAttempted = false;
     let providerTools = preparedEngine.providerTools;
     if (runOptions.unattended) {
       const unattendedApproval = {
@@ -226,6 +231,7 @@ export class AgentRunner {
       // ask continues to degrade to deny like every caller-executed tool.
       if (unattendedApproval.network !== 'allow') {
         webSearchMode = 'unavailable';
+        webSearchFallbackAvailable = false;
         providerTools = undefined;
         config = withoutNativeWebSearchCompat(config);
       }
@@ -391,6 +397,23 @@ export class AgentRunner {
         });
 
         if (!response.ok) {
+          if (
+            webSearchMode === 'native'
+            && webSearchFallbackAvailable
+            && !nativeWebSearchFallbackAttempted
+            && isNativeWebSearchCapabilityError(response.error)
+          ) {
+            nativeWebSearchFallbackAttempted = true;
+            webSearchMode = 'fallback';
+            providerTools = undefined;
+            config = withoutNativeWebSearchCompat(config);
+            iterations -= 1;
+            this.deps.taskStore.appendEvent(task.id, {
+              kind: 'decision',
+              message: 'Provider-hosted web search is unavailable; switching to Marifold fallback search.',
+            });
+            continue;
+          }
           if (this.shouldFallBackToControlBlocks(response, state)) {
             state.mode = 'control-block';
             state.triedNativeFallback = true;
@@ -987,9 +1010,15 @@ function truncate(text: string, limit: number): string {
 }
 
 function withoutNativeWebSearchCompat(config: PriestConfig): PriestConfig {
-  if (config.providerOptions?.[NATIVE_WEB_SEARCH_COMPAT_OPTION] !== true) return config;
+  if (
+    config.providerOptions?.[NATIVE_WEB_SEARCH_COMPAT_OPTION] !== true
+    && config.providerOptions?.[NATIVE_WEB_SEARCH_CHAT_OPTION] !== true
+  ) {
+    return config;
+  }
   const providerOptions = { ...config.providerOptions };
   delete providerOptions[NATIVE_WEB_SEARCH_COMPAT_OPTION];
+  delete providerOptions[NATIVE_WEB_SEARCH_CHAT_OPTION];
   return {
     ...config,
     providerOptions: Object.keys(providerOptions).length > 0 ? providerOptions : undefined,

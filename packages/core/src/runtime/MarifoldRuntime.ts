@@ -25,7 +25,7 @@ import type { ProviderModelList, ProviderStatus } from '../config/ProviderInspec
 import { exchangeGitHubTokenForCopilotToken } from '../config/GitHubCopilotAuth';
 import { createSearchBackend } from '../search/createSearchBackend';
 import { formatSearchResults, SearchBackend } from '../search/SearchBackend';
-import { ProviderFactory } from '../config/ProviderFactory';
+import { ProviderFactory, type NativeWebSearchStrategy } from '../config/ProviderFactory';
 import { isGitHubCopilotResponsesModelId } from '../config/ProviderRegistry';
 import { MarifoldError } from '../errors/MarifoldError';
 import { prepareImageInputs } from '../images/ImageOptimizer';
@@ -73,6 +73,7 @@ import { TaskStore } from '../tasks/TaskStore';
 import { defaultAppsDir, defaultSchedulesDir, defaultSkillsDir } from '../workspace/WorkspacePaths';
 import type { TaskCreateInput, TaskEventInput, TaskListOptions, TaskState, TaskSummary, TaskUpdateInput } from '../tasks/TaskStore';
 import { MarifoldAskResponse, MarifoldProviderToolDefinition, MarifoldResolvedSettings, MarifoldRunRequest, MarifoldWebSearchMode } from './MarifoldTypes';
+import { isNativeWebSearchCapabilityError } from './NativeWebSearch';
 
 // Older OpenAI-compatible gateways still take a raw `{think}` body option.
 // Priest 2.8 owns neutral reasoning for Ollama, Anthropic, and Responses.
@@ -95,7 +96,8 @@ export class MarifoldRuntime {
   private readonly providerFactory: ProviderFactory;
   private readonly memoryStore: MemoryStore;
   private readonly taskStore: TaskStore;
-  private readonly searchBackend: SearchBackend;
+  private searchBackend: SearchBackend;
+  private readonly searchBackendOverridden: boolean;
   private readonly scheduleStore: ScheduleStore;
 
   constructor(private readonly options: MarifoldRuntimeOptions) {
@@ -106,6 +108,7 @@ export class MarifoldRuntime {
     this.providerFactory = new ProviderFactory(config, configPath);
     this.memoryStore = new MemoryStore(config.paths.profilesDir);
     this.taskStore = new TaskStore(config.paths.tasksDir);
+    this.searchBackendOverridden = options.searchBackend !== undefined;
     this.searchBackend = options.searchBackend
       ?? createSearchBackend(resolveWebSearchConfig(config.webSearch));
     this.scheduleStore = new ScheduleStore(config.paths.schedulesDir ?? defaultSchedulesDir());
@@ -142,10 +145,17 @@ export class MarifoldRuntime {
     );
     const memoryOn = this.memoryEnabled(settings.profile, request.memories);
     const memory = this.memoryForRequest(settings.profile, request.memories, request.prompt, settings.think);
-    const webSearchMode = this.resolveWebSearchMode(settings, request.chatTools !== false);
-    const chatTools = this.chatTools(request, webSearchMode);
-    const priestRequest: PriestRequest & { providerTools?: MarifoldProviderToolDefinition[] } = {
-      config: this.toPriestConfig(settings, webSearchMode === 'native'),
+    const searchResolution = this.resolveWebSearch(settings, request.chatTools !== false);
+    let webSearchMode = searchResolution.mode;
+    let chatTools = this.chatTools(request, webSearchMode);
+    const nativeFallbackAvailable = webSearchMode === 'native'
+      && this.fallbackWebSearchAvailable(settings, request.chatTools !== false);
+    let nativeFallbackAttempted = false;
+    const buildPriestRequest = (): PriestRequest & { providerTools?: MarifoldProviderToolDefinition[] } => ({
+      config: this.toPriestConfig(
+        settings,
+        webSearchMode === 'native' ? searchResolution.nativeStrategy : 'none',
+      ),
       profile: settings.profile,
       prompt: request.prompt,
       session: request.sessionId && !replacing && !isolated
@@ -159,10 +169,11 @@ export class MarifoldRuntime {
       memory,
       images: preparedImages.images.length > 0 ? preparedImages.images : undefined,
       userContext: request.userContext,
-      providerTools: this.providerToolsFor(webSearchMode),
-    };
+      providerTools: this.providerToolsFor(webSearchMode, searchResolution.nativeStrategy),
+    });
+    let priestRequest = buildPriestRequest();
     const exchange: ToolExchangeTurn[] = [];
-    const maxIterations = chatTools ? CHAT_TOOL_MAX_ITERATIONS : 1;
+    const maxIterations = chatTools || nativeFallbackAvailable ? CHAT_TOOL_MAX_ITERATIONS : 1;
     let response: PriestResponse | undefined;
     let aggregateUsage: UsageInfo | undefined;
 
@@ -177,6 +188,20 @@ export class MarifoldRuntime {
         ...(exchange.length > 0 ? { toolExchange: exchange } : {}),
       }, request.signal ? { signal: request.signal } : undefined);
       aggregateUsage = sumUsage(aggregateUsage, response.usage);
+      if (
+        !response.ok
+        && webSearchMode === 'native'
+        && nativeFallbackAvailable
+        && !nativeFallbackAttempted
+        && isNativeWebSearchCapabilityError(response.error)
+      ) {
+        nativeFallbackAttempted = true;
+        webSearchMode = 'fallback';
+        chatTools = this.chatTools(request, webSearchMode);
+        priestRequest = buildPriestRequest();
+        iteration -= 1;
+        continue;
+      }
       if (!response.ok || !chatTools || !response.toolCalls?.length) break;
 
       exchange.push({
@@ -274,11 +299,17 @@ export class MarifoldRuntime {
     );
     const memoryOn = this.memoryEnabled(settings.profile, request.memories);
     const memory = this.memoryForRequest(settings.profile, request.memories, request.prompt, settings.think);
-    const webSearchMode = this.resolveWebSearchMode(settings, request.chatTools !== false);
-    const chatTools = this.chatTools(request, webSearchMode);
-
-    const baseRequest: PriestRequest & { providerTools?: MarifoldProviderToolDefinition[] } = {
-      config: this.toPriestConfig(settings, webSearchMode === 'native'),
+    const searchResolution = this.resolveWebSearch(settings, request.chatTools !== false);
+    let webSearchMode = searchResolution.mode;
+    let chatTools = this.chatTools(request, webSearchMode);
+    const nativeFallbackAvailable = webSearchMode === 'native'
+      && this.fallbackWebSearchAvailable(settings, request.chatTools !== false);
+    let nativeFallbackAttempted = false;
+    const buildBaseRequest = (): PriestRequest & { providerTools?: MarifoldProviderToolDefinition[] } => ({
+      config: this.toPriestConfig(
+        settings,
+        webSearchMode === 'native' ? searchResolution.nativeStrategy : 'none',
+      ),
       profile: settings.profile,
       prompt: request.prompt,
       session: request.sessionId && !replacing && !isolated
@@ -292,8 +323,9 @@ export class MarifoldRuntime {
       memory,
       images: preparedImages.images.length > 0 ? preparedImages.images : undefined,
       userContext: request.userContext,
-      providerTools: this.providerToolsFor(webSearchMode),
-    };
+      providerTools: this.providerToolsFor(webSearchMode, searchResolution.nativeStrategy),
+    });
+    let baseRequest = buildBaseRequest();
 
     // Caller-executed fallback/read loop. Provider-hosted search is carried
     // separately and does not enter Marifold's tool exchange.
@@ -301,12 +333,13 @@ export class MarifoldRuntime {
     // session only on the loop's final response, and memory payloads are
     // applied only from that final response.
     const exchange: ToolExchangeTurn[] = [];
-    const maxIterations = chatTools ? CHAT_TOOL_MAX_ITERATIONS : 1;
+    const maxIterations = chatTools || nativeFallbackAvailable ? CHAT_TOOL_MAX_ITERATIONS : 1;
 
     for (let iteration = 0; iteration < maxIterations; iteration += 1) {
       const stripper = new MemoryControlStripper();
       const visibleParts: string[] = [];
       let done: PriestResponse | undefined;
+      let providerOutputStarted = false;
       const lastIteration = iteration === maxIterations - 1;
 
       for await (const event of engine.streamEvents(
@@ -318,13 +351,21 @@ export class MarifoldRuntime {
         request.signal ? { signal: request.signal } : undefined,
       )) {
         if (event.type === 'text_delta') {
+          providerOutputStarted = true;
           const visible = stripper.feed(event.text);
           if (visible) {
             visibleParts.push(visible);
             yield visible;
           }
         } else if (event.type === 'reasoning_summary_delta') {
+          providerOutputStarted = true;
           onReasoningSummary?.(event.text);
+        } else if (
+          event.type === 'tool_call_start'
+          || event.type === 'tool_call_delta'
+          || event.type === 'tool_call_end'
+        ) {
+          providerOutputStarted = true;
         } else if (event.type === 'done') {
           done = event.response;
         }
@@ -336,6 +377,20 @@ export class MarifoldRuntime {
       }
 
       aggregateUsage = sumUsage(aggregateUsage, done?.usage);
+      if (
+        !providerOutputStarted
+        && webSearchMode === 'native'
+        && nativeFallbackAvailable
+        && !nativeFallbackAttempted
+        && isNativeWebSearchCapabilityError(done?.error)
+      ) {
+        nativeFallbackAttempted = true;
+        webSearchMode = 'fallback';
+        chatTools = this.chatTools(request, webSearchMode);
+        baseRequest = buildBaseRequest();
+        iteration -= 1;
+        continue;
+      }
       if (done?.error) {
         this.discardFailedNewSession(request.sessionId, sessionWasMissing);
         throw MarifoldError.providerError(
@@ -427,7 +482,7 @@ export class MarifoldRuntime {
     }
   }
 
-  /** Run the web search backend directly (the /search chat command). */
+  /** Run the selected web-search backend directly for non-chat integrations. */
   async searchWeb(query: string, maxResults?: number): Promise<string> {
     const config = resolveWebSearchConfig(this.options.loadedConfig.config.webSearch);
     const results = await this.searchBackend.search(query, maxResults ?? config.maxResults);
@@ -602,6 +657,11 @@ export class MarifoldRuntime {
    * validation as the CLI's `config set` (see ConfigManager.setValue). */
   setConfigValue(key: string, value: string): void {
     new ConfigManager(this.options.loadedConfig).setValue(key, value);
+    if (key.startsWith('web_search.') && !this.searchBackendOverridden) {
+      this.searchBackend = createSearchBackend(
+        resolveWebSearchConfig(this.options.loadedConfig.config.webSearch),
+      );
+    }
   }
 
   /** Read a config value by dotted key (CLI `config get`). */
@@ -770,15 +830,18 @@ export class MarifoldRuntime {
       resolveSettings: request => this.resolveSettings(request),
       prepareEngine: async settings => {
         await this.refreshProviderCredentialsIfNeeded(settings.provider);
-        const webSearchMode = this.resolveWebSearchMode(settings);
+        const searchResolution = this.resolveWebSearch(settings);
+        const webSearchMode = searchResolution.mode;
         return {
           // No engine-level session store: priest would otherwise persist the
           // raw per-iteration `Objective:`/tool framing (and duplicates). The
           // runner instead persists one clean turn pair via `persistTurn` below.
           engine: this.createEngine(settings.provider, false),
-          config: this.toPriestConfig(settings, webSearchMode === 'native'),
+          config: this.toPriestConfig(settings, searchResolution.nativeStrategy),
           webSearchMode,
-          providerTools: this.providerToolsFor(webSearchMode),
+          webSearchFallbackAvailable: webSearchMode === 'native'
+            && this.fallbackWebSearchAvailable(settings),
+          providerTools: this.providerToolsFor(webSearchMode, searchResolution.nativeStrategy),
         };
       },
       prepareImages: async (images, optimize) => (await prepareImageInputs(images, { optimize })).images,
@@ -1263,7 +1326,10 @@ export class MarifoldRuntime {
     };
   }
 
-  private toPriestConfig(settings: MarifoldResolvedSettings, nativeWebSearch = false): PriestConfig {
+  private toPriestConfig(
+    settings: MarifoldResolvedSettings,
+    nativeWebSearch: NativeWebSearchStrategy = 'none',
+  ): PriestConfig {
     const { config } = this.options.loadedConfig;
     const provider = config.providers[settings.provider];
     const neutralReasoning = this.supportsNeutralReasoning(settings.provider, settings.model);
@@ -1272,7 +1338,11 @@ export class MarifoldRuntime {
     // Compatibility bridge for Priest 3.0.x. Priest 3.1 reads providerTools
     // directly; Marifold's Responses wrapper consumes and removes this marker
     // when an older engine does not forward that additive request field.
-    if (nativeWebSearch) providerOptions[NATIVE_WEB_SEARCH_COMPAT_OPTION] = true;
+    if (nativeWebSearch === 'responses-tool') {
+      providerOptions[NATIVE_WEB_SEARCH_COMPAT_OPTION] = true;
+    } else if (nativeWebSearch === 'chat-option') {
+      providerOptions['enable_search'] = true;
+    }
     return {
       provider: settings.provider,
       model: settings.model,
@@ -1325,21 +1395,46 @@ export class MarifoldRuntime {
     });
   }
 
-  private resolveWebSearchMode(
+  private resolveWebSearch(
     settings: Pick<MarifoldResolvedSettings, 'profile' | 'provider' | 'model'>,
     modelToolsEnabled = true,
-  ): MarifoldWebSearchMode {
-    if (!modelToolsEnabled) return 'unavailable';
+  ): { mode: MarifoldWebSearchMode; nativeStrategy: NativeWebSearchStrategy } {
+    if (!modelToolsEnabled) {
+      return { mode: 'unavailable', nativeStrategy: 'none' };
+    }
     const approval = this.resolveAgentConfigForProfile(settings.profile).approval;
-    if (approval.network === 'deny') return 'unavailable';
-    if (this.providerFactory.supportsNativeWebSearch(settings.provider)) return 'native';
-    return resolveWebSearchConfig(this.options.loadedConfig.config.webSearch).enabled
-      ? 'fallback'
-      : 'unavailable';
+    if (approval.network === 'deny') {
+      return { mode: 'unavailable', nativeStrategy: 'none' };
+    }
+    const nativeStrategy = this.providerFactory.nativeWebSearchStrategy(settings.provider, settings.model);
+    if (nativeStrategy !== 'none') {
+      return { mode: 'native', nativeStrategy };
+    }
+    return {
+      mode: this.fallbackWebSearchAvailable(settings, modelToolsEnabled) ? 'fallback' : 'unavailable',
+      nativeStrategy: 'none',
+    };
   }
 
-  private providerToolsFor(mode: MarifoldWebSearchMode): MarifoldProviderToolDefinition[] | undefined {
-    return mode === 'native' ? [{ type: 'web_search' }] : undefined;
+  private fallbackWebSearchAvailable(
+    settings: Pick<MarifoldResolvedSettings, 'profile'>,
+    modelToolsEnabled = true,
+  ): boolean {
+    if (!modelToolsEnabled) {
+      return false;
+    }
+    const approval = this.resolveAgentConfigForProfile(settings.profile).approval;
+    return approval.network !== 'deny'
+      && resolveWebSearchConfig(this.options.loadedConfig.config.webSearch).enabled;
+  }
+
+  private providerToolsFor(
+    mode: MarifoldWebSearchMode,
+    nativeStrategy: NativeWebSearchStrategy,
+  ): MarifoldProviderToolDefinition[] | undefined {
+    return mode === 'native' && nativeStrategy === 'responses-tool'
+      ? [{ type: 'web_search' }]
+      : undefined;
   }
 
   private runtimeContext(

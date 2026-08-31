@@ -877,6 +877,114 @@ describe('AgentRunner', () => {
     expect(task.events.some(e => e.kind === 'decision' && e.message.includes('control-block'))).toBe(true);
   });
 
+  it('retries rejected provider-hosted search through the Marifold fallback tool', async () => {
+    const engine = new ScriptedEngine([
+      response({
+        ok: false,
+        error: {
+          code: 'PROVIDER_ERROR',
+          message: "Provider tool 'web_search' is not supported for model 'grok-4.6'.",
+          details: {},
+        },
+      }),
+      response({
+        toolCalls: [{ id: 'call_search', name: 'web_search', arguments: { query: 'Tokyo weather' } }],
+      }),
+      response({ text: 'Tokyo is sunny.' }),
+    ]);
+    const search = fakeTool({ name: 'web_search', kind: 'network' });
+    const { runner, taskStore } = makeRunner(engine, [search], {}, {
+      resolveSettings: () => ({
+        profile: 'default',
+        provider: 'xai',
+        model: 'grok-4.6',
+        think: false,
+        mode: 'agent',
+      }),
+      prepareEngine: async () => ({
+        engine,
+        config: {
+          provider: 'xai',
+          model: 'grok-4.6',
+          providerOptions: { marifold_native_web_search: true },
+        },
+        webSearchMode: 'native',
+        webSearchFallbackAvailable: true,
+        providerTools: [{ type: 'web_search' }],
+      }),
+    });
+
+    const events = await collect(runner.run({
+      objective: 'Check Tokyo weather.',
+      cwd: tempDir(),
+      approvalHandler: async () => ({ approved: true }),
+    }));
+    const done = events[events.length - 1] as Extract<AgentEvent, { type: 'done' }>;
+    expect(done.status).toBe('completed');
+
+    expect(engine.requests).toHaveLength(3);
+    expect(engine.requests[0].providerTools).toEqual([{ type: 'web_search' }]);
+    expect(engine.requests[0].tools).toBeUndefined();
+    expect(engine.requests[1].providerTools).toBeUndefined();
+    expect(engine.requests[1].config.providerOptions?.marifold_native_web_search).toBeUndefined();
+    expect(engine.requests[1].tools?.map(tool => tool.name)).toContain('web_search');
+    expect(engine.requests[1].context?.join('\n')).toContain('Marifold fallback web search is available');
+    expect(JSON.stringify(engine.requests[2].toolExchange)).toContain('tool output');
+
+    const task = taskStore.get(done.taskId)!;
+    expect(task.events.some(
+      event => event.kind === 'decision' && event.message.includes('Marifold fallback search'),
+    )).toBe(true);
+  });
+
+  it('removes Bailian enable_search when an agent switches to fallback', async () => {
+    const engine = new ScriptedEngine([
+      response({
+        ok: false,
+        error: {
+          code: 'PROVIDER_ERROR',
+          message: 'enable_search is not supported for this model',
+          details: {},
+        },
+      }),
+      response({
+        toolCalls: [{ id: 'call_search', name: 'web_search', arguments: { query: 'current news' } }],
+      }),
+      response({ text: 'Current answer.' }),
+    ]);
+    const { runner } = makeRunner(engine, [fakeTool({ name: 'web_search', kind: 'network' })], {}, {
+      resolveSettings: () => ({
+        profile: 'default',
+        provider: 'bailian',
+        model: 'qwen-plus',
+        think: false,
+        mode: 'agent',
+      }),
+      prepareEngine: async () => ({
+        engine,
+        config: {
+          provider: 'bailian',
+          model: 'qwen-plus',
+          providerOptions: { think: false, enable_search: true },
+        },
+        webSearchMode: 'native',
+        webSearchFallbackAvailable: true,
+      }),
+    });
+
+    const events = await collect(runner.run({
+      objective: 'Find current news.',
+      cwd: tempDir(),
+      approvalHandler: async () => ({ approved: true }),
+    }));
+
+    const done = events[events.length - 1] as Extract<AgentEvent, { type: 'done' }>;
+    expect(done.status).toBe('completed');
+    expect(engine.requests[0].config.providerOptions).toMatchObject({ enable_search: true });
+    expect(engine.requests[1].config.providerOptions).toEqual({ think: false });
+    expect(engine.requests[1].tools?.map(tool => tool.name)).toContain('web_search');
+  });
+
   it('strips memory control blocks from agent output and discards payloads', async () => {
     const engine = new ScriptedEngine([
       planResponse,

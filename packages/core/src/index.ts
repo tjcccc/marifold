@@ -106,6 +106,8 @@ export type { RunArtifact, ResolvedRunArtifact } from './agent/RunArtifacts';
 export { DuckDuckGoBackend } from './search/DuckDuckGoBackend';
 export { FirecrawlBackend } from './search/FirecrawlBackend';
 export type { FirecrawlBackendOptions } from './search/FirecrawlBackend';
+export { OllamaSearchBackend } from './search/OllamaSearchBackend';
+export type { OllamaSearchBackendOptions } from './search/OllamaSearchBackend';
 export { createSearchBackend } from './search/createSearchBackend';
 export { formatSearchContext, formatSearchResults } from './search/SearchBackend';
 export type { SearchBackend, SearchResultItem } from './search/SearchBackend';
@@ -123,6 +125,7 @@ export type {
   MarifoldProviderConfig,
   MarifoldServiceConfig,
   MarifoldWebSearchConfig,
+  NativeWebSearchPreference,
   WebSearchProvider,
   ProfileDetail,
   ProfileFileSummary,

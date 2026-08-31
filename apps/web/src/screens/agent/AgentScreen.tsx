@@ -1,13 +1,16 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { ApiClient } from '../../api/client';
 import type { CreateProfileInput } from '../../api/profiles';
 import { createProfileWithSetup } from '../../api/profiles';
 import { Avatar } from '../../components/Avatar';
 import { CreateProfileSheet } from '../../components/CreateProfileSheet';
+import { MobileNavigationBar } from '../../components/MobileNavigationBar';
+import { MobileWorkspaceNavigation } from '../../components/MobileWorkspaceNavigation';
 import { ResizableSidebar } from '../../components/ResizableSidebar';
 import { SidebarSystemFooter } from '../../components/SidebarChrome';
 import type { WorkspaceView } from '../../components/WorkspaceTabs';
 import type { Route } from '../../lib/route';
+import { useMediaQuery } from '../../lib/useMediaQuery';
 import type { ThemePreference } from '../../theme/theme';
 import { AppsScreen } from '../apps/AppsScreen';
 import { AppsSidebarContent } from '../apps/AppsSidebar';
@@ -23,6 +26,7 @@ import { WorkspaceSidebar } from './WorkspaceSidebar';
 import styles from './AgentScreen.module.css';
 
 const SIDEBARS_KEY = 'marifold.sidebars';
+const MOBILE_QUERY = '(max-width: 899px)';
 
 export interface AgentScreenProps {
   client: ApiClient;
@@ -39,10 +43,11 @@ export interface AgentScreenProps {
   onWorkspaceViewChange: (view: WorkspaceView) => void;
 }
 
-/** Desktop Agent workspace: one navigation-stack sidebar plus conversation. */
+/** Responsive Agent workspace: desktop sidebar or mobile navigation stack plus conversation. */
 export function AgentScreen(props: AgentScreenProps) {
   const controller = useAgentController(props);
   const appsCatalog = useAppsCatalog(props.client, props.onUnauthorized);
+  const mobile = useMediaQuery(MOBILE_QUERY);
   const [sidebarsHidden, setSidebarsHidden] = useState(
     () => localStorage.getItem(SIDEBARS_KEY) === 'hidden',
   );
@@ -52,7 +57,14 @@ export function AgentScreen(props: AgentScreenProps) {
   const [createBusy, setCreateBusy] = useState(false);
   const [createError, setCreateError] = useState<string | undefined>();
   const [scrollToBottomRequest, setScrollToBottomRequest] = useState(0);
+  const [mobileConversationOpen, setMobileConversationOpen] = useState(() => props.route.session !== undefined);
+  const [mobileAppOpen, setMobileAppOpen] = useState(false);
   const appsView = props.workspaceView === 'apps';
+
+  useEffect(() => {
+    if (!props.route.profile) setMobileConversationOpen(false);
+    else if (props.route.session) setMobileConversationOpen(true);
+  }, [props.route.profile, props.route.session]);
 
   async function submitCreateProfile(input: CreateProfileInput): Promise<void> {
     setCreateBusy(true);
@@ -100,7 +112,26 @@ export function AgentScreen(props: AgentScreenProps) {
   }, [controller.steeringRun, controller.profileName]);
 
   const currentSession = controller.sessions.find(session => session.id === controller.sessionId);
-  const sidebarFooter = (
+  const mobileWorkspaceOpen = appsView
+    ? mobileAppOpen && appsCatalog.selected !== undefined
+    : controller.profileName !== undefined && mobileConversationOpen;
+  const sidebarFooter = mobile ? (
+    <MobileWorkspaceNavigation
+      active={appsView ? 'apps' : 'agent'}
+      theme={props.theme}
+      connectionName={props.connectionName}
+      onAgent={() => {
+        if (appsView) props.onWorkspaceViewChange('agent');
+      }}
+      onApps={() => {
+        setMobileAppOpen(false);
+        if (!appsView) props.onWorkspaceViewChange('apps');
+      }}
+      onOpenConnection={props.onOpenConnection}
+      onThemeChange={props.onThemeChange}
+      onOpenSettings={props.onOpenSettings}
+    />
+  ) : (
     <SidebarSystemFooter
       theme={props.theme}
       onThemeChange={props.onThemeChange}
@@ -110,82 +141,98 @@ export function AgentScreen(props: AgentScreenProps) {
     />
   );
 
+  const navigation = (
+    <WorkspaceSidebar
+      ariaLabel={appsView ? 'Apps' : controller.profileName ? 'Sessions' : 'Profiles'}
+      footer={sidebarFooter}
+      showBrand={appsView || !controller.profileName}
+    >
+      {appsView ? (
+        <AppsSidebarContent
+          client={props.client}
+          apps={appsCatalog.apps}
+          selected={appsCatalog.selectedName}
+          busy={appBusy}
+          loading={appsCatalog.loading}
+          onSelect={name => {
+            appsCatalog.select(name);
+            setMobileAppOpen(true);
+          }}
+        />
+      ) : controller.profileName ? (
+        <SessionListContent
+          sessions={controller.sessions}
+          selected={controller.sessionId}
+          profileName={controller.profileName}
+          profileDisplayName={controller.profileDetail?.displayName}
+          profileAvatar={(
+            <Avatar
+              client={props.client}
+              name={controller.profileName}
+              label={controller.profileDetail?.displayName}
+              hasAvatar={controller.profiles.some(
+                profile => profile.name === controller.profileName && profile.avatar !== undefined,
+              )}
+              size={64}
+            />
+          )}
+          search={controller.sessionSearch}
+          onSearchChange={controller.setSessionSearch}
+          showArchived={controller.showArchivedSessions}
+          onShowArchivedChange={controller.setShowArchivedSessions}
+          runningSessionIds={controller.runningSessionIds}
+          onSelect={id => {
+            setMobileConversationOpen(true);
+            controller.selectSession(id);
+          }}
+          onNew={() => {
+            setMobileConversationOpen(true);
+            controller.newSession();
+          }}
+          onBack={controller.showProfiles}
+          onConfigureProfile={() => props.navigate({
+            view: 'config',
+            section: 'profiles',
+            item: controller.profileName,
+          })}
+          onRename={controller.renameSession}
+          onSetPinned={controller.setSessionPinned}
+          onSetArchived={controller.setSessionArchived}
+          onDelete={controller.deleteSession}
+        />
+      ) : (
+        <ProfileSidebarContent
+          client={props.client}
+          profiles={controller.profiles}
+          selected={controller.profileName}
+          workingProfiles={workingProfiles}
+          onSelect={name => {
+            setMobileConversationOpen(false);
+            controller.selectProfile(name);
+          }}
+          onSetPinned={controller.setProfilePinned}
+          onConfigure={name => props.navigate({
+            view: 'config',
+            section: 'profiles',
+            item: name,
+          })}
+          onCreate={() => {
+            setCreateError(undefined);
+            setCreateOpen(true);
+          }}
+        />
+      )}
+    </WorkspaceSidebar>
+  );
+
   return (
     <div className={styles.layout}>
-      {sidebarsHidden ? null : (
-        <ResizableSidebar>
-          <WorkspaceSidebar
-            ariaLabel={appsView ? 'Apps' : controller.profileName ? 'Sessions' : 'Profiles'}
-            footer={sidebarFooter}
-            showBrand={appsView || !controller.profileName}
-          >
-            {appsView ? (
-              <AppsSidebarContent
-                client={props.client}
-                apps={appsCatalog.apps}
-                selected={appsCatalog.selectedName}
-                busy={appBusy}
-                loading={appsCatalog.loading}
-                onSelect={appsCatalog.select}
-              />
-            ) : controller.profileName ? (
-              <SessionListContent
-                sessions={controller.sessions}
-                selected={controller.sessionId}
-                profileName={controller.profileName}
-                profileDisplayName={controller.profileDetail?.displayName}
-                profileAvatar={(
-                  <Avatar
-                    client={props.client}
-                    name={controller.profileName}
-                    label={controller.profileDetail?.displayName}
-                    hasAvatar={controller.profiles.some(
-                      profile => profile.name === controller.profileName && profile.avatar !== undefined,
-                    )}
-                    size={64}
-                  />
-                )}
-                search={controller.sessionSearch}
-                onSearchChange={controller.setSessionSearch}
-                showArchived={controller.showArchivedSessions}
-                onShowArchivedChange={controller.setShowArchivedSessions}
-                runningSessionIds={controller.runningSessionIds}
-                onSelect={controller.selectSession}
-                onNew={controller.newSession}
-                onBack={controller.showProfiles}
-                onConfigureProfile={() => props.navigate({
-                  view: 'config',
-                  section: 'profiles',
-                  item: controller.profileName,
-                })}
-                onRename={controller.renameSession}
-                onSetPinned={controller.setSessionPinned}
-                onSetArchived={controller.setSessionArchived}
-                onDelete={controller.deleteSession}
-              />
-            ) : (
-              <ProfileSidebarContent
-                client={props.client}
-                profiles={controller.profiles}
-                selected={controller.profileName}
-                workingProfiles={workingProfiles}
-                onSelect={controller.selectProfile}
-                onSetPinned={controller.setProfilePinned}
-                onConfigure={name => props.navigate({
-                  view: 'config',
-                  section: 'profiles',
-                  item: name,
-                })}
-                onCreate={() => {
-                  setCreateError(undefined);
-                  setCreateOpen(true);
-                }}
-              />
-            )}
-          </WorkspaceSidebar>
-        </ResizableSidebar>
+      {mobile ? (
+        mobileWorkspaceOpen ? null : <div className={styles.mobileNavigation}>{navigation}</div>
+      ) : sidebarsHidden ? null : (
+        <ResizableSidebar>{navigation}</ResizableSidebar>
       )}
-      <div
+      {!mobile || mobileWorkspaceOpen ? <div
         className={styles.threadPane}
         onDragOver={appsView ? undefined : onDragOver}
         onDragLeave={() => setDropActive(false)}
@@ -196,17 +243,35 @@ export function AgentScreen(props: AgentScreenProps) {
             Drop to attach
           </div>
         ) : null}
-        <ThreadHeader
-          sessionTitle={appsView
-            ? 'Apps'
-            : controller.profileName
-              ? (currentSession ? sessionTitle(currentSession) : 'New session')
-              : 'Profiles'}
-          sidebarsHidden={sidebarsHidden}
-          onToggleSidebars={toggleSidebars}
-          view={props.workspaceView}
-          onViewChange={props.onWorkspaceViewChange}
-        />
+        {mobile ? (
+          <MobileNavigationBar
+            title={appsView
+              ? appsCatalog.selected?.app.title ?? 'Apps'
+              : currentSession ? sessionTitle(currentSession) : 'New session'}
+            backLabel={appsView ? 'Apps' : 'Sessions'}
+            onBack={() => {
+              if (appsView) setMobileAppOpen(false);
+              else {
+                setMobileConversationOpen(false);
+                if (controller.profileName && props.route.session) {
+                  props.navigate({ view: 'agent', profile: controller.profileName });
+                }
+              }
+            }}
+          />
+        ) : (
+          <ThreadHeader
+            sessionTitle={appsView
+              ? 'Apps'
+              : controller.profileName
+                ? (currentSession ? sessionTitle(currentSession) : 'New session')
+                : 'Profiles'}
+            sidebarsHidden={sidebarsHidden}
+            onToggleSidebars={toggleSidebars}
+            view={props.workspaceView}
+            onViewChange={props.onWorkspaceViewChange}
+          />
+        )}
         {appsView ? (
           <AppsScreen
             client={props.client}
@@ -262,7 +327,7 @@ export function AgentScreen(props: AgentScreenProps) {
             <div className={styles.chooseHint}>Profiles keep their own instructions, sessions, skills, and memories.</div>
           </div>
         )}
-      </div>
+      </div> : null}
       {createOpen ? (
         <CreateProfileSheet
           existingNames={controller.profiles.map(profile => profile.name)}
