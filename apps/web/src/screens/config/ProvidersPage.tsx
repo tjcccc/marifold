@@ -7,6 +7,7 @@ import styles from './SystemPages.module.css';
 
 const PROVIDER_TYPES = ['ollama', 'openai-compatible', 'anthropic'] as const;
 const OAUTH_PROVIDERS = new Set(['github_copilot', 'chatgpt', 'xai']);
+const BAILIAN_PROVIDERS = new Set(['bailian', 'alibaba_cloud']);
 
 export interface ProvidersPageProps {
   selected?: string;
@@ -229,6 +230,24 @@ export function ProvidersPage(props: ProvidersPageProps) {
             ) : null}
           </div>
         </div>
+
+        {BAILIAN_PROVIDERS.has(props.selected) ? (
+          <div className={styles.fieldRow}>
+            <label className={styles.fieldLabel} htmlFor="provider-native-web-search">Native web search</label>
+            <select
+              id="provider-native-web-search"
+              className={styles.select}
+              value={provider.nativeWebSearch ?? 'auto'}
+              disabled={props.busy}
+              onChange={event => props.onSaveField(props.selected!, 'native_web_search', event.target.value)}
+            >
+              <option value="auto">Auto — verified model matrix</option>
+              <option value="responses">Force Responses tool</option>
+              <option value="chat">Force Chat enable_search</option>
+              <option value="off">Off — use Marifold fallback</option>
+            </select>
+          </div>
+        ) : null}
 
         <div className={styles.fieldRow}>
           <span className={styles.fieldLabel}>Credentials</span>

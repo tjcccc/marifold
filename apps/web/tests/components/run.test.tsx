@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 afterEach(cleanup);
 import type { RunApprovalAction } from '../../src/api/types';
 import type { ApiClient } from '../../src/api/client';
+import { MobileWorkspaceNavigation } from '../../src/components/MobileWorkspaceNavigation';
 import { ResizableSidebar } from '../../src/components/ResizableSidebar';
 import { SidebarSystemFooter } from '../../src/components/SidebarChrome';
 import type { RunCardState } from '../../src/state/thread';
@@ -463,6 +464,45 @@ describe('Desktop workspace sidebar', () => {
     expect(onOpenConnection).toHaveBeenCalledOnce();
     expect(onThemeChange).toHaveBeenCalledWith('light');
     expect(onOpenSettings).toHaveBeenCalledOnce();
+  });
+});
+
+describe('Mobile workspace navigation', () => {
+  it('switches tabs and opens Config actions in a bottom-sheet menu', () => {
+    const onAgent = vi.fn();
+    const onApps = vi.fn();
+    const onOpenConnection = vi.fn();
+    const onThemeChange = vi.fn();
+    const onOpenSettings = vi.fn();
+    render(
+      <MobileWorkspaceNavigation
+        active="agent"
+        theme="auto"
+        connectionName="This server"
+        onAgent={onAgent}
+        onApps={onApps}
+        onOpenConnection={onOpenConnection}
+        onThemeChange={onThemeChange}
+        onOpenSettings={onOpenSettings}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Apps' }));
+    expect(onApps).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByRole('button', { name: 'Config' }));
+    const menu = screen.getByRole('dialog', { name: 'Config menu' });
+    expect(menu).toBeTruthy();
+    expect(screen.getByText('This server')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /Appearance/ }));
+    expect(onThemeChange).toHaveBeenCalledWith('light');
+    expect(screen.queryByRole('dialog', { name: 'Config menu' })).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Config' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
+    expect(onOpenSettings).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByRole('button', { name: 'Agent' }));
+    expect(onAgent).toHaveBeenCalledOnce();
+    expect(onOpenConnection).not.toHaveBeenCalled();
   });
 });
 

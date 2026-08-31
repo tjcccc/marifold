@@ -1,17 +1,13 @@
 .shell {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  height: var(--marifold-viewport-height, 100%);
 }
 
 .content {
   flex: 1;
   min-height: 0;
   display: flex;
-}
-
-.narrowWindow {
-  display: none;
 }
 
 .placeholder {
@@ -33,34 +29,16 @@
 }
 
 @media (max-width: 899px) {
+  .shell {
+    width: 100%;
+    min-width: 0;
+    overflow: hidden;
+    transform: translateY(var(--marifold-viewport-offset-top, 0));
+  }
+
   .content {
-    display: none;
-  }
-
-  .narrowWindow {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 32px;
-    text-align: center;
-    background: var(--content);
-  }
-
-  .narrowLogo {
-    display: inline-flex;
-    margin-bottom: 14px;
-    color: var(--brand-fill);
-  }
-
-  .narrowTitle {
-    font-size: 18px;
-    font-weight: 650;
-  }
-
-  .narrowHint {
-    margin-top: 6px;
-    color: var(--text-3);
+    width: 100%;
+    min-width: 0;
+    overflow: hidden;
   }
 }

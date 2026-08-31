@@ -43,6 +43,7 @@ import {
   splitInlineTextAttachments,
 } from '../../lib/attachments';
 import { parseCommand, WEB_COMMANDS } from '../../lib/commandSyntax';
+import { createClientId } from '../../lib/id';
 import { withPendingSession } from '../../lib/sessionSummaries';
 import { RunFollowers } from '../../state/followers';
 import type { ThreadState, UserAttachment } from '../../state/thread';
@@ -484,7 +485,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
 
   const newSession = useCallback(() => {
     if (!profileName || (sessionId && !persistedSessionIds.has(sessionId))) return;
-    const id = crypto.randomUUID();
+    const id = createClientId();
     abortActiveChat();
     followers.stopAll();
     setSessionId(id);
@@ -635,7 +636,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
 
       let sid = sessionId;
       if (!sid) {
-        sid = crypto.randomUUID();
+        sid = createClientId();
         setSessionId(sid);
         navigate({ view: 'agent', profile: profileName, session: sid });
       }

@@ -338,3 +338,43 @@
   font-weight: 600;
   font-size: 12px;
 }
+
+@media (max-width: 899px) {
+  .scroll {
+    overscroll-behavior-y: contain;
+  }
+
+  .thread {
+    width: 100%;
+    padding: 18px 13px 10px;
+    gap: 16px;
+  }
+
+  .empty {
+    padding: 18vh 24px 0;
+  }
+
+  .userTurn {
+    max-width: 88%;
+  }
+
+  .userBubble {
+    padding: 9px 13px;
+  }
+
+  .userImage {
+    max-width: min(260px, 72vw);
+    height: auto;
+  }
+
+  .userActions {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .userActionButton,
+  .responseCopyButton {
+    width: 40px;
+    height: 40px;
+  }
+}

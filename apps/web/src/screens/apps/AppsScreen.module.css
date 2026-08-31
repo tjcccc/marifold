@@ -423,11 +423,37 @@
 }
 
 @media (max-width: 760px) {
+  .scrollArea {
+    overscroll-behavior-y: contain;
+  }
+
   .header,
   .appCanvas {
     width: calc(100% - 32px);
   }
 
+  .header {
+    padding: 24px 0 18px;
+  }
+
+  .header h1 {
+    font-size: 24px;
+  }
+
+  .appCanvas {
+    padding: 20px 0 calc(40px + env(safe-area-inset-bottom));
+  }
+
+  .field input,
+  .field select,
+  .field textarea {
+    font-size: 16px;
+  }
+
+  .primaryButton,
+  .secondaryButton {
+    min-height: 44px;
+  }
 }
 
 @container (max-width: 620px) {

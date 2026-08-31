@@ -21,6 +21,27 @@ body {
   text-rendering: optimizeLegibility;
 }
 
+@media (max-width: 899px) {
+  html,
+  body,
+  #root {
+    width: 100%;
+    overflow: hidden;
+  }
+
+  body {
+    overscroll-behavior: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  button,
+  input,
+  textarea,
+  select {
+    touch-action: manipulation;
+  }
+}
+
 button {
   font: inherit;
   color: inherit;

@@ -181,9 +181,9 @@ SDK.
 - Testing and evaluation: service integration tests, cross-client contract tests, streaming smoke tests, adversarial memory tests, task-state regression tests, and broader provider-backed evals.
 - Operations and packaging: install/start/restart behavior, local daemon strategy, log rotation, migrations, diagnostics, crash recovery, and user-friendly troubleshooting.
 
-## Deferred: Multi-Profile Orchestration & App UX (design notes, not yet scheduled)
+## Deferred: Topics, Teams, Multi-Profile Orchestration & App UX (design notes, not yet scheduled)
 
-Design conclusions from product discussion (2026-06-22). Captured for later; not being built now (current focus is TUI polish).
+Design conclusions from product discussions (2026-06-22 and 2026-08-27). Captured for later; none of the Topic, Team, or group-chat work below is scheduled for implementation.
 
 - Two profile-to-profile patterns, kept distinct:
   - **Consult (delegate-and-return)** — front profile stays the face, calls a specialist once, relays the result. Already exists as the `ask_profile` tool (in-process via `runtime.ask`; do NOT shell out to `marifold --profile … exec`). Best fit for message bots (Telegram/Slack) where there is a single entry point. Multi-turn happens between user and orchestrator; the delegate call is one-shot with assembled context, so depth-1/stateless is usually sufficient.
@@ -192,7 +192,21 @@ Design conclusions from product discussion (2026-06-22). Captured for later; not
 - Decisions locked:
   - **Memory stays per-profile** (actor-model isolation): profiles share by talking, never by reading each other's memory files. Possible single exception: a read-only "owner card" (user's name/timezone) every contact may see — opt-in, not a shared-memory backdoor.
   - **New contact = init a new profile.** Offer starter templates (email writer, translator, coder) = preset profiles.
-  - **Skills remain global + profile-scoped. Apps are global bundles with explicit actors.** Agent conversations remain profile/session based; Apps use their own workspace and do not write Agent transcripts.
+  - **Skills remain global + profile-scoped. Apps are global bundles with explicit actors.** Existing direct conversations remain profile/session based; future multi-party Topic conversations need their own contract. Apps use their own workspace and do not write Agent transcripts.
+- **Topics and Teams are separate global concepts.** They are top-level within one marifold service, not owned by a profile; this does not require equally prominent navigation for both on day one.
+  - **Profile = who, Topic = what/where, Session = one conversation, Team = who works together and how.** Existing direct profile conversations remain valid without a Topic.
+  - A **Topic** is a persistent shared place with its own instructions, managed files/artifacts, invited profiles and Teams, and multiple conversations or work runs. It may have a default Profile or Team, but any invited actor can work in it. Topic files should reuse the lazy, bounded resource boundary instead of entering every prompt; persistent writes remain explicit and approval-aware.
+  - A **Team** is a reusable roster of Profiles with an optional lead and coordination instructions. A Team can be invited into many Topics; a Topic can invite Teams and individual Profiles. Team membership never creates shared Profile memory.
+  - **Invitation means awareness and eligibility, not an obligation to answer.** An invited Profile keeps its own identity and private memory, gains the Topic's explicit context while participating, and acts only when selected, mentioned, delegated to, or activated by Team policy.
+  - Keep ad hoc Topic participants distinct from saved Teams: inviting Profiles individually creates a local group for that Topic, while inviting a Team brings a reusable roster and collaboration policy.
+- **Group chat requires a multi-party conversation contract, not parallel completions.** Silence and turn-taking are core behavior, so do not wake every invited Profile and publish every generated answer.
+  - Store an authored room transcript with message author, mentions, and optional reply target. Every participant can observe the durable message later, but only selected Profiles are actively invoked for a given event.
+  - Use a renderer-neutral floor-selection step to choose zero or usually one likely speaker from explicit mentions, reply targets, public Profile roles, relevance, and recent participation. The floor selector is not a visible Profile and must not author the answer.
+  - Give a selected Profile a structured intent such as `silent`, `react`, `reply`, `redirect`, or `defer`. Silence is a successful terminal outcome, not an error or empty assistant message. A Profile may redirect or mention a better-suited Profile.
+  - Project the shared transcript separately for each invoked Profile so its own prior messages and messages from the user or other Profiles retain unambiguous authorship. Do not force multi-party history into the current binary user/assistant session representation.
+  - Pass Profile-authored messages through the same routing loop, with cooldowns and a strict cap on Profile-to-Profile turns before waiting for fresh user input. This prevents self-sustaining conversations and response pile-ons.
+  - Keep **group chat** (attention, silence, reactions, social initiative) distinct from **Team work** (assignment, delegation, typed handoff, review, completion). They may share a Topic and transcript UI without sharing one orchestration engine.
+  - A deliberately narrow first experiment would route direct mentions, otherwise select at most one candidate or nobody, let that Profile reply/silence/redirect, and bound follow-on Profile turns. Richer reactions and spontaneous social behavior can wait.
 - **Pipelines / work chains before group chat.** A directed A→B handoff (e.g. Agent A collects stock news → JSON → Agent B writes investment advice). Build this first; group chat (shared room, all-to-all) is deferred and harder to make useful.
   - Keep the pipeline *structure* deterministic (fixed config run by code); the model powers only each *stage*. Do not let a model decide flow for recurring scheduled jobs.
   - The central artifact is the **typed handoff schema** between stages (priest `OutputSpec` enables this) — the schema is the API between agents; free-form string passing is fragile.

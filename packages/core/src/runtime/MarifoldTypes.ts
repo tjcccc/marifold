@@ -28,7 +28,7 @@ export interface MarifoldRunRequest {
   images?: ImageInput[];
   /** Preserve the attached images' original encoded bytes for this turn. */
   originalImages?: boolean;
-  /** Per-turn ephemeral strings appended to the user message (e.g. /search results, /read file content). */
+  /** Per-turn ephemeral strings appended to the user message (e.g. retrieved context or file content). */
   userContext?: string[];
   /** Authoritative instructions injected at the top of the system prompt (e.g. a
    * skill body). Guides the turn like a system directive; not persisted as a

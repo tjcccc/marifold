@@ -65,6 +65,14 @@ function responsesSse(events: Array<Record<string, unknown>>): Response {
   });
 }
 
+function chatCompletionsSse(chunks: Array<Record<string, unknown>>): Response {
+  const body = chunks.map(chunk => `data: ${JSON.stringify(chunk)}\n\n`).join('') + 'data: [DONE]\n\n';
+  return new Response(body, {
+    status: 200,
+    headers: { 'Content-Type': 'text/event-stream' },
+  });
+}
+
 async function collectStream(stream: AsyncGenerator<string>): Promise<string> {
   const parts: string[] = [];
   for await (const chunk of stream) parts.push(chunk);
@@ -357,9 +365,324 @@ describe('chat tool loop', () => {
         prompt: 'Search for something current.',
         memories: false,
       }))).toBe('Current answer.');
-      expect(bodies[0].tools).toEqual([{ type: 'web_search' }]);
+      expect(bodies[0].tools).toEqual(expect.arrayContaining([{ type: 'web_search' }]));
+      expect(JSON.stringify(bodies[0].tools)).not.toContain('"name":"web_search"');
       expect(bodies[0]).not.toHaveProperty('max_output_tokens');
       expect(JSON.stringify(bodies[0].input)).toContain('Provider-hosted web search is available');
+    } finally {
+      runtime.close();
+    }
+  });
+
+  it('uses xAI hosted web search through the Responses API', async () => {
+    const dir = tempDir();
+    const urls: string[] = [];
+    const bodies: Array<Record<string, unknown>> = [];
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      urls.push(String(input));
+      bodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+      return responsesSse([
+        { type: 'response.output_text.delta', delta: 'Current Grok answer.' },
+        {
+          type: 'response.completed',
+          response: {
+            status: 'completed',
+            output: [{
+              type: 'message',
+              content: [{ type: 'output_text', text: 'Current Grok answer.' }],
+            }],
+          },
+        },
+      ]);
+    }));
+
+    const config = baseConfig(dir, {
+      default: { provider: 'xai', model: 'grok-4.6', profile: 'default', think: false },
+      models: { options: ['xai/grok-4.6'] },
+      providers: {
+        xai: {
+          type: 'openai-compatible',
+          baseUrl: 'https://api.x.ai/v1',
+          apiKey: 'test-xai-token',
+        },
+      },
+      webSearch: { enabled: false, provider: 'duckduckgo', maxResults: 5 },
+    });
+    const runtime = runtimeFor(dir, config);
+    try {
+      expect(await collectStream(runtime.stream({
+        prompt: 'What happened today?',
+        memories: false,
+      }))).toBe('Current Grok answer.');
+      expect(urls).toEqual(['https://api.x.ai/v1/responses']);
+      expect(bodies[0].tools).toEqual([{ type: 'web_search' }]);
+      expect(JSON.stringify(bodies[0].input)).toContain('Provider-hosted web search is available');
+    } finally {
+      runtime.close();
+    }
+  });
+
+  it('uses Bailian Responses hosted search for a documented Qwen3.5 model', async () => {
+    const dir = tempDir();
+    const urls: string[] = [];
+    const bodies: Array<Record<string, unknown>> = [];
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      urls.push(String(input));
+      bodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+      return responsesSse([
+        { type: 'response.output_text.delta', delta: 'Current Qwen answer.' },
+        {
+          type: 'response.completed',
+          response: {
+            status: 'completed',
+            output: [{
+              type: 'message',
+              content: [{ type: 'output_text', text: 'Current Qwen answer.' }],
+            }],
+          },
+        },
+      ]);
+    }));
+
+    const config = baseConfig(dir, {
+      default: { provider: 'bailian', model: 'qwen3.5-plus', profile: 'default', think: false },
+      models: { options: ['bailian/qwen3.5-plus'] },
+      providers: {
+        bailian: {
+          type: 'openai-compatible',
+          baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode',
+          apiKey: 'test-bailian-key',
+        },
+      },
+      webSearch: { enabled: false, provider: 'duckduckgo', maxResults: 5 },
+    });
+    const runtime = runtimeFor(dir, config);
+    try {
+      expect(await collectStream(runtime.stream({
+        prompt: 'What happened today?',
+        memories: false,
+      }))).toBe('Current Qwen answer.');
+      expect(urls).toEqual(['https://dashscope.aliyuncs.com/compatible-mode/v1/responses']);
+      expect(bodies[0].tools).toEqual(expect.arrayContaining([{ type: 'web_search' }]));
+      expect(JSON.stringify(bodies[0].tools)).not.toContain('"name":"web_search"');
+    } finally {
+      runtime.close();
+    }
+  });
+
+  it('uses Bailian enable_search for a documented Chat Completions model', async () => {
+    const dir = tempDir();
+    const urls: string[] = [];
+    const bodies: Array<Record<string, unknown>> = [];
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      urls.push(String(input));
+      bodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+      return chatCompletionsSse([
+        { choices: [{ delta: { content: 'Current Qwen Plus answer.' } }] },
+        { choices: [{ delta: {}, finish_reason: 'stop' }] },
+      ]);
+    }));
+
+    const config = baseConfig(dir, {
+      default: { provider: 'bailian', model: 'qwen-plus', profile: 'default', think: false },
+      models: { options: ['bailian/qwen-plus'] },
+      providers: {
+        bailian: {
+          type: 'openai-compatible',
+          baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode',
+          apiKey: 'test-bailian-key',
+        },
+      },
+      webSearch: { enabled: false, provider: 'duckduckgo', maxResults: 5 },
+    });
+    const runtime = runtimeFor(dir, config);
+    try {
+      expect(await collectStream(runtime.stream({
+        prompt: 'Search for the latest release.',
+        memories: false,
+      }))).toBe('Current Qwen Plus answer.');
+      expect(urls).toEqual(['https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions']);
+      expect(bodies[0].enable_search).toBe(true);
+      expect(bodies[0].tools).toBeUndefined();
+      expect(JSON.stringify(bodies[0].messages)).toContain('Provider-hosted web search is available');
+    } finally {
+      runtime.close();
+    }
+  });
+
+  it('keeps an unknown Bailian model on Marifold fallback instead of guessing native support', async () => {
+    const dir = tempDir();
+    const bodies: Array<Record<string, unknown>> = [];
+    vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      bodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+      return chatCompletionsSse([
+        { choices: [{ delta: { content: 'No live access.' } }] },
+        { choices: [{ delta: {}, finish_reason: 'stop' }] },
+      ]);
+    }));
+
+    const config = baseConfig(dir, {
+      default: { provider: 'bailian', model: 'qwen3-32b', profile: 'default', think: false },
+      models: { options: ['bailian/qwen3-32b'] },
+      providers: {
+        bailian: {
+          type: 'openai-compatible',
+          baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode',
+          apiKey: 'test-bailian-key',
+        },
+      },
+      webSearch: { enabled: false, provider: 'duckduckgo', maxResults: 5 },
+    });
+    const runtime = runtimeFor(dir, config);
+    try {
+      expect(await collectStream(runtime.stream({
+        prompt: 'What happened today?',
+        memories: false,
+      }))).toBe('No live access.');
+      expect(bodies[0].enable_search).toBeUndefined();
+      expect(JSON.stringify(bodies[0].messages)).toContain('Web search is unavailable for this run');
+    } finally {
+      runtime.close();
+    }
+  });
+
+  it('retries rejected xAI hosted search through the configured Marifold fallback while streaming', async () => {
+    const dir = tempDir();
+    const urls: string[] = [];
+    const bodies: Array<Record<string, unknown>> = [];
+    const queries: string[] = [];
+    let call = 0;
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      urls.push(String(input));
+      bodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+      call += 1;
+      if (call === 1) {
+        return new Response(JSON.stringify({
+          error: { message: 'web_search is not supported for this model' },
+        }), { status: 400 });
+      }
+      if (call === 2) {
+        return chatCompletionsSse([
+          {
+            choices: [{
+              delta: {
+                tool_calls: [{
+                  index: 0,
+                  id: 'call_search',
+                  function: { name: 'web_search', arguments: '{"query":"Tokyo weather"}' },
+                }],
+              },
+            }],
+          },
+          { choices: [{ delta: {}, finish_reason: 'tool_calls' }] },
+        ]);
+      }
+      return chatCompletionsSse([
+        { choices: [{ delta: { content: 'Tokyo is sunny.' } }] },
+        { choices: [{ delta: {}, finish_reason: 'stop' }] },
+      ]);
+    }));
+
+    const config = baseConfig(dir, {
+      default: { provider: 'xai', model: 'grok-4.6', profile: 'default', think: false },
+      models: { options: ['xai/grok-4.6'] },
+      providers: {
+        xai: {
+          type: 'openai-compatible',
+          baseUrl: 'https://api.x.ai/v1',
+          apiKey: 'test-xai-token',
+        },
+      },
+      webSearch: { enabled: true, provider: 'duckduckgo', maxResults: 5 },
+    });
+    const backend: SearchBackend = {
+      search: async query => {
+        queries.push(query);
+        return [{ title: 'Forecast', url: 'https://example.com/weather', snippet: 'Sunny.' }];
+      },
+    };
+    const runtime = runtimeFor(dir, config, backend);
+    try {
+      expect(await collectStream(runtime.stream({
+        prompt: 'What is Tokyo weather?',
+        memories: false,
+      }))).toBe('Tokyo is sunny.');
+      expect(urls).toEqual([
+        'https://api.x.ai/v1/responses',
+        'https://api.x.ai/v1/chat/completions',
+        'https://api.x.ai/v1/chat/completions',
+      ]);
+      expect(queries).toEqual(['Tokyo weather']);
+      expect(bodies[0].tools).toEqual(expect.arrayContaining([{ type: 'web_search' }]));
+      expect(JSON.stringify(bodies[0].tools)).not.toContain('"name":"web_search"');
+      expect(bodies[1].tools).toEqual(expect.arrayContaining([
+        expect.objectContaining({ type: 'function', function: expect.objectContaining({ name: 'web_search' }) }),
+      ]));
+      expect(JSON.stringify(bodies[2].messages)).toContain('Sunny.');
+    } finally {
+      runtime.close();
+    }
+  });
+
+  it('retries rejected hosted search through the fallback in the non-streaming ask path', async () => {
+    const dir = tempDir();
+    const urls: string[] = [];
+    const queries: string[] = [];
+    let call = 0;
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      urls.push(String(input));
+      call += 1;
+      if (call === 1) {
+        return new Response('Not Found', { status: 404 });
+      }
+      if (call === 2) {
+        return new Response(JSON.stringify({
+          choices: [{
+            message: {
+              content: null,
+              tool_calls: [{
+                id: 'call_search',
+                type: 'function',
+                function: { name: 'web_search', arguments: '{"query":"Marifold news"}' },
+              }],
+            },
+            finish_reason: 'tool_calls',
+          }],
+        }), { status: 200 });
+      }
+      return new Response(JSON.stringify({
+        choices: [{ message: { content: 'Here is the current news.' }, finish_reason: 'stop' }],
+      }), { status: 200 });
+    }));
+
+    const config = baseConfig(dir, {
+      default: { provider: 'xai', model: 'grok-4.6', profile: 'default', think: false },
+      models: { options: ['xai/grok-4.6'] },
+      providers: {
+        xai: {
+          type: 'openai-compatible',
+          baseUrl: 'https://api.x.ai/v1',
+          apiKey: 'test-xai-token',
+        },
+      },
+      webSearch: { enabled: true, provider: 'duckduckgo', maxResults: 5 },
+    });
+    const backend: SearchBackend = {
+      search: async query => {
+        queries.push(query);
+        return [{ title: 'News', url: 'https://example.com/news', snippet: 'Fresh.' }];
+      },
+    };
+    const runtime = runtimeFor(dir, config, backend);
+    try {
+      const response = await runtime.ask({ prompt: 'Find Marifold news.', memories: false });
+      expect(response).toMatchObject({ ok: true, text: 'Here is the current news.' });
+      expect(urls).toEqual([
+        'https://api.x.ai/v1/responses',
+        'https://api.x.ai/v1/chat/completions',
+        'https://api.x.ai/v1/chat/completions',
+      ]);
+      expect(queries).toEqual(['Marifold news']);
     } finally {
       runtime.close();
     }
@@ -524,7 +847,7 @@ describe('chat tool loop', () => {
     }
   });
 
-  it('searchWeb formats backend results for the /search command', async () => {
+  it('searchWeb formats backend results for direct integrations', async () => {
     const dir = tempDir();
     const backend: SearchBackend = {
       search: async () => [{ title: 'T', url: 'https://u', snippet: 'S' }],

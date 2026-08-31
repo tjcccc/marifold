@@ -2,6 +2,7 @@ import type { MarifoldAgentConfig, PartialAgentConfig } from '../agent/ApprovalP
 import type { ResponseMetrics } from '../sessions/ResponseMetrics';
 
 export type ProviderType = 'ollama' | 'openai-compatible' | 'anthropic';
+export type NativeWebSearchPreference = 'auto' | 'responses' | 'chat' | 'off';
 
 export interface MarifoldDefaultConfig {
   provider?: string;
@@ -40,7 +41,7 @@ export interface MarifoldMemoryConfig {
   contextLimit: number;
 }
 
-export type WebSearchProvider = 'duckduckgo' | 'firecrawl';
+export type WebSearchProvider = 'duckduckgo' | 'firecrawl' | 'ollama';
 
 export interface MarifoldWebSearchConfig {
   /** Enables Marifold's caller-executed fallback web_search tool in chat and
@@ -49,7 +50,8 @@ export interface MarifoldWebSearchConfig {
   enabled: boolean;
   maxResults: number;
   /** Active fallback backend. Defaults to the keyless DuckDuckGo floor;
-   * `firecrawl` adds AI-ready scraped results (BYOK). */
+   * `firecrawl` adds AI-ready scraped results and `ollama` uses Ollama Cloud's
+   * account-backed search API (both BYOK). */
   provider: WebSearchProvider;
   /** Env var holding the provider's API key. Preferred over `apiKey` so the
    * secret stays out of config.toml. */
@@ -94,6 +96,10 @@ export interface MarifoldProviderConfig {
   /** ChatGPT subscription account id, sent as the `chatgpt-account-id` header
    * on Codex-backend requests. Set during ChatGPT OAuth sign-in. */
   accountId?: string;
+  /** Optional hosted-search transport override. `auto` uses Marifold's
+   * verified provider/model matrix; Bailian users can force a newly released
+   * model onto Responses or its non-standard Chat Completions search option. */
+  nativeWebSearch?: NativeWebSearchPreference;
 }
 
 export interface MarifoldConfig {

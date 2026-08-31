@@ -391,3 +391,94 @@
     animation: none;
   }
 }
+
+@media (max-width: 899px) {
+  .pane {
+    background: var(--content);
+  }
+
+  .profileHeader {
+    min-height: calc(48px + env(safe-area-inset-top));
+    padding: env(safe-area-inset-top) 12px 0 8px;
+    border-bottom: 1px solid var(--separator-soft);
+    background: color-mix(in srgb, var(--content) 92%, transparent);
+  }
+
+  .backButton {
+    width: 44px;
+    height: 44px;
+    color: var(--brand-text);
+  }
+
+  .headerTitle {
+    font-size: 16px;
+  }
+
+  .profileHero {
+    padding: 14px 16px 12px;
+  }
+
+  .header {
+    min-height: 40px;
+    padding: 8px 20px 4px;
+    font-size: 12px;
+  }
+
+  .newButton {
+    width: 36px;
+    height: 36px;
+    margin: -8px -8px -8px 0;
+    color: var(--brand-text);
+    font-size: 24px;
+  }
+
+  .searchWrap {
+    height: 38px;
+    margin: 4px 16px 8px;
+    padding: 0 12px;
+    border-radius: 11px;
+  }
+
+  .searchInput {
+    font-size: 16px;
+  }
+
+  .list {
+    padding: 0 0 12px;
+    gap: 0;
+  }
+
+  .row,
+  .rowSelected {
+    min-height: 58px;
+    border-radius: 0;
+    background: var(--content);
+  }
+
+  .row + .row,
+  .rowSelected + .row,
+  .row + .rowSelected,
+  .rowSelected + .rowSelected {
+    border-top: 1px solid var(--separator-soft);
+  }
+
+  .rowMain {
+    min-height: 58px;
+    padding: 8px 50px 8px 18px;
+  }
+
+  .title {
+    font-size: 16px;
+  }
+
+  .sub {
+    font-size: 13px;
+  }
+
+  .moreButton {
+    right: 8px;
+    width: 40px;
+    height: 40px;
+    opacity: 1;
+  }
+}

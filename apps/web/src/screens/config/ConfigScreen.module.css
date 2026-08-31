@@ -4,6 +4,12 @@
   display: flex;
 }
 
+.mobileLevel {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
 /* Column 1: config sections. */
 .sections {
   width: 100%;
@@ -169,6 +175,21 @@
   background: var(--content);
 }
 
+.pageBody {
+  min-width: 0;
+}
+
+.mobileAddButton {
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  color: var(--brand-text);
+  font-size: 28px;
+  font-weight: 300;
+}
+
 .problem {
   max-width: 620px;
   margin: 0 auto 16px;
@@ -180,4 +201,114 @@
   margin-top: 20vh;
   text-align: center;
   color: var(--text-3);
+}
+
+@media (max-width: 899px) {
+  .layout,
+  .mobileLevel,
+  .sections,
+  .items,
+  .page {
+    width: 100%;
+  }
+
+  .layout {
+    overflow: hidden;
+    background: var(--canvas);
+  }
+
+  .mobileLevel,
+  .items,
+  .page {
+    animation: mobileConfigPushIn 180ms ease-out;
+  }
+
+  .sections {
+    background: var(--canvas);
+  }
+
+  .sectionRows {
+    margin: 18px 12px;
+    padding: 0;
+    flex: 0 1 auto;
+    border-radius: var(--radius-lg);
+    background: var(--surface);
+    box-shadow: 0 0 0 1px var(--separator-soft);
+    overflow: hidden;
+  }
+
+  .row,
+  .rowSelected {
+    min-height: 48px;
+    padding: 0 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-radius: 0;
+    background: var(--surface);
+    color: var(--text);
+    font-size: 16px;
+    font-weight: 500;
+    letter-spacing: normal;
+    text-transform: none;
+  }
+
+  .row + .row,
+  .rowSelected + .row,
+  .row + .rowSelected,
+  .rowSelected + .rowSelected {
+    border-top: 1px solid var(--separator-soft);
+  }
+
+  .row svg,
+  .rowSelected svg {
+    color: var(--text-3);
+  }
+
+  .items {
+    height: 100%;
+    padding: 0 0 calc(16px + env(safe-area-inset-bottom));
+    border-right: 0;
+    background: var(--content);
+  }
+
+  .itemRow,
+  .itemRowSelected {
+    min-height: 56px;
+    padding: 8px 16px;
+    border-radius: 0;
+    border-bottom: 1px solid var(--separator-soft);
+    background: var(--content);
+    font-size: 16px;
+  }
+
+  .itemRowSelected {
+    color: var(--text);
+    font-weight: 600;
+  }
+
+  .page {
+    height: 100%;
+    padding: 0;
+    background: var(--canvas);
+  }
+
+  .pageBody {
+    padding: 20px 16px calc(36px + env(safe-area-inset-bottom));
+  }
+}
+
+@keyframes mobileConfigPushIn {
+  from {
+    opacity: 0.72;
+    transform: translateX(18px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mobileLevel,
+  .items,
+  .page {
+    animation: none;
+  }
 }

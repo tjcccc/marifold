@@ -5,6 +5,7 @@ import {
   MarifoldConfig,
   MarifoldProviderConfig,
   MarifoldWebSearchConfig,
+  NativeWebSearchPreference,
   ProviderType,
   resolveWebSearchConfig,
 } from './ConfigSchema';
@@ -181,6 +182,7 @@ export class ConfigManager {
         api_key_expires_at: provider?.apiKeyExpiresAt,
         account_id: provider?.accountId,
         proxy: provider?.proxy,
+        native_web_search: provider?.nativeWebSearch,
       }, parts[2]);
     }
     throw MarifoldError.configInvalid(`Unknown config key: ${key}`);
@@ -497,8 +499,8 @@ export class ConfigManager {
         search.maxResults = parsePositiveInteger(value, 'web_search.max_results');
         return;
       case 'provider':
-        if (value !== 'duckduckgo' && value !== 'firecrawl') {
-          throw MarifoldError.configInvalid('Expected web_search.provider to be duckduckgo or firecrawl.');
+        if (value !== 'duckduckgo' && value !== 'firecrawl' && value !== 'ollama') {
+          throw MarifoldError.configInvalid('Expected web_search.provider to be duckduckgo, firecrawl, or ollama.');
         }
         search.provider = value;
         return;
@@ -546,6 +548,9 @@ export class ConfigManager {
       case 'proxy':
         if (value.trim()) provider.proxy = value.trim();
         else delete provider.proxy;
+        return;
+      case 'native_web_search':
+        provider.nativeWebSearch = parseNativeWebSearchPreference(value, `providers.${providerName}.native_web_search`);
         return;
       default:
         throw MarifoldError.configInvalid(`Unknown config key: providers.${providerName}.${key}`);
@@ -677,6 +682,7 @@ function renderProvider(name: string, provider: MarifoldProviderConfig): string 
     optionalNumberLine('api_key_expires_at', provider.apiKeyExpiresAt),
     optionalStringLine('account_id', provider.accountId),
     optionalStringLine('proxy', provider.proxy),
+    optionalStringLine('native_web_search', provider.nativeWebSearch),
   ].filter(Boolean);
   return lines.join('\n');
 }
@@ -693,6 +699,13 @@ function parseNumber(value: string, label: string): number {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) throw MarifoldError.configInvalid(`Expected ${label} to be a number.`);
   return parsed;
+}
+
+function parseNativeWebSearchPreference(value: string, label: string): NativeWebSearchPreference {
+  if (value === 'auto' || value === 'responses' || value === 'chat' || value === 'off') {
+    return value;
+  }
+  throw MarifoldError.configInvalid(`Expected ${label} to be "auto", "responses", "chat", or "off".`);
 }
 
 function parseNonNegativeNumber(value: string, label: string): number {

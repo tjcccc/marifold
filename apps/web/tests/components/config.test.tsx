@@ -1,8 +1,10 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ProfilePatchInput } from '../../src/api/profiles';
 import type { MemoryEntry, ProfileDetail } from '../../src/api/types';
+import type { Route } from '../../src/lib/route';
 import { AddProviderSheet } from '../../src/components/AddProviderSheet';
 import { CreateProfileSheet } from '../../src/components/CreateProfileSheet';
 import { ProfileSettingsPage } from '../../src/screens/config/ProfileSettingsPage';
@@ -11,6 +13,7 @@ import type { ProfileSettingsPageProps } from '../../src/screens/config/ProfileS
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 const detail: ProfileDetail = {
@@ -304,6 +307,31 @@ describe('ProvidersPage', () => {
     expect(onSaveField).toHaveBeenCalledWith('xai', 'proxy', 'http://127.0.0.1:1080');
   });
 
+  it('exposes the model-aware native-search override for Bailian providers', async () => {
+    const { ProvidersPage } = await import('../../src/screens/config/ProvidersPage');
+    const onSaveField = vi.fn();
+    render(
+      <ProvidersPage
+        selected="bailian"
+        config={{
+          default: { profile: 'default' },
+          models: { options: ['bailian/qwen3.5-plus'] },
+          providers: {
+            bailian: { type: 'openai-compatible', nativeWebSearch: 'auto' },
+          },
+        } as never}
+        status={[]}
+        busy={false}
+        onSaveField={onSaveField}
+        onRefreshStatus={() => {}}
+        onRemoveProvider={() => {}}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText('Native web search'), { target: { value: 'chat' } });
+    expect(onSaveField).toHaveBeenCalledWith('bailian', 'native_web_search', 'chat');
+  });
+
   it('requires the provider name before removal', async () => {
     const { ProvidersPage } = await import('../../src/screens/config/ProvidersPage');
     const onRemoveProvider = vi.fn();
@@ -492,6 +520,8 @@ describe('ConfigScreen provider creation', () => {
         onOpenSettings={() => {}}
         connectionName="This server"
         onDone={() => {}}
+        onOpenAgent={() => {}}
+        onOpenApps={() => {}}
       />,
     );
 
@@ -500,6 +530,78 @@ describe('ConfigScreen provider creation', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Add provider' });
     expect(within(dialog).getByText('OpenAI')).toBeTruthy();
     expect(request).toHaveBeenCalledWith('GET', '/v1/providers/catalog');
+  });
+});
+
+describe('ConfigScreen mobile navigation', () => {
+  it('drills from Settings into list and detail levels with app-style back controls', async () => {
+    vi.stubGlobal('matchMedia', vi.fn(() => ({
+      matches: true,
+      media: '(max-width: 899px)',
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })));
+    const { ConfigScreen } = await import('../../src/screens/config/ConfigScreen');
+    const request = vi.fn(async (_method: string, path: string) => {
+      if (path === '/v1/profiles') return { profiles: [] };
+      if (path === '/v1/config') {
+        return {
+          config: {
+            default: { profile: 'default', provider: 'ollama', model: 'gemma4:e4b' },
+            models: { options: ['ollama/gemma4:e4b'] },
+            providers: { ollama: { type: 'ollama', baseUrl: 'http://localhost:11434' } },
+          },
+        };
+      }
+      if (path === '/v1/models') {
+        return { default: { provider: 'ollama', model: 'gemma4:e4b' }, options: ['ollama/gemma4:e4b'] };
+      }
+      throw new Error(`Unexpected request: ${path}`);
+    });
+    const client = {
+      baseUrl: '',
+      request,
+      stream: async () => { throw new Error('unused'); },
+      blob: async () => undefined,
+    };
+
+    function Harness() {
+      const [route, setRoute] = useState<Extract<Route, { view: 'config' }>>({
+        view: 'config',
+        section: 'profiles',
+      });
+      return (
+        <ConfigScreen
+          client={client as never}
+          route={route}
+          navigate={next => {
+            if (next.view === 'config') setRoute(next);
+          }}
+          onUnauthorized={() => {}}
+          theme="auto"
+          onThemeChange={() => {}}
+          onOpenConnection={() => {}}
+          onOpenSettings={() => {}}
+          connectionName="This server"
+          onDone={() => {}}
+          onOpenAgent={() => {}}
+          onOpenApps={() => {}}
+        />
+      );
+    }
+
+    render(<Harness />);
+    const settings = await screen.findByRole('navigation', { name: 'Config sections' });
+    fireEvent.click(within(settings).getByRole('button', { name: 'Profiles' }));
+    expect(screen.getByRole('navigation', { name: 'Profiles' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Back to Settings' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Agent defaults' }));
+    expect(screen.getByRole('button', { name: 'Back to Settings' })).toBeTruthy();
+    expect(screen.getByText('Agent defaults')).toBeTruthy();
   });
 });
 
@@ -545,6 +647,29 @@ describe('Global settings pages', () => {
     fireEvent.change(screen.getByLabelText('Fallback provider'), { target: { value: 'firecrawl' } });
     expect(onSave).toHaveBeenCalledWith('provider', 'firecrawl');
     expect(screen.getByText(/configured/).textContent).not.toContain('test-secret');
+  });
+
+  it('offers Ollama Cloud as an explicit non-local fallback backend', async () => {
+    const { WebSearchPage } = await import('../../src/screens/config/WebSearchPage');
+    const onSave = vi.fn();
+    render(
+      <WebSearchPage
+        search={{
+          enabled: true,
+          maxResults: 5,
+          provider: 'ollama',
+          apiKeyEnv: 'OLLAMA_API_KEY',
+          hasApiKey: false,
+        }}
+        busy={false}
+        onSave={onSave}
+      />,
+    );
+
+    expect(screen.getByText(/queries leave this machine for ollama.com/i)).toBeTruthy();
+    expect(screen.getByPlaceholderText('OLLAMA_API_KEY')).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Fallback provider'), { target: { value: 'duckduckgo' } });
+    expect(onSave).toHaveBeenCalledWith('provider', 'duckduckgo');
   });
 });
 

@@ -9,6 +9,7 @@ import {
   MarifoldMemoryConfig,
   MarifoldModelsConfig,
   MarifoldChannelsConfig,
+  NativeWebSearchPreference,
   MarifoldPathsConfig,
   MarifoldProviderConfig,
   MarifoldServiceConfig,
@@ -195,6 +196,10 @@ export class ConfigLoader {
       const apiKeyExpiresAt = optionalNumber(providerRaw.api_key_expires_at, `providers.${name}.api_key_expires_at`);
       const accountId = optionalString(providerRaw.account_id, `providers.${name}.account_id`);
       const proxy = optionalString(providerRaw.proxy, `providers.${name}.proxy`);
+      const nativeWebSearch = optionalNativeWebSearchPreference(
+        providerRaw.native_web_search,
+        `providers.${name}.native_web_search`,
+      );
       providers[name] = {
         type,
         ...(baseUrl !== undefined ? { baseUrl } : {}),
@@ -204,6 +209,7 @@ export class ConfigLoader {
         ...(apiKeyExpiresAt !== undefined ? { apiKeyExpiresAt } : {}),
         ...(accountId !== undefined ? { accountId } : {}),
         ...(proxy !== undefined ? { proxy } : {}),
+        ...(nativeWebSearch !== undefined ? { nativeWebSearch } : {}),
       };
     }
 
@@ -314,9 +320,13 @@ export function parsePartialAgentConfig(raw: unknown, label: string): PartialAge
 
 function optionalWebSearchProvider(value: unknown, label: string): WebSearchProvider | undefined {
   const provider = optionalString(value, label);
-  if (provider === undefined) return undefined;
-  if (provider === 'duckduckgo' || provider === 'firecrawl') return provider;
-  throw MarifoldError.configInvalid(`Expected ${label} to be "duckduckgo" or "firecrawl".`);
+  if (provider === undefined) {
+    return undefined;
+  }
+  if (provider === 'duckduckgo' || provider === 'firecrawl' || provider === 'ollama') {
+    return provider;
+  }
+  throw MarifoldError.configInvalid(`Expected ${label} to be "duckduckgo", "firecrawl", or "ollama".`);
 }
 
 function optionalPositiveInteger(value: unknown, label: string): number | undefined {
@@ -331,4 +341,18 @@ function optionalProviderType(value: unknown, label: string): ProviderType | und
   if (type === undefined) return undefined;
   if (type === 'ollama' || type === 'openai-compatible' || type === 'anthropic') return type;
   throw MarifoldError.configInvalid(`Expected ${label} to be "ollama", "openai-compatible", or "anthropic".`);
+}
+
+function optionalNativeWebSearchPreference(
+  value: unknown,
+  label: string,
+): NativeWebSearchPreference | undefined {
+  const preference = optionalString(value, label);
+  if (preference === undefined) {
+    return undefined;
+  }
+  if (preference === 'auto' || preference === 'responses' || preference === 'chat' || preference === 'off') {
+    return preference;
+  }
+  throw MarifoldError.configInvalid(`Expected ${label} to be "auto", "responses", "chat", or "off".`);
 }

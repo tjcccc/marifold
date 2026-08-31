@@ -148,3 +148,28 @@
   font-weight: 400;
   opacity: 0.75;
 }
+
+@media (max-width: 560px) {
+  .option {
+    min-height: 48px;
+    padding: 11px;
+  }
+
+  .optionLabel {
+    font-size: 14px;
+  }
+
+  .customInput {
+    min-height: 42px;
+    font-size: 16px;
+  }
+
+  .submit {
+    min-height: 44px;
+    padding-inline: 20px;
+  }
+
+  .kbd {
+    display: none;
+  }
+}

@@ -228,6 +228,24 @@ describe('config editing routes', () => {
       expect(proxy.statusCode).toBe(200);
       expect(proxy.json().config.providers.xai.proxy).toBe('http://127.0.0.1:7890');
 
+      const nativeSearch = await server.inject({
+        method: 'PATCH',
+        url: '/v1/config',
+        headers: auth,
+        payload: { key: 'providers.xai.native_web_search', value: 'off' },
+      });
+      expect(nativeSearch.statusCode).toBe(200);
+      expect(nativeSearch.json().config.providers.xai.nativeWebSearch).toBe('off');
+
+      const ollamaSearch = await server.inject({
+        method: 'PATCH',
+        url: '/v1/config',
+        headers: auth,
+        payload: { key: 'web_search.provider', value: 'ollama' },
+      });
+      expect(ollamaSearch.statusCode).toBe(200);
+      expect(ollamaSearch.json().config.webSearch.provider).toBe('ollama');
+
       const unknown = await server.inject({
         method: 'PATCH',
         url: '/v1/config',

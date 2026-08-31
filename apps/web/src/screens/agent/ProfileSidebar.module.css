@@ -239,3 +239,81 @@
     animation: none;
   }
 }
+
+@media (max-width: 899px) {
+  .pane {
+    background: var(--content);
+  }
+
+  .searchWrap {
+    height: 38px;
+    margin: 8px 16px 6px;
+    padding: 0 12px;
+    border-radius: 11px;
+  }
+
+  .searchInput {
+    font-size: 16px;
+  }
+
+  .header {
+    min-height: 40px;
+    padding: 10px 20px 6px;
+    font-size: 12px;
+  }
+
+  .newButton {
+    width: 36px;
+    height: 36px;
+    margin: -8px -8px -8px 0;
+    color: var(--brand-text);
+    font-size: 24px;
+  }
+
+  .list {
+    padding: 0 0 12px;
+    gap: 0;
+  }
+
+  .row,
+  .rowSelected {
+    min-height: 64px;
+    border-radius: 0;
+    background: var(--content);
+  }
+
+  .row + .row,
+  .rowSelected + .row,
+  .row + .rowSelected,
+  .rowSelected + .rowSelected {
+    border-top: 1px solid var(--separator-soft);
+  }
+
+  .rowMain {
+    min-height: 64px;
+    gap: 12px;
+    padding: 8px 50px 8px 16px;
+  }
+
+  .name {
+    font-size: 16px;
+  }
+
+  .sub,
+  .working,
+  .activityTime {
+    font-size: 13px;
+  }
+
+  .moreButton {
+    right: 8px;
+    width: 40px;
+    height: 40px;
+    opacity: 1;
+  }
+
+  .empty {
+    padding: 24px 20px;
+    font-size: 14px;
+  }
+}

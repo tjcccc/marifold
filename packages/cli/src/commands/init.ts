@@ -49,8 +49,8 @@ export function registerInitCommand(program: Command, printer: ConsolePrinter): 
     .option('--apps-dir <path>', 'Apps directory.')
     .option('--base-url <url>', 'Provider base URL.')
     .option('--api-key-env <name>', 'Environment variable containing the provider API key.')
-    .option('--search-provider <name>', 'Fallback web search provider: duckduckgo, firecrawl, or off.')
-    .option('--search-api-key-env <name>', 'Env var holding the search provider API key (Firecrawl).')
+    .option('--search-provider <name>', 'Fallback web search provider: duckduckgo, firecrawl, ollama, or off.')
+    .option('--search-api-key-env <name>', 'Env var holding the selected search provider API key.')
     .action(async (options: InitOptions) => {
       const rootOptions = program.opts<RootCommandOptions>();
       // Interactive only on a real terminal when the model wasn't pinned by a

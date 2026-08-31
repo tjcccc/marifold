@@ -15,6 +15,24 @@
   transition: color 120ms ease;
 }
 
+@media (max-width: 899px) {
+  .control {
+    width: 100%;
+    min-height: 36px;
+  }
+
+  .segment,
+  .selected {
+    flex: 1;
+    min-height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px 16px;
+    font-size: 14px;
+  }
+}
+
 .segment:hover {
   color: var(--text);
 }

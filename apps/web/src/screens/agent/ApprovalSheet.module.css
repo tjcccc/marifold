@@ -108,3 +108,24 @@
   opacity: 0.5;
   cursor: default;
 }
+
+@media (max-width: 560px) {
+  .sheet {
+    padding: 14px;
+  }
+
+  .actions {
+    align-items: stretch;
+  }
+
+  .deny,
+  .persist,
+  .allow {
+    min-height: 42px;
+    flex: 1 1 auto;
+  }
+
+  .kbd {
+    display: none;
+  }
+}

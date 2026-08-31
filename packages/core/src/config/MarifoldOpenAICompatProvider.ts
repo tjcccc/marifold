@@ -59,8 +59,7 @@ export class MarifoldOpenAICompatProvider implements ProviderAdapter {
   }
 
   supportsProviderTool(tool: { type: 'web_search' }, config: PriestConfig): boolean {
-    return this.options.providerName === 'chatgpt'
-      && this.endpointForModel(config.model) === 'responses'
+    return this.endpointForRequest(config) === 'responses'
       && tool.type === 'web_search';
   }
 
@@ -70,7 +69,7 @@ export class MarifoldOpenAICompatProvider implements ProviderAdapter {
     outputSpec?: OutputSpec,
     options?: AdapterCallOptions,
   ): Promise<AdapterResult> {
-    if (this.endpointForModel(config.model) !== 'responses') {
+    if (this.endpointForRequest(config) !== 'responses') {
       return this.chatProvider.complete(messages, config, outputSpec, options);
     }
     const responsesConfig = this.responsesConfig(config, options);
@@ -98,7 +97,7 @@ export class MarifoldOpenAICompatProvider implements ProviderAdapter {
     outputSpec?: OutputSpec,
     options?: AdapterCallOptions,
   ): AsyncGenerator<AdapterStreamEvent, void, unknown> {
-    if (this.endpointForModel(config.model) === 'responses') {
+    if (this.endpointForRequest(config) === 'responses') {
       yield* this.responsesProvider.streamEvents(
         messages,
         this.responsesConfig(config, options),
@@ -167,9 +166,12 @@ export class MarifoldOpenAICompatProvider implements ProviderAdapter {
     };
   }
 
-  private endpointForModel(model: string): OpenAICompatEndpoint {
+  private endpointForRequest(config: PriestConfig): OpenAICompatEndpoint {
     if (this.options.providerName === 'chatgpt') return 'responses';
-    if (this.options.providerName === 'github_copilot' && isGitHubCopilotResponsesModelId(model)) {
+    if (this.options.providerName === 'github_copilot' && isGitHubCopilotResponsesModelId(config.model)) {
+      return 'responses';
+    }
+    if (config.providerOptions?.[NATIVE_WEB_SEARCH_COMPAT_OPTION] === true) {
       return 'responses';
     }
     return 'chat-completions';

@@ -1,3 +1,5 @@
+import { createClientId } from '../lib/id';
+
 /** One Marifold service that the Web shell can use as its data source. The
  * built-in entry has no baseUrl: requests go to the origin serving the shell. */
 export interface ServerConnection {
@@ -82,11 +84,7 @@ export function removeConnection(store: ConnectionStore, id: string): Connection
 }
 
 export function newConnectionId(): string {
-  try {
-    return `server-${crypto.randomUUID()}`;
-  } catch {
-    return `server-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  }
+  return `server-${createClientId()}`;
 }
 
 export function normalizeServerName(value: string): string {
