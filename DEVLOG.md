@@ -2,6 +2,16 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-09-01 — v0.65.1 — Mobile composer line breaks
+
+- Made Enter insert a line break in the mobile Web composer and reserved
+  submission for the Send button, including while autocomplete is open.
+- Preserved desktop Enter-to-send and Shift+Enter line-break behavior.
+- Added focused composer regression coverage and verified all 205 Web tests,
+  the workspace typecheck/build gate, the flow in Chromium at 390×844, and the
+  corrected interaction in an iPhone browser.
+- Version 0.65.0 → 0.65.1 across all packages + CLI `.version`.
+
 ## 2026-08-31 — v0.65.0 — Mobile Web workspace and expanded search
 
 - Replaced the below-900-px desktop-width notice with a dedicated mobile Web

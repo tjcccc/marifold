@@ -1,6 +1,6 @@
 {
   "name": "@marifold/workspace",
-  "version": "0.65.0",
+  "version": "0.65.1",
   "private": true,
   "description": "Marifold local-first personal AI workspace",
   "license": "GPL-3.0-only",

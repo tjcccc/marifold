@@ -78,6 +78,8 @@ appearance, and full Settings. The mobile shell also includes safe-area
 padding, dynamic visual-viewport sizing and offset alignment for the on-screen keyboard,
 touch-visible actions, and bottom-sheet treatments for compact dialogs. Wider
 windows retain the resizable desktop sidebar and multi-column Config layout.
+In the mobile composer, Enter inserts a line break and only the Send button
+submits; desktop keeps Enter-to-send with Shift+Enter for a line break.
 
 ## Attachments
 
