@@ -1,6 +1,8 @@
 import fastify, { FastifyInstance, FastifyReply } from 'fastify';
 import {
   type AgentUsage,
+  type SkillAppAttachmentInput,
+  type SkillAppDefinition,
   LoadedMarifoldConfig,
   listProviderRegistry,
   MarifoldError,
@@ -288,7 +290,7 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
   // statically compiled JSON contract and can only submit typed state.
   server.get('/v1/apps', async () => ({
     ok: true,
-    apps: runtime.listApps(),
+    apps: runtime.listApps().map(publicSkillAppDefinition),
   }));
 
   server.get<{
@@ -305,12 +307,12 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
         },
       };
     }
-    return { ok: true, app };
+    return { ok: true, app: publicSkillAppDefinition(app) };
   });
 
   // SkillApps are statically compiled templates with ephemeral service-owned
   // state. Both buttons and on-change triggers execute the same declared
-  // model + app-local Skill operation and return a normalized result.
+  // app-local/model or profile/Skill operation and return a normalized result.
   server.post<{
     Params: { name: string };
   }>('/v1/apps/:name/instances', async (request, reply) => {
@@ -326,6 +328,23 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
     return {
       ok: true,
       ...(await skillAppInstances.update(request.params.id, objectBody(body.values))),
+    };
+  });
+
+  server.put<{
+    Params: { id: string; state: string };
+  }>('/v1/app-instances/:id/attachments/:state', async request => {
+    const body = objectBody(request.body);
+    if (!Array.isArray(body.attachments)) {
+      throw MarifoldError.configInvalid('attachments must be an array.');
+    }
+    return {
+      ok: true,
+      ...skillAppInstances.updateAttachments(
+        request.params.id,
+        request.params.state,
+        body.attachments as unknown as SkillAppAttachmentInput[],
+      ),
     };
   });
 
@@ -636,6 +655,11 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
   }));
 
   return server;
+}
+
+function publicSkillAppDefinition(definition: SkillAppDefinition): SkillAppDefinition {
+  const { permissions: _permissions, ...publicDefinition } = definition;
+  return publicDefinition;
 }
 
 export async function startMarifoldService(options: MarifoldServiceStartOptions): Promise<MarifoldServiceStartResult> {

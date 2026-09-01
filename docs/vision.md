@@ -31,11 +31,11 @@ Workflows connect profiles, Skills, Apps, models, and external agents into multi
 
 ## App Shape
 
-The current `marifold.skillapp.v1` template contract defines a safe floor that can grow to include:
+The current `marifold.skillapp.v1`/`.v2` template contracts define a safe floor that can grow to include:
 
 - Layout: known UI components such as text inputs, text areas, selects, tabs, preview panes, file pickers, and download buttons.
 - State: user-editable bindings and server-owned generated outputs.
-- Operations: one app-local Skill run with one explicitly registered model and a declared result shape.
+- Operations: one app-local Skill with an explicit model, or one installed profile Skill with live profile docs/model resolution, and a declared result shape.
 - Triggers: direct button bindings and debounced state-change bindings with service-owned concurrency.
 
 Example targets:

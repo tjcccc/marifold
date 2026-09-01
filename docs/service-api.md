@@ -278,15 +278,28 @@ and submit typed values only:
 
 | Route | Returns |
 |---|---|
-| `GET /v1/apps` | `{ apps: SkillAppDefinition[] }`, sorted by display title. Invalid local definitions are skipped so one bad bundle does not break the catalog |
-| `GET /v1/apps/:name` | `{ app: SkillAppDefinition }`; 404 `APP_NOT_FOUND` |
-| `POST /v1/apps/:name/instances` | Create ephemeral state for a `marifold.skillapp.v1` definition |
+| `GET /v1/apps` | `{ apps: SkillAppDefinition[] }`, sorted by display title. Invalid local definitions are skipped so one bad bundle does not break the catalog. Static host permission paths are omitted |
+| `GET /v1/apps/:name` | `{ app: SkillAppDefinition }` with host permission paths omitted; 404 `APP_NOT_FOUND` |
+| `POST /v1/apps/:name/instances` | Create ephemeral state for a `marifold.skillapp.v1` or `.v2` definition |
 | `PATCH /v1/app-instances/:id/state` | Update editable state and run matching declarative triggers |
-| `POST /v1/app-instances/:id/operations/:operation` | Run one button-bound v1 operation |
+| `PUT /v1/app-instances/:id/attachments/:state` | Replace one declared attachment slot. Body: `{ attachments: [{ kind, name, mediaType, size, data, inspectionText? }] }`; `data` is base64, snapshots return metadata only |
+| `POST /v1/app-instances/:id/operations/:operation` | Run one button-bound Skill operation |
 | `DELETE /v1/app-instances/:id` | Cancel work and release an instance |
 
-For v1, the server loads and statically compiles
+For both schemas, the server loads and statically compiles
 `<apps_dir>/<name>/skillapp.ts`; it never imports or executes the TypeScript.
+v1 definitions remain profile-free. v2 definitions may name a configured
+profile and one of its effective profile/global Skills. Profile documents and
+the selected Skill bundle stay server-owned and never cross this API as raw
+source or host paths.
+A v2 definition may declare static read-only `FileAccess`/`FolderAccess`
+capabilities. They are resolved and enforced only on the service host and never
+serialized to clients. Attachment bytes likewise remain in ephemeral
+service-owned instance state and are staged into the selected Agent operation's
+read-only run workspace.
+A v2 operation may expose `skillState` plus a static `skillOptions` allowlist;
+the bound `Select` values must match that list, and state updates cannot select
+an undeclared Skill.
 An instance begins with the declared `State(...)` values. A state update body is:
 
 ```json
@@ -328,9 +341,11 @@ definition's model directly. It loads no profile, memory, history, transcript,
 or tools. Output states are server-owned. Debounced triggers use latest-wins
 concurrency, cancelling older work and preventing stale state writes.
 Required, default-less Skill variables identify operation inputs that must be
-non-empty. If one becomes empty, the server cancels that operation, clears its
-output, and returns `status: "idle"` with
-`reason: "missing_required_input"`; it does not return an App error. Invalid
+non-empty. When inputs or attachments change, the server preserves an existing
+output and lists its state name in `instance.staleOutputs` until a successful
+rerun replaces it. If a required input becomes empty, the server cancels that
+operation and returns `status: "idle"` with `reason: "missing_required_input"`;
+it does not return an App error. Invalid
 definitions or values return 400 `APP_INVALID`; the complete schema and example
 are in [docs/app.md](app.md).
 

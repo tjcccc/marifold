@@ -41,17 +41,31 @@ Chat resolves search in three states: provider/model-hosted search when the veri
 Scheduling lives in `packages/core/src/schedule`: a file-backed `ScheduleStore` (cron via `croner`) and a minute-resolution `Scheduler` hosted inside the `marifold service` process. Scheduled firings are unattended agent runs (`AgentRunOptions.unattended`): `[agent.unattended]` approval overrides apply, and `ask` degrades to deny. Schedule results link to TaskStore tasks tagged `scheduled`.
 
 The App subsystem (`packages/core/src/app`) statically compiles restricted
-`marifold.skillapp.v1` `<apps_dir>/<name>/skillapp.ts` templates into
+`marifold.skillapp.v1`/`.v2` `<apps_dir>/<name>/skillapp.ts` templates into
 renderer-neutral definitions. A v1 operation binds service-owned string state
 to one app-local Skill, one explicit provider/model, and one normalized result;
-it never loads a profile, memory, Agent session, transcript, or tool. Ephemeral
-instances implement read-only output bindings plus button and debounced
-latest-wins state triggers. The TypeScript authoring file is never imported or
-executed. The Web UI renders the normalized semantic component tree, and a
-future SwiftUI client can consume the same service data. Approval-aware
-effectful actions and general scripted App logic remain out of scope.
+it remains profile-free and tool-free. A v2 operation instead registers an
+existing profile, resolves one Skill through its profile-over-global catalog,
+loads the live profile documents, and inherits or locally overrides its model.
+An operation may select among a statically allowlisted set of those Skills from
+service-owned form state; every candidate is validated before the App loads.
+Selected Skill bundles are mounted through the existing narrow read-only run
+workspace. Static `FileAccess`/`FolderAccess` declarations add fail-closed
+read-only capabilities without serializing host paths to clients; exact files
+do not widen to their parent directories. `AttachmentState` uploads retain only
+metadata in instance snapshots and stage original bytes behind the existing
+opaque attachment inspection boundary for the selected operation. Optional memory is read-only and optional history is confined to the
+ephemeral App instance/profile reference; neither touches profile conversation
+history. Profile Agent permissions and trusted folders are not inherited, and
+write/shell/network/delegation tools are not exposed. Ephemeral instances
+implement read-only output bindings plus button and debounced latest-wins state
+triggers. The TypeScript authoring file is never imported or executed. The Web
+UI renders the normalized semantic component tree at bookmarkable
+`/apps/<app-name>` paths, and a future SwiftUI client
+can consume the same service data. Approval-aware effectful actions and general
+scripted App logic remain out of scope.
 
-The skill subsystem (`packages/core/src/skill`) defines the `marifold.skill.v0` primitive — a prompt template with declared `{{variables}}` and an optional run mode. `SkillStore` loads user skills from `[paths].skills_dir` (default `~/.marifold/skills`) and each profile's `skills/` directory, with profile skills shadowing global ones; `parseSkill`/`renderSkillPrompt` validate and expand them. A separate compiled built-in registry contributes protected `$skill-installer` and `$skill-creator` definitions to effective listing/resolution without materializing them in either mutable directory; their names are reserved. Their agent-mode instructions use the approval-aware `manage_skill` tool, which binds the active profile, validates local sources/content and bundled text paths through `SkillStore`, and mutates exactly one explicit scope. The TUI invokes an indexed skill directly with core's binding rules; service/Web clients use `resolveSkillInvocation` to do the same over HTTP. Both paths resolve exactly one skill before model execution, inject its expanded body and bundled-file directory, preserve the typed invocation in durable history, and use history-isolated execution so one prompt skill cannot inherit another prompt skill's style. A Skill is also the shared unit a graphical SkillApp consumes: SkillApp binds semantic form state to an app-local Skill and explicit model. See `docs/tui.md`.
+The skill subsystem (`packages/core/src/skill`) defines the `marifold.skill.v0` primitive — a prompt template with declared `{{variables}}` and an optional run mode. `SkillStore` loads user skills from `[paths].skills_dir` (default `~/.marifold/skills`) and each profile's `skills/` directory, with profile skills shadowing global ones; `parseSkill`/`renderSkillPrompt` validate and expand them. A separate compiled built-in registry contributes protected `$skill-installer` and `$skill-creator` definitions to effective listing/resolution without materializing them in either mutable directory; their names are reserved. Their agent-mode instructions use the approval-aware `manage_skill` tool, which binds the active profile, validates local sources/content and bundled text paths through `SkillStore`, and mutates exactly one explicit scope. The TUI invokes an indexed skill directly with core's binding rules; service/Web clients use `resolveSkillInvocation` to do the same over HTTP. Both paths resolve exactly one skill before model execution, inject its expanded body and bundled-file directory, preserve the typed invocation in durable history, and use history-isolated execution so one prompt skill cannot inherit another prompt skill's style. A Skill is also the shared unit a graphical SkillApp consumes: v1 binds semantic form state to an app-local Skill and explicit model, while v2 binds it to an installed profile Skill and that profile's live context/model resolution. See `docs/tui.md`.
 
 The TUI (`packages/tui`, Ink/React) is the primary interactive surface and a pure renderer of two existing core streams — `MarifoldRuntime.stream` (chat) and `AgentRunner.run`→`AgentEvent` (agent). It adds no model-side logic. It is an ESM-only package the CommonJS CLI loads through a dynamic `import()` (kept a real import via a `new Function` escape hatch so `tsc`'s CommonJS emit does not turn it into a `require()`). Logic lives in pure, unit-tested modules under `src/core/` (input grammar, event→view mapping, an `appState` reducer, command/skill registries); Ink components under `src/ui/` stay thin. The `/btw` steering hook (`AgentRunOptions.steering`) drains queued user guidance between iterations. Approval UX (allow-once / session-grant / persist-to-config / deny) reuses the core `ApprovalPolicy`; non-persistable risks expose only allow-once/deny, while the process sandbox enforces the hard filesystem and network ceiling independently of approval. Optional `ask_user` events open a separate keyboard question modal, batch every answer, and resume through `AgentRunOptions.userInputHandler`.
 

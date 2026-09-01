@@ -49,8 +49,11 @@ short: what shipped (one line each), what's next, and what's deliberately deferr
   environments; and deterministic service shutdown/listen-failure cleanup.
 - **v0.51+ — direct Skills and SkillApp foundation**: history-isolated direct
   Skill invocation; global, statically compiled `skillapp.ts` bundles;
-  app-local Skills and explicit models; renderer-neutral state/layout/result
-  contracts; and a dedicated Apps view in the persistent Web workspace shell.
+  app-local Skills and explicit models; additive profile references with live
+  installed Skills, profile docs, read-only bundles, and App-local memory/history
+  controls; exact file/folder read capabilities; attachment-state staging;
+  renderer-neutral state/layout/result contracts; and bookmarkable App-name
+  routes in the persistent Web workspace shell.
 
 ## Next
 

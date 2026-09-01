@@ -371,6 +371,34 @@ describe('ReadFileTool', () => {
       persistable: false,
     });
   });
+
+  it('enforces exact-file SkillApp grants without exposing sibling files', async () => {
+    const home = tempDir();
+    const cwd = path.join(home, 'repo');
+    const sharedDir = path.join(home, 'shared');
+    const granted = path.join(sharedDir, 'vars.toml');
+    const sibling = path.join(sharedDir, 'private.toml');
+    fs.mkdirSync(cwd);
+    fs.mkdirSync(sharedDir);
+    fs.writeFileSync(granted, 'look = "cinematic"');
+    fs.writeFileSync(sibling, 'secret = true');
+    const workspace = createRunWorkspace({
+      id: 'tool_exact_read',
+      cwd,
+      runsDir: path.join(home, '.marifold', 'runs'),
+      userHome: home,
+      readOnlyFiles: [granted],
+    });
+    const ctx: ToolExecutionContext = { cwd, outputLimit: 100000, workspace };
+    const tool = new ReadFileTool({ strictWorkspace: true });
+
+    expect(tool.assessRisk({ path: granted }, ctx)).toEqual({ escalate: false, trusted: true });
+    expect(tool.assessRisk({ path: sibling }, ctx)).toMatchObject({ blocked: true });
+    expect((await tool.execute({ path: granted }, ctx)).content).toContain('cinematic');
+    const blocked = await tool.execute({ path: sibling }, ctx);
+    expect(blocked.isError).toBe(true);
+    expect(blocked.content).toContain('declared read permissions');
+  });
 });
 
 describe('WriteFileTool', () => {

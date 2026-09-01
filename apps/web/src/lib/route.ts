@@ -5,7 +5,7 @@ export type ConfigSection = 'profiles' | 'providers' | 'models' | 'agent' | 'web
 
 export type Route =
   | { view: 'agent'; profile?: string; session?: string }
-  | { view: 'apps' }
+  | { view: 'apps'; app?: string }
   | { view: 'config'; section: ConfigSection; item?: string };
 
 const CONFIG_SECTIONS: ConfigSection[] = ['profiles', 'providers', 'models', 'agent', 'web-search', 'appearance', 'service'];
@@ -26,7 +26,7 @@ export function parsePath(pathname: string): Route {
 
   switch (parts[0]) {
     case 'apps':
-      return { view: 'apps' };
+      return { view: 'apps', ...(parts[1] ? { app: parts[1] } : {}) };
     case 'config': {
       const section = CONFIG_SECTIONS.find(candidate => candidate === parts[1]);
       if (section) {
@@ -49,7 +49,7 @@ export function parsePath(pathname: string): Route {
 export function formatPath(route: Route): string {
   switch (route.view) {
     case 'apps':
-      return '/apps';
+      return route.app ? `/apps/${encodeURIComponent(route.app)}` : '/apps';
     case 'config': {
       const parts = ['/config', route.section];
       if (route.item) parts.push(encodeURIComponent(route.item));

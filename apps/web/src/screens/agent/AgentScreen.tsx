@@ -31,6 +31,7 @@ const MOBILE_QUERY = '(max-width: 899px)';
 export interface AgentScreenProps {
   client: ApiClient;
   route: Extract<Route, { view: 'agent' }>;
+  appName?: string;
   navigate: (route: Route) => void;
   onUnauthorized: () => void;
   theme: ThemePreference;
@@ -46,7 +47,7 @@ export interface AgentScreenProps {
 /** Responsive Agent workspace: desktop sidebar or mobile navigation stack plus conversation. */
 export function AgentScreen(props: AgentScreenProps) {
   const controller = useAgentController(props);
-  const appsCatalog = useAppsCatalog(props.client, props.onUnauthorized);
+  const appsCatalog = useAppsCatalog(props.client, props.onUnauthorized, props.appName);
   const mobile = useMediaQuery(MOBILE_QUERY);
   const [sidebarsHidden, setSidebarsHidden] = useState(
     () => localStorage.getItem(SIDEBARS_KEY) === 'hidden',
@@ -60,6 +61,11 @@ export function AgentScreen(props: AgentScreenProps) {
   const [mobileConversationOpen, setMobileConversationOpen] = useState(() => props.route.session !== undefined);
   const [mobileAppOpen, setMobileAppOpen] = useState(false);
   const appsView = props.workspaceView === 'apps';
+
+  useEffect(() => {
+    if (!appsView || !appsCatalog.selectedName || props.appName === appsCatalog.selectedName) return;
+    props.navigate({ view: 'apps', app: appsCatalog.selectedName });
+  }, [appsCatalog.selectedName, appsView, props.appName, props.navigate]);
 
   useEffect(() => {
     if (!props.route.profile) setMobileConversationOpen(false);
@@ -155,7 +161,7 @@ export function AgentScreen(props: AgentScreenProps) {
           busy={appBusy}
           loading={appsCatalog.loading}
           onSelect={name => {
-            appsCatalog.select(name);
+            props.navigate({ view: 'apps', app: name });
             setMobileAppOpen(true);
           }}
         />

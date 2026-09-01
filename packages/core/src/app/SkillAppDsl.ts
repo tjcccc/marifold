@@ -4,6 +4,7 @@ import type {
   SkillAppInfo,
   SkillAppLayoutGap,
   SkillAppResponsiveBehavior,
+  SkillAppSelectOption,
 } from './SkillAppSchema';
 
 /**
@@ -17,10 +18,32 @@ export interface StateReference<T extends string = string> {
   readonly initial: T;
 }
 
+export interface AttachmentStateReference {
+  readonly kind: 'attachment_state';
+}
+
+export interface PermissionReference {
+  readonly kind: 'permission';
+  readonly resource: 'file' | 'folder';
+  readonly path: string;
+  readonly access: 'read';
+}
+
 export interface ModelReference {
   readonly kind: 'model';
   readonly id: string;
   readonly options: { think?: boolean };
+}
+
+export interface ProfileReference {
+  readonly kind: 'profile';
+  readonly profile: string;
+  readonly options: {
+    model?: string;
+    think?: boolean;
+    memory: boolean;
+    history: boolean;
+  };
 }
 
 export interface TextResultReference {
@@ -36,10 +59,16 @@ export interface SkillReference {
 
 export interface OperationReference {
   readonly kind: 'operation';
-  readonly model: ModelReference;
-  readonly skill: SkillReference;
+  readonly model?: ModelReference;
+  readonly profile?: ProfileReference;
+  readonly skill: SkillReference | string | StateReference;
+  readonly skillOptions?: readonly (string | SkillAppSelectOption)[];
+  readonly stripSkillName?: boolean;
+  readonly input?: StateReference;
+  readonly attachments?: AttachmentStateReference;
   readonly parameters: Record<string, StateReference>;
   readonly output: StateReference;
+  readonly result?: TextResultReference;
 }
 
 export interface ComponentReference {
@@ -52,6 +81,7 @@ export interface ComponentReference {
 
 export interface SkillAppTemplate {
   app: SkillAppInfo;
+  permissions?: readonly PermissionReference[];
   ui: ComponentReference;
 }
 
@@ -59,8 +89,41 @@ export function State<T extends string>(initial: T): StateReference<T> {
   return { kind: 'state', initial };
 }
 
+export function AttachmentState(): AttachmentStateReference {
+  return { kind: 'attachment_state' };
+}
+
+export function FileAccess(path: string, options: { access: 'read' }): PermissionReference {
+  return { kind: 'permission', resource: 'file', path, access: options.access };
+}
+
+export function FolderAccess(path: string, options: { access: 'read' }): PermissionReference {
+  return { kind: 'permission', resource: 'folder', path, access: options.access };
+}
+
 export function registerModel(id: string, options: { think?: boolean } = {}): ModelReference {
   return { kind: 'model', id, options };
+}
+
+export function registerProfile(
+  profile: string,
+  options: {
+    model?: string;
+    think?: boolean;
+    memory?: boolean;
+    history?: boolean;
+  } = {},
+): ProfileReference {
+  return {
+    kind: 'profile',
+    profile,
+    options: {
+      ...(options.model !== undefined ? { model: options.model } : {}),
+      ...(options.think !== undefined ? { think: options.think } : {}),
+      memory: options.memory ?? false,
+      history: options.history ?? false,
+    },
+  };
 }
 
 export function TextResult(options: { trim?: boolean } = {}): TextResultReference {
@@ -91,6 +154,34 @@ export function useSkill(
     skill,
     parameters: options.parameters,
     output: options.output,
+  };
+}
+
+export function useProfileSkill(
+  profile: ProfileReference,
+  skill: string | StateReference,
+  options: {
+    /** Required static allowlist when `skill` is a State reference. */
+    skills?: readonly (string | SkillAppSelectOption)[];
+    input?: StateReference;
+    attachments?: AttachmentStateReference;
+    stripSkillName?: boolean;
+    parameters?: Record<string, StateReference>;
+    output: StateReference;
+    result: TextResultReference;
+  },
+): OperationReference {
+  return {
+    kind: 'operation',
+    profile,
+    skill,
+    ...(options.skills ? { skillOptions: options.skills } : {}),
+    ...(options.input ? { input: options.input } : {}),
+    ...(options.attachments ? { attachments: options.attachments } : {}),
+    ...(options.stripSkillName !== undefined ? { stripSkillName: options.stripSkillName } : {}),
+    parameters: options.parameters ?? {},
+    output: options.output,
+    result: options.result,
   };
 }
 
@@ -137,6 +228,8 @@ export function Textarea(
     grow?: boolean;
     editable?: boolean;
     copyable?: boolean;
+    rows?: number;
+    autoGrow?: boolean;
     placeholder?: string;
   } = {},
 ): ComponentReference {
@@ -146,14 +239,33 @@ export function Textarea(
 export function Select(
   label: string,
   state: StateReference,
-  options: { options: readonly string[]; showLabel?: boolean; grow?: boolean },
+  options: {
+    options: readonly (string | SkillAppSelectOption)[];
+    showLabel?: boolean;
+    grow?: boolean;
+  },
 ): ComponentReference {
   return component('select', undefined, { label, state }, options);
 }
 
+export function Attachments(
+  label: string,
+  state: AttachmentStateReference,
+  options: {
+    showLabel?: boolean;
+    grow?: boolean;
+  } = {},
+): ComponentReference {
+  return component('attachments', undefined, { label, state }, options);
+}
+
 export function Button(
   label: string,
-  options: { trigger: OperationReference; emphasis?: SkillAppButtonEmphasis },
+  options: {
+    trigger: OperationReference;
+    emphasis?: SkillAppButtonEmphasis;
+    alignToField?: boolean;
+  },
 ): ComponentReference {
   return component('button', undefined, { label }, options);
 }

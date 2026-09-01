@@ -155,7 +155,10 @@ describe('MarifoldService', () => {
         status: 'idle',
         reason: 'missing_required_input',
         operation: 'translate',
-        instance: { state: { source: '', result: '' } },
+        instance: {
+          state: { source: '', result: 'Good morning' },
+          staleOutputs: ['result'],
+        },
       });
       expect(providerBodies).toHaveLength(2);
 
@@ -164,6 +167,188 @@ describe('MarifoldService', () => {
         url: `/v1/app-instances/${instanceId}`,
       });
       expect(removed.json()).toMatchObject({ ok: true, deleted: true });
+    } finally {
+      await server.close();
+    }
+  });
+
+  it('runs a profile SkillApp with profile docs and read-only bundled files', async () => {
+    const dir = tempDir();
+    const profileDir = path.join(dir, 'profiles', 'painter');
+    const skillDir = path.join(profileDir, 'skills', 'make-prompt');
+    const otherSkillDir = path.join(profileDir, 'skills', 'make-other-prompt');
+    const appDir = path.join(dir, 'apps', 'painers-room');
+    const sharedVars = path.join(dir, 'shared-vars.toml');
+    fs.mkdirSync(skillDir, { recursive: true });
+    fs.mkdirSync(otherSkillDir, { recursive: true });
+    fs.mkdirSync(appDir, { recursive: true });
+    fs.writeFileSync(sharedVars, 'woman = "reference subject"\n');
+    fs.writeFileSync(path.join(profileDir, 'PROFILE.md'), 'Painter identity from PROFILE.md.\n');
+    fs.writeFileSync(path.join(profileDir, 'RULES.md'), 'Painter rules from RULES.md.\n');
+    fs.writeFileSync(path.join(profileDir, 'CUSTOM.md'), 'Painter custom context.\n');
+    fs.writeFileSync(path.join(profileDir, 'profile.toml'), 'mode = "agent"\nmemories = true\n');
+    fs.writeFileSync(
+      path.join(skillDir, 'SKILL.md'),
+      '---\nname: make-prompt\n---\nTurn the user idea into a production image prompt.\n',
+    );
+    fs.writeFileSync(path.join(skillDir, 'vars.toml'), 'look = "cinematic"\n');
+    fs.writeFileSync(
+      path.join(otherSkillDir, 'SKILL.md'),
+      '---\nname: make-other-prompt\n---\nCreate the selected alternate prompt format.\n',
+    );
+    fs.writeFileSync(path.join(otherSkillDir, 'vars.toml'), 'look = "alternate"\n');
+    fs.writeFileSync(path.join(appDir, 'skillapp.ts'), `
+      import { App, AttachmentState, Attachments, Button, FileAccess, Row, Select, State, Textarea, TextResult, defineSkillApp, registerProfile, useProfileSkill } from '@marifold/core';
+      const promptMakers = [
+        { label: 'Prompt', value: 'make-prompt' },
+        { label: 'Other', value: 'make-other-prompt' },
+      ];
+      const promptMaker = State('make-prompt');
+      const idea = State('');
+      const result = State('');
+      const references = AttachmentState();
+      const painter = registerProfile('painter', { memory: true, history: false });
+      const makePrompt = useProfileSkill(painter, promptMaker, {
+        skills: promptMakers,
+        input: idea,
+        attachments: references,
+        stripSkillName: true,
+        output: result,
+        result: TextResult({ trim: true }),
+      });
+      export default defineSkillApp({
+        app: { name: 'painers-room', title: "Painer's Room" },
+        permissions: [FileAccess(${JSON.stringify(sharedVars)}, { access: 'read' })],
+        ui: App([
+          Row([Select('Prompt maker', promptMaker, { options: promptMakers })]),
+          Row([Textarea('Idea', idea), Textarea('Prompt', result, { editable: false })]),
+          Row([Attachments('Attachments', references)]),
+          Row([Button('Make prompt', { trigger: makePrompt })]),
+        ]),
+      });
+    `);
+
+    const providerBodies: unknown[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      providerBodies.push(JSON.parse(String(init?.body)));
+      return new Response(JSON.stringify({
+        message: { content: '<memory_save>{"memories":[{"kind":"auto_short","text":"Should not save from an App."}]}</memory_save>  A cinematic lighthouse prompt.  ' },
+        done: true,
+        done_reason: 'stop',
+        prompt_eval_count: 30,
+        eval_count: 6,
+      }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }));
+
+    const loaded = fixtureLoadedConfig(dir);
+    loaded.config.paths.appsDir = path.join(dir, 'apps');
+    loaded.config.paths.profilesDir = path.join(dir, 'profiles');
+    const server = createMarifoldService({ loadedConfig: loaded, scheduler: false });
+    try {
+      const remembered = await server.inject({
+        method: 'POST',
+        url: '/v1/profiles/painter/memories',
+        payload: { text: 'The user prefers dramatic lighting.' },
+      });
+      expect(remembered.statusCode).toBe(200);
+
+      const listed = await server.inject({ method: 'GET', url: '/v1/apps' });
+      expect(listed.json().apps[0]).toMatchObject({
+        schema: 'marifold.skillapp.v2',
+        profiles: [{ profile: 'painter', memory: true, history: false }],
+        operations: [{
+          name: 'makePrompt',
+          profile: 'painter',
+          skillState: 'promptMaker',
+          skillOptions: ['make-prompt', 'make-other-prompt'],
+          input: 'idea',
+          stripSkillName: true,
+          requiredInputs: ['promptMaker', 'idea'],
+          attachments: 'references',
+        }],
+      });
+      expect(JSON.stringify(listed.json())).not.toContain(sharedVars);
+      expect(listed.json().apps[0].permissions).toBeUndefined();
+
+      const created = await server.inject({ method: 'POST', url: '/v1/apps/painers-room/instances' });
+      const instanceId = created.json().instance.id as string;
+      await server.inject({
+        method: 'PATCH',
+        url: `/v1/app-instances/${instanceId}/state`,
+        payload: {
+          values: {
+            promptMaker: 'make-other-prompt',
+            idea: '$make-prompt A lighthouse in a storm',
+          },
+        },
+      });
+      const attachmentData = Buffer.from('reference notes').toString('base64');
+      const attached = await server.inject({
+        method: 'PUT',
+        url: `/v1/app-instances/${instanceId}/attachments/references`,
+        payload: {
+          attachments: [{
+            kind: 'file',
+            name: 'reference.txt',
+            mediaType: 'text/plain',
+            size: Buffer.byteLength('reference notes'),
+            data: attachmentData,
+            inspectionText: 'reference notes',
+          }],
+        },
+      });
+      expect(attached.statusCode).toBe(200);
+      expect(attached.json().instance.attachments).toEqual({
+        references: [{ kind: 'file', name: 'reference.txt', mediaType: 'text/plain', size: 15 }],
+      });
+      expect(JSON.stringify(attached.json())).not.toContain(attachmentData);
+      const run = await server.inject({
+        method: 'POST',
+        url: `/v1/app-instances/${instanceId}/operations/makePrompt`,
+      });
+      expect(run.json()).toMatchObject({
+        status: 'completed',
+        instance: { state: { result: 'A cinematic lighthouse prompt.' } },
+        result: {
+          status: 'ok',
+          meta: { engine: 'ollama', model: 'gemma4:e4b' },
+        },
+      });
+
+      expect(providerBodies).toHaveLength(1);
+      const context = JSON.stringify(providerBodies[0]);
+      expect(context).toContain('Painter identity from PROFILE.md.');
+      expect(context).toContain('Painter rules from RULES.md.');
+      expect(context).toContain('Painter custom context.');
+      expect(context).toContain('Create the selected alternate prompt format.');
+      expect(context).not.toContain('Turn the user idea into a production image prompt.');
+      expect(context).toContain('vars.toml');
+      expect(context).toContain('A lighthouse in a storm');
+      expect(context).not.toContain('$make-prompt A lighthouse in a storm');
+      expect(context).toContain('The user prefers dramatic lighting.');
+      expect(context).toContain('reference.txt');
+      expect(context).toContain('inspect_attachment');
+
+      const detached = await server.inject({
+        method: 'PUT',
+        url: `/v1/app-instances/${instanceId}/attachments/references`,
+        payload: { attachments: [] },
+      });
+      expect(detached.json()).toMatchObject({
+        status: 'idle',
+        instance: {
+          state: { result: 'A cinematic lighthouse prompt.' },
+          staleOutputs: ['result'],
+          attachments: { references: [] },
+        },
+      });
+
+      const memories = await server.inject({ method: 'GET', url: '/v1/profiles/painter/memories' });
+      expect(memories.json().memories).toHaveLength(1);
+      expect(JSON.stringify(memories.json())).not.toContain('Should not save from an App.');
     } finally {
       await server.close();
     }

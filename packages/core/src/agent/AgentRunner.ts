@@ -90,6 +90,9 @@ export interface AgentRunOptions {
   /** Authoritative instructions (e.g. a skill body) injected at the top of the
    * system prompt for every loop turn, so the run is guided by them. */
   instructions?: string[];
+  /** Read-only dynamic memory supplied by an embedding surface. Agent output
+   * never mutates profile memory, even when this context is present. */
+  memory?: string[];
   /** Resolves 'ask' approvals. Absent (unattended runs): 'ask' degrades to deny. */
   approvalHandler?: ApprovalHandler;
   /** Resolves optional model-authored clarification questions. Absent or
@@ -153,6 +156,9 @@ export interface AgentRunnerDeps {
   /** Narrow app-owned folders that the resolved profile may inspect read-only
    * during a run, such as profile and global skill directories. */
   resolveReadOnlyFolders?: (profile: string) => string[];
+  /** Exact app-owned files that may be read without exposing their parents. */
+  resolveReadOnlyFiles?: (profile: string) => string[];
+  allowExternalReadOnlyFolders?: boolean;
 }
 
 /** Char budget for the injected history window when no profile budget is set. */
@@ -255,6 +261,8 @@ export class AgentRunner {
       cwd,
       trustedFolders: [...agentConfig.trustedFolders, ...(options.trustedFolders ?? [])],
       readOnlyFolders: this.deps.resolveReadOnlyFolders?.(settings.profile),
+      readOnlyFiles: this.deps.resolveReadOnlyFiles?.(settings.profile),
+      allowExternalReadOnlyFolders: this.deps.allowExternalReadOnlyFolders,
       files: options.files,
       images: runOptions.images,
     });
@@ -763,6 +771,7 @@ export class AgentRunner {
         ? options.objective
         : `Objective: ${options.objective}\n\nUse tools only when the objective genuinely requires reading or writing files, running commands, searching the web, or delegating. Many objectives — greetings, questions, explanations, drafting text — need no tools at all; for those, answer directly from your own knowledge. Do not invent tool calls. When the objective is complete, reply with a short final answer describing the outcome.`,
       context: this.agentContext(state, workspace, webSearchMode, options.instructions, options.lean),
+      ...(options.memory && options.memory.length > 0 ? { memory: options.memory } : {}),
       ...(options.sessionId ? { session: { id: options.sessionId, createIfMissing: true } } : {}),
       ...(state.activeImages.length > 0 ? { images: state.activeImages } : {}),
       ...(providerTools && providerTools.length > 0 ? { providerTools } : {}),

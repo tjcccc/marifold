@@ -19,6 +19,10 @@ describe('useRoute', () => {
     expect(window.location.hash).toBe('');
     expect(screen.getByTestId('route').textContent).toBe('apps');
 
+    window.history.pushState(null, '', '/apps/painers-room');
+    fireEvent(window, new PopStateEvent('popstate'));
+    expect(screen.getByTestId('route').textContent).toBe('apps:painers-room');
+
     window.history.pushState(null, '', '/config/models');
     fireEvent(window, new PopStateEvent('popstate'));
     expect(screen.getByTestId('route').textContent).toBe('config:models');
@@ -42,7 +46,7 @@ function RouteHarness() {
     ? ['agent', route.profile, route.session].filter(Boolean).join(':')
     : route.view === 'config'
       ? ['config', route.section, route.item].filter(Boolean).join(':')
-      : route.view;
+      : ['apps', route.app].filter(Boolean).join(':');
   return (
     <>
       <span data-testid="route">{label}</span>

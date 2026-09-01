@@ -162,10 +162,10 @@ the request language; only an explicit request to write the skill or its
 documentation in another language overrides that default. The skill's intended
 input/output language remains an independent behavior setting.
 
-A Skill is the shared primitive a graphical **SkillApp** renders as a form
-before running an app-local Skill with its explicitly registered model. Legacy
-App v0 actor/profile bundles remain compatible. Apps are not rendered in the
-TUI.
+A Skill is the shared primitive a graphical **SkillApp** renders as a form.
+SkillApp v1 runs an app-local Skill with an explicitly registered model; v2 can
+register an existing profile and run its installed Skills with live profile
+documents and read-only bundled-file access. Apps are not rendered in the TUI.
 
 ## Clarification questions
 

@@ -14,6 +14,7 @@ describe('route', () => {
       { view: 'agent' as const, profile: 'default' },
       { view: 'agent' as const, profile: 'writing helper', session: 'sess/1' },
       { view: 'apps' as const },
+      { view: 'apps' as const, app: 'painers-room' },
       { view: 'config' as const, section: 'profiles' as const },
       { view: 'config' as const, section: 'profiles' as const, item: 'default' },
       { view: 'config' as const, section: 'providers' as const, item: 'ollama' },
@@ -28,6 +29,7 @@ describe('route', () => {
   it('formats clean paths and defaults unknown or empty paths to the agent view', () => {
     expect(formatPath({ view: 'agent' })).toBe('/agent');
     expect(formatPath({ view: 'apps' })).toBe('/apps');
+    expect(formatPath({ view: 'apps', app: 'painers-room' })).toBe('/apps/painers-room');
     expect(formatPath({ view: 'config', section: 'profiles', item: 'writing helper' }))
       .toBe('/config/profiles/writing%20helper');
     expect(parsePath('')).toEqual({ view: 'agent' });

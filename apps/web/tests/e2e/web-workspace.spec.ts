@@ -11,7 +11,7 @@ test('Agent and Apps reuse one sidebar shell and header toggle', async ({ page }
   const profileBox = await profilesSidebar.boundingBox();
 
   await page.getByRole('tab', { name: 'Apps' }).click();
-  await expect(page).toHaveURL(/\/apps$/);
+  await expect(page).toHaveURL(/\/apps\/translator$/);
   const appsSidebar = page.getByRole('navigation', { name: 'Apps' });
   await expect(appsSidebar.getByLabel('Search apps')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Hide sidebar' })).toBeVisible();
