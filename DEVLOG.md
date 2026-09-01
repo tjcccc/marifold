@@ -2,6 +2,53 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-09-01 — v0.66.0 — Profile-backed SkillApps
+
+- Added the additive `marifold.skillapp.v2` contract with statically compiled
+  `registerProfile()` and `useProfileSkill()` builders while preserving v1.
+- Profile operations inherit or locally override the profile model, always load
+  PROFILE/RULES/CUSTOM, resolve live profile-over-global Skills, and expose the
+  selected Skill bundles through narrow read-only run capabilities.
+- Added optional read-only profile memory and ephemeral per-App/profile history;
+  effectful tools, profile approvals, trusted folders, and normal conversation
+  history remain isolated from Apps.
+- Added the `Painer's Room` example and installed a live local copy backed by
+  the existing `painter` profile's seven `make-*-prompt` Skills.
+- Refined the example into a single-column prompt-maker form with a friendly
+  label/value selector, one statically allowlisted dynamic Skill operation, a
+  four-row Idea field with a field-aligned Make action, and a ten-row
+  auto-growing Prompt result. Pasted leading Skill names are stripped without
+  treating arbitrary Idea text as a Skill selection.
+- Added static read-only `FileAccess`/`FolderAccess` declarations with exact-file
+  enforcement and server-only host paths. The live Painer App now grants its
+  shared variable TOML explicitly without inheriting Painter permissions.
+- Added renderer-neutral attachment state plus a rounded Web picker/drop zone
+  with image thumbnails, ellipsized filenames, removal, shared preprocessing,
+  metadata-only snapshots, and lazy Agent attachment inspection.
+- Added bookmarkable `/apps/<app-name>` routes whose selection follows browser
+  Back/Forward navigation.
+- Made the App footer's running hint pulse gently while an operation is active,
+  with a static reduced-motion fallback.
+- Preserved completed App output when its inputs or attachments change and
+  added a renderer-neutral stale-output marker shown as “Based on previous
+  inputs” until the next successful run.
+- Added compiler, resolver, history-isolation, and service/runtime regressions.
+- Verified the full workspace typecheck/build/test gate (713 tests: core 357,
+  service 62, TUI 60, CLI 28, Web 206) and resolved the live App against all
+  seven installed `painter` Skills without making a provider call. A headed
+  Chromium pass verified the refined desktop and 390 px mobile layouts, Skill
+  selection, textarea sizing, and responsive Make action without submitting it.
+
+## 2026-09-01 — v0.65.1 — Mobile composer line breaks
+
+- Made Enter insert a line break in the mobile Web composer and reserved
+  submission for the Send button, including while autocomplete is open.
+- Preserved desktop Enter-to-send and Shift+Enter line-break behavior.
+- Added focused composer regression coverage and verified all 205 Web tests,
+  the workspace typecheck/build gate, the flow in Chromium at 390×844, and the
+  corrected interaction in an iPhone browser.
+- Version 0.65.0 → 0.65.1 across all packages + CLI `.version`.
+
 ## 2026-08-31 — v0.65.0 — Mobile Web workspace and expanded search
 
 - Replaced the below-900-px desktop-width notice with a dedicated mobile Web

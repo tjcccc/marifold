@@ -63,6 +63,9 @@ export interface RunWorkspace {
   /** App-owned inputs, such as the active profile's skills, that tools may
    * inspect but never modify through the process sandbox. */
   readOnlyRoots: string[];
+  /** Exact host files explicitly granted read-only. Their parent directories
+   * are not capabilities and must not become listable. */
+  readOnlyFiles: string[];
   readRoots: string[];
   writeRoots: string[];
   /** Roots outside the user's home. Shell calls touching this capability set
@@ -79,6 +82,12 @@ export interface CreateRunWorkspaceOptions {
   /** Narrow app-owned folders exposed read-only to this run. Entries outside
    * the user's home remain approval-gated. */
   readOnlyFolders?: string[];
+  /** Explicit internal capability for statically declared resources. Ordinary
+   * profile/global read roots remain confined to the user home. */
+  allowExternalReadOnlyFolders?: boolean;
+  /** Narrow exact-file capabilities. Unlike readOnlyFolders, these never widen
+   * access to siblings in the containing directory. */
+  readOnlyFiles?: string[];
   files?: RunFileInput[];
   /** Prepared image inputs to stage alongside ordinary files for lazy,
    * attachment-scoped inspection during an agent run. */
@@ -119,8 +128,9 @@ export function createRunWorkspace(options: CreateRunWorkspaceOptions): RunWorks
   const trusted = uniqueExistingDirectories(options.trustedFolders ?? [])
     .filter(folder => !isUnsafeBroadRoot(folder, userHome, appHome));
   const readOnlyRoots = uniqueExistingDirectories(options.readOnlyFolders ?? [])
-    .filter(folder => isInside(folder, userHome))
+    .filter(folder => options.allowExternalReadOnlyFolders || isInside(folder, userHome))
     .filter(folder => !isUnsafeBroadReadRoot(folder, userHome, appHome));
+  const readOnlyFiles = uniqueExistingFiles(options.readOnlyFiles ?? []);
   const runWriteRoots = [homeDir, workDir, outputDir, tempDir, cacheDir].map(canonicalExistingPath);
   const writeRoots = uniquePaths([cwd, ...trusted, ...runWriteRoots]);
   const readRoots = uniquePaths([...writeRoots, canonicalExistingPath(inputDir), ...readOnlyRoots]);
@@ -139,6 +149,7 @@ export function createRunWorkspace(options: CreateRunWorkspaceOptions): RunWorks
     cwd,
     userHome,
     readOnlyRoots,
+    readOnlyFiles,
     readRoots,
     writeRoots,
     externalRoots,
@@ -239,6 +250,11 @@ export function isInsideAnyRoot(target: string, roots: string[]): boolean {
   return roots.some(root => isInside(resolved, root));
 }
 
+export function isExactPath(target: string, candidates: string[]): boolean {
+  const resolved = canonicalPath(target);
+  return candidates.some(candidate => resolved === canonicalPath(candidate));
+}
+
 export function isOutsideUserHome(target: string, workspace: RunWorkspace): boolean {
   return !isInside(canonicalPath(target), workspace.userHome);
 }
@@ -298,6 +314,17 @@ function uniqueExistingDirectories(values: string[]): string[] {
     const resolved = canonicalExistingPath(value);
     try {
       return fs.statSync(resolved).isDirectory() ? [resolved] : [];
+    } catch {
+      return [];
+    }
+  }));
+}
+
+function uniqueExistingFiles(values: string[]): string[] {
+  return uniquePaths(values.flatMap(value => {
+    const resolved = canonicalExistingPath(value);
+    try {
+      return fs.statSync(resolved).isFile() ? [resolved] : [];
     } catch {
       return [];
     }

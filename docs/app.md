@@ -1,11 +1,15 @@
-# SkillApp Specification (`marifold.skillapp.v1`)
+# SkillApp Specification (`marifold.skillapp.v1` and `.v2`)
 
 SkillApps are declarative, local GUI templates for one focused model-backed
 job. Their core operation is deliberately narrow:
 
-> Bind user parameters to one app-local Skill, run that Skill with one
-> explicitly registered model, normalize the response, and bind it to output
-> state.
+> Bind user input to one Skill, run that Skill with either an explicitly
+> registered model or a registered profile, normalize the response, and bind
+> it to output state.
+
+`marifold.skillapp.v1` remains the profile-free app-local contract.
+`marifold.skillapp.v2` is selected automatically when a template uses
+`registerProfile()` and `useProfileSkill()`.
 
 `skillapp.ts` is an authoring format, not an application runtime. marifold
 statically inspects its TypeScript syntax and compiles it to renderer-neutral
@@ -33,6 +37,11 @@ and `app.name` must match and use kebab-case.
 `<bundle>/skills/translate/SKILL.md`. There is no profile/global fallback, and
 the resolved file must remain inside the bundle after symbolic links are
 resolved. The folder name and the Skill frontmatter `name` must match.
+
+A v2 profile reference does not copy Skills into the App bundle. It resolves
+the selected profile's effective Skill catalog at load and run time, including
+the normal profile-over-global shadowing rule. The profile and App remain
+separate global resources.
 
 ## Complete translator
 
@@ -140,6 +149,61 @@ Its Skill declares `source_text` and `target_language`; operation parameter
 keys intentionally match those Skill variable names. State names are local to
 the template and may use normal TypeScript camelCase.
 
+## Profile-backed SkillApp
+
+The repository example
+[`examples/apps/painers-room/skillapp.ts`](../examples/apps/painers-room/skillapp.ts)
+uses the installed `painter` profile without duplicating its prompt-making
+Skills. The essential form is:
+
+```ts
+const idea = State('');
+const result = State('');
+const references = AttachmentState();
+const promptMakers = [
+  { label: 'GPT Image', value: 'make-gpt-image-prompt' },
+  { label: 'Midjourney', value: 'make-midjourney-prompt' },
+] as const;
+const promptMaker = State('make-gpt-image-prompt');
+
+const painter = registerProfile('painter', {
+  memory: false,
+  history: false,
+});
+
+const makePrompt = useProfileSkill(painter, promptMaker, {
+  skills: promptMakers,
+  input: idea,
+  attachments: references,
+  stripSkillName: true,
+  output: result,
+  result: TextResult({ trim: true }),
+});
+```
+
+`input` is the ordinary user prompt seen by the Skill. It is useful for Skills
+such as prompt makers that intentionally declare no template variables.
+`stripSkillName: true` removes one pasted leading allowlisted Skill invocation
+(with or without `$`) from that input; it does not remove ordinary mentions
+later in the text.
+`attachments` binds one `AttachmentState()` slot. Its uploads are staged
+read-only for the operation and remain outside the model prompt until the
+Agent uses the attachment inspection tools. Images and ordinary files share
+the same slot; non-image attachments require the registered profile to run in
+Agent mode.
+`parameters` remains available for Skills with named `{{variables}}`:
+
+```ts
+const translate = useProfileSkill(friend, 'translate', {
+  parameters: {
+    source_text: source,
+    target_language: targetLanguage,
+  },
+  output: result,
+  result: TextResult({ trim: true }),
+});
+```
+
 ## Restricted TypeScript
 
 The `.ts` extension provides familiar syntax, editor completion, and type
@@ -164,20 +228,25 @@ such as a todo manager belongs in a normal application rather than SkillApp.
 name. Components bind to the state reference; the template never reads or
 writes it directly.
 
-When a renderer opens a v1 SkillApp, the service creates an ephemeral instance
+When a renderer opens a SkillApp, the service creates an ephemeral instance
 with the declared initial values. User edits are validated and stored there.
 States used as an operation output are read-only to clients. A successful
 operation replaces its bound output state, causing every renderer component
 bound to that state to refresh.
 
-Required inputs are derived from required, default-less variables in the
-operation's `SKILL.md`. When any such bound state is empty or whitespace,
-marifold treats the operation as not ready: it cancels pending work, clears the
-bound output, returns an idle mutation with
-`reason: "missing_required_input"`, and disables buttons for that operation.
-This is ordinary form state, not a warning or error.
+Required inputs are derived from an explicit v2 `input` binding plus required,
+default-less variables in the operation's `SKILL.md`. Changing an operation's
+bound input, parameter, selected Skill, or attachments cancels pending work but
+preserves a completed output for copying. The snapshot names that output in
+`staleOutputs`, and renderers identify it as based on previous inputs until a
+successful rerun replaces it. When a required state is empty or whitespace,
+marifold also returns an idle mutation with `reason: "missing_required_input"`
+and disables buttons for that operation. This is ordinary form state, not a
+warning or error.
 
-v1 intentionally supports string state only. Lists, structured results,
+Ordinary `State` remains string-only. `AttachmentState()` is a separate,
+bounded ephemeral resource binding whose snapshots expose filename, type, size,
+and kind but never return uploaded base64 bytes. Lists, structured results,
 append/replace list policies, and computed state can be added later without
 introducing arbitrary template code.
 
@@ -203,6 +272,51 @@ function and cannot be called from template code. It binds:
 - one output state;
 - the fixed profile-free execution policy.
 
+`registerProfile(name, options)` declares a v2 profile reference. `name` is a
+stable configured profile name. The options are:
+
+- `model`: optional `provider/model` override for this App only. When omitted,
+  the profile's model override falls back to the global default normally;
+- `think`: optional App-only override, otherwise inherited normally;
+- `memory`: defaults to `false`; when `true`, current profile memory is loaded
+  read-only when that profile has memory enabled, and Agent output is never
+  promoted into memory;
+- `history`: defaults to `false`; when `true`, completed turns are retained
+  only inside the current ephemeral App instance and profile reference. Normal
+  profile conversations are never read or written.
+
+PROFILE.md, RULES.md, and CUSTOM.md always load for a registered profile; there
+is intentionally no `profileContext: false` switch because those documents are
+the profile's identity. The Skill's declared mode is honored. A Skill without
+a mode follows the profile's configured mode, defaulting to Agent mode.
+
+`useProfileSkill(profile, skillNameOrState, options)` resolves the name through the
+profile's ordinary installed profile/global catalog (excluding protected
+built-in management Skills). It binds an optional `input` state,
+optional named `parameters`, one output state, and a result adapter. String
+skill names keep hyphenated names valid without allowing property access in the
+restricted TypeScript grammar.
+
+The second argument may instead be a `State` for a user-selected Skill. In that
+form, `skills` is a required static allowlist and must exactly match the values
+of a `Select` bound to that state. Every candidate Skill is resolved and its
+bindings are validated when the App loads; a client cannot select any other
+profile Skill by changing service state directly. Select choices may provide
+separate renderer labels and values:
+
+```ts
+Select('Prompt maker', promptMaker, {
+  options: promptMakers,
+  grow: true,
+});
+```
+
+Profile Skill bundles remain live rather than copied: every App load and run
+re-resolves the profile/global Skill, and Agent-mode runs receive the selected
+Skill directory through the existing narrow read-only run-workspace boundary.
+This lets a Skill read files beside its SKILL.md while preventing writes to the
+profile or global Skill directories.
+
 ## Triggers
 
 A button binds directly to an operation:
@@ -221,13 +335,46 @@ trigger(translate, {
 });
 ```
 
-`debounce` is milliseconds, defaults to `0`, and is capped at 60 seconds. v1 concurrency is always
+`debounce` is milliseconds, defaults to `0`, and is capped at 60 seconds. Current concurrency is always
 `latest`: a new matching change cancels a pending timer or in-flight provider
 request for the same operation, and a stale result cannot overwrite newer
 state. Manual and automatic triggers use the same operation path.
 
-Each trigger runs exactly one Skill with one model. SkillApp does not support
-operation chaining, branching, loops, local actions, or effectful tools.
+Each trigger runs exactly one Skill. SkillApp does not support operation
+chaining, branching, loops, or local actions.
+
+Profile mode does not inherit the profile's Agent permissions or trusted
+folders. Agent-mode profile Skill operations expose attachment-scoped
+`inspect_attachment`, `read_attachment`, and `search_attachment`, plus a
+fail-closed `read_file`. Selected Skill bundles, the private run workspace, and
+static App read declarations are the only readable host resources. Write,
+shell, network, and delegation tools are not exposed.
+
+Static host reads belong directly in `skillapp.ts`:
+
+```ts
+export default defineSkillApp({
+  app: { name: 'prompt-maker', title: 'Prompt maker' },
+  permissions: [
+    FileAccess('~/Prompts/shared-vars.toml', { access: 'read' }),
+    FolderAccess('references', { access: 'read' }),
+  ],
+  ui: App([/* ... */]),
+});
+```
+
+Relative paths resolve inside the App bundle; `~` and absolute paths resolve
+on the service host. Declarations must already exist, symbolic links are
+canonicalized, folder grants cannot target the filesystem root, the complete
+user home, or Marifold private state, and only `access: "read"` is accepted.
+An exact `FileAccess` does not make its parent directory or sibling files
+readable. Permission paths stay server-side and are removed from catalog/detail
+API definitions.
+
+The attachment picker is an ephemeral per-instance upload grant, not a host
+path selector and not a persistent permission. Dynamic filesystem grants and
+effectful tool declarations remain future work; they do not need a second App
+configuration file.
 
 ## Structured result contract
 
@@ -265,6 +412,10 @@ Failures use the same envelope:
 
 The model is not required to emit JSON or XML tags. A future result adapter can
 normalize JSON, lists, files, or images while preserving this outer contract.
+Natural-language warnings authored by a Skill currently remain ordinary text
+results because the Skill contract has no typed warning marker. Renderers must
+not guess warning severity from prose; an eventual structured result adapter
+can route typed warnings to a separate state safely.
 
 ## Components
 
@@ -272,18 +423,27 @@ SkillApp components are semantic, form-oriented controls with marifold-owned
 appearance. They do not accept HTML, CSS, classes, arbitrary styles, or event
 callbacks.
 
-v1 supports:
+Both schemas currently support:
 
 - layout: `App`, `Row`, `Column`, `Spacer`;
 - form: `Textarea(label, state, options)` and
   `Select(label, state, { options, ... })`;
+- resource: `Attachments(label, attachmentState, options)`;
 - action: `Button(label, { trigger, emphasis })`.
 
 Form components always require a non-empty label. `showLabel: false` hides the
 visual label without reserving layout space while retaining an accessible
 label for native renderers. Supported controlled presentation options include
 `grow`, `gap`, `responsive: "stack"`, `placeholder`, `editable`, `copyable`,
-and button `emphasis`.
+and button `emphasis`. `Select` accepts either string choices or
+`{ label, value }` choices. `Textarea` accepts `rows` (1–40) and `autoGrow`;
+`Button({ alignToField: true })` aligns a full-height action with the input box
+of an adjacent labeled field while collapsing to an ordinary action in a
+responsive stacked row.
+`Attachments` renders a rounded multi-file picker/drop target. Renderers show
+image thumbnails plus ellipsized filenames, generic file chips for other
+formats, and per-item removal. The Web renderer reuses the same file limits,
+image optimization, and Office readable-view preparation as Agent chat.
 
 The renderer owns app chrome rather than the template. The Web renderer keeps
 the app version and an **Activity** control in a footer fixed to the bottom of
@@ -294,14 +454,16 @@ should preserve the same distinction even when their chrome differs.
 
 ## Service and native-renderer contract
 
-Catalog routes return normalized `marifold.skillapp.v1` definitions:
+Catalog routes return normalized `marifold.skillapp.v1` or
+`marifold.skillapp.v2` definitions:
 
 | Route | Purpose |
 | --- | --- |
 | `GET /v1/apps` | List normalized definitions |
 | `GET /v1/apps/:name` | Read one normalized definition |
-| `POST /v1/apps/:name/instances` | Create ephemeral v1 state |
+| `POST /v1/apps/:name/instances` | Create ephemeral App state |
 | `PATCH /v1/app-instances/:id/state` | Apply user state and matching automatic triggers |
+| `PUT /v1/app-instances/:id/attachments/:state` | Replace one attachment-state slot with bounded base64 uploads |
 | `POST /v1/app-instances/:id/operations/:operation` | Run a button-bound operation |
 | `DELETE /v1/app-instances/:id` | Cancel work and release the instance |
 
@@ -310,3 +472,6 @@ The instance mutation response contains `status` (`idle`, `completed`, or
 and structured Skill result fields. This JSON is the middle layer shared by
 Web, SwiftUI, and other future renderers. Idle instances expire after 30
 minutes; renderers should also delete them when their App view closes.
+The Web workspace gives the active App a bookmarkable clean path such as
+`/apps/painers-room`; selecting another App updates browser history and
+Back/Forward restores the selection.

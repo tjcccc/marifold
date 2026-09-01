@@ -165,6 +165,37 @@ describe('InputBar $-autocomplete', () => {
 });
 
 describe('InputBar composer interactions', () => {
+  it('uses Enter for a mobile line break and submits multiline text only from Send', () => {
+    const onSubmit = vi.fn();
+    render(
+      <InputBar
+        steering={false}
+        responding={false}
+        think={false}
+        onToggleThink={() => {}}
+        modelOptions={[]}
+        onSelectModel={() => {}}
+        skills={skills}
+        enterSubmits={false}
+        onSubmit={onSubmit}
+        onStop={() => {}}
+      />,
+    );
+
+    const textarea = screen.getByPlaceholderText('Message the agent…') as HTMLTextAreaElement;
+    fireEvent.focus(textarea);
+    fireEvent.change(textarea, { target: { value: '$make' } });
+    expect(fireEvent.keyDown(textarea, { key: 'Enter' })).toBe(true);
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(textarea.value).toBe('$make');
+
+    // jsdom does not perform the textarea's native key default, so emulate the
+    // browser's resulting input event before using the explicit send control.
+    fireEvent.change(textarea, { target: { value: '$make\nthis image cinematic' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(onSubmit).toHaveBeenCalledWith('$make\nthis image cinematic');
+  });
+
   it('replaces Send with an always-available Stop response button while responding', () => {
     const onSubmit = vi.fn();
     const onStop = vi.fn();

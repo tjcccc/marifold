@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import { JSONValue } from '@priest-ai/core';
 import {
   isInsideAnyRoot,
+  isExactPath,
   isOutsideUserHome,
   isSensitiveHostPath,
   resolveToolPath,
@@ -15,7 +16,15 @@ import {
   ToolRiskAssessment,
 } from '../ToolRegistry';
 
+export interface ReadFileToolOptions {
+  /** Fail closed outside the run's declared read roots/exact files. Used by
+   * SkillApps, whose model must never request an interactive wider grant. */
+  strictWorkspace?: boolean;
+}
+
 export class ReadFileTool implements AgentTool {
+  constructor(private readonly options: ReadFileToolOptions = {}) {}
+
   readonly kind = 'read' as const;
   readonly definition = {
     name: 'read_file',
@@ -40,7 +49,17 @@ export class ReadFileTool implements AgentTool {
   assessRisk(input: Record<string, JSONValue>, ctx: ToolExecutionContext): ToolRiskAssessment {
     if (typeof input.path !== 'string' || !ctx.workspace) return { escalate: false };
     const target = resolveToolPath(input.path, ctx.workspace, ctx.cwd);
-    if (isInsideAnyRoot(target, ctx.workspace.readRoots)) return { escalate: false };
+    if (isInsideAnyRoot(target, ctx.workspace.readRoots) || isExactPath(target, ctx.workspace.readOnlyFiles)) {
+      return this.options.strictWorkspace ? { escalate: false, trusted: true } : { escalate: false };
+    }
+    if (this.options.strictWorkspace) {
+      return {
+        escalate: false,
+        blocked: true,
+        reason: `reading ${target} is outside this SkillApp's declared read permissions`,
+        targetPath: target,
+      };
+    }
     const nonPersistable = isOutsideUserHome(target, ctx.workspace) || isSensitiveHostPath(target, ctx.workspace);
     return {
       escalate: true,
@@ -58,6 +77,15 @@ export class ReadFileTool implements AgentTool {
       ctx.workspace,
       ctx.cwd,
     );
+    if (this.options.strictWorkspace && ctx.workspace
+      && !isInsideAnyRoot(target, ctx.workspace.readRoots)
+      && !isExactPath(target, ctx.workspace.readOnlyFiles)) {
+      return {
+        content: `Could not read ${target}: path is outside this SkillApp's declared read permissions.`,
+        summary: `blocked read outside SkillApp permissions`,
+        isError: true,
+      };
+    }
     let content: string;
     try {
       const stat = fs.statSync(target);

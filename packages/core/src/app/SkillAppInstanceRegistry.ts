@@ -1,7 +1,12 @@
 import { randomUUID } from 'crypto';
+import * as path from 'path';
 import { MarifoldError } from '../errors/MarifoldError';
+import { MAX_RUN_INPUT_BYTES, MAX_RUN_INSPECTION_TEXT_BYTES } from '../agent/RunWorkspace';
+import { MAX_IMAGES_PER_REQUEST } from '../images/ImageOptimizer';
 import type {
+  SkillAppAttachmentInput,
   SkillAppDefinition,
+  SkillAppHistoryTurn,
   SkillAppInstanceSnapshot,
   SkillAppMutationResult,
   SkillAppResult,
@@ -19,6 +24,8 @@ export interface SkillAppInstanceRuntime {
     operationName: string,
     state: Record<string, SkillAppStateValue>,
     signal?: AbortSignal,
+    history?: SkillAppHistoryTurn[],
+    attachments?: SkillAppAttachmentInput[],
   ): Promise<SkillAppResult>;
 }
 
@@ -33,6 +40,8 @@ interface InstanceRecord {
   definition: SkillAppDefinition;
   snapshot: SkillAppInstanceSnapshot;
   operations: Map<string, ActiveOperation>;
+  historyByProfile: Map<string, SkillAppHistoryTurn[]>;
+  attachmentsByState: Map<string, SkillAppAttachmentInput[]>;
   expiryTimer?: NodeJS.Timeout;
 }
 
@@ -57,8 +66,15 @@ export class SkillAppInstanceRegistry {
       id,
       appName,
       state: Object.fromEntries(definition.states.map(item => [item.name, item.initial])),
+      attachments: Object.fromEntries((definition.attachmentStates ?? []).map(item => [item.name, []])),
     };
-    const record: InstanceRecord = { definition, snapshot, operations: new Map() };
+    const record: InstanceRecord = {
+      definition,
+      snapshot,
+      operations: new Map(),
+      historyByProfile: new Map(),
+      attachmentsByState: new Map((definition.attachmentStates ?? []).map(item => [item.name, []])),
+    };
     this.instances.set(id, record);
     this.refreshExpiry(record);
     return cloneSnapshot(snapshot);
@@ -92,11 +108,12 @@ export class SkillAppInstanceRegistry {
     if (changed.length === 0) return { status: 'idle', instance: cloneSnapshot(record.snapshot) };
     const triggers = record.definition.triggers.filter(trigger =>
       trigger.onChange.some(name => changed.includes(name)));
-    const missingOperations = record.definition.operations.filter(operation =>
-      operation.requiredInputs.some(name => changed.includes(name))
-      && !operationIsRunnable(operation.requiredInputs, record.snapshot.state));
-    for (const operation of missingOperations) {
-      record.snapshot.state[operation.output] = '';
+    const affectedOperations = record.definition.operations.filter(operation =>
+      operationInputStates(operation).some(name => changed.includes(name)));
+    const missingOperations = affectedOperations.filter(operation =>
+      !operationIsRunnable(operation.requiredInputs, record.snapshot.state));
+    for (const operation of affectedOperations) {
+      markOutputStale(record.snapshot, operation.output);
       this.cancelOperation(record, operation.name);
     }
     const runnableTriggers = triggers.filter(trigger => {
@@ -130,7 +147,7 @@ export class SkillAppInstanceRegistry {
       throw MarifoldError.appInvalid(`SkillApp '${record.definition.app.name}' has no operation '${operationName}'.`);
     }
     if (!operationIsRunnable(operation.requiredInputs, record.snapshot.state)) {
-      record.snapshot.state[operation.output] = '';
+      markOutputStale(record.snapshot, operation.output);
       this.cancelOperation(record, operationName);
       return Promise.resolve({
         status: 'idle',
@@ -140,6 +157,29 @@ export class SkillAppInstanceRegistry {
       });
     }
     return this.executeLatest(record, operationName, 0);
+  }
+
+  updateAttachments(
+    instanceId: string,
+    stateName: string,
+    attachments: SkillAppAttachmentInput[],
+  ): SkillAppMutationResult {
+    const record = this.require(instanceId);
+    this.refreshExpiry(record);
+    if (!(record.definition.attachmentStates ?? []).some(state => state.name === stateName)) {
+      throw MarifoldError.appInvalid(`SkillApp received unknown attachment state '${stateName}'.`);
+    }
+    const normalized = validateAttachments(attachments);
+    record.attachmentsByState.set(stateName, normalized);
+    record.snapshot.attachments = {
+      ...(record.snapshot.attachments ?? {}),
+      [stateName]: normalized.map(({ name, mediaType, size, kind }) => ({ name, mediaType, size, kind })),
+    };
+    for (const operation of record.definition.operations.filter(candidate => candidate.attachments === stateName)) {
+      markOutputStale(record.snapshot, operation.output);
+      this.cancelOperation(record, operation.name);
+    }
+    return { status: 'idle', instance: cloneSnapshot(record.snapshot) };
   }
 
   delete(instanceId: string): boolean {
@@ -181,16 +221,33 @@ export class SkillAppInstanceRegistry {
         active.timer = undefined;
         active.controller = new AbortController();
         const input = { ...record.snapshot.state };
+        const operation = record.definition.operations.find(candidate => candidate.name === operationName)!;
+        const historyKey = operation.profile;
+        const history = operation.execution.history && historyKey
+          ? [...(record.historyByProfile.get(historyKey) ?? [])]
+          : undefined;
+        const attachments = operation.attachments
+          ? [...(record.attachmentsByState.get(operation.attachments) ?? [])]
+          : undefined;
         void this.runtime.runSkillAppOperation(
           record.definition.app.name,
           operationName,
           input,
           active.controller.signal,
+          history,
+          attachments,
         ).then(result => {
           if (record.operations.get(operationName)?.generation !== generation) return;
           if (result.status === 'ok') {
-            const operation = record.definition.operations.find(candidate => candidate.name === operationName)!;
             record.snapshot.state[operation.output] = result.data.text;
+            markOutputFresh(record.snapshot, operation.output);
+            if (operation.execution.history && historyKey) {
+              record.historyByProfile.set(historyKey, appendHistory(
+                record.historyByProfile.get(historyKey) ?? [],
+                operationInputText(operation, input),
+                result.data.text,
+              ));
+            }
           }
           record.operations.delete(operationName);
           resolve({ status: 'completed', operation: operationName, instance: cloneSnapshot(record.snapshot), result });
@@ -235,11 +292,41 @@ export class SkillAppInstanceRegistry {
   }
 }
 
+function operationInputText(
+  operation: SkillAppDefinition['operations'][number],
+  state: Record<string, SkillAppStateValue>,
+): string {
+  if (operation.input) return state[operation.input] ?? '';
+  const values = Object.values(operation.parameters)
+    .map(name => state[name] ?? '')
+    .filter(value => value.trim().length > 0);
+  return values.join('\n');
+}
+
+function appendHistory(
+  history: SkillAppHistoryTurn[],
+  user: string,
+  assistant: string,
+): SkillAppHistoryTurn[] {
+  const next: SkillAppHistoryTurn[] = [
+    ...history,
+    { role: 'user' as const, content: user },
+    { role: 'assistant' as const, content: assistant },
+  ].slice(-20);
+  let chars = next.reduce((sum, turn) => sum + turn.content.length, 0);
+  while (next.length > 2 && chars > 16_000) {
+    const removed = next.shift();
+    chars -= removed?.content.length ?? 0;
+  }
+  return next;
+}
+
 function validateSelectValue(definition: SkillAppDefinition, stateName: string, value: string): void {
   const selects = flatten(definition.layout).filter(item => item.component === 'select' && item.bind === stateName);
   for (const select of selects) {
-    if (!(select.options ?? []).includes(value)) {
-      throw MarifoldError.appInvalid(`SkillApp state '${stateName}' must be one of: ${(select.options ?? []).join(', ')}.`);
+    const allowed = (select.options ?? []).map(option => typeof option === 'string' ? option : option.value);
+    if (!allowed.includes(value)) {
+      throw MarifoldError.appInvalid(`SkillApp state '${stateName}' must be one of: ${allowed.join(', ')}.`);
     }
   }
 }
@@ -249,7 +336,96 @@ function flatten(items: SkillAppDefinition['layout']): SkillAppDefinition['layou
 }
 
 function cloneSnapshot(snapshot: SkillAppInstanceSnapshot): SkillAppInstanceSnapshot {
-  return { ...snapshot, state: { ...snapshot.state } };
+  return {
+    ...snapshot,
+    state: { ...snapshot.state },
+    ...(snapshot.staleOutputs ? { staleOutputs: [...snapshot.staleOutputs] } : {}),
+    ...(snapshot.attachments ? {
+      attachments: Object.fromEntries(Object.entries(snapshot.attachments).map(([name, attachments]) => [
+        name,
+        attachments.map(attachment => ({ ...attachment })),
+      ])),
+    } : {}),
+  };
+}
+
+function operationInputStates(
+  operation: SkillAppDefinition['operations'][number],
+): string[] {
+  return [...new Set([
+    ...(operation.skillState ? [operation.skillState] : []),
+    ...(operation.input ? [operation.input] : []),
+    ...operation.requiredInputs,
+    ...Object.values(operation.parameters),
+  ])];
+}
+
+function markOutputStale(snapshot: SkillAppInstanceSnapshot, output: string): void {
+  if (!(snapshot.state[output] ?? '').trim()) return;
+  snapshot.staleOutputs = [...new Set([...(snapshot.staleOutputs ?? []), output])];
+}
+
+function markOutputFresh(snapshot: SkillAppInstanceSnapshot, output: string): void {
+  const remaining = (snapshot.staleOutputs ?? []).filter(candidate => candidate !== output);
+  if (remaining.length > 0) snapshot.staleOutputs = remaining;
+  else delete snapshot.staleOutputs;
+}
+
+function validateAttachments(inputs: SkillAppAttachmentInput[]): SkillAppAttachmentInput[] {
+  if (!Array.isArray(inputs)) throw MarifoldError.appInvalid('SkillApp attachments must be an array.');
+  if (inputs.length > 16) throw MarifoldError.appInvalid('SkillApp attachments are limited to 16 files.');
+  let total = 0;
+  let images = 0;
+  return inputs.map((input, index) => {
+    if (!input || typeof input !== 'object') {
+      throw MarifoldError.appInvalid(`SkillApp attachment #${index + 1} must be an object.`);
+    }
+    const name = path.basename(input.name ?? '').replace(/[\u0000-\u001f\u007f]/g, '').trim();
+    if (!name || name === '.' || name === '..') {
+      throw MarifoldError.appInvalid(`SkillApp attachment #${index + 1} needs a valid filename.`);
+    }
+    if (input.kind !== 'image' && input.kind !== 'file') {
+      throw MarifoldError.appInvalid(`SkillApp attachment '${name}' has an invalid kind.`);
+    }
+    if (!input.mediaType || typeof input.mediaType !== 'string') {
+      throw MarifoldError.appInvalid(`SkillApp attachment '${name}' needs a media type.`);
+    }
+    if (input.kind === 'image') {
+      images += 1;
+      if (images > MAX_IMAGES_PER_REQUEST) {
+        throw MarifoldError.appInvalid(`SkillApp attachments are limited to ${MAX_IMAGES_PER_REQUEST} images.`);
+      }
+      if (!input.mediaType.startsWith('image/')) {
+        throw MarifoldError.appInvalid(`SkillApp image '${name}' needs an image media type.`);
+      }
+    }
+    if (typeof input.data !== 'string' || !/^[A-Za-z0-9+/]*={0,2}$/.test(input.data) || input.data.length % 4 === 1) {
+      throw MarifoldError.appInvalid(`SkillApp attachment '${name}' must contain base64 data.`);
+    }
+    const size = Buffer.from(input.data, 'base64').length;
+    if (size === 0 || size !== input.size) {
+      throw MarifoldError.appInvalid(`SkillApp attachment '${name}' has invalid size metadata.`);
+    }
+    total += size;
+    if (total > MAX_RUN_INPUT_BYTES) {
+      throw MarifoldError.appInvalid(`SkillApp attachments exceed ${MAX_RUN_INPUT_BYTES / (1024 * 1024)} MiB.`);
+    }
+    if (input.inspectionText !== undefined
+      && (typeof input.inspectionText !== 'string'
+        || Buffer.byteLength(input.inspectionText, 'utf8') > MAX_RUN_INSPECTION_TEXT_BYTES)) {
+      throw MarifoldError.appInvalid(
+        `SkillApp attachment '${name}' inspection text exceeds ${MAX_RUN_INSPECTION_TEXT_BYTES / 1024} KiB.`,
+      );
+    }
+    return {
+      kind: input.kind,
+      name,
+      mediaType: input.mediaType,
+      size,
+      data: input.data,
+      ...(input.inspectionText !== undefined ? { inspectionText: input.inspectionText } : {}),
+    };
+  });
 }
 
 function operationIsRunnable(

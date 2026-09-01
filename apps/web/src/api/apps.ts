@@ -1,6 +1,7 @@
 import type { ApiClient } from './client';
 import type {
   SkillAppDefinition,
+  SkillAppAttachmentInput,
   SkillAppInstanceSnapshot,
   SkillAppMutationResult,
 } from './types';
@@ -47,6 +48,20 @@ export async function runSkillAppOperation(
   const payload = await client.request<{ ok: true } & SkillAppMutationResult>(
     'POST',
     `/v1/app-instances/${encodeURIComponent(instanceId)}/operations/${encodeURIComponent(operationName)}`,
+  );
+  return payload;
+}
+
+export async function updateSkillAppAttachments(
+  client: ApiClient,
+  instanceId: string,
+  stateName: string,
+  attachments: SkillAppAttachmentInput[],
+): Promise<SkillAppMutationResult> {
+  const payload = await client.request<{ ok: true } & SkillAppMutationResult>(
+    'PUT',
+    `/v1/app-instances/${encodeURIComponent(instanceId)}/attachments/${encodeURIComponent(stateName)}`,
+    { attachments },
   );
   return payload;
 }

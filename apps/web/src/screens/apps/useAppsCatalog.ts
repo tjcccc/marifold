@@ -8,7 +8,6 @@ export interface AppsCatalog {
   apps: SkillAppDefinition[];
   selected?: SkillAppDefinition;
   selectedName?: string;
-  select: (name: string) => void;
   loading: boolean;
   error?: string;
 }
@@ -17,23 +16,21 @@ export interface AppsCatalog {
 export function useAppsCatalog(
   client: ApiClient,
   onUnauthorized: () => void,
+  requestedName?: string,
 ): AppsCatalog {
   const [apps, setApps] = useState<SkillAppDefinition[]>([]);
-  const [selectedName, setSelectedName] = useState<string>();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>();
 
   useEffect(() => {
     let live = true;
     setApps([]);
-    setSelectedName(undefined);
     setError(undefined);
     setLoading(true);
     void listApps(client)
       .then(next => {
         if (!live) return;
         setApps(next);
-        setSelectedName(next[0]?.app.name);
       })
       .catch(reason => {
         if (!live) return;
@@ -49,15 +46,14 @@ export function useAppsCatalog(
   }, [client, onUnauthorized]);
 
   const selected = useMemo(
-    () => apps.find(app => app.app.name === selectedName) ?? apps[0],
-    [apps, selectedName],
+    () => apps.find(app => app.app.name === requestedName) ?? apps[0],
+    [apps, requestedName],
   );
 
   return {
     apps,
     selected,
     selectedName: selected?.app.name,
-    select: setSelectedName,
     loading,
     error,
   };

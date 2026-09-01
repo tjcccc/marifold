@@ -156,5 +156,17 @@ describe('RunWorkspace', () => {
 
     expect(workspace.readOnlyRoots).not.toContain(fs.realpathSync(externalSkills));
     expect(workspace.readRoots).not.toContain(fs.realpathSync(externalSkills));
+
+    const explicitlyGranted = createRunWorkspace({
+      id: 'run_explicit_external_read',
+      cwd,
+      runsDir: path.join(home, '.marifold', 'runs'),
+      userHome: home,
+      readOnlyFolders: [externalSkills],
+      allowExternalReadOnlyFolders: true,
+    });
+    expect(explicitlyGranted.readOnlyRoots).toContain(fs.realpathSync(externalSkills));
+    expect(explicitlyGranted.readRoots).toContain(fs.realpathSync(externalSkills));
+    expect(explicitlyGranted.writeRoots).not.toContain(fs.realpathSync(externalSkills));
   });
 });

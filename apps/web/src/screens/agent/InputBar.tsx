@@ -28,6 +28,8 @@ export interface InputBarProps {
   onRemoveAttachment?: (index: number) => void;
   /** Available skills for the `$` autocomplete (from GET /v1/skills). */
   skills?: SkillHint[];
+  /** Plain Enter submits on desktop; mobile leaves it to the textarea as a line break. */
+  enterSubmits?: boolean;
   onSubmit: (text: string) => void;
   onStop: () => void;
 }
@@ -132,6 +134,9 @@ export function InputBar(props: InputBarProps) {
     // Enter commits an active IME composition. It must never also submit the
     // half-composed text (keyCode 229 covers older WebKit behavior).
     if (composingRef.current || event.nativeEvent.isComposing || event.keyCode === 229) return;
+    // Mobile keyboards expose Enter as the only practical newline control.
+    // Leave its native textarea behavior intact; the send button submits.
+    if (event.key === 'Enter' && props.enterSubmits === false) return;
     if (menuOpen) {
       if (event.key === 'ArrowDown') {
         event.preventDefault();

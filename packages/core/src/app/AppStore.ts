@@ -1,17 +1,28 @@
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import { MarifoldError } from '../errors/MarifoldError';
 import { parseSkill } from '../skill/SkillValidator';
+import type { MarifoldSkill } from '../skill/SkillSchema';
 import { compileSkillApp } from './SkillAppCompiler';
-import type { SkillAppDefinition } from './SkillAppSchema';
+import type { SkillAppDefinition, SkillAppOperationDefinition } from './SkillAppSchema';
 
 const SAFE_APP_NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const SKILL_APP_DEFINITION_FILE = 'skillapp.ts';
 
+export interface AppStoreOptions {
+  /** Resolve exactly as a normal invocation from this profile: profile Skills
+   * shadow global Skills. Runtime wiring also validates that the profile exists. */
+  resolveProfileSkill?: (profile: string, skillName: string) => MarifoldSkill | undefined;
+}
+
 /** Global App bundles under `<appsDir>/<name>/skillapp.ts`. Invalid bundles
  * are skipped by list(); get() reports their exact validation failure. */
 export class AppStore {
-  constructor(private readonly directory: string) {}
+  constructor(
+    private readonly directory: string,
+    private readonly options: AppStoreOptions = {},
+  ) {}
 
   list(): SkillAppDefinition[] {
     if (!fs.existsSync(this.directory)) return [];
@@ -41,7 +52,9 @@ export class AppStore {
         realSource,
       );
     }
+    definition.permissions = resolvePermissions(bundle, definition.permissions ?? [], realSource);
     this.validateLocalSkills(name, definition);
+    this.validateProfileSkills(definition);
     return definition;
   }
 
@@ -63,6 +76,12 @@ export class AppStore {
     return requireConfinedFile(bundle, source, `App-local skill '${skillName}'`);
   }
 
+  requireProfileSkill(profile: string, skillName: string): MarifoldSkill {
+    const skill = this.options.resolveProfileSkill?.(profile, skillName);
+    if (!skill) throw MarifoldError.skillNotFound(skillName);
+    return skill;
+  }
+
   private validateLocalSkills(appName: string, definition: SkillAppDefinition): void {
     for (const registered of definition.skills) {
       const source = this.requireLocalSkillSource(appName, registered.name);
@@ -79,31 +98,132 @@ export class AppStore {
           source,
         );
       }
-      const variables = new Set(skill.variables.map(variable => variable.name));
-      for (const operation of definition.operations.filter(candidate => candidate.skill === registered.name)) {
-        const parameters = new Set(Object.keys(operation.parameters));
-        const unknown = [...parameters].filter(name => !variables.has(name));
-        if (unknown.length > 0) {
-          throw MarifoldError.appInvalid(
-            `SkillApp operation '${operation.name}' supplies unknown Skill parameter(s): ${unknown.join(', ')}.`,
-            source,
-          );
-        }
-        const missing = skill.variables
-          .filter(variable => variable.required && variable.default === undefined && !parameters.has(variable.name))
-          .map(variable => variable.name);
-        if (missing.length > 0) {
-          throw MarifoldError.appInvalid(
-            `SkillApp operation '${operation.name}' does not bind required Skill parameter(s): ${missing.join(', ')}.`,
-            source,
-          );
-        }
-        operation.requiredInputs = [...new Set(skill.variables
-          .filter(variable => variable.required && variable.default === undefined)
-          .map(variable => operation.parameters[variable.name]))];
+      for (const operation of definition.operations.filter(
+        candidate => candidate.profile === undefined && candidate.skill === registered.name,
+      )) {
+        operation.requiredInputs = this.validateOperationBindings(skill, operation, source);
       }
     }
   }
+
+  private validateProfileSkills(definition: SkillAppDefinition): void {
+    for (const operation of definition.operations.filter(candidate => candidate.profile !== undefined)) {
+      const profile = (definition.profiles ?? []).find(candidate => candidate.name === operation.profile);
+      if (!profile) {
+        throw MarifoldError.appInvalid(
+          `SkillApp operation '${operation.name}' references missing profile '${operation.profile}'.`,
+        );
+      }
+      if (!this.options.resolveProfileSkill) {
+        throw MarifoldError.appInvalid(
+          `SkillApp '${definition.app.name}' requires profile-backed Skill resolution.`,
+        );
+      }
+      const skillNames = operation.skill ? [operation.skill] : (operation.skillOptions ?? []);
+      if (skillNames.length === 0) {
+        throw MarifoldError.appInvalid(
+          `SkillApp operation '${operation.name}' has no profile Skill candidates.`,
+        );
+      }
+      const requiredInputs = new Set<string>([
+        ...(operation.skillState ? [operation.skillState] : []),
+        ...(operation.input ? [operation.input] : []),
+      ]);
+      for (const skillName of skillNames) {
+        const skill = this.requireProfileSkill(profile.profile, skillName);
+        for (const input of this.validateOperationBindings(skill, operation, skill.source)) {
+          requiredInputs.add(input);
+        }
+      }
+      operation.requiredInputs = [...requiredInputs];
+    }
+  }
+
+  private validateOperationBindings(
+    skill: MarifoldSkill,
+    operation: SkillAppOperationDefinition,
+    source?: string,
+  ): string[] {
+    const variables = new Set(skill.variables.map(variable => variable.name));
+    const parameters = new Set(Object.keys(operation.parameters));
+    const unknown = [...parameters].filter(name => !variables.has(name));
+    if (unknown.length > 0) {
+      throw MarifoldError.appInvalid(
+        `SkillApp operation '${operation.name}' supplies unknown Skill parameter(s): ${unknown.join(', ')}.`,
+        source,
+      );
+    }
+    const missing = skill.variables
+      .filter(variable => variable.required && variable.default === undefined && !parameters.has(variable.name))
+      .map(variable => variable.name);
+    if (missing.length > 0) {
+      throw MarifoldError.appInvalid(
+        `SkillApp operation '${operation.name}' does not bind required Skill parameter(s): ${missing.join(', ')}.`,
+        source,
+      );
+    }
+    return [...new Set([
+      ...(operation.input ? [operation.input] : []),
+      ...skill.variables
+        .filter(variable => variable.required && variable.default === undefined)
+        .map(variable => operation.parameters[variable.name]),
+    ])];
+  }
+}
+
+function resolvePermissions(
+  bundle: string,
+  permissions: NonNullable<SkillAppDefinition['permissions']>,
+  source: string,
+): NonNullable<SkillAppDefinition['permissions']> {
+  const userHome = fs.realpathSync(os.homedir());
+  const privateAppHome = path.join(userHome, '.marifold');
+  const bundleRoot = fs.realpathSync(bundle);
+  return permissions.map(permission => {
+    const requested = permission.path === '~'
+      ? userHome
+      : permission.path.startsWith('~/')
+        ? path.join(userHome, permission.path.slice(2))
+        : path.isAbsolute(permission.path)
+          ? permission.path
+          : path.join(bundle, permission.path);
+    let resolved: string;
+    let stat: fs.Stats;
+    try {
+      resolved = fs.realpathSync(requested);
+      stat = fs.statSync(resolved);
+    } catch (error) {
+      throw MarifoldError.appInvalid(
+        `Declared ${permission.kind} permission '${permission.path}' cannot be resolved: ${error instanceof Error ? error.message : String(error)}`,
+        source,
+      );
+    }
+    if (permission.kind === 'file' && !stat.isFile()) {
+      throw MarifoldError.appInvalid(`Declared file permission '${permission.path}' is not a regular file.`, source);
+    }
+    if (permission.kind === 'folder' && !stat.isDirectory()) {
+      throw MarifoldError.appInvalid(`Declared folder permission '${permission.path}' is not a directory.`, source);
+    }
+    if (permission.kind === 'folder' && isBroadPermissionRoot(resolved, userHome, privateAppHome)) {
+      throw MarifoldError.appInvalid(`Declared folder permission '${permission.path}' is too broad or sensitive.`, source);
+    }
+    if (isInside(resolved, privateAppHome) && !isInside(resolved, bundleRoot)) {
+      throw MarifoldError.appInvalid(`Declared permission '${permission.path}' cannot expose Marifold private state.`, source);
+    }
+    return { ...permission, path: resolved };
+  });
+}
+
+function isBroadPermissionRoot(target: string, userHome: string, privateAppHome: string): boolean {
+  return target === path.parse(target).root
+    || target === userHome
+    || target === privateAppHome
+    || isInside(privateAppHome, target);
+}
+
+function isInside(target: string, root: string): boolean {
+  const relative = path.relative(root, target);
+  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
 }
 
 function requireConfinedFile(bundle: string, source: string, label: string): string {

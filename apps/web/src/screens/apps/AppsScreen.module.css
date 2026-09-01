@@ -99,6 +99,23 @@
   gap: 12px;
 }
 
+.fieldHeaderActions {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.staleHint {
+  overflow: hidden;
+  color: #d99b20;
+  font-size: 11px;
+  font-weight: 550;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .copyButton {
   padding: 0;
   border: 0;
@@ -134,6 +151,142 @@
   font: inherit;
 }
 
+.fileInput {
+  display: none;
+}
+
+.attachmentZone {
+  position: relative;
+  min-height: 86px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid var(--separator);
+  border-radius: 12px;
+  background: var(--surface-2);
+  transition: border-color 120ms ease, background 120ms ease;
+}
+
+.attachmentZoneActive {
+  border-color: var(--brand-text);
+  background: var(--brand-tint);
+}
+
+.attachmentPicker {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  width: 100%;
+  border: 0;
+  border-radius: inherit;
+  color: var(--text-3);
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.attachmentPicker strong {
+  color: var(--brand-text);
+  font-weight: 650;
+}
+
+.attachmentPicker:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--brand-fill) 45%, transparent);
+  outline-offset: 2px;
+}
+
+.attachmentPicker:disabled {
+  cursor: wait;
+}
+
+.attachmentChips {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.attachmentChip {
+  width: min(250px, calc(100cqw - 112px));
+  min-width: 0;
+  height: 48px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 5px 8px 5px 5px;
+  border: 1px solid var(--separator);
+  border-radius: 10px;
+  color: var(--text-2);
+  background: var(--surface);
+  pointer-events: auto;
+}
+
+.attachmentThumbnail,
+.attachmentFileIcon {
+  width: 36px;
+  height: 36px;
+  flex: none;
+  border-radius: 7px;
+}
+
+.attachmentThumbnail {
+  display: block;
+  object-fit: cover;
+  background: var(--surface-2);
+}
+
+.attachmentFileIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-3);
+  background: var(--surface-2);
+  font-size: 18px;
+}
+
+.attachmentName {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12.5px;
+}
+
+.attachmentRemove {
+  width: 24px;
+  height: 24px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  color: var(--text-3);
+  background: transparent;
+  font: inherit;
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.attachmentRemove:hover {
+  color: var(--text);
+  background: var(--separator-soft);
+}
+
+.attachmentRemove:disabled {
+  cursor: wait;
+  opacity: .55;
+}
+
 .field input,
 .field select {
   height: 42px;
@@ -145,6 +298,15 @@
   padding: 12px 14px;
   line-height: 1.55;
   resize: vertical;
+}
+
+.field .sizedTextarea {
+  min-height: 0;
+}
+
+.field .autoGrowTextarea {
+  overflow-y: hidden;
+  resize: none;
 }
 
 .field input:focus,
@@ -203,6 +365,24 @@
   font: inherit;
   font-weight: 650;
   cursor: pointer;
+}
+
+.fieldAlignedButton {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.fieldLabelSpacer {
+  flex: 0 0 18px;
+}
+
+.fieldAlignedButton > .primaryButton,
+.fieldAlignedButton > .secondaryButton {
+  align-self: stretch;
+  flex: 1 1 auto;
+  height: auto;
 }
 
 .primaryButton:disabled,
@@ -265,8 +445,10 @@
 
 .footerStatus {
   overflow: hidden;
+  color: var(--text-2);
   text-overflow: ellipsis;
   white-space: nowrap;
+  animation: running-pulse 1.2s ease-in-out infinite;
 }
 
 .activityButton,
@@ -369,6 +551,10 @@
   min-width: 0;
 }
 
+.activityBody p {
+  white-space: pre-wrap;
+}
+
 .activityTitleLine {
   display: flex;
   align-items: baseline;
@@ -418,8 +604,14 @@
   to { transform: translateY(0); opacity: 1; }
 }
 
+@keyframes running-pulse {
+  0%, 100% { opacity: .42; }
+  50% { opacity: 1; }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .activityDrawer { animation: none; }
+  .activityDrawer,
+  .footerStatus { animation: none; }
 }
 
 @media (max-width: 760px) {
@@ -459,5 +651,19 @@
 @container (max-width: 620px) {
   .stackResponsive {
     flex-direction: column;
+  }
+
+  .stackResponsive .fieldAlignedButton {
+    height: auto;
+    gap: 0;
+  }
+
+  .stackResponsive .fieldLabelSpacer {
+    display: none;
+  }
+
+  .stackResponsive .fieldAlignedButton > .primaryButton,
+  .stackResponsive .fieldAlignedButton > .secondaryButton {
+    flex: 0 0 44px;
   }
 }

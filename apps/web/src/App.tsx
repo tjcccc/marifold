@@ -140,11 +140,11 @@ export function App() {
     if (switchingServers) {
       const nextAgentRoute = loadLastAgentRoute(connection.id);
       lastAgentRoute.current = nextAgentRoute;
-      settingsReturnRoute.current = route.view === 'apps' ? { view: 'apps' } : nextAgentRoute;
-      navigate(route.view === 'apps' ? { view: 'apps' } : nextAgentRoute);
+      settingsReturnRoute.current = route.view === 'apps' ? route : nextAgentRoute;
+      navigate(route.view === 'apps' ? route : nextAgentRoute);
     }
     return undefined;
-  }, [connections, currentConnection.id, navigate, route.view]);
+  }, [connections, currentConnection.id, navigate, route]);
 
   const onRemoveConnection = useCallback((id: string) => {
     const removingActive = connections.activeId === id;
@@ -193,6 +193,7 @@ export function App() {
           <AgentScreen
             client={client}
             route={route.view === 'agent' ? route : lastAgentRoute.current}
+            appName={route.view === 'apps' ? route.app : undefined}
             navigate={navigate}
             onUnauthorized={onUnauthorized}
             theme={theme}
