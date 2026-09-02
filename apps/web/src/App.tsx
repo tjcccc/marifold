@@ -21,6 +21,7 @@ import { useTheme } from './theme/theme';
 import styles from './App.module.css';
 
 const LAST_AGENT_ROUTE_PREFIX = 'marifold.lastAgentRoute.';
+const LAST_APPS_ROUTE_PREFIX = 'marifold.lastAppsRoute.';
 
 /** Root shell: clean-path desktop views and the service connection. */
 export function App() {
@@ -34,6 +35,9 @@ export function App() {
   const lastAgentRoute = useRef<Extract<Route, { view: 'agent' }>>(
     route.view === 'agent' ? route : loadLastAgentRoute(currentConnection.id),
   );
+  const lastAppsRoute = useRef<Extract<Route, { view: 'apps' }>>(
+    route.view === 'apps' ? route : loadLastAppsRoute(currentConnection.id),
+  );
   const settingsReturnRoute = useRef<Extract<Route, { view: 'agent' | 'apps' }>>(
     route.view === 'apps' ? route : lastAgentRoute.current,
   );
@@ -43,6 +47,16 @@ export function App() {
     lastAgentRoute.current = route;
     try {
       window.sessionStorage.setItem(lastAgentRouteKey(currentConnection.id), JSON.stringify(route));
+    } catch {
+      // In-memory continuity still works when storage is unavailable.
+    }
+  }, [currentConnection.id, route]);
+
+  useEffect(() => {
+    if (route.view !== 'apps') return;
+    lastAppsRoute.current = route;
+    try {
+      window.sessionStorage.setItem(lastAppsRouteKey(currentConnection.id), JSON.stringify(route));
     } catch {
       // In-memory continuity still works when storage is unavailable.
     }
@@ -139,9 +153,11 @@ export function App() {
     setConnectionProblem(undefined);
     if (switchingServers) {
       const nextAgentRoute = loadLastAgentRoute(connection.id);
+      const nextAppsRoute = loadLastAppsRoute(connection.id);
       lastAgentRoute.current = nextAgentRoute;
-      settingsReturnRoute.current = route.view === 'apps' ? route : nextAgentRoute;
-      navigate(route.view === 'apps' ? route : nextAgentRoute);
+      lastAppsRoute.current = nextAppsRoute;
+      settingsReturnRoute.current = route.view === 'apps' ? nextAppsRoute : nextAgentRoute;
+      navigate(route.view === 'apps' ? nextAppsRoute : nextAgentRoute);
     }
     return undefined;
   }, [connections, currentConnection.id, navigate, route]);
@@ -156,6 +172,7 @@ export function App() {
     setConnectionEpoch(epoch => epoch + 1);
     const nextConnection = activeConnection(next);
     const nextRoute = loadLastAgentRoute(nextConnection.id);
+    lastAppsRoute.current = loadLastAppsRoute(nextConnection.id);
     lastAgentRoute.current = nextRoute;
     settingsReturnRoute.current = nextRoute;
     navigate(nextRoute);
@@ -163,7 +180,7 @@ export function App() {
 
   const onWorkspaceViewChange = useCallback((view: WorkspaceView) => {
     if (view === 'agent') navigate(lastAgentRoute.current);
-    else navigate({ view: 'apps' });
+    else navigate(lastAppsRoute.current);
   }, [navigate]);
 
   const onOpenSettings = useCallback(() => {
@@ -187,13 +204,13 @@ export function App() {
             connectionName={currentConnection.name}
             onDone={() => navigate(settingsReturnRoute.current)}
             onOpenAgent={() => navigate(lastAgentRoute.current)}
-            onOpenApps={() => navigate({ view: 'apps' })}
+            onOpenApps={() => navigate(lastAppsRoute.current)}
           />
         ) : (
           <AgentScreen
             client={client}
             route={route.view === 'agent' ? route : lastAgentRoute.current}
-            appName={route.view === 'apps' ? route.app : undefined}
+            appName={route.view === 'apps' ? route.app : lastAppsRoute.current.app}
             navigate={navigate}
             onUnauthorized={onUnauthorized}
             theme={theme}
@@ -241,4 +258,24 @@ function loadLastAgentRoute(connectionId: string): Extract<Route, { view: 'agent
 
 function lastAgentRouteKey(connectionId: string): string {
   return `${LAST_AGENT_ROUTE_PREFIX}${encodeURIComponent(connectionId)}`;
+}
+
+function loadLastAppsRoute(connectionId: string): Extract<Route, { view: 'apps' }> {
+  try {
+    const value = JSON.parse(window.sessionStorage.getItem(lastAppsRouteKey(connectionId)) ?? 'null') as unknown;
+    if (!value || typeof value !== 'object' || !('view' in value) || value.view !== 'apps') {
+      return { view: 'apps' };
+    }
+    const candidate = value as { app?: unknown };
+    return {
+      view: 'apps',
+      ...(typeof candidate.app === 'string' ? { app: candidate.app } : {}),
+    };
+  } catch {
+    return { view: 'apps' };
+  }
+}
+
+function lastAppsRouteKey(connectionId: string): string {
+  return `${LAST_APPS_ROUTE_PREFIX}${encodeURIComponent(connectionId)}`;
 }

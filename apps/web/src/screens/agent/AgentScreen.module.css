@@ -19,6 +19,21 @@
   background: var(--content);
 }
 
+.threadPane[hidden] {
+  display: none;
+}
+
+.appsPane {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+}
+
+.appsPane[hidden] {
+  display: none;
+}
+
 .dropOverlay {
   position: absolute;
   inset: 8px;

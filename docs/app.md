@@ -204,6 +204,81 @@ const translate = useProfileSkill(friend, 'translate', {
 });
 ```
 
+## Interactive operations and the built-in builder
+
+Long-running Agent Skills may pause for model-authored questions or a write
+approval. This lifecycle belongs to the service runtime, not to executable
+template code. A template opts one fixed profile Agent Skill into it with
+`interactive: true`:
+
+```ts
+const idea = State('');
+const result = State('');
+const references = AttachmentState();
+const maker = registerProfile('default', {
+  memory: false,
+  history: false,
+});
+
+const build = useProfileSkill(maker, 'skillapp-builder', {
+  input: idea,
+  attachments: references,
+  output: result,
+  result: TextResult({ trim: true }),
+  interactive: true,
+});
+```
+
+Interactive operations must use a fixed Skill rather than a state-selected
+Skill, must resolve to Agent mode, and may be started only by a button. They
+cannot use `trigger(...)`. One interactive execution is exclusive within an
+App instance. Its renderer-neutral `instance.execution` snapshot moves through
+`running`, `waiting_for_input`, `waiting_for_approval`, and one terminal phase.
+While it is active, renderers disable the ordinary App interface as a single
+global operation state; question, approval, and cancel controls remain active.
+No component-level state binding or `async` function exists in `skillapp.ts`.
+
+The Web renderer presents the existing single- and multiple-question sheets
+inside the App, polls the service-owned snapshot, and can reconnect to an
+active browser-session instance after a reload. Approval offers only **Allow
+once** or **Deny** because an App cannot create a persistent grant.
+
+`skillapp-builder` is a protected built-in Agent Skill. Users may invoke it as
+`$skillapp-builder ...` or simply ask an Agent to make or update a SkillApp;
+the runtime lazily attaches the same path-aware builder guide. It first
+inspects the current App contract, configured App directory, existing Apps,
+profiles, and each profile's effective Skills. It helps turn a rough idea into
+fields, layout, and behavior, batches essential design questions, and then
+submits a complete text bundle to one dedicated write tool. That tool requires
+approval, confines paths to one kebab-case bundle, statically compiles and
+validates the staged App, and installs it atomically. `create` refuses
+collisions; `update` replaces the complete bundle and must have been explicitly
+requested.
+The inspection result includes exact builder signatures, bundle rules, and
+canonical v1/v2 template skeletons; the built-in builder does not receive a
+generic host-file reader when it has no bundled or explicitly permitted files.
+This keeps it from probing existing App folders for examples. Builder runs use
+at most eight model iterations, and three failed validation submissions block
+further installation attempts in that run. A terminal failure reports the
+iteration-cap reason and the most recent builder validation error when present.
+Once installation commits, later cancellation or a provider failure cannot
+roll it back; the execution reports the typed effect as its authoritative
+success even if the Agent never finishes its prose explanation.
+
+This is the one narrow effectful SkillApp path. Ordinary Apps still receive no
+general write, shell, network, delegation, or dynamic permission capability.
+Successful installation adds a typed `app_installed` effect to the operation
+result. Renderers refresh the catalog while keeping the builder App open so its
+final response and Activity result remain visible. The user can open the new
+App from the refreshed catalog; the service rereads bundles and does not need
+to restart.
+
+The builder also receives the exact output-component signatures. It uses
+`Markdown` when generated text should be read as rendered Markdown and may bind
+`Download` to that same output state when the user wants a local file. The
+download is renderer-owned; the Skill returns text and does not write a file or
+invent a link.
+
 ## Restricted TypeScript
 
 The `.ts` extension provides familiar syntax, editor completion, and type
@@ -338,17 +413,20 @@ trigger(translate, {
 `debounce` is milliseconds, defaults to `0`, and is capped at 60 seconds. Current concurrency is always
 `latest`: a new matching change cancels a pending timer or in-flight provider
 request for the same operation, and a stale result cannot overwrite newer
-state. Manual and automatic triggers use the same operation path.
+state. Manual and automatic non-interactive triggers use the same operation
+path.
 
 Each trigger runs exactly one Skill. SkillApp does not support operation
-chaining, branching, loops, or local actions.
+chaining, branching, loops, or local actions. The protected built-in builder
+described above is the only App-specific persistent mutation boundary.
 
 Profile mode does not inherit the profile's Agent permissions or trusted
-folders. Agent-mode profile Skill operations expose attachment-scoped
+folders. Ordinary Agent-mode profile Skill operations expose attachment-scoped
 `inspect_attachment`, `read_attachment`, and `search_attachment`, plus a
 fail-closed `read_file`. Selected Skill bundles, the private run workspace, and
 static App read declarations are the only readable host resources. Write,
-shell, network, and delegation tools are not exposed.
+shell, network, and delegation tools are not exposed except for the builder's
+dedicated approve-once installation tool described above.
 
 Static host reads belong directly in `skillapp.ts`:
 
@@ -373,8 +451,8 @@ API definitions.
 
 The attachment picker is an ephemeral per-instance upload grant, not a host
 path selector and not a persistent permission. Dynamic filesystem grants and
-effectful tool declarations remain future work; they do not need a second App
-configuration file.
+general effectful tool declarations remain future work; they do not need a
+second App configuration file.
 
 ## Structured result contract
 
@@ -410,6 +488,18 @@ Failures use the same envelope:
 }
 ```
 
+The protected builder may additionally return a renderer-neutral typed effect:
+
+```json
+{
+  "kind": "app_installed",
+  "appName": "writing-studio",
+  "title": "Writing Studio",
+  "action": "created",
+  "files": ["skillapp.ts"]
+}
+```
+
 The model is not required to emit JSON or XML tags. A future result adapter can
 normalize JSON, lists, files, or images while preserving this outer contract.
 Natural-language warnings authored by a Skill currently remain ordinary text
@@ -429,6 +519,8 @@ Both schemas currently support:
 - form: `Textarea(label, state, options)` and
   `Select(label, state, { options, ... })`;
 - resource: `Attachments(label, attachmentState, options)`;
+- output: `Markdown(label, state, options)` and
+  `Download(label, state, { filename, ... })`;
 - action: `Button(label, { trigger, emphasis })`.
 
 Form components always require a non-empty label. `showLabel: false` hides the
@@ -445,12 +537,46 @@ image thumbnails plus ellipsized filenames, generic file chips for other
 formats, and per-item removal. The Web renderer reuses the same file limits,
 image optimization, and Office readable-view preparation as Agent chat.
 
+`Markdown` is an explicit read-only presentation of a text state; renderers do
+not guess the format from model prose. It is copyable and offers a
+preview/source toggle by default. `copyable: false` or `sourceToggle: false`
+removes either action, and `placeholder` controls its empty state.
+
+`Download` serializes its bound text state in the renderer. Before that state
+contains text, renderers show a neutral empty state instead of presenting the
+declared filename as an existing file. It requires one static safe `filename`
+without path separators and accepts optional
+`mediaType`, `description`, `showLabel`, and `grow`. `mediaType` defaults to
+`text/plain;charset=utf-8`; Markdown output should normally use
+`text/markdown;charset=utf-8`. Multiple output components may bind the same
+state, so an App can render an article with `Markdown` and download the exact
+same value with `Download` without filesystem access:
+
+```ts
+Column([
+  Markdown('Article preview', result),
+  Download('Download article', result, {
+    filename: 'short-article.md',
+    mediaType: 'text/markdown;charset=utf-8',
+  }),
+])
+```
+
+Each `Download` represents one text file whose name is fixed by the template.
+An App may declare several components for several static text downloads, with
+each bound to the appropriate state. Per-run filenames, dynamic file
+collections, and binary formats such as PDF, DOCX, ZIP, and PNG require a
+future runtime-owned artifact contract and are not represented by `Download`.
+
 The renderer owns app chrome rather than the template. The Web renderer keeps
-the app version and an **Activity** control in a footer fixed to the bottom of
-the App workspace. Activity opens a bottom drawer for completed runs, genuine
-warnings and errors, response time, and token usage. Expected idle states such
-as a missing required input do not create Activity entries. Native renderers
-should preserve the same distinction even when their chrome differs.
+the app version plus **Reset** and **Activity** controls in a footer fixed to the
+bottom of the App workspace. Reset creates a fresh instance before releasing
+the previous one, then clears form state, outputs, attachments, and Activity;
+it is disabled during updates and operations. Activity opens a bottom drawer
+for completed runs, genuine warnings and errors, response time, and token
+usage. Expected idle states such as a missing required input do not create
+Activity entries. Native renderers should preserve the same distinction even
+when their chrome differs.
 
 ## Service and native-renderer contract
 
@@ -462,16 +588,27 @@ Catalog routes return normalized `marifold.skillapp.v1` or
 | `GET /v1/apps` | List normalized definitions |
 | `GET /v1/apps/:name` | Read one normalized definition |
 | `POST /v1/apps/:name/instances` | Create ephemeral App state |
+| `GET /v1/app-instances/:id` | Read current state and interactive execution snapshot |
 | `PATCH /v1/app-instances/:id/state` | Apply user state and matching automatic triggers |
 | `PUT /v1/app-instances/:id/attachments/:state` | Replace one attachment-state slot with bounded base64 uploads |
 | `POST /v1/app-instances/:id/operations/:operation` | Run a button-bound operation |
+| `POST /v1/app-instances/:id/executions/:executionId/input` | Resume a waiting run with normalized question answers |
+| `POST /v1/app-instances/:id/executions/:executionId/approval` | Resume with `once` or `deny` |
+| `POST /v1/app-instances/:id/executions/:executionId/cancel` | Cancel an active interactive run |
 | `DELETE /v1/app-instances/:id` | Cancel work and release the instance |
 
-The instance mutation response contains `status` (`idle`, `completed`, or
-`superseded`), the complete state snapshot, and optional `operation`, `reason`,
-and structured Skill result fields. This JSON is the middle layer shared by
-Web, SwiftUI, and other future renderers. Idle instances expire after 30
-minutes; renderers should also delete them when their App view closes.
+The instance mutation response contains `status` (`idle`, `running`,
+`completed`, or `superseded`), the complete state snapshot, and optional
+`operation`, `reason`, and structured Skill result fields. Interactive
+completion is recorded under `instance.execution.result`; a successful text
+result also updates the declared output state. This JSON is the middle layer
+shared by Web, SwiftUI, and other future renderers. Instances expire after 30
+minutes without access. The Web renderer keeps browser-session instance IDs so
+inputs, outputs, and terminal results survive App navigation, while expired or
+missing instances safely reopen from their declared initial state.
 The Web workspace gives the active App a bookmarkable clean path such as
 `/apps/painers-room`; selecting another App updates browser history and
-Back/Forward restores the selection.
+Back/Forward restores the selection. Switching from Apps to Agent keeps the App
+renderer mounted so live polling, questions, approvals, attachments, and local
+form state continue; switching back restores the previous App route rather than
+opening the first catalog item.

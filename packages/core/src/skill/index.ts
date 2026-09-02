@@ -4,6 +4,7 @@ export {
 } from './SkillSchema';
 export type { MarifoldSkill, SkillMode, SkillVariable } from './SkillSchema';
 export { getBuiltInSkill, isBuiltInSkillName, listBuiltInSkills } from './BuiltInSkills';
+export { buildSkillAppBuilderGuide, mentionsSkillApps } from './BuiltInSkillAppBuilder';
 export { parseSkill, validateSkill } from './SkillValidator';
 export { renderSkillPrompt, resolveSkillValues } from './SkillTemplater';
 export type { SkillRenderResult } from './SkillTemplater';

@@ -321,6 +321,13 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
     return { ok: true, instance };
   });
 
+  server.get<{
+    Params: { id: string };
+  }>('/v1/app-instances/:id', async request => ({
+    ok: true,
+    instance: skillAppInstances.get(request.params.id),
+  }));
+
   server.patch<{
     Params: { id: string };
   }>('/v1/app-instances/:id/state', async request => {
@@ -353,6 +360,42 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
   }>('/v1/app-instances/:id/operations/:operation', async request => ({
     ok: true,
     ...(await skillAppInstances.run(request.params.id, request.params.operation)),
+  }));
+
+  server.post<{
+    Params: { id: string; executionId: string };
+  }>('/v1/app-instances/:id/executions/:executionId/input', async request => ({
+    ok: true,
+    instance: skillAppInstances.answerUserInput(
+      request.params.id,
+      request.params.executionId,
+      objectBody(request.body),
+    ),
+  }));
+
+  server.post<{
+    Params: { id: string; executionId: string };
+  }>('/v1/app-instances/:id/executions/:executionId/approval', async request => {
+    const body = objectBody(request.body);
+    const action = requiredString(body.action, 'action');
+    if (action !== 'once' && action !== 'deny') {
+      throw MarifoldError.configInvalid('SkillApp approval action must be "once" or "deny".');
+    }
+    return {
+      ok: true,
+      instance: skillAppInstances.answerApproval(
+        request.params.id,
+        request.params.executionId,
+        action,
+      ),
+    };
+  });
+
+  server.post<{
+    Params: { id: string; executionId: string };
+  }>('/v1/app-instances/:id/executions/:executionId/cancel', async request => ({
+    ok: true,
+    instance: skillAppInstances.cancelExecution(request.params.id, request.params.executionId),
   }));
 
   server.delete<{

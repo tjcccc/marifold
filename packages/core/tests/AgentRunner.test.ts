@@ -516,6 +516,57 @@ describe('AgentRunner', () => {
     expect(skillEngine.requests[0].tools?.map(tool => tool.name)).toEqual(['read_file', 'manage_skill']);
   });
 
+  it('advertises only the dedicated SkillApp authoring tools to the builder', async () => {
+    const engine = new ScriptedEngine([response({ text: 'Done.' })]);
+    const runner = makeRunner(engine, [
+      fakeTool(),
+      fakeTool({ name: 'manage_skill', kind: 'write' }),
+      fakeTool({ name: 'inspect_skill_apps', kind: 'read' }),
+      fakeTool({ name: 'manage_skill_app', kind: 'write' }),
+      fakeTool({ name: 'write_file', kind: 'write' }),
+      fakeTool({ name: 'shell_exec', kind: 'shell' }),
+      fakeTool({ name: 'delegate', kind: 'delegate' }),
+    ]).runner;
+
+    await collect(runner.run({
+      objective: 'make an App',
+      lean: true,
+      instructions: ['Call inspect_skill_apps, then manage_skill_app after design.'],
+    }));
+
+    expect(engine.requests[0].tools?.map(tool => tool.name)).toEqual([
+      'read_file',
+      'inspect_skill_apps',
+      'manage_skill_app',
+    ]);
+  });
+
+  it('rejects a model call to a registered tool that was not advertised', async () => {
+    const execute = vi.fn(async () => ({ content: 'should not run' }));
+    const engine = new ScriptedEngine([
+      response({
+        toolCalls: [{ id: 'hidden_1', name: 'manage_skill_app', arguments: {} }],
+      }),
+      response({ text: 'Done.' }),
+    ]);
+    const runner = makeRunner(engine, [
+      fakeTool(),
+      fakeTool({ name: 'manage_skill_app', kind: 'write', execute }),
+    ]).runner;
+
+    const events = await collect(runner.run({
+      objective: 'Answer normally.',
+      instructions: ['ordinary guidance'],
+    }));
+
+    expect(execute).not.toHaveBeenCalled();
+    expect(events).toContainEqual(expect.objectContaining({
+      type: 'tool_result',
+      tool: 'manage_skill_app',
+      isError: true,
+    }));
+  });
+
   it('caps NON-lean history to the last N turns when session_context_turns is set', async () => {
     const engine = new ScriptedEngine([response({ text: 'Saved.' })]);
     const registry = new ToolRegistry();

@@ -281,9 +281,13 @@ and submit typed values only:
 | `GET /v1/apps` | `{ apps: SkillAppDefinition[] }`, sorted by display title. Invalid local definitions are skipped so one bad bundle does not break the catalog. Static host permission paths are omitted |
 | `GET /v1/apps/:name` | `{ app: SkillAppDefinition }` with host permission paths omitted; 404 `APP_NOT_FOUND` |
 | `POST /v1/apps/:name/instances` | Create ephemeral state for a `marifold.skillapp.v1` or `.v2` definition |
+| `GET /v1/app-instances/:id` | Read the complete instance snapshot, including service-owned interactive execution state |
 | `PATCH /v1/app-instances/:id/state` | Update editable state and run matching declarative triggers |
 | `PUT /v1/app-instances/:id/attachments/:state` | Replace one declared attachment slot. Body: `{ attachments: [{ kind, name, mediaType, size, data, inspectionText? }] }`; `data` is base64, snapshots return metadata only |
 | `POST /v1/app-instances/:id/operations/:operation` | Run one button-bound Skill operation |
+| `POST /v1/app-instances/:id/executions/:executionId/input` | Answer the current single/multiple question request with a normalized `UserInputSubmission` |
+| `POST /v1/app-instances/:id/executions/:executionId/approval` | Answer the current approval with `{ action: "once" | "deny" }` |
+| `POST /v1/app-instances/:id/executions/:executionId/cancel` | Abort an active interactive operation |
 | `DELETE /v1/app-instances/:id` | Cancel work and release an instance |
 
 For both schemas, the server loads and statically compiles
@@ -300,15 +304,23 @@ read-only run workspace.
 A v2 operation may expose `skillState` plus a static `skillOptions` allowlist;
 the bound `Select` values must match that list, and state updates cannot select
 an undeclared Skill.
+An operation with `interactive: true` instead names one fixed profile Agent
+Skill and cannot have an automatic trigger. Starting it returns
+`status: "running"`; `instance.execution` then exposes `running`,
+`waiting_for_input`, `waiting_for_approval`, and terminal phases. Only one such
+run may own an instance at a time, so ordinary state, attachment, and operation
+mutations fail while it is active. Question and approval payloads reuse the
+same renderer-neutral contracts as live Agent runs.
 An instance begins with the declared `State(...)` values. A state update body is:
 
 ```json
 { "values": { "source": "早上好", "targetLanguage": "English" } }
 ```
 
-The mutation response has `status: "idle" | "completed" | "superseded"`, a
-complete instance/state snapshot, optional `operation` and `reason` fields, and
-an optional normalized Skill result:
+The mutation response has
+`status: "idle" | "running" | "completed" | "superseded"`, a complete
+instance/state snapshot, optional `operation` and `reason` fields, and an
+optional normalized Skill result:
 
 ```json
 {

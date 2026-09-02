@@ -13,9 +13,12 @@ import { ShellExecTool } from '../src/agent/tools/ShellExecTool';
 import { WebSearchTool } from '../src/agent/tools/WebSearchTool';
 import { isInsideWorkspace, WriteFileTool } from '../src/agent/tools/WriteFileTool';
 import { SkillManagementTool } from '../src/agent/tools/SkillManagementTool';
+import { SkillAppContextTool, SkillAppManagementTool } from '../src/agent/tools/SkillAppTools';
+import { AppStore } from '../src/app/AppStore';
 import { createRunWorkspace } from '../src/agent/RunWorkspace';
 import { capToolOutput, ToolExecutionContext, ToolRegistry } from '../src/agent/ToolRegistry';
 import { SkillStore } from '../src/skill/SkillStore';
+import { getBuiltInSkill } from '../src/skill/BuiltInSkills';
 import {
   ensurePythonEnvironment,
   findExecutable,
@@ -93,12 +96,154 @@ describe('ToolRegistry', () => {
         listProfileNames: () => [],
       }),
       skillManagementTool(),
+      new SkillAppContextTool({
+        activeProfile: 'writer',
+        appsDir: '/tmp/apps',
+        listApps: () => [],
+        listProfiles: () => [],
+        listSkills: () => [],
+      }),
+      new SkillAppManagementTool({
+        appsDir: '/tmp/apps',
+        createStore: appsDir => new AppStore(appsDir),
+      }),
     ];
 
     for (const tool of tools) {
       expect(tool.definition.description, tool.definition.name).toContain('When to use:');
       expect(tool.definition.description, tool.definition.name).toContain('When NOT to use:');
     }
+  });
+});
+
+describe('SkillAppContextTool', () => {
+  it('reports the exact Markdown and Download authoring contract', async () => {
+    const tool = new SkillAppContextTool({
+      activeProfile: 'writer',
+      appsDir: '/tmp/apps',
+      listApps: () => [],
+      listProfiles: () => [],
+      listSkills: () => [],
+    });
+    const result = JSON.parse((await tool.execute()).content) as {
+      contract: {
+        outputs: string[];
+        constraints: string[];
+        templates: { v1: string; v1Skill: string; v2: string };
+        bundle: { v1: string[]; v2: string[] };
+      };
+    };
+
+    expect(result.contract.outputs).toEqual([
+      'Markdown(label, state, { showLabel?, grow?, copyable?, sourceToggle?, placeholder? })',
+      'Download(label, state, { filename, mediaType?, description?, showLabel?, grow? })',
+    ]);
+    expect(result.contract.constraints).toContain(
+      'Markdown and Download may bind the same text output State; Download creates the file in the renderer without filesystem access',
+    );
+    expect(result.contract.constraints).toContain(
+      'each Download is one text file with a static filename; multiple components make multiple static downloads, while binary files, per-run filenames, and dynamic file collections are unsupported',
+    );
+    expect(result.contract.templates.v1).toContain("registerModel('provider/model'");
+    expect(result.contract.templates.v1).toContain("Download('Download result', result");
+    expect(result.contract.templates.v1Skill).toContain('{{request}}');
+    expect(result.contract.templates.v2).toContain("registerProfile('profile-name'");
+    expect(result.contract.bundle.v1).toContain('include skills/<skill-name>/SKILL.md whose frontmatter name matches registerSkill');
+    expect(result.contract.bundle.v2).toContain('do not copy the profile Skill into the App bundle');
+  });
+});
+
+describe('SkillAppManagementTool', () => {
+  it('statically validates and atomically creates an interactive App bundle', async () => {
+    const root = tempDir();
+    const appsDir = path.join(root, 'apps');
+    const effects: Array<{ appName: string; action: string }> = [];
+    const tool = new SkillAppManagementTool({
+      appsDir,
+      createStore: directory => new AppStore(directory, {
+        resolveProfileSkill: (_profile, skillName) => getBuiltInSkill(skillName),
+      }),
+      onInstalled: effect => effects.push(effect),
+    });
+    const source = `
+      import { App, Button, Row, State, Textarea, TextResult, defineSkillApp, registerProfile, useProfileSkill } from '@marifold/core';
+      const idea = State('');
+      const result = State('');
+      const assistant = registerProfile('default', { memory: false, history: false });
+      const build = useProfileSkill(assistant, 'skillapp-builder', {
+        input: idea,
+        output: result,
+        result: TextResult({ trim: true }),
+        interactive: true,
+      });
+      export default defineSkillApp({
+        app: { name: 'app-studio', title: 'App Studio' },
+        ui: App([
+          Row([Textarea('Idea', idea)]),
+          Row([Button('Build', { trigger: build })]),
+          Row([Textarea('Result', result, { editable: false, copyable: true })]),
+        ]),
+      });
+    `;
+
+    const created = await tool.execute({
+      action: 'create',
+      name: 'app-studio',
+      files: [{ path: 'skillapp.ts', content: source }],
+    }, context(root));
+
+    expect(created.isError, created.content).toBeFalsy();
+    expect(created.content).toContain('does not need a restart');
+    expect(fs.readFileSync(path.join(appsDir, 'app-studio', 'skillapp.ts'), 'utf8')).toBe(source);
+    expect(effects).toEqual([expect.objectContaining({ appName: 'app-studio', action: 'created' })]);
+    expect(fs.readdirSync(appsDir).filter(name => name.startsWith('.skillapp-'))).toEqual([]);
+
+    const collision = await tool.execute({
+      action: 'create',
+      name: 'app-studio',
+      files: [{ path: 'skillapp.ts', content: source }],
+    }, context(root));
+    expect(collision.isError).toBe(true);
+    expect(collision.content).toContain('already exists');
+
+    fs.writeFileSync(path.join(appsDir, 'app-studio', 'obsolete.txt'), 'remove me');
+    const updatedSource = source.replace("title: 'App Studio'", "title: 'App Studio 2'");
+    const updated = await tool.execute({
+      action: 'update',
+      name: 'app-studio',
+      files: [{ path: 'skillapp.ts', content: updatedSource }],
+    }, context(root));
+    expect(updated.isError, updated.content).toBeFalsy();
+    expect(fs.readFileSync(path.join(appsDir, 'app-studio', 'skillapp.ts'), 'utf8')).toBe(updatedSource);
+    expect(fs.existsSync(path.join(appsDir, 'app-studio', 'obsolete.txt'))).toBe(false);
+    expect(effects.at(-1)).toMatchObject({ appName: 'app-studio', action: 'updated' });
+    expect(fs.readdirSync(appsDir).filter(name => name.startsWith('.skillapp-'))).toEqual([]);
+  });
+
+  it('blocks a runaway builder after three invalid installation attempts', async () => {
+    const root = tempDir();
+    const appsDir = path.join(root, 'apps');
+    const tool = new SkillAppManagementTool({
+      appsDir,
+      createStore: directory => new AppStore(directory),
+    });
+    const invalid = {
+      action: 'create',
+      name: 'broken-app',
+      files: [{ path: 'skillapp.ts', content: 'not a SkillApp' }],
+    };
+
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const result = await tool.execute(invalid, context(root));
+      expect(result.isError).toBe(true);
+      expect(result.summary).toContain('SkillApp validation failed:');
+    }
+    expect(tool.assessRisk(invalid, context(root))).toMatchObject({
+      blocked: true,
+      escalate: false,
+      persistable: false,
+      reason: expect.stringContaining('three SkillApp validation attempts failed'),
+    });
   });
 });
 
