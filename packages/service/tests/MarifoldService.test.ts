@@ -61,6 +61,27 @@ describe('MarifoldService', () => {
         name: 'skill-creator',
         usage: '$skill-creator [request]',
       });
+      expect(skills.find(skill => skill.name === 'skillapp-builder')).toMatchObject({
+        name: 'skillapp-builder',
+        usage: '$skillapp-builder [request]',
+      });
+
+      const creator = await server.inject({
+        method: 'POST',
+        url: '/v1/skills/resolve',
+        payload: {
+          profile: 'default',
+          invocation: '$skill-creator create a skill that teaches users about SkillApps',
+        },
+      });
+      expect(creator.statusCode).toBe(200);
+      expect(creator.json()).toMatchObject({
+        ok: true,
+        invocation: {
+          name: 'skill-creator',
+          prompt: 'create a skill that teaches users about SkillApps',
+        },
+      });
     } finally {
       await server.close();
     }
@@ -115,6 +136,11 @@ describe('MarifoldService', () => {
       });
       expect(created.statusCode).toBe(201);
       const instanceId = created.json().instance.id as string;
+      const reopened = await server.inject({ method: 'GET', url: `/v1/app-instances/${instanceId}` });
+      expect(reopened.json()).toMatchObject({
+        ok: true,
+        instance: { id: instanceId, appName: 'translator' },
+      });
 
       const changed = await server.inject({
         method: 'PATCH',

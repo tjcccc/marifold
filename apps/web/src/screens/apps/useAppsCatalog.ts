@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { listApps } from '../../api/apps';
 import type { ApiClient } from '../../api/client';
 import { MarifoldApiError } from '../../api/client';
@@ -10,6 +10,7 @@ export interface AppsCatalog {
   selectedName?: string;
   loading: boolean;
   error?: string;
+  refresh: () => Promise<void>;
 }
 
 /** Persistent App catalog state shared by the Apps sidebar and canvas. */
@@ -21,6 +22,19 @@ export function useAppsCatalog(
   const [apps, setApps] = useState<SkillAppDefinition[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>();
+
+  const refresh = useCallback(async (): Promise<void> => {
+    setError(undefined);
+    setLoading(true);
+    try {
+      setApps(await listApps(client));
+    } catch (reason) {
+      if (reason instanceof MarifoldApiError && reason.code === 'UNAUTHORIZED') onUnauthorized();
+      setError(reason instanceof Error ? reason.message : String(reason));
+    } finally {
+      setLoading(false);
+    }
+  }, [client, onUnauthorized]);
 
   useEffect(() => {
     let live = true;
@@ -56,5 +70,6 @@ export function useAppsCatalog(
     selectedName: selected?.app.name,
     loading,
     error,
+    refresh,
   };
 }

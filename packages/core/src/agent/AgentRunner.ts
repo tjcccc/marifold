@@ -461,9 +461,12 @@ export class AgentRunner {
           state.transcript.push(`Assistant reply:\n${text || '(tool calls only)'}`);
         }
 
+        const availableToolNames = new Set(
+          this.toolDefinitions(webSearchMode, runOptions.instructions).map(tool => tool.name),
+        );
         for (const call of calls) {
           this.assertNotAborted(options.signal);
-          yield* this.executeCall(task.id, call, options, state, toolContext);
+          yield* this.executeCall(task.id, call, runOptions, state, toolContext, availableToolNames);
         }
       }
 
@@ -510,10 +513,11 @@ export class AgentRunner {
     options: AgentRunOptions,
     state: LoopState,
     toolContext: ToolExecutionContext,
+    availableToolNames: ReadonlySet<string>,
   ): AsyncGenerator<AgentEvent, void, unknown> {
     const tool = this.deps.registry.get(call.name);
-    if (!tool) {
-      const message = `Unknown tool '${call.name}'. Available tools: ${this.deps.registry.list().map(t => t.definition.name).join(', ')}.`;
+    if (!tool || !availableToolNames.has(call.name)) {
+      const message = `Unknown or unavailable tool '${call.name}'. Available tools: ${[...availableToolNames].join(', ')}.`;
       yield { type: 'tool_result', callId: call.id, tool: call.name, summary: `unknown tool '${call.name}'`, isError: true };
       this.recordToolResult(taskId, state, call, message, true, `unknown tool '${call.name}'`);
       return;
@@ -856,10 +860,22 @@ export class AgentRunner {
   }
 
   private toolDefinitions(webSearchMode: MarifoldWebSearchMode, instructions?: string[]) {
-    const exposeSkillManagement = instructions?.some(instruction => instruction.includes('manage_skill')) ?? false;
-    const definitions = this.deps.registry.definitions().filter(
-      tool => tool.name !== 'manage_skill' || exposeSkillManagement,
+    const mentionsTool = (name: string): boolean => instructions?.some(instruction =>
+      new RegExp(`(^|[^A-Za-z0-9_])${name}([^A-Za-z0-9_]|$)`).test(instruction)) ?? false;
+    const exposeSkillManagement = mentionsTool('manage_skill');
+    const exposeSkillAppContext = mentionsTool('inspect_skill_apps');
+    const exposeSkillAppManagement = mentionsTool('manage_skill_app');
+    const tools = this.deps.registry.list().filter(
+      tool => (tool.definition.name !== 'manage_skill' || exposeSkillManagement)
+        && (tool.definition.name !== 'inspect_skill_apps' || exposeSkillAppContext)
+        && (tool.definition.name !== 'manage_skill_app' || exposeSkillAppManagement),
     );
+    const definitions = tools
+      .filter(tool => !exposeSkillAppManagement
+        || tool.kind === 'read'
+        || tool.kind === 'interaction'
+        || tool.definition.name === 'manage_skill_app')
+      .map(tool => tool.definition);
     return webSearchMode === 'fallback'
       ? definitions
       : definitions.filter(tool => tool.name !== 'web_search');

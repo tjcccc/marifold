@@ -1,4 +1,6 @@
 import type { UsageInfo } from '@priest-ai/core';
+import type { ApprovalRequest } from '../agent/ApprovalPolicy';
+import type { UserInputRequest } from '../agent/UserInput';
 
 export const SKILL_APP_SCHEMA = 'marifold.skillapp.v1';
 export const SKILL_APP_PROFILE_SCHEMA = 'marifold.skillapp.v2';
@@ -103,6 +105,8 @@ export interface SkillAppOperationDefinition {
   output: string;
   /** v2 profile Skills declare their result adapter on the operation. */
   result?: SkillAppTextResultDefinition;
+  /** Run this profile Agent Skill through the resumable interaction lifecycle. */
+  interactive?: boolean;
   execution: SkillAppExecution;
 }
 
@@ -119,6 +123,8 @@ export type SkillAppComponent =
   | 'column'
   | 'spacer'
   | 'textarea'
+  | 'markdown'
+  | 'download'
   | 'select'
   | 'attachments'
   | 'button';
@@ -142,8 +148,12 @@ export interface SkillAppLayoutItem {
   copyable?: boolean;
   rows?: number;
   autoGrow?: boolean;
+  sourceToggle?: boolean;
   alignToField?: boolean;
   placeholder?: string;
+  filename?: string;
+  mediaType?: string;
+  description?: string;
   emphasis?: SkillAppButtonEmphasis;
   options?: Array<string | SkillAppSelectOption>;
 }
@@ -181,6 +191,7 @@ export interface SkillAppSuccessResult {
   status: 'ok';
   data: { text: string };
   meta: SkillAppResultMeta;
+  effects?: SkillAppEffect[];
 }
 
 export interface SkillAppErrorResult {
@@ -190,6 +201,41 @@ export interface SkillAppErrorResult {
 
 export type SkillAppResult = SkillAppSuccessResult | SkillAppErrorResult;
 
+export interface SkillAppInstalledEffect {
+  kind: 'app_installed';
+  appName: string;
+  title: string;
+  action: 'created' | 'updated';
+  files: string[];
+}
+
+export type SkillAppEffect = SkillAppInstalledEffect;
+
+export type SkillAppExecutionPhase =
+  | 'running'
+  | 'waiting_for_input'
+  | 'waiting_for_approval'
+  | 'completed'
+  | 'failed'
+  | 'cancelled';
+
+/** Service-owned lifecycle for one exclusive interactive operation. Template
+ * authors never declare or bind this state; every renderer applies it. */
+export interface SkillAppExecutionSnapshot {
+  id: string;
+  operation: string;
+  phase: SkillAppExecutionPhase;
+  startedAt: string;
+  finishedAt?: string;
+  cancellable: boolean;
+  userInput?: UserInputRequest;
+  approval?: ApprovalRequest;
+  /** Persistent effects already committed before the Agent finishes its final
+   * explanation. Cancellation cannot roll these back. */
+  committedEffects?: SkillAppEffect[];
+  result?: SkillAppResult;
+}
+
 export interface SkillAppInstanceSnapshot {
   id: string;
   appName: string;
@@ -198,6 +244,7 @@ export interface SkillAppInstanceSnapshot {
    * of inputs. Renderers preserve the value and identify it as stale. */
   staleOutputs?: string[];
   attachments?: Record<string, SkillAppAttachmentSummary[]>;
+  execution?: SkillAppExecutionSnapshot;
 }
 
 export interface SkillAppAttachmentSummary {
@@ -213,7 +260,7 @@ export interface SkillAppAttachmentInput extends SkillAppAttachmentSummary {
   inspectionText?: string;
 }
 
-export type SkillAppMutationStatus = 'idle' | 'completed' | 'superseded';
+export type SkillAppMutationStatus = 'idle' | 'running' | 'completed' | 'superseded';
 export type SkillAppMutationReason = 'missing_required_input';
 
 export interface SkillAppMutationResult {

@@ -59,7 +59,7 @@ The service defaults to loopback. Explicit non-loopback binds accept only direct
 - `apps/web` contains the browser UI — a second renderer of the same contracts the TUI renders. All data flows over the service HTTP API; `src/api/types.ts` is the only file that may import from `@marifold/core`, and only with `import type`.
 - Raw provider `api_key` values never cross the wire: service routes expose env-var names and boolean presence flags only; key values are edited via the CLI or config file.
 - marifold is permanently a personal, single-owner BYOK/BYO-auth agent. Remote access connects that owner's devices; never add multi-tenant accounts, credential pooling, subscription/API relays, quota resale, or public-internet service exposure.
-- Preserve the documented SkillApp v1/v2 static compiler and capability boundary. Host paths require explicit static read declarations and stay server-only. Do not add effectful App actions, dynamic persistent grants, Workflow, Apple apps, external-agent aliases, or provider-owned model deletion until that area is explicitly in scope.
+- Preserve the documented SkillApp v1/v2 static compiler and capability boundary. Host paths require explicit static read declarations and stay server-only. The protected built-in SkillApp builder is the sole App-specific persistent mutation: it uses a dedicated approve-once tool to validate and atomically install one complete bundle. Do not add other effectful App actions, dynamic persistent grants, Workflow, Apple apps, external-agent aliases, or provider-owned model deletion until that area is explicitly in scope.
 
 ## Versioning
 

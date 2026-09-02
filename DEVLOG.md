@@ -2,6 +2,54 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-09-02 — v0.67.0 — Interactive SkillApp builder
+
+- Added the protected built-in `skillapp-builder`, with version-matched
+  inspection of the active App directory, existing Apps, profiles, effective
+  Skills, components, and static template rules.
+- Clarified the `$skill-creator` boundary without keyword-based runtime
+  rejection: it distinguishes the requested deliverable, so ordinary Skills may
+  validly explain, support, or be invoked by SkillApps while actual App creation
+  is directed to `$skillapp-builder`.
+- Added one approve-once `manage_skill_app` boundary that confines generated
+  text paths, validates a complete staged bundle through the static compiler,
+  refuses implicit collision updates, and installs create/update results
+  atomically without a service restart. A committed installation remains the
+  authoritative success if the Agent is cancelled or fails afterward.
+- Added exclusive service-owned interactive App executions with Agent questions,
+  approval, cancellation, terminal results, and typed `app_installed` effects.
+  `skillapp.ts` remains declarative and contains no executable async functions.
+- Added Web global operation locking, inline single/multiple-question and
+  approval sheets, polling and browser-session reconnection, Activity results,
+  plus automatic catalog refresh after a successful installation. The builder
+  remains open so its final response is visible instead of jumping to the new App.
+- Kept the selected App renderer mounted while viewing Agent, remembered the
+  last App route per server, and retained inactive as well as running instance
+  IDs for browser-session restoration. The hidden renderer keeps receiving that
+  selected App even in a multi-App catalog, so Agent/App switching preserves
+  form content and running Activity without a warning.
+- Kept text and select controls focused during ordinary asynchronous state
+  persistence while retaining the global lock for interactive Agent execution.
+- Added a footer Reset action immediately before Activity. It creates the fresh
+  instance before retiring the old one, clears form/output/attachment/Activity
+  state, and stays disabled while any update or operation is active.
+- Added explicit `Markdown` preview/source and renderer-owned `Download`
+  components. Both can bind one text output state, and the download uses a
+  validated static filename and media type without filesystem access. Empty
+  download states no longer present that filename as an existing file, and the
+  builder now states the text-only, static-name, one-file-per-component limit.
+- Taught `skillapp-builder` when and how to pair those output components and to
+  keep file creation out of the model Skill response.
+- Fixed a real builder run that exhausted 20 iterations after probing denied
+  App paths and submitting 11 invalid bundles: inspection now supplies complete
+  canonical v1/v2 skeletons and bundle rules, unused generic readers are not
+  advertised, builder runs are bounded to eight iterations and three failed
+  installations, and terminal errors retain the cap plus last validation cause.
+- Added compiler, runtime, tool, service, and Web regressions. Verified the full
+  workspace typecheck/build/test gate (738 tests: core 376, service 62, TUI 60,
+  CLI 28, Web 212), plus a real multi-App Chromium Agent → Apps round trip
+  preserving the selected route, App input, and attached Activity state.
+
 ## 2026-09-01 — v0.66.0 — Profile-backed SkillApps
 
 - Added the additive `marifold.skillapp.v2` contract with statically compiled

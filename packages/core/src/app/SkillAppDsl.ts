@@ -69,6 +69,7 @@ export interface OperationReference {
   readonly parameters: Record<string, StateReference>;
   readonly output: StateReference;
   readonly result?: TextResultReference;
+  readonly interactive?: boolean;
 }
 
 export interface ComponentReference {
@@ -169,6 +170,8 @@ export function useProfileSkill(
     parameters?: Record<string, StateReference>;
     output: StateReference;
     result: TextResultReference;
+    /** Use the renderer-neutral interactive Agent lifecycle for this operation. */
+    interactive?: boolean;
   },
 ): OperationReference {
   return {
@@ -182,6 +185,7 @@ export function useProfileSkill(
     parameters: options.parameters ?? {},
     output: options.output,
     result: options.result,
+    ...(options.interactive !== undefined ? { interactive: options.interactive } : {}),
   };
 }
 
@@ -234,6 +238,34 @@ export function Textarea(
   } = {},
 ): ComponentReference {
   return component('textarea', undefined, { label, state }, options);
+}
+
+export function Markdown(
+  label: string,
+  state: StateReference,
+  options: {
+    showLabel?: boolean;
+    grow?: boolean;
+    copyable?: boolean;
+    sourceToggle?: boolean;
+    placeholder?: string;
+  } = {},
+): ComponentReference {
+  return component('markdown', undefined, { label, state }, options);
+}
+
+export function Download(
+  label: string,
+  state: StateReference,
+  options: {
+    filename: string;
+    mediaType?: string;
+    description?: string;
+    showLabel?: boolean;
+    grow?: boolean;
+  },
+): ComponentReference {
+  return component('download', undefined, { label, state }, options);
 }
 
 export function Select(

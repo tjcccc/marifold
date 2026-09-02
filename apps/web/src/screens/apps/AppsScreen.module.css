@@ -21,6 +21,55 @@
   margin-inline: auto;
 }
 
+.executionPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-top: 4px;
+}
+
+.executionStatus {
+  min-height: 42px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border: 1px solid var(--separator);
+  border-radius: 12px;
+  color: var(--text-2);
+  background: var(--surface-2);
+  font-size: 13px;
+}
+
+.executionSpinner {
+  width: 13px;
+  height: 13px;
+  flex: none;
+  border: 2px solid color-mix(in srgb, var(--text-3) 35%, transparent);
+  border-top-color: var(--brand-text);
+  border-radius: 50%;
+  animation: executionSpin 900ms linear infinite;
+}
+
+.executionCancel {
+  margin-left: auto;
+  padding: 5px 9px;
+  border: 0;
+  color: var(--text-3);
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+
+@keyframes executionSpin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .executionSpinner { animation: none; }
+}
+
 .header {
   padding: 42px 0 24px;
   border-bottom: 1px solid var(--separator);
@@ -124,6 +173,11 @@
   font: inherit;
   font-size: 12px;
   cursor: pointer;
+}
+
+.copyButton:disabled {
+  cursor: not-allowed;
+  opacity: .5;
 }
 
 .visuallyHidden {
@@ -339,6 +393,100 @@
   font-size: 13px;
 }
 
+.markdownPreview {
+  min-height: 220px;
+  box-sizing: border-box;
+  padding: 14px 16px;
+  border: 1px solid var(--separator);
+  border-radius: 10px;
+  color: var(--text);
+  background: var(--surface-2);
+  overflow-wrap: anywhere;
+}
+
+.markdownPreview pre {
+  margin: 0;
+  white-space: pre-wrap;
+  font: 13px/1.6 var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+}
+
+.downloadZone {
+  min-height: 72px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 11px 12px;
+  border: 1px solid var(--separator);
+  border-radius: 12px;
+  color: var(--text-2);
+  background: var(--surface-2);
+}
+
+.downloadEmpty {
+  color: var(--text-3);
+  font-size: 13px;
+}
+
+.downloadFileIcon {
+  width: 42px;
+  height: 42px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px;
+  color: var(--brand-text);
+  background: var(--surface);
+  font-size: 20px;
+}
+
+.downloadDetails {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.downloadName {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.downloadDescription {
+  color: var(--text-3);
+  font-size: 12px;
+}
+
+.downloadButton {
+  min-width: 92px;
+  height: 36px;
+  padding: 0 13px;
+  border: 1px solid var(--separator);
+  border-radius: 9px;
+  color: var(--text);
+  background: var(--surface);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.downloadButton:hover:not(:disabled),
+.downloadButton:focus-visible {
+  border-color: var(--brand-text);
+}
+
+.downloadButton:disabled {
+  cursor: not-allowed;
+  opacity: .5;
+}
+
 .primaryButton {
   align-self: flex-start;
   min-width: 112px;
@@ -451,7 +599,7 @@
   animation: running-pulse 1.2s ease-in-out infinite;
 }
 
-.activityButton,
+.footerButton,
 .activityActions button {
   padding: 4px 8px;
   border: 0;
@@ -463,10 +611,15 @@
   cursor: pointer;
 }
 
-.activityButton:hover,
+.footerButton:hover:not(:disabled),
 .activityActions button:hover {
   color: var(--text);
   background: var(--separator-soft);
+}
+
+.footerButton:disabled {
+  cursor: not-allowed;
+  opacity: .45;
 }
 
 .activityButtonError {

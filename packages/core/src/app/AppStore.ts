@@ -131,6 +131,18 @@ export class AppStore {
       ]);
       for (const skillName of skillNames) {
         const skill = this.requireProfileSkill(profile.profile, skillName);
+        if (operation.interactive && skill.mode === 'chat') {
+          throw MarifoldError.appInvalid(
+            `Interactive SkillApp operation '${operation.name}' cannot invoke chat-mode Skill '${skillName}'.`,
+            skill.source,
+          );
+        }
+        if (skillName === 'skillapp-builder' && !operation.interactive) {
+          throw MarifoldError.appInvalid(
+            `SkillApp operation '${operation.name}' must invoke the built-in skillapp-builder interactively.`,
+            skill.source,
+          );
+        }
         for (const input of this.validateOperationBindings(skill, operation, skill.source)) {
           requiredInputs.add(input);
         }

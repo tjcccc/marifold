@@ -2,8 +2,12 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { ApiClient } from '../../api/client';
 import { MarifoldApiError } from '../../api/client';
 import {
+  answerSkillAppApproval,
+  answerSkillAppInput,
+  cancelSkillAppExecution,
   createSkillAppInstance,
   deleteSkillAppInstance,
+  getSkillAppInstance,
   runSkillAppOperation,
   updateSkillAppAttachments,
   updateSkillAppState,
@@ -12,11 +16,17 @@ import type {
   AgentUsage,
   SkillAppAttachmentInput,
   SkillAppDefinition,
+  SkillAppExecutionSnapshot,
+  SkillAppInstanceSnapshot,
   SkillAppLayoutItem,
   SkillAppMutationResult,
+  UserInputSubmission,
 } from '../../api/types';
 import type { PreparedAttachment } from '../../lib/attachments';
 import { fileToBase64, prepareFiles } from '../../lib/attachments';
+import { Markdown as MarkdownView } from '../../components/Markdown';
+import { ApprovalSheet } from '../agent/ApprovalSheet';
+import { QuestionSheet } from '../agent/QuestionSheet';
 import styles from './AppsScreen.module.css';
 
 export interface AppsScreenProps {
@@ -26,6 +36,7 @@ export interface AppsScreenProps {
   loading?: boolean;
   loadError?: string;
   onBusyChange?: (busy: boolean) => void;
+  onAppInstalled?: () => void | Promise<void>;
 }
 
 interface RunMetrics {
@@ -53,12 +64,14 @@ export function AppsScreen({
   loading = false,
   loadError,
   onBusyChange = ignoreBusyChange,
+  onAppInstalled,
 }: AppsScreenProps) {
   const [values, setValues] = useState<Record<string, string>>(() => app ? initialValues(app) : {});
   const [attachments, setAttachments] = useState<Record<string, PreparedAttachment[]>>({});
   const [staleOutputs, setStaleOutputs] = useState<Set<string>>(new Set());
   const [pending, setPending] = useState(0);
   const [runningOperation, setRunningOperation] = useState<string>();
+  const [execution, setExecution] = useState<SkillAppExecutionSnapshot>();
   const [activity, setActivity] = useState<ActivityEntry[]>([]);
   const [activityOpen, setActivityOpen] = useState(false);
   const instanceRef = useRef<string | undefined>(undefined);
@@ -68,11 +81,12 @@ export function AppsScreen({
   const mutationVersion = useRef(0);
   const appEpoch = useRef(0);
   const activityId = useRef(0);
+  const handledExecutions = useRef(new Set<string>());
 
   useEffect(() => {
     const epoch = ++appEpoch.current;
     let live = true;
-    let createdId: string | undefined;
+    let openedId: string | undefined;
     const initial = app ? initialValues(app) : {};
     instanceRef.current = undefined;
     valuesRef.current = initial;
@@ -84,6 +98,8 @@ export function AppsScreen({
     setActivity([]);
     setActivityOpen(false);
     setRunningOperation(undefined);
+    setExecution(undefined);
+    handledExecutions.current.clear();
 
     if (!app) {
       setPending(0);
@@ -92,16 +108,17 @@ export function AppsScreen({
       };
     }
 
+    const storageKey = skillAppInstanceStorageKey(client, app.app.name);
     setPending(1);
-    void createSkillAppInstance(client, app.app.name)
+    void openSkillAppInstance(client, app.app.name, storageKey)
       .then(instance => {
-        createdId = instance.id;
-        if (!live) return deleteSkillAppInstance(client, instance.id);
+        openedId = instance.id;
+        if (!live) {
+          storeInstance(storageKey, instance.id);
+          return;
+        }
         instanceRef.current = instance.id;
-        valuesRef.current = instance.state;
-        staleOutputsRef.current = new Set(instance.staleOutputs ?? []);
-        setValues(instance.state);
-        setStaleOutputs(new Set(instance.staleOutputs ?? []));
+        applyInstanceSnapshot(instance);
       })
       .catch(reason => {
         if (!live) return;
@@ -117,14 +134,17 @@ export function AppsScreen({
       if (appEpoch.current === epoch) appEpoch.current += 1;
       mutationVersion.current += 1;
       instanceRef.current = undefined;
-      if (createdId) void deleteSkillAppInstance(client, createdId).catch(() => {});
+      if (openedId) storeInstance(storageKey, openedId);
     };
   }, [app, client, onUnauthorized]);
 
+  const executionActive = isExecutionActive(execution);
+  const interfaceBusy = pending > 0 || executionActive;
+
   useEffect(() => {
-    onBusyChange(pending > 0);
+    onBusyChange(interfaceBusy);
     return () => onBusyChange(false);
-  }, [onBusyChange, pending]);
+  }, [interfaceBusy, onBusyChange]);
 
   useEffect(() => {
     if (!activityOpen) return;
@@ -134,6 +154,33 @@ export function AppsScreen({
     document.addEventListener('keydown', closeOnEscape);
     return () => document.removeEventListener('keydown', closeOnEscape);
   }, [activityOpen]);
+
+  useEffect(() => {
+    const instanceId = instanceRef.current;
+    if (!instanceId || !executionActive || !execution) return;
+    let live = true;
+    let timer: number | undefined;
+    const poll = async (): Promise<void> => {
+      try {
+        const snapshot = await getSkillAppInstance(client, instanceId);
+        if (!live) return;
+        applyInstanceSnapshot(snapshot);
+        if (isExecutionActive(snapshot.execution)) {
+          timer = window.setTimeout(() => void poll(), 400);
+        }
+      } catch (reason) {
+        if (!live) return;
+        if (reason instanceof MarifoldApiError && reason.code === 'UNAUTHORIZED') onUnauthorized();
+        appendActivity('error', 'Could not follow App operation', errorMessage(reason));
+        setActivityOpen(true);
+      }
+    };
+    timer = window.setTimeout(() => void poll(), 250);
+    return () => {
+      live = false;
+      if (timer !== undefined) window.clearTimeout(timer);
+    };
+  }, [client, execution?.id, execution?.phase, executionActive, onUnauthorized]);
 
   function appendActivity(
     tone: ActivityTone,
@@ -150,6 +197,54 @@ export function AppsScreen({
       ...(metrics ? { metrics } : {}),
     };
     setActivity(current => [...current, entry]);
+  }
+
+  function applyInstanceSnapshot(snapshot: SkillAppInstanceSnapshot): void {
+    valuesRef.current = snapshot.state;
+    staleOutputsRef.current = new Set(snapshot.staleOutputs ?? []);
+    setValues(snapshot.state);
+    setStaleOutputs(new Set(snapshot.staleOutputs ?? []));
+    setExecution(snapshot.execution);
+    if (app) {
+      const storageKey = skillAppInstanceStorageKey(client, app.app.name);
+      storeInstance(storageKey, snapshot.id);
+    }
+    const terminal = snapshot.execution;
+    if (!terminal || isExecutionActive(terminal) || handledExecutions.current.has(terminal.id)) return;
+    handledExecutions.current.add(terminal.id);
+    setRunningOperation(undefined);
+    const label = humanize(terminal.operation);
+    if (terminal.phase === 'cancelled') {
+      appendActivity('warning', `${label} cancelled`);
+      return;
+    }
+    if (terminal.result?.status === 'error' || terminal.phase === 'failed') {
+      appendActivity(
+        'error',
+        `${label} failed`,
+        terminal.result?.status === 'error' ? terminal.result.error.message : 'The operation failed.',
+      );
+      setActivityOpen(true);
+      return;
+    }
+    if (terminal.result?.status === 'ok') {
+      appendActivity('success', `${label} completed`, undefined, {
+        latencyMs: terminal.result.meta.durationMs,
+        ...(terminal.result.meta.usage?.totalTokens !== undefined
+          ? { usage: { totalTokens: terminal.result.meta.usage.totalTokens } }
+          : {}),
+      });
+      for (const effect of terminal.result.effects ?? []) {
+        if (effect.kind === 'app_installed') {
+          appendActivity(
+            'success',
+            `${effect.title} ${effect.action}`,
+            `${effect.files.length} validated ${effect.files.length === 1 ? 'file' : 'files'} · no service restart required`,
+          );
+          void onAppInstalled?.();
+        }
+      }
+    }
   }
 
   function setValue(name: string, value: string): void {
@@ -195,8 +290,81 @@ export function AppsScreen({
       .catch(reason => handleError(reason, version, `${label} failed`))
       .finally(() => {
         if (epoch === appEpoch.current) setPending(current => Math.max(0, current - 1));
-        if (version === mutationVersion.current) setRunningOperation(undefined);
+        if (!operation.interactive && version === mutationVersion.current) setRunningOperation(undefined);
       });
+  }
+
+  async function submitExecutionInput(submission: UserInputSubmission): Promise<void> {
+    const instanceId = instanceRef.current;
+    if (!instanceId || !execution?.userInput) return;
+    setPending(current => current + 1);
+    try {
+      applyInstanceSnapshot(await answerSkillAppInput(client, instanceId, execution.id, submission));
+    } catch (reason) {
+      appendActivity('error', 'Could not submit answers', errorMessage(reason));
+      setActivityOpen(true);
+    } finally {
+      setPending(current => Math.max(0, current - 1));
+    }
+  }
+
+  async function answerExecutionApproval(action: 'once' | 'deny'): Promise<void> {
+    const instanceId = instanceRef.current;
+    if (!instanceId || !execution?.approval) return;
+    setPending(current => current + 1);
+    try {
+      applyInstanceSnapshot(await answerSkillAppApproval(client, instanceId, execution.id, action));
+    } catch (reason) {
+      appendActivity('error', 'Could not submit approval', errorMessage(reason));
+      setActivityOpen(true);
+    } finally {
+      setPending(current => Math.max(0, current - 1));
+    }
+  }
+
+  async function cancelExecution(): Promise<void> {
+    const instanceId = instanceRef.current;
+    if (!instanceId || !execution || !isExecutionActive(execution)) return;
+    setPending(current => current + 1);
+    try {
+      applyInstanceSnapshot(await cancelSkillAppExecution(client, instanceId, execution.id));
+    } catch (reason) {
+      appendActivity('error', 'Could not cancel operation', errorMessage(reason));
+      setActivityOpen(true);
+    } finally {
+      setPending(current => Math.max(0, current - 1));
+    }
+  }
+
+  async function resetApp(): Promise<void> {
+    if (!app || interfaceBusy) return;
+    const previousId = instanceRef.current;
+    const epoch = appEpoch.current;
+    setPending(current => current + 1);
+    try {
+      const fresh = await createSkillAppInstance(client, app.app.name);
+      if (epoch !== appEpoch.current) {
+        storeInstance(skillAppInstanceStorageKey(client, app.app.name), fresh.id);
+        return;
+      }
+      instanceRef.current = fresh.id;
+      attachmentsRef.current = {};
+      setAttachments({});
+      handledExecutions.current.clear();
+      setRunningOperation(undefined);
+      setActivity([]);
+      setActivityOpen(false);
+      applyInstanceSnapshot(fresh);
+      if (previousId && previousId !== fresh.id) {
+        void deleteSkillAppInstance(client, previousId).catch(() => {});
+      }
+    } catch (reason) {
+      if (reason instanceof MarifoldApiError && reason.code === 'UNAUTHORIZED') onUnauthorized();
+      appendActivity('error', 'Could not reset app', errorMessage(reason));
+      setActivityOpen(true);
+    } finally {
+      if (epoch === appEpoch.current) setPending(current => Math.max(0, current - 1));
+    }
   }
 
   async function addAttachments(stateName: string, files: File[]): Promise<void> {
@@ -281,11 +449,9 @@ export function AppsScreen({
 
   function applyMutation(result: SkillAppMutationResult, version: number): void {
     if (version !== mutationVersion.current || result.status === 'superseded') return;
-    valuesRef.current = result.instance.state;
-    staleOutputsRef.current = new Set(result.instance.staleOutputs ?? []);
-    setValues(result.instance.state);
-    setStaleOutputs(new Set(result.instance.staleOutputs ?? []));
+    applyInstanceSnapshot(result.instance);
     if (result.reason === 'missing_required_input') return;
+    if (result.status === 'running') return;
 
     const label = humanize(result.operation ?? runningOperation ?? 'operation');
     if (result.result?.status === 'error') {
@@ -343,9 +509,10 @@ export function AppsScreen({
           {app.layout.map((item, index) => (
             <SkillLayoutItem
               app={app}
-              busy={pending > 0}
+              busy={interfaceBusy}
               item={item}
               key={`${item.component}-${index}`}
+              locked={executionActive}
               onOperation={run}
               attachments={attachments}
               onAttachFiles={(name, files) => void addAttachments(name, files)}
@@ -357,6 +524,39 @@ export function AppsScreen({
               values={values}
             />
           ))}
+          {executionActive && execution ? (
+            <section className={styles.executionPanel} aria-label="Interactive App operation">
+              <div className={styles.executionStatus} role="status">
+                <span className={styles.executionSpinner} aria-hidden />
+                <span>{executionStatus(execution)}</span>
+                <button
+                  className={styles.executionCancel}
+                  disabled={pending > 0}
+                  onClick={() => void cancelExecution()}
+                  type="button"
+                >
+                  Cancel
+                </button>
+              </div>
+              {execution.approval ? (
+                <ApprovalSheet
+                  request={execution.approval}
+                  busy={pending > 0}
+                  onAnswer={action => {
+                    if (action === 'once' || action === 'deny') void answerExecutionApproval(action);
+                  }}
+                />
+              ) : null}
+              {execution.userInput ? (
+                <QuestionSheet
+                  key={execution.userInput.id}
+                  request={execution.userInput}
+                  busy={pending > 0}
+                  onSubmit={submission => void submitExecutionInput(submission)}
+                />
+              ) : null}
+            </section>
+          ) : null}
         </div>
       </div>
 
@@ -399,15 +599,25 @@ export function AppsScreen({
       <footer className={styles.appFooter}>
         <span>{app.app.version ? `v${app.app.version}` : app.app.name}</span>
         <span className={styles.footerActions}>
-          {pending > 0 ? (
+          {interfaceBusy ? (
             <span className={styles.footerStatus} role="status">
-              {runningOperation ? `Running ${humanize(runningOperation)}…` : 'Updating…'}
+              {executionActive && execution
+                ? executionStatus(execution)
+                : runningOperation ? `Running ${humanize(runningOperation)}…` : 'Updating…'}
             </span>
           ) : null}
           <button
+            className={styles.footerButton}
+            disabled={interfaceBusy || instanceRef.current === undefined}
+            onClick={() => void resetApp()}
+            type="button"
+          >
+            Reset
+          </button>
+          <button
             aria-controls="skillapp-activity"
             aria-expanded={activityOpen}
-            className={`${styles.activityButton} ${hasErrors ? styles.activityButtonError : ''}`}
+            className={`${styles.footerButton} ${hasErrors ? styles.activityButtonError : ''}`}
             onClick={() => setActivityOpen(open => !open)}
             type="button"
           >
@@ -424,6 +634,7 @@ function SkillLayoutItem({
   attachments,
   busy,
   item,
+  locked,
   onAttachFiles,
   onOperation,
   onChange,
@@ -437,6 +648,7 @@ function SkillLayoutItem({
   attachments: Record<string, PreparedAttachment[]>;
   busy: boolean;
   item: SkillAppLayoutItem;
+  locked: boolean;
   onAttachFiles: (name: string, files: File[]) => void;
   onOperation: (name: string) => void;
   onChange: (name: string, value: string) => void;
@@ -464,6 +676,7 @@ function SkillLayoutItem({
                 attachments,
                 busy,
                 item: child,
+                locked,
                 onAttachFiles,
                 onOperation,
                 onChange,
@@ -512,7 +725,7 @@ function SkillLayoutItem({
     return (
       <label className={styles.field}>
         {fieldLabel}
-        <select disabled={!ready} onChange={event => onChange(item.bind!, event.target.value)} value={value}>
+        <select disabled={locked || !ready} onChange={event => onChange(item.bind!, event.target.value)} value={value}>
           {item.options?.map(option => {
             const choice = typeof option === 'string' ? { label: option, value: option } : option;
             return <option key={choice.value} value={choice.value}>{choice.label}</option>;
@@ -524,10 +737,23 @@ function SkillLayoutItem({
   if (item.component === 'textarea') {
     return (
       <SkillTextarea
-        {...{ item, onChange, path, ready, value }}
+        {...{ item, locked, onChange, path, ready, value }}
         stale={staleOutputs.has(item.bind) && Boolean(value.trim())}
       />
     );
+  }
+  if (item.component === 'markdown') {
+    return (
+      <SkillMarkdown
+        item={item}
+        locked={locked}
+        stale={staleOutputs.has(item.bind) && Boolean(value.trim())}
+        value={value}
+      />
+    );
+  }
+  if (item.component === 'download') {
+    return <SkillDownload item={item} locked={locked} value={value} />;
   }
   if (item.component === 'attachments') {
     return (
@@ -647,8 +873,105 @@ function SkillAttachments({
   );
 }
 
+function SkillMarkdown({
+  item,
+  locked,
+  stale,
+  value,
+}: {
+  item: SkillAppLayoutItem;
+  locked: boolean;
+  stale: boolean;
+  value: string;
+}) {
+  const [showSource, setShowSource] = useState(false);
+  return (
+    <section className={styles.field} aria-label={item.label}>
+      <span className={styles.fieldHeader}>
+        <span className={item.showLabel === false ? styles.visuallyHidden : styles.label}>{item.label}</span>
+        <span className={styles.fieldHeaderActions}>
+          {stale ? (
+            <span aria-label="Based on previous inputs" className={styles.staleHint} role="status">
+              Based on previous inputs
+            </span>
+          ) : null}
+          {item.sourceToggle ? (
+            <button
+              className={styles.copyButton}
+              disabled={locked}
+              onClick={() => setShowSource(current => !current)}
+              type="button"
+            >
+              {showSource ? 'View preview' : 'View source'}
+            </button>
+          ) : null}
+          {item.copyable ? (
+            <button
+              className={styles.copyButton}
+              disabled={locked || !value}
+              onClick={() => void navigator.clipboard?.writeText(value)}
+              type="button"
+            >
+              Copy
+            </button>
+          ) : null}
+        </span>
+      </span>
+      <div className={styles.markdownPreview}>
+        {value ? (
+          showSource ? <pre>{value}</pre> : <MarkdownView source={value} />
+        ) : (
+          <span className={styles.previewEmpty}>{item.placeholder ?? 'Markdown output will appear here'}</span>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function SkillDownload({
+  item,
+  locked,
+  value,
+}: {
+  item: SkillAppLayoutItem;
+  locked: boolean;
+  value: string;
+}) {
+  const filename = item.filename ?? 'download.txt';
+  const mediaType = item.mediaType ?? 'text/plain;charset=utf-8';
+  return (
+    <section className={styles.field} aria-label={item.label}>
+      <span className={item.showLabel === false ? styles.visuallyHidden : styles.label}>{item.label}</span>
+      <div className={styles.downloadZone} aria-live="polite">
+        {value ? (
+          <>
+            <span aria-hidden className={styles.downloadFileIcon}>⇩</span>
+            <span className={styles.downloadDetails}>
+              <span className={styles.downloadName} title={filename}>{filename}</span>
+              <span className={styles.downloadDescription}>
+                {item.description ?? describeDownload(mediaType)} · {formatBytes(new Blob([value]).size)}
+              </span>
+            </span>
+            <button
+              className={styles.downloadButton}
+              disabled={locked}
+              onClick={() => downloadText(value, filename, mediaType)}
+              type="button"
+            >
+              Download
+            </button>
+          </>
+        ) : (
+          <span className={styles.downloadEmpty}>A downloadable file will appear when content is ready.</span>
+        )}
+      </div>
+    </section>
+  );
+}
+
 function SkillTextarea({
   item,
+  locked,
   onChange,
   path,
   ready,
@@ -656,6 +979,7 @@ function SkillTextarea({
   value,
 }: {
   item: SkillAppLayoutItem;
+  locked: boolean;
   onChange: (name: string, value: string) => void;
   path: string;
   ready: boolean;
@@ -698,7 +1022,7 @@ function SkillTextarea({
       <textarea
         className={`${item.rows ? styles.sizedTextarea : ''} ${item.autoGrow ? styles.autoGrowTextarea : ''}`}
         id={inputId}
-        disabled={!ready}
+        disabled={locked || !ready}
         onChange={event => item.bind && onChange(item.bind, event.target.value)}
         placeholder={item.placeholder}
         readOnly={item.editable === false}
@@ -708,6 +1032,32 @@ function SkillTextarea({
       />
     </div>
   );
+}
+
+function downloadText(value: string, filename: string, mediaType: string): void {
+  const url = URL.createObjectURL(new Blob([value], { type: mediaType }));
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.hidden = true;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function describeDownload(mediaType: string): string {
+  const normalized = mediaType.toLowerCase();
+  if (normalized.startsWith('text/markdown')) return 'Markdown document';
+  if (normalized.startsWith('application/json')) return 'JSON document';
+  if (normalized.startsWith('text/csv')) return 'CSV document';
+  return 'Text document';
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KiB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MiB`;
 }
 
 function WorkspaceEmptyState({ title, detail }: { title: string; detail: string }) {
@@ -758,6 +1108,69 @@ async function attachmentInputs(attachments: PreparedAttachment[]): Promise<Skil
 
 function isOperationRunnable(requiredInputs: string[], values: Record<string, string>): boolean {
   return requiredInputs.every(name => (values[name] ?? '').trim().length > 0);
+}
+
+function isExecutionActive(execution: SkillAppExecutionSnapshot | undefined): boolean {
+  return execution?.phase === 'running'
+    || execution?.phase === 'waiting_for_input'
+    || execution?.phase === 'waiting_for_approval';
+}
+
+async function openSkillAppInstance(
+  client: ApiClient,
+  appName: string,
+  storageKey: string,
+): Promise<SkillAppInstanceSnapshot> {
+  const storedId = readStoredInstance(storageKey);
+  if (storedId) {
+    try {
+      const snapshot = await getSkillAppInstance(client, storedId);
+      if (snapshot.appName === appName) return snapshot;
+    } catch (error) {
+      if (!(error instanceof MarifoldApiError) || error.code !== 'APP_NOT_FOUND') throw error;
+    }
+    removeStoredInstance(storageKey);
+  }
+  return createSkillAppInstance(client, appName);
+}
+
+function skillAppInstanceStorageKey(client: ApiClient, appName: string): string {
+  return `marifold.skillapp.instance:${encodeURIComponent(client.baseUrl || 'same-origin')}:${appName}`;
+}
+
+function readStoredInstance(key: string): string | undefined {
+  try {
+    return window.sessionStorage.getItem(key) ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function storeInstance(key: string, instanceId: string): void {
+  try {
+    window.sessionStorage.setItem(key, instanceId);
+  } catch {
+    // Resuming is a convenience; the service-owned run remains authoritative.
+  }
+}
+
+function removeStoredInstance(key: string): void {
+  try {
+    window.sessionStorage.removeItem(key);
+  } catch {
+    // Ignore unavailable browser storage.
+  }
+}
+
+function executionStatus(execution: SkillAppExecutionSnapshot): string {
+  switch (execution.phase) {
+    case 'waiting_for_input':
+      return 'Waiting for your answers';
+    case 'waiting_for_approval':
+      return 'Waiting for your approval';
+    default:
+      return `Running ${humanize(execution.operation)}…`;
+  }
 }
 
 function operationInputStates(operation: SkillAppDefinition['operations'][number]): string[] {

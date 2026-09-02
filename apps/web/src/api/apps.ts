@@ -1,9 +1,11 @@
 import type { ApiClient } from './client';
 import type {
+  RunApprovalAction,
   SkillAppDefinition,
   SkillAppAttachmentInput,
   SkillAppInstanceSnapshot,
   SkillAppMutationResult,
+  UserInputSubmission,
 } from './types';
 
 export async function listApps(
@@ -23,6 +25,17 @@ export async function createSkillAppInstance(
   const payload = await client.request<{ ok: true; instance: SkillAppInstanceSnapshot }>(
     'POST',
     `/v1/apps/${encodeURIComponent(appName)}/instances`,
+  );
+  return payload.instance;
+}
+
+export async function getSkillAppInstance(
+  client: ApiClient,
+  instanceId: string,
+): Promise<SkillAppInstanceSnapshot> {
+  const payload = await client.request<{ ok: true; instance: SkillAppInstanceSnapshot }>(
+    'GET',
+    `/v1/app-instances/${encodeURIComponent(instanceId)}`,
   );
   return payload.instance;
 }
@@ -71,4 +84,44 @@ export async function deleteSkillAppInstance(
   instanceId: string,
 ): Promise<void> {
   await client.request('DELETE', `/v1/app-instances/${encodeURIComponent(instanceId)}`);
+}
+
+export async function answerSkillAppInput(
+  client: ApiClient,
+  instanceId: string,
+  executionId: string,
+  submission: UserInputSubmission,
+): Promise<SkillAppInstanceSnapshot> {
+  const payload = await client.request<{ ok: true; instance: SkillAppInstanceSnapshot }>(
+    'POST',
+    `/v1/app-instances/${encodeURIComponent(instanceId)}/executions/${encodeURIComponent(executionId)}/input`,
+    submission,
+  );
+  return payload.instance;
+}
+
+export async function answerSkillAppApproval(
+  client: ApiClient,
+  instanceId: string,
+  executionId: string,
+  action: Extract<RunApprovalAction, 'once' | 'deny'>,
+): Promise<SkillAppInstanceSnapshot> {
+  const payload = await client.request<{ ok: true; instance: SkillAppInstanceSnapshot }>(
+    'POST',
+    `/v1/app-instances/${encodeURIComponent(instanceId)}/executions/${encodeURIComponent(executionId)}/approval`,
+    { action },
+  );
+  return payload.instance;
+}
+
+export async function cancelSkillAppExecution(
+  client: ApiClient,
+  instanceId: string,
+  executionId: string,
+): Promise<SkillAppInstanceSnapshot> {
+  const payload = await client.request<{ ok: true; instance: SkillAppInstanceSnapshot }>(
+    'POST',
+    `/v1/app-instances/${encodeURIComponent(instanceId)}/executions/${encodeURIComponent(executionId)}/cancel`,
+  );
+  return payload.instance;
 }

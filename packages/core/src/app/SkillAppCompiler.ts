@@ -22,9 +22,11 @@ const SAFE_LOCAL_NAME = /^[a-zA-Z][a-zA-Z0-9_]*$/;
 const SAFE_SKILL_NAME = /^[a-z0-9][a-z0-9_-]*$/;
 const SAFE_PROVIDER_NAME = /^[a-z0-9][a-z0-9_-]*$/;
 const SAFE_PROFILE_NAME = /^[A-Za-z0-9_-]+$/;
+const SAFE_DOWNLOAD_FILENAME = /^[^/\\\u0000-\u001f\u007f]{1,255}$/;
+const SAFE_DOWNLOAD_MEDIA_TYPE = /^[a-z0-9][a-z0-9!#$&^_.+-]*\/[a-z0-9][a-z0-9!#$&^_.+-]*(?:\s*;\s*charset=[a-z0-9._-]+)?$/i;
 const ALLOWED_BUILDERS = new Set([
-  'App', 'AttachmentState', 'Attachments', 'Button', 'Column', 'FileAccess',
-  'FolderAccess', 'Row', 'Select', 'Spacer', 'State', 'Textarea',
+  'App', 'AttachmentState', 'Attachments', 'Button', 'Column', 'Download', 'FileAccess',
+  'FolderAccess', 'Markdown', 'Row', 'Select', 'Spacer', 'State', 'Textarea',
   'TextResult', 'defineSkillApp', 'registerModel', 'registerProfile', 'registerSkill',
   'trigger', 'useProfileSkill', 'useSkill',
 ]);
@@ -264,6 +266,9 @@ function registerDeclaration(
           kind: 'text',
           trim: requireBoolean(result.trim, 'result trim', node, state, sourcePath),
         },
+        ...(value.interactive !== undefined
+          ? { interactive: requireBoolean(value.interactive, 'interactive', node, state, sourcePath) }
+          : {}),
         execution: {
           memory: requireBoolean(profile.memory, 'profile memory', node, state, sourcePath),
           history: requireBoolean(profile.history, 'profile history', node, state, sourcePath),
@@ -440,12 +445,23 @@ function evaluateCall(
         throw invalidAt(state.sourceFile, node.pos, `Invalid profile skill name '${skillName}'.`, sourcePath);
       }
       const options = requireObject(args[2], 'useProfileSkill options', node, state, sourcePath);
-      rejectUnknown(options, ['skills', 'input', 'attachments', 'stripSkillName', 'parameters', 'output', 'result'], name, node, state, sourcePath);
+      rejectUnknown(options, ['skills', 'input', 'attachments', 'stripSkillName', 'parameters', 'output', 'result', 'interactive'], name, node, state, sourcePath);
       if (skillName !== undefined && options.skills !== undefined) {
         throw invalidAt(state.sourceFile, node.pos, 'useProfileSkill.skills is only valid when the Skill is selected by State.', sourcePath);
       }
       if (skillState !== undefined && options.skills === undefined) {
         throw invalidAt(state.sourceFile, node.pos, 'A state-selected profile Skill requires a non-empty useProfileSkill.skills allowlist.', sourcePath);
+      }
+      const interactive = options.interactive === undefined
+        ? undefined
+        : requireBoolean(options.interactive, 'interactive', node, state, sourcePath);
+      if (interactive && skillState !== undefined) {
+        throw invalidAt(
+          state.sourceFile,
+          node.pos,
+          'An interactive profile operation must use one fixed Agent Skill.',
+          sourcePath,
+        );
       }
       return {
         __kind: 'operation',
@@ -466,6 +482,7 @@ function evaluateCall(
           : requireObject(options.parameters, 'useProfileSkill parameters', node, state, sourcePath),
         output: requireTagged(options.output, 'state', node, state, sourcePath),
         result: requireTagged(options.result, 'text_result', node, state, sourcePath),
+        ...(interactive !== undefined ? { interactive } : {}),
       };
     }
     case 'trigger': {
@@ -524,6 +541,40 @@ function evaluateCall(
       return {
         __kind: 'component', component: 'textarea', label: requireNonEmptyString(args[0], 'Textarea label', node, state, sourcePath),
         bind: requireTagged(args[1], 'state', node, state, sourcePath), options,
+      };
+    }
+    case 'Markdown': {
+      argsRange(name, args, 2, 3, node, state, sourcePath);
+      const options = args[2] === undefined ? {} : requireObject(args[2], 'Markdown options', node, state, sourcePath);
+      rejectUnknown(options, ['showLabel', 'grow', 'copyable', 'sourceToggle', 'placeholder'], name, node, state, sourcePath);
+      return {
+        __kind: 'component', component: 'markdown', label: requireNonEmptyString(args[0], 'Markdown label', node, state, sourcePath),
+        bind: requireTagged(args[1], 'state', node, state, sourcePath),
+        options: {
+          ...options,
+          copyable: options.copyable === undefined ? true : requireBoolean(options.copyable, 'copyable', node, state, sourcePath),
+          sourceToggle: options.sourceToggle === undefined ? true : requireBoolean(options.sourceToggle, 'sourceToggle', node, state, sourcePath),
+        },
+      };
+    }
+    case 'Download': {
+      exactArgs(name, args, 3, node, state, sourcePath);
+      const options = requireObject(args[2], 'Download options', node, state, sourcePath);
+      rejectUnknown(options, ['filename', 'mediaType', 'description', 'showLabel', 'grow'], name, node, state, sourcePath);
+      const filename = requireNonEmptyString(options.filename, 'Download filename', node, state, sourcePath);
+      if (!SAFE_DOWNLOAD_FILENAME.test(filename) || filename === '.' || filename === '..') {
+        throw invalidAt(state.sourceFile, node.pos, 'Download filename must be one safe file name without a path.', sourcePath);
+      }
+      const mediaType = options.mediaType === undefined
+        ? 'text/plain;charset=utf-8'
+        : requireNonEmptyString(options.mediaType, 'Download mediaType', node, state, sourcePath);
+      if (!SAFE_DOWNLOAD_MEDIA_TYPE.test(mediaType)) {
+        throw invalidAt(state.sourceFile, node.pos, `Invalid Download mediaType '${mediaType}'.`, sourcePath);
+      }
+      return {
+        __kind: 'component', component: 'download', label: requireNonEmptyString(args[0], 'Download label', node, state, sourcePath),
+        bind: requireTagged(args[1], 'state', node, state, sourcePath),
+        options: { ...options, filename, mediaType },
       };
     }
     case 'Select': {
@@ -589,6 +640,7 @@ function normalizeComponent(
   copyBoolean(options, 'editable', item, state, sourcePath);
   copyBoolean(options, 'copyable', item, state, sourcePath);
   copyBoolean(options, 'autoGrow', item, state, sourcePath);
+  copyBoolean(options, 'sourceToggle', item, state, sourcePath);
   copyBoolean(options, 'alignToField', item, state, sourcePath);
   if (options.rows !== undefined) {
     item.rows = requireNonNegativeInteger(options.rows, 'rows', state.sourceFile, state, sourcePath);
@@ -597,6 +649,9 @@ function normalizeComponent(
     }
   }
   copyString(options, 'placeholder', item, state, sourcePath);
+  copyString(options, 'filename', item, state, sourcePath);
+  copyString(options, 'mediaType', item, state, sourcePath);
+  copyString(options, 'description', item, state, sourcePath);
   copyString(options, 'gap', item, state, sourcePath);
   copyString(options, 'responsive', item, state, sourcePath);
   copyString(options, 'emphasis', item, state, sourcePath);
@@ -636,6 +691,12 @@ function validateReferences(state: CompilationState, layout: SkillAppLayoutItem[
   if (state.states.length === 0) throw MarifoldError.appInvalid('SkillApp must declare at least one State.', sourcePath);
   if (state.operations.length === 0) throw MarifoldError.appInvalid('SkillApp must declare at least one useSkill or useProfileSkill operation.', sourcePath);
   for (const operation of state.operations) {
+    if (operation.interactive && (!operation.profile || !operation.skill || operation.skillState)) {
+      throw MarifoldError.appInvalid(
+        `Interactive operation '${operation.name}' must reference one fixed profile Agent Skill.`,
+        sourcePath,
+      );
+    }
     if (operation.profile) {
       if (!profileNames.has(operation.profile)) throw MarifoldError.appInvalid(`Operation '${operation.name}' references missing profile '${operation.profile}'.`, sourcePath);
       if (operation.model) throw MarifoldError.appInvalid(`Operation '${operation.name}' cannot reference both a profile and model.`, sourcePath);
@@ -696,6 +757,9 @@ function validateReferences(state: CompilationState, layout: SkillAppLayoutItem[
   }
   for (const triggerDefinition of state.triggers) {
     if (!operationNames.has(triggerDefinition.operation)) throw MarifoldError.appInvalid(`Trigger references missing operation '${triggerDefinition.operation}'.`, sourcePath);
+    if (state.operations.find(operation => operation.name === triggerDefinition.operation)?.interactive) {
+      throw MarifoldError.appInvalid(`Interactive operation '${triggerDefinition.operation}' cannot use an automatic trigger.`, sourcePath);
+    }
     for (const name of triggerDefinition.onChange) {
       if (!stateNames.has(name)) throw MarifoldError.appInvalid(`Trigger references missing state '${name}'.`, sourcePath);
     }
@@ -928,7 +992,7 @@ function rejectUnknown(
 
 function copyBoolean(
   source: Record<string, Evaluated>,
-  key: 'showLabel' | 'grow' | 'editable' | 'copyable' | 'autoGrow' | 'alignToField',
+  key: 'showLabel' | 'grow' | 'editable' | 'copyable' | 'autoGrow' | 'sourceToggle' | 'alignToField',
   target: SkillAppLayoutItem,
   state: CompilationState,
   sourcePath: string,
@@ -938,7 +1002,7 @@ function copyBoolean(
 
 function copyString(
   source: Record<string, Evaluated>,
-  key: 'placeholder' | 'gap' | 'responsive' | 'emphasis',
+  key: 'placeholder' | 'filename' | 'mediaType' | 'description' | 'gap' | 'responsive' | 'emphasis',
   target: SkillAppLayoutItem,
   state: CompilationState,
   sourcePath: string,

@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
+import { buildSkillAppBuilderGuide, mentionsSkillApps } from '../src/skill/BuiltInSkillAppBuilder';
 import { buildSkillManagerGuide, mentionsSkills } from '../src/skill/BuiltInSkillManager';
 import { getBuiltInSkill, listBuiltInSkills } from '../src/skill/BuiltInSkills';
 import { parseSkill } from '../src/skill/SkillValidator';
@@ -243,15 +244,35 @@ describe('SkillStore', () => {
 });
 
 describe('protected built-in skills', () => {
-  it('lists the installer and creator as agent-mode built-ins', () => {
+  it('lists the protected management builders as agent-mode built-ins', () => {
     expect(listBuiltInSkills().map(skill => skill.name)).toEqual([
       'skill-installer',
       'skill-creator',
+      'skillapp-builder',
     ]);
     expect(getBuiltInSkill('skill-installer')).toMatchObject({
       mode: 'agent',
       scope: 'builtin',
     });
+  });
+
+  it('grounds the SkillApp builder in live context and validated installation', () => {
+    const skill = getBuiltInSkill('skillapp-builder')!;
+    const resolved = resolveSkillInvocation(
+      skill,
+      parseSkillInvocation('$skillapp-builder Make a SkillApp for making SkillApps')!,
+    );
+
+    expect(resolved.mode).toBe('agent');
+    expect(resolved.instructions[0]).toContain('inspect_skill_apps');
+    expect(resolved.instructions[0]).toContain('manage_skill_app');
+    expect(resolved.instructions[0]).toContain('interactive: true');
+    expect(resolved.instructions[0]).toContain('Use Markdown for text results');
+    expect(resolved.instructions[0]).toContain('add Download bound to the same output State');
+    expect(resolved.instructions[0]).toContain('Each Download component represents one renderer-created text file');
+    expect(resolved.instructions[0]).toContain('binary files such as PDF, DOCX, ZIP, or PNG');
+    expect(resolved.instructions[0]).toContain('canonical v1/v2 templates');
+    expect(resolved.instructions[0]).toContain('after two corrected attempts fail');
   });
 
   it('binds installer subcommands without requiring missing variables', () => {
@@ -288,6 +309,18 @@ describe('protected built-in skills', () => {
     expect(resolved.instructions[0]).toContain('intended input or output language is a separate behavioral requirement');
     expect(resolved.instructions[0]).toContain('explicitly asks');
   });
+
+  it('does not hard-reject a valid Skill request that mentions SkillApps', () => {
+    const skill = getBuiltInSkill('skill-creator')!;
+    const resolved = resolveSkillInvocation(
+      skill,
+      parseSkillInvocation('$skill-creator create a skill that teaches users when to make a SkillApp')!,
+    );
+
+    expect(resolved.prompt).toContain('create a skill that teaches users when to make a SkillApp');
+    expect(resolved.instructions[0]).toContain('Decide from the user\'s requested deliverable rather than keyword mentions');
+    expect(resolved.instructions[0]).toContain('$skillapp-builder');
+  });
 });
 
 describe('built-in skill manager guide', () => {
@@ -322,5 +355,34 @@ describe('built-in skill manager guide', () => {
     expect(guide).toContain('Never create .claude/skills');
     expect(guide).toContain('manage_skill');
     expect(guide).toContain('$skill-installer');
+  });
+});
+
+describe('built-in SkillApp builder guide', () => {
+  it.each([
+    'make a SkillApp for making skillapps',
+    'create a skill app for translation',
+    '做一个技能应用',
+    'スキルアプリを作って',
+    '스킬 앱을 만들어 줘',
+  ])('detects a SkillApp-related prompt: %s', prompt => {
+    expect(mentionsSkillApps(prompt)).toBe(true);
+  });
+
+  it('does not treat an ordinary application as a SkillApp request', () => {
+    expect(mentionsSkillApps('make a calendar application')).toBe(false);
+  });
+
+  it('renders the active profile, App path, and protected tool workflow', () => {
+    const guide = buildSkillAppBuilderGuide({
+      profile: 'default',
+      appsDir: '/tmp/marifold/apps',
+    });
+    expect(guide).toContain('Internal $skillapp-builder guide');
+    expect(guide).toContain('/tmp/marifold/apps');
+    expect(guide).toContain('inspect_skill_apps');
+    expect(guide).toContain('manage_skill_app');
+    expect(guide).toContain('Multiple declared Download components');
+    expect(guide).toContain('does not need a restart');
   });
 });

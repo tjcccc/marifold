@@ -19,6 +19,15 @@ fs.writeFileSync(path.join(researchProfileDir, 'PROFILE.md'), '# Research Lab\n\
 fs.writeFileSync(path.join(researchProfileDir, 'profile.toml'), 'mode = "agent"\nmemories = false\n');
 const appsDir = path.join(stateDir, 'apps');
 fs.cpSync(path.join(root, 'examples/apps'), appsDir, { recursive: true });
+const writerFixtureDir = path.join(appsDir, 'writer-fixture');
+fs.cpSync(path.join(appsDir, 'translator'), writerFixtureDir, { recursive: true });
+const writerFixtureSource = path.join(writerFixtureDir, 'skillapp.ts');
+fs.writeFileSync(
+  writerFixtureSource,
+  fs.readFileSync(writerFixtureSource, 'utf8')
+    .replace("name: 'translator'", "name: 'writer-fixture'")
+    .replace("title: 'Marifold Translation'", "title: 'Writer Fixture'"),
+);
 
 const loadedConfig = {
   config: {

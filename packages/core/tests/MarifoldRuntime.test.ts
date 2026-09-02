@@ -44,6 +44,7 @@ describe('MarifoldRuntime', () => {
       expect(runtime.listSkills('default').map(skill => skill.name)).toEqual([
         'skill-creator',
         'skill-installer',
+        'skillapp-builder',
       ]);
       expect(runtime.listSkills('default', 'profile')).toEqual([]);
       expect(runtime.listSkills('default', 'global')).toEqual([]);
@@ -55,6 +56,92 @@ describe('MarifoldRuntime', () => {
       );
       expect(resolved.mode).toBe('agent');
       expect(resolved.instructions[0]).toContain('install ./translate --global');
+      const creator = runtime.resolveSkillInvocation(
+        '$skill-creator create a SkillApp for making SkillApps',
+        'default',
+      );
+      expect(creator.prompt).toBe('create a SkillApp for making SkillApps');
+      expect(creator.instructions[0]).toContain('Decide from the user\'s requested deliverable');
+    } finally {
+      runtime.close();
+    }
+  });
+
+  it('keeps the SkillApp builder on canonical tools and surfaces its iteration-cap reason', async () => {
+    const dir = tempDir();
+    const profilesDir = path.join(dir, 'profiles');
+    const appsDir = path.join(dir, 'apps');
+    fs.mkdirSync(path.join(profilesDir, 'default'), { recursive: true });
+    fs.mkdirSync(path.join(appsDir, 'builder-host'), { recursive: true });
+    fs.writeFileSync(path.join(profilesDir, 'default', 'PROFILE.md'), 'You build focused Apps.');
+    fs.writeFileSync(path.join(profilesDir, 'default', 'profile.toml'), 'mode = "agent"\n');
+    fs.writeFileSync(path.join(appsDir, 'builder-host', 'skillapp.ts'), `
+      import { App, Button, Row, State, Textarea, TextResult, defineSkillApp, registerProfile, useProfileSkill } from '@marifold/core';
+      const idea = State('');
+      const result = State('');
+      const profile = registerProfile('default', { memory: false, history: false });
+      const build = useProfileSkill(profile, 'skillapp-builder', {
+        parameters: { request: idea },
+        output: result,
+        result: TextResult({ trim: true }),
+        interactive: true,
+      });
+      export default defineSkillApp({
+        app: { name: 'builder-host', title: 'Builder Host' },
+        ui: App([
+          Row([Textarea('Idea', idea)]),
+          Row([Button('Build', { trigger: build })]),
+          Row([Textarea('Result', result, { editable: false })]),
+        ]),
+      });
+    `);
+    const config: MarifoldConfig = {
+      default: { provider: 'ollama', model: 'gemma4:e4b', profile: 'default', think: false },
+      models: { options: ['ollama/gemma4:e4b'] },
+      memory: { sizeLimit: 50000, contextLimit: 2400 },
+      agent: { maxIterations: 1, toolMode: 'native' },
+      paths: {
+        profilesDir,
+        appsDir,
+        sessionsDb: path.join(dir, 'sessions.db'),
+        tasksDir: path.join(dir, 'tasks'),
+      },
+      providers: { ollama: { type: 'ollama', baseUrl: 'http://localhost:11434' } },
+    };
+    let requestBody: { tools?: Array<{ function: { name: string } }> } | undefined;
+    vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      requestBody = JSON.parse(String(init?.body));
+      return new Response(JSON.stringify({
+        message: {
+          content: '',
+          tool_calls: [{ function: { name: 'inspect_skill_apps', arguments: {} } }],
+        },
+        done: true,
+        done_reason: 'stop',
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }));
+    const runtime = new MarifoldRuntime({
+      loadedConfig: { config, configPath: path.join(dir, 'config.toml'), foundConfig: true },
+    });
+
+    try {
+      const result = await runtime.runSkillAppOperation('builder-host', 'build', {
+        idea: 'Make an article App.',
+        result: '',
+      }, undefined, undefined, undefined, {
+        approvalHandler: async () => ({ approved: false }),
+        userInputHandler: async () => undefined,
+      });
+
+      expect(result).toMatchObject({
+        status: 'error',
+        error: { message: 'Stopped at the iteration cap before completing the objective.' },
+      });
+      expect(requestBody?.tools?.map(tool => tool.function.name)).toEqual([
+        'ask_user',
+        'inspect_skill_apps',
+        'manage_skill_app',
+      ]);
     } finally {
       runtime.close();
     }
@@ -759,10 +846,11 @@ describe('MarifoldRuntime', () => {
     }
   });
 
-  it('injects the path-aware skill-manager guide for skill-related agent objectives', async () => {
+  it('injects path-aware builder guides for natural management objectives', async () => {
     const dir = tempDir();
     const profilesDir = path.join(dir, 'profiles');
     const skillsDir = path.join(dir, 'shared-skills');
+    const appsDir = path.join(dir, 'apps');
     fs.mkdirSync(path.join(profilesDir, 'writer'), { recursive: true });
     fs.writeFileSync(path.join(profilesDir, 'writer', 'PROFILE.md'), 'You are a writer.');
     const config: MarifoldConfig = {
@@ -772,6 +860,7 @@ describe('MarifoldRuntime', () => {
       paths: {
         profilesDir,
         skillsDir,
+        appsDir,
         sessionsDb: path.join(dir, 'sessions.db'),
         tasksDir: path.join(dir, 'tasks'),
       },
@@ -796,6 +885,18 @@ describe('MarifoldRuntime', () => {
       expect(system).toContain('Internal $skill-manager guide');
       expect(system).toContain(path.join(profilesDir, 'writer', 'skills'));
       expect(system).toContain(skillsDir);
+
+      for await (const _event of runner.run({
+        objective: 'Make a SkillApp for making SkillApps',
+        profile: 'writer',
+      })) {
+        // Consume the run so the provider request completes.
+      }
+      const appSystem = requestBody?.messages?.find(message => message.role === 'system')?.content ?? '';
+      expect(appSystem).toContain('Internal $skillapp-builder guide');
+      expect(appSystem).toContain(appsDir);
+      expect(appSystem).toContain('inspect_skill_apps');
+      expect(appSystem).toContain('manage_skill_app');
     } finally {
       runtime.close();
     }

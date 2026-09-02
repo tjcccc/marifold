@@ -283,7 +283,11 @@ export type {
 } from './skill';
 export { AppStore } from './app/AppStore';
 export { SkillAppInstanceRegistry } from './app/SkillAppInstanceRegistry';
-export type { SkillAppInstanceRuntime } from './app/SkillAppInstanceRegistry';
+export type {
+  SkillAppApprovalAction,
+  SkillAppInstanceRuntime,
+  SkillAppInteractionHandlers,
+} from './app/SkillAppInstanceRegistry';
 export { resolveSkillAppOperation } from './app/SkillAppResolver';
 export type { ResolvedSkillAppOperation } from './app/SkillAppResolver';
 export { compileSkillApp } from './app/SkillAppCompiler';
@@ -293,8 +297,10 @@ export {
   Attachments,
   Button,
   Column,
+  Download,
   FileAccess,
   FolderAccess,
+  Markdown,
   Row,
   Select,
   Spacer,
@@ -330,10 +336,14 @@ export type {
   SkillAppComponent,
   SkillAppConcurrency,
   SkillAppDefinition,
+  SkillAppEffect,
   SkillAppErrorResult,
   SkillAppExecution,
+  SkillAppExecutionPhase,
+  SkillAppExecutionSnapshot,
   SkillAppInstanceSnapshot,
   SkillAppInfo,
+  SkillAppInstalledEffect,
   SkillAppHistoryTurn,
   SkillAppLayoutGap,
   SkillAppLayoutItem,

@@ -1,11 +1,20 @@
 import { randomUUID } from 'crypto';
 import * as path from 'path';
+import type { ApprovalDecision, ApprovalHandler, ApprovalRequest } from '../agent/ApprovalPolicy';
+import {
+  normalizeUserInputSubmission,
+  type UserInputHandler,
+  type UserInputRequest,
+  type UserInputSubmission,
+} from '../agent/UserInput';
 import { MarifoldError } from '../errors/MarifoldError';
 import { MAX_RUN_INPUT_BYTES, MAX_RUN_INSPECTION_TEXT_BYTES } from '../agent/RunWorkspace';
 import { MAX_IMAGES_PER_REQUEST } from '../images/ImageOptimizer';
 import type {
   SkillAppAttachmentInput,
   SkillAppDefinition,
+  SkillAppExecutionSnapshot,
+  SkillAppEffect,
   SkillAppHistoryTurn,
   SkillAppInstanceSnapshot,
   SkillAppMutationResult,
@@ -26,8 +35,17 @@ export interface SkillAppInstanceRuntime {
     signal?: AbortSignal,
     history?: SkillAppHistoryTurn[],
     attachments?: SkillAppAttachmentInput[],
+    interactions?: SkillAppInteractionHandlers,
   ): Promise<SkillAppResult>;
 }
+
+export interface SkillAppInteractionHandlers {
+  approvalHandler: ApprovalHandler;
+  userInputHandler: UserInputHandler;
+  effectHandler?: (effect: SkillAppEffect) => void;
+}
+
+export type SkillAppApprovalAction = 'once' | 'deny';
 
 interface ActiveOperation {
   generation: number;
@@ -36,12 +54,20 @@ interface ActiveOperation {
   resolve?: (result: SkillAppMutationResult) => void;
 }
 
+interface ActiveExecution {
+  id: string;
+  controller: AbortController;
+  pendingApproval?: { request: ApprovalRequest; settle: (decision: ApprovalDecision) => void };
+  pendingUserInput?: { request: UserInputRequest; settle: (submission: UserInputSubmission | undefined) => void };
+}
+
 interface InstanceRecord {
   definition: SkillAppDefinition;
   snapshot: SkillAppInstanceSnapshot;
   operations: Map<string, ActiveOperation>;
   historyByProfile: Map<string, SkillAppHistoryTurn[]>;
   attachmentsByState: Map<string, SkillAppAttachmentInput[]>;
+  execution?: ActiveExecution;
   expiryTimer?: NodeJS.Timeout;
 }
 
@@ -92,6 +118,7 @@ export class SkillAppInstanceRegistry {
   ): Promise<SkillAppMutationResult> {
     const record = this.require(instanceId);
     this.refreshExpiry(record);
+    this.assertIdle(record);
     const outputStates = new Set(record.definition.operations.map(operation => operation.output));
     const knownStates = new Set(record.definition.states.map(state => state.name));
     const changed: string[] = [];
@@ -142,6 +169,7 @@ export class SkillAppInstanceRegistry {
   run(instanceId: string, operationName: string): Promise<SkillAppMutationResult> {
     const record = this.require(instanceId);
     this.refreshExpiry(record);
+    this.assertIdle(record);
     const operation = record.definition.operations.find(candidate => candidate.name === operationName);
     if (!operation) {
       throw MarifoldError.appInvalid(`SkillApp '${record.definition.app.name}' has no operation '${operationName}'.`);
@@ -156,6 +184,7 @@ export class SkillAppInstanceRegistry {
         instance: cloneSnapshot(record.snapshot),
       });
     }
+    if (operation.interactive) return Promise.resolve(this.startInteractive(record, operationName));
     return this.executeLatest(record, operationName, 0);
   }
 
@@ -166,6 +195,7 @@ export class SkillAppInstanceRegistry {
   ): SkillAppMutationResult {
     const record = this.require(instanceId);
     this.refreshExpiry(record);
+    this.assertIdle(record);
     if (!(record.definition.attachmentStates ?? []).some(state => state.name === stateName)) {
       throw MarifoldError.appInvalid(`SkillApp received unknown attachment state '${stateName}'.`);
     }
@@ -182,6 +212,52 @@ export class SkillAppInstanceRegistry {
     return { status: 'idle', instance: cloneSnapshot(record.snapshot) };
   }
 
+  answerUserInput(
+    instanceId: string,
+    executionId: string,
+    value: unknown,
+  ): SkillAppInstanceSnapshot {
+    const record = this.require(instanceId);
+    const execution = this.requireExecution(record, executionId);
+    const pending = execution.pendingUserInput;
+    if (!pending) throw MarifoldError.userInputNotFound(executionId);
+    const submission = normalizeUserInputSubmission(pending.request, value);
+    execution.pendingUserInput = undefined;
+    this.setExecutionPhase(record, executionId, 'running');
+    pending.settle(submission);
+    this.refreshExpiry(record);
+    return cloneSnapshot(record.snapshot);
+  }
+
+  answerApproval(
+    instanceId: string,
+    executionId: string,
+    action: SkillAppApprovalAction,
+  ): SkillAppInstanceSnapshot {
+    const record = this.require(instanceId);
+    const execution = this.requireExecution(record, executionId);
+    const pending = execution.pendingApproval;
+    if (!pending) throw MarifoldError.approvalNotFound(executionId);
+    execution.pendingApproval = undefined;
+    this.setExecutionPhase(record, executionId, 'running');
+    pending.settle(action === 'once' ? { approved: true } : { approved: false, reason: 'denied via service' });
+    this.refreshExpiry(record);
+    return cloneSnapshot(record.snapshot);
+  }
+
+  cancelExecution(instanceId: string, executionId: string): SkillAppInstanceSnapshot {
+    const record = this.require(instanceId);
+    const execution = this.requireExecution(record, executionId);
+    execution.pendingApproval?.settle({ approved: false, reason: 'execution cancelled' });
+    execution.pendingUserInput?.settle(undefined);
+    execution.pendingApproval = undefined;
+    execution.pendingUserInput = undefined;
+    execution.controller.abort();
+    this.finishExecution(record, executionId, 'cancelled');
+    this.refreshExpiry(record);
+    return cloneSnapshot(record.snapshot);
+  }
+
   delete(instanceId: string): boolean {
     const record = this.instances.get(instanceId);
     if (!record) return false;
@@ -191,6 +267,9 @@ export class SkillAppInstanceRegistry {
       active.controller?.abort();
       active.resolve?.({ status: 'superseded', operation: operationName, instance: cloneSnapshot(record.snapshot) });
     }
+    record.execution?.pendingApproval?.settle({ approved: false, reason: 'instance closed' });
+    record.execution?.pendingUserInput?.settle(undefined);
+    record.execution?.controller.abort();
     this.instances.delete(instanceId);
     return true;
   }
@@ -199,7 +278,190 @@ export class SkillAppInstanceRegistry {
     for (const id of [...this.instances.keys()]) this.delete(id);
   }
 
+  private startInteractive(record: InstanceRecord, operationName: string): SkillAppMutationResult {
+    const operation = record.definition.operations.find(candidate => candidate.name === operationName)!;
+    if (!operation.profile) {
+      throw MarifoldError.appInvalid('Interactive SkillApp operations require a registered profile.');
+    }
+    const id = `app_run_${randomUUID()}`;
+    const controller = new AbortController();
+    const active: ActiveExecution = { id, controller };
+    record.execution = active;
+    record.snapshot.execution = {
+      id,
+      operation: operationName,
+      phase: 'running',
+      startedAt: new Date().toISOString(),
+      cancellable: true,
+    };
+    const input = { ...record.snapshot.state };
+    const historyKey = operation.profile;
+    const history = operation.execution.history
+      ? [...(record.historyByProfile.get(historyKey) ?? [])]
+      : undefined;
+    const attachments = operation.attachments
+      ? [...(record.attachmentsByState.get(operation.attachments) ?? [])]
+      : undefined;
+    const interactions: SkillAppInteractionHandlers = {
+      approvalHandler: request => this.waitForApproval(record, id, request),
+      userInputHandler: request => this.waitForUserInput(record, id, request),
+      effectHandler: effect => this.recordEffect(record, id, effect),
+    };
+    void this.runtime.runSkillAppOperation(
+      record.definition.app.name,
+      operationName,
+      input,
+      controller.signal,
+      history,
+      attachments,
+      interactions,
+    ).then(result => {
+      if (record.execution?.id !== id) return;
+      if (result.status === 'ok') {
+        record.snapshot.state[operation.output] = result.data.text;
+        markOutputFresh(record.snapshot, operation.output);
+        if (operation.execution.history) {
+          record.historyByProfile.set(historyKey, appendHistory(
+            record.historyByProfile.get(historyKey) ?? [],
+            operationInputText(operation, input),
+            result.data.text,
+          ));
+        }
+      }
+      this.finishExecution(record, id, result.status === 'ok' ? 'completed' : 'failed', result);
+    }).catch(error => {
+      if (record.execution?.id !== id) return;
+      if (controller.signal.aborted) {
+        this.finishExecution(record, id, 'cancelled');
+        return;
+      }
+      this.finishExecution(record, id, 'failed', {
+        status: 'error',
+        error: {
+          code: error instanceof MarifoldError ? error.code : 'APP_INVALID',
+          message: error instanceof Error ? error.message : String(error),
+        },
+      });
+    });
+    return {
+      status: 'running',
+      operation: operationName,
+      instance: cloneSnapshot(record.snapshot),
+    };
+  }
+
+  private waitForApproval(
+    record: InstanceRecord,
+    executionId: string,
+    request: ApprovalRequest,
+  ): Promise<ApprovalDecision> {
+    if (record.execution?.id !== executionId) {
+      return Promise.resolve({ approved: false, reason: 'execution no longer active' });
+    }
+    return new Promise(resolve => {
+      record.execution!.pendingApproval = { request, settle: resolve };
+      const snapshot = this.requireExecutionSnapshot(record, executionId);
+      snapshot.phase = 'waiting_for_approval';
+      snapshot.approval = request;
+      delete snapshot.userInput;
+    });
+  }
+
+  private waitForUserInput(
+    record: InstanceRecord,
+    executionId: string,
+    request: UserInputRequest,
+  ): Promise<UserInputSubmission | undefined> {
+    if (record.execution?.id !== executionId) return Promise.resolve(undefined);
+    return new Promise(resolve => {
+      record.execution!.pendingUserInput = { request, settle: resolve };
+      const snapshot = this.requireExecutionSnapshot(record, executionId);
+      snapshot.phase = 'waiting_for_input';
+      snapshot.userInput = request;
+      delete snapshot.approval;
+    });
+  }
+
+  private setExecutionPhase(
+    record: InstanceRecord,
+    executionId: string,
+    phase: SkillAppExecutionSnapshot['phase'],
+  ): void {
+    const snapshot = this.requireExecutionSnapshot(record, executionId);
+    snapshot.phase = phase;
+    delete snapshot.approval;
+    delete snapshot.userInput;
+  }
+
+  private recordEffect(
+    record: InstanceRecord,
+    executionId: string,
+    effect: SkillAppEffect,
+  ): void {
+    const snapshot = this.requireExecutionSnapshot(record, executionId);
+    snapshot.committedEffects = [...(snapshot.committedEffects ?? []), effect];
+    this.refreshExpiry(record);
+  }
+
+  private finishExecution(
+    record: InstanceRecord,
+    executionId: string,
+    phase: Extract<SkillAppExecutionSnapshot['phase'], 'completed' | 'failed' | 'cancelled'>,
+    result?: SkillAppResult,
+  ): void {
+    const snapshot = record.snapshot.execution;
+    if (!snapshot || snapshot.id !== executionId) return;
+    if (phase !== 'completed' && snapshot.committedEffects?.length) {
+      phase = 'completed';
+      const committedResult = committedEffectResult(snapshot);
+      result = committedResult;
+      const operation = record.definition.operations.find(candidate => candidate.name === snapshot.operation);
+      if (operation) {
+        record.snapshot.state[operation.output] = committedResult.data.text;
+        markOutputFresh(record.snapshot, operation.output);
+      }
+    }
+    snapshot.phase = phase;
+    snapshot.finishedAt = new Date().toISOString();
+    snapshot.cancellable = false;
+    delete snapshot.approval;
+    delete snapshot.userInput;
+    if (result) snapshot.result = result;
+    record.execution = undefined;
+    this.refreshExpiry(record);
+  }
+
+  private requireExecution(record: InstanceRecord, executionId: string): ActiveExecution {
+    const execution = record.execution;
+    if (!execution || execution.id !== executionId) {
+      throw MarifoldError.appInvalid(`SkillApp execution '${executionId}' is not active.`);
+    }
+    return execution;
+  }
+
+  private requireExecutionSnapshot(
+    record: InstanceRecord,
+    executionId: string,
+  ): SkillAppExecutionSnapshot {
+    const execution = record.snapshot.execution;
+    if (!execution || execution.id !== executionId) {
+      throw MarifoldError.appInvalid(`SkillApp execution '${executionId}' was not found.`);
+    }
+    return execution;
+  }
+
+  private assertIdle(record: InstanceRecord): void {
+    if (record.execution) {
+      throw MarifoldError.appInvalid(
+        `SkillApp operation '${record.snapshot.execution?.operation ?? 'unknown'}' is still active.`,
+      );
+    }
+  }
+
   private schedule(record: InstanceRecord, trigger: SkillAppTriggerDefinition): Promise<SkillAppMutationResult> {
+    if (record.definition.operations.find(operation => operation.name === trigger.operation)?.interactive) {
+      throw MarifoldError.appInvalid('Interactive SkillApp operations cannot use automatic triggers.');
+    }
     return this.executeLatest(record, trigger.operation, trigger.debounce);
   }
 
@@ -346,6 +608,69 @@ function cloneSnapshot(snapshot: SkillAppInstanceSnapshot): SkillAppInstanceSnap
         attachments.map(attachment => ({ ...attachment })),
       ])),
     } : {}),
+    ...(snapshot.execution ? {
+      execution: {
+        ...snapshot.execution,
+        ...(snapshot.execution.userInput ? {
+          userInput: {
+            ...snapshot.execution.userInput,
+            questions: snapshot.execution.userInput.questions.map(question => ({
+              ...question,
+              options: question.options.map(option => ({ ...option })),
+            })),
+          },
+        } : {}),
+        ...(snapshot.execution.approval ? {
+          approval: {
+            ...snapshot.execution.approval,
+            input: { ...snapshot.execution.approval.input },
+          },
+        } : {}),
+        ...(snapshot.execution.committedEffects ? {
+          committedEffects: snapshot.execution.committedEffects.map(effect => ({
+            ...effect,
+            files: [...effect.files],
+          })),
+        } : {}),
+        ...(snapshot.execution.result?.status === 'ok' ? {
+          result: {
+            ...snapshot.execution.result,
+            data: { ...snapshot.execution.result.data },
+            meta: {
+              ...snapshot.execution.result.meta,
+              ...(snapshot.execution.result.meta.usage
+                ? { usage: { ...snapshot.execution.result.meta.usage } }
+                : {}),
+            },
+            ...(snapshot.execution.result.effects
+              ? { effects: snapshot.execution.result.effects.map(effect => ({ ...effect, files: [...effect.files] })) }
+              : {}),
+          },
+        } : snapshot.execution.result ? {
+          result: {
+            ...snapshot.execution.result,
+            error: { ...snapshot.execution.result.error },
+          },
+        } : {}),
+      },
+    } : {}),
+  };
+}
+
+function committedEffectResult(snapshot: SkillAppExecutionSnapshot): SkillAppResult & { status: 'ok' } {
+  const effects = snapshot.committedEffects ?? [];
+  const text = effects.map(effect =>
+    `${effect.action === 'created' ? 'Created' : 'Updated'} SkillApp '${effect.title}' (${effect.appName}).`)
+    .join('\n');
+  return {
+    status: 'ok',
+    data: { text: `${text}\nThe service does not need a restart.` },
+    meta: {
+      engine: 'marifold',
+      model: 'skillapp-builder',
+      durationMs: Math.max(0, Date.now() - Date.parse(snapshot.startedAt)),
+    },
+    effects: effects.map(effect => ({ ...effect, files: [...effect.files] })),
   };
 }
 

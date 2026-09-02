@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ApiClient } from '../../api/client';
 import type { CreateProfileInput } from '../../api/profiles';
 import { createProfileWithSetup } from '../../api/profiles';
@@ -61,6 +61,14 @@ export function AgentScreen(props: AgentScreenProps) {
   const [mobileConversationOpen, setMobileConversationOpen] = useState(() => props.route.session !== undefined);
   const [mobileAppOpen, setMobileAppOpen] = useState(false);
   const appsView = props.workspaceView === 'apps';
+  const [appsMounted, setAppsMounted] = useState(appsView);
+  const refreshInstalledApp = useCallback(async (): Promise<void> => {
+    await appsCatalog.refresh();
+  }, [appsCatalog.refresh]);
+
+  useEffect(() => {
+    if (appsView) setAppsMounted(true);
+  }, [appsView]);
 
   useEffect(() => {
     if (!appsView || !appsCatalog.selectedName || props.appName === appsCatalog.selectedName) return;
@@ -238,8 +246,9 @@ export function AgentScreen(props: AgentScreenProps) {
       ) : sidebarsHidden ? null : (
         <ResizableSidebar>{navigation}</ResizableSidebar>
       )}
-      {!mobile || mobileWorkspaceOpen ? <div
+      <div
         className={styles.threadPane}
+        hidden={mobile && !mobileWorkspaceOpen}
         onDragOver={appsView ? undefined : onDragOver}
         onDragLeave={() => setDropActive(false)}
         onDrop={appsView ? undefined : onDrop}
@@ -278,16 +287,20 @@ export function AgentScreen(props: AgentScreenProps) {
             onViewChange={props.onWorkspaceViewChange}
           />
         )}
-        {appsView ? (
-          <AppsScreen
-            client={props.client}
-            onUnauthorized={props.onUnauthorized}
-            app={appsCatalog.selected}
-            loading={appsCatalog.loading}
-            loadError={appsCatalog.error}
-            onBusyChange={setAppBusy}
-          />
-        ) : controller.profileName ? (
+        {appsMounted ? (
+          <div className={styles.appsPane} hidden={!appsView}>
+            <AppsScreen
+              client={props.client}
+              onUnauthorized={props.onUnauthorized}
+              app={appsCatalog.selected}
+              loading={appsCatalog.loading}
+              loadError={appsCatalog.error}
+              onBusyChange={setAppBusy}
+              onAppInstalled={refreshInstalledApp}
+            />
+          </div>
+        ) : null}
+        {!appsView && controller.profileName ? (
           <>
             <CatchUpBanner
               runs={controller.thread.catchUp}
@@ -328,13 +341,13 @@ export function AgentScreen(props: AgentScreenProps) {
               onStop={() => void controller.stop()}
             />
           </>
-        ) : (
+        ) : !appsView ? (
           <div className={styles.chooseProfile}>
             <div className={styles.chooseTitle}>Choose a profile</div>
             <div className={styles.chooseHint}>Profiles keep their own instructions, sessions, skills, and memories.</div>
           </div>
-        )}
-      </div> : null}
+        ) : null}
+      </div>
       {createOpen ? (
         <CreateProfileSheet
           existingNames={controller.profiles.map(profile => profile.name)}

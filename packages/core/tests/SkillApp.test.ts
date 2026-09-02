@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AppStore } from '../src/app/AppStore';
 import { compileSkillApp } from '../src/app/SkillAppCompiler';
 import { SkillAppInstanceRegistry } from '../src/app/SkillAppInstanceRegistry';
@@ -39,6 +39,52 @@ describe('SkillApp', () => {
       { component: 'textarea', label: 'Input', bind: 'source', editable: true },
       { component: 'textarea', label: 'Result', bind: 'result', editable: false, copyable: true },
     ]);
+  });
+
+  it('compiles Markdown preview and renderer-owned text downloads', () => {
+    const source = translatorSource()
+      .replace('  Button,', '  Button,\n  Download,\n  Markdown,')
+      .replace(
+        `      Textarea('Result', result, {
+        grow: true,
+        editable: false,
+        copyable: true,
+      }),`,
+        `      Markdown('Article preview', result, {
+        grow: true,
+        placeholder: 'Generated article will appear here',
+      }),
+      Download('Download article', result, {
+        filename: 'short-article.md',
+        mediaType: 'text/markdown;charset=utf-8',
+        description: 'Generated Markdown article',
+      }),`,
+      );
+    const definition = compileSkillApp(source, 'short-article/skillapp.ts');
+
+    expect(definition.layout[1].children).toMatchObject([
+      { component: 'textarea', bind: 'source' },
+      {
+        component: 'markdown',
+        bind: 'result',
+        label: 'Article preview',
+        copyable: true,
+        sourceToggle: true,
+        placeholder: 'Generated article will appear here',
+      },
+      {
+        component: 'download',
+        bind: 'result',
+        label: 'Download article',
+        filename: 'short-article.md',
+        mediaType: 'text/markdown;charset=utf-8',
+        description: 'Generated Markdown article',
+      },
+    ]);
+    expect(() => compileSkillApp(
+      source.replace("filename: 'short-article.md'", "filename: '../short-article.md'"),
+      'skillapp.ts',
+    )).toThrow(/safe file name without a path/);
   });
 
   it('rejects arbitrary script logic and imports', () => {
@@ -198,6 +244,29 @@ describe('SkillApp', () => {
       idea: '$make-gpt-image-prompt',
       result: '',
     })).toThrow(/requires input beyond the selected Skill name/);
+  });
+
+  it('compiles interactive profile operations and rejects automatic triggers', () => {
+    const source = painersRoomSource()
+      .replace('useProfileSkill(painter, promptMaker, {', "useProfileSkill(painter, 'make-gpt-image-prompt', {")
+      .replace('  skills: promptMakers,\n', '')
+      .replace('result: promptResult,', 'result: promptResult,\n  interactive: true,');
+    const definition = compileSkillApp(source, 'painers-room/skillapp.ts');
+    expect(definition.operations[0].interactive).toBe(true);
+    expect(() => compileSkillApp(
+      source.replace(
+        'export default defineSkillApp({',
+        'trigger(makePrompt, { onChange: [idea] });\n\nexport default defineSkillApp({',
+      ).replace('  Textarea,', '  Textarea,\n  trigger,'),
+      'painers-room/skillapp.ts',
+    )).toThrow(/Interactive operation .* cannot use an automatic trigger/);
+    expect(() => compileSkillApp(
+      painersRoomSource().replace(
+        'result: promptResult,',
+        'result: promptResult,\n  interactive: true,',
+      ),
+      'painers-room/skillapp.ts',
+    )).toThrow(/must use one fixed Agent Skill/);
   });
 
   it('resolves explicit file permissions without widening them to the parent folder', () => {
@@ -360,6 +429,115 @@ describe('SkillApp', () => {
       instance: { state: { result: 'SECOND' }, staleOutputs: ['result'] },
     });
     expect(calls).toEqual(['second']);
+    registry.close();
+  });
+
+  it('owns an exclusive interactive lifecycle and resumes after user input', async () => {
+    const definition = compileSkillApp(
+      painersRoomSource()
+        .replace('useProfileSkill(painter, promptMaker, {', "useProfileSkill(painter, 'make-gpt-image-prompt', {")
+        .replace('  skills: promptMakers,\n', '')
+        .replace('result: promptResult,', 'result: promptResult,\n  interactive: true,'),
+      'painers-room/skillapp.ts',
+    );
+    definition.operations[0].requiredInputs = ['idea'];
+    const runtime: SkillAppInstanceRuntime = {
+      getApp: () => definition,
+      runSkillAppOperation: async (_app, _operation, state, _signal, _history, _attachments, interactions) => {
+        const submission = await interactions!.userInputHandler({
+          id: 'question_1',
+          questions: [{
+            id: 'layout',
+            question: 'Which layout?',
+            options: [
+              { id: 'studio', label: 'Studio' },
+              { id: 'form', label: 'Form' },
+            ],
+          }],
+        });
+        const selected = submission?.answers[0];
+        const answer = selected && 'optionId' in selected ? selected.optionId : 'unknown';
+        return {
+          status: 'ok',
+          data: { text: `${state.idea}:${answer}` },
+          meta: { engine: 'test', model: 'test', durationMs: 1 },
+        };
+      },
+    };
+    const registry = new SkillAppInstanceRegistry(runtime);
+    const instance = registry.create('painers-room');
+    await registry.update(instance.id, { idea: 'builder' });
+    const started = await registry.run(instance.id, 'makePrompt');
+    expect(started).toMatchObject({
+      status: 'running',
+      instance: {
+        execution: {
+          operation: 'makePrompt',
+          phase: 'waiting_for_input',
+          cancellable: true,
+          userInput: { id: 'question_1' },
+        },
+      },
+    });
+    expect(() => registry.updateAttachments(instance.id, 'references', [])).toThrow(/still active/);
+    const executionId = started.instance.execution!.id;
+    registry.answerUserInput(instance.id, executionId, {
+      answers: [{ questionId: 'layout', optionId: 'studio' }],
+    });
+    await new Promise(resolve => setImmediate(resolve));
+    expect(registry.get(instance.id)).toMatchObject({
+      state: { result: 'builder:studio' },
+      execution: {
+        id: executionId,
+        phase: 'completed',
+        cancellable: false,
+        result: { status: 'ok' },
+      },
+    });
+    registry.close();
+  });
+
+  it('reports an already committed App install even if the Agent fails afterward', async () => {
+    const definition = compileSkillApp(
+      painersRoomSource()
+        .replace('useProfileSkill(painter, promptMaker, {', "useProfileSkill(painter, 'make-gpt-image-prompt', {")
+        .replace('  skills: promptMakers,\n', '')
+        .replace('result: promptResult,', 'result: promptResult,\n  interactive: true,'),
+      'painers-room/skillapp.ts',
+    );
+    definition.operations[0].requiredInputs = ['idea'];
+    const runtime: SkillAppInstanceRuntime = {
+      getApp: () => definition,
+      runSkillAppOperation: async (_app, _operation, _state, _signal, _history, _attachments, interactions) => {
+        interactions!.effectHandler?.({
+          kind: 'app_installed',
+          appName: 'writing-studio',
+          title: 'Writing Studio',
+          action: 'created',
+          files: ['skillapp.ts'],
+        });
+        throw new Error('Provider disconnected after installation');
+      },
+    };
+    const registry = new SkillAppInstanceRegistry(runtime);
+    const instance = registry.create('painers-room');
+    await registry.update(instance.id, { idea: 'Make a writing App' });
+    expect((await registry.run(instance.id, 'makePrompt')).status).toBe('running');
+
+    await vi.waitFor(() => {
+      expect(registry.get(instance.id).execution?.phase).toBe('completed');
+    });
+    expect(registry.get(instance.id)).toMatchObject({
+      state: { result: expect.stringContaining("Created SkillApp 'Writing Studio'") },
+      execution: {
+        phase: 'completed',
+        committedEffects: [{ appName: 'writing-studio', action: 'created' }],
+        result: {
+          status: 'ok',
+          effects: [{ appName: 'writing-studio', action: 'created' }],
+        },
+      },
+    });
     registry.close();
   });
 });
