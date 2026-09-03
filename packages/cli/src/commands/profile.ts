@@ -61,9 +61,10 @@ export function registerProfileCommand(program: Command, printer: ConsolePrinter
         if (detail.path) process.stdout.write(`Path:    ${detail.path}\n`);
         process.stdout.write(`Model:   ${detail.settings.provider && detail.settings.model ? `${detail.settings.provider}/${detail.settings.model}` : 'default'}\n`);
         process.stdout.write(`Memory:  ${detail.settings.memories ? 'on' : 'off'}\n`);
-        printProfileSection('PROFILE.md', detail.files.profile);
-        printProfileSection('RULES.md', detail.files.rules);
-        printProfileSection('CUSTOM.md', detail.files.custom);
+        printProfileSection('INSTRUCTIONS.md', detail.files.instructions);
+        if (detail.instructionFormat === 'legacy') {
+          process.stdout.write(`Legacy:  ${detail.legacyInstructionFiles.join(', ')} (run marifold doctor --fix --profile ${detail.name})\n`);
+        }
         printProfileSection('profile.toml', detail.files.profileToml);
       } catch (error) {
         printer.printError(error);

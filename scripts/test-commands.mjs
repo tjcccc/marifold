@@ -51,6 +51,11 @@ try {
     contains: rootPackage.version,
   });
   runHelpDiscovery(commandEnv);
+  runCase('removed chat command', ['chat'], {
+    env: commandEnv,
+    status: 1,
+    contains: 'too many arguments',
+  });
 
   runCase('init with every init option', [
     ...configArgs,
@@ -301,108 +306,6 @@ try {
   runCase('session delete <id>', [...configArgs, 'session', 'delete', 'renamed-session'], {
     env: commandEnv,
     contains: 'Deleted session renamed-session',
-  });
-
-  runCase('chat /help command', [
-    ...configArgs,
-    'chat',
-    '--profile', 'default',
-    '--provider', 'ollama',
-    '--model', 'gemma4:e4b',
-    '--no-memories',
-  ], {
-    env: commandEnv,
-    input: '/help\n',
-    contains: ['Chat commands:', '/remember pref <text>'],
-  });
-
-  runCase('chat /think command', [
-    ...configArgs,
-    'chat',
-    '--profile', 'default',
-    '--provider', 'ollama',
-    '--model', 'gemma4:e4b',
-    '--no-memories',
-    '--think', 'true',
-  ], {
-    env: commandEnv,
-    input: '/think off\n',
-    contains: ['Think:    on', 'Thinking mode off.'],
-  });
-
-  runCase('chat /remember command', [
-    ...configArgs,
-    'chat',
-    '--profile', 'default',
-    '--provider', 'ollama',
-    '--model', 'gemma4:e4b',
-    '--session', 'chat-memory-session',
-  ], {
-    env: commandEnv,
-    input: '/remember pref concise answers\n',
-    contains: 'Remembered preference memory:',
-  });
-
-  runCase('profile memory [name]', [...configArgs, 'profile', 'memory', 'default'], {
-    env: commandEnv,
-    contains: ['Profile: default', 'concise answers', 'priority=2'],
-  });
-
-  runCase('chat /forget command', [
-    ...configArgs,
-    'chat',
-    '--profile', 'default',
-    '--provider', 'ollama',
-    '--model', 'gemma4:e4b',
-  ], {
-    env: commandEnv,
-    input: '/forget concise\n',
-    contains: 'Forgot 1 memory record.',
-  });
-
-  runCase('chat /delete-memory command', [
-    ...configArgs,
-    'chat',
-    '--profile', 'default',
-    '--provider', 'ollama',
-    '--model', 'gemma4:e4b',
-  ], {
-    env: commandEnv,
-    input: '/delete-memory concise\n',
-    contains: 'Deleted 1 memory record.',
-  });
-
-  runCase('chat with profile/provider/model/session/no-memories/think', [
-    ...configArgs,
-    'chat',
-    '--profile', 'default',
-    '--provider', 'ollama',
-    '--model', 'gemma4:e4b',
-    '--session', 'chat-session',
-    '--no-memories',
-    '--think', 'true',
-  ], {
-    env: commandEnv,
-    input: 'hello from chat\n',
-    contains: ['Model:    ollama/gemma4:e4b', 'Memory:   off', 'Think:    on', 'mock response'],
-  });
-
-  runCase('chat --resume last --think', [
-    ...configArgs,
-    'chat',
-    '--profile', 'default',
-    '--resume', 'last',
-    '--no-memories',
-    '--think',
-  ], {
-    env: commandEnv,
-    input: '/quit\n',
-    contains: ['Session:  chat-session', 'Think:    on'],
-  });
-
-  runCase('session delete chat session', [...configArgs, 'session', 'delete', 'chat-session'], {
-    env: commandEnv,
-    contains: 'Deleted session chat-session',
   });
 
   runCase('profile init clear target', [...configArgs, 'profile', 'init', 'clear-target'], {

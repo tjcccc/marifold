@@ -1,14 +1,15 @@
 import type { ApiClient } from './client';
 import type { ApprovalMode, MemoryEntry, ProfileDetail, ProfileMode, ProfileSummary, ToolKind } from './types';
 
-/** The editable per-profile markdown files (mirrors core's ProfileFileKind). */
-export type ProfileFileKind = 'profile' | 'rules' | 'custom';
+/** Canonical instruction document plus deprecated aliases accepted by the service. */
+export type ProfileFileKind = 'instructions' | 'profile' | 'rules' | 'custom';
 
 /** PATCH /v1/profiles/:name body. Absent field = untouched; null = clear the
  * override (inherit again). provider/model must be set together (or both null). */
 export interface ProfilePatchInput {
   /** Human-readable label; null/blank clears to the profile-name fallback. */
   displayName?: string | null;
+  /** @deprecated Retained for older service clients; primary clients use Agent. */
   mode?: ProfileMode;
   provider?: string | null;
   model?: string | null;
@@ -145,7 +146,6 @@ export async function fetchAvatarBlob(client: ApiClient, name: string): Promise<
 
 export interface CreateProfileInput {
   name: string;
-  mode?: ProfileMode;
   /** "provider/model" pair; both or neither. */
   provider?: string;
   model?: string;
@@ -158,7 +158,6 @@ export interface CreateProfileInput {
 export async function createProfileWithSetup(client: ApiClient, input: CreateProfileInput): Promise<ProfileDetail> {
   let detail = await createProfile(client, input.name);
   const patch: ProfilePatchInput = {
-    ...(input.mode ? { mode: input.mode } : {}),
     ...(input.provider && input.model ? { provider: input.provider, model: input.model } : {}),
   };
   if (Object.keys(patch).length > 0) detail = await updateProfile(client, input.name, patch);

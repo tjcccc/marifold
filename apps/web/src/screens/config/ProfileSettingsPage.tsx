@@ -36,11 +36,6 @@ const APPROVAL_OPTIONS = [
   { id: 'deny', label: 'Deny' },
 ] as const;
 
-const MODE_OPTIONS = [
-  { id: 'agent', label: 'Agent' },
-  { id: 'chat', label: 'Chat' },
-] as const;
-
 /** Apple-Settings-style grouped page for one profile (design 1d). Editable:
  * every control writes the PROFILE OVERRIDE (never the resolved effective
  * value), so clearing an override falls back to the global default again. */
@@ -58,6 +53,7 @@ export function ProfileSettingsPage(props: ProfileSettingsPageProps) {
   const [cropFile, setCropFile] = useState<File | undefined>();
   const [removeOpen, setRemoveOpen] = useState(false);
   const [removeName, setRemoveName] = useState('');
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const removeTriggerRef = useRef<HTMLButtonElement>(null);
   const removeDialogRef = useRef<HTMLFormElement>(null);
@@ -75,6 +71,10 @@ export function ProfileSettingsPage(props: ProfileSettingsPageProps) {
   useEffect(() => {
     setDisplayName(detail.settings.displayName ?? '');
   }, [detail.name, detail.settings.displayName]);
+
+  useEffect(() => {
+    setAdvancedOpen(false);
+  }, [detail.name]);
 
   useEffect(() => {
     if (!removeOpen) return;
@@ -218,18 +218,29 @@ export function ProfileSettingsPage(props: ProfileSettingsPageProps) {
         </div>
       </section>
 
+      <section className={styles.group} aria-label="Instructions">
+        <div className={styles.groupTitle}>Instructions</div>
+        <FileEditor
+          key={`${detail.name}:instructions`}
+          label="Instructions"
+          content={detail.files.instructions.content}
+          busy={busy}
+          onSave={next => props.onSaveFile('instructions', next)}
+        />
+        {detail.instructionFormat === 'legacy' ? (
+          <div className={styles.groupHint}>
+            Saving creates INSTRUCTIONS.md. Run marifold doctor --fix to archive the legacy files now.
+          </div>
+        ) : detail.legacyInstructionFiles.length > 0 ? (
+          <div className={styles.groupHint}>
+            INSTRUCTIONS.md is active. Run marifold doctor --fix to back up and archive the old split files.
+          </div>
+        ) : null}
+      </section>
+
       <section className={styles.group} aria-label="Model">
         <div className={styles.groupTitle}>Model</div>
         <div className={styles.card}>
-          <div className={styles.rowLine}>
-            <span className={styles.rowLabel}>Mode</span>
-            <SegmentedControl
-              options={MODE_OPTIONS}
-              value={detail.settings.mode ?? 'agent'}
-              onChange={mode => props.onPatch({ mode })}
-              aria-label="Default mode"
-            />
-          </div>
           <div className={styles.rowLine}>
             <span className={styles.rowLabel}>Model</span>
             <select
@@ -274,142 +285,141 @@ export function ProfileSettingsPage(props: ProfileSettingsPageProps) {
         </div>
       </section>
 
-      <section className={styles.group} aria-label="Memory">
-        <div className={styles.groupTitle}>Memory</div>
-        <div className={styles.card}>
-          {active.length === 0 ? <div className={styles.emptyRow}>Nothing remembered yet.</div> : null}
-          {active.map(entry => (
-            <div key={entry.id} className={styles.memoryRow}>
-              <div className={styles.memoryBody}>
-                <div className={styles.memoryText}>{entry.text}</div>
-                <div className={styles.memoryMeta}>
-                  {entry.kind} · p{entry.priority} · {formatRelativeTime(entry.updated_at)}
+      <button
+        type="button"
+        className={styles.advancedToggle}
+        aria-expanded={advancedOpen}
+        aria-controls="profile-advanced-settings"
+        onClick={() => setAdvancedOpen(open => !open)}
+      >
+        <span>
+          <span className={styles.advancedTitle}>Advanced settings</span>
+          <span className={styles.advancedHint}>Memory and agent permissions</span>
+        </span>
+        <DisclosureChevron expanded={advancedOpen} />
+      </button>
+
+      {advancedOpen ? (
+        <div id="profile-advanced-settings" className={styles.advancedGroups}>
+          <section className={styles.group} aria-label="Memory">
+            <div className={styles.groupTitle}>Memory</div>
+            <div className={styles.card}>
+              {active.length === 0 ? <div className={styles.emptyRow}>Nothing remembered yet.</div> : null}
+              {active.map(entry => (
+                <div key={entry.id} className={styles.memoryRow}>
+                  <div className={styles.memoryBody}>
+                    <div className={styles.memoryText}>{entry.text}</div>
+                    <div className={styles.memoryMeta}>
+                      {entry.kind} · p{entry.priority} · {formatRelativeTime(entry.updated_at)}
+                    </div>
+                  </div>
+                  <div className={styles.memoryActions}>
+                    <button
+                      className={styles.smallButton}
+                      disabled={busy}
+                      onClick={() => props.onMemoryAction(entry.id, 'forget')}
+                    >
+                      Forget
+                    </button>
+                    <button
+                      className={styles.smallButtonDanger}
+                      disabled={busy}
+                      onClick={() => {
+                        if (window.confirm('Permanently delete this memory? Forget keeps it recoverable.')) {
+                          props.onMemoryAction(entry.id, 'delete');
+                        }
+                      }}
+                    >
+                      Delete
+                    </button>
+                  </div>
                 </div>
+              ))}
+            </div>
+            <div className={styles.groupHint}>
+              Forget supersedes an entry (recoverable); Delete removes it for good. New memories still come from conversations.
+            </div>
+          </section>
+
+          <section className={styles.group} aria-label="Agent permissions">
+            <div className={styles.groupTitle}>Agent permissions</div>
+            <div className={styles.card}>
+              {TOOL_KINDS.map(kind => {
+                const override = detail.settings.agent?.approval?.[kind];
+                return (
+                  <div key={kind} className={styles.rowLine}>
+                    <span className={styles.rowLabel}>
+                      {TOOL_KIND_LABELS[kind]}
+                      {override ? (
+                        <button
+                          className={styles.inheritButton}
+                          disabled={busy}
+                          title="Remove this profile's override; inherit the global default"
+                          onClick={() => props.onPatch({ approval: { [kind]: null } })}
+                        >
+                          overridden — inherit
+                        </button>
+                      ) : (
+                        <span className={styles.inheritedTag}>inherited</span>
+                      )}
+                    </span>
+                    <SegmentedControl
+                      options={APPROVAL_OPTIONS}
+                      value={effective.approval[kind]}
+                      onChange={mode => props.onPatch({ approval: { [kind]: mode as ApprovalMode } })}
+                      aria-label={`${TOOL_KIND_LABELS[kind]} approval`}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+            <div className={styles.card}>
+              <div className={styles.rowLine}>
+                <span className={styles.rowLabel}>Trusted folders</span>
               </div>
-              <div className={styles.memoryActions}>
+              {inheritedFolders.map(folder => (
+                <div key={folder} className={styles.folderRow}>
+                  <code>{folder}</code>
+                  <span className={styles.inheritedTag}>global</span>
+                </div>
+              ))}
+              {profileFolders.map(folder => (
+                <div key={folder} className={styles.folderRow}>
+                  <code>{folder}</code>
+                  <button
+                    className={styles.smallButton}
+                    disabled={busy}
+                    onClick={() => props.onRemoveTrustedFolder(folder)}
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+              <div className={styles.folderAdd}>
+                <input
+                  className={styles.input}
+                  placeholder="/path/to/folder"
+                  aria-label="New trusted folder"
+                  value={newFolder}
+                  disabled={busy}
+                  onChange={event => setNewFolder(event.target.value)}
+                />
                 <button
                   className={styles.smallButton}
-                  disabled={busy}
-                  onClick={() => props.onMemoryAction(entry.id, 'forget')}
-                >
-                  Forget
-                </button>
-                <button
-                  className={styles.smallButtonDanger}
-                  disabled={busy}
+                  disabled={busy || !newFolder.trim()}
                   onClick={() => {
-                    if (window.confirm('Permanently delete this memory? Forget keeps it recoverable.')) {
-                      props.onMemoryAction(entry.id, 'delete');
-                    }
+                    props.onAddTrustedFolder(newFolder.trim());
+                    setNewFolder('');
                   }}
                 >
-                  Delete
+                  Add
                 </button>
               </div>
             </div>
-          ))}
+            <div className={styles.groupHint}>The agent still narrates everything it does.</div>
+          </section>
         </div>
-        <div className={styles.groupHint}>
-          Forget supersedes an entry (recoverable); Delete removes it for good. New memories still come from conversations.
-        </div>
-      </section>
-
-      <section className={styles.group} aria-label="Agent permissions">
-        <div className={styles.groupTitle}>Agent permissions</div>
-        <div className={styles.card}>
-          {TOOL_KINDS.map(kind => {
-            const override = detail.settings.agent?.approval?.[kind];
-            return (
-              <div key={kind} className={styles.rowLine}>
-                <span className={styles.rowLabel}>
-                  {TOOL_KIND_LABELS[kind]}
-                  {override ? (
-                    <button
-                      className={styles.inheritButton}
-                      disabled={busy}
-                      title="Remove this profile's override; inherit the global default"
-                      onClick={() => props.onPatch({ approval: { [kind]: null } })}
-                    >
-                      overridden — inherit
-                    </button>
-                  ) : (
-                    <span className={styles.inheritedTag}>inherited</span>
-                  )}
-                </span>
-                <SegmentedControl
-                  options={APPROVAL_OPTIONS}
-                  value={effective.approval[kind]}
-                  onChange={mode => props.onPatch({ approval: { [kind]: mode as ApprovalMode } })}
-                  aria-label={`${TOOL_KIND_LABELS[kind]} approval`}
-                />
-              </div>
-            );
-          })}
-        </div>
-        <div className={styles.card}>
-          <div className={styles.rowLine}>
-            <span className={styles.rowLabel}>Trusted folders</span>
-          </div>
-          {inheritedFolders.map(folder => (
-            <div key={folder} className={styles.folderRow}>
-              <code>{folder}</code>
-              <span className={styles.inheritedTag}>global</span>
-            </div>
-          ))}
-          {profileFolders.map(folder => (
-            <div key={folder} className={styles.folderRow}>
-              <code>{folder}</code>
-              <button
-                className={styles.smallButton}
-                disabled={busy}
-                onClick={() => props.onRemoveTrustedFolder(folder)}
-              >
-                Remove
-              </button>
-            </div>
-          ))}
-          <div className={styles.folderAdd}>
-            <input
-              className={styles.input}
-              placeholder="/path/to/folder"
-              aria-label="New trusted folder"
-              value={newFolder}
-              disabled={busy}
-              onChange={event => setNewFolder(event.target.value)}
-            />
-            <button
-              className={styles.smallButton}
-              disabled={busy || !newFolder.trim()}
-              onClick={() => {
-                props.onAddTrustedFolder(newFolder.trim());
-                setNewFolder('');
-              }}
-            >
-              Add
-            </button>
-          </div>
-        </div>
-        <div className={styles.groupHint}>The agent still narrates everything it does.</div>
-      </section>
-
-      <section className={styles.group} aria-label="Instructions">
-        <div className={styles.groupTitle}>Instructions</div>
-        {(
-          [
-            ['PROFILE', 'profile', detail.files.profile.content],
-            ['RULES', 'rules', detail.files.rules.content],
-            ['CUSTOM', 'custom', detail.files.custom.content],
-          ] as const
-        ).map(([label, file, content]) => (
-          <FileEditor
-            key={`${detail.name}:${file}`}
-            label={label}
-            content={content}
-            busy={busy}
-            onSave={next => props.onSaveFile(file, next)}
-          />
-        ))}
-      </section>
+      ) : null}
 
       {props.onDelete ? (
         <section className={styles.group} aria-label="Remove profile">
@@ -501,16 +511,34 @@ export function ProfileSettingsPage(props: ProfileSettingsPageProps) {
   );
 }
 
+function DisclosureChevron({ expanded }: { expanded: boolean }) {
+  return (
+    <svg
+      className={styles.advancedChevron}
+      width="20"
+      height="20"
+      viewBox="0 0 20 20"
+      fill="none"
+      aria-hidden
+      focusable="false"
+    >
+      <path
+        d={expanded ? 'm5 12.5 5-5 5 5' : 'm5 7.5 5 5 5-5'}
+        stroke="currentColor"
+        strokeWidth="2.25"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 /** One instruction-file editor: textarea with Save/Revert, dirty-tracked locally. */
 function FileEditor(props: { label: string; content: string; busy?: boolean; onSave: (content: string) => void }) {
   const [draft, setDraft] = useState(props.content);
   const dirty = draft !== props.content;
   return (
-    <details className={styles.fileBlock}>
-      <summary className={styles.fileSummary}>
-        {props.label}
-        {dirty ? <span className={styles.dirtyTag}>edited</span> : null}
-      </summary>
+    <div className={styles.fileBlock}>
       <div className={styles.fileEditor}>
         <textarea
           className={styles.textarea}
@@ -521,6 +549,7 @@ function FileEditor(props: { label: string; content: string; busy?: boolean; onS
           onChange={event => setDraft(event.target.value)}
         />
         <div className={styles.editorActions}>
+          {dirty ? <span className={styles.dirtyTag}>edited</span> : null}
           <button
             className={styles.smallButton}
             disabled={props.busy || !dirty}
@@ -537,6 +566,6 @@ function FileEditor(props: { label: string; content: string; busy?: boolean; onS
           </button>
         </div>
       </div>
-    </details>
+    </div>
   );
 }

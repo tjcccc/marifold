@@ -130,6 +130,7 @@ export type {
   WebSearchProvider,
   ProfileDetail,
   ProfileFileSummary,
+  ProfileInstructionsFormat,
   ProfileMode,
   ProfileSettings,
   ProfileSummary,
@@ -211,6 +212,7 @@ export type {
   ProfileDeleteResult,
   ProfileFileKind,
   ProfileInitResult,
+  ProfileInstructionsMigrationResult,
   ProfileModelOverrideResult,
   ProfileRenameResult,
 } from './profiles/ProfileManager';

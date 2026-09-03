@@ -11,7 +11,6 @@ import {
   listProfiles,
   rememberMemory,
   setProfilePinned as setProfilePinnedRequest,
-  updateProfile,
 } from '../../api/profiles';
 import { answerApproval, answerUserInput, cancelRun, listRuns, startRun, steerRun } from '../../api/runs';
 import {
@@ -645,7 +644,9 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
       // and readable text is inlined for chat parity; every agent-run upload is
       // staged read-only for inspect_attachment.
       const pending = options.attachments ?? attachmentsRef.current;
-      const mode = skill?.mode ?? profileDetail?.settings.mode ?? 'agent';
+      // Ordinary Web conversations are always agent runs. The chat transport
+      // remains available only for explicitly chat-mode Skills and compatibility.
+      const mode = skill?.mode ?? 'agent';
       if (mode === 'chat' && pending.some(item => item.kind === 'file')) {
         dispatch({
           type: 'notice',
@@ -831,7 +832,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
         setSending(false);
       }
     },
-    [client, profileName, sessionId, modelChoice, think, profileDetail, followers, navigate, handleError, refreshSessions, loadSession, attachmentDraftKey],
+    [client, profileName, sessionId, modelChoice, think, followers, navigate, handleError, refreshSessions, loadSession, attachmentDraftKey],
   );
 
   const stop = useCallback(async (): Promise<boolean> => {
@@ -861,7 +862,6 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
         case 'status':
           notify([
             `Profile: ${profileName ?? '—'}`,
-            `Mode: ${profileDetail?.settings.mode ?? 'agent'}`,
             `Model: ${modelChoice ?? 'Auto (profile default)'}`,
             `Thinking: ${think ? 'on' : 'off'}`,
             `Session: ${sessionId ?? 'new'}`,
@@ -894,18 +894,6 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
         case 'new':
           newSession();
           break;
-        case 'agent':
-        case 'chat': {
-          if (!profileName) break;
-          try {
-            const detail = await updateProfile(client, profileName, { mode: name as 'agent' | 'chat' });
-            setProfileDetail(detail);
-            notify(`Profile mode set to ${name} (saved to the profile).`);
-          } catch (error) {
-            handleError(error);
-          }
-          break;
-        }
         case 'think':
           setThink(!think);
           notify(`Thinking mode ${think ? 'off' : 'on'}.`);

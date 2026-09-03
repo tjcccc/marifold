@@ -6,13 +6,19 @@ import { MarifoldError } from '../errors/MarifoldError';
 import { ProfileDetail, ProfileFileSummary, ProfileMode, ProfileSettings, ProfileSummary } from '../config/ConfigSchema';
 import { parsePartialAgentConfig } from '../config/ConfigLoader';
 import { findProfileAvatar, normalizeProfileDisplayName } from './ProfileManager';
+import {
+  DEFAULT_MARIFOLD_PROFILE_INSTRUCTIONS,
+  PROFILE_INSTRUCTIONS_FILE,
+  combineInstructionParts,
+  resolveDirectoryProfileInstructions,
+} from './ProfileInstructions';
 
 const SAFE_PROFILE_NAME = /^[A-Za-z0-9_-]+$/;
 
 const BUILT_IN_DEFAULT_PROFILE: Profile = {
   name: 'default',
-  identity: 'You are Marifold, a local-first personal AI workspace assistant.',
-  rules: 'Answer clearly and practically. Do not claim unsupported capabilities.',
+  identity: DEFAULT_MARIFOLD_PROFILE_INSTRUCTIONS,
+  rules: '',
   custom: '',
   memories: [],
 };
@@ -117,13 +123,27 @@ export class ProfileResolver implements ProfileLoader {
     }
 
     if (summary.source === 'directory' && summary.path) {
+      const instructions = resolveDirectoryProfileInstructions(summary.path);
+      const compatibilityProfile = instructions.format === 'unified'
+        ? { path: instructions.path, content: instructions.content }
+        : readProfileFile(path.join(summary.path, 'PROFILE.md'));
       return {
         ...summary,
         settings: this.loadSettings(name),
+        instructionFormat: instructions.format,
+        legacyInstructionFiles: instructions.legacyFiles,
         files: {
-          profile: readProfileFile(path.join(summary.path, 'PROFILE.md')),
-          rules: readProfileFile(path.join(summary.path, 'RULES.md')),
-          custom: readProfileFile(path.join(summary.path, 'CUSTOM.md')),
+          instructions: {
+            ...(instructions.format === 'unified' ? { path: instructions.path } : {}),
+            content: instructions.content,
+          },
+          profile: compatibilityProfile,
+          rules: instructions.format === 'unified'
+            ? { content: '' }
+            : readProfileFile(path.join(summary.path, 'RULES.md')),
+          custom: instructions.format === 'unified'
+            ? { content: '' }
+            : readProfileFile(path.join(summary.path, 'CUSTOM.md')),
           profileToml: readProfileFile(path.join(summary.path, 'profile.toml')),
         },
       };
@@ -131,10 +151,14 @@ export class ProfileResolver implements ProfileLoader {
 
     if (summary.source === 'json' && summary.path) {
       const profile = this.loadJsonProfile(name);
+      const instructions = combineProfileFields(profile);
       return {
         ...summary,
         settings: { memories: true },
+        instructionFormat: 'json',
+        legacyInstructionFiles: [],
         files: {
+          instructions: { content: instructions },
           profile: { path: summary.path, content: profile?.identity ?? '' },
           rules: { path: summary.path, content: profile?.rules ?? '' },
           custom: { path: summary.path, content: profile?.custom ?? '' },
@@ -146,7 +170,10 @@ export class ProfileResolver implements ProfileLoader {
     return {
       ...summary,
       settings: { memories: true },
+      instructionFormat: 'built-in',
+      legacyInstructionFiles: [],
       files: {
+        instructions: { content: BUILT_IN_DEFAULT_PROFILE.identity },
         profile: { content: BUILT_IN_DEFAULT_PROFILE.identity },
         rules: { content: BUILT_IN_DEFAULT_PROFILE.rules },
         custom: { content: BUILT_IN_DEFAULT_PROFILE.custom ?? '' },
@@ -158,11 +185,12 @@ export class ProfileResolver implements ProfileLoader {
   private loadDirectoryProfile(name: string): Profile | undefined {
     const profileDir = path.join(this.profilesDir, name);
     if (!isProfileDirectory(profileDir)) return undefined;
+    const instructions = resolveDirectoryProfileInstructions(profileDir);
     return {
       name,
-      identity: readOptional(path.join(profileDir, 'PROFILE.md')),
-      rules: readOptional(path.join(profileDir, 'RULES.md')),
-      custom: readOptional(path.join(profileDir, 'CUSTOM.md')),
+      identity: instructions.content,
+      rules: '',
+      custom: '',
       memories: [],
     };
   }
@@ -222,6 +250,7 @@ function isProfileDirectory(profileDir: string): boolean {
       fs.existsSync(path.join(profileDir, 'PROFILE.md'))
       || fs.existsSync(path.join(profileDir, 'RULES.md'))
       || fs.existsSync(path.join(profileDir, 'CUSTOM.md'))
+      || fs.existsSync(path.join(profileDir, PROFILE_INSTRUCTIONS_FILE))
       || fs.existsSync(path.join(profileDir, 'profile.toml'))
     );
 }
@@ -235,6 +264,11 @@ function readProfileFile(filePath: string): ProfileFileSummary {
     path: filePath,
     content: readOptional(filePath),
   };
+}
+
+function combineProfileFields(profile: Profile | undefined): string {
+  if (!profile) return '';
+  return combineInstructionParts([profile.rules, profile.identity, profile.custom]);
 }
 
 function optionalString(value: unknown, label: string): string | undefined {

@@ -1,4 +1,4 @@
-import type { Mode, NoticeTone } from './appState.js';
+import type { NoticeTone } from './appState.js';
 
 /**
  * Operations a `/command` can perform. The App implements this against the
@@ -8,9 +8,6 @@ import type { Mode, NoticeTone } from './appState.js';
  */
 export interface CommandContext {
   notify(text: string, tone?: NoticeTone): void;
-  setMode(mode: Mode): void;
-  /** Persist `mode` as the current profile's default (profile.toml) and apply it now. */
-  setDefaultMode(mode: Mode): void;
   newSession(): void;
   clear(): void;
   stop(): void;
@@ -20,7 +17,7 @@ export interface CommandContext {
   openModelPicker(): void;
   openProfilePicker(): void;
   selectProfile(name: string): void;
-  openSkills(scope?: 'global' | 'profile'): void;
+  openSkills(scope?: 'global' | 'profile', profile?: string): void;
   showPermissions(): void;
   showHelp(): void;
   showStatus(): void;
@@ -32,7 +29,7 @@ export interface CommandContext {
   /** Send one prompt with attached images preserved byte-for-byte. */
   sendOriginal(text: string): void;
   showSessions(): void;
-  runDoctor(): void;
+  runDoctor(fix?: boolean): void;
   installSkill(arg: string): void;
   readFile(path: string): void;
   setImage(arg: string): void;
@@ -66,7 +63,7 @@ export interface CommandCompletion {
 
 const COMMANDS: CommandSpec[] = [
   { name: 'help', summary: 'List commands and input syntax.', run: ctx => ctx.showHelp() },
-  { name: 'status', summary: 'Show profile, mode, model, thinking, and session.', run: ctx => ctx.showStatus() },
+  { name: 'status', summary: 'Show profile, model, thinking, and session.', run: ctx => ctx.showStatus() },
   { name: 'copy', summary: "Copy the last response's original text to the clipboard.", run: ctx => ctx.copyLast() },
   { name: 'retry', aliases: ['regenerate'], summary: 'Re-run your last message (e.g. after /model to compare).', run: ctx => ctx.retryLast() },
   {
@@ -80,16 +77,6 @@ const COMMANDS: CommandSpec[] = [
   },
   { name: 'exit', aliases: ['quit'], summary: 'Leave the TUI.', run: ctx => ctx.exit() },
   { name: 'new', summary: 'Start a fresh session (clear transcript).', run: ctx => ctx.newSession() },
-  {
-    name: 'agent',
-    summary: 'Agent mode: /agent (this session) or /agent default (save to profile).',
-    run: (ctx, args) => (args.trim() === 'default' ? ctx.setDefaultMode('agent') : ctx.setMode('agent')),
-  },
-  {
-    name: 'chat',
-    summary: 'Chat mode: /chat (this session) or /chat default (save to profile).',
-    run: (ctx, args) => (args.trim() === 'default' ? ctx.setDefaultMode('chat') : ctx.setMode('chat')),
-  },
   { name: 'clear', summary: 'Clear the transcript.', run: ctx => ctx.clear() },
   { name: 'steps', summary: 'Force a step-by-step plan on your next message (one-shot).', run: ctx => ctx.toggleForcePlan() },
   { name: 'stop', summary: 'Cancel the running task.', run: ctx => ctx.stop() },
@@ -140,19 +127,37 @@ const COMMANDS: CommandSpec[] = [
   },
   {
     name: 'skills',
-    summary: 'Manage skills: /skills (this profile) or /skills --global.',
-    run: (ctx, args) => ctx.openSkills(args.trim() === '--global' ? 'global' : 'profile'),
+    summary: 'Manage global skills, or use /skills --profile <name>.',
+    run: (ctx, args) => {
+      const value = args.trim();
+      if (!value || value === '--global' || value === '-g') {
+        ctx.openSkills('global');
+        return;
+      }
+      const match = /^--profile\s+([A-Za-z0-9_-]+)$/.exec(value);
+      if (match) ctx.openSkills('profile', match[1]);
+      else ctx.notify('Usage: /skills [--profile <name>]', 'warn');
+    },
   },
   {
     name: 'install-skill',
-    summary: 'Install a skill: /install-skill [--global] <path|url>.',
+    summary: 'Install globally, or use /install-skill --profile <name> <path|url>.',
     run: (ctx, args) => {
       const arg = args.trim();
-      if (!arg) ctx.notify('Usage: /install-skill <path>', 'warn');
+      if (!arg) ctx.notify('Usage: /install-skill [--profile <name>] <path|url>', 'warn');
       else ctx.installSkill(arg);
     },
   },
-  { name: 'doctor', summary: 'Check provider/model health.', run: ctx => ctx.runDoctor() },
+  {
+    name: 'doctor',
+    summary: 'Check health; /doctor --fix migrates this profile\'s legacy instructions.',
+    run: (ctx, args) => {
+      const value = args.trim();
+      if (!value) ctx.runDoctor(false);
+      else if (value === '--fix') ctx.runDoctor(true);
+      else ctx.notify('Usage: /doctor [--fix]', 'warn');
+    },
+  },
   {
     name: 'read',
     summary: 'Read a file into context: /read <path>.',

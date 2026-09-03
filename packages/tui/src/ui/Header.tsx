@@ -30,7 +30,7 @@ export function Header({ state }: { state: AppState }): React.ReactElement {
       <Box justifyContent="space-between">
         <Text>
           <Text bold>{state.displayName} ({state.profile})</Text>
-          <Text color={DIM}> · {state.mode} · {state.provider}/{state.model}</Text>
+          <Text color={DIM}> · {state.provider}/{state.model}</Text>
         </Text>
         <Text color={DIM}>/help for usage</Text>
       </Box>

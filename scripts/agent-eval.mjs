@@ -161,8 +161,7 @@ try {
 function writeProfile(root, providerName, modelName) {
   const profileDir = path.join(root, 'default');
   fs.mkdirSync(profileDir, { recursive: true });
-  fs.writeFileSync(path.join(profileDir, 'PROFILE.md'), '# Agent Eval\n\nYou are a focused agent completing small filesystem tasks.\n');
-  fs.writeFileSync(path.join(profileDir, 'RULES.md'), '# Rules\n\n- Use tools when needed.\n- Keep answers short.\n');
+  fs.writeFileSync(path.join(profileDir, 'INSTRUCTIONS.md'), '# Agent Eval\n\nYou are a focused agent completing small filesystem tasks.\n\n## Guidelines\n\n- Use tools when needed.\n- Keep answers short.\n');
   fs.writeFileSync(path.join(profileDir, 'profile.toml'), `memories = false\nprovider = "${providerName}"\nmodel = "${modelName}"\n`);
 }
 

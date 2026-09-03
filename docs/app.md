@@ -360,10 +360,11 @@ stable configured profile name. The options are:
   only inside the current ephemeral App instance and profile reference. Normal
   profile conversations are never read or written.
 
-PROFILE.md, RULES.md, and CUSTOM.md always load for a registered profile; there
-is intentionally no `profileContext: false` switch because those documents are
-the profile's identity. The Skill's declared mode is honored. A Skill without
-a mode follows the profile's configured mode, defaulting to Agent mode.
+`INSTRUCTIONS.md` always loads for a registered profile, with the read-only
+legacy split-file fallback used when it has not been migrated yet. There is
+intentionally no `profileContext: false` switch because that document is the
+profile's identity. The Skill's declared mode is honored. A Skill without a
+mode uses Agent execution.
 
 `useProfileSkill(profile, skillNameOrState, options)` resolves the name through the
 profile's ordinary installed profile/global catalog (excluding protected
@@ -420,8 +421,8 @@ Each trigger runs exactly one Skill. SkillApp does not support operation
 chaining, branching, loops, or local actions. The protected built-in builder
 described above is the only App-specific persistent mutation boundary.
 
-Profile mode does not inherit the profile's Agent permissions or trusted
-folders. Ordinary Agent-mode profile Skill operations expose attachment-scoped
+App execution does not inherit the profile's Agent permissions or trusted
+folders. Ordinary Agent profile Skill operations expose attachment-scoped
 `inspect_attachment`, `read_attachment`, and `search_attachment`, plus a
 fail-closed `read_file`. Selected Skill bundles, the private run workspace, and
 static App read declarations are the only readable host resources. Write,

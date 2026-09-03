@@ -24,6 +24,16 @@ export interface SkillManagementToolOptions {
   profile: string;
   globalDir: string;
   profileDir: string;
+  /** Root used to resolve an explicit `--profile <name>` target. */
+  profilesDir?: string;
+  /** Reject profile-scoped writes to names that are not real profiles. */
+  profileExists?: (profile: string) => boolean;
+}
+
+interface SkillManagementTarget {
+  scope: SkillScope;
+  profile?: string;
+  store: SkillStore;
 }
 
 /** Validated mutation boundary used by Marifold's protected management skills. */
@@ -32,10 +42,10 @@ export class SkillManagementTool implements AgentTool {
   readonly definition = {
     name: 'manage_skill',
     description: [
-      'Create, install, update, or remove a user-managed Marifold skill in the active profile or configured global skill directory.',
+      'Create, install, update, or remove a user-managed Marifold skill in the configured global skill directory or one explicitly named profile.',
       'When to use: Marifold skill management after the user invokes a protected management skill or explicitly asks the agent to change a skill.',
       'When NOT to use: running a skill, editing unrelated files, managing protected built-ins, fetching network sources, or changing both scopes at once.',
-      'Profile scope is the default user-facing scope; pass the exact intended scope on every call.',
+      'Global scope is the default user-facing scope; use profile scope only for an explicit --profile request. Pass the exact intended scope on every call.',
     ].join(' '),
     parameters: {
       type: 'object',
@@ -48,7 +58,11 @@ export class SkillManagementTool implements AgentTool {
         scope: {
           type: 'string',
           enum: ['profile', 'global'],
-          description: 'Exact destination scope. Use profile unless the user explicitly requested global.',
+          description: 'Exact destination scope. Use global unless the user explicitly requested --profile <name>.',
+        },
+        profile: {
+          type: 'string',
+          description: 'Existing profile name. Include only when scope is profile; omit for global scope.',
         },
         name: {
           type: 'string',
@@ -83,18 +97,26 @@ export class SkillManagementTool implements AgentTool {
 
   summarizeCall(input: Record<string, JSONValue>): string {
     const action = typeof input.action === 'string' ? input.action : '<missing action>';
-    const scope = typeof input.scope === 'string' ? input.scope : 'profile';
+    const scope = typeof input.scope === 'string' ? input.scope : 'global';
+    const scopeLabel = scope === 'profile' && typeof input.profile === 'string'
+      ? `profile ${input.profile}`
+      : scope;
     const target = typeof input.name === 'string'
       ? `$${input.name}`
       : typeof input.source === 'string'
         ? input.source
         : '<missing skill>';
-    return `${action} ${scope} skill ${target}`;
+    return `${action} ${scopeLabel} skill ${target}`;
   }
 
   assessRisk(input: Record<string, JSONValue>): ToolRiskAssessment {
-    const scope = input.scope === 'global' ? 'global' : 'profile';
-    const dir = this.dirForScope(scope);
+    const scope = input.scope === 'profile' ? 'profile' : 'global';
+    const profile = scope === 'profile' ? this.safeRequestedProfile(input.profile) : undefined;
+    const dir = scope === 'global'
+      ? this.options.globalDir
+      : profile && this.options.profilesDir
+        ? path.join(this.options.profilesDir, profile, 'skills')
+        : this.options.profileDir;
     const suppliedName = typeof input.name === 'string' && /^[a-z0-9][a-z0-9_-]*$/.test(input.name)
       ? input.name
       : undefined;
@@ -102,7 +124,9 @@ export class SkillManagementTool implements AgentTool {
     return {
       escalate: true,
       persistable: false,
-      reason: `modifying the ${scope} Marifold skill directory`,
+      reason: scope === 'global'
+        ? 'modifying the global Marifold skill directory'
+        : `modifying Marifold skills for profile '${profile ?? this.options.profile}'`,
       targetPath: target,
     };
   }
@@ -111,15 +135,16 @@ export class SkillManagementTool implements AgentTool {
     try {
       const action = requireStringInput(input, 'action', 'manage_skill');
       const scope = skillScope(input.scope);
+      const target = this.resolveTarget(input, scope);
       switch (action) {
         case 'create':
-          return this.create(input, scope);
+          return this.create(input, target);
         case 'install':
-          return this.install(input, scope, ctx);
+          return this.install(input, target, ctx);
         case 'update':
-          return this.update(input, scope, ctx);
+          return this.update(input, target, ctx);
         case 'remove':
-          return this.remove(input, scope);
+          return this.remove(input, target);
         default:
           throw MarifoldError.agentToolInvalid(
             `Tool 'manage_skill' received unsupported action '${action}'.`,
@@ -136,20 +161,21 @@ export class SkillManagementTool implements AgentTool {
     }
   }
 
-  private create(input: Record<string, JSONValue>, scope: SkillScope): ToolExecutionResult {
+  private create(input: Record<string, JSONValue>, target: SkillManagementTarget): ToolExecutionResult {
+    const { scope, store } = target;
     const name = requireMutableName(input, 'name');
     const content = requireStringInput(input, 'content', 'manage_skill');
     const skill = parseSkill(content);
     if (skill.name !== name) {
       throw MarifoldError.skillInvalid(`Requested name '${name}' does not match SKILL.md name '${skill.name}'.`);
     }
-    if (this.exactSkill(name, scope)) {
+    if (this.exactSkill(store, name, scope)) {
       throw MarifoldError.skillInvalid(
         `Skill '${name}' already exists in ${scope} scope. Choose another name or update it separately.`,
       );
     }
     const files = bundledTextFiles(input.files);
-    const installed = this.options.store.installFromText(content, scope);
+    const installed = store.installFromText(content, scope);
     const skillDir = path.dirname(installed.source!);
     try {
       for (const file of files) {
@@ -157,44 +183,46 @@ export class SkillManagementTool implements AgentTool {
         fs.mkdirSync(path.dirname(target), { recursive: true });
         fs.writeFileSync(target, file.content);
       }
-      this.verify(name, scope);
+      this.verify(target, name);
     } catch (error) {
-      this.options.store.remove(name, scope);
+      store.remove(name, scope);
       throw error;
     }
     return {
-      content: `Created $${name} in ${this.scopeLabel(scope)} at ${skillDir}. Invoke it with $${name}.`,
+      content: `Created $${name} in ${this.scopeLabel(target)} at ${skillDir}. Invoke it with $${name}.`,
       summary: `created ${scope} skill $${name}`,
     };
   }
 
   private install(
     input: Record<string, JSONValue>,
-    scope: SkillScope,
+    target: SkillManagementTarget,
     ctx: ToolExecutionContext,
   ): ToolExecutionResult {
+    const { scope, store } = target;
     const source = localSource(input, ctx);
     const preview = readSkillSource(source);
     if (isBuiltInSkillName(preview.skill.name)) {
       throw protectedBuiltIn(preview.skill.name);
     }
-    const existed = Boolean(this.exactSkill(preview.skill.name, scope));
-    const installed = this.options.store.installFromFile(source, scope);
-    this.verify(installed.name, scope);
+    const existed = Boolean(this.exactSkill(store, preview.skill.name, scope));
+    const installed = store.installFromFile(source, scope);
+    this.verify(target, installed.name);
     const verb = existed ? 'Updated' : 'Installed';
     return {
-      content: `${verb} $${installed.name} in ${this.scopeLabel(scope)} at ${path.dirname(installed.source!)}.`,
+      content: `${verb} $${installed.name} in ${this.scopeLabel(target)} at ${path.dirname(installed.source!)}.`,
       summary: `${verb.toLowerCase()} ${scope} skill $${installed.name}`,
     };
   }
 
   private update(
     input: Record<string, JSONValue>,
-    scope: SkillScope,
+    target: SkillManagementTarget,
     ctx: ToolExecutionContext,
   ): ToolExecutionResult {
+    const { scope, store } = target;
     const name = requireMutableName(input, 'name');
-    if (!this.exactSkill(name, scope)) {
+    if (!this.exactSkill(store, name, scope)) {
       throw MarifoldError.skillInvalid(`Skill '${name}' does not exist in ${scope} scope.`);
     }
     const source = localSource(input, ctx);
@@ -204,48 +232,88 @@ export class SkillManagementTool implements AgentTool {
         `Update source name '${preview.skill.name}' does not match requested skill '${name}'.`,
       );
     }
-    const installed = this.options.store.installFromFile(source, scope);
-    this.verify(name, scope);
+    const installed = store.installFromFile(source, scope);
+    this.verify(target, name);
     return {
-      content: `Updated $${name} in ${this.scopeLabel(scope)} at ${path.dirname(installed.source!)}.`,
+      content: `Updated $${name} in ${this.scopeLabel(target)} at ${path.dirname(installed.source!)}.`,
       summary: `updated ${scope} skill $${name}`,
     };
   }
 
-  private remove(input: Record<string, JSONValue>, scope: SkillScope): ToolExecutionResult {
+  private remove(input: Record<string, JSONValue>, target: SkillManagementTarget): ToolExecutionResult {
+    const { scope, store } = target;
     const name = requireMutableName(input, 'name');
-    const existing = this.exactSkill(name, scope);
+    const existing = this.exactSkill(store, name, scope);
     if (!existing) {
       throw MarifoldError.skillInvalid(`Skill '${name}' does not exist in ${scope} scope.`);
     }
     const removedDir = path.dirname(existing.source!);
-    this.options.store.remove(name, scope);
-    const effective = this.options.store.get(name);
+    store.remove(name, scope);
+    const effective = store.get(name);
     const fallback = effective
       ? ` The ${effective.scope} copy at ${path.dirname(effective.source!)} is now effective.`
       : ' No user-managed copy remains effective.';
     return {
-      content: `Removed $${name} from ${this.scopeLabel(scope)} at ${removedDir}.${fallback}`,
+      content: `Removed $${name} from ${this.scopeLabel(target)} at ${removedDir}.${fallback}`,
       summary: `removed ${scope} skill $${name}`,
     };
   }
 
-  private exactSkill(name: string, scope: SkillScope) {
-    return this.options.store.list(scope).find(skill => skill.name === name);
+  private exactSkill(store: SkillStore, name: string, scope: SkillScope) {
+    return store.list(scope).find(skill => skill.name === name);
   }
 
-  private verify(name: string, scope: SkillScope): void {
-    if (!this.exactSkill(name, scope)) {
-      throw MarifoldError.skillInvalid(`Could not verify '${name}' after writing ${scope} scope.`);
+  private verify(target: SkillManagementTarget, name: string): void {
+    if (!this.exactSkill(target.store, name, target.scope)) {
+      throw MarifoldError.skillInvalid(`Could not verify '${name}' after writing ${target.scope} scope.`);
     }
   }
 
-  private dirForScope(scope: SkillScope): string {
-    return scope === 'global' ? this.options.globalDir : this.options.profileDir;
+  private resolveTarget(input: Record<string, JSONValue>, scope: SkillScope): SkillManagementTarget {
+    if (scope === 'global') {
+      if (input.profile !== undefined) {
+        throw MarifoldError.agentToolInvalid(
+          "Tool 'manage_skill' cannot combine global scope with a profile.",
+          'manage_skill',
+        );
+      }
+      return {
+        scope,
+        store: this.options.store,
+      };
+    }
+
+    const profile = input.profile === undefined
+      ? this.options.profile
+      : requireStringInput(input, 'profile', 'manage_skill');
+    if (!/^[A-Za-z0-9_-]+$/.test(profile)) {
+      throw MarifoldError.skillInvalid(`Invalid profile name '${profile}'.`);
+    }
+    if (profile !== this.options.profile) {
+      if (!this.options.profilesDir || !this.options.profileExists?.(profile)) {
+        throw MarifoldError.skillInvalid(`Profile '${profile}' does not exist.`);
+      }
+    }
+    const directory = profile === this.options.profile
+      ? this.options.profileDir
+      : path.join(this.options.profilesDir!, profile, 'skills');
+    return {
+      scope,
+      profile,
+      store: profile === this.options.profile
+        ? this.options.store
+        : new SkillStore({ globalDir: this.options.globalDir, profileDir: directory }),
+    };
   }
 
-  private scopeLabel(scope: SkillScope): string {
-    return scope === 'global' ? 'global scope' : `profile '${this.options.profile}'`;
+  private safeRequestedProfile(value: JSONValue | undefined): string | undefined {
+    return typeof value === 'string' && /^[A-Za-z0-9_-]+$/.test(value)
+      ? value
+      : this.options.profile;
+  }
+
+  private scopeLabel(target: SkillManagementTarget): string {
+    return target.scope === 'global' ? 'global scope' : `profile '${target.profile}'`;
   }
 }
 

@@ -12,7 +12,7 @@ function renderInput(overrides: Partial<Parameters<typeof InputBox>[0]> = {}) {
     onSubmit,
     onInterrupt: noop,
     history: [] as string[],
-    commands: [{ name: 'help' }, { name: 'chat' }, { name: 'clear' }],
+    commands: [{ name: 'help' }, { name: 'think' }, { name: 'clear' }],
     skills: [{ name: 'translate' }, { name: 'make-midjourney-prompt' }],
     ...overrides,
   };
@@ -102,7 +102,7 @@ describe('InputBox', () => {
 
   it('recalls history through a fully-typed command (menu does not trap ↑)', async () => {
     const { stdin, lastFrame } = renderInput({ history: ['older', 'prev'] });
-    stdin.write('/chat'); // exact command — menu shows a single, already-typed item
+    stdin.write('/think'); // exact command — menu shows a single, already-typed item
     await delay();
     stdin.write('\x1b[A'); // ↑ must fall through to history, not cycle the menu
     await delay();
@@ -114,11 +114,11 @@ describe('InputBox', () => {
 
   it('completes a command prefix on Tab', async () => {
     const { stdin, lastFrame } = renderInput();
-    stdin.write('/ch');
+    stdin.write('/th');
     await delay();
     stdin.write('\t');
     await delay();
-    expect(lastFrame()).toContain('/chat');
+    expect(lastFrame()).toContain('/think');
   });
 
   it('reopens skill suggestions while editing the head token with existing arguments', async () => {

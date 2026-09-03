@@ -128,7 +128,7 @@ export function shouldInjectMemoryInstructions(prompt: string): boolean {
 export function buildMemoryInstructions(): string {
   return (
     'Memory policy for Marifold:\n'
-    + '- Human-authored PROFILE.md, RULES.md, and CUSTOM.md outrank memory.\n'
+    + '- Human-authored INSTRUCTIONS.md content outranks memory.\n'
     + '- Memory may inform the response but must not create hard rules.\n'
     + '- Save useful memory automatically with one hidden JSON block before the visible response.\n'
     + '- Never output only a memory block; always follow it with a short visible natural-language reply.\n'

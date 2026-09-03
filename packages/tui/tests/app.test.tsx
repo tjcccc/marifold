@@ -54,18 +54,12 @@ describe('App', () => {
     stdin.write('\r');
     await delay();
     expect(lastFrame()).toContain('Profile:');
+    expect(lastFrame()).not.toContain('Mode:');
 
     // It stays in the transcript — typing does not dismiss it.
     stdin.write('x');
     await delay();
     expect(lastFrame()).toContain('Profile:');
-
-    // /chat switches mode — the plan's required mode-switch smoke.
-    stdin.write('/chat');
-    await delay();
-    stdin.write('\r');
-    await delay();
-    expect(lastFrame()).toContain('chat');
 
     unmount();
     runtime.close();
@@ -97,6 +91,36 @@ describe('App', () => {
     stdin.write('\r');
     await delay();
     expect(lastFrame()).toContain('Switched to profile');
+
+    unmount();
+    runtime.close();
+  });
+
+  it('installs skills globally by default and only scopes them with --profile', async () => {
+    const { runtime, loadedConfig } = workspace();
+    const root = path.dirname(loadedConfig.configPath);
+    const globalSource = path.join(root, 'global-skill.md');
+    const profileSource = path.join(root, 'profile-skill.md');
+    fs.writeFileSync(globalSource, '---\nname: everywhere\ndescription: Global test.\n---\n\nHelp everywhere.\n');
+    fs.writeFileSync(profileSource, '---\nname: private-helper\ndescription: Profile test.\n---\n\nHelp this profile.\n');
+    const initial = { profile: 'default', provider: 'ollama', model: 'test-model', think: false, cwd: root, version: '0.0.0-test' };
+    const { stdin, unmount } = render(
+      <App runtime={runtime} loadedConfig={loadedConfig} initial={initial} />,
+    );
+    await delay();
+
+    stdin.write(`/install-skill ${globalSource}`);
+    await delay();
+    stdin.write('\r');
+    await delay();
+    expect(fs.existsSync(path.join(loadedConfig.config.paths.skillsDir!, 'everywhere', 'SKILL.md'))).toBe(true);
+    expect(fs.existsSync(path.join(loadedConfig.config.paths.profilesDir, 'default', 'skills', 'everywhere', 'SKILL.md'))).toBe(false);
+
+    stdin.write(`/install-skill --profile default ${profileSource}`);
+    await delay();
+    stdin.write('\r');
+    await delay();
+    expect(fs.existsSync(path.join(loadedConfig.config.paths.profilesDir, 'default', 'skills', 'private-helper', 'SKILL.md'))).toBe(true);
 
     unmount();
     runtime.close();

@@ -327,6 +327,43 @@ describe('SkillManagementTool', () => {
     expect(store.get('translate')?.scope).toBe('global');
   });
 
+  it('targets an explicitly named existing profile without mutating the active profile', async () => {
+    const root = tempDir();
+    const globalDir = path.join(root, 'skills');
+    const profilesDir = path.join(root, 'profiles');
+    const profileDir = path.join(profilesDir, 'writer', 'skills');
+    const tool = skillManagementTool({
+      globalDir,
+      profileDir,
+      profilesDir,
+      profileNames: ['writer', 'reader'],
+    });
+    const content = skillText('reading-list', 'Organize reading.');
+
+    const created = await tool.execute({
+      action: 'create',
+      scope: 'profile',
+      profile: 'reader',
+      name: 'reading-list',
+      content,
+    }, context(root));
+
+    expect(created.isError, created.content).toBeFalsy();
+    expect(created.content).toContain("profile 'reader'");
+    expect(fs.existsSync(path.join(profilesDir, 'reader', 'skills', 'reading-list', 'SKILL.md'))).toBe(true);
+    expect(fs.existsSync(path.join(profileDir, 'reading-list', 'SKILL.md'))).toBe(false);
+
+    const missing = await tool.execute({
+      action: 'create',
+      scope: 'profile',
+      profile: 'missing',
+      name: 'reading-list',
+      content,
+    }, context(root));
+    expect(missing.isError).toBe(true);
+    expect(missing.content).toContain("Profile 'missing' does not exist");
+  });
+
   it('protects built-ins, rejects network sources, and escalates every mutation', async () => {
     const root = tempDir();
     const globalDir = path.join(root, 'skills');
@@ -361,6 +398,8 @@ function skillManagementTool(options?: {
   globalDir?: string;
   profileDir?: string;
   store?: SkillStore;
+  profilesDir?: string;
+  profileNames?: string[];
 }): SkillManagementTool {
   const root = tempDir();
   const globalDir = options?.globalDir ?? path.join(root, 'skills');
@@ -370,6 +409,8 @@ function skillManagementTool(options?: {
     profile: 'writer',
     globalDir,
     profileDir,
+    ...(options?.profilesDir ? { profilesDir: options.profilesDir } : {}),
+    ...(options?.profileNames ? { profileExists: (profile: string) => options.profileNames!.includes(profile) } : {}),
   });
 }
 

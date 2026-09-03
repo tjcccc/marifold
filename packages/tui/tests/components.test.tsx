@@ -18,6 +18,7 @@ describe('StatusLine context gauge', () => {
   it('hides the gauge when no budget is set', () => {
     const frame = render(<StatusLine state={createInitialState({ ...base })} />).lastFrame() ?? '';
     expect(frame).not.toContain('ctx');
+    expect(frame).not.toContain('agent');
   });
 
   it('shows budget placeholder before any turn, then percent + usage', () => {

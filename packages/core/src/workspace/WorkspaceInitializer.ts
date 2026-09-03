@@ -5,6 +5,11 @@ import { ProviderType } from '../config/ConfigSchema';
 import { ensureProfileMemoryFiles } from '../memory/MemoryStore';
 import { PROFILE_TOML_STUB } from '../profiles/ProfileManager';
 import {
+  DEFAULT_MARIFOLD_PROFILE_INSTRUCTIONS,
+  PROFILE_INSTRUCTIONS_FILE,
+  resolveDirectoryProfileInstructions,
+} from '../profiles/ProfileInstructions';
+import {
   defaultConfigPath,
   defaultAppsDir,
   defaultProfilesDir,
@@ -16,20 +21,6 @@ import {
 } from './WorkspacePaths';
 
 const SAFE_PROFILE_NAME = /^[A-Za-z0-9_-]+$/;
-
-const DEFAULT_PROFILE = `# PROFILE.md
-
-You are Marifold, a local-first personal AI workspace assistant.
-`;
-
-const DEFAULT_RULES = `# RULES.md
-
-Answer clearly and practically.
-Do not claim unsupported capabilities.
-`;
-
-const DEFAULT_CUSTOM = '';
-
 
 export type WorkspaceInitFileStatus = 'created' | 'updated' | 'kept';
 
@@ -120,9 +111,14 @@ export class WorkspaceInitializer {
 
     const profileDir = path.join(profilesDir, profile);
     fs.mkdirSync(profileDir, { recursive: true });
-    files.push(writeIfMissing(path.join(profileDir, 'PROFILE.md'), DEFAULT_PROFILE));
-    files.push(writeIfMissing(path.join(profileDir, 'RULES.md'), DEFAULT_RULES));
-    files.push(writeIfMissing(path.join(profileDir, 'CUSTOM.md'), DEFAULT_CUSTOM));
+    const existingInstructions = resolveDirectoryProfileInstructions(profileDir);
+    if (existingInstructions.format === 'legacy') {
+      for (const fileName of existingInstructions.legacyFiles) {
+        files.push({ path: path.join(profileDir, fileName), status: 'kept' });
+      }
+    } else {
+      files.push(writeIfMissing(path.join(profileDir, PROFILE_INSTRUCTIONS_FILE), DEFAULT_MARIFOLD_PROFILE_INSTRUCTIONS));
+    }
     files.push(writeIfMissing(path.join(profileDir, 'profile.toml'), PROFILE_TOML_STUB));
     files.push(...ensureProfileMemoryFiles(profileDir));
 

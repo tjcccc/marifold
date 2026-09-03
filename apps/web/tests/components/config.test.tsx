@@ -20,6 +20,8 @@ const detail: ProfileDetail = {
   name: 'writer',
   displayName: 'Writing Partner',
   source: 'directory',
+  instructionFormat: 'unified',
+  legacyInstructionFiles: [],
   settings: {
     displayName: 'Writing Partner',
     memories: true,
@@ -30,6 +32,7 @@ const detail: ProfileDetail = {
     agent: { approval: { shell: 'deny' }, trustedFolders: ['/Users/me/blog'] },
   },
   files: {
+    instructions: { content: 'You are a writing assistant.\n\nBe concise.' },
     profile: { content: 'You are a writing assistant.' },
     rules: { content: 'Be concise.' },
     custom: { content: '' },
@@ -53,7 +56,7 @@ const memory: MemoryEntry = {
   last_seen_at: '2026-07-01T00:00:00Z',
 };
 
-function renderPage(overrides: Partial<ProfileSettingsPageProps> = {}) {
+function renderPage(overrides: Partial<ProfileSettingsPageProps> = {}, expandAdvanced = true) {
   const handlers = {
     onPatch: vi.fn<(patch: ProfilePatchInput) => void>(),
     onSaveFile: vi.fn(),
@@ -70,6 +73,7 @@ function renderPage(overrides: Partial<ProfileSettingsPageProps> = {}) {
       {...overrides}
     />,
   );
+  if (expandAdvanced) fireEvent.click(screen.getByRole('button', { name: /Advanced settings/ }));
   return handlers;
 }
 
@@ -83,6 +87,7 @@ describe('ProfileSettingsPage', () => {
     // The model select shows the override.
     const select = screen.getByLabelText('Model override') as HTMLSelectElement;
     expect(select.value).toBe('ollama/gemma4:e4b');
+    expect(screen.queryByLabelText('Default mode')).toBeNull();
 
     // All five action kinds render; the profile's shell=deny override wins
     // (the selected segment inside the shell row's segmented control).
@@ -94,6 +99,28 @@ describe('ProfileSettingsPage', () => {
     expect(selected?.textContent).toBe('Deny');
 
     expect(screen.getByText('/Users/me/blog')).toBeTruthy();
+  });
+
+  it('keeps Advanced settings collapsed by default and lets the user expand it', () => {
+    const emptyDetail: ProfileDetail = {
+      ...detail,
+      settings: {
+        ...detail.settings,
+        agent: undefined,
+      },
+    };
+    renderPage({ detail: emptyDetail, memories: [] }, false);
+
+    const toggle = screen.getByRole('button', { name: /Advanced settings/ });
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    expect(screen.queryByRole('region', { name: 'Memory' })).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Agent permissions' })).toBeNull();
+
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    expect(screen.getByRole('region', { name: 'Memory' })).toBeTruthy();
+    expect(screen.getByText('Nothing remembered yet.')).toBeTruthy();
+    expect(screen.getByRole('region', { name: 'Agent permissions' })).toBeTruthy();
   });
 
   it('shows the stable profile name and saves or clears the display-name override', () => {
@@ -154,17 +181,23 @@ describe('ProfileSettingsPage', () => {
     expect(handlers.onPatch).toHaveBeenCalledWith({ provider: null, model: null });
   });
 
-  it('file editor Save sends the edited content; Revert restores', () => {
+  it('shows the instruction editor above Model and saves or reverts edits', () => {
     const handlers = renderPage();
-    const textarea = screen.getByLabelText('RULES content') as HTMLTextAreaElement;
-    fireEvent.change(textarea, { target: { value: 'Be VERY concise.' } });
-    const editor = textarea.closest('details')!;
-    fireEvent.click(Array.from(editor.querySelectorAll('button')).find(b => b.textContent === 'Save')!);
-    expect(handlers.onSaveFile).toHaveBeenCalledWith('rules', 'Be VERY concise.');
+    const instructions = screen.getByRole('region', { name: 'Instructions' });
+    const model = screen.getByRole('region', { name: 'Model' });
+    const textarea = screen.getByLabelText('Instructions content') as HTMLTextAreaElement;
+    expect(instructions.compareDocumentPosition(model) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(textarea.closest('details')).toBeNull();
+    expect(screen.queryByLabelText('PROFILE content')).toBeNull();
+    expect(screen.queryByLabelText('RULES content')).toBeNull();
+    expect(screen.queryByLabelText('CUSTOM content')).toBeNull();
+    fireEvent.change(textarea, { target: { value: 'You are a writing assistant.\n\nBe VERY concise.' } });
+    fireEvent.click(within(instructions).getByRole('button', { name: 'Save' }));
+    expect(handlers.onSaveFile).toHaveBeenCalledWith('instructions', 'You are a writing assistant.\n\nBe VERY concise.');
 
     fireEvent.change(textarea, { target: { value: 'scratch' } });
-    fireEvent.click(Array.from(editor.querySelectorAll('button')).find(b => b.textContent === 'Revert')!);
-    expect((screen.getByLabelText('RULES content') as HTMLTextAreaElement).value).toBe('Be concise.');
+    fireEvent.click(within(instructions).getByRole('button', { name: 'Revert' }));
+    expect((screen.getByLabelText('Instructions content') as HTMLTextAreaElement).value).toBe('You are a writing assistant.\n\nBe concise.');
   });
 
   it('memory Forget fires immediately; trusted-folder add and remove call handlers', () => {
@@ -240,6 +273,7 @@ describe('CreateProfileSheet', () => {
     expect(screen.getByText('Letters, numbers, underscores, and hyphens only. No spaces.')).toBeTruthy();
     const input = screen.getByLabelText('Profile name');
     expect(input.getAttribute('aria-describedby')).toBe('new-profile-name-rules');
+    expect(screen.queryByLabelText('Mode')).toBeNull();
 
     fireEvent.change(input, { target: { value: 'my profile' } });
     expect(screen.getByText('Letters, numbers, underscores, and hyphens only.')).toBeTruthy();

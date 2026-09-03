@@ -286,6 +286,8 @@ describe('protected built-in skills', () => {
     expect(resolved.missing).toEqual([]);
     expect(resolved.instructions[0]).toContain('update translate --from ./translate -g');
     expect(resolved.instructions[0]).toContain('manage_skill');
+    expect(resolved.instructions[0]).toContain('Global scope is the default');
+    expect(resolved.instructions[0]).toContain('--profile <name>');
   });
 
   it('turns a bare creator invocation into a clarification-oriented request', () => {
@@ -355,6 +357,8 @@ describe('built-in skill manager guide', () => {
     expect(guide).toContain('Never create .claude/skills');
     expect(guide).toContain('manage_skill');
     expect(guide).toContain('$skill-installer');
+    expect(guide).toContain('Default every skill creation, installation, update, and removal to this global scope');
+    expect(guide).toContain('--profile <name>');
   });
 });
 

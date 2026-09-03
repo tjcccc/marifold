@@ -1,7 +1,6 @@
 ---
 name: translate
 description: Translate text into a target language.
-mode: chat
 variables:
   - name: language
     description: Target language (e.g. Japanese, French).

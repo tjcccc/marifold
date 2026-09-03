@@ -11,7 +11,7 @@ import { objectBody, requiredString, stringValue } from './Validation';
 
 const TOOL_KINDS: ToolKind[] = ['read', 'write', 'shell', 'network', 'delegate'];
 const APPROVAL_MODES: ApprovalMode[] = ['allow', 'ask', 'deny'];
-const PROFILE_FILES: ProfileFileKind[] = ['profile', 'rules', 'custom'];
+const PROFILE_FILES: ProfileFileKind[] = ['instructions', 'profile', 'rules', 'custom'];
 
 export interface ProfileRouteOptions {
   isProfileActive?: (name: string) => boolean;
@@ -21,6 +21,7 @@ export interface ProfileRouteOptions {
  * null = clear the override (inherit again). */
 interface ProfilePatch {
   displayName?: string | null;
+  /** Retained for backward compatibility; primary clients no longer expose it. */
   mode?: 'agent' | 'chat';
   /** Both strings sets the override; both null clears it. */
   model?: { provider: string; model: string } | null;
@@ -148,7 +149,7 @@ export function registerProfileRoutes(
     runtime.getProfile(name);
     const file = request.params.file as ProfileFileKind;
     if (!PROFILE_FILES.includes(file)) {
-      throw MarifoldError.configInvalid(`Unknown profile file '${request.params.file}'. Use profile, rules, or custom.`);
+      throw MarifoldError.configInvalid(`Unknown profile file '${request.params.file}'. Use instructions.`);
     }
     const body = objectBody(request.body);
     runtime.writeProfileFile(name, file, stringValue(body.content, 'content'));

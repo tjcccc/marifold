@@ -192,7 +192,7 @@ function fakeCtx(): { ctx: CommandContext; calls: Record<string, unknown[]> } {
   const calls: Record<string, unknown[]> = {};
   const record = (name: string) => (...args: unknown[]) => { calls[name] = args; };
   const ctx = {
-    notify: record('notify'), setMode: record('setMode'), setDefaultMode: record('setDefaultMode'), newSession: record('newSession'),
+    notify: record('notify'), newSession: record('newSession'),
     clear: record('clear'), stop: record('stop'), steer: record('steer'), exit: record('exit'),
     setThink: record('setThink'), openModelPicker: record('openModelPicker'), openProfilePicker: record('openProfilePicker'),
     openSkills: record('openSkills'), showPermissions: record('showPermissions'), showHelp: record('showHelp'),
@@ -209,8 +209,8 @@ function fakeCtx(): { ctx: CommandContext; calls: Record<string, unknown[]> } {
 describe('commands', () => {
   it('dispatches known commands and reports unknown ones', () => {
     const { ctx, calls } = fakeCtx();
-    expect(runCommand(ctx, 'chat', '')).toBe(true);
-    expect(calls.setMode).toEqual(['chat']);
+    expect(runCommand(ctx, 'clear', '')).toBe(true);
+    expect(calls.clear).toBeDefined();
     expect(runCommand(ctx, 'btw', 'focus here')).toBe(true);
     expect(calls.steer).toEqual(['focus here']);
     expect(runCommand(ctx, 'quit', '')).toBe(true); // alias of exit
@@ -230,13 +230,24 @@ describe('commands', () => {
     });
   });
 
-  it('routes mode commands: bare = session, "default" = persist', () => {
+  it('does not expose Chat/Agent mode commands', () => {
+    const { ctx } = fakeCtx();
+    expect(runCommand(ctx, 'agent', '')).toBe(false);
+    expect(runCommand(ctx, 'chat', '')).toBe(false);
+    expect(listCommandCompletions().map(command => command.name)).not.toContain('chat');
+    expect(listCommandCompletions().map(command => command.name)).not.toContain('agent');
+  });
+
+  it('defaults skill management to global and accepts an explicit profile', () => {
     const { ctx, calls } = fakeCtx();
-    runCommand(ctx, 'agent', '');
-    expect(calls.setMode).toEqual(['agent']);
-    expect(calls.setDefaultMode).toBeUndefined();
-    runCommand(ctx, 'chat', 'default');
-    expect(calls.setDefaultMode).toEqual(['chat']);
+    runCommand(ctx, 'skills', '');
+    expect(calls.openSkills).toEqual(['global']);
+
+    runCommand(ctx, 'skills', '--profile writer');
+    expect(calls.openSkills).toEqual(['profile', 'writer']);
+
+    runCommand(ctx, 'skills', '--global');
+    expect(calls.openSkills).toEqual(['global']);
   });
 
   it('validates think argument', () => {
@@ -245,6 +256,16 @@ describe('commands', () => {
     expect(calls.setThink).toEqual([true]);
     runCommand(ctx, 'think', 'sideways');
     expect(calls.notify).toBeDefined();
+  });
+
+  it('keeps /doctor read-only unless --fix is explicit', () => {
+    const { ctx, calls } = fakeCtx();
+    runCommand(ctx, 'doctor', '');
+    expect(calls.runDoctor).toEqual([false]);
+    runCommand(ctx, 'doctor', '--fix');
+    expect(calls.runDoctor).toEqual([true]);
+    runCommand(ctx, 'doctor', '--unknown');
+    expect(calls.notify).toEqual(['Usage: /doctor [--fix]', 'warn']);
   });
 
   it('routes /context-window: status, session set, profile default, off, and k-suffix', () => {

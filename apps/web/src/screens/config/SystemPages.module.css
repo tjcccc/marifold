@@ -132,12 +132,13 @@
 }
 
 .select {
+  width: 260px;
   max-width: 260px;
   border: 1px solid var(--separator);
   border-radius: var(--radius-md);
-  padding: 6px 8px;
+  padding: 6px 34px 6px 8px;
   font-size: 12.5px;
-  background: var(--content);
+  background-color: var(--content);
   color: var(--text);
 }
 
