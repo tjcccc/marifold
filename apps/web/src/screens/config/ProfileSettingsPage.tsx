@@ -218,6 +218,26 @@ export function ProfileSettingsPage(props: ProfileSettingsPageProps) {
         </div>
       </section>
 
+      <section className={styles.group} aria-label="Instructions">
+        <div className={styles.groupTitle}>Instructions</div>
+        <FileEditor
+          key={`${detail.name}:instructions`}
+          label="Instructions"
+          content={detail.files.instructions.content}
+          busy={busy}
+          onSave={next => props.onSaveFile('instructions', next)}
+        />
+        {detail.instructionFormat === 'legacy' ? (
+          <div className={styles.groupHint}>
+            Saving creates INSTRUCTIONS.md. Run marifold doctor --fix to archive the legacy files now.
+          </div>
+        ) : detail.legacyInstructionFiles.length > 0 ? (
+          <div className={styles.groupHint}>
+            INSTRUCTIONS.md is active. Run marifold doctor --fix to back up and archive the old split files.
+          </div>
+        ) : null}
+      </section>
+
       <section className={styles.group} aria-label="Model">
         <div className={styles.groupTitle}>Model</div>
         <div className={styles.card}>
@@ -392,25 +412,6 @@ export function ProfileSettingsPage(props: ProfileSettingsPageProps) {
         <div className={styles.groupHint}>The agent still narrates everything it does.</div>
       </section>
 
-      <section className={styles.group} aria-label="Instructions">
-        <div className={styles.groupTitle}>Instructions</div>
-        {(
-          [
-            ['PROFILE', 'profile', detail.files.profile.content],
-            ['RULES', 'rules', detail.files.rules.content],
-            ['CUSTOM', 'custom', detail.files.custom.content],
-          ] as const
-        ).map(([label, file, content]) => (
-          <FileEditor
-            key={`${detail.name}:${file}`}
-            label={label}
-            content={content}
-            busy={busy}
-            onSave={next => props.onSaveFile(file, next)}
-          />
-        ))}
-      </section>
-
       {props.onDelete ? (
         <section className={styles.group} aria-label="Remove profile">
           <div className={styles.groupTitle}>Profile</div>
@@ -506,11 +507,7 @@ function FileEditor(props: { label: string; content: string; busy?: boolean; onS
   const [draft, setDraft] = useState(props.content);
   const dirty = draft !== props.content;
   return (
-    <details className={styles.fileBlock}>
-      <summary className={styles.fileSummary}>
-        {props.label}
-        {dirty ? <span className={styles.dirtyTag}>edited</span> : null}
-      </summary>
+    <div className={styles.fileBlock}>
       <div className={styles.fileEditor}>
         <textarea
           className={styles.textarea}
@@ -521,6 +518,7 @@ function FileEditor(props: { label: string; content: string; busy?: boolean; onS
           onChange={event => setDraft(event.target.value)}
         />
         <div className={styles.editorActions}>
+          {dirty ? <span className={styles.dirtyTag}>edited</span> : null}
           <button
             className={styles.smallButton}
             disabled={props.busy || !dirty}
@@ -537,6 +535,6 @@ function FileEditor(props: { label: string; content: string; busy?: boolean; onS
           </button>
         </div>
       </div>
-    </details>
+    </div>
   );
 }

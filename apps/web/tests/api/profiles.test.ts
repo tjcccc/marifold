@@ -47,11 +47,11 @@ describe('profile write api', () => {
     const mock = stubFetch({ ok: true, profile: { name: 'writer' } });
     const client = createApiClient({ baseUrl: 'http://x.test' });
 
-    await putProfileFile(client, 'writer', 'rules', '# r');
+    await putProfileFile(client, 'writer', 'instructions', '# Instructions');
     let [url, init] = mock.mock.calls[0] as [string, RequestInit];
-    expect(url).toBe('http://x.test/v1/profiles/writer/files/rules');
+    expect(url).toBe('http://x.test/v1/profiles/writer/files/instructions');
     expect(init.method).toBe('PUT');
-    expect(JSON.parse(String(init.body))).toEqual({ content: '# r' });
+    expect(JSON.parse(String(init.body))).toEqual({ content: '# Instructions' });
 
     await removeTrustedFolder(client, 'writer', '/tmp/blog');
     [url, init] = mock.mock.calls[1] as [string, RequestInit];

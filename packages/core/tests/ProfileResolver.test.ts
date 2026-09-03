@@ -19,7 +19,7 @@ afterEach(() => {
 });
 
 describe('ProfileResolver', () => {
-  it('loads priests-style profile directories', () => {
+  it('combines legacy split profile directories in their effective order', () => {
     const root = tempDir();
     const profileDir = path.join(root, 'default');
     fs.mkdirSync(profileDir, { recursive: true });
@@ -29,9 +29,29 @@ describe('ProfileResolver', () => {
 
     const profile = new ProfileResolver(root).load('default');
 
-    expect(profile.identity).toBe('Identity');
-    expect(profile.rules).toBe('Rules');
-    expect(profile.custom).toBe('Custom');
+    expect(profile.identity).toBe('Rules\n\nIdentity\n\nCustom');
+    expect(profile.rules).toBe('');
+    expect(profile.custom).toBe('');
+  });
+
+  it('prefers INSTRUCTIONS.md even when it is empty', () => {
+    const root = tempDir();
+    const profileDir = path.join(root, 'default');
+    fs.mkdirSync(profileDir, { recursive: true });
+    fs.writeFileSync(path.join(profileDir, 'INSTRUCTIONS.md'), '');
+    fs.writeFileSync(path.join(profileDir, 'PROFILE.md'), 'Legacy identity');
+    fs.writeFileSync(path.join(profileDir, 'RULES.md'), 'Legacy rules');
+
+    const resolver = new ProfileResolver(root);
+    const profile = resolver.load('default');
+    const detail = resolver.detail('default');
+
+    expect(profile.identity).toBe('');
+    expect(detail.instructionFormat).toBe('unified');
+    expect(detail.legacyInstructionFiles).toEqual(['PROFILE.md', 'RULES.md']);
+    expect(detail.files.instructions.content).toBe('');
+    expect(detail.files.profile.content).toBe('');
+    expect(detail.files.rules.content).toBe('');
   });
 
   it('loads profile provider/model overrides from profile.toml', () => {
@@ -112,6 +132,9 @@ describe('ProfileResolver', () => {
 
     expect(detail.name).toBe('writer');
     expect(detail.settings).toEqual({ provider: 'ollama', model: 'gemma4:e4b', memories: true });
+    expect(detail.instructionFormat).toBe('legacy');
+    expect(detail.legacyInstructionFiles).toEqual(['PROFILE.md', 'RULES.md', 'CUSTOM.md']);
+    expect(detail.files.instructions.content).toBe('Writer rules\n\nWriter identity\n\nWriter custom');
     expect(detail.files.profile.content).toBe('Writer identity');
     expect(detail.files.rules.content).toBe('Writer rules');
     expect(detail.files.custom.content).toBe('Writer custom');
@@ -271,16 +294,61 @@ describe('ProfileResolver', () => {
     expect(() => new ProfileResolver(root).loadSettings('bad')).toThrow(/non-negative integer or "all"/i);
   });
 
-  it('writes profile markdown files (creating the dir) via writeProfileFile', () => {
+  it('writes canonical instructions and keeps legacy aliases compatible', () => {
     const root = tempDir();
     const pm = new ProfileManager(root);
 
     pm.writeProfileFile('editor-test', 'rules', '# New rules\nBe terse.');
     pm.writeProfileFile('editor-test', 'custom', 'Extra guidance.');
+    pm.writeProfileFile('editor-test', 'instructions', '# Unified\nDo the work.');
 
     expect(fs.readFileSync(path.join(root, 'editor-test', 'RULES.md'), 'utf-8')).toBe('# New rules\nBe terse.');
     expect(fs.readFileSync(path.join(root, 'editor-test', 'CUSTOM.md'), 'utf-8')).toBe('Extra guidance.');
+    expect(fs.readFileSync(path.join(root, 'editor-test', 'INSTRUCTIONS.md'), 'utf-8')).toBe('# Unified\nDo the work.');
+    expect(() => pm.writeProfileFile('editor-test', 'rules', 'ignored')).toThrow(/uses INSTRUCTIONS\.md/);
+    pm.writeProfileFile('editor-test', 'profile', '# Updated unified');
+    expect(fs.readFileSync(path.join(root, 'editor-test', 'INSTRUCTIONS.md'), 'utf-8')).toBe('# Updated unified');
     expect(() => pm.writeProfileFile('editor-test', 'nope' as never, 'x')).toThrow(/Unknown profile file/);
+  });
+
+  it('backs up and migrates legacy profile instructions idempotently', () => {
+    const root = tempDir();
+    const profileDir = path.join(root, 'writer');
+    fs.mkdirSync(profileDir, { recursive: true });
+    fs.writeFileSync(path.join(profileDir, 'PROFILE.md'), 'Identity');
+    fs.writeFileSync(path.join(profileDir, 'RULES.md'), 'Rules');
+    fs.writeFileSync(path.join(profileDir, 'CUSTOM.md'), 'Custom');
+    const pm = new ProfileManager(root);
+
+    const result = pm.migrateProfileInstructions('writer');
+
+    expect(result.status).toBe('migrated');
+    expect(fs.readFileSync(path.join(profileDir, 'INSTRUCTIONS.md'), 'utf-8')).toBe('Rules\n\nIdentity\n\nCustom');
+    expect(fs.existsSync(path.join(profileDir, 'PROFILE.md'))).toBe(false);
+    expect(fs.existsSync(path.join(profileDir, 'RULES.md'))).toBe(false);
+    expect(fs.existsSync(path.join(profileDir, 'CUSTOM.md'))).toBe(false);
+    expect(result.backupPath).toBeTruthy();
+    expect(fs.readFileSync(path.join(result.backupPath!, 'PROFILE.md'), 'utf-8')).toBe('Identity');
+    expect(pm.migrateProfileInstructions('writer').status).toBe('unchanged');
+    expect(new ProfileResolver(root).detail('writer')).toMatchObject({
+      instructionFormat: 'unified',
+      legacyInstructionFiles: [],
+    });
+  });
+
+  it('cleans backed-up legacy files without replacing existing unified instructions', () => {
+    const root = tempDir();
+    const profileDir = path.join(root, 'writer');
+    fs.mkdirSync(profileDir, { recursive: true });
+    fs.writeFileSync(path.join(profileDir, 'INSTRUCTIONS.md'), 'Canonical');
+    fs.writeFileSync(path.join(profileDir, 'PROFILE.md'), 'Stale identity');
+
+    const result = new ProfileManager(root).migrateProfileInstructions('writer');
+
+    expect(result.status).toBe('cleaned');
+    expect(fs.readFileSync(path.join(profileDir, 'INSTRUCTIONS.md'), 'utf-8')).toBe('Canonical');
+    expect(fs.existsSync(path.join(profileDir, 'PROFILE.md'))).toBe(false);
+    expect(fs.readFileSync(path.join(result.backupPath!, 'PROFILE.md'), 'utf-8')).toBe('Stale identity');
   });
 
   it('removes a trusted folder and clears the line when the list empties', () => {

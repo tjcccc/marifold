@@ -633,9 +633,37 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
     dispatch({ type: 'add_item', item: { kind: 'info', title: 'Permissions', lines } });
   }, [runtime]);
 
-  const runDoctor = useCallback(() => {
+  const runDoctor = useCallback((fix = false) => {
     const current = stateRef.current;
     const provider = loadedConfig.config.providers[current.provider];
+    const instructionLines: string[] = [];
+    try {
+      let detail = runtime.getProfile(current.profile);
+      const needsFix = detail.instructionFormat === 'legacy'
+        || detail.legacyInstructionFiles.length > 0;
+      if (fix && needsFix) {
+        const migration = runtime.migrateProfileInstructions(current.profile);
+        detail = runtime.getProfile(current.profile);
+        instructionLines.push(`Instructions: ✓ ${migration.status === 'migrated' ? 'migrated' : 'cleaned'} to INSTRUCTIONS.md`);
+        if (migration.backupPath) instructionLines.push(`Backup: ${migration.backupPath}`);
+      } else if (detail.instructionFormat === 'unified' && detail.legacyInstructionFiles.length === 0) {
+        instructionLines.push('Instructions: ✓ INSTRUCTIONS.md');
+      } else if (detail.instructionFormat === 'legacy') {
+        instructionLines.push(`Instructions: ⚠ legacy ${detail.legacyInstructionFiles.join(', ')}`);
+        instructionLines.push('Run /doctor --fix to back up and migrate them.');
+      } else if (detail.instructionFormat === 'unified') {
+        instructionLines.push('Instructions: ⚠ unified with legacy files pending cleanup');
+        instructionLines.push('Run /doctor --fix to back up and archive them.');
+      } else if (detail.instructionFormat === 'built-in') {
+        instructionLines.push('Instructions: ✓ built-in');
+      } else if (detail.instructionFormat === 'json') {
+        instructionLines.push('Instructions: ⚠ legacy JSON profile (supported)');
+      } else {
+        instructionLines.push('Instructions: ⚠ missing');
+      }
+    } catch (error) {
+      instructionLines.push(`Instructions: ✗ ${errorText(error)}`);
+    }
     const lines = [
       `Provider: ${current.provider}`,
       `Model: ${current.model}`,
@@ -645,6 +673,8 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
         provider?.apiKeyEnv ? (process.env[provider.apiKeyEnv] ? ' ✓ set' : ' ✗ unset') : ''
       }`,
       `Stored key: ${provider?.apiKey ? 'present' : 'none'}`,
+      '',
+      ...instructionLines,
       '',
       'Run `marifold model` for full provider checks.',
     ];

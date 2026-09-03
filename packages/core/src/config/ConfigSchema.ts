@@ -209,11 +209,21 @@ export interface ProfileFileSummary {
   content: string;
 }
 
+export type ProfileInstructionsFormat = 'unified' | 'legacy' | 'missing' | 'json' | 'built-in';
+
 export interface ProfileDetail extends ProfileSummary {
   settings: ProfileSettings;
+  /** Source used to build the effective instruction document. */
+  instructionFormat: ProfileInstructionsFormat;
+  /** Legacy split files still present beside the canonical document. */
+  legacyInstructionFiles: string[];
   files: {
+    instructions: ProfileFileSummary;
+    /** @deprecated Compatibility fields for older service clients. */
     profile: ProfileFileSummary;
+    /** @deprecated Compatibility fields for older service clients. */
     rules: ProfileFileSummary;
+    /** @deprecated Compatibility fields for older service clients. */
     custom: ProfileFileSummary;
     profileToml: ProfileFileSummary;
   };

@@ -376,7 +376,7 @@ describe('ProfileManager', () => {
     const manager = new ProfileManager(profilesDir);
 
     const created = manager.init('coder');
-    expect(fs.existsSync(path.join(created.path, 'PROFILE.md'))).toBe(true);
+    expect(fs.existsSync(path.join(created.path, 'INSTRUCTIONS.md'))).toBe(true);
     expect(fs.existsSync(path.join(created.path, 'memories', 'user.jsonl'))).toBe(true);
     expect(fs.existsSync(path.join(created.path, 'memories', 'preferences.jsonl'))).toBe(true);
     expect(fs.existsSync(path.join(created.path, 'memories', 'auto_short.jsonl'))).toBe(true);
@@ -395,7 +395,7 @@ describe('ProfileManager', () => {
     manager.init('writer');
     const renamed = manager.rename('writer', 'editor');
     expect(fs.existsSync(renamed.fromPath)).toBe(false);
-    expect(fs.existsSync(path.join(profilesDir, 'editor', 'PROFILE.md'))).toBe(true);
+    expect(fs.existsSync(path.join(profilesDir, 'editor', 'INSTRUCTIONS.md'))).toBe(true);
 
     const deleted = manager.delete('editor');
     expect(fs.existsSync(deleted.path)).toBe(false);

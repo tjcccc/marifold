@@ -32,7 +32,7 @@ export interface CommandContext {
   /** Send one prompt with attached images preserved byte-for-byte. */
   sendOriginal(text: string): void;
   showSessions(): void;
-  runDoctor(): void;
+  runDoctor(fix?: boolean): void;
   installSkill(arg: string): void;
   readFile(path: string): void;
   setImage(arg: string): void;
@@ -152,7 +152,16 @@ const COMMANDS: CommandSpec[] = [
       else ctx.installSkill(arg);
     },
   },
-  { name: 'doctor', summary: 'Check provider/model health.', run: ctx => ctx.runDoctor() },
+  {
+    name: 'doctor',
+    summary: 'Check health; /doctor --fix migrates this profile\'s legacy instructions.',
+    run: (ctx, args) => {
+      const value = args.trim();
+      if (!value) ctx.runDoctor(false);
+      else if (value === '--fix') ctx.runDoctor(true);
+      else ctx.notify('Usage: /doctor [--fix]', 'warn');
+    },
+  },
   {
     name: 'read',
     summary: 'Read a file into context: /read <path>.',

@@ -19,7 +19,7 @@ afterEach(() => {
 });
 
 describe('WorkspaceInitializer', () => {
-  it('creates config and a priests-style default profile', () => {
+  it('creates config and a unified default profile', () => {
     const dir = tempDir();
     const configPath = path.join(dir, 'config.toml');
     const profilesDir = path.join(dir, 'profiles');
@@ -37,9 +37,10 @@ describe('WorkspaceInitializer', () => {
     expect(result.provider).toBe('ollama');
     expect(result.model).toBe('gemma4:e4b');
     expect(fs.existsSync(configPath)).toBe(true);
-    expect(fs.existsSync(path.join(profilesDir, 'default', 'PROFILE.md'))).toBe(true);
-    expect(fs.existsSync(path.join(profilesDir, 'default', 'RULES.md'))).toBe(true);
-    expect(fs.existsSync(path.join(profilesDir, 'default', 'CUSTOM.md'))).toBe(true);
+    expect(fs.existsSync(path.join(profilesDir, 'default', 'INSTRUCTIONS.md'))).toBe(true);
+    expect(fs.existsSync(path.join(profilesDir, 'default', 'PROFILE.md'))).toBe(false);
+    expect(fs.existsSync(path.join(profilesDir, 'default', 'RULES.md'))).toBe(false);
+    expect(fs.existsSync(path.join(profilesDir, 'default', 'CUSTOM.md'))).toBe(false);
     expect(fs.existsSync(path.join(profilesDir, 'default', 'profile.toml'))).toBe(true);
     expect(fs.existsSync(path.join(profilesDir, 'default', 'memories', 'user.jsonl'))).toBe(true);
     expect(fs.existsSync(path.join(profilesDir, 'default', 'memories', 'preferences.jsonl'))).toBe(true);
@@ -81,7 +82,7 @@ describe('WorkspaceInitializer', () => {
     const configPath = path.join(dir, 'config.toml');
     const profilesDir = path.join(dir, 'profiles');
     const sessionsDb = path.join(dir, 'sessions.db');
-    const profilePath = path.join(profilesDir, 'default', 'PROFILE.md');
+    const profilePath = path.join(profilesDir, 'default', 'INSTRUCTIONS.md');
     const initializer = new WorkspaceInitializer();
 
     initializer.initialize({ configPath, profilesDir, sessionsDb });
@@ -107,5 +108,26 @@ describe('WorkspaceInitializer', () => {
     expect(loaded.config.models.options).toEqual(['openai/gpt-test']);
     expect(fs.readFileSync(profilePath, 'utf-8')).toBe('Custom profile content');
     expect(result.files.find(file => file.path === profilePath)?.status).toBe('kept');
+  });
+
+  it('does not shadow a legacy default profile during forced initialization', () => {
+    const dir = tempDir();
+    const configPath = path.join(dir, 'config.toml');
+    const profilesDir = path.join(dir, 'profiles');
+    const profileDir = path.join(profilesDir, 'default');
+    const sessionsDb = path.join(dir, 'sessions.db');
+    fs.mkdirSync(profileDir, { recursive: true });
+    fs.writeFileSync(path.join(profileDir, 'PROFILE.md'), 'Legacy identity');
+    fs.writeFileSync(path.join(profileDir, 'RULES.md'), 'Legacy rules');
+
+    new WorkspaceInitializer().initialize({
+      configPath,
+      profilesDir,
+      sessionsDb,
+      force: true,
+    });
+
+    expect(fs.existsSync(path.join(profileDir, 'INSTRUCTIONS.md'))).toBe(false);
+    expect(new ProfileResolver(profilesDir).load('default').identity).toBe('Legacy rules\n\nLegacy identity');
   });
 });

@@ -4,7 +4,7 @@ marifold is a local-first personal AI workspace for profiles, chats, skills, min
 
 The primary surface is the **TUI** — an Ink/React terminal app launched by bare `marifold`. It's agent-first (with a `/chat` mode), rendering chat and agent-event streams with `/` commands, `$skill` invocation, an approval modal, `/btw` mid-run steering, a skills manager, a profile-aware header, and session resume (`--resume`). Skills (`marifold.skill.v0`, run via `$name`) execute as agentic tools: the skill body is authoritative instructions and, in agent mode, the model reads the skill's own bundled files (e.g. a `vars.toml`) to do its work. `marifold init` and `marifold provider add` walk you through choosing a provider/model interactively.
 
-Underneath sits an approval-aware agent loop with native provider tool calling, provider-hosted search, and Responses reasoning continuity (through `@priest-ai/core` 3.x) plus control-block and Marifold web-search fallbacks, narrow built-in tools (file read/write, isolated shell, per-run Python packages, web search, profile delegation), capability-scoped run workspaces, config-driven approval policy, a `marifold agent` command, chat file/image attachments, ChatGPT/Copilot OAuth, the model-driven `marifold.skillapp.v1`/`.v2` template contracts (with legacy App v0 compatibility), and cron-scheduled unattended runs hosted inside `marifold service` — alongside priests-style profile chat, structured per-profile memory, model/provider management, config backup/import, the default-loopback Fastify service API with private LAN/Tailscale access for the owner's devices, and ephemeral task-state storage.
+Underneath sits an approval-aware agent loop with native provider tool calling, provider-hosted search, and Responses reasoning continuity (through `@priest-ai/core` 3.x) plus control-block and Marifold web-search fallbacks, narrow built-in tools (file read/write, isolated shell, per-run Python packages, web search, profile delegation), capability-scoped run workspaces, config-driven approval policy, a `marifold agent` command, chat file/image attachments, ChatGPT/Copilot OAuth, the model-driven `marifold.skillapp.v1`/`.v2` template contracts (with legacy App v0 compatibility), and cron-scheduled unattended runs hosted inside `marifold service` — alongside lightweight profile chat, structured per-profile memory, model/provider management, config backup/import, the default-loopback Fastify service API with private LAN/Tailscale access for the owner's devices, and ephemeral task-state storage.
 
 For product direction and future scope, see [docs/vision.md](docs/vision.md) and [docs/roadmap.md](docs/roadmap.md). For the terminal app, see [docs/tui.md](docs/tui.md).
 
@@ -16,7 +16,7 @@ For product direction and future scope, see [docs/vision.md](docs/vision.md) and
 - Protected skill management: `$skill-installer install|update|remove|uninstall|help` manages local skill sources and `$skill-creator` gathers requirements and creates a validated skill. Both default to the active profile; `--global`/`-g` explicitly selects the shared user scope. Their names are compiled into core, cannot be shadowed or removed, and ordinary skill-related prompts receive the same validated management guidance lazily.
 - The TUI: launch with bare `marifold` (or `marifold --profile <name>`); agent mode by default, `/chat` for chat.
 - Input grammar: plain text → agent/chat, `/command` → app-executed action, `$skill [args]` → model-backed skill.
-- `/` commands: `/help` `/exit` `/new` `/agent` `/chat` `/model` `/profile` `/resume` `/think` `/clear` `/stop` `/btw` `/permissions` `/skills` `/install-skill` `/doctor`, plus `/read` `/image` `/attach-original` `/remember` `/forget` `/delete-memory`.
+- `/` commands: `/help` `/exit` `/new` `/agent` `/chat` `/model` `/profile` `/resume` `/think` `/clear` `/stop` `/btw` `/permissions` `/skills` `/install-skill` `/doctor [--fix]`, plus `/read` `/image` `/attach-original` `/remember` `/forget` `/delete-memory`.
 - Approval modal that previews the tool's input (file content / shell command), with allow-once / session-grant / persist-to-config / deny; escalated (out-of-cwd) calls always prompt; `/permissions` shows modes and grants.
 - `/btw <text>` steers a running task without cancelling it; Esc / Ctrl+C cancels a run, and a second Ctrl+C when idle exits.
 - Input editing: history (Up/Down), multi-line via trailing `\`, readline keys (Ctrl+A/E/U/W), and Tab completion for `/commands` and `$skills`.
@@ -52,7 +52,7 @@ For product direction and future scope, see [docs/vision.md](docs/vision.md) and
 - Interactive chat.
 - Chat session resume with `--resume` or `--resume last`.
 - Workspace initialization.
-- Basic priests-style profile loading.
+- Unified per-profile instructions with read-compatible legacy profile loading.
 - Basic profile creation and default-profile selection.
 - Profile inspection.
 - Basic provider/model configuration.
@@ -245,6 +245,9 @@ marifold profile init coder
 marifold profile rename coder writer
 marifold profile delete writer --yes
 marifold profile default coder
+marifold doctor
+marifold doctor --fix
+marifold doctor --fix --profile writer
 
 marifold session list --profile default
 marifold session show test-session
@@ -519,13 +522,11 @@ Each run creates a task tagged `scheduled` and records `lastTaskId`/`lastResultS
 
 ## Profiles
 
-marifold loads priests-style profile directories:
+marifold loads lightweight profile directories:
 
 ```text
 profiles/default/
-  PROFILE.md
-  RULES.md
-  CUSTOM.md
+  INSTRUCTIONS.md
   profile.toml
   memories/
     user.jsonl
@@ -533,7 +534,12 @@ profiles/default/
     auto_short.jsonl
 ```
 
-`PROFILE.md` defines identity, `RULES.md` defines behavior rules, and `CUSTOM.md` is optional extra system guidance.
+`INSTRUCTIONS.md` is one free-form Markdown document for the profile's identity,
+behavior, tone, and optional context. Headings are organizational only; marifold
+does not require or parse a section schema. Older `RULES.md`, `PROFILE.md`, and
+`CUSTOM.md` files remain readable in their previous effective order. Run
+`marifold doctor` to find them and `marifold doctor --fix` to back them up and
+consolidate them into `INSTRUCTIONS.md`.
 
 ### `profile.toml` properties
 
@@ -564,7 +570,7 @@ session_context_turns = 5
 
 `memories/user.jsonl` stores durable user facts, `memories/preferences.jsonl` stores durable preferences, and `memories/auto_short.jsonl` stores short-term notes. Each JSONL entry stores rich metadata such as `priority`, `confidence`, `stability`, `source`, `source_type`, `scope`, timestamps, optional `evidence`, optional `reason`, optional `conflict_key`, and supersession status.
 
-Memory is context, not authority. Human-authored profile files and the current user message outrank memory. Prompt injection receives compact grouped memory blocks rather than raw JSON.
+Memory is context, not authority. Human-authored profile instructions and the current user message outrank memory. Prompt injection receives compact grouped memory blocks rather than raw JSON.
 
 marifold creates memory files for existing profiles when memory is first prepared, read, or written. When memory is on, marifold asks the model to emit hidden memory control blocks for useful saves or forgets, strips those blocks from visible replies and session history, applies JSONL updates after the turn, applies conservative prompt fallback extraction, applies prompt-driven forgets, and trims low-priority short-term memory. Recall uses priority cutoffs: normal mode recalls priority `0..3`, thinking mode recalls priority `0..10`, and simple greetings recall only priority `0`.
 
@@ -574,4 +580,4 @@ marifold also reads legacy Markdown memory files in `memories/user.md`, `memorie
 
 marifold depends on `@priest-ai/core` for provider calls, streaming, native tool-call transport, context assembly, and SQLite-backed session continuity. Priest owns everything about talking to models; marifold owns everything about acting on the world.
 
-marifold owns the product-level layer: CLI commands, marifold config, priests-style profile directory loading, profile memory selection, concrete agent tools, approval policy, task state, and user-facing runtime behavior.
+marifold owns the product-level layer: CLI commands, marifold config, unified profile-instruction loading, profile memory selection, concrete agent tools, approval policy, task state, and user-facing runtime behavior.

@@ -12,7 +12,7 @@ afterEach(() => {
 function scaffoldProfile(profilesDir: string, name: string): string {
   const dir = path.join(profilesDir, name);
   fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(path.join(dir, 'PROFILE.md'), `# ${name}`);
+  fs.writeFileSync(path.join(dir, 'INSTRUCTIONS.md'), `# ${name}`);
   fs.writeFileSync(path.join(dir, 'profile.toml'), 'memories = true\n');
   return dir;
 }
@@ -88,7 +88,7 @@ describe('config editing routes', () => {
     }
   });
 
-  it('PUT /v1/profiles/:name/files/:file writes the markdown and rejects unknown files', async () => {
+  it('PUT /v1/profiles/:name/files/:file writes instructions and rejects unknown files', async () => {
     const dir = tempDir();
     const loadedConfig = fixtureLoadedConfig(dir);
     const profileDir = scaffoldProfile(loadedConfig.config.paths.profilesDir, 'writer');
@@ -96,12 +96,12 @@ describe('config editing routes', () => {
     try {
       const put = await server.inject({
         method: 'PUT',
-        url: '/v1/profiles/writer/files/rules',
-        payload: { content: '# Strict rules\nNo fluff.' },
+        url: '/v1/profiles/writer/files/instructions',
+        payload: { content: '# Writer\n\nNo fluff.' },
       });
       expect(put.statusCode).toBe(200);
-      expect(fs.readFileSync(path.join(profileDir, 'RULES.md'), 'utf-8')).toBe('# Strict rules\nNo fluff.');
-      expect(put.json().profile.files.rules.content).toBe('# Strict rules\nNo fluff.');
+      expect(fs.readFileSync(path.join(profileDir, 'INSTRUCTIONS.md'), 'utf-8')).toBe('# Writer\n\nNo fluff.');
+      expect(put.json().profile.files.instructions.content).toBe('# Writer\n\nNo fluff.');
 
       const bad = await server.inject({
         method: 'PUT',
@@ -273,7 +273,7 @@ describe('config editing routes', () => {
         displayName: 'scribe',
         source: 'directory',
       });
-      expect(fs.existsSync(path.join(loadedConfig.config.paths.profilesDir, 'scribe', 'PROFILE.md'))).toBe(true);
+      expect(fs.existsSync(path.join(loadedConfig.config.paths.profilesDir, 'scribe', 'INSTRUCTIONS.md'))).toBe(true);
 
       const listed = await server.inject({ method: 'GET', url: '/v1/profiles' });
       expect(listed.json().profiles.map((p: { name: string }) => p.name)).toContain('scribe');

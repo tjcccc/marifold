@@ -165,7 +165,7 @@ describe('web client ↔ real service', () => {
     const loadedConfig = fixtureLoadedConfig(dir);
     const profileDir = path.join(dir, 'profiles', 'writer');
     fs.mkdirSync(profileDir, { recursive: true });
-    fs.writeFileSync(path.join(profileDir, 'PROFILE.md'), '# writer');
+    fs.writeFileSync(path.join(profileDir, 'INSTRUCTIONS.md'), '# writer');
     fs.writeFileSync(path.join(profileDir, 'profile.toml'), 'memories = true\n');
 
     const server = createMarifoldService({ loadedConfig, scheduler: false });
@@ -181,10 +181,10 @@ describe('web client ↔ real service', () => {
       expect(patched.settings).toMatchObject({ mode: 'chat', memories: false });
       expect(patched.settings.agent?.approval?.shell).toBe('deny');
 
-      const withRules = await putProfileFile(client, 'writer', 'rules', '# Web-edited rules');
-      expect(withRules.files.rules.content).toBe('# Web-edited rules');
+      const withInstructions = await putProfileFile(client, 'writer', 'instructions', '# Web-edited instructions');
+      expect(withInstructions.files.instructions.content).toBe('# Web-edited instructions');
       // The writes are on disk, not just in the response.
-      expect(fs.readFileSync(path.join(profileDir, 'RULES.md'), 'utf-8')).toBe('# Web-edited rules');
+      expect(fs.readFileSync(path.join(profileDir, 'INSTRUCTIONS.md'), 'utf-8')).toBe('# Web-edited instructions');
       expect(fs.readFileSync(path.join(profileDir, 'profile.toml'), 'utf-8')).toContain('mode = "chat"');
     } finally {
       await server.close();

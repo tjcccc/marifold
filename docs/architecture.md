@@ -1,6 +1,6 @@
 # Architecture
 
-marifold v0.14.0 adds the TUI — an Ink/React terminal app (`packages/tui`) that is the primary interactive surface — on top of the v0.13.0 pre-TUI foundation: the basic agent loop (v0.11.0), chat parity (v0.12.0), the early declarative App spec, and scheduled task execution (v0.13.0). It provides a TypeScript CLI for priests-style profile chat, one-shot requests, an approval-aware agent loop, workspace initialization, chat resume behavior, saved model options, model validation, structured profile memory, thinking mode controls, OAuth provider setup, GitHub Copilot Responses API routing, config backup/import, local management commands, a default-loopback Fastify service API with authenticated opt-in remote binding, an ephemeral task-state subsystem, and the `marifold.skill.v0` skill primitive.
+marifold v0.14.0 adds the TUI — an Ink/React terminal app (`packages/tui`) that is the primary interactive surface — on top of the v0.13.0 pre-TUI foundation: the basic agent loop (v0.11.0), chat parity (v0.12.0), the early declarative App spec, and scheduled task execution (v0.13.0). It provides a TypeScript CLI for lightweight profile chat, one-shot requests, an approval-aware agent loop, workspace initialization, chat resume behavior, saved model options, model validation, structured profile memory, thinking mode controls, OAuth provider setup, GitHub Copilot Responses API routing, config backup/import, local management commands, a default-loopback Fastify service API with authenticated opt-in remote binding, an ephemeral task-state subsystem, and the `marifold.skill.v0` skill primitive.
 
 ## Current Scope
 
@@ -77,13 +77,11 @@ The service API is local-first and defaults to loopback. It exposes health/statu
 
 Model validation checks local configuration and provider model-list endpoints where available. It does not delete, pull, or mutate local provider storage.
 
-Profiles are loaded from priests-style directories:
+Profiles are loaded from lightweight directories:
 
 ```text
 profiles/default/
-  PROFILE.md
-  RULES.md
-  CUSTOM.md
+  INSTRUCTIONS.md
   profile.toml
   memories/
     user.jsonl
@@ -91,11 +89,18 @@ profiles/default/
     auto_short.jsonl
 ```
 
+`INSTRUCTIONS.md` is the sole canonical human-authored instruction document.
+Marifold maps it through its Priest `ProfileLoader`; Priest does not depend on
+the Markdown filename. When the canonical file is absent, the resolver combines
+legacy `RULES.md`, `PROFILE.md`, and `CUSTOM.md` content in that existing
+effective order without mutating disk. `marifold doctor --fix` owns the explicit,
+backed-up migration.
+
 marifold owns the profile memory file meaning and passes selected memory to `@priest-ai/core` through `PriestRequest.memory`. The memory path can be disabled per profile through `profile.toml` or per run through `--no-memories`. When enabled, marifold injects memory policy instructions, strips hidden `<memory_save>` and `<memory_forget>` blocks from visible output and saved session history, applies JSONL mutations after the turn, applies conservative prompt fallback extraction, applies prompt-driven forgets, and trims low-priority short-term memory.
 
 Structured memory is stored in JSONL under profile directories. The current memory subsystem is integrated inside `packages/core/src/memory`, but it is intentionally package-shaped: schema, persistence, selection, prompt/control extraction, and policy remain separated enough to extract into a future `@marifold/memory` package once agent/task memory requirements settle.
 
-Memory is context, not authority. Human-authored profile files and the current user message outrank memory. Normal recall includes priority `0..3`, thinking mode includes priority `0..10`, and simple greetings include only priority `0` memories.
+Memory is context, not authority. Human-authored profile instructions and the current user message outrank memory. Normal recall includes priority `0..3`, thinking mode includes priority `0..10`, and simple greetings include only priority `0` memories.
 
 Thinking mode is a provider option selected by marifold and only forwarded to known compatible providers. It does not change context assembly or introduce agent behavior.
 

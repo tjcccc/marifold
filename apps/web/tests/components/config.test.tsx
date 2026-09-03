@@ -20,6 +20,8 @@ const detail: ProfileDetail = {
   name: 'writer',
   displayName: 'Writing Partner',
   source: 'directory',
+  instructionFormat: 'unified',
+  legacyInstructionFiles: [],
   settings: {
     displayName: 'Writing Partner',
     memories: true,
@@ -30,6 +32,7 @@ const detail: ProfileDetail = {
     agent: { approval: { shell: 'deny' }, trustedFolders: ['/Users/me/blog'] },
   },
   files: {
+    instructions: { content: 'You are a writing assistant.\n\nBe concise.' },
     profile: { content: 'You are a writing assistant.' },
     rules: { content: 'Be concise.' },
     custom: { content: '' },
@@ -154,17 +157,23 @@ describe('ProfileSettingsPage', () => {
     expect(handlers.onPatch).toHaveBeenCalledWith({ provider: null, model: null });
   });
 
-  it('file editor Save sends the edited content; Revert restores', () => {
+  it('shows the instruction editor above Model and saves or reverts edits', () => {
     const handlers = renderPage();
-    const textarea = screen.getByLabelText('RULES content') as HTMLTextAreaElement;
-    fireEvent.change(textarea, { target: { value: 'Be VERY concise.' } });
-    const editor = textarea.closest('details')!;
-    fireEvent.click(Array.from(editor.querySelectorAll('button')).find(b => b.textContent === 'Save')!);
-    expect(handlers.onSaveFile).toHaveBeenCalledWith('rules', 'Be VERY concise.');
+    const instructions = screen.getByRole('region', { name: 'Instructions' });
+    const model = screen.getByRole('region', { name: 'Model' });
+    const textarea = screen.getByLabelText('Instructions content') as HTMLTextAreaElement;
+    expect(instructions.compareDocumentPosition(model) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(textarea.closest('details')).toBeNull();
+    expect(screen.queryByLabelText('PROFILE content')).toBeNull();
+    expect(screen.queryByLabelText('RULES content')).toBeNull();
+    expect(screen.queryByLabelText('CUSTOM content')).toBeNull();
+    fireEvent.change(textarea, { target: { value: 'You are a writing assistant.\n\nBe VERY concise.' } });
+    fireEvent.click(within(instructions).getByRole('button', { name: 'Save' }));
+    expect(handlers.onSaveFile).toHaveBeenCalledWith('instructions', 'You are a writing assistant.\n\nBe VERY concise.');
 
     fireEvent.change(textarea, { target: { value: 'scratch' } });
-    fireEvent.click(Array.from(editor.querySelectorAll('button')).find(b => b.textContent === 'Revert')!);
-    expect((screen.getByLabelText('RULES content') as HTMLTextAreaElement).value).toBe('Be concise.');
+    fireEvent.click(within(instructions).getByRole('button', { name: 'Revert' }));
+    expect((screen.getByLabelText('Instructions content') as HTMLTextAreaElement).value).toBe('You are a writing assistant.\n\nBe concise.');
   });
 
   it('memory Forget fires immediately; trusted-folder add and remove call handlers', () => {

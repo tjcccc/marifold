@@ -316,8 +316,11 @@ function printStep(result) {
 function writeProfile(root, profile, provider, model) {
   const profileDir = path.join(root, profile);
   fs.mkdirSync(profileDir, { recursive: true });
-  fs.writeFileSync(path.join(profileDir, 'PROFILE.md'), '# Memory Eval\n\nYou are a concise assistant participating in a memory evaluation.\n');
-  fs.writeFileSync(path.join(profileDir, 'RULES.md'), [
+  fs.writeFileSync(path.join(profileDir, 'INSTRUCTIONS.md'), [
+    '# Memory Eval',
+    '',
+    'You are a concise assistant participating in a memory evaluation.',
+    '',
     '# Rules',
     '',
     '- Reply naturally and briefly.',
@@ -325,7 +328,6 @@ function writeProfile(root, profile, provider, model) {
     '- Do not invent unknown personal details.',
     '',
   ].join('\n'));
-  fs.writeFileSync(path.join(profileDir, 'CUSTOM.md'), '');
   fs.writeFileSync(path.join(profileDir, 'profile.toml'), `memories = true\nprovider = "${provider}"\nmodel = "${model}"\n`);
   ensureProfileMemoryFiles(profileDir);
 }

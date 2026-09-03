@@ -37,7 +37,7 @@ export interface MarifoldRunRequest {
   /** Set false to disable all model-initiated chat tools for this run,
    * including provider-hosted and Marifold fallback web search. */
   chatTools?: boolean;
-  /** Set false to omit PROFILE.md, RULES.md, and CUSTOM.md from the provider
+  /** Set false to omit the profile's INSTRUCTIONS.md (or legacy fallback) from the provider
    * request. Runtime safety framing and explicit instructions still apply. */
   profileContext?: boolean;
   /** Session-scoped context-budget override (e.g. /context-window set N). Wins over profile/global. */

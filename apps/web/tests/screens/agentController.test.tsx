@@ -15,8 +15,11 @@ const profile: ProfileDetail = {
   name: 'prompt-maker',
   displayName: 'Prompt Maker',
   source: 'directory',
+  instructionFormat: 'unified',
+  legacyInstructionFiles: [],
   settings: { memories: true, mode: 'agent' },
   files: {
+    instructions: { content: '' },
     profile: { content: '' },
     rules: { content: '' },
     custom: { content: '' },

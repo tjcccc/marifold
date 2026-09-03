@@ -1,12 +1,17 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { randomUUID } from 'crypto';
 import { parse } from 'smol-toml';
 import { MarifoldError } from '../errors/MarifoldError';
 import { ensureProfileMemoryFiles } from '../memory/MemoryStore';
 import { expandHome } from '../workspace/WorkspacePaths';
 import type { ProfileMode } from '../config/ConfigSchema';
 import type { ApprovalMode, ToolKind } from '../agent/ApprovalPolicy';
+import {
+  PROFILE_INSTRUCTIONS_FILE,
+  resolveDirectoryProfileInstructions,
+} from './ProfileInstructions';
 
 const SAFE_PROFILE_NAME = /^[A-Za-z0-9_-]+$/;
 
@@ -17,24 +22,21 @@ const AVATAR_MEDIA_TYPES: Record<string, string> = {
   'image/webp': 'webp',
 };
 /** Media assets (avatars, and future banners/exports) live under this subdir
- * so binaries don't clutter the profile root next to profile.md/rules.md. */
+ * so binaries don't clutter the profile root next to INSTRUCTIONS.md. */
 const ASSETS_DIR = 'assets';
 // The web client crops + downscales to 512² and re-encodes lossless PNG before
 // upload, so the stored file stays small; this ceiling guards the processed
 // output (a lossless 512² PNG can exceed 1 MB for detailed images).
 const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
 
-const PROFILE_MD_STUB = `# {name}
+const PROFILE_INSTRUCTIONS_STUB = `# {name}
 
 You are a helpful assistant.
-`;
 
-const RULES_MD_STUB = `# RULES.md
+## Guidelines
 
-Be honest. Do not make things up.
-Be concise unless the user asks for depth.
-
-Replace this content with specific guidance for this profile's role.
+- Be honest. Do not make things up.
+- Be concise unless the user asks for depth.
 `;
 
 /** Documented per-profile config template. Shared by `profile create` and the
@@ -86,14 +88,23 @@ export interface ProfileInitResult {
   files: string[];
 }
 
-/** The editable per-profile markdown files. */
-export type ProfileFileKind = 'profile' | 'rules' | 'custom';
+/** The canonical editable instruction document plus deprecated service aliases. */
+export type ProfileFileKind = 'instructions' | 'profile' | 'rules' | 'custom';
 
 const PROFILE_FILE_NAMES: Record<ProfileFileKind, string> = {
+  instructions: PROFILE_INSTRUCTIONS_FILE,
   profile: 'PROFILE.md',
   rules: 'RULES.md',
   custom: 'CUSTOM.md',
 };
+
+export interface ProfileInstructionsMigrationResult {
+  name: string;
+  status: 'migrated' | 'cleaned' | 'unchanged' | 'not-applicable';
+  instructionsPath?: string;
+  backupPath?: string;
+  legacyFiles: string[];
+}
 
 export interface ProfileModelOverrideResult {
   name: string;
@@ -133,9 +144,7 @@ export class ProfileManager {
 
     fs.mkdirSync(profileDir, { recursive: true });
     const files = [
-      writeFile(path.join(profileDir, 'PROFILE.md'), PROFILE_MD_STUB.replace('{name}', name)),
-      writeFile(path.join(profileDir, 'RULES.md'), RULES_MD_STUB),
-      writeFile(path.join(profileDir, 'CUSTOM.md'), ''),
+      writeFile(path.join(profileDir, PROFILE_INSTRUCTIONS_FILE), PROFILE_INSTRUCTIONS_STUB.replace('{name}', name)),
       writeFile(path.join(profileDir, 'profile.toml'), PROFILE_TOML_STUB),
       ...ensureProfileMemoryFiles(profileDir).map(file => file.path),
     ];
@@ -215,18 +224,71 @@ export class ProfileManager {
     return { name, path: profileToml, kind, ...(mode !== undefined ? { mode } : {}) };
   }
 
-  /** Overwrite one of the profile's markdown files (PROFILE/RULES/CUSTOM.md). */
+  /** Overwrite the canonical instructions or a deprecated split-file alias. */
   writeProfileFile(name: string, file: ProfileFileKind, content: string): { name: string; path: string; file: ProfileFileKind } {
     assertSafeName(name);
-    const fileName = PROFILE_FILE_NAMES[file];
+    let fileName = PROFILE_FILE_NAMES[file];
     if (!fileName) {
-      throw MarifoldError.profileInvalid(`Unknown profile file '${String(file)}'. Use profile, rules, or custom.`, name);
+      throw MarifoldError.profileInvalid(`Unknown profile file '${String(file)}'. Use instructions.`, name);
     }
     const profileDir = path.join(this.profilesDir, name);
     fs.mkdirSync(profileDir, { recursive: true });
+    const hasUnifiedInstructions = fs.existsSync(path.join(profileDir, PROFILE_INSTRUCTIONS_FILE));
+    if (file === 'profile' && hasUnifiedInstructions) {
+      fileName = PROFILE_INSTRUCTIONS_FILE;
+    } else if ((file === 'rules' || file === 'custom') && hasUnifiedInstructions) {
+      throw MarifoldError.profileInvalid(
+        `Profile '${name}' uses ${PROFILE_INSTRUCTIONS_FILE}; edit its instructions instead of ${fileName}.`,
+        name,
+      );
+    }
     const filePath = path.join(profileDir, fileName);
     fs.writeFileSync(filePath, content);
     return { name, path: filePath, file };
+  }
+
+  /** Consolidate legacy split documents and remove them from the active profile
+   * only after copying them to a timestamped backup. Safe to call repeatedly. */
+  migrateProfileInstructions(name: string): ProfileInstructionsMigrationResult {
+    assertSafeName(name);
+    const stored = this.requireStoredProfile(name);
+    if (stored.type !== 'directory') {
+      return { name, status: 'not-applicable', legacyFiles: [] };
+    }
+
+    const resolved = resolveDirectoryProfileInstructions(stored.path);
+    if (resolved.legacyFiles.length === 0) {
+      return {
+        name,
+        status: resolved.format === 'unified' ? 'unchanged' : 'not-applicable',
+        ...(resolved.format === 'unified' ? { instructionsPath: resolved.path } : {}),
+        legacyFiles: [],
+      };
+    }
+
+    const backupPath = createInstructionsBackupDir(this.profilesDir, name);
+    for (const fileName of resolved.legacyFiles) {
+      fs.copyFileSync(path.join(stored.path, fileName), path.join(backupPath, fileName));
+    }
+
+    if (resolved.format === 'legacy') {
+      atomicWriteFile(resolved.path, resolved.content);
+      if (fs.readFileSync(resolved.path, 'utf-8') !== resolved.content) {
+        throw MarifoldError.profileInvalid(`Could not verify migrated instructions for profile '${name}'.`, name);
+      }
+    }
+
+    for (const fileName of resolved.legacyFiles) {
+      fs.rmSync(path.join(stored.path, fileName), { force: true });
+    }
+
+    return {
+      name,
+      status: resolved.format === 'legacy' ? 'migrated' : 'cleaned',
+      instructionsPath: resolved.path,
+      backupPath,
+      legacyFiles: resolved.legacyFiles,
+    };
   }
 
   /** Persist (or clear, when undefined) whether this profile loads its memory. */
@@ -422,6 +484,27 @@ export function findProfileAvatar(profilesDir: string, name: string): { path: st
 function writeFile(filePath: string, content: string): string {
   fs.writeFileSync(filePath, content);
   return filePath;
+}
+
+function createInstructionsBackupDir(profilesDir: string, name: string): string {
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const backupDir = path.join(profilesDir, '.legacy-instructions', `${stamp}-${randomUUID()}`, name);
+  fs.mkdirSync(backupDir, { recursive: true });
+  return backupDir;
+}
+
+function atomicWriteFile(filePath: string, content: string): void {
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  const tempPath = path.join(
+    path.dirname(filePath),
+    `.${path.basename(filePath)}.${process.pid}.${randomUUID()}.tmp`,
+  );
+  try {
+    fs.writeFileSync(tempPath, content, { flag: 'wx' });
+    fs.renameSync(tempPath, filePath);
+  } finally {
+    if (fs.existsSync(tempPath)) fs.rmSync(tempPath, { force: true });
+  }
 }
 
 function upsertProfileToml(text: string, provider: string, model: string): string {

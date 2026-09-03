@@ -2,6 +2,25 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-09-03 — v0.68.0 — Unified profile instructions
+
+- Replaced the three-document profile scaffold with one free-form
+  `INSTRUCTIONS.md`, shared by new workspace and profile initialization.
+- Kept old profiles behavior-compatible through a read-only
+  `RULES.md` → `PROFILE.md` → `CUSTOM.md` fallback; an existing canonical file
+  wins even when empty, and forced workspace initialization never shadows
+  legacy instructions.
+- Added backed-up, idempotent migration and cleanup through explicit
+  `marifold doctor --fix`, plus active-profile `/doctor [--fix]` status and
+  migration in the TUI.
+- Replaced the Web Config split editors with one always-visible Instructions
+  editor above Model while retaining deprecated service response fields and
+  write aliases for older clients during migration.
+- Updated examples, eval fixtures, architecture/API/TUI documentation, and
+  focused regressions. Verified the full workspace typecheck/build/test gate
+  (744 tests: core 380, service 62, TUI 61, CLI 29, Web 212) and all 129
+  non-provider command checks.
+
 ## 2026-09-02 — v0.67.0 — Interactive SkillApp builder
 
 - Added the protected built-in `skillapp-builder`, with version-matched

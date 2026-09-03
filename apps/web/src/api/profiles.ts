@@ -1,8 +1,8 @@
 import type { ApiClient } from './client';
 import type { ApprovalMode, MemoryEntry, ProfileDetail, ProfileMode, ProfileSummary, ToolKind } from './types';
 
-/** The editable per-profile markdown files (mirrors core's ProfileFileKind). */
-export type ProfileFileKind = 'profile' | 'rules' | 'custom';
+/** Canonical instruction document plus deprecated aliases accepted by the service. */
+export type ProfileFileKind = 'instructions' | 'profile' | 'rules' | 'custom';
 
 /** PATCH /v1/profiles/:name body. Absent field = untouched; null = clear the
  * override (inherit again). provider/model must be set together (or both null). */

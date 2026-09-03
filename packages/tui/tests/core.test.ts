@@ -247,6 +247,16 @@ describe('commands', () => {
     expect(calls.notify).toBeDefined();
   });
 
+  it('keeps /doctor read-only unless --fix is explicit', () => {
+    const { ctx, calls } = fakeCtx();
+    runCommand(ctx, 'doctor', '');
+    expect(calls.runDoctor).toEqual([false]);
+    runCommand(ctx, 'doctor', '--fix');
+    expect(calls.runDoctor).toEqual([true]);
+    runCommand(ctx, 'doctor', '--unknown');
+    expect(calls.notify).toEqual(['Usage: /doctor [--fix]', 'warn']);
+  });
+
   it('routes /context-window: status, session set, profile default, off, and k-suffix', () => {
     const { ctx, calls } = fakeCtx();
     runCommand(ctx, 'context-window', '');

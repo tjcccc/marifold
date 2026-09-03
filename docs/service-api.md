@@ -186,15 +186,15 @@ Responses are `{ "ok": true, ... }` unless noted. Bodies are JSON.
 | Route | Returns |
 |---|---|
 | `GET /v1/profiles` | Profile summaries, pinned first and then by recent session activity. Every summary includes the stable `name` plus effective `displayName` (`profile.toml` `display_name`, falling back to `name`); summaries may also carry contact-list metadata: `pinned?`, `updatedAt?`, and `preview?` (the first non-empty line of the latest assistant response in the profile's most recent session) |
-| `GET /v1/profiles/:name` | Profile detail (files, settings), including the effective top-level `displayName` and optional stored `settings.displayName` override |
-| `POST /v1/profiles` → 201 | Body `{ name }` — scaffold a new profile directory (PROFILE/RULES/CUSTOM.md + profile.toml, the `profile init` layout). Names must match `[A-Za-z0-9_-]+` (ASCII letters, numbers, underscores, and hyphens; no spaces). The display-name override starts unset, so `displayName` falls back to `name`. Duplicate or invalid names are 400. Follow up with `PATCH` / avatar `PUT` for initial settings |
+| `GET /v1/profiles/:name` | Profile detail (files, settings), including canonical `files.instructions`, `instructionFormat`, any `legacyInstructionFiles`, the effective top-level `displayName`, and optional stored `settings.displayName` override. Deprecated `files.profile`/`rules`/`custom` fields remain during compatibility migration |
+| `POST /v1/profiles` → 201 | Body `{ name }` — scaffold a new profile directory (`INSTRUCTIONS.md` + profile.toml + memories, the `profile init` layout). Names must match `[A-Za-z0-9_-]+` (ASCII letters, numbers, underscores, and hyphens; no spaces). The display-name override starts unset, so `displayName` falls back to `name`. Duplicate or invalid names are 400. Follow up with `PATCH` / avatar `PUT` for initial settings |
 | `PATCH /v1/profiles/:name/display` | Body `{ pinned: boolean }` — persist contact-list pin state and return the freshly sorted profile summaries. Display metadata never enters profile instructions or model context |
 | `DELETE /v1/profiles/:name` | Remove the stored profile directory/JSON and its display metadata. Deletes instructions, memories, skills, and avatar but retains SQLite session history. The built-in/current-default profile cannot be removed, and active requests/runs must be cancelled first |
 | `GET /v1/profiles/:name/avatar` | Raw avatar image bytes (`content-type` = stored media type, `ETag` + `no-cache`; honors `If-None-Match` with 304). 404 `AVATAR_NOT_FOUND` when unset. Auth'd clients fetch with headers and render a blob URL (`<img src>` can't send a bearer token) |
 | `PUT /v1/profiles/:name/avatar` | Body `{ data: <base64>, mediaType }` — store the avatar (PNG/JPEG/WebP, ≤1 MB; replaces any previous one). Returns the fresh profile detail (summaries carry `avatar?: { mediaType }`) |
 | `DELETE /v1/profiles/:name/avatar` | `{ removed: boolean }` + fresh profile detail |
 | `PATCH /v1/profiles/:name` | Update per-profile settings. Optional fields: `displayName` (single-line string up to 100 characters; blank or `null` clears to the profile-name fallback), `mode` (`"agent"\|"chat"`), `provider`+`model` (both strings, or both `null` to clear the override), `memories`/`think` (`boolean\|null`), `maxContextTokens` (`int\|null`), `sessionContextTurns` (`int ≥ 0\|"all"\|null`), `approval` (`{ read\|write\|shell\|network\|delegate: "allow"\|"ask"\|"deny"\|null }` — `null` clears the override so the kind inherits again). Absent = untouched. Returns the fresh profile detail |
-| `PUT /v1/profiles/:name/files/:file` | Overwrite `PROFILE`/`RULES`/`CUSTOM.md` (`:file` ∈ `profile\|rules\|custom`); body `{ content }`. Returns the fresh profile detail |
+| `PUT /v1/profiles/:name/files/:file` | Overwrite `INSTRUCTIONS.md` (`:file = instructions`); body `{ content }`. Returns the fresh profile detail. Deprecated `profile\|rules\|custom` aliases remain for unmigrated clients; `rules`/`custom` writes are rejected once canonical instructions exist |
 | `POST /v1/profiles/:name/trusted-folders` | Body `{ folder }` — add a trusted folder (safety refusals for broad/sensitive roots are 400) |
 | `DELETE /v1/profiles/:name/trusted-folders` | Body `{ folder }` (in the body — folders contain slashes) — `{ removed: boolean }` + fresh profile detail |
 | `GET /v1/profiles/:name/memories?all=&limit=` | Structured memory records; `all=true` includes superseded |
@@ -236,7 +236,7 @@ carry a different display/persistence value than the model-facing `prompt`;
 direct skill runs use it to retain the original `$skill …` invocation. With
 `isolated: true`, a chat turn does not replay the session to the model, but its
 clean user/assistant pair is still appended to that durable session.
-`profileContext: false` omits PROFILE/RULES/CUSTOM text while retaining
+`profileContext: false` omits the profile's unified instructions (or legacy fallback) while retaining
 request-scoped instructions and marifold's minimal runtime framing. App routes
 set this server-side from the definition; ordinary clients should not
 use it as a way to bypass profile policy accidentally.

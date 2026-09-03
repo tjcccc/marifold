@@ -53,13 +53,16 @@ prompt.
 
 `/help` `/exit` (`/quit`) `/new` `/agent` `/chat` `/model` `/profile` `/resume`
 `/think on|off` `/clear` `/stop` `/btw <text>` `/permissions` `/skills`
-`/install-skill [--global] <path|url>` `/doctor`, plus chat carry-overs `/read`
+`/install-skill [--global] <path|url>` `/doctor [--fix]`, plus chat carry-overs `/read`
 `/image` `/attach-original <prompt>` `/remember` `/forget` `/delete-memory`.
 
 - `/btw <text>` steers a **running** task without cancelling it: the text is
   queued and handed to the model on its next turn. With no run active, it is sent
   as a normal message.
 - `/stop` (or Esc / Ctrl+C while running) cancels the current run.
+- `/doctor` reports the active profile's instruction format without changing
+  files. `/doctor --fix` backs up and consolidates its legacy split documents
+  into `INSTRUCTIONS.md`.
 - `/think on|off` maps to Priest's provider-neutral reasoning configuration on
   Ollama, Anthropic, ChatGPT, and Responses-only GitHub Copilot models (with
   legacy provider options retained for Bailian-compatible endpoints). Safe

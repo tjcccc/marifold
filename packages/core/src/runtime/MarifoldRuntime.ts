@@ -44,7 +44,7 @@ import {
 import type { MemoryControlPayloads } from '../memory/MemoryControls';
 import { ProfileResolver } from '../profiles/ProfileResolver';
 import { ProfileManager } from '../profiles/ProfileManager';
-import type { ProfileFileKind } from '../profiles/ProfileManager';
+import type { ProfileFileKind, ProfileInstructionsMigrationResult } from '../profiles/ProfileManager';
 import { Scheduler } from '../schedule/Scheduler';
 import { RunRegistry } from '../runs/RunRegistry';
 import { TelegramBridge } from '../channels/TelegramBridge';
@@ -626,9 +626,14 @@ export class MarifoldRuntime {
     this.profileManager.setSessionContextTurns(name, turns);
   }
 
-  /** Overwrite one of a profile's markdown files (PROFILE/RULES/CUSTOM.md). */
+  /** Overwrite the canonical profile instructions or a deprecated split-file alias. */
   writeProfileFile(name: string, file: ProfileFileKind, content: string): void {
     this.profileManager.writeProfileFile(name, file, content);
+  }
+
+  /** Consolidate a stored profile's legacy split instructions with backup. */
+  migrateProfileInstructions(name: string): ProfileInstructionsMigrationResult {
+    return this.profileManager.migrateProfileInstructions(name);
   }
 
   /** Scaffold a new profile directory (same layout as `profile init`) and
