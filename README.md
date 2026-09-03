@@ -2,9 +2,9 @@
 
 marifold is a local-first personal AI workspace for profiles, chats, skills, mini apps, workflows, and external agents.
 
-The primary surface is the **TUI** — an Ink/React terminal app launched by bare `marifold`. It's agent-first (with a `/chat` mode), rendering chat and agent-event streams with `/` commands, `$skill` invocation, an approval modal, `/btw` mid-run steering, a skills manager, a profile-aware header, and session resume (`--resume`). Skills (`marifold.skill.v0`, run via `$name`) execute as agentic tools: the skill body is authoritative instructions and, in agent mode, the model reads the skill's own bundled files (e.g. a `vars.toml`) to do its work. `marifold init` and `marifold provider add` walk you through choosing a provider/model interactively.
+The primary surface is the **TUI** — an Ink/React terminal app launched by bare `marifold`. Every ordinary message runs through one approval-aware Agent path: the model answers directly when no action is needed and chooses tools when work is required. The TUI renders `/` commands, `$skill` invocation, approval prompts, `/btw` mid-run steering, a skills manager, a profile-aware header, and session resume (`--resume`). Skills (`marifold.skill.v0`, run via `$name`) execute as agentic tools: the skill body is authoritative instructions and the model can read the skill's own bundled files (e.g. a `vars.toml`) when needed. `marifold init` and `marifold provider add` walk you through choosing a provider/model interactively.
 
-Underneath sits an approval-aware agent loop with native provider tool calling, provider-hosted search, and Responses reasoning continuity (through `@priest-ai/core` 3.x) plus control-block and Marifold web-search fallbacks, narrow built-in tools (file read/write, isolated shell, per-run Python packages, web search, profile delegation), capability-scoped run workspaces, config-driven approval policy, a `marifold agent` command, chat file/image attachments, ChatGPT/Copilot OAuth, the model-driven `marifold.skillapp.v1`/`.v2` template contracts (with legacy App v0 compatibility), and cron-scheduled unattended runs hosted inside `marifold service` — alongside lightweight profile chat, structured per-profile memory, model/provider management, config backup/import, the default-loopback Fastify service API with private LAN/Tailscale access for the owner's devices, and ephemeral task-state storage.
+Underneath sits an approval-aware agent loop with native provider tool calling, provider-hosted search, and Responses reasoning continuity (through `@priest-ai/core` 3.x) plus control-block and Marifold web-search fallbacks, narrow built-in tools (file read/write, isolated shell, per-run Python packages, web search, profile delegation), capability-scoped run workspaces, config-driven approval policy, a `marifold agent` command, conversation file/image attachments, ChatGPT/Copilot OAuth, the model-driven `marifold.skillapp.v1`/`.v2` template contracts (with legacy App v0 compatibility), and cron-scheduled unattended runs hosted inside `marifold service` — alongside lightweight profile conversations, structured per-profile memory, model/provider management, config backup/import, the default-loopback Fastify service API with private LAN/Tailscale access for the owner's devices, and ephemeral task-state storage.
 
 For product direction and future scope, see [docs/vision.md](docs/vision.md) and [docs/roadmap.md](docs/roadmap.md). For the terminal app, see [docs/tui.md](docs/tui.md).
 
@@ -12,15 +12,15 @@ For product direction and future scope, see [docs/vision.md](docs/vision.md) and
 
 - Onboarding: `marifold init` writes config and interactively picks a provider/model (so a first run never points at a model you don't have); `marifold provider add` configures a provider (including pointing Ollama at a remote/Tailscale server); running `marifold` before `init` prints a clear hint instead of failing.
 - Session resume: `marifold --resume` (most recent) or `--resume <id>` replays the conversation; the in-TUI `/resume` picker resumes too (`/session` remains an alias). Agent/skill runs persist one clean turn (your invocation → the final answer, or a clear failed/cancelled outcome when no final answer was produced).
-- Skills as agentic tools: `$name [args]` resolves the selected profile/global skill or a protected built-in directly, expands its variables, and runs its authoritative instructions without leaking earlier skill-turn history. The original `$name …` invocation remains in durable history. In agent mode, bundled files (e.g. `vars.toml` for `#name` fragments) are available through `read_file`; a skill's run mode follows the session unless it declares `mode:`.
-- Protected skill management: `$skill-installer install|update|remove|uninstall|help` manages local skill sources and `$skill-creator` gathers requirements and creates a validated skill. Both default to the active profile; `--global`/`-g` explicitly selects the shared user scope. Their names are compiled into core, cannot be shadowed or removed, and ordinary skill-related prompts receive the same validated management guidance lazily.
-- The TUI: launch with bare `marifold` (or `marifold --profile <name>`); agent mode by default, `/chat` for chat.
-- Input grammar: plain text → agent/chat, `/command` → app-executed action, `$skill [args]` → model-backed skill.
-- `/` commands: `/help` `/exit` `/new` `/agent` `/chat` `/model` `/profile` `/resume` `/think` `/clear` `/stop` `/btw` `/permissions` `/skills` `/install-skill` `/doctor [--fix]`, plus `/read` `/image` `/attach-original` `/remember` `/forget` `/delete-memory`.
+- Skills as agentic tools: `$name [args]` resolves the selected profile/global skill or a protected built-in directly, expands its variables, and runs its authoritative instructions without leaking earlier skill-turn history. The original `$name …` invocation remains in durable history. Bundled files (e.g. `vars.toml` for `#name` fragments) are available through `read_file`; Skills default to Agent execution, while an explicit legacy `mode: chat` declaration still uses the retained compatibility transport.
+- Protected skill management: `$skill-installer install|update|remove|uninstall|help` manages local skill sources and `$skill-creator` gathers requirements and creates a validated skill. Both default to the shared user scope so new profiles see installed Skills immediately; `--profile <name>` creates or changes a profile-only copy. The older `--global`/`-g` spelling remains accepted as a redundant compatibility alias. Their names are compiled into core, cannot be shadowed or removed, and ordinary skill-related prompts receive the same validated management guidance lazily.
+- The TUI: launch with bare `marifold` (or `marifold --profile <name>`); ordinary messages always use the Agent path.
+- Input grammar: plain text → agent, `/command` → app-executed action, `$skill [args]` → model-backed skill.
+- `/` commands: `/help` `/exit` `/new` `/model` `/profile` `/resume` `/think` `/clear` `/stop` `/btw` `/permissions` `/skills` `/install-skill` `/doctor [--fix]`, plus `/read` `/image` `/attach-original` `/remember` `/forget` `/delete-memory`.
 - Approval modal that previews the tool's input (file content / shell command), with allow-once / session-grant / persist-to-config / deny; escalated (out-of-cwd) calls always prompt; `/permissions` shows modes and grants.
 - `/btw <text>` steers a running task without cancelling it; Esc / Ctrl+C cancels a run, and a second Ctrl+C when idle exits.
 - Input editing: history (Up/Down), multi-line via trailing `\`, readline keys (Ctrl+A/E/U/W), and Tab completion for `/commands` and `$skills`.
-- `marifold.skill.v0` skills run via `$name [args]` (inline prompting for missing variables), managed with `/skills` (Enter run, Del remove) and `/install-skill <path|url>`; bundled examples in `examples/skills/`.
+- `marifold.skill.v0` skills run via `$name [args]` (inline prompting for missing variables), managed globally with `/skills` (Enter run, Del remove) and `/install-skill <path|url>`; add `--profile <name>` for a profile-only copy. Bundled examples live in `examples/skills/`.
 - A launch-time profile picker when no default profile resolves.
 - The Web UI presents profiles as a compact contact list: 40 px avatars, the latest response preview and relative activity time, recent-activity sorting, persistent pinning, and a row menu that opens profile Config. Stored profiles can be removed from Config after changing the default profile and typing the profile name in a second confirmation dialog; their conversation history is retained.
 - The launch directory is the workspace; `~/.marifold` stays config/state; profiles are identities, not workspaces.
@@ -35,7 +35,7 @@ For product direction and future scope, see [docs/vision.md](docs/vision.md) and
 - Model-driven SkillApps ([docs/app.md](docs/app.md)): restricted, statically compiled `~/.marifold/apps/<name>/skillapp.ts` templates, app-local or profile-installed Skills, explicit or profile-inherited models, semantic form, attachment, Markdown-preview, and text-download components, static fail-closed read permissions, service-owned state, debounced latest triggers, structured results, and bookmarkable `/apps/<name>` views with an Activity drawer. A protected built-in `skillapp-builder` turns rough ideas into validated bundles through resumable questions, approve-once atomic installation, and live catalog refresh without a service restart.
 - Autonomous fallback web search through a provider-pluggable model tool, with DuckDuckGo as the keyless default.
 - Native-first web search: OpenAI API, ChatGPT subscription, xAI/Grok, and verified Bailian/Alibaba Cloud model families use provider-hosted search independently of `[web_search].enabled`. Bailian selects either its Responses tool or Chat Completions `enable_search` contract per model; unknown models use Marifold's fallback unless `[providers.<name>].native_web_search` overrides the transport. If a native route rejects search before producing output, Marifold retries once through the configured fallback. Runs with neither capability tell the model that search is unavailable. `read_file` remains a caller-executed chat tool when the fallback section is enabled.
-- File attachment through chat `/read <path>` (100k-char truncation) and image attachment through `/image <path>` / `/image clear` and `ask --image <path>`. Local/base64 images are validated, MIME-corrected, metadata-stripped, and optimized before provider requests (1600 px maximum long edge; lossless WebP for PNG/transparent inputs; conservative high-quality encoding for JPEG and oversized static WebP inputs; animated images preserved). The candidate is used only when smaller. TUI and Web UI support one-turn `/attach-original <prompt>` to preserve original encoded bytes. Embedded/URL images are retained as display-only session attachments so the Web UI can restore transcript thumbnails without adding them to later model context. The Web composer extracts a bounded readable view from modern Word (`.docx`), Excel (`.xlsx`), and PowerPoint (`.pptx`) files and accepts PDFs, ebooks, archives, and other bounded binaries for agent runs. Every Agent upload is staged as an immutable local resource: `inspect_attachment` returns metadata, a read-only path, and at most an 8k-character preview; `read_attachment` and `search_attachment` expose bounded selections. Complete joins, conversions, edits, and extraction run locally against the original file, keeping the full document out of model context.
+- File attachment through TUI `/read <path>` (100k-char truncation), image attachment through `/image <path>` / `/image clear`, and one-shot `ask --image <path>`. Local/base64 images are validated, MIME-corrected, metadata-stripped, and optimized before provider requests (1600 px maximum long edge; lossless WebP for PNG/transparent inputs; conservative high-quality encoding for JPEG and oversized static WebP inputs; animated images preserved). The candidate is used only when smaller. TUI and Web UI support one-turn `/attach-original <prompt>` to preserve original encoded bytes. Embedded/URL images are retained as display-only session attachments so the Web UI can restore transcript thumbnails without adding them to later model context. The Web composer extracts a bounded readable view from modern Word (`.docx`), Excel (`.xlsx`), and PowerPoint (`.pptx`) files and accepts PDFs, ebooks, archives, and other bounded binaries for agent runs. Every Agent upload is staged as an immutable local resource: `inspect_attachment` returns metadata, a read-only path, and at most an 8k-character preview; `read_attachment` and `search_attachment` expose bounded selections. Complete joins, conversions, edits, and extraction run locally against the original file, keeping the full document out of model context.
 - Base64/URL image payloads on the service `/v1/ask` route.
 - ChatGPT OAuth token refresh before provider requests, mirroring the GitHub Copilot refresh flow.
 - Approval-aware basic agent loop through `marifold agent "<objective>"`.
@@ -71,11 +71,11 @@ For product direction and future scope, see [docs/vision.md](docs/vision.md) and
 - Priority/relevance recall with simple-prompt gating, thinking-mode priority expansion, expiry handling, and `[memory].context_limit`.
 - Conflict-key canonicalization and open-slot updates such as `user.name`, `user.favorite_color`, `user.favorite_editor`, `preferences.reply_style`, and `auto_short.project_meeting_time`.
 - Automatic low-priority short-term trimming through `[memory].size_limit`.
-- Explicit chat memory commands for remember, soft-forget, and permanent delete.
+- Explicit conversation memory commands for remember, soft-forget, and permanent delete.
 - Profile memory inspection through `profile memory`.
 - Memory injection through the `@priest-ai/core` request `memory` lane.
 - Memory recall controls through `[memory].context_limit`, `profile.toml` `memories = false`, and `--no-memories`.
-- Thinking mode controls through `[default].think`, `ask/chat --think [true|false]`, and chat `/think on|off`.
+- Thinking controls through `[default].think`, `ask --think [true|false]`, and TUI `/think on|off`.
 - Basic config, model, provider, and session inspection commands.
 - Config backup and restore for config, profiles, memories, and optional sessions.
 - Profile rename and delete commands for stored profiles.
@@ -197,14 +197,6 @@ marifold ask --no-memories "Format this JSON"
 marifold ask --think true "Solve step by step."
 marifold ask --image ./photo.jpg "What is in this image?"
 
-marifold chat
-marifold chat --profile default
-marifold chat --profile default --no-memories
-marifold chat --profile default --think true
-marifold chat --profile default --session test-session
-marifold chat --profile default --resume
-marifold chat --profile default --resume last
-
 marifold init
 marifold init --provider openai --model gpt-4o-mini
 
@@ -283,9 +275,7 @@ human-readable label with spaces or Unicode.
 
 The packaged binary name is `marifold`.
 
-Inside `marifold chat`, use `/help` for chat commands. End a line with `\` to continue a multiline message.
-
-Memory commands available inside chat:
+Related commands available inside the TUI:
 
 ```text
 /think on             Enable thinking mode for supported providers.
@@ -550,10 +540,9 @@ All keys are optional. An absent key inherits the global `[default]` value (wher
 | `display_name` | string | profile name | Optional human-readable label shown by clients. Blank or absent keeps the stable profile name as the display fallback. |
 | `provider` | string | inherits `[default].provider` | Provider override. Must be set **together with** `model` (both or neither). |
 | `model` | string | inherits `[default].model` | Model override. Must be set together with `provider`. |
-| `memories` | boolean | `true` | Load profile memory for this profile. Set `false` for tool profiles. Per-run `--no-memories` disables it for one `ask`/`chat`. |
-| `mode` | `"agent"` \| `"chat"` | `"agent"` | Default TUI interaction mode for this profile. |
+| `memories` | boolean | `true` | Load profile memory for this profile. Set `false` for tool profiles. Per-run `--no-memories` disables it for one `ask`. |
 | `max_context_tokens` | integer | inherits `[default].max_context_tokens` | Conversation-context budget in tokens; near ~80% older turns fold into a running summary. `0` disables compaction. |
-| `session_context_turns` | integer ≥ 0 \| `"all"` | `"all"` (inherits `[default].session_context_turns`) | Hard cap on the recent session turns the model sees each turn — applies to chat replay and non-lean agent history. `0` = none; `"all"` or absent = no cap. Older turns stay on disk; this only bounds what is sent per turn. Pairs with `max_context_tokens` (the budget safety net). |
+| `session_context_turns` | integer ≥ 0 \| `"all"` | `"all"` (inherits `[default].session_context_turns`) | Hard cap on the recent session turns the model sees each turn — applies to conversation replay and non-lean agent history. `0` = none; `"all"` or absent = no cap. Older turns stay on disk; this only bounds what is sent per turn. Pairs with `max_context_tokens` (the budget safety net). |
 | `think` | boolean | inherits `[default].think` (off) | Per-profile thinking default. Toggle per session with `/think on\|off`. |
 | `agent.approval.<kind>` | `"allow"` \| `"ask"` \| `"deny"` | inherits global `[agent.approval]` | Per-profile tool permission for `read`/`write`/`shell`/`network`/`delegate`. Persisted by the approval prompt's "Trust". |
 | `agent.trusted_folders` | array of paths | `[]` (union of global) | Extra folder capabilities. In-home entries may be written without prompting; external entries still require one-time approval per action. Add eligible entries with `/trust-folder` or the prompt. The whole `[agent]` table (incl. `max_iterations`, `tool_mode`, `unattended`) is per-profile overridable. |
@@ -564,7 +553,6 @@ Example:
 display_name = "Writing Partner"
 provider = "bailian"
 model = "qwen3.6-plus"
-mode = "chat"
 session_context_turns = 5
 ```
 

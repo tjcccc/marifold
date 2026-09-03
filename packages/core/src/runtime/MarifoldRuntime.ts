@@ -960,6 +960,8 @@ export class MarifoldRuntime {
       profile: resolvedProfile,
       globalDir: config.paths.skillsDir ?? defaultSkillsDir(),
       profileDir: path.join(config.paths.profilesDir, resolvedProfile, 'skills'),
+      profilesDir: config.paths.profilesDir,
+      profileExists: profileName => this.listProfiles().some(candidate => candidate.name === profileName),
     }));
     registry.register(new SkillAppContextTool({
       activeProfile: resolvedProfile,
@@ -1102,7 +1104,9 @@ export class MarifoldRuntime {
           ...operation.instructions,
           ...(historyContext ? [historyContext] : []),
         ];
-        const mode = operation.mode ?? settings.mode;
+        // Profile-backed App operations default to the product's single Agent
+        // path. An explicitly chat-mode Skill still uses the retained transport.
+        const mode = operation.mode ?? 'agent';
         if (declaredOperation.interactive && mode !== 'agent') {
           throw MarifoldError.appInvalid(
             `Interactive SkillApp operation '${operationName}' must invoke an Agent Skill.`,

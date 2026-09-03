@@ -2,6 +2,22 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-09-03 — v0.69.0 — Agent-first simplification
+
+- Removed Chat/Agent selectors and mode-switch commands from profile creation,
+  profile settings, Web, TUI, Telegram, and the top-level CLI surface.
+- Routed ordinary Web, TUI, Telegram, and profile-backed App messages through
+  Agent execution while retaining the chat engine, service transport, legacy
+  config parsing, and explicit chat-mode Skill compatibility internally.
+- Made user-managed Skills global by default across direct TUI installation,
+  the protected installer/creator, and lazy agent guidance. Added explicit
+  `--profile <name>` targeting while retaining `--global`/`-g` as compatibility
+  aliases.
+- Grouped Web profile Memory and Agent permissions under one Advanced settings
+  control. It stays collapsed by default and can be expanded manually.
+- Verified the full workspace typecheck/build/test gate (748 tests: core 381,
+  service 62, TUI 63, CLI 29, Web 213) and all 120 non-provider command checks.
+
 ## 2026-09-03 — v0.68.0 — Unified profile instructions
 
 - Replaced the three-document profile scaffold with one free-form

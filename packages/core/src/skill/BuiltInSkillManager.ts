@@ -39,7 +39,8 @@ export function buildSkillManagerGuide(options: SkillManagerGuideOptions): strin
 This request concerns Marifold skills. Follow these rules for any skill inspection, creation, installation, update, or removal:
 
 - The active profile is ${quoted(options.profile)}. Its skill directory is ${quoted(profileSkillsDir)}.
-- The global skill directory is ${quoted(options.globalSkillsDir)}. Use it only when the user explicitly requests global scope; otherwise default to the active profile.
+- The global skill directory is ${quoted(options.globalSkillsDir)}. Default every skill creation, installation, update, and removal to this global scope.
+- Use a profile's skill directory only when the user explicitly requests --profile <name>. The protected management Skills validate that the named profile exists. Continue to understand --global and -g as redundant compatibility aliases, but do not recommend them.
 - A skill lives at <skill-directory>/<name>/SKILL.md, with optional bundled files beside SKILL.md. Never create .claude/skills, .agents/skills, or a skills directory in the working directory.
 - Profile skills shadow global skills with the same name. Inspect both exact locations before updating or removing, and change only the intended scope.
 - SKILL.md must contain YAML frontmatter with a lowercase name and a non-empty prompt body. Preserve bundled files unless the user asks to replace the whole skill.

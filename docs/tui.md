@@ -1,8 +1,9 @@
 # marifold TUI
 
-The TUI is marifold's primary interactive surface (v0.14.0). It is a renderer of
-two streams the core already produces — `MarifoldRuntime.stream` (chat) and
-`AgentRunner.run` → `AgentEvent` (agent) — plus an input grammar and command/skill
+The TUI is marifold's primary interactive surface (v0.14.0). Ordinary messages
+always use `AgentRunner.run` → `AgentEvent`; the retained
+`MarifoldRuntime.stream` path supports explicit compatibility consumers and
+chat-mode Skills. The TUI also provides an input grammar and command/skill
 registries. It lives in `packages/tui` (Ink + React), an ESM-only package the
 CommonJS CLI loads through a dynamic `import()`.
 
@@ -13,10 +14,9 @@ marifold                 # launch the TUI on the default profile (agent mode)
 marifold --profile work  # launch on a named profile
 ```
 
-Bare `marifold` (no subcommand) launches the TUI. All existing subcommands
-(`marifold agent`, `marifold chat`, `marifold service`, …) are unchanged and
-remain the scriptable surface. When stdout is not a TTY (piped/non-interactive),
-the TUI prints a hint and exits instead of starting Ink.
+Bare `marifold` (no subcommand) launches the TUI. `marifold agent` remains the
+scriptable Agent surface. When stdout is not a TTY (piped/non-interactive), the
+TUI prints a hint and exits instead of starting Ink.
 
 The launch directory is the working directory: `cd ~/notes && marifold` treats
 `~/notes` as the workspace. `~/.marifold` stays the config/state home. Profiles
@@ -31,7 +31,7 @@ prompt.
 
 ## Input grammar
 
-- **plain text** → talk to the agent (or the model in `/chat` mode).
+- **plain text** → talk to the agent; it answers directly or uses tools as needed.
 - **`/command [args]`** → an app-executed action. Most commands are local;
   `/retry` and `/attach-original <prompt>` start a model turn intentionally.
 - **`$skill [args]`** → run a model-backed skill. `$<name>` *is* the run.
@@ -51,9 +51,9 @@ prompt.
 
 ## Commands
 
-`/help` `/exit` (`/quit`) `/new` `/agent` `/chat` `/model` `/profile` `/resume`
+`/help` `/exit` (`/quit`) `/new` `/model` `/profile` `/resume`
 `/think on|off` `/clear` `/stop` `/btw <text>` `/permissions` `/skills`
-`/install-skill [--global] <path|url>` `/doctor [--fix]`, plus chat carry-overs `/read`
+`/install-skill [--profile <name>] <path|url>` `/doctor [--fix]`, plus chat carry-overs `/read`
 `/image` `/attach-original <prompt>` `/remember` `/forget` `/delete-memory`.
 
 - `/btw <text>` steers a **running** task without cancelling it: the text is
@@ -81,19 +81,12 @@ prompt.
   resume does not silently lose the request. A failed historical regeneration
   leaves the prior successful exchange unchanged.
 - `/skills` opens an arrow-key list: Enter runs the selected skill, Del removes it.
-- `/agent` / `/chat` switch the **current session's** mode. `/agent default` /
-  `/chat default` additionally persist it as the active profile's default mode
-  (written to that profile's `profile.toml` as `mode = "agent" | "chat"`), so it
-  also applies to future launches. A profile with no `mode` set launches in
-  `agent` (the global default); switching profiles adopts the target profile's
-  default mode.
-
 ## Skills
 
 A skill is a `marifold.skill.v0` markdown file — a YAML frontmatter block with
 the metadata, then a prompt body with declared `{{variables}}`. `mode` is
-optional (`agent` or `chat`); when omitted, the skill follows the current
-session mode. User-managed skills live in
+optional (`agent` or the retained compatibility value `chat`); when omitted,
+the Skill uses Agent execution. User-managed skills live in
 `[paths].skills_dir` (default `~/.marifold/skills`) and in each profile's
 `skills/` directory (profile skills shadow global ones).
 
@@ -108,7 +101,6 @@ files travel with the skill and are available to agent-mode skill runs through
 ---
 name: translate
 description: Translate text into a target language.
-mode: chat
 variables:
   - name: language
     default: English
@@ -124,18 +116,19 @@ Translate into {{language}}:
 Run it with `$translate ja こんにちは` — positional args fill the declared
 variables in order, and the final variable absorbs trailing words. Missing
 required variables are prompted inline. `/install-skill <path>` adds to the
-current profile; `--global` adds for all profiles. Install the bundled examples
+global catalog for all profiles; `--profile <name>` adds a profile-only copy.
+Install the bundled examples
 with:
 
 ```text
-/install-skill examples/skills/translate          # a SKILL.md skill folder
-/install-skill --global examples/skills/summarize-file.md
+/install-skill examples/skills/translate                    # global folder Skill
+/install-skill --profile writer examples/skills/summarize-file.md
 ```
 
 Installing the same skill name again updates its `SKILL.md`; installing from a
 folder replaces that skill's whole folder. `/install-skill` does not uninstall:
-use `/skills` (or `/skills --global`) and press Del to remove the selected skill
-from that scope.
+use `/skills` for the global catalog, or `/skills --profile <name>` for a
+profile-only catalog, and press Del to remove the selected skill from that scope.
 
 For ordinary agent prompts that mention skills, marifold lazily attaches its
 built-in `$skill-manager` guide. The guide supplies the active profile and
@@ -144,11 +137,11 @@ creating another tool's skill directory in the working folder. It prefers the
 same validated mutation boundary used by the protected built-ins:
 
 ```text
-$skill-installer install <local-path> [--global|-g]
-$skill-installer update <name> --from <local-path> [--global|-g]
-$skill-installer remove|uninstall <name> [--global|-g]
+$skill-installer install <local-path> [--profile <name>]
+$skill-installer update <name> --from <local-path> [--profile <name>]
+$skill-installer remove|uninstall <name> [--profile <name>]
 $skill-installer help
-$skill-creator [name and requirements] [--global|-g]
+$skill-creator [name and requirements] [--profile <name>]
 ```
 
 These two skills are compiled into core rather than copied into either mutable
@@ -156,10 +149,12 @@ skill directory. They always appear in `$` completion, cannot be shadowed or
 removed, and do not appear in the scope-specific `/skills` deletion picker.
 `skill-installer` accepts local files and folders only; `/install-skill` retains
 its existing local-path/URL behavior. Every mutation targets exactly one scope,
-defaults to the active profile, validates the resulting `SKILL.md`, and passes
-through normal write approval. Removing a profile copy reports when it reveals
-a shadowed global copy. Creating or managing ordinary skills through direct
-filesystem operations remains supported. `$skill-creator` authors `SKILL.md`
+defaults to the global catalog, validates the resulting `SKILL.md`, and passes
+through normal write approval. `--profile <name>` targets only that existing
+profile; the older `--global`/`-g` spelling remains accepted but is unnecessary.
+Removing a profile copy reports when it reveals a shadowed global copy. Creating
+or managing ordinary skills through direct filesystem operations remains supported.
+`$skill-creator` authors `SKILL.md`
 and model-written bundled documentation in English by default, regardless of
 the request language; only an explicit request to write the skill or its
 documentation in another language overrides that default. The skill's intended

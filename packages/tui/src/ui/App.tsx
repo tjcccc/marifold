@@ -61,7 +61,7 @@ export interface AppProps {
 type SkillScope = 'global' | 'profile';
 type Overlay =
   | { type: 'model' | 'profile' | 'sessions'; items: SelectItem[] }
-  | { type: 'skills'; scope: SkillScope; items: SelectItem[]; title: string; emptyHint: string[] };
+  | { type: 'skills'; scope: SkillScope; profile?: string; items: SelectItem[]; title: string; emptyHint: string[] };
 
 interface PendingSkill {
   skill: MarifoldSkill;
@@ -543,26 +543,32 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
     setOverlay({ type: 'profile', items });
   }, [runtime]);
 
-  const openSkills = useCallback((scope: SkillScope = 'profile') => {
-    const profile = stateRef.current.profile;
+  const openSkills = useCallback((scope: SkillScope = 'global', requestedProfile?: string) => {
+    const profile = requestedProfile ?? stateRef.current.profile;
+    if (scope === 'profile') {
+      try {
+        runtime.getProfile(profile);
+      } catch (error) {
+        notify(`Cannot open profile skills: ${errorText(error)}`, 'error');
+        return;
+      }
+    }
     const items = runtime.listSkills(profile, scope).map(skill => ({
       label: skill.name,
       value: skill.name,
       hint: skill.description,
     }));
-    // Cross-reference the other layer so global skills stay discoverable from
-    // the profile view (and vice versa).
     const other: SkillScope = scope === 'global' ? 'profile' : 'global';
     const otherCount = runtime.listSkills(profile, other).length;
-    const otherCmd = other === 'global' ? '/skills --global' : '/skills';
-    const base = scope === 'global' ? 'Global skills' : 'Profile skills';
+    const otherCmd = other === 'global' ? '/skills' : `/skills --profile ${profile}`;
+    const base = scope === 'global' ? 'Global skills' : `Skills for profile ${profile}`;
     const title = `${base} — Enter runs, Del removes${otherCount ? `  (+${otherCount} ${other}: ${otherCmd})` : ''}`;
     const emptyHint = scope === 'global'
-      ? ['/install-skill --global <path>  installs a global skill (all profiles)']
-      : ['/install-skill <path>  installs a skill into this profile'];
+      ? ['/install-skill <path>  installs a global skill (all profiles)']
+      : [`/install-skill --profile ${profile} <path>  installs only for this profile`];
     if (otherCount) emptyHint.push(`${otherCount} ${other} skill(s) — ${otherCmd}`);
-    setOverlay({ type: 'skills', scope, items, title, emptyHint });
-  }, [runtime]);
+    setOverlay({ type: 'skills', scope, ...(scope === 'profile' ? { profile } : {}), items, title, emptyHint });
+  }, [runtime, notify]);
 
   const showSessions = useCallback(() => {
     if (stateRef.current.running) {
@@ -578,7 +584,7 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
 
   const showHelp = useCallback(() => {
     const lines = [
-      'Plain text → talk to the agent (or chat in /chat mode).',
+      'Plain text → talk to the agent.',
       '$<skill> [args] → run a model-backed skill.',
       '',
       ...listCommands().map(spec => `/${spec.name}${spec.aliases ? ` (/${spec.aliases.join(', /')})` : ''} — ${spec.summary}`),
@@ -592,7 +598,6 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
     const session = s.sessionId ?? '(starts on your first message)';
     const lines = [
       `Profile:    ${s.profile}`,
-      `Mode:       ${s.mode}`,
       `Provider:   ${s.provider}`,
       `Model:      ${s.model}`,
       `Thinking:   ${thinkRef.current ? 'on' : 'off'}`,
@@ -682,29 +687,31 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
   }, [loadedConfig]);
 
   const installSkill = useCallback((arg: string) => {
-    // `--global` installs for every profile; otherwise the skill lands in the
-    // current profile (profile skills shadow global ones).
-    const tokens = arg.trim().split(/\s+/).filter(Boolean);
-    const global = tokens.includes('--global');
-    const target = unwrapPath(tokens.filter(token => token !== '--global').join(' '));
-    const scope = global ? 'global' : 'profile';
-    const profile = stateRef.current.profile;
+    const parsed = parseSkillInstallArgs(arg);
     const run = async () => {
       try {
-        if (!target) {
-          notify('Usage: /install-skill [--global] <path|url>', 'warn');
+        if (parsed.error || !parsed.target) {
+          notify(parsed.error ?? 'Usage: /install-skill [--profile <name>] <path|url>', 'warn');
           return;
         }
+        if (parsed.profile) runtime.getProfile(parsed.profile);
         let installed;
-        if (/^https?:\/\//i.test(target)) {
-          const response = await fetch(target);
-          if (!response.ok) throw new Error(`HTTP ${response.status} fetching ${target}`);
-          installed = runtime.installSkillFromText(await response.text(), scope, profile);
+        if (/^https?:\/\//i.test(parsed.target)) {
+          const response = await fetch(parsed.target);
+          if (!response.ok) throw new Error(`HTTP ${response.status} fetching ${parsed.target}`);
+          installed = runtime.installSkillFromText(await response.text(), parsed.scope, parsed.profile);
         } else {
-          installed = runtime.installSkillFromFile(path.resolve(expandHome(target)), scope, profile);
+          installed = runtime.installSkillFromFile(
+            path.resolve(expandHome(parsed.target)),
+            parsed.scope,
+            parsed.profile,
+          );
         }
         refreshSkills();
-        notify(`Installed skill: $${installed.name} (${global ? 'global' : `profile ${profile}`})`, 'info');
+        notify(
+          `Installed skill: $${installed.name} (${parsed.profile ? `profile ${parsed.profile}` : 'global'})`,
+          'info',
+        );
       } catch (error) {
         notify(`Install failed: ${errorText(error)}`, 'error');
       }
@@ -788,7 +795,7 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
         model: settings.model,
         maxContextTokens: settings.maxContextTokens ?? loadedConfig.config.default.maxContextTokens,
       });
-      dispatch({ type: 'set_mode', mode: settings.mode });
+      dispatch({ type: 'set_mode', mode: 'agent' });
       // Adopt the new profile's thinking default (bare setter — selectProfile
       // emits its own notice; the wrapped ctx.setThink would add a spurious one).
       setThink(settings.think);
@@ -796,7 +803,7 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
       sessionGrantsRef.current.clear();
       sessionTrustedFoldersRef.current.clear();
       refreshSkills(settings.profile);
-      notify(`Switched to profile: ${settings.profile} · ${settings.provider}/${settings.model} · ${settings.mode} (new session)`, 'info');
+      notify(`Switched to profile: ${settings.profile} · ${settings.provider}/${settings.model} (new session)`, 'info');
     } catch (error) {
       notify(`Could not switch profile: ${errorText(error)}`, 'error');
     }
@@ -805,20 +812,6 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
   // CommandContext bound to the live handlers.
   const commandContext = useMemo<CommandContext>(() => ({
     notify,
-    // The Header (mode shown) lives in the append-only <Static>, so a mode
-    // change needs a repaint to refresh it — otherwise the top line goes stale
-    // while the live StatusLine flips. repaint() remounts Static with the new mode.
-    setMode: (mode: Mode) => { dispatch({ type: 'set_mode', mode }); notify(`Mode: ${mode}`, 'info'); repaint(); },
-    setDefaultMode: (mode: Mode) => {
-      try {
-        runtime.setProfileMode(stateRef.current.profile, mode);
-        dispatch({ type: 'set_mode', mode });
-        notify(`Default mode for ${stateRef.current.profile} set to ${mode} (this and future sessions).`, 'info');
-        repaint();
-      } catch (error) {
-        notify(`Could not set default mode: ${errorText(error)}`, 'error');
-      }
-    },
     newSession: () => { dispatch({ type: 'new_session', sessionId: undefined }); notify('Started a new session.', 'info'); },
     clear: () => dispatch({ type: 'clear' }),
     stop,
@@ -1028,7 +1021,7 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
         />
       );
     }
-    // skills (scope-aware: profile or global)
+    // skills (global by default, or explicitly scoped to one profile)
     if (overlay.type === 'skills') {
       const scope = overlay.scope;
       return (
@@ -1037,13 +1030,23 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
           maxRows={overlayMaxRows}
           items={overlay.items}
           emptyHint={overlay.emptyHint}
-          onSelect={value => { setOverlay(null); runSkill(value, []); }}
+          onSelect={value => {
+            setOverlay(null);
+            if (overlay.profile && overlay.profile !== stateRef.current.profile) {
+              notify(`Switch to profile ${overlay.profile} to run $${value}.`, 'warn');
+              return;
+            }
+            runSkill(value, []);
+          }}
           onCancel={() => setOverlay(null)}
           onDelete={value => {
-            runtime.removeSkill(value, stateRef.current.profile, scope);
+            runtime.removeSkill(value, overlay.profile, scope);
             refreshSkills();
-            notify(`Removed ${scope} skill: $${value}`, 'info');
-            openSkills(scope);
+            notify(
+              `Removed ${overlay.profile ? `profile ${overlay.profile}` : 'global'} skill: $${value}`,
+              'info',
+            );
+            openSkills(scope, overlay.profile);
           }}
         />
       );
@@ -1107,13 +1110,57 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
             commands={commandItems}
             skills={skillItems}
             resizing={resizing}
-            placeholder={pendingSkill ? `value for ${pendingSkill.missing[pendingSkill.index]}` : planNext ? 'planned · your next message will be planned step-by-step' : state.mode === 'agent' ? 'message the agent · /help' : 'chat · /help'}
+            placeholder={pendingSkill ? `value for ${pendingSkill.missing[pendingSkill.index]}` : planNext ? 'planned · your next message will be planned step-by-step' : 'message the agent · /help'}
           />
         )}
         {!resizing ? <StatusLine state={state} /> : null}
       </Box>
     </Box>
   );
+}
+
+function parseSkillInstallArgs(arg: string): {
+  scope: SkillScope;
+  profile?: string;
+  target?: string;
+  error?: string;
+} {
+  const tokens = arg.trim().split(/\s+/).filter(Boolean);
+  const remaining: string[] = [];
+  let profile: string | undefined;
+  let explicitGlobal = false;
+
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index];
+    if (token === '--global' || token === '-g') {
+      explicitGlobal = true;
+      continue;
+    }
+    if (token === '--profile') {
+      const value = tokens[index + 1];
+      if (!value || value.startsWith('-')) {
+        return { scope: 'global', error: 'Usage: /install-skill --profile <name> <path|url>' };
+      }
+      if (profile !== undefined) {
+        return { scope: 'global', error: 'Specify --profile only once.' };
+      }
+      if (!/^[A-Za-z0-9_-]+$/.test(value)) {
+        return { scope: 'global', error: `Invalid profile name: ${value}` };
+      }
+      profile = value;
+      index += 1;
+      continue;
+    }
+    remaining.push(token);
+  }
+
+  if (explicitGlobal && profile) {
+    return { scope: 'global', error: 'Use either --profile <name> or --global, not both.' };
+  }
+  const target = unwrapPath(remaining.join(' '));
+  return profile
+    ? { scope: 'profile', profile, ...(target ? { target } : {}) }
+    : { scope: 'global', ...(target ? { target } : {}) };
 }
 
 const BANNER_ID = '__banner__';

@@ -112,7 +112,6 @@ export function registerDoctorCommand(program: Command, printer: ConsolePrinter)
           out.write(`  Bot token:    ${tokenDesc}\n`);
           out.write(`  Allowlist:    ${tg.allowlist.length} user(s)${tg.allowlist.length === 0 ? ' ✗ (bot is locked)' : ''}\n`);
           out.write(`  Profile:      ${tg.profile}${profileOk ? '' : ' ✗ (not found)'}\n`);
-          out.write(`  Default mode: ${tg.defaultMode}\n`);
           if (!tokenOk || tg.allowlist.length === 0 || !profileOk) {
             out.write('  Status: ✗ not ready — fix the ✗ items (or rerun `marifold channel telegram setup`).\n');
             process.exitCode = 1;

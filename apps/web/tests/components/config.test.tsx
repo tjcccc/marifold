@@ -56,7 +56,7 @@ const memory: MemoryEntry = {
   last_seen_at: '2026-07-01T00:00:00Z',
 };
 
-function renderPage(overrides: Partial<ProfileSettingsPageProps> = {}) {
+function renderPage(overrides: Partial<ProfileSettingsPageProps> = {}, expandAdvanced = true) {
   const handlers = {
     onPatch: vi.fn<(patch: ProfilePatchInput) => void>(),
     onSaveFile: vi.fn(),
@@ -73,6 +73,7 @@ function renderPage(overrides: Partial<ProfileSettingsPageProps> = {}) {
       {...overrides}
     />,
   );
+  if (expandAdvanced) fireEvent.click(screen.getByRole('button', { name: /Advanced settings/ }));
   return handlers;
 }
 
@@ -86,6 +87,7 @@ describe('ProfileSettingsPage', () => {
     // The model select shows the override.
     const select = screen.getByLabelText('Model override') as HTMLSelectElement;
     expect(select.value).toBe('ollama/gemma4:e4b');
+    expect(screen.queryByLabelText('Default mode')).toBeNull();
 
     // All five action kinds render; the profile's shell=deny override wins
     // (the selected segment inside the shell row's segmented control).
@@ -97,6 +99,28 @@ describe('ProfileSettingsPage', () => {
     expect(selected?.textContent).toBe('Deny');
 
     expect(screen.getByText('/Users/me/blog')).toBeTruthy();
+  });
+
+  it('keeps Advanced settings collapsed by default and lets the user expand it', () => {
+    const emptyDetail: ProfileDetail = {
+      ...detail,
+      settings: {
+        ...detail.settings,
+        agent: undefined,
+      },
+    };
+    renderPage({ detail: emptyDetail, memories: [] }, false);
+
+    const toggle = screen.getByRole('button', { name: /Advanced settings/ });
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    expect(screen.queryByRole('region', { name: 'Memory' })).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Agent permissions' })).toBeNull();
+
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    expect(screen.getByRole('region', { name: 'Memory' })).toBeTruthy();
+    expect(screen.getByText('Nothing remembered yet.')).toBeTruthy();
+    expect(screen.getByRole('region', { name: 'Agent permissions' })).toBeTruthy();
   });
 
   it('shows the stable profile name and saves or clears the display-name override', () => {
@@ -249,6 +273,7 @@ describe('CreateProfileSheet', () => {
     expect(screen.getByText('Letters, numbers, underscores, and hyphens only. No spaces.')).toBeTruthy();
     const input = screen.getByLabelText('Profile name');
     expect(input.getAttribute('aria-describedby')).toBe('new-profile-name-rules');
+    expect(screen.queryByLabelText('Mode')).toBeNull();
 
     fireEvent.change(input, { target: { value: 'my profile' } });
     expect(screen.getByText('Letters, numbers, underscores, and hyphens only.')).toBeTruthy();

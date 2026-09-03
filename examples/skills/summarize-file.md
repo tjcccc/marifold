@@ -1,7 +1,6 @@
 ---
 name: summarize-file
 description: Read a file in the working directory and summarize it.
-mode: agent
 variables:
   - name: path
     description: Path to the file, relative to the working directory.

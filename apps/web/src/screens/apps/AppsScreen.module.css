@@ -38,7 +38,7 @@
   border: 1px solid var(--separator);
   border-radius: 12px;
   color: var(--text-2);
-  background: var(--surface-2);
+  background-color: var(--surface-2);
   font-size: 13px;
 }
 
@@ -345,6 +345,10 @@
 .field select {
   height: 42px;
   padding: 0 12px;
+}
+
+.field select {
+  padding-right: 34px;
 }
 
 .field textarea {

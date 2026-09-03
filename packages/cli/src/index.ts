@@ -2,7 +2,6 @@
 import { Command } from 'commander';
 import { registerAgentCommand } from './commands/agent';
 import { registerAskCommand } from './commands/ask';
-import { registerChatCommand } from './commands/chat';
 import { registerChannelCommand } from './commands/channel';
 import { registerConfigCommand } from './commands/config';
 import { registerDoctorCommand } from './commands/doctor';
@@ -23,7 +22,7 @@ const printer = new ConsolePrinter();
 const program = new Command()
   .name('marifold')
   .description('Marifold local-first AI workspace CLI.')
-  .version('0.68.0')
+  .version('0.69.0')
   // Allow a root --profile (for the bare-`marifold` TUI launch) to coexist with
   // subcommand options of the same name: root options must precede the
   // subcommand, and options after the subcommand bind to it.
@@ -38,7 +37,6 @@ const program = new Command()
 registerInitCommand(program, printer);
 registerAgentCommand(program, printer);
 registerAskCommand(program, printer);
-registerChatCommand(program, printer);
 registerChannelCommand(program, printer);
 registerConfigCommand(program, printer);
 registerDoctorCommand(program, printer);

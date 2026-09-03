@@ -1,18 +1,11 @@
 import { useRef, useState } from 'react';
 import type { CreateProfileInput } from '../api/profiles';
-import type { ProfileMode } from '../api/types';
 import { fileToBase64 } from '../lib/attachments';
-import { SegmentedControl } from './SegmentedControl';
 import styles from './CreateProfileSheet.module.css';
 
 const SAFE_NAME = /^[A-Za-z0-9_-]+$/;
 const AVATAR_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp']);
 const MAX_AVATAR_BYTES = 1024 * 1024;
-
-const MODES = [
-  { id: 'agent', label: 'Agent' },
-  { id: 'chat', label: 'Chat' },
-] as const;
 
 export interface CreateProfileSheetProps {
   existingNames: string[];
@@ -23,12 +16,11 @@ export interface CreateProfileSheetProps {
   onClose: () => void;
 }
 
-/** The light create-profile modal (name, avatar, mode, model). Everything
+/** The light create-profile modal (name, avatar, model). Everything
  * else — docs, permissions, memories — is edited on the Config page after
  * creation. Presentational: the screen owns the API flow. */
 export function CreateProfileSheet(props: CreateProfileSheetProps) {
   const [name, setName] = useState('');
-  const [mode, setMode] = useState<ProfileMode>('agent');
   const [modelChoice, setModelChoice] = useState('');
   const [avatar, setAvatar] = useState<{ data: string; mediaType: string } | undefined>();
   const [localProblem, setLocalProblem] = useState<string | undefined>();
@@ -65,7 +57,6 @@ export function CreateProfileSheet(props: CreateProfileSheetProps) {
     const slash = modelChoice.indexOf('/');
     props.onSubmit({
       name: trimmed,
-      mode,
       ...(modelChoice && slash > 0
         ? { provider: modelChoice.slice(0, slash), model: modelChoice.slice(slash + 1) }
         : {}),
@@ -132,11 +123,6 @@ export function CreateProfileSheet(props: CreateProfileSheetProps) {
         </div>
 
         <div className={styles.fieldRow}>
-          <span className={styles.fieldLabel}>Mode</span>
-          <SegmentedControl options={MODES} value={mode} onChange={setMode} aria-label="Mode" />
-        </div>
-
-        <div className={styles.fieldRow}>
           <span className={styles.fieldLabel}>Model</span>
           <select
             className={styles.modelSelect}
@@ -154,7 +140,7 @@ export function CreateProfileSheet(props: CreateProfileSheetProps) {
 
         {problem ? <div className={styles.problem}>{problem}</div> : null}
 
-        <div className={styles.hint}>Docs, permissions, and memories are edited in Config after creation.</div>
+        <div className={styles.hint}>Instructions, memories, and advanced permissions are edited in Config after creation.</div>
 
         <div className={styles.actions}>
           <button className={styles.cancel} onClick={props.onClose} disabled={props.busy}>

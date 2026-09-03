@@ -2,7 +2,7 @@
  * Classifies a submitted input line into the three TUI primitives:
  *   - `/command [args]` → a deterministic, code-executed command (no model).
  *   - `$skill [args]`   → invoke a model-backed skill (`$<name>` *is* the run).
- *   - plain text        → talk to the agent (or chat in `/chat` mode).
+ *   - plain text        → talk to the agent.
  *
  * Pure and renderer-agnostic so it can be unit-tested without Ink.
  */

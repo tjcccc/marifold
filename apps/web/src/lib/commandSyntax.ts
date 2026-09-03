@@ -59,13 +59,11 @@ export interface Suggestion {
  * useAgentController's send(). Keep in sync with the command switch there. */
 export const WEB_COMMANDS: Suggestion[] = [
   { name: 'help', usage: '/help', description: 'List available commands.' },
-  { name: 'status', usage: '/status', description: 'Show profile, mode, model, thinking, and session.' },
+  { name: 'status', usage: '/status', description: 'Show profile, model, thinking, and session.' },
   { name: 'copy', usage: '/copy', description: "Copy the last response to the clipboard." },
   { name: 'retry', usage: '/retry', description: 'Re-run your last message.' },
   { name: 'attach-original', usage: '/attach-original <prompt>', description: 'Send this message’s attached images without optimization.' },
   { name: 'new', usage: '/new', description: 'Start a fresh session.' },
-  { name: 'agent', usage: '/agent', description: 'Set the profile to agent mode.' },
-  { name: 'chat', usage: '/chat', description: 'Set the profile to chat mode.' },
   { name: 'think', usage: '/think', description: 'Toggle thinking mode.' },
   { name: 'model', usage: '/model <id>', description: 'Set the session model, e.g. /model xai/grok-4.5.' },
   { name: 'btw', usage: '/btw <text>', description: 'Steer the running task without cancelling it.' },

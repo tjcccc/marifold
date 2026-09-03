@@ -21,6 +21,7 @@ export interface ProfileRouteOptions {
  * null = clear the override (inherit again). */
 interface ProfilePatch {
   displayName?: string | null;
+  /** Retained for backward compatibility; primary clients no longer expose it. */
   mode?: 'agent' | 'chat';
   /** Both strings sets the override; both null clears it. */
   model?: { provider: string; model: string } | null;

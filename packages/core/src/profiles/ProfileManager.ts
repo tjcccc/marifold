@@ -51,9 +51,6 @@ export const PROFILE_TOML_STUB = `# profile.toml — per-profile overrides. Ever
 # provider = "ollama"
 # model = "gemma4:e4b"
 
-# Default TUI mode for this profile: "agent" or "chat" (default "agent").
-# mode = "agent"
-
 # Load this profile's structured memory into context (default true).
 # memories = true
 
@@ -188,8 +185,7 @@ export class ProfileManager {
     return { name, path: profileToml, cleared: true };
   }
 
-  /** Persist the profile's default TUI mode into its profile.toml, preserving
-   * every other key. Used by the TUI's `/agent default` / `/chat default`. */
+  /** Retained compatibility API for older clients that persist profile mode. */
   setMode(name: string, mode: ProfileMode): ProfileModeResult {
     assertSafeName(name);
     const profileDir = this.requireProfileDir(name);

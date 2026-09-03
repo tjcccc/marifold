@@ -121,20 +121,29 @@ describe('useAgentController session lifecycle', () => {
     });
   });
 
-  it('aborts a live chat response and closes its partial assistant turn', async () => {
-    const chatProfile: ProfileDetail = {
-      ...profile,
-      settings: { ...profile.settings, mode: 'chat' },
-    };
+  it('aborts an explicit chat-mode Skill response and closes its partial assistant turn', async () => {
     let streamSignal: AbortSignal | undefined;
     const client: ApiClient = {
       baseUrl: '',
       request: async (method, path) => {
-        if (method === 'GET' && path === '/v1/profiles') return { profiles: [chatProfile] } as never;
+        if (method === 'GET' && path === '/v1/profiles') return { profiles: [profile] } as never;
         if (method === 'GET' && path === '/v1/models') return { default: {}, options: [] } as never;
-        if (method === 'GET' && path === '/v1/profiles/prompt-maker') return { profile: chatProfile } as never;
+        if (method === 'GET' && path === '/v1/profiles/prompt-maker') return { profile } as never;
         if (method === 'GET' && path === '/v1/skills?profile=prompt-maker') return { skills: [] } as never;
         if (method === 'GET' && path.startsWith('/v1/sessions?')) return { sessions: [] } as never;
+        if (method === 'POST' && path === '/v1/skills/resolve') {
+          return {
+            invocation: {
+              name: 'legacy-chat',
+              userTurn: '$legacy-chat Keep this concise',
+              prompt: 'Keep this concise',
+              instructions: ['Answer concisely.'],
+              mode: 'chat',
+              missing: [],
+              usage: '$legacy-chat <text>',
+            },
+          } as never;
+        }
         throw new Error(`Unexpected request: ${method} ${path}`);
       },
       stream: async (path, init) => {
@@ -160,10 +169,10 @@ describe('useAgentController session lifecycle', () => {
       navigate: vi.fn(),
       onUnauthorized: vi.fn(),
     }));
-    await waitFor(() => expect(result.current.profileDetail?.settings.mode).toBe('chat'));
+    await waitFor(() => expect(result.current.profileDetail?.name).toBe('prompt-maker'));
 
     let send!: Promise<void>;
-    act(() => { send = result.current.send('Keep this concise'); });
+    act(() => { send = result.current.send('$legacy-chat Keep this concise'); });
     await waitFor(() => expect(result.current.responding).toBe(true));
 
     let stop!: Promise<boolean>;
@@ -183,15 +192,19 @@ describe('useAgentController session lifecycle', () => {
   });
 
   it('cancels the live agent run selected by the composer', async () => {
+    const legacyChatProfile: ProfileDetail = {
+      ...profile,
+      settings: { ...profile.settings, mode: 'chat' },
+    };
     let releaseRun!: () => void;
     const runFinished = new Promise<void>(resolve => { releaseRun = resolve; });
     let cancelledPath: string | undefined;
     const client: ApiClient = {
       baseUrl: '',
       request: async (method, path, body) => {
-        if (method === 'GET' && path === '/v1/profiles') return { profiles: [profile] } as never;
+        if (method === 'GET' && path === '/v1/profiles') return { profiles: [legacyChatProfile] } as never;
         if (method === 'GET' && path === '/v1/models') return { default: {}, options: [] } as never;
-        if (method === 'GET' && path === '/v1/profiles/prompt-maker') return { profile } as never;
+        if (method === 'GET' && path === '/v1/profiles/prompt-maker') return { profile: legacyChatProfile } as never;
         if (method === 'GET' && path === '/v1/skills?profile=prompt-maker') return { skills: [] } as never;
         if (method === 'GET' && path.startsWith('/v1/sessions?')) return { sessions: [] } as never;
         if (method === 'GET' && path === '/v1/runs') return { runs: [] } as never;
@@ -234,7 +247,7 @@ describe('useAgentController session lifecycle', () => {
       navigate: vi.fn(),
       onUnauthorized: vi.fn(),
     }));
-    await waitFor(() => expect(result.current.profileDetail?.settings.mode).toBe('agent'));
+    await waitFor(() => expect(result.current.profileDetail?.settings.mode).toBe('chat'));
 
     let send!: Promise<void>;
     act(() => { send = result.current.send('Run until stopped'); });

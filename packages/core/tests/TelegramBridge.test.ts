@@ -44,7 +44,7 @@ function makeBridge(opts: {
   const config: TelegramChannelConfig = {
     allowlist: opts.allowlist ?? [42],
     profile: 'messenger',
-    defaultMode: opts.defaultMode ?? 'chat',
+    defaultMode: opts.defaultMode ?? 'agent',
   };
   return { bridge: new TelegramBridge({ runtime, token: 'TKN', config, fetchImpl, profilesDir: '/tmp/marifold-test-profiles' }), sent };
 }
@@ -75,8 +75,14 @@ describe('TelegramBridge.handleUpdate', () => {
     expect(sent).toHaveLength(0);
   });
 
-  it('runs an allowlisted chat message through respond and sends the reply', async () => {
-    const { bridge, sent } = makeBridge({ defaultMode: 'chat', chatChunks: ['Hel', 'lo wor', 'ld'] });
+  it('runs an allowlisted message through the agent and sends the reply', async () => {
+    const { bridge, sent } = makeBridge({
+      defaultMode: 'chat',
+      agentEvents: [
+        { type: 'text', text: 'Hello world' },
+        { type: 'done', status: 'completed' },
+      ],
+    });
     await bridge.handleUpdate(msg('hi'));
     expect(sent).toEqual([{ chatId: 100, text: 'Hello world' }]);
   });
@@ -85,8 +91,8 @@ describe('TelegramBridge.handleUpdate', () => {
     const { bridge, sent } = makeBridge();
     await bridge.handleUpdate(msg('/help'));
     expect(sent).toHaveLength(1);
-    expect(sent[0].text).toContain('/agent');
-    expect(sent[0].text).toContain('/chat');
+    expect(sent[0].text).not.toContain('/agent');
+    expect(sent[0].text).not.toContain('/chat');
   });
 
   it('/think on|off toggles, and warns when the provider does not support it', async () => {
@@ -104,12 +110,12 @@ describe('TelegramBridge.handleUpdate', () => {
     expect(badArg.sent[0].text).toContain('Usage: /think');
   });
 
-  it('/agent switches the chat to agent mode for the next message', async () => {
-    const { bridge, sent } = makeBridge({ defaultMode: 'chat', agentEvents: [{ type: 'text', text: 'agent answer' }, { type: 'done', status: 'completed' }] });
+  it('does not expose Chat/Agent mode commands', async () => {
+    const { bridge, sent } = makeBridge();
+    await bridge.handleUpdate(msg('/chat'));
+    expect(sent[0].text).toContain('Unknown command /chat');
     await bridge.handleUpdate(msg('/agent'));
-    expect(sent[0].text).toBe('Switched to agent mode.');
-    await bridge.handleUpdate(msg('do something'));
-    expect(sent[1].text).toBe('agent answer'); // came from the agent runner, not the chat stream
+    expect(sent[1].text).toContain('Unknown command /agent');
   });
 
   it('appends a note for tools the agent could not run', async () => {
@@ -128,7 +134,13 @@ describe('TelegramBridge.handleUpdate', () => {
   });
 
   it('splits a reply longer than Telegram’s limit into multiple messages', async () => {
-    const { bridge, sent } = makeBridge({ defaultMode: 'chat', chatChunks: ['x'.repeat(5000)] });
+    const { bridge, sent } = makeBridge({
+      defaultMode: 'chat',
+      agentEvents: [
+        { type: 'text', text: 'x'.repeat(5000) },
+        { type: 'done', status: 'completed' },
+      ],
+    });
     await bridge.handleUpdate(msg('hi'));
     expect(sent.length).toBe(2);
     expect(sent[0].text.length).toBeLessThanOrEqual(4096);

@@ -87,10 +87,10 @@ The composer accepts images, plain-text/code files, and modern Microsoft Office
 files: Word `.docx`, Excel `.xlsx`, and PowerPoint `.pptx`. Office files are
 OOXML ZIP archives; marifold opens them locally in the browser, extracts text
 with useful paragraph/slide/sheet structure, and inlines that text into the model
-prompt. In chat mode the original binary stays in the browser. In agent mode it
-is additionally staged by the local service as a read-only file in the private
-run workspace so file tools can inspect it; raw Office bytes are not sent to the
-model.
+prompt. Ordinary messages stage the original through the local service as a
+read-only file in the private Agent workspace so file tools can inspect it; raw
+Office bytes are not sent to the model. The retained chat transport is used
+only by explicitly chat-mode Skills and compatibility clients.
 
 While the selected conversation is responding, the circular Send control
 becomes Stop. It cancels a live agent run through the service run API or aborts
@@ -127,6 +127,9 @@ cancelled, and the built-in `default` profile cannot be removed. The user must
 type the exact profile name in the destructive dialog before its final action
 enables. Removal deletes the profile directory (instructions, memories, skills,
 and avatar) but preserves its SQLite conversation history.
+Memory and Agent permissions share one Advanced settings control. The area is
+collapsed whenever Profile Config opens and can be expanded manually for the
+current visit.
 
 The Providers column's `+` action opens a modal backed by the same ordered
 registry as `marifold provider add`. Selecting an entry pre-fills its type,

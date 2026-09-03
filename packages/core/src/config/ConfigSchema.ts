@@ -153,7 +153,7 @@ export interface TelegramChannelConfig {
   allowlist: number[];
   /** Profile whose model + permissions the bot runs under. */
   profile: string;
-  /** Default interaction mode for a new chat (`/chat` `/agent` switch per chat). */
+  /** Legacy compatibility field. Primary channel messages always use Agent. */
   defaultMode: ProfileMode;
 }
 
@@ -163,8 +163,8 @@ export interface LoadedMarifoldConfig {
   foundConfig: boolean;
 }
 
-/** A profile's default interaction mode for the TUI: autonomous `agent` (the
- * global default) or single-turn `chat`. */
+/** Retained mode contract for old configs, APIs, and explicit Skill execution.
+ * Primary clients route ordinary messages through Agent. */
 export type ProfileMode = 'agent' | 'chat';
 
 export interface ProfileSettings {
@@ -173,7 +173,7 @@ export interface ProfileSettings {
   provider?: string;
   model?: string;
   memories: boolean;
-  /** Default TUI mode for this profile; undefined falls back to `agent`. */
+  /** Legacy compatibility override; primary clients ignore it for ordinary messages. */
   mode?: ProfileMode;
   /** Per-profile conversation-context budget in tokens; falls back to default.maxContextTokens. */
   maxContextTokens?: number;

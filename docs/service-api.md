@@ -193,7 +193,7 @@ Responses are `{ "ok": true, ... }` unless noted. Bodies are JSON.
 | `GET /v1/profiles/:name/avatar` | Raw avatar image bytes (`content-type` = stored media type, `ETag` + `no-cache`; honors `If-None-Match` with 304). 404 `AVATAR_NOT_FOUND` when unset. Auth'd clients fetch with headers and render a blob URL (`<img src>` can't send a bearer token) |
 | `PUT /v1/profiles/:name/avatar` | Body `{ data: <base64>, mediaType }` — store the avatar (PNG/JPEG/WebP, ≤1 MB; replaces any previous one). Returns the fresh profile detail (summaries carry `avatar?: { mediaType }`) |
 | `DELETE /v1/profiles/:name/avatar` | `{ removed: boolean }` + fresh profile detail |
-| `PATCH /v1/profiles/:name` | Update per-profile settings. Optional fields: `displayName` (single-line string up to 100 characters; blank or `null` clears to the profile-name fallback), `mode` (`"agent"\|"chat"`), `provider`+`model` (both strings, or both `null` to clear the override), `memories`/`think` (`boolean\|null`), `maxContextTokens` (`int\|null`), `sessionContextTurns` (`int ≥ 0\|"all"\|null`), `approval` (`{ read\|write\|shell\|network\|delegate: "allow"\|"ask"\|"deny"\|null }` — `null` clears the override so the kind inherits again). Absent = untouched. Returns the fresh profile detail |
+| `PATCH /v1/profiles/:name` | Update per-profile settings. Optional fields: `displayName` (single-line string up to 100 characters; blank or `null` clears to the profile-name fallback), `provider`+`model` (both strings, or both `null` to clear the override), `memories`/`think` (`boolean\|null`), `maxContextTokens` (`int\|null`), `sessionContextTurns` (`int ≥ 0\|"all"\|null`), `approval` (`{ read\|write\|shell\|network\|delegate: "allow"\|"ask"\|"deny"\|null }` — `null` clears the override so the kind inherits again). Absent = untouched. Returns the fresh profile detail. The older `mode` field remains accepted for wire compatibility but primary clients always run ordinary messages as Agent. |
 | `PUT /v1/profiles/:name/files/:file` | Overwrite `INSTRUCTIONS.md` (`:file = instructions`); body `{ content }`. Returns the fresh profile detail. Deprecated `profile\|rules\|custom` aliases remain for unmigrated clients; `rules`/`custom` writes are rejected once canonical instructions exist |
 | `POST /v1/profiles/:name/trusted-folders` | Body `{ folder }` — add a trusted folder (safety refusals for broad/sensitive roots are 400) |
 | `DELETE /v1/profiles/:name/trusted-folders` | Body `{ folder }` (in the body — folders contain slashes) — `{ removed: boolean }` + fresh profile detail |
@@ -270,6 +270,8 @@ invocations return 400 `SKILL_INVALID`. A non-empty `missing` list means the
 client must collect the required variables before starting a run.
 `$skill-installer` and `$skill-creator` resolve with `mode: "agent"`; their
 mutations run through the same per-run approval stream as other write tools.
+They default to the global Skill catalog; `--profile <name>` selects one
+existing profile's profile-only catalog.
 
 ### Apps
 

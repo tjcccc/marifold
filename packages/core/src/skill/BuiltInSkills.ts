@@ -15,7 +15,7 @@ const BUILT_IN_SKILLS: readonly MarifoldSkill[] = [
       },
       {
         name: 'arguments',
-        description: 'The skill name, local source path, and optional --global or -g flag.',
+        description: 'The skill name, local source path, and optional --profile <name> target.',
         required: false,
       },
     ],
@@ -25,16 +25,16 @@ The requested command is:
 
 {{command}} {{arguments}}
 
-Support exactly these interfaces:
+Support these canonical interfaces:
 
-- $skill-installer install <local-path> [--global|-g]
-- $skill-installer update <name> --from <local-path> [--global|-g]
-- $skill-installer remove|uninstall <name> [--global|-g]
+- $skill-installer install <local-path> [--profile <name>]
+- $skill-installer update <name> --from <local-path> [--profile <name>]
+- $skill-installer remove|uninstall <name> [--profile <name>]
 - $skill-installer help
 
-Profile scope is the default. Use global scope only when --global or -g is present. A local source may be one Markdown file or a folder containing SKILL.md. Do not fetch network sources.
+Global scope is the default, so a newly installed Skill is available to every profile. Use profile scope only when --profile <name> names an existing profile. Continue to accept --global or -g as redundant compatibility aliases, but do not recommend them. A local source may be one Markdown file or a folder containing SKILL.md. Do not fetch network sources.
 
-For install, call manage_skill with action install, the resolved scope, and source. Installing over an existing skill is allowed for compatibility; clearly report that it was updated. For update, require a name and --from path, then call manage_skill with action update. For remove or uninstall, require a name and call manage_skill with action remove. The tool validates names, source content, exact scope, bundled files, protected built-ins, and shadowing outcomes.
+For install, call manage_skill with action install, the resolved scope, and source. For profile scope, also pass the exact profile name. Installing over an existing skill is allowed for compatibility; clearly report that it was updated. For update, require a name and --from path, then call manage_skill with action update. For remove or uninstall, require a name and call manage_skill with action remove. The tool validates names, source content, exact scope, bundled files, protected built-ins, and shadowing outcomes.
 
 For help or malformed arguments, do not mutate anything. Return the supported syntax and briefly explain profile/global scope and profile shadowing. Never use shell_exec, write_file, or improvised filesystem mutation for these operations. Users may still manage ordinary skills directly through filesystem operations when they explicitly choose to do so.`,
   },
@@ -46,7 +46,7 @@ For help or malformed arguments, do not mutate anything. Return the supported sy
     variables: [
       {
         name: 'request',
-        description: 'The skill name, optional --global or -g flag, and any creation requirements.',
+        description: 'The skill name, optional --profile <name> target, and any creation requirements.',
         required: false,
         default: 'No name or requirements were supplied.',
       },
@@ -59,7 +59,7 @@ The user's creation request is:
 
 This creator's output is a Marifold Skill (a SKILL.md bundle), not a SkillApp bundle. Decide from the user's requested deliverable rather than keyword mentions: a valid Skill may explain, support, or be invoked by SkillApps. If the primary requested output is itself a SkillApp, do not create a similarly named Skill; explain the distinction and recommend invoking $skillapp-builder with the same request.
 
-Create a marifold.skill.v0 folder containing SKILL.md and only the bundled text files the skill genuinely needs. Profile scope is the default. Use global scope only when the user explicitly supplies --global or -g.
+Create a marifold.skill.v0 folder containing SKILL.md and only the bundled text files the skill genuinely needs. Global scope is the default, so the Skill is available to every profile. Use profile scope only when the user explicitly supplies --profile <name> for an existing profile. Continue to accept --global or -g as redundant compatibility aliases, but do not recommend them.
 
 Before creating anything, make sure you know the valid lowercase skill name, its purpose and expected output, its inputs/defaults, whether it must pin mode to agent or chat, and whether it needs bundled files. Infer obvious details from the request. If essential information is missing and a reasonable assumption could materially change the skill, use ask_user once to batch the missing questions; do not use a script merely to ask questions.
 
@@ -67,7 +67,7 @@ Author the skill documentation in English by default. This includes the SKILL.md
 
 Generate concise YAML frontmatter plus an authoritative Markdown prompt body. Declare every double-brace variable referenced by the prompt. Omit mode unless it must be pinned; agent mode is for skills that require tools, while chat mode forbids them. Avoid tool-specific directories, speculative files, and unnecessary instructions.
 
-When ready, call manage_skill with action create, the exact name and scope, the complete SKILL.md content, and any bundled text files. Creation must not overwrite an existing skill. If the name already exists, explain the collision and ask whether the user wants to choose another name or update it separately. Never use shell_exec or write_file to bypass validation. After success, report the scope and invocation. Users may still create ordinary skills directly through filesystem operations when they explicitly choose to do so.`,
+When ready, call manage_skill with action create, the exact name and scope, the complete SKILL.md content, and any bundled text files. For profile scope, also pass the exact profile name. Creation must not overwrite an existing skill. If the name already exists, explain the collision and ask whether the user wants to choose another name or update it separately. Never use shell_exec or write_file to bypass validation. After success, report the scope and invocation. Users may still create ordinary skills directly through filesystem operations when they explicitly choose to do so.`,
   },
   {
     name: 'skillapp-builder',

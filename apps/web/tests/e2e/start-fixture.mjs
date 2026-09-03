@@ -12,11 +12,11 @@ const profilesDir = path.join(stateDir, 'profiles');
 const profileDir = path.join(profilesDir, 'default');
 fs.mkdirSync(profileDir, { recursive: true });
 fs.writeFileSync(path.join(profileDir, 'INSTRUCTIONS.md'), '# Default\n\nA disposable browser-test profile.\n');
-fs.writeFileSync(path.join(profileDir, 'profile.toml'), 'mode = "agent"\nmemories = false\n');
+fs.writeFileSync(path.join(profileDir, 'profile.toml'), 'memories = false\n');
 const researchProfileDir = path.join(profilesDir, 'research-lab');
 fs.mkdirSync(researchProfileDir, { recursive: true });
 fs.writeFileSync(path.join(researchProfileDir, 'INSTRUCTIONS.md'), '# Research Lab\n\nA second profile for sidebar search.\n');
-fs.writeFileSync(path.join(researchProfileDir, 'profile.toml'), 'mode = "agent"\nmemories = false\n');
+fs.writeFileSync(path.join(researchProfileDir, 'profile.toml'), 'memories = false\n');
 const appsDir = path.join(stateDir, 'apps');
 fs.cpSync(path.join(root, 'examples/apps'), appsDir, { recursive: true });
 const writerFixtureDir = path.join(appsDir, 'writer-fixture');
@@ -88,7 +88,7 @@ const remoteProfilesDir = path.join(remoteStateDir, 'profiles');
 const remoteProfileDir = path.join(remoteProfilesDir, 'remote-only');
 fs.mkdirSync(remoteProfileDir, { recursive: true });
 fs.writeFileSync(path.join(remoteProfileDir, 'INSTRUCTIONS.md'), '# Remote Only\n\nA profile owned by the remote fixture.\n');
-fs.writeFileSync(path.join(remoteProfileDir, 'profile.toml'), 'mode = "agent"\nmemories = false\n');
+fs.writeFileSync(path.join(remoteProfileDir, 'profile.toml'), 'memories = false\n');
 const remoteLoadedConfig = {
   config: {
     ...loadedConfig.config,

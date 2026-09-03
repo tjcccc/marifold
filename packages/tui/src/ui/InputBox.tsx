@@ -108,7 +108,7 @@ export function InputBox({
     : [];
   const showMenu = menuOpen && suggestions.length > 0;
   const menuIdx = Math.min(menuIndex, Math.max(0, suggestions.length - 1));
-  // When the only suggestion is already fully typed (e.g. `/chat`), the menu has
+  // When the only suggestion is already fully typed (e.g. `/think`), the menu has
   // nothing to navigate — so ↑/↓ should fall through to history instead of being
   // trapped cycling a single item.
   const menuNavigable = showMenu && !(suggestions.length === 1 && suggestions[0].name === partial);

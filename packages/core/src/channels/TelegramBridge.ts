@@ -3,7 +3,7 @@ import { access, mkdir, readdir, readFile, rename, writeFile } from 'fs/promises
 import { basename, dirname, extname, join, resolve, sep } from 'path';
 import { createLinkedAbort } from '@priest-ai/core';
 import type { MarifoldRuntime } from '../runtime/MarifoldRuntime';
-import type { ProfileMode, TelegramChannelConfig } from '../config/ConfigSchema';
+import type { TelegramChannelConfig } from '../config/ConfigSchema';
 import type { ApprovalDecision, ApprovalRequest, ToolKind } from '../agent/ApprovalPolicy';
 import { proxyDispatcher } from '../util/proxy';
 import { respond } from './respond';
@@ -28,8 +28,6 @@ const OUTBOX_INSTRUCTIONS = [
 
 const USAGE = [
   'marifold bot — commands:',
-  '/agent — agent mode (can use tools; asks before risky ones)',
-  '/chat — plain chat mode (no tools)',
   '/think on|off — thinking mode (for providers that support it)',
   '/new — start a fresh session',
   '/help — show this help',
@@ -101,7 +99,6 @@ export class TelegramBridge {
   private readonly log?: (message: string) => void;
   private readonly fetchImpl: typeof fetch;
 
-  private readonly chatModes = new Map<number, ProfileMode>();
   private readonly chatEpoch = new Map<number, number>();
   private readonly chatThink = new Map<number, boolean>();
   // Path of the most recently received file per chat, injected into the next
@@ -139,7 +136,7 @@ export class TelegramBridge {
     if (this.running) return;
     this.running = true;
     this.abort = new AbortController();
-    this.log?.(`Telegram bridge started (profile ${this.profile}, default ${this.config.defaultMode} mode, ${this.config.allowlist.length} allowed user(s)).`);
+    this.log?.(`Telegram bridge started (profile ${this.profile}, agent mode, ${this.config.allowlist.length} allowed user(s)).`);
     void this.loop();
   }
 
@@ -217,14 +214,6 @@ export class TelegramBridge {
       case '/help':
         await this.sendMessage(chatId, USAGE);
         return;
-      case '/chat':
-        this.chatModes.set(chatId, 'chat');
-        await this.sendMessage(chatId, 'Switched to chat mode.');
-        return;
-      case '/agent':
-        this.chatModes.set(chatId, 'agent');
-        await this.sendMessage(chatId, 'Switched to agent mode.');
-        return;
       case '/new':
         this.chatEpoch.set(chatId, (this.chatEpoch.get(chatId) ?? 0) + 1);
         await this.sendMessage(chatId, 'Started a new session.');
@@ -250,7 +239,6 @@ export class TelegramBridge {
   }
 
   private async runTurn(chatId: number, prompt: string): Promise<void> {
-    const mode = this.chatModes.get(chatId) ?? this.config.defaultMode;
     const epoch = this.chatEpoch.get(chatId) ?? 0;
     const sessionId = epoch ? `tg-${chatId}-${epoch}` : `tg-${chatId}`;
 
@@ -263,24 +251,20 @@ export class TelegramBridge {
     // Agent runs work inside the profile's outbox (trusted → writes there don't
     // prompt); whatever it leaves there is delivered afterwards.
     const outbox = this.outboxDir();
-    if (mode === 'agent') await mkdir(outbox, { recursive: true }).catch(() => undefined);
+    await mkdir(outbox, { recursive: true }).catch(() => undefined);
 
     let reply: string;
     try {
       const result = await respond(this.runtime, {
         profile: this.profile,
-        mode,
+        mode: 'agent',
         prompt: fullPrompt,
         sessionId,
         think: this.chatThink.get(chatId) ?? undefined,
-        ...(mode === 'agent'
-          ? {
-              approvalHandler: request => this.requestApproval(chatId, request),
-              cwd: outbox,
-              trustedFolders: [outbox],
-              instructions: OUTBOX_INSTRUCTIONS,
-            }
-          : {}),
+        approvalHandler: request => this.requestApproval(chatId, request),
+        cwd: outbox,
+        trustedFolders: [outbox],
+        instructions: OUTBOX_INSTRUCTIONS,
       });
       let text = result.text;
       if (result.denied.length > 0) text += `${text ? '\n\n' : ''}(Couldn't run: ${result.denied.join(', ')} — denied.)`;
@@ -296,7 +280,7 @@ export class TelegramBridge {
       reply = `⚠️ Error: ${errorMessage(error)}`;
     }
     await this.sendMessage(chatId, reply);
-    if (mode === 'agent') await this.deliverOutbox(chatId);
+    await this.deliverOutbox(chatId);
   }
 
   // ── Inbox / outbox ────────────────────────────────────────────────────────

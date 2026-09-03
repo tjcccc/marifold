@@ -1,5 +1,5 @@
 import { Command } from 'commander';
-import { ConfigManager, MarifoldError, MarifoldRuntime, type ProfileMode } from '@marifold/core';
+import { ConfigManager, MarifoldError, MarifoldRuntime } from '@marifold/core';
 import { InteractivePrompt } from '../input/InteractivePrompt';
 import { PromptAbortError, isPromptAbortError } from '../input/PromptAbort';
 import { readSecretLine } from '../input/SecretPrompt';
@@ -17,7 +17,7 @@ export function registerChannelCommand(program: Command, printer: ConsolePrinter
 
   telegram
     .command('setup')
-    .description('Configure the Telegram bot: token, allowlist, profile, default mode.')
+    .description('Configure the Telegram bot: token, allowlist, and profile.')
     .action(async () => {
       const loaded = loadConfig(program);
       const runtime = new MarifoldRuntime({ loadedConfig: loaded });
@@ -82,12 +82,6 @@ export function registerChannelCommand(program: Command, printer: ConsolePrinter
           process.stderr.write('Warning: empty allowlist — the bot will respond to nobody until you add an id.\n');
         }
 
-        // Default mode — preselect the current one on re-run.
-        const defaultMode = ((await selectTerminalOption('Default mode for a new chat:', [
-          { label: existing?.defaultMode === 'agent' ? 'agent (tools, current)' : 'agent (tools)', value: 'agent' },
-          { label: existing?.defaultMode === 'chat' ? 'chat (current)' : 'chat', value: 'chat' },
-        ], { defaultIndex: existing?.defaultMode === 'chat' ? 1 : 0 })) ?? existing?.defaultMode ?? 'agent') as ProfileMode;
-
         loaded.config.channels = {
           ...(loaded.config.channels ?? {}),
           telegram: {
@@ -95,14 +89,14 @@ export function registerChannelCommand(program: Command, printer: ConsolePrinter
             ...tokenFields,
             allowlist,
             profile,
-            defaultMode,
+            defaultMode: 'agent',
           },
         };
         const savedPath = new ConfigManager(loaded).save();
 
         const tokenNote = tokenInput.trim() ? 'updated' : 'kept';
         process.stdout.write(`\nSaved [channel.telegram] to ${savedPath}.\n`);
-        process.stdout.write(`  profile: ${profile} · default mode: ${defaultMode} · ${allowlist.length} allowed user(s) · token ${tokenNote}\n`);
+        process.stdout.write(`  profile: ${profile} · ${allowlist.length} allowed user(s) · token ${tokenNote}\n`);
         if (tokenFields.botToken) {
           process.stdout.write('Note: the token is stored in config.toml. For better hygiene, move it to an env var and set\n');
           process.stdout.write('      bot_token_env instead of bot_token. Run `marifold doctor` to check readiness.\n');

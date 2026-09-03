@@ -120,6 +120,47 @@ button.avatarButton:disabled {
   padding-left: 4px;
 }
 
+.advancedToggle {
+  width: 100%;
+  padding: 11px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--text);
+  text-align: left;
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 0 0 1px var(--separator-soft);
+}
+
+.advancedTitle,
+.advancedHint {
+  display: block;
+}
+
+.advancedTitle {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.advancedHint {
+  margin-top: 2px;
+  color: var(--text-3);
+  font-size: 11.5px;
+}
+
+.advancedChevron {
+  flex: 0 0 auto;
+  color: var(--text-3);
+}
+
+.advancedGroups {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
 .card {
   background: var(--surface);
   border-radius: var(--radius-lg);
@@ -267,10 +308,14 @@ button.avatarButton:disabled {
   font: inherit;
   font-size: 12.5px;
   color: var(--text);
-  background: var(--surface);
+  background-color: var(--surface);
   border: 1px solid var(--separator-soft);
   border-radius: 8px;
   padding: 4px 8px;
+}
+
+.select {
+  padding-right: 34px;
 }
 
 .input {
