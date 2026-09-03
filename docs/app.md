@@ -414,8 +414,10 @@ trigger(translate, {
 `debounce` is milliseconds, defaults to `0`, and is capped at 60 seconds. Current concurrency is always
 `latest`: a new matching change cancels a pending timer or in-flight provider
 request for the same operation, and a stale result cannot overwrite newer
-state. Manual and automatic non-interactive triggers use the same operation
-path.
+state. A button-triggered run clears its bound output immediately so a prior
+result cannot be mistaken for the new one; the output stays empty when the run
+fails or is cancelled. Automatic triggers retain the prior output and mark it
+stale while input is changing to avoid unnecessary flicker.
 
 Each trigger runs exactly one Skill. SkillApp does not support operation
 chaining, branching, loops, or local actions. The protected built-in builder

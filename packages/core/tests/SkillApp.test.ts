@@ -386,6 +386,44 @@ describe('SkillApp', () => {
     registry.close();
   });
 
+  it('clears an explicit operation output while it reruns and keeps it empty on failure', async () => {
+    const definition = compileSkillApp(painersRoomSource(), 'painers-room/skillapp.ts');
+    definition.operations[0].requiredInputs = ['idea'];
+    let settle: ((result: SkillAppResult) => void) | undefined;
+    const runtime: SkillAppInstanceRuntime = {
+      getApp: () => definition,
+      runSkillAppOperation: async () => new Promise<SkillAppResult>(resolve => {
+        settle = resolve;
+      }),
+    };
+    const registry = new SkillAppInstanceRegistry(runtime);
+    const instance = registry.create('painers-room');
+    await registry.update(instance.id, { idea: 'new idea' });
+    const output = definition.operations[0].output;
+    // Seed through the owned snapshot by completing one run before testing the rerun.
+    const first = registry.run(instance.id, 'makePrompt');
+    expect(registry.get(instance.id).state[output]).toBe('');
+    settle?.({
+      status: 'ok',
+      data: { text: 'Previous result' },
+      meta: { engine: 'test', model: 'test', durationMs: 1 },
+    });
+    await first;
+
+    const rerun = registry.run(instance.id, 'makePrompt');
+    const running = registry.get(instance.id);
+    expect(running.state[output]).toBe('');
+    expect(running.staleOutputs).toBeUndefined();
+    settle?.({
+      status: 'error',
+      error: { code: 'PROVIDER_ERROR', message: 'Model unavailable.' },
+    });
+    const failed = await rerun;
+    expect(failed.instance.state[output]).toBe('');
+    expect(failed.instance.staleOutputs).toBeUndefined();
+    registry.close();
+  });
+
   it('keeps stale output in the service runtime and lets the newest trigger win', async () => {
     const definition = compileSkillApp(
       translatorSource().replace('debounce: 1_000', 'debounce: 5'),

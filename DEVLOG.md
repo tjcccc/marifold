@@ -2,6 +2,19 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-09-03 — v0.69.1 — Clear explicit SkillApp results while running
+
+- Cleared only the bound output when a button-triggered SkillApp operation
+  starts, preventing a previous result from appearing to be newly generated.
+- Mirrored the service-owned behavior optimistically in Web output components,
+  with a `Generating…` state and empty output after failure or cancellation;
+  automatic triggers continue to retain and label stale results.
+- Fixed the shared select-arrow styling interaction that tiled oversized arrows
+  across SkillApp selects after the profile-settings select update.
+- Added core and Web regressions. Verified the full workspace
+  typecheck/build/test gate (749 tests: core 382, service 62, TUI 63, CLI 29,
+  Web 213).
+
 ## 2026-09-03 — v0.69.0 — Agent-first simplification
 
 - Removed Chat/Agent selectors and mode-switch commands from profile creation,

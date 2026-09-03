@@ -282,6 +282,13 @@ export function AppsScreen({
     const version = ++mutationVersion.current;
     const epoch = appEpoch.current;
     const label = humanize(operationName);
+    const nextValues = { ...valuesRef.current, [operation.output]: '' };
+    const nextStaleOutputs = new Set(staleOutputsRef.current);
+    nextStaleOutputs.delete(operation.output);
+    valuesRef.current = nextValues;
+    staleOutputsRef.current = nextStaleOutputs;
+    setValues(nextValues);
+    setStaleOutputs(nextStaleOutputs);
     setPending(current => current + 1);
     setRunningOperation(operationName);
     appendActivity('info', `${label} started`);
@@ -496,6 +503,9 @@ export function AppsScreen({
   }
 
   const hasErrors = activity.some(entry => entry.tone === 'error');
+  const runningOutput = runningOperation
+    ? app.operations.find(operation => operation.name === runningOperation)?.output
+    : undefined;
   return (
     <main className={styles.workspace}>
       <div className={styles.scrollArea}>
@@ -520,6 +530,7 @@ export function AppsScreen({
               onRemoveAttachment={(name, index) => void removeAttachment(name, index)}
               path={String(index)}
               ready={instanceRef.current !== undefined}
+              runningOutput={runningOutput}
               staleOutputs={staleOutputs}
               values={values}
             />
@@ -641,6 +652,7 @@ function SkillLayoutItem({
   onRemoveAttachment,
   path,
   ready,
+  runningOutput,
   staleOutputs,
   values,
 }: {
@@ -655,6 +667,7 @@ function SkillLayoutItem({
   onRemoveAttachment: (name: string, index: number) => void;
   path: string;
   ready: boolean;
+  runningOutput?: string;
   staleOutputs: Set<string>;
   values: Record<string, string>;
 }) {
@@ -682,6 +695,7 @@ function SkillLayoutItem({
                 onChange,
                 onRemoveAttachment,
                 ready,
+                runningOutput,
                 staleOutputs,
                 values,
               }}
@@ -738,6 +752,7 @@ function SkillLayoutItem({
     return (
       <SkillTextarea
         {...{ item, locked, onChange, path, ready, value }}
+        generating={item.bind === runningOutput}
         stale={staleOutputs.has(item.bind) && Boolean(value.trim())}
       />
     );
@@ -746,6 +761,7 @@ function SkillLayoutItem({
     return (
       <SkillMarkdown
         item={item}
+        generating={item.bind === runningOutput}
         locked={locked}
         stale={staleOutputs.has(item.bind) && Boolean(value.trim())}
         value={value}
@@ -753,7 +769,7 @@ function SkillLayoutItem({
     );
   }
   if (item.component === 'download') {
-    return <SkillDownload item={item} locked={locked} value={value} />;
+    return <SkillDownload generating={item.bind === runningOutput} item={item} locked={locked} value={value} />;
   }
   if (item.component === 'attachments') {
     return (
@@ -874,11 +890,13 @@ function SkillAttachments({
 }
 
 function SkillMarkdown({
+  generating,
   item,
   locked,
   stale,
   value,
 }: {
+  generating: boolean;
   item: SkillAppLayoutItem;
   locked: boolean;
   stale: boolean;
@@ -886,7 +904,7 @@ function SkillMarkdown({
 }) {
   const [showSource, setShowSource] = useState(false);
   return (
-    <section className={styles.field} aria-label={item.label}>
+    <section aria-busy={generating} className={styles.field} aria-label={item.label}>
       <span className={styles.fieldHeader}>
         <span className={item.showLabel === false ? styles.visuallyHidden : styles.label}>{item.label}</span>
         <span className={styles.fieldHeaderActions}>
@@ -921,7 +939,9 @@ function SkillMarkdown({
         {value ? (
           showSource ? <pre>{value}</pre> : <MarkdownView source={value} />
         ) : (
-          <span className={styles.previewEmpty}>{item.placeholder ?? 'Markdown output will appear here'}</span>
+          <span className={styles.previewEmpty}>
+            {generating ? 'Generating…' : item.placeholder ?? 'Markdown output will appear here'}
+          </span>
         )}
       </div>
     </section>
@@ -929,10 +949,12 @@ function SkillMarkdown({
 }
 
 function SkillDownload({
+  generating,
   item,
   locked,
   value,
 }: {
+  generating: boolean;
   item: SkillAppLayoutItem;
   locked: boolean;
   value: string;
@@ -940,7 +962,7 @@ function SkillDownload({
   const filename = item.filename ?? 'download.txt';
   const mediaType = item.mediaType ?? 'text/plain;charset=utf-8';
   return (
-    <section className={styles.field} aria-label={item.label}>
+    <section aria-busy={generating} className={styles.field} aria-label={item.label}>
       <span className={item.showLabel === false ? styles.visuallyHidden : styles.label}>{item.label}</span>
       <div className={styles.downloadZone} aria-live="polite">
         {value ? (
@@ -962,7 +984,9 @@ function SkillDownload({
             </button>
           </>
         ) : (
-          <span className={styles.downloadEmpty}>A downloadable file will appear when content is ready.</span>
+          <span className={styles.downloadEmpty}>
+            {generating ? 'Generating…' : 'A downloadable file will appear when content is ready.'}
+          </span>
         )}
       </div>
     </section>
@@ -970,6 +994,7 @@ function SkillDownload({
 }
 
 function SkillTextarea({
+  generating,
   item,
   locked,
   onChange,
@@ -978,6 +1003,7 @@ function SkillTextarea({
   stale,
   value,
 }: {
+  generating: boolean;
   item: SkillAppLayoutItem;
   locked: boolean;
   onChange: (name: string, value: string) => void;
@@ -1020,11 +1046,12 @@ function SkillTextarea({
         </span>
       </span>
       <textarea
+        aria-busy={generating}
         className={`${item.rows ? styles.sizedTextarea : ''} ${item.autoGrow ? styles.autoGrowTextarea : ''}`}
         id={inputId}
         disabled={locked || !ready}
         onChange={event => item.bind && onChange(item.bind, event.target.value)}
-        placeholder={item.placeholder}
+        placeholder={generating ? 'Generating…' : item.placeholder}
         readOnly={item.editable === false}
         ref={textareaRef}
         rows={item.rows}
