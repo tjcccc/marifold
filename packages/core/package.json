@@ -1,6 +1,6 @@
 {
   "name": "@marifold/core",
-  "version": "0.70.3",
+  "version": "0.70.4",
   "description": "Core runtime for Marifold",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

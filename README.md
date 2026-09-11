@@ -2,7 +2,7 @@
 
 marifold is a local-first personal AI workspace for profiles, chats, skills, mini apps, workflows, and external agents.
 
-**v0.70.3 workspace status: in testing.** Device-hosted workspaces and the Linux bridge installer are available for trials. An Aliyun ECS bridge over public HTTPS and paired Mac profile/avatar/session reads have been verified. Reboot recovery and broader host–guest acceptance remain pending. See [workspace setup](docs/workspaces.md) and [bridge hosting](apps/bridge/HOSTING.md).
+**v0.70.4 workspace status: in testing.** Device-hosted workspaces and the Linux bridge installer are available for trials. An Aliyun ECS bridge over public HTTPS and paired Mac profile/avatar/session reads have been verified. Reboot recovery and broader host–guest acceptance remain pending. See [workspace setup](docs/workspaces.md) and [bridge hosting](apps/bridge/HOSTING.md).
 
 The primary surface is the **TUI** — an Ink/React terminal app launched by bare `marifold`. Every ordinary message runs through one approval-aware Agent path: the model answers directly when no action is needed and chooses tools when work is required. The TUI renders `/` commands, `$skill` invocation, approval prompts, `/btw` mid-run steering, a skills manager, a profile-aware header, and session resume (`--resume`). Skills (`marifold.skill.v0`, run via `$name`) execute as agentic tools: the skill body is authoritative instructions and the model can read the skill's own bundled files (e.g. a `vars.toml`) when needed. `marifold init` and `marifold provider add` walk you through choosing a provider/model interactively.
 

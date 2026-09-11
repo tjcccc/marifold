@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { useState } from 'react';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ApiClient } from '../../src/api/client';
 import type { SkillAppDefinition } from '../../src/api/types';
@@ -108,6 +108,48 @@ function AppsHarness({ client }: { client: ApiClient }) {
 }
 
 describe('AppsScreen', () => {
+  it('keeps the active form mounted across workspace catalog refreshes', async () => {
+    let finishRefresh: (value: unknown) => void = () => {};
+    let catalogReads = 0;
+    const request = vi.fn(async (method: string, path: string) => {
+      if (path === '/v1/apps') {
+        if (++catalogReads === 1) return { apps: structuredClone([skillTranslator]) };
+        return new Promise(resolve => { finishRefresh = resolve; });
+      }
+      if (method === 'POST' && path === '/v1/apps/translator/instances') {
+        return { instance: { id: 'stable', appName: 'translator', state: {
+          source: 'Keep this input', targetLanguage: 'English', result: 'Existing output',
+        } } };
+      }
+      throw new Error(`Unexpected request: ${method} ${path}`);
+    });
+    const client = { baseUrl: '', request } as unknown as ApiClient;
+    render(<AppsHarness client={client} />);
+    await waitFor(() => expect((screen.getByLabelText('Input') as HTMLTextAreaElement).value).toBe('Keep this input'));
+    const input = screen.getByLabelText('Input');
+    input.focus();
+    for (let i = 0; i < 3; i++) {
+      await act(async () => {
+        window.dispatchEvent(new CustomEvent('marifold-workspace-changed', { detail: '' }));
+      });
+      expect(screen.getByLabelText('Input')).toBe(input);
+      expect(screen.queryByText('Loading apps…')).toBeNull();
+      await act(async () => { finishRefresh({ apps: structuredClone([skillTranslator]) }); });
+      expect(screen.getByLabelText('Input')).toBe(input);
+      expect(document.activeElement).toBe(input);
+      expect((input as HTMLTextAreaElement).value).toBe('Keep this input');
+    }
+    expect(request.mock.calls.filter(([, path]) => path.includes('instances'))).toHaveLength(1);
+
+    await act(async () => {
+      window.dispatchEvent(new CustomEvent('marifold-workspace-changed', { detail: '' }));
+    });
+    const updated = structuredClone(skillTranslator);
+    updated.app.title = 'Updated Translation';
+    await act(async () => { finishRefresh({ apps: [updated] }); });
+    expect(await screen.findByRole('heading', { name: 'Updated Translation' })).toBeTruthy();
+  });
+
   it('runs a SkillApp, preserves stale output, and keeps metrics in Activity', async () => {
     let state = { source: '', targetLanguage: 'English', result: '' };
     let staleOutputs: string[] | undefined;

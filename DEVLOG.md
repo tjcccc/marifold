@@ -2,6 +2,18 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-09-11 — v0.70.4 — SkillApp background refresh fix
+
+- Keep the active SkillApp form mounted while workspace notifications refresh
+  the catalog. Reuse unchanged definitions so unrelated activity does not reopen
+  the instance, reset Activity, or interrupt input focus.
+- Regression coverage repeats background refreshes, checks preserved input/focus
+  and a single instance open, and confirms changed definitions still reach the UI.
+- Future work: simplify bridge setup and reduce manual installation/configuration steps.
+- Validation: workspace typecheck/build passed; all 798 tests passed on retry
+  (optional real Redis test skipped). The first run hit a five-second timeout in
+  the existing artifact-transfer test; no code changes were needed for the retry.
+
 ## 2026-09-11 — v0.70.3 — Relay delivery amplification and safe updates (in testing)
 
 - Live v0.70.2 testing exposed repeated Redis inbox delivery under concurrent
