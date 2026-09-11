@@ -422,6 +422,12 @@ do not configure workspace bridge traffic.
 
 ## Acceptance, updates, and recovery
 
+There is currently no `marifold workspace bridge update` command. The installer
+option `workspace bridge install --start` starts the installed package; it does
+not copy newer bridge code from a freshly pulled repository. Device-only fixes
+(including v0.70.1–v0.70.2 avatar and transfer changes) need updated Mac services,
+not a bridge redeployment.
+
 For every provider, verify before relying on the bridge:
 
 - HTTPS health responds without a login/challenge; then authenticated registration

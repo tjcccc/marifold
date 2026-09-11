@@ -1,3 +1,4 @@
+import { artifactReadLength } from './WorkspaceArtifactTransfer';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { digest, identifier, randomId, record } from '@marifold/workspace-protocol';
@@ -83,7 +84,7 @@ export class WorkspaceExecutor {
         throw new Error('Invalid artifact offset.');
       const fd = fs.openSync(artifact.path, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
       try {
-        const bytes = Buffer.alloc(Math.min(32 * 1024, artifact.size - offset));
+        const bytes = Buffer.alloc(Math.min(artifactReadLength(b.length), artifact.size - offset));
         const n = fs.readSync(fd, bytes, 0, bytes.length, offset);
         return { data: bytes.subarray(0, n).toString('base64'), size: artifact.size };
       } finally {

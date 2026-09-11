@@ -2,6 +2,20 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-09-11 — v0.70.2 — Bounded concurrent workspace transfers (in testing)
+
+- Pipeline authenticated bulk chunks with a negotiated four-chunk window and an
+  eight-chunk connection budget. Preserve sequential delivery for older peers,
+  bounded assembly, sender-bound acknowledgments and disconnect cleanup.
+- Stream artifacts with four reads ahead and up to 128 KiB per read, retaining
+  older 32 KiB readers and verifying lengths without changing file contents.
+- Save new Web avatars as 512px WebP (PNG fallback); keep existing avatars intact.
+  These changes run on the devices and need no ECS bridge redeployment.
+- Added multi-megabyte byte-integrity, mixed-traffic, ordering, compatibility,
+  read-ahead, disconnect and full artifact-route regressions. Full typecheck/build/test
+  passed (795 tests; optional real Redis skipped). Chromium avatar saving produced
+  a valid 512px WebP from a synthetic PNG. Live MacBook verification follows deployment.
+
 ## 2026-09-11 — v0.70.1 — Workspace avatar traffic and recovery (in testing)
 
 - Reproduced concurrent avatar downloads on the paired MacBook causing profile,

@@ -407,6 +407,8 @@ export {
   resolveUserPath,
 } from './workspace/WorkspacePaths';
 export { WorkspaceManager } from './workspace/WorkspaceManager';
+export { artifactReadLength, workspaceArtifactStream } from './workspace/WorkspaceArtifactTransfer';
+export type { ArtifactChunk } from './workspace/WorkspaceArtifactTransfer';
 export type { WorkspaceOperationContext } from './workspace/WorkspaceManager';
 export { WorkspaceStore } from './workspace/WorkspaceStore';
 export type { WorkspaceConnection } from './workspace/WorkspaceStore';

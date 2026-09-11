@@ -1,4 +1,5 @@
 import WebSocket from 'ws';
+import { ChunkTransfers } from './ChunkTransfers';
 import {
   decryptMessage,
   digest,
@@ -53,8 +54,7 @@ export class BridgePeer {
   private pending = new Map<string, Pending>();
   private controls = new Map<string, { resolve: () => void; reject: () => void }>();
   private seen = new Map<string, number>();
-  private assembling = new Map<string, { parts: string[]; bytes: number; expires: number }>();
-  private chunkAcks = new Map<string, { accept: () => void; reject: () => void }>();
+  private transfers = new ChunkTransfers();
   private inflight = new Map<string, { hash: string; job: Promise<unknown> }>();
   private lastPong = Date.now();
   private hostDeviceId?: string;
@@ -83,11 +83,9 @@ export class BridgePeer {
       p.reject(new Error('Workspace connection closed.'));
     }
     this.pending.clear();
-    this.assembling.clear();
+    this.transfers.reset();
     for (const control of this.controls.values()) control.reject();
     this.controls.clear();
-    for (const ack of this.chunkAcks.values()) ack.reject();
-    this.chunkAcks.clear();
   }
   async ready(timeoutMs = 10000): Promise<void> {
     const end = Date.now() + timeoutMs;
@@ -163,6 +161,7 @@ export class BridgePeer {
     socket.on('close', () => {
       if (this.socket !== socket) return;
       this.connected = false;
+      this.transfers.reset();
       this.options.onStatus?.(false);
       clearInterval(this.ping);
       if (!this.stopped) {
@@ -256,41 +255,13 @@ export class BridgePeer {
     this.seen.set(message.header.id, message.header.expiresAt);
 
     if (decoded.type === 'chunk_ack') {
-      this.chunkAcks.get(`${decoded.transfer}:${decoded.index}`)?.accept();
+      this.transfers.acknowledge(sender, decoded);
       return;
     }
     if (decoded.type === 'chunk') {
-      const transfer = String(decoded.transfer);
-      const key = `${sender}:${transfer}`;
-      for (const [id, item] of this.assembling) if (item.expires < Date.now()) this.assembling.delete(id);
-      let item = this.assembling.get(key);
-      if (!item) {
-        if (this.assembling.size >= 16 || decoded.index !== 0) throw new Error('Invalid transfer.');
-        item = { parts: [], bytes: 0, expires: Date.now() + 60000 };
-        this.assembling.set(key, item);
-      }
-      if (decoded.index !== item.parts.length || typeof decoded.data !== 'string')
-        throw new Error('Out-of-order transfer.');
-      item.parts.push(decoded.data);
-      item.bytes += decoded.data.length;
-      item.expires = Date.now() + 60000;
-      if (
-        item.bytes > 40 * 1024 * 1024 ||
-        [...this.assembling.values()].reduce((total, entry) => total + entry.bytes, 0) > 64 * 1024 * 1024
-      ) {
-        this.assembling.delete(key);
-        throw new Error('Transfer limit exceeded.');
-      }
-      await this.send(sender, identity, { type: 'chunk_ack', transfer, index: decoded.index });
-      if (decoded.last === true) {
-        this.assembling.delete(key);
-        await this.dispatch(
-          record(JSON.parse(Buffer.from(item.parts.join(''), 'base64').toString('utf8'))),
-          sender,
-          identity,
-          certificate,
-        );
-      }
+      const { ack, text } = this.transfers.receive(sender, decoded);
+      await this.send(sender, identity, ack);
+      if (text !== undefined) await this.dispatch(record(JSON.parse(text)), sender, identity, certificate);
       return;
     }
     await this.dispatch(decoded, sender, identity, certificate);
@@ -343,44 +314,11 @@ export class BridgePeer {
       await this.send(recipient, identity, value);
       return;
     }
-    const encoded = Buffer.from(text).toString('base64');
-    if (encoded.length > 40 * 1024 * 1024) throw new Error('Transfer exceeds limit.');
-    const transfer = randomId();
-    for (let offset = 0, index = 0; offset < encoded.length; offset += 48000, index++) {
-      const key = `${transfer}:${index}`;
-      await new Promise<void>((resolve, reject) => {
-        const timer = setTimeout(() => {
-          this.chunkAcks.delete(key);
-          reject(new Error('Transfer acknowledgment timed out.'));
-        }, 15000);
-        this.chunkAcks.set(key, {
-          accept: () => {
-            clearTimeout(timer);
-            this.chunkAcks.delete(key);
-            resolve();
-          },
-          reject: () => {
-            clearTimeout(timer);
-            this.chunkAcks.delete(key);
-            reject(new Error('Transfer disconnected.'));
-          },
-        });
-        void this.send(recipient, identity, {
-          type: 'chunk',
-          transfer,
-          index,
-          data: encoded.slice(offset, offset + 48000),
-          last: offset + 48000 >= encoded.length,
-        }).catch((error) => {
-          clearTimeout(timer);
-          this.chunkAcks.delete(key);
-          reject(error);
-        });
-      });
-    }
+    await this.transfers.transmit(recipient, text, chunk => this.send(recipient, identity, chunk));
   }
   private async send(recipient: string, identity: PublicIdentity, value: unknown): Promise<void> {
     if (!this.connected || this.socket?.readyState !== WebSocket.OPEN) throw new Error('Workspace disconnected.');
+    const socket = this.socket;
     const message = await encryptMessage(
       this.options.identity,
       identity,
@@ -394,6 +332,7 @@ export class BridgePeer {
       },
       value,
     );
-    this.socket.send(JSON.stringify({ type: 'send', message }));
+    if (this.socket !== socket || socket.readyState !== WebSocket.OPEN) throw new Error('Workspace disconnected.');
+    socket.send(JSON.stringify({ type: 'send', message }));
   }
 }

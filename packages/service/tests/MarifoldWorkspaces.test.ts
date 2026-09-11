@@ -1,5 +1,6 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { randomBytes } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { resolveAgentConfig } from '@marifold/core';
@@ -71,6 +72,37 @@ async function paired(executor = false) {
   };
 }
 describe('device-hosted workspaces', () => {
+  it('downloads a complete large host artifact while serving ordinary workspace reads', async () => {
+    const p = await paired();
+    const original = randomBytes(1024 * 1024 + 17);
+    const realFetch = globalThis.fetch;
+    vi.stubGlobal('fetch', vi.fn(async (input, init) => {
+      if (!String(input).includes('localhost:11434')) return realFetch(input, init);
+      const request = JSON.parse(String(init?.body));
+      const context = request.messages.map((m: { content: string }) => m.content).join('\n');
+      const output = /otherwise write generated deliverables to (.+?)\. Regular output files/.exec(context)?.[1];
+      if (!output) throw new Error('No fixture output directory.');
+      generatedRuns.push(path.dirname(output));
+      fs.writeFileSync(path.join(output, 'transfer.bin'), original);
+      return new Response(JSON.stringify({ message: { content: 'Fixture complete.' }, done: true, done_reason: 'stop' }), {
+        headers: { 'content-type': 'application/json' },
+      });
+    }));
+    const { run } = await post(p.guest, `${p.prefix}/v1/runs`, { objective: 'Create a fixture artifact.' });
+    let current = run;
+    await expect.poll(async () => {
+      current = (await p.host.inject(`/v1/runs/${run.id}`)).json().run;
+      return current.status;
+    }).toBe('completed');
+    expect(current.artifacts).toHaveLength(1);
+    const [download, profiles] = await Promise.all([
+      p.guest.inject(`${p.prefix}/v1/runs/${run.id}/artifacts/${current.artifacts[0].id}`),
+      p.guest.inject(`${p.prefix}/v1/profiles`),
+    ]);
+    expect(download.statusCode).toBe(200);
+    expect(download.rawPayload).toEqual(original);
+    expect(profiles.statusCode).toBe(200);
+  }, 20000);
   it('shares the host surface without credentials or nested workspace access', async () => {
     const p = await paired();
     const config = await p.guest.inject(`${p.prefix}/v1/config`);
