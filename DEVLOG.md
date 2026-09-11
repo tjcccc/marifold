@@ -12,7 +12,10 @@ Cross-session development log. Newest first. Keep entries short: what shipped, w
   even when the host revision has not changed.
 - Added thumbnail, response/ETag, timeout-classification and recovery regressions.
   Full typecheck/build/test passed (784 tests; optional real Redis test skipped).
-  Live guest verification follows deployment; module remains in testing.
+- Deployed to both Macs. Three live concurrent request rounds passed (30/30 HTTP
+  200, all under four seconds); Home stayed online. Guest Web UI navigation and
+  refresh loaded the avatar and all 13 sessions without an offline warning.
+  Broader workspace acceptance remains in testing.
 
 ## 2026-09-11 — v0.70.0 — Device-hosted personal workspaces (in testing)
 

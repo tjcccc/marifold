@@ -1,7 +1,9 @@
 # Device-hosted workspaces
 
-**Status: in testing (v0.70.1).** Local automated checks have passed; live cloud,
-Linux Docker/reboot, public HTTPS, and host–guest acceptance remain pending.
+**Status: in testing (v0.70.1).** Local automated checks and paired Mac
+profile/avatar/session reads through an Aliyun ECS bridge over public HTTPS
+have passed, including Web UI refresh. Reboot recovery and broader host–guest
+acceptance remain pending.
 
 A workspace belongs to one person. Hosting shares this device's existing local
 `.marifold` configuration, profiles, sessions, Skills, Apps and schedules. The host
