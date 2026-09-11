@@ -1066,6 +1066,7 @@ function statusCodeForError(error: MarifoldError): number {
   if (error.code === 'RUN_LIMIT_EXCEEDED') return 429;
   if (error.code === 'SESSION_BUSY') return 409;
   if (error.code === 'WORKSPACE_OFFLINE') return 503;
+  if (error.code === 'WORKSPACE_TIMEOUT') return 504;
   if (error.code === 'PROVIDER_ERROR') return 502;
   return 500;
 }

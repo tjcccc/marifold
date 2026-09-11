@@ -1,9 +1,10 @@
 import { mkdtempSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createBridge, MemoryRelayStore } from '../../../apps/bridge/src';
 import { WorkspaceManager } from '../src/workspace/WorkspaceManager';
+import { BridgePeer } from '../src/workspace/bridge/BridgePeer';
 
 const cleanup: Array<() => void> = [];
 afterEach(() => {
@@ -50,6 +51,15 @@ describe('workspace bridge', () => {
     const third = manager();
     third.start(async () => null);
     await expect(third.add(url, created.invitation)).rejects.toThrow('invalid or expired');
+    const request = vi.spyOn(BridgePeer.prototype, 'request').mockRejectedValueOnce(new Error('Workspace request timed out.'));
+    try {
+      await expect(guest.request(joined.id, 'api', { method: 'GET', path: '/v1/profiles' }))
+        .rejects.toMatchObject({ code: 'WORKSPACE_TIMEOUT' });
+      expect(request.mock.calls[0]?.[5]).toBe(60000);
+      expect(guest.list()[0].online).toBe(true);
+    } finally {
+      request.mockRestore();
+    }
   }, 20000);
   it('reconnects interrupted transfers without repeating effects and supports executor revocation', async () => {
     const bridge = createBridge(new MemoryRelayStore(), 'b'.repeat(32));

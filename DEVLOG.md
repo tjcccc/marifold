@@ -2,6 +2,18 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-09-11 — v0.70.1 — Workspace avatar traffic and recovery (in testing)
+
+- Reproduced concurrent avatar downloads on the paired MacBook causing profile,
+  session and change requests to hit the 10-second read deadline while Home was online.
+- Web avatars now request bounded 256px WebP thumbnails; stored originals remain
+  available. Allow 60 seconds for bridge reads and distinguish connected-host
+  timeouts (504) from offline hosts (503). Refresh views after a connection recovers,
+  even when the host revision has not changed.
+- Added thumbnail, response/ETag, timeout-classification and recovery regressions.
+  Full typecheck/build/test passed (784 tests; optional real Redis test skipped).
+  Live guest verification follows deployment; module remains in testing.
+
 ## 2026-09-11 — v0.70.0 — Device-hosted personal workspaces (in testing)
 
 - Added `workspace bridge install` and a portable Linux setup wizard for Docker

@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import type { ApiClient } from '../api/client';
+import { MarifoldApiError, type ApiClient } from '../api/client';
 const EVENT = 'marifold-workspace-changed';
 export function useWorkspaceChangePublisher(client: ApiClient, onAvailability?: (available: boolean) => void): void {
   const availability = useRef(onAvailability);
@@ -8,6 +8,7 @@ export function useWorkspaceChangePublisher(client: ApiClient, onAvailability?: 
     let live = true;
     let busy = false;
     let revision: string | undefined;
+    let interrupted = false;
     const poll = async () => {
       if (busy || document.visibilityState === 'hidden') return;
       busy = true;
@@ -15,11 +16,14 @@ export function useWorkspaceChangePublisher(client: ApiClient, onAvailability?: 
         const result = await client.request<{ revision: string }>('GET', '/v1/changes');
         if (!live || typeof result.revision !== 'string') return;
         availability.current?.(true);
-        if (revision !== undefined && revision !== result.revision)
+        if (interrupted || (revision !== undefined && revision !== result.revision))
           window.dispatchEvent(new CustomEvent(EVENT, { detail: client.baseUrl }));
+        interrupted = false;
         revision = result.revision;
-      } catch {
-        if (live) availability.current?.(false);
+      } catch (error) {
+        interrupted = true;
+        if (live && (!(error instanceof MarifoldApiError) || error.code === 'WORKSPACE_OFFLINE'))
+          availability.current?.(false);
       } finally {
         busy = false;
       }

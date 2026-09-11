@@ -1,4 +1,5 @@
 export type { ImageInput, JSONValue as PriestJSONValue, ToolCall, ToolDefinition } from '@priest-ai/core';
+export { avatarThumbnail } from './images/AvatarThumbnail';
 export { AgentRunner } from './agent/AgentRunner';
 export type { AgentEngineContext, AgentRunnerDeps, AgentRunOptions } from './agent/AgentRunner';
 export type { AgentEvent, AgentUsage } from './agent/AgentEvents';

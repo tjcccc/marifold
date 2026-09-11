@@ -1,6 +1,6 @@
 # Device-hosted workspaces
 
-**Status: in testing (v0.70.0).** Local automated checks have passed; live cloud,
+**Status: in testing (v0.70.1).** Local automated checks have passed; live cloud,
 Linux Docker/reboot, public HTTPS, and host–guest acceptance remain pending.
 
 A workspace belongs to one person. Hosting shares this device's existing local
@@ -276,3 +276,8 @@ need your cloud account and second device; local tests do not claim to replace t
 Cloud-owned workspaces, offline editing, automatic conflict merging, browser-only
 pairing, iOS, Keychain, role tiers, other deployment providers and privileged OS
 maintenance helpers are deferred. The local HTTP service remains private-network-only.
+
+Web avatar displays use 256px WebP thumbnails to keep image traffic from delaying
+workspace navigation. Originals remain unchanged. Bridge reads have a 60-second
+deadline; a connected-host timeout reports `WORKSPACE_TIMEOUT` (HTTP 504), distinct
+from `WORKSPACE_OFFLINE` (HTTP 503). Recovered connections refresh open data views.
