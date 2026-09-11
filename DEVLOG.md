@@ -2,6 +2,23 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-09-11 — v0.70.3 — Relay delivery amplification and safe updates (in testing)
+
+- Live v0.70.2 testing exposed repeated Redis inbox delivery under concurrent
+  chunks: original-avatar downloads regressed and a seven-file burst overloaded
+  the old relay. Keep sequential transfers until the relay advertises fixed delivery.
+- Track a delivery cursor per Redis subscription; retain unacknowledged entries
+  for reconnect replay without resending them on every publish.
+- Add `workspace bridge update` for installer-managed Linux deployments. Stage
+  and build a release, preserve local Dockerfile/mirror settings and all runtime
+  configuration, replace only the bridge, and restore the prior image on failure.
+  No Redis/Caddy container replacement or data/config regeneration.
+- Relay cursor, legacy relay fallback and installer preservation/rollback tests
+  added. Full typecheck/build/test passed (797 tests; optional real Redis skipped),
+  plus 8 installer fixtures. An 8 MiB encrypted local transfer preserved every byte.
+  The old ECS relay works with the compatibility guard; ECS update and live
+  concurrent-transfer acceptance remain pending.
+
 ## 2026-09-11 — v0.70.2 — Bounded concurrent workspace transfers (in testing)
 
 - Pipeline authenticated bulk chunks with a negotiated four-chunk window and an
@@ -10,11 +27,12 @@ Cross-session development log. Newest first. Keep entries short: what shipped, w
 - Stream artifacts with four reads ahead and up to 128 KiB per read, retaining
   older 32 KiB readers and verifying lengths without changing file contents.
 - Save new Web avatars as 512px WebP (PNG fallback); keep existing avatars intact.
-  These changes run on the devices and need no ECS bridge redeployment.
+  Live testing later exposed a relay bottleneck; see the v0.70.3 follow-up above.
 - Added multi-megabyte byte-integrity, mixed-traffic, ordering, compatibility,
   read-ahead, disconnect and full artifact-route regressions. Full typecheck/build/test
   passed (795 tests; optional real Redis skipped). Chromium avatar saving produced
-  a valid 512px WebP from a synthetic PNG. Live MacBook verification follows deployment.
+  a valid 512px WebP from a synthetic PNG. Live throughput acceptance failed on
+  the older ECS relay despite passing local tests; see v0.70.3.
 
 ## 2026-09-11 — v0.70.1 — Workspace avatar traffic and recovery (in testing)
 

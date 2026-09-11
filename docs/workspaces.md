@@ -1,6 +1,6 @@
 # Device-hosted workspaces
 
-**Status: in testing (v0.70.2).** Local automated checks and paired Mac
+**Status: in testing (v0.70.3).** Local automated checks and paired Mac
 profile/avatar/session reads through an Aliyun ECS bridge over public HTTPS
 have passed, including Web UI refresh. Reboot recovery and broader host–guest
 acceptance remain pending.
@@ -236,11 +236,13 @@ frames per recipient for five minutes. Messages expire after one minute. Large
 application payloads use authenticated chunks with acknowledgment, transfer-size
 limits and assembly expiry. Updated devices negotiate four chunks in flight per
 transfer, with eight bulk chunks total per connection; ordinary requests do not
-wait for a whole file transfer. Older receivers retain sequential delivery.
+wait for a whole file transfer. Older receivers and relays retain sequential delivery.
+The relay delivers each inbox entry once per connection, replaying unacknowledged
+entries after reconnect instead of repeating them on every publish.
 Artifact downloads request up to 128 KiB per read with four reads ahead, preserving
 byte order and bounded memory; older hosts fall back to 32 KiB reads. Redis must
-preserve host and revocation metadata. These device-side improvements work with
-the existing bridge deployment; update both Mac services to get the full benefit.
+preserve host and revocation metadata. Update both Mac services and the ECS bridge
+with `marifold workspace bridge update` to enable concurrent bulk transfers.
 
 An operation has a stable request ID and input hash. The receiving endpoint journals
 mutations before execution. Reconnection resends the same operation ID; completed

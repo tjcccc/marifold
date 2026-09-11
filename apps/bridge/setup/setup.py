@@ -12,6 +12,7 @@ import shutil
 import socket
 import subprocess
 import sys
+import tempfile
 from urllib.parse import urlsplit
 
 PROJECT = "marifold-personal-bridge"
@@ -108,7 +109,7 @@ def compose_config(dedicated, domain):
     return config
 
 
-def prepare(source, target, redis_url, domain):
+def validate_package(source):
     # Only copy the compiled package inputs; never copy local environment/configuration.
     required = ["package.json", "dist", "vendor"]
     for name in required:
@@ -120,6 +121,11 @@ def prepare(source, target, redis_url, domain):
     manifest = json.loads((source / "package.json").read_text())
     if manifest.get("name") != "marifold-personal-bridge":
         raise ValueError("Run marifold workspace bridge prepare first, then use that package's setup.sh.")
+    return required
+
+
+def prepare(source, target, redis_url, domain):
+    required = validate_package(source)
     target.mkdir(mode=0o700)  # Exclusive creation: never overwrite an existing installation.
     package = target / "package"
     package.mkdir(mode=0o755)
@@ -166,9 +172,81 @@ def start(target):
         print("Next route your existing HTTPS proxy or Cloudflare Tunnel to http://127.0.0.1:32143.")
 
 
+def update(source, target):
+    required = validate_package(source)
+    config = json.loads((target / "compose.json").read_text())
+    bridge = config.get("services", {}).get("bridge", {})
+    build = bridge.get("build")
+    if not isinstance(build, dict) or not isinstance(build.get("context"), str):
+        raise ValueError("Only installer-managed bridge builds can be updated.")
+    installed = (target / build["context"]).resolve()
+    if not installed.is_relative_to(target.resolve()):
+        raise ValueError("Bridge build context must stay inside the installation.")
+    for name in ("Dockerfile", ".dockerignore", "health.cjs"):
+        if (installed / name).is_symlink() or not (installed / name).is_file():
+            raise ValueError("Incomplete installed bridge build inputs.")
+    command = ["docker", "compose", "-f", str(target / "compose.json")]
+    container = run(command + ["ps", "--quiet", "bridge"])
+    if not re.fullmatch(r"[a-f0-9]{12,64}", container):
+        raise ValueError("Start the existing bridge before updating it.")
+    image = run(["docker", "inspect", "--format", "{{.Image}}", container])
+    if not re.fullmatch(r"sha256:[a-f0-9]{64}", image):
+        raise ValueError("Could not identify the running bridge image for rollback.")
+    release = Path(tempfile.mkdtemp(prefix="release-", dir=target))
+    release.chmod(0o755)
+    for name in required:
+        item = source / name
+        if item.is_dir():
+            shutil.copytree(item, release / name)
+        else:
+            shutil.copyfile(item, release / name)
+    # Preserve local image-mirror and build settings chosen during installation.
+    for name in ("Dockerfile", ".dockerignore", "health.cjs"):
+        shutil.copyfile(installed / name, release / name)
+    for item in release.rglob("*"):
+        item.chmod(0o755 if item.is_dir() else 0o644)
+    tag = f"{PROJECT}:{release.name}"
+    rollback_tag = tag + "-previous"
+    run(["docker", "tag", image, rollback_tag])
+    previous = json.loads(json.dumps(config))
+    previous["services"]["bridge"]["image"] = rollback_tag
+    previous["services"]["bridge"]["pull_policy"] = "never"
+    backup = target / f"{release.name}-rollback.json"
+    write(backup, json.dumps(previous, indent=2) + "\n")
+    bridge["build"]["context"] = str(release)
+    bridge["image"] = tag
+    bridge["pull_policy"] = "never"
+    candidate = target / f"{release.name}-compose.json"
+    write(candidate, json.dumps(config, indent=2) + "\n")
+    staged = ["docker", "compose", "-f", str(candidate)]
+    run(staged + ["config", "--quiet"])
+    print("Building the new bridge while the existing bridge stays online.", flush=True)
+    run(staged + ["build", "bridge"])
+    print("Replacing only the bridge container; checking health. Existing device connections will reconnect.", flush=True)
+    candidate.replace(target / "compose.json")
+    up = ["up", "--detach", "--no-deps", "--no-build", "--pull", "never", "--wait", "--wait-timeout", "180", "bridge"]
+    try:
+        run(command + up)
+        run(command + ["exec", "-T", "bridge", "node", "health.cjs"])
+    except (RuntimeError, OSError, KeyboardInterrupt):
+        restore = target / f"{release.name}-restore.json"
+        shutil.copyfile(backup, restore)
+        restore.chmod(0o600)
+        restore.replace(target / "compose.json")
+        try:
+            run(command + up)
+        except (RuntimeError, OSError, KeyboardInterrupt):
+            raise RuntimeError(f"Update and automatic rollback failed. Configuration is restored; run docker compose -f {target}/compose.json up -d --no-deps --no-build --pull never bridge. Previous release: {backup}") from None
+        raise RuntimeError("New bridge health failed; the previous bridge image was restored.") from None
+    print("Bridge updated. Local HTTP and Redis PING passed; verify your public HTTPS origin and paired devices.")
+    print(f"Previous release retained for rollback: {backup}")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--start", action="store_true", help="Start an existing installer-managed installation without replacing secrets/data")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--update", action="store_true", help="Update only the installed bridge, retaining secrets, data and a rollback image")
+    mode.add_argument("--start", action="store_true", help="Start an existing installer-managed installation without replacing secrets/data")
     args = parser.parse_args()
     if sys.platform != "linux" or os.geteuid() != 0:
         raise ValueError("Run sudo bash setup.sh on the Linux ECS/EC2 server, not on your Mac.")
@@ -177,7 +255,7 @@ def main():
             raise ValueError("Install Docker Engine with its Compose plugin first: https://docs.docker.com/engine/install/ . Existing Docker installations are never replaced by this script.")
     run(["docker", "compose", "version"])
     target = DEFAULT_TARGET
-    if args.start:
+    if args.start or args.update:
         if target.is_symlink() or target.stat().st_uid != 0 or target.stat().st_mode & 0o077:
             raise ValueError("Installation directory must be root-owned, mode 0700, and not a symlink.")
         for name in ("installation.json", "compose.json", "bridge.env"):
@@ -185,6 +263,11 @@ def main():
                 raise ValueError("Incomplete installation; inspect retained files before recovery.")
         if json.loads((target / "installation.json").read_text()).get("schema") != 1:
             raise ValueError("Unrecognized installation metadata.")
+        if args.update:
+            print("Update only the bridge container. Preserve Redis, Caddy, tokens and the configured image mirror. Retain the previous image for rollback.")
+            if confirm("Build and deploy the new bridge with a brief connection interruption?"):
+                update(Path(__file__).resolve().parent.parent, target)
+            return
         if confirm("Start the existing bridge and enable Docker at boot, preserving its configuration?"):
             run(["systemctl", "enable", "--now", "docker"])
             start(target)

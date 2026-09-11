@@ -38,7 +38,7 @@ export class ChunkTransfers {
     if (ack?.recipient === sender) ack.accept(frame.window === WINDOW ? WINDOW : 1);
   }
 
-  receive(sender: string, frame: Record<string, unknown>): { ack: unknown; text?: string } {
+  receive(sender: string, frame: Record<string, unknown>): { ack: Record<string, unknown>; text?: string } {
     const transfer = identifier(frame.transfer);
     const index = frame.index;
     if (typeof index !== 'number' || !Number.isSafeInteger(index) || index < 0 || index >= 1024 ||
@@ -73,19 +73,20 @@ export class ChunkTransfers {
     return { ack, text: Buffer.from(item.parts.join(''), 'base64').toString('utf8') };
   }
 
-  async transmit(recipient: string, text: string, send: Send): Promise<void> {
+  async transmit(recipient: string, text: string, send: Send, relayWindow = WINDOW): Promise<void> {
     const encoded = Buffer.from(text).toString('base64');
     if (encoded.length > TRANSFER_LIMIT) throw new Error('Transfer exceeds limit.');
     const transfer = randomId();
     const generation = this.generation;
+    const chunkSize = relayWindow === WINDOW ? CHUNK_SIZE : 48000;
     const chunk = (index: number) => this.sendChunk(recipient, {
       type: 'chunk', transfer, index,
-      data: encoded.slice(index * CHUNK_SIZE, (index + 1) * CHUNK_SIZE),
-      last: (index + 1) * CHUNK_SIZE >= encoded.length,
+      data: encoded.slice(index * chunkSize, (index + 1) * chunkSize),
+      last: (index + 1) * chunkSize >= encoded.length,
     }, send, generation);
     // Old receivers omit window and continue to receive one chunk at a time.
-    const window = await chunk(0);
-    const count = Math.ceil(encoded.length / CHUNK_SIZE);
+    const window = Math.min(await chunk(0), relayWindow);
+    const count = Math.ceil(encoded.length / chunkSize);
     for (let index = 1; index < count; index += window) {
       await Promise.all(Array.from({ length: Math.min(window, count - index) }, (_, offset) => chunk(index + offset)));
     }

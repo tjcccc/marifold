@@ -422,11 +422,36 @@ do not configure workspace bridge traffic.
 
 ## Acceptance, updates, and recovery
 
-There is currently no `marifold workspace bridge update` command. The installer
-option `workspace bridge install --start` starts the installed package; it does
-not copy newer bridge code from a freshly pulled repository. Device-only fixes
-(including v0.70.1–v0.70.2 avatar and transfer changes) need updated Mac services,
-not a bridge redeployment.
+For an installer-managed Linux deployment, pull and build Marifold on the server,
+then run the updater:
+
+```sh
+cd ~/repos/marifold
+git pull --ff-only
+pnpm install --frozen-lockfile
+pnpm -r build
+node packages/cli/dist/index.js workspace bridge update
+```
+
+With a linked CLI, the last command is `marifold workspace bridge update`. For a
+freshly prepared standalone package, use `sudo bash setup.sh --update` instead.
+`workspace bridge install --start` remains a restart/recovery command, not an upgrade.
+
+The updater targets the existing `/opt/marifold-bridge` installation. It builds a
+new release while the current container runs, preserves the installed Dockerfile
+(including a China registry mirror), and replaces only the bridge container. It
+preserves the environment file, registration token, Redis container/data and Caddy
+configuration. Connections briefly reconnect. Failed deployment or health checks
+trigger a rollback to the retained previous image. Build failures leave the running
+container and active configuration intact. Release directories and rollback
+configuration remain under `/opt/marifold-bridge`; the updater prints their location.
+This updater does not manage manual systemd or Vercel deployments.
+
+The v0.70.3 relay prevents repeated delivery of unacknowledged packets within a
+connection. Updated devices enable concurrent chunks only when both relay
+connections support this behavior. Upgrade the ECS bridge as well as both Macs
+to enable the throughput improvement; older relays retain sequential transfers.
+After updating, `/health` includes `"deliveryReplay":"on-reconnect"`.
 
 For every provider, verify before relying on the bridge:
 

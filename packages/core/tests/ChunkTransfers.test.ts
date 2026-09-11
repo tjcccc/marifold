@@ -4,6 +4,26 @@ import { ChunkTransfers } from '../src/workspace/bridge/ChunkTransfers';
 afterEach(() => vi.useRealTimers());
 
 describe('bounded workspace transfers', () => {
+  it('keeps legacy chunk size and sequential delivery when the relay lacks replay protection', async () => {
+    const sender = new ChunkTransfers();
+    const receiver = new ChunkTransfers();
+    const text = 'x'.repeat(150000);
+    let active = 0;
+    let peak = 0;
+    let output: string | undefined;
+    await sender.transmit('guest', text, async value => {
+      const frame = value as Record<string, unknown>;
+      expect((frame.data as string).length).toBeLessThanOrEqual(48000);
+      peak = Math.max(peak, ++active);
+      await new Promise(resolve => setTimeout(resolve, 1));
+      const result = receiver.receive('host', frame);
+      if (result.text) output = result.text;
+      active--;
+      sender.acknowledge('guest', result.ack);
+    }, 1);
+    expect(peak).toBe(1);
+    expect(output).toBe(text);
+  });
   it.each([false, true])('preserves multi-megabyte bytes with legacy receiver=%s', async legacy => {
     vi.useFakeTimers();
     const sender = new ChunkTransfers();

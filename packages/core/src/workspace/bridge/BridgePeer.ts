@@ -55,6 +55,7 @@ export class BridgePeer {
   private controls = new Map<string, { resolve: () => void; reject: () => void }>();
   private seen = new Map<string, number>();
   private transfers = new ChunkTransfers();
+  private transferWindow = 1;
   private inflight = new Map<string, { hash: string; job: Promise<unknown> }>();
   private lastPong = Date.now();
   private hostDeviceId?: string;
@@ -186,6 +187,7 @@ export class BridgePeer {
       return;
     }
     if (frame.type === 'ready') {
+      this.transferWindow = frame.deliveryReplay === 'on-reconnect' ? 4 : 1;
       this.hostDeviceId = String(frame.hostDeviceId);
       if (this.options.hostDeviceId && this.hostDeviceId !== this.options.hostDeviceId) {
         this.close();
@@ -260,7 +262,7 @@ export class BridgePeer {
     }
     if (decoded.type === 'chunk') {
       const { ack, text } = this.transfers.receive(sender, decoded);
-      await this.send(sender, identity, ack);
+      await this.send(sender, identity, { ...ack, window: this.transferWindow });
       if (text !== undefined) await this.dispatch(record(JSON.parse(text)), sender, identity, certificate);
       return;
     }
@@ -314,7 +316,7 @@ export class BridgePeer {
       await this.send(recipient, identity, value);
       return;
     }
-    await this.transfers.transmit(recipient, text, chunk => this.send(recipient, identity, chunk));
+    await this.transfers.transmit(recipient, text, chunk => this.send(recipient, identity, chunk), this.transferWindow);
   }
   private async send(recipient: string, identity: PublicIdentity, value: unknown): Promise<void> {
     if (!this.connected || this.socket?.readyState !== WebSocket.OPEN) throw new Error('Workspace disconnected.');
