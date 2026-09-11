@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { FastifyInstance, FastifyReply } from 'fastify';
+import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { MarifoldError, RunApprovalAction, RunRegistry, RunStartInput } from '@marifold/core';
 import { SSE_HEADERS, startSseHeartbeat, writeSse, writeSseRetry } from './Sse';
 import {
@@ -23,9 +23,13 @@ const RECONNECT_DELAY_MS = 3000;
  * clarifications, approvals, steer, and cancel. The AgentEvent union is serialized verbatim —
  * it is the wire contract shared with every other Marifold client.
  */
-export function registerRunRoutes(server: FastifyInstance, registry: RunRegistry): void {
+export function registerRunRoutes(server: FastifyInstance, registry: RunRegistry, options: {
+  resolve?: (input: RunStartInput, body: Record<string, unknown>, request: FastifyRequest) => Promise<RunStartInput>;
+  artifact?: (runId: string, artifactId: string, reply: FastifyReply) => Promise<boolean>;
+} = {}): void {
   server.post('/v1/runs', async (request, reply) => {
-    const run = registry.start(parseRunStartInput(request.body));
+    const input = parseRunStartInput(request.body);
+    const run = registry.start(options.resolve ? await options.resolve(input, objectBody(request.body), request) : input);
     reply.status(201);
     return { ok: true, run };
   });
@@ -40,6 +44,7 @@ export function registerRunRoutes(server: FastifyInstance, registry: RunRegistry
   server.get<{ Params: { id: string; artifactId: string } }>(
     '/v1/runs/:id/artifacts/:artifactId',
     async (request, reply) => {
+      if (await options.artifact?.(request.params.id, request.params.artifactId, reply)) return reply;
       const artifact = registry.requireArtifact(request.params.id, request.params.artifactId);
       reply.header('content-type', artifact.mediaType);
       reply.header('content-length', String(artifact.size));
@@ -135,7 +140,9 @@ async function streamRunEvents(
 
 function parseRunStartInput(value: unknown): RunStartInput {
   const body = objectBody(value);
+  if (body.toolMode !== undefined && !['auto', 'native', 'control-block'].includes(String(body.toolMode))) throw MarifoldError.configInvalid('Invalid toolMode.');
   return {
+    ...(body.toolMode !== undefined ? { toolMode: body.toolMode as RunStartInput['toolMode'] } : {}),
     objective: requiredString(body.objective, 'objective'),
     ...optionalStringField('profile', body.profile),
     ...optionalStringField('provider', body.provider),

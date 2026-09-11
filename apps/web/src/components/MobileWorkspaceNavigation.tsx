@@ -67,7 +67,7 @@ export function MobileWorkspaceNavigation({
           >
             <button className={styles.action} type="button" onClick={() => run(onOpenConnection)}>
               <span className={styles.actionIcon}><ConnectionGlyph /></span>
-              <span>Connection</span>
+              <span>Workspace</span>
               {connectionName ? <span className={styles.value}>{connectionName}</span> : null}
             </button>
             <button

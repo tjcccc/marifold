@@ -1,3 +1,5 @@
+import type { AgentRunnerDeps } from '../agent/AgentRunner';
+import type { RunStartInput, RunJournal } from '../runs/RunRegistry';
 import { ImageInput, JSONValue, PriestConfig, PriestEngine, PriestRequest, PriestResponse, ToolDefinition, ToolExchangeTurn, UsageInfo } from '@priest-ai/core';
 import * as path from 'path';
 import { AgentRunner } from '../agent/AgentRunner';
@@ -845,6 +847,10 @@ export class MarifoldRuntime {
     registry?: ToolRegistry,
     agentConfigOverride?: MarifoldAgentConfig,
     runtimeOptions: {
+      createWorkspace?: AgentRunnerDeps['createWorkspace'];
+      listArtifacts?: AgentRunnerDeps['listArtifacts'];
+      deviceInstructions?: string;
+      contextInstructions?: string[];
       webSearch?: boolean;
       readOnlyFolders?: string[];
       readOnlyFiles?: string[];
@@ -852,6 +858,10 @@ export class MarifoldRuntime {
     } = {},
   ): AgentRunner {
     return new AgentRunner({
+      deniedRoots: [path.join(path.dirname(this.options.loadedConfig.configPath), 'workspaces')],
+      contextInstructions: runtimeOptions.contextInstructions,
+      createWorkspace: runtimeOptions.createWorkspace,
+      listArtifacts: runtimeOptions.listArtifacts,
       taskStore: this.taskStore,
       registry: registry ?? this.createDefaultToolRegistry(profile),
       agentConfig: agentConfigOverride ?? this.resolveAgentConfigForProfile(profile),
@@ -916,6 +926,7 @@ export class MarifoldRuntime {
           .filter(t => t.role === 'user' || t.role === 'assistant')
           .map(t => ({ role: t.role as 'user' | 'assistant', content: t.content })),
       resolveBuiltInInstructions: (objective, resolvedProfile) => {
+        if (runtimeOptions.deviceInstructions) return [runtimeOptions.deviceInstructions];
         const { config } = this.options.loadedConfig;
         if (mentionsSkillApps(objective)) {
           return [buildSkillAppBuilderGuide({
@@ -943,7 +954,15 @@ export class MarifoldRuntime {
     });
   }
 
-  private createDefaultToolRegistry(profile?: string): ToolRegistry {
+  createHostContextTools(profile?: string): ToolRegistry {
+    const registry = new ToolRegistry();
+    for (const tool of this.createDefaultToolRegistry(profile).list()) {
+      if (tool.kind === 'interaction' || ['web_search', 'delegate'].includes(tool.definition.name)) registry.register(tool);
+    }
+    return registry;
+  }
+
+  createDefaultToolRegistry(profile?: string): ToolRegistry {
     const registry = new ToolRegistry();
     const { config } = this.options.loadedConfig;
     const resolvedProfile = profile ?? config.default.profile;
@@ -1411,10 +1430,11 @@ export class MarifoldRuntime {
 
   /** Live run-session registry for the service process: start/attach/approve/
    * steer/cancel agent runs across separate requests. Call close() on shutdown. */
-  createRunRegistry(log?: (message: string) => void): RunRegistry {
+  createRunRegistry(log?: (message: string) => void, runnerForRun?: (input: RunStartInput) => AgentRunner | Promise<AgentRunner>, journal?: RunJournal): RunRegistry {
     return new RunRegistry({
+      journal,
       runtime: {
-        createAgentRunner: profile => this.createAgentRunner(profile),
+        createAgentRunner: (profile, input) => runnerForRun && input ? runnerForRun(input) : this.createAgentRunner(profile),
         setProfileAgentApproval: (profile, kind, mode) => {
           this.setProfileAgentApproval(profile, kind, mode);
         },

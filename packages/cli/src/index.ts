@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { registerWorkspaceCommand, localServiceSettings } from './commands/workspace';
 import { Command } from 'commander';
 import { registerAgentCommand } from './commands/agent';
 import { registerAskCommand } from './commands/ask';
@@ -22,7 +23,7 @@ const printer = new ConsolePrinter();
 const program = new Command()
   .name('marifold')
   .description('Marifold local-first AI workspace CLI.')
-  .version('0.69.2')
+  .version('0.70.0')
   // Allow a root --profile (for the bare-`marifold` TUI launch) to coexist with
   // subcommand options of the same name: root options must precede the
   // subcommand, and options after the subcommand bind to it.
@@ -48,6 +49,7 @@ registerServiceCommand(program, printer);
 registerSessionCommand(program, printer);
 registerStatusCommand(program, printer);
 registerUpdateCommand(program, printer);
+registerWorkspaceCommand(program, printer);
 
 // Bare `marifold` (or `marifold --profile x`) launches the Ink TUI. The TUI is
 // an ESM-only package (Ink v7); the CLI is CommonJS, so import it through a
@@ -69,8 +71,10 @@ program.action(async () => {
   const options = program.opts<{ profile?: string; resume?: string | boolean }>();
   const loadedConfig = loadConfig(program);
   const { runTui } = await importEsm('@marifold/tui');
+  let service; try { service = localServiceSettings(loadedConfig); } catch { /* Standalone local TUI remains available. */ }
   await runTui({
     loadedConfig,
+    service,
     ...(options.profile ? { profile: options.profile } : {}),
     ...(options.resume !== undefined ? { resume: options.resume } : {}),
   });

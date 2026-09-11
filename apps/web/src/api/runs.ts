@@ -107,7 +107,7 @@ export async function* followRun(
       // Stream ended without `done` — the connection dropped; reconnect.
     } catch (error) {
       if (signal?.aborted) return;
-      if (error instanceof MarifoldApiError) throw error;
+      if (error instanceof MarifoldApiError && ![502, 503, 504].includes(error.status)) throw error;
       // Network-level failure — fall through to the retry delay.
     }
     if (signal?.aborted) return;

@@ -35,7 +35,7 @@ describe('App workspace routing', () => {
   it('keeps the selected App supplied while Agent is visible and returns to its route', async () => {
     render(<App />);
 
-    expect(screen.getByTestId('active-app').textContent).toBe('short-article-generator');
+    await waitFor(() => expect(screen.getByTestId('active-app').textContent).toBe('short-article-generator'));
     fireEvent.click(screen.getByRole('button', { name: 'Show Agent' }));
     await waitFor(() => expect(window.location.pathname).toBe('/agent'));
     expect(screen.getByTestId('workspace-view').textContent).toBe('agent');

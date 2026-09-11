@@ -1,3 +1,4 @@
+import { workspaceClient, remoteAgent } from './WorkspaceClient';
 import { AgentEvent, ApprovalDecision, ApprovalRequest } from '@marifold/core';
 import { Command } from 'commander';
 import { InteractivePrompt } from '../input/InteractivePrompt';
@@ -6,6 +7,9 @@ import { TerminalStyle } from '../output/TerminalStyle';
 import { createRuntime } from './RuntimeFactory';
 
 interface AgentOptions {
+  cwd?: string;
+  workspace?: string;
+  device?: string;
   profile?: string;
   provider?: string;
   model?: string;
@@ -19,6 +23,9 @@ export function registerAgentCommand(program: Command, printer: ConsolePrinter):
     .command('agent')
     .description('Run an approval-aware agent loop toward an objective, persisting task state.')
     .argument('<objective...>', 'The objective for the agent run.')
+    .option('--cwd <path>', 'Working directory on the execution device.')
+    .option('--workspace <nameOrId>', 'Use a saved workspace, or local.')
+    .option('--device <id>', 'Execution device ID (or host); defaults to this device when enabled.')
     .option('--profile <name>', 'Profile name.')
     .option('--provider <name>', 'Provider key from config.toml.')
     .option('--model <model>', 'Model name.')
@@ -26,7 +33,8 @@ export function registerAgentCommand(program: Command, printer: ConsolePrinter):
     .option('--tool-mode <mode>', 'Tool calling mode: auto, native, or control-block.', parseToolMode)
     .option('--yes', 'Approve all tool calls without prompting (use with care).')
     .action(async (objectiveParts: string[], options: AgentOptions) => {
-      const runtime = createRuntime(program);
+      const api = await workspaceClient(program, options.workspace, options.device);
+      const runtime = api ? undefined : createRuntime(program);
       const style = new TerminalStyle(process.stdout.isTTY ?? false);
       const prompt = new InteractivePrompt();
       const controller = new AbortController();
@@ -34,7 +42,7 @@ export function registerAgentCommand(program: Command, printer: ConsolePrinter):
       process.on('SIGINT', onSigint);
 
       try {
-        const runner = runtime.createAgentRunner(options.profile);
+        const runner = api ? { run: (options: import('@marifold/core').AgentRunOptions) => remoteAgent(api, options) } : runtime!.createAgentRunner(options.profile);
         const approvalHandler = options.yes
           // --yes may satisfy ordinary kind-level prompts, but it must never
           // silently cross the non-persistable host/network boundary.
@@ -43,6 +51,7 @@ export function registerAgentCommand(program: Command, printer: ConsolePrinter):
             : Promise.resolve({ approved: true }))
           : ((request: ApprovalRequest) => promptForApproval(prompt, style, request));
         const events = runner.run({
+          cwd: options.cwd,
           objective: objectiveParts.join(' '),
           profile: options.profile,
           provider: options.provider,
@@ -65,7 +74,7 @@ export function registerAgentCommand(program: Command, printer: ConsolePrinter):
       } finally {
         process.off('SIGINT', onSigint);
         prompt.close();
-        runtime.close();
+        runtime?.close();
       }
     });
 }

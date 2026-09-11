@@ -2,6 +2,8 @@
 
 marifold is a local-first personal AI workspace for profiles, chats, skills, mini apps, workflows, and external agents.
 
+**v0.70.0 workspace status: in testing.** Device-hosted workspaces and the Linux bridge installer are available for trials. Live cloud deployment, Docker/reboot behavior, public HTTPS, and host–guest device acceptance remain pending. See [workspace setup](docs/workspaces.md) and [bridge hosting](apps/bridge/HOSTING.md).
+
 The primary surface is the **TUI** — an Ink/React terminal app launched by bare `marifold`. Every ordinary message runs through one approval-aware Agent path: the model answers directly when no action is needed and chooses tools when work is required. The TUI renders `/` commands, `$skill` invocation, approval prompts, `/btw` mid-run steering, a skills manager, a profile-aware header, and session resume (`--resume`). Skills (`marifold.skill.v0`, run via `$name`) execute as agentic tools: the skill body is authoritative instructions and the model can read the skill's own bundled files (e.g. a `vars.toml`) when needed. `marifold init` and `marifold provider add` walk you through choosing a provider/model interactively.
 
 Underneath sits an approval-aware agent loop with native provider tool calling, provider-hosted search, and Responses reasoning continuity (through `@priest-ai/core` 3.x) plus control-block and Marifold web-search fallbacks, narrow built-in tools (file read/write, isolated shell, per-run Python packages, web search, profile delegation), capability-scoped run workspaces, config-driven approval policy, a `marifold agent` command, conversation file/image attachments, ChatGPT/Copilot OAuth, the model-driven `marifold.skillapp.v1`/`.v2` template contracts (with legacy App v0 compatibility), and cron-scheduled unattended runs hosted inside `marifold service` — alongside lightweight profile conversations, structured per-profile memory, model/provider management, config backup/import, the default-loopback Fastify service API with private LAN/Tailscale access for the owner's devices, and ephemeral task-state storage.
@@ -181,6 +183,15 @@ pnpm agent-eval -- --provider ollama --model qwen3.5:9b
 ```
 
 The agent eval runs scripted objectives in sandboxed temp directories and reports which provider/model/tool-mode combinations converge — useful for deciding which saved models are agent-capable.
+
+## Personal workspaces across devices
+
+Host your existing local workspace and pair your other Macs through an encrypted
+bridge. Profiles, sessions, models, Skills, Apps and schedules stay on the host;
+approved agent tools can run on a paired Mac. The Web **Workspace** control and TUI
+`/workspace` switch between Local and paired workspaces. Existing direct private
+connections remain available. See [setup, permissions and recovery](docs/workspaces.md)
+and the [Vercel/Redis deployment guide](apps/bridge/README.md).
 
 ## Commands
 

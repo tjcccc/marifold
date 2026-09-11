@@ -140,3 +140,5 @@ export interface PublicConfig {
   };
   service?: { webDir?: string; tokenEnv?: string; corsOrigins: string[]; hasToken: boolean };
 }
+
+export type { WorkspaceSummary, WorkspaceDevice } from '@marifold/core';

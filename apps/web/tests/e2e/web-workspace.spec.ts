@@ -28,7 +28,8 @@ test('Connection switches the local Web shell between named Marifold servers', a
   await page.goto('/agent');
   await expect(page.getByText('research-lab', { exact: true })).toBeVisible();
 
-  await page.getByRole('button', { name: 'Connection' }).click();
+  await page.getByRole('button', { name: 'Workspace' }).click();
+  await page.getByRole('button', { name: 'Direct servers' }).click();
   await page.getByRole('button', { name: 'Add server' }).click();
   await page.getByLabel('Server name').fill('Remote fixture');
   await page.getByLabel('Service URL').fill('http://127.0.0.1:32142');
@@ -43,12 +44,43 @@ test('Connection switches the local Web shell between named Marifold servers', a
   await expect(page.getByText('remote-only', { exact: true })).toBeVisible();
   await expect(page.getByText('Remote fixture', { exact: true })).toBeVisible();
 
-  await page.getByRole('button', { name: 'Connection' }).click();
+  await page.getByRole('button', { name: 'Workspace' }).click();
+  await page.getByRole('button', { name: 'Direct servers' }).click();
   await page.getByRole('button', { name: /This server/ }).click();
   await page.getByRole('button', { name: 'Connect', exact: true }).click();
 
   await expect(page.getByText('research-lab', { exact: true })).toBeVisible();
   await expect(page.getByText('remote-only', { exact: true })).toHaveCount(0);
+});
+
+test('paired workspaces share host data and preserve separate local drafts and startup defaults', async ({ page, request }) => {
+  await page.goto('/agent/default/session-gallery');
+  const composer = page.getByPlaceholder('Message the agent…');
+  await composer.fill('private Local draft');
+  await page.getByRole('button', { name: 'Workspace', exact: true }).click();
+  await page.getByRole('button', { name: /Home workspace Paired/ }).click();
+  await expect(page.getByLabel('Allow agent tools on this device')).not.toBeChecked();
+  await page.getByLabel('Allow agent tools on this device').check();
+  await expect(page.getByLabel('Allow agent tools on this device')).toBeChecked();
+  await page.screenshot({ path: '../../output/playwright/workspace-picker.png' });
+  await page.getByRole('button', { name: 'Use at startup' }).click();
+  try {
+    await page.getByRole('button', { name: 'Open', exact: true }).click();
+    await expect(page.getByText('remote-only', { exact: true })).toBeVisible();
+    await expect(page.getByText('research-lab', { exact: true })).toHaveCount(0);
+    await page.getByText('remote-only', { exact: true }).click();
+    await expect(composer).toHaveValue('');
+    await composer.fill('private Home draft');
+    await page.reload();
+    await expect(page.getByText('remote-only', { exact: true })).toBeVisible();
+    await expect(composer).toHaveValue('private Home draft');
+    await page.getByRole('button', { name: 'Workspace', exact: true }).click();
+    await page.getByRole('button', { name: /Local This device/ }).click();
+    await page.getByRole('button', { name: 'Open', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Open profile config for default' })).toBeVisible();
+    await expect(composer).toHaveValue('private Local draft');
+    await page.screenshot({ path: '../../output/playwright/workspace-local.png' });
+  } finally { await request.put('/v1/workspaces/default', { data: { id: 'local' } }); }
 });
 
 test('profile search filters the project-style profile list', async ({ page }) => {

@@ -1,0 +1,5 @@
+{
+  "buildCommand": "pnpm --filter @marifold/workspace-protocol build && pnpm --filter @marifold/bridge build",
+  "functions": { "api/bridge.ts": { "maxDuration": 300 } },
+  "rewrites": [{ "source": "/(.*)", "destination": "/api/bridge" }]
+}

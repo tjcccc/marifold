@@ -405,3 +405,15 @@ export {
   marifoldHome,
   resolveUserPath,
 } from './workspace/WorkspacePaths';
+export { WorkspaceManager } from './workspace/WorkspaceManager';
+export type { WorkspaceOperationContext } from './workspace/WorkspaceManager';
+export { WorkspaceStore } from './workspace/WorkspaceStore';
+export type { WorkspaceConnection } from './workspace/WorkspaceStore';
+
+
+export { WorkspaceExecutor } from './workspace/WorkspaceExecutor';
+export { WorkspaceRuns } from './workspace/WorkspaceRuns';
+
+export type { WorkspaceSummary, WorkspaceDevice, WorkspaceExecutionContext } from '@marifold/workspace-protocol';
+
+export { workspaceTerminal } from './workspace/WorkspaceTerminal';

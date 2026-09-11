@@ -1,3 +1,5 @@
+import type { ApiClientOptions } from '@marifold/client';
+import { WorkspaceShell } from './ui/WorkspaceShell.js';
 import { readFileSync } from 'fs';
 import { Box, render, Text } from 'ink';
 import { MarifoldRuntime } from '@marifold/core';
@@ -18,6 +20,7 @@ function readVersion(): string {
 }
 
 export interface RunTuiOptions {
+  service?: ApiClientOptions;
   loadedConfig: LoadedMarifoldConfig;
   /** Profile to launch with; defaults to the configured default profile. */
   profile?: string;
@@ -40,6 +43,16 @@ export async function runTui(options: RunTuiOptions): Promise<void> {
     );
     process.exitCode = 1;
     return;
+  }
+
+  if (options.service) {
+    const local = new MarifoldRuntime({ loadedConfig: options.loadedConfig });
+    process.stdout.write('\x1b[?2004h');
+    try {
+      const app = render(<WorkspaceShell local={local} loadedConfig={options.loadedConfig} service={options.service} profile={options.profile} resume={options.resume} version={readVersion()} />, { exitOnCtrlC: false });
+      await app.waitUntilExit();
+    } finally { process.stdout.write('\x1b[?2004l'); local.close(); }
+    process.exit(process.exitCode ?? 0);
   }
 
   // Not initialized yet: no config file. Show one clear hint instead of a

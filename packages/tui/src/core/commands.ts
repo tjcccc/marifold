@@ -7,45 +7,47 @@ import type { NoticeTone } from './appState.js';
  * separates `/command` (code) from `$skill` (model-backed).
  */
 export interface CommandContext {
-  notify(text: string, tone?: NoticeTone): void;
-  newSession(): void;
-  clear(): void;
-  stop(): void;
-  steer(text: string): void;
-  exit(): void;
-  setThink(on: boolean): void;
-  openModelPicker(): void;
-  openProfilePicker(): void;
-  selectProfile(name: string): void;
-  openSkills(scope?: 'global' | 'profile', profile?: string): void;
-  showPermissions(): void;
-  showHelp(): void;
-  showStatus(): void;
+  workspace?(args: string): void | Promise<void>;
+  device?(args: string): void | Promise<void>;
+  notify(text: string, tone?: NoticeTone): void | Promise<void>;
+  newSession(): void | Promise<void>;
+  clear(): void | Promise<void>;
+  stop(): void | Promise<void>;
+  steer(text: string): void | Promise<void>;
+  exit(): void | Promise<void>;
+  setThink(on: boolean): void | Promise<void>;
+  openModelPicker(): void | Promise<void>;
+  openProfilePicker(): void | Promise<void>;
+  selectProfile(name: string): void | Promise<void>;
+  openSkills(scope?: 'global' | 'profile', profile?: string): void | Promise<void>;
+  showPermissions(): void | Promise<void>;
+  showHelp(): void | Promise<void>;
+  showStatus(): void | Promise<void>;
   /** Arm a one-shot forced plan for the next message (toggles off if armed). */
-  toggleForcePlan(): void;
-  copyLast(): void;
+  toggleForcePlan(): void | Promise<void>;
+  copyLast(): void | Promise<void>;
   /** Re-run the last plain-text message through the current profile/model/mode. */
-  retryLast(): void;
+  retryLast(): void | Promise<void>;
   /** Send one prompt with attached images preserved byte-for-byte. */
-  sendOriginal(text: string): void;
-  showSessions(): void;
-  runDoctor(fix?: boolean): void;
-  installSkill(arg: string): void;
-  readFile(path: string): void;
-  setImage(arg: string): void;
-  remember(text: string): void;
-  forget(query: string): void;
-  deleteMemory(query: string): void;
+  sendOriginal(text: string): void | Promise<void>;
+  showSessions(): void | Promise<void>;
+  runDoctor(fix?: boolean): void | Promise<void>;
+  installSkill(arg: string): void | Promise<void>;
+  readFile(path: string): void | Promise<void>;
+  setImage(arg: string): void | Promise<void>;
+  remember(text: string): void | Promise<void>;
+  forget(query: string): void | Promise<void>;
+  deleteMemory(query: string): void | Promise<void>;
   /** Show the current context budget + usage. */
-  showContextWindow(): void;
+  showContextWindow(): void | Promise<void>;
   /** Set the context budget for this session (tokens), or 0/undefined to disable. */
-  setContextWindow(tokens?: number): void;
+  setContextWindow(tokens?: number): void | Promise<void>;
   /** Persist the context budget as the current profile's default (profile.toml). */
-  setDefaultContextWindow(tokens?: number): void;
+  setDefaultContextWindow(tokens?: number): void | Promise<void>;
   /** Compact the current session now (model-backed). */
-  compactNow(): void;
+  compactNow(): void | Promise<void>;
   /** Trust a folder for the active profile — file writes there won't prompt. */
-  trustFolder(path: string): void;
+  trustFolder(path: string): void | Promise<void>;
 }
 
 export interface CommandSpec {
@@ -53,7 +55,7 @@ export interface CommandSpec {
   /** Alternate invocations (e.g. quit → exit). */
   aliases?: string[];
   summary: string;
-  run(ctx: CommandContext, args: string): void;
+  run(ctx: CommandContext, args: string): void | Promise<void>;
 }
 
 export interface CommandCompletion {
@@ -62,6 +64,8 @@ export interface CommandCompletion {
 }
 
 const COMMANDS: CommandSpec[] = [
+  { name: 'workspace', summary: 'List, join, or leave a workspace: /workspace list|join <name|id>|leave.', run: (ctx, args) => ctx.workspace ? ctx.workspace(args) : ctx.notify('Start marifold service before using workspaces.', 'warn') },
+  { name: 'device', summary: 'Show devices or choose tools: /device list|use <host|auto|id>.', run: (ctx, args) => ctx.device ? ctx.device(args) : ctx.notify('Join a workspace before selecting another device.', 'warn') },
   { name: 'help', summary: 'List commands and input syntax.', run: ctx => ctx.showHelp() },
   { name: 'status', summary: 'Show profile, model, thinking, and session.', run: ctx => ctx.showStatus() },
   { name: 'copy', summary: "Copy the last response's original text to the clipboard.", run: ctx => ctx.copyLast() },
@@ -72,7 +76,7 @@ const COMMANDS: CommandSpec[] = [
     run: (ctx, args) => {
       const text = args.trim();
       if (!text) ctx.notify('Usage: /attach-original <prompt>', 'warn');
-      else ctx.sendOriginal(text);
+      else return ctx.sendOriginal(text);
     },
   },
   { name: 'exit', aliases: ['quit'], summary: 'Leave the TUI.', run: ctx => ctx.exit() },
@@ -86,7 +90,7 @@ const COMMANDS: CommandSpec[] = [
     run: (ctx, args) => {
       const text = args.trim();
       if (!text) ctx.notify('Usage: /btw <text>', 'warn');
-      else ctx.steer(text);
+      else return ctx.steer(text);
     },
   },
   { name: 'model', summary: 'Pick the active model.', run: ctx => ctx.openModelPicker() },
@@ -95,8 +99,8 @@ const COMMANDS: CommandSpec[] = [
     summary: 'Switch profile: /profile [name] (omit name for a picker).',
     run: (ctx, args) => {
       const name = args.trim();
-      if (name) ctx.selectProfile(name);
-      else ctx.openProfilePicker();
+      if (name) return ctx.selectProfile(name);
+      else return ctx.openProfilePicker();
     },
   },
   {
@@ -112,7 +116,7 @@ const COMMANDS: CommandSpec[] = [
       const value = args.trim().toLowerCase();
       if (value === 'on') ctx.setThink(true);
       else if (value === 'off') ctx.setThink(false);
-      else ctx.notify('Usage: /think on|off', 'warn');
+      else return ctx.notify('Usage: /think on|off', 'warn');
     },
   },
   { name: 'permissions', summary: 'Show approval modes and active session grants.', run: ctx => ctx.showPermissions() },
@@ -122,7 +126,7 @@ const COMMANDS: CommandSpec[] = [
     run: (ctx, args) => {
       const target = args.trim();
       if (!target) ctx.notify('Usage: /trust-folder <path>', 'warn');
-      else ctx.trustFolder(target);
+      else return ctx.trustFolder(target);
     },
   },
   {
@@ -136,7 +140,7 @@ const COMMANDS: CommandSpec[] = [
       }
       const match = /^--profile\s+([A-Za-z0-9_-]+)$/.exec(value);
       if (match) ctx.openSkills('profile', match[1]);
-      else ctx.notify('Usage: /skills [--profile <name>]', 'warn');
+      else return ctx.notify('Usage: /skills [--profile <name>]', 'warn');
     },
   },
   {
@@ -145,7 +149,7 @@ const COMMANDS: CommandSpec[] = [
     run: (ctx, args) => {
       const arg = args.trim();
       if (!arg) ctx.notify('Usage: /install-skill [--profile <name>] <path|url>', 'warn');
-      else ctx.installSkill(arg);
+      else return ctx.installSkill(arg);
     },
   },
   {
@@ -153,9 +157,9 @@ const COMMANDS: CommandSpec[] = [
     summary: 'Check health; /doctor --fix migrates this profile\'s legacy instructions.',
     run: (ctx, args) => {
       const value = args.trim();
-      if (!value) ctx.runDoctor(false);
-      else if (value === '--fix') ctx.runDoctor(true);
-      else ctx.notify('Usage: /doctor [--fix]', 'warn');
+      if (!value) return ctx.runDoctor(false);
+      else if (value === '--fix') return ctx.runDoctor(true);
+      else return ctx.notify('Usage: /doctor [--fix]', 'warn');
     },
   },
   {
@@ -164,7 +168,7 @@ const COMMANDS: CommandSpec[] = [
     run: (ctx, args) => {
       const file = args.trim();
       if (!file) ctx.notify('Usage: /read <path>', 'warn');
-      else ctx.readFile(file);
+      else return ctx.readFile(file);
     },
   },
   {
@@ -178,7 +182,7 @@ const COMMANDS: CommandSpec[] = [
     run: (ctx, args) => {
       const text = args.trim();
       if (!text) ctx.notify('Usage: /remember <text>', 'warn');
-      else ctx.remember(text);
+      else return ctx.remember(text);
     },
   },
   {
@@ -187,7 +191,7 @@ const COMMANDS: CommandSpec[] = [
     run: (ctx, args) => {
       const query = args.trim();
       if (!query) ctx.notify('Usage: /forget <query>', 'warn');
-      else ctx.forget(query);
+      else return ctx.forget(query);
     },
   },
   {
@@ -196,7 +200,7 @@ const COMMANDS: CommandSpec[] = [
     run: (ctx, args) => {
       const query = args.trim();
       if (!query) ctx.notify('Usage: /delete-memory <query>', 'warn');
-      else ctx.deleteMemory(query);
+      else return ctx.deleteMemory(query);
     },
   },
   {
@@ -213,7 +217,7 @@ const COMMANDS: CommandSpec[] = [
       const toDefault = parts[2]?.toLowerCase() === 'default';
       const raw = (parts[1] ?? '').toLowerCase();
       if (raw === 'off') {
-        if (toDefault) ctx.setDefaultContextWindow(undefined); else ctx.setContextWindow(undefined);
+        if (toDefault) ctx.setDefaultContextWindow(undefined); else return ctx.setContextWindow(undefined);
         return;
       }
       const tokens = parseTokens(raw);
@@ -221,7 +225,7 @@ const COMMANDS: CommandSpec[] = [
         ctx.notify('Usage: /context-window set <tokens|off> [default] (e.g. 16000 or 16k)', 'warn');
         return;
       }
-      if (toDefault) ctx.setDefaultContextWindow(tokens); else ctx.setContextWindow(tokens);
+      if (toDefault) ctx.setDefaultContextWindow(tokens); else return ctx.setContextWindow(tokens);
     },
   },
   { name: 'compact', summary: 'Compact the current session now (summarize older turns).', run: ctx => ctx.compactNow() },
@@ -265,6 +269,7 @@ export function findCommand(name: string): CommandSpec | undefined {
 export function runCommand(ctx: CommandContext, name: string, args: string): boolean {
   const spec = findCommand(name);
   if (!spec) return false;
-  spec.run(ctx, args);
+  try { void Promise.resolve(spec.run(ctx, args)).catch(error => ctx.notify(error instanceof Error ? error.message : String(error), 'error')); }
+  catch (error) { ctx.notify(error instanceof Error ? error.message : String(error), 'error'); }
   return true;
 }

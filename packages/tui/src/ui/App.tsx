@@ -1,3 +1,4 @@
+import type { TuiRuntime } from '../core/TuiRuntime.js';
 import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { Box, Static, useApp, useInput, useStdout } from 'ink';
 import { randomUUID } from 'crypto';
@@ -40,7 +41,9 @@ import { copyToClipboard, errorText, runSummary, skillInvocation, unwrapPath } f
 const READ_FILE_CHAR_LIMIT = 100000;
 
 export interface AppProps {
-  runtime: MarifoldRuntime;
+  runtime: TuiRuntime;
+  workspaceCommand?: (args: string) => Promise<string>;
+  deviceCommand?: (args: string) => Promise<string>;
   loadedConfig: LoadedMarifoldConfig;
   initial: {
     profile: string;
@@ -70,7 +73,7 @@ interface PendingSkill {
   index: number;
 }
 
-export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactElement {
+export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCommand }: AppProps): React.ReactElement {
   const { exit } = useApp();
   const [state, dispatch] = useReducer(
     appReducer,
@@ -259,11 +262,11 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
   }, []);
 
   // "Always (allow <kind>)": persist to the active profile + grant for this session.
-  const persistApprovalKind = useCallback((kind: ToolKind) => {
+  const persistApprovalKind = useCallback(async (kind: ToolKind) => {
     const profile = stateRef.current.profile;
     sessionGrantsRef.current.add(kind);
     try {
-      runtime.setProfileAgentApproval(profile, kind, 'allow');
+      await runtime.setProfileAgentApproval(profile, kind, 'allow');
       notify(`Persisted approval: ${kind} = allow for ${profile}`, 'info');
     } catch (error) {
       notify(`Could not persist approval: ${errorText(error)}`, 'error');
@@ -272,10 +275,10 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
 
   // "Always (trust <folder>)" / `/trust-folder`: persist to the active profile +
   // trust for this session (the running run can't re-read profile.toml).
-  const trustFolderForProfile = useCallback((folder: string) => {
+  const trustFolderForProfile = useCallback(async (folder: string) => {
     const profile = stateRef.current.profile;
     try {
-      const resolved = runtime.addProfileTrustedFolder(profile, folder);
+      const resolved = await runtime.addProfileTrustedFolder(profile, folder);
       sessionTrustedFoldersRef.current.add(resolved);
       notify(`Trusting ${resolved} for ${profile} (writes here won't ask).`, 'info');
     } catch (error) {
@@ -306,6 +309,7 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
       const runner = runtime.createAgentRunner(current.profile);
       for await (const event of runner.run({
         objective,
+        think: thinkRef.current,
         profile: current.profile,
         provider: current.provider,
         model: current.model,
@@ -570,14 +574,13 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
     setOverlay({ type: 'skills', scope, ...(scope === 'profile' ? { profile } : {}), items, title, emptyHint });
   }, [runtime, notify]);
 
-  const showSessions = useCallback(() => {
+  const showSessions = useCallback(async () => {
     if (stateRef.current.running) {
       notify('Stop the running task before switching sessions.', 'warn');
       return;
     }
     const currentSessionId = stateRef.current.sessionId;
-    const items = runtime
-      .listSessions(20, stateRef.current.profile, { order: 'recent' })
+    const items = (await runtime.listSessions(20, stateRef.current.profile, { order: 'recent' }))
       .map(sessionItem.bind(null, currentSessionId));
     setOverlay({ type: 'sessions', items });
   }, [runtime, notify]);
@@ -638,7 +641,7 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
     dispatch({ type: 'add_item', item: { kind: 'info', title: 'Permissions', lines } });
   }, [runtime]);
 
-  const runDoctor = useCallback((fix = false) => {
+  const runDoctor = useCallback(async (fix = false) => {
     const current = stateRef.current;
     const provider = loadedConfig.config.providers[current.provider];
     const instructionLines: string[] = [];
@@ -647,7 +650,7 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
       const needsFix = detail.instructionFormat === 'legacy'
         || detail.legacyInstructionFiles.length > 0;
       if (fix && needsFix) {
-        const migration = runtime.migrateProfileInstructions(current.profile);
+        const migration = await runtime.migrateProfileInstructions(current.profile);
         detail = runtime.getProfile(current.profile);
         instructionLines.push(`Instructions: ✓ ${migration.status === 'migrated' ? 'migrated' : 'cleaned'} to INSTRUCTIONS.md`);
         if (migration.backupPath) instructionLines.push(`Backup: ${migration.backupPath}`);
@@ -699,9 +702,9 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
         if (/^https?:\/\//i.test(parsed.target)) {
           const response = await fetch(parsed.target);
           if (!response.ok) throw new Error(`HTTP ${response.status} fetching ${parsed.target}`);
-          installed = runtime.installSkillFromText(await response.text(), parsed.scope, parsed.profile);
+          installed = await runtime.installSkillFromText(await response.text(), parsed.scope, parsed.profile);
         } else {
-          installed = runtime.installSkillFromFile(
+          installed = await runtime.installSkillFromFile(
             path.resolve(expandHome(parsed.target)),
             parsed.scope,
             parsed.profile,
@@ -749,18 +752,18 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
     notify(`Attached image #${pendingImagesRef.current.length}: ${resolved}`, 'info');
   }, [notify]);
 
-  const remember = useCallback((text: string) => {
-    const result = runtime.rememberMemory(stateRef.current.profile, 'auto_short', text, stateRef.current.sessionId);
+  const remember = useCallback(async (text: string) => {
+    const result = await runtime.rememberMemory(stateRef.current.profile, 'auto_short', text, stateRef.current.sessionId);
     notify(`${result.created ? 'Remembered' : 'Already remembered'}: ${result.entry.id}`, 'info');
   }, [runtime, notify]);
 
-  const forget = useCallback((query: string) => {
-    const result = runtime.forgetMemories(stateRef.current.profile, query);
+  const forget = useCallback(async (query: string) => {
+    const result = await runtime.forgetMemories(stateRef.current.profile, query);
     notify(result.count === 0 ? 'No matching memories.' : `Forgot ${result.count} memory record(s).`, 'info');
   }, [runtime, notify]);
 
-  const deleteMemory = useCallback((query: string) => {
-    const result = runtime.deleteMemories(stateRef.current.profile, query);
+  const deleteMemory = useCallback(async (query: string) => {
+    const result = await runtime.deleteMemories(stateRef.current.profile, query);
     notify(result.count === 0 ? 'No matching memories.' : `Deleted ${result.count} memory record(s).`, 'info');
   }, [runtime, notify]);
 
@@ -812,6 +815,8 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
   // CommandContext bound to the live handlers.
   const commandContext = useMemo<CommandContext>(() => ({
     notify,
+    workspace: args => { if (stateRef.current.running) { notify('Stop the running task before switching workspaces.', 'warn'); return; } if (!workspaceCommand) { notify('Start marifold service before using workspaces.', 'warn'); return; } void workspaceCommand(args).then(message => notify(message, 'info')).catch(error => notify(errorText(error), 'error')); },
+    device: args => { if (stateRef.current.running) { notify('Execution device is fixed for the active run.', 'warn'); return; } if (!deviceCommand) { notify('Join a workspace to choose another device.', 'warn'); return; } void deviceCommand(args).then(message => notify(message, 'info')).catch(error => notify(errorText(error), 'error')); },
     newSession: () => { dispatch({ type: 'new_session', sessionId: undefined }); notify('Started a new session.', 'info'); },
     clear: () => dispatch({ type: 'clear' }),
     stop,
@@ -860,9 +865,9 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
       dispatch({ type: 'set_context_budget', maxContextTokens: tokens });
       notify(tokens ? `Context budget set to ${tokens.toLocaleString()} tokens for this session.` : 'Compaction disabled for this session.', 'info');
     },
-    setDefaultContextWindow: (tokens?: number) => {
+    setDefaultContextWindow: async (tokens?: number) => {
       try {
-        const saved = runtime.setProfileMaxContextTokens(stateRef.current.profile, tokens);
+        const saved = await runtime.setProfileMaxContextTokens(stateRef.current.profile, tokens);
         dispatch({ type: 'set_context_budget', maxContextTokens: saved });
         notify(saved
           ? `Default context budget for ${stateRef.current.profile} set to ${saved.toLocaleString()} tokens (this and future sessions).`
@@ -886,7 +891,7 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
   }), [
     notify, stop, steer, exit, openModelPicker, openProfilePicker, selectProfile, openSkills,
     showPermissions, showHelp, showStatus, copyLast, retryLast, showSessions, runDoctor, installSkill,
-    readFileCmd, setImage, remember, forget, deleteMemory, repaint, runtime, trustFolderForProfile, startTextRun,
+    readFileCmd, setImage, remember, forget, deleteMemory, repaint, runtime, trustFolderForProfile, startTextRun, workspaceCommand, deviceCommand,
   ]);
 
   // --- Input routing -------------------------------------------------------
@@ -1003,9 +1008,10 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
           title="Resume session"
           maxRows={overlayMaxRows}
           items={overlay.items}
-          onSelect={value => {
+          onSelect={async value => {
+            try {
             setOverlay(null);
-            const detail = runtime.getSession(value);
+            const detail = await runtime.getSession(value);
             if (!detail) {
               notify(`Session not found: ${value}`, 'error');
               return;
@@ -1015,6 +1021,7 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
               dispatch({ type: 'add_item', item: { kind: turn.role === 'user' ? 'user' : 'assistant', text: turn.content } });
             }
             notify(`Resumed session ${detail.id.slice(0, 8)} — your next message continues it.`, 'info');
+            } catch (error) { notify(errorText(error), 'error'); }
           }}
           onCancel={() => setOverlay(null)}
           emptyHint={['No saved sessions for this profile yet.']}
@@ -1039,14 +1046,16 @@ export function App({ runtime, loadedConfig, initial }: AppProps): React.ReactEl
             runSkill(value, []);
           }}
           onCancel={() => setOverlay(null)}
-          onDelete={value => {
-            runtime.removeSkill(value, overlay.profile, scope);
+          onDelete={async value => {
+            try {
+            await runtime.removeSkill(value, overlay.profile, scope);
             refreshSkills();
             notify(
               `Removed ${overlay.profile ? `profile ${overlay.profile}` : 'global'} skill: $${value}`,
               'info',
             );
             openSkills(scope, overlay.profile);
+            } catch (error) { notify(errorText(error), 'error'); }
           }}
         />
       );

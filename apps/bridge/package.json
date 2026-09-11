@@ -1,0 +1,26 @@
+{
+  "name": "@marifold/bridge",
+  "version": "0.69.2",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@marifold/workspace-protocol": "workspace:*",
+    "ws": "^8.18.3",
+    "ioredis": "^5.7.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.3",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.10",
+    "@types/ws": "^8.18.1"
+  }
+}

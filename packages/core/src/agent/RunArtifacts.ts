@@ -8,6 +8,8 @@ export const MAX_RUN_ARTIFACTS = 50;
 export const MAX_RUN_ARTIFACT_BYTES = 512 * 1024 * 1024;
 
 export interface RunArtifact {
+  /** Server-authored provenance for an artifact forwarded by a child device run. */
+  source?: { runId: string; artifactId: string };
   id: string;
   name: string;
   mediaType: string;
@@ -27,25 +29,32 @@ export function listRunArtifacts(
   return listResolvedArtifacts(workspace.outputDir).map(({ path: _path, ...artifact }) => artifact);
 }
 
-export function resolveRunArtifact(runId: string, artifactId: string): ResolvedRunArtifact | undefined {
+export function resolveRunArtifact(runId: string, artifactId: string, runsDir = path.join(marifoldHome(), 'runs')): ResolvedRunArtifact | undefined {
   if (!/^[A-Za-z0-9_-]{1,160}$/.test(runId) || !/^[a-f0-9]{24}$/.test(artifactId)) return undefined;
-  const outputDir = path.join(marifoldHome(), 'runs', runId, 'output');
+  const outputDir = path.join(runsDir, runId, 'output');
+  try {
+    const root = fs.realpathSync(runsDir);
+    if (fs.lstatSync(path.dirname(outputDir)).isSymbolicLink() || fs.lstatSync(outputDir).isSymbolicLink() || !isInside(fs.realpathSync(outputDir), root)) return undefined;
+  } catch { return undefined; }
   return listResolvedArtifacts(outputDir).find(artifact => artifact.id === artifactId);
 }
 
 function listResolvedArtifacts(outputDir: string): ResolvedRunArtifact[] {
   let root: string;
   try {
+    if (fs.lstatSync(outputDir).isSymbolicLink() || fs.lstatSync(path.dirname(outputDir)).isSymbolicLink()) return [];
     root = fs.realpathSync(outputDir);
   } catch {
     return [];
   }
   const artifacts: ResolvedRunArtifact[] = [];
   const pending = [root];
-  while (pending.length > 0 && artifacts.length < MAX_RUN_ARTIFACTS) {
+  let directories = 0;
+  while (pending.length > 0 && artifacts.length < MAX_RUN_ARTIFACTS && directories++ < 1000) {
     const directory = pending.shift()!;
     let entries: fs.Dirent[];
     try {
+      if (fs.lstatSync(directory).isSymbolicLink() || !isInside(fs.realpathSync(directory), root)) continue;
       entries = fs.readdirSync(directory, { withFileTypes: true })
         .sort((left, right) => left.name.localeCompare(right.name));
     } catch {

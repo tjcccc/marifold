@@ -28,9 +28,9 @@ import {
   formatControlBlockResult,
   parseControlBlockCalls,
 } from './ControlBlockTools';
-import { createRunWorkspace, RunFileInput, RunWorkspace } from './RunWorkspace';
-import { listRunArtifacts } from './RunArtifacts';
-import { capToolOutput, ToolRegistry } from './ToolRegistry';
+import { createRunWorkspace, CreateRunWorkspaceOptions, RunFileInput, RunWorkspace } from './RunWorkspace';
+import { listRunArtifacts, RunArtifact } from './RunArtifacts';
+import { capToolOutput, ToolRegistry, UncertainToolOutcomeError } from './ToolRegistry';
 import type { EffectfulAgentTool, ToolExecutionContext, UserInputAgentTool } from './ToolRegistry';
 import type { UserInputHandler } from './UserInput';
 import type { ResponseMetrics } from '../sessions/ResponseMetrics';
@@ -129,6 +129,8 @@ export interface AgentEngineContext {
 }
 
 export interface AgentRunnerDeps {
+  createWorkspace?: (options: CreateRunWorkspaceOptions) => Promise<RunWorkspace>;
+  listArtifacts?: (workspace: RunWorkspace) => Promise<RunArtifact[]>;
   taskStore: TaskStore;
   registry: ToolRegistry;
   agentConfig: MarifoldAgentConfig;
@@ -159,6 +161,8 @@ export interface AgentRunnerDeps {
   /** Exact app-owned files that may be read without exposing their parents. */
   resolveReadOnlyFiles?: (profile: string) => string[];
   allowExternalReadOnlyFolders?: boolean;
+  deniedRoots?: string[];
+  contextInstructions?: string[];
 }
 
 /** Char budget for the injected history window when no profile budget is set. */
@@ -211,8 +215,9 @@ export class AgentRunner {
     const builtInInstructions = options.lean
       ? []
       : (this.deps.resolveBuiltInInstructions?.(options.objective, settings.profile) ?? []);
-    let runOptions: AgentRunOptions = builtInInstructions.length > 0
-      ? { ...options, instructions: [...builtInInstructions, ...(options.instructions ?? [])] }
+    const instructions = [...(this.deps.contextInstructions ?? []), ...builtInInstructions, ...(options.instructions ?? [])];
+    let runOptions: AgentRunOptions = instructions.length > 0
+      ? { ...options, instructions }
       : options;
     if (runOptions.images && this.deps.prepareImages) {
       runOptions = {
@@ -256,7 +261,10 @@ export class AgentRunner {
     });
     yield { type: 'status', taskId: task.id, status: 'running' };
 
-    const workspace = createRunWorkspace({
+    let workspace: RunWorkspace;
+    try {
+    workspace = await (this.deps.createWorkspace ?? createRunWorkspace)({
+      deniedRoots: this.deps.deniedRoots,
       id: options.executionId ?? task.id,
       cwd,
       trustedFolders: [...agentConfig.trustedFolders, ...(options.trustedFolders ?? [])],
@@ -266,6 +274,12 @@ export class AgentRunner {
       files: options.files,
       images: runOptions.images,
     });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      yield { type: 'error', code: 'EXECUTION_UNAVAILABLE', message };
+      yield* this.finish(task.id, options.signal?.aborted ? 'cancelled' : 'failed', undefined, message, usage);
+      return;
+    }
     const toolContext: ToolExecutionContext = {
       cwd: workspace.cwd,
       trustedFolders: [...agentConfig.trustedFolders, ...(options.trustedFolders ?? [])],
@@ -547,7 +561,7 @@ export class AgentRunner {
     let isError = false;
     let resultSummary = summary;
     try {
-      const result = await tool.execute(call.arguments, toolContext);
+      const result = yield* this.executeWithEvents(tool, call.arguments, { ...toolContext, callId: call.id });
       content = result.content;
       isError = result.isError ?? false;
       resultSummary = result.summary ?? summary;
@@ -557,6 +571,7 @@ export class AgentRunner {
         }
       }
     } catch (error) {
+      if (error instanceof UncertainToolOutcomeError) throw error;
       content = `Tool '${call.name}' failed: ${error instanceof Error ? error.message : String(error)}`;
       isError = true;
       resultSummary = `${summary} failed`;
@@ -564,6 +579,24 @@ export class AgentRunner {
 
     yield { type: 'tool_result', callId: call.id, tool: call.name, summary: resultSummary, isError };
     this.recordToolResult(taskId, state, call, content, isError, resultSummary);
+  }
+
+  private async *executeWithEvents(
+    tool: EffectfulAgentTool,
+    input: Record<string, JSONValue>,
+    context: ToolExecutionContext,
+  ): AsyncGenerator<AgentEvent, import('./ToolRegistry').ToolExecutionResult, unknown> {
+    const events: AgentEvent[] = [];
+    let wake: (() => void) | undefined;
+    let finished = false;
+    const result = tool.execute(input, { ...context, emitEvent: event => { events.push(event); wake?.(); } });
+    void result.finally(() => { finished = true; wake?.(); }).catch(() => undefined);
+    while (!finished || events.length > 0) {
+      const event = events.shift();
+      if (event) { yield event; continue; }
+      await new Promise<void>(resolve => { wake = resolve; }); wake = undefined;
+    }
+    return result;
   }
 
   private async *requestUserInput(
@@ -637,7 +670,7 @@ export class AgentRunner {
     options: AgentRunOptions,
     toolContext: ToolExecutionContext,
   ): AsyncGenerator<AgentEvent, { approved: boolean; reason?: string }, unknown> {
-    const risk = tool.assessRisk?.(call.arguments, toolContext) ?? { escalate: false };
+    const risk = await tool.assessRisk?.(call.arguments, toolContext) ?? { escalate: false };
     if (risk.blocked) {
       const reason = risk.reason ?? 'blocked by the run security policy';
       yield { type: 'approval_decision', requestId: call.id, approved: false, source: 'policy', reason };
@@ -953,8 +986,10 @@ export class AgentRunner {
       ...(nextAction ? { nextAction: truncate(nextAction, 500) } : {}),
     });
     if (workspace) {
-      for (const artifact of listRunArtifacts(workspace)) {
-        yield { type: 'artifact', artifact };
+      try {
+        for (const artifact of await (this.deps.listArtifacts ?? listRunArtifacts)(workspace)) yield { type: 'artifact', artifact };
+      } catch (error) {
+        yield { type: 'error', code: 'ARTIFACTS_UNAVAILABLE', message: error instanceof Error ? error.message : 'Artifact listing unavailable.' };
       }
     }
     yield { type: 'status', taskId, status: updated.status };

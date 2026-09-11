@@ -2,6 +2,37 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-09-11 — v0.70.0 — Device-hosted personal workspaces (in testing)
+
+- Added `workspace bridge install` and a portable Linux setup wizard for Docker
+  Compose: optional dedicated persistent Redis, existing Redis URLs, Caddy or
+  existing HTTPS ingress, private generated tokens, startup health checks and
+  reboot recovery. Existing installations/data are never overwritten. Linux
+  Docker execution and public HTTPS remain pending live validation.
+- Documented Vercel project configuration, Cloudflare Tunnel, AWS EC2 and Aliyun
+  ECS setup, plus planned per-device bridge proxies. Include the hosting guide
+  in prepared packages. Verified packaging tests and standalone pnpm 11.17.0
+  installs/runtime import; live cloud deployments remain unverified.
+- Fixed bridge package preparation for nested destinations with missing parent
+  directories, retaining refusal to overwrite an existing destination.
+- Added encrypted outbound workspace bridges, host-pinned single-use pairing,
+  independent device credentials, revocation, protected state and durable request
+  deduplication. The host shares its existing local data; Local is the startup fallback.
+- Added host-owned model runs with approved guest tools, device context, one-level
+  device delegation, child interaction/artifact forwarding, lease cancellation and
+  restart recovery. Skills/Apps/schedules remain host execution paths.
+- Added workspace CLI/TUI/Web selection, shared views and change notifications,
+  isolated drafts, executor opt-out, schedule management and retained direct servers.
+- Added a standalone Vercel package generator, Redis relay and deployment guide.
+  Live cloud deployment and host–MacBook acceptance remain pending. Native iOS
+  and privileged maintenance helpers are deferred.
+- Verified typecheck/build and 781 tests, including disposable real Redis, two
+  relay instances with reconnect, and macOS sandbox isolation; 9 Chromium tests
+  passed. The standalone bridge package installs and serves health successfully.
+  Latest full gate passed 781 tests with the optional Redis integration skipped;
+  earlier real Redis and Chromium results are retained. Six installer fixture
+  tests passed. This is a testing checkpoint, not production acceptance.
+
 ## 2026-09-11 — v0.69.2 — GPT-6 catalog discovery and reasoning defaults
 
 - Fixed ChatGPT catalog version gating that omitted GPT-6 Astra despite account

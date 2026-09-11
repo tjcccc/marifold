@@ -7,3 +7,4 @@ output/playwright/
 .env
 .env.*
 !.env.example
+output/bridge-review*/
