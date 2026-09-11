@@ -2,8 +2,10 @@
 
 **Status: in testing (v0.70.3).** Local automated checks and paired Mac
 profile/avatar/session reads through an Aliyun ECS bridge over public HTTPS
-have passed, including Web UI refresh. Reboot recovery and broader host–guest
-acceptance remain pending.
+have passed, including Web UI refresh. The ECS update and seven concurrent original
+avatar downloads passed with matching file hashes and a responsive session list.
+Bulk speed is still connection-dependent: the live 3 MB burst took 54 seconds.
+Reboot recovery, live rollback and broader host–guest acceptance remain pending.
 
 A workspace belongs to one person. Hosting shares this device's existing local
 `.marifold` configuration, profiles, sessions, Skills, Apps and schedules. The host

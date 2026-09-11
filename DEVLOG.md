@@ -16,8 +16,13 @@ Cross-session development log. Newest first. Keep entries short: what shipped, w
 - Relay cursor, legacy relay fallback and installer preservation/rollback tests
   added. Full typecheck/build/test passed (797 tests; optional real Redis skipped),
   plus 8 installer fixtures. An 8 MiB encrypted local transfer preserved every byte.
-  The old ECS relay works with the compatibility guard; ECS update and live
-  concurrent-transfer acceptance remain pending.
+- User deployed the updater on ECS; public health advertises the new relay mode.
+  All 24 live guest requests passed, including seven concurrent original avatars
+  (3,063,975 bytes total), with all seven hashes matching the host and Home staying
+  online. Session/change reads completed in 0.6 seconds at burst start; additional
+  reads during the burst completed in 0.07–1.27 seconds. Bulk throughput remains
+  limited: the full seven-file burst took 54.2 seconds. Live reboot/rollback and
+  broader workspace acceptance remain pending.
 
 ## 2026-09-11 — v0.70.2 — Bounded concurrent workspace transfers (in testing)
 
