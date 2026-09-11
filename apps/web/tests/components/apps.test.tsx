@@ -131,6 +131,8 @@ describe('AppsScreen', () => {
         return { ok: true, status: 'idle', instance: { id: 'app_test', appName: 'translator', state, staleOutputs } };
       }
       if (method === 'POST' && path === '/v1/app-instances/app_test/operations/translate') {
+        state = { ...state, result: '' };
+        staleOutputs = undefined;
         if (state.source === 'Bad') {
           return {
             ok: true,
@@ -215,9 +217,15 @@ describe('AppsScreen', () => {
     fireEvent.change(source, { target: { value: 'Bad' } });
     await waitFor(() => expect(screen.getByRole('button', { name: 'Translate' }).hasAttribute('disabled')).toBe(false));
     fireEvent.click(screen.getByRole('button', { name: 'Translate' }));
+    expect(result.value).toBe('');
+    expect(result.placeholder).toBe('Generating…');
+    expect(screen.queryByRole('status', { name: 'Based on previous inputs' })).toBeNull();
     expect(await screen.findByText('Model unavailable.')).toBeTruthy();
-    expect(screen.getByRole('status', { name: 'Based on previous inputs' })).toBeTruthy();
+    expect(result.value).toBe('');
+    expect(result.placeholder).toBe('');
+    expect(screen.queryByRole('status', { name: 'Based on previous inputs' })).toBeNull();
     expect(screen.getByRole('region', { name: 'App activity' })).toBeTruthy();
+    expect(screen.getByText('Translate completed')).toBeTruthy();
   });
 
   it('keeps field focus while an ordinary state update is pending', async () => {

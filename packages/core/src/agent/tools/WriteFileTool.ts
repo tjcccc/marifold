@@ -3,6 +3,7 @@ import * as path from 'path';
 import { JSONValue } from '@priest-ai/core';
 import { expandHome } from '../../workspace/WorkspacePaths';
 import {
+  isDeniedRunPath,
   isInsideAnyRoot,
   isOutsideUserHome,
   isProtectedSystemWrite,
@@ -40,6 +41,7 @@ export class WriteFileTool implements AgentTool {
   assessRisk(input: Record<string, JSONValue>, ctx: ToolExecutionContext): ToolRiskAssessment {
     if (typeof input.path !== 'string') return { escalate: false };
     const target = resolveToolPath(input.path, ctx.workspace, ctx.cwd);
+    if (ctx.workspace && isDeniedRunPath(target, ctx.workspace)) return { escalate: false, blocked: true, persistable: false, reason: 'This path contains device-local or other-workspace state.' };
     if (ctx.workspace) {
       if (isProtectedSystemWrite(target, ctx.workspace)) {
         return {
@@ -91,6 +93,7 @@ export class WriteFileTool implements AgentTool {
       ctx.workspace,
       ctx.cwd,
     );
+    if (ctx.workspace && isDeniedRunPath(target, ctx.workspace)) return { content: 'Path is isolated from this workspace.', summary: 'blocked workspace state access', isError: true };
     if (ctx.workspace && isProtectedSystemWrite(target, ctx.workspace)) {
       return {
         content: `Refused to write protected system path ${target}.`,

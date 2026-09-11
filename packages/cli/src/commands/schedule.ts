@@ -1,3 +1,5 @@
+import { workspaceClient } from './WorkspaceClient';
+import type { MarifoldRuntime } from '@marifold/core';
 import { Command } from 'commander';
 import { ScheduleState } from '@marifold/core';
 import { ConsolePrinter } from '../output/ConsolePrinter';
@@ -14,6 +16,7 @@ interface ScheduleAddOptions {
 export function registerScheduleCommand(program: Command, printer: ConsolePrinter): void {
   const schedule = program
     .command('schedule')
+    .option('--workspace <nameOrId>', 'Use a saved workspace, or local.')
     .description('Manage scheduled agent runs. Schedules fire while marifold service is running.');
 
   schedule
@@ -27,7 +30,7 @@ export function registerScheduleCommand(program: Command, printer: ConsolePrinte
     .action(async (objectiveParts: string[], options: ScheduleAddOptions) => {
       await withRuntime(program, printer, async runtime => {
         const objective = objectiveParts.join(' ');
-        const created = runtime.createSchedule({
+        const created = await runtime.createSchedule({
           name: options.name ?? objective.slice(0, 60),
           objective,
           cron: options.cron,
@@ -44,7 +47,7 @@ export function registerScheduleCommand(program: Command, printer: ConsolePrinte
     .description('List schedules.')
     .action(async () => {
       await withRuntime(program, printer, async runtime => {
-        const schedules = runtime.listSchedules();
+        const schedules = await runtime.listSchedules();
         if (schedules.length === 0) {
           process.stdout.write('No schedules. Create one with marifold schedule add.\n');
           return;
@@ -62,7 +65,7 @@ export function registerScheduleCommand(program: Command, printer: ConsolePrinte
     .argument('<id>', 'Schedule id.')
     .action(async (id: string) => {
       await withRuntime(program, printer, async runtime => {
-        const item = runtime.getSchedule(id);
+        const item = await runtime.getSchedule(id);
         if (!item) {
           process.stderr.write(`Schedule not found: ${id}\n`);
           process.exitCode = 1;
@@ -78,7 +81,7 @@ export function registerScheduleCommand(program: Command, printer: ConsolePrinte
     .argument('<id>', 'Schedule id.')
     .action(async (id: string) => {
       await withRuntime(program, printer, async runtime => {
-        if (runtime.deleteSchedule(id)) {
+        if (await runtime.deleteSchedule(id)) {
           process.stdout.write(`Deleted schedule ${id}.\n`);
         } else {
           process.stderr.write(`Schedule not found: ${id}\n`);
@@ -93,7 +96,7 @@ export function registerScheduleCommand(program: Command, printer: ConsolePrinte
     .argument('<id>', 'Schedule id.')
     .action(async (id: string) => {
       await withRuntime(program, printer, async runtime => {
-        runtime.updateSchedule(id, { enabled: true });
+        await runtime.updateSchedule(id, { enabled: true });
         process.stdout.write(`Enabled schedule ${id}.\n`);
       });
     });
@@ -104,7 +107,7 @@ export function registerScheduleCommand(program: Command, printer: ConsolePrinte
     .argument('<id>', 'Schedule id.')
     .action(async (id: string) => {
       await withRuntime(program, printer, async runtime => {
-        runtime.updateSchedule(id, { enabled: false });
+        await runtime.updateSchedule(id, { enabled: false });
         process.stdout.write(`Disabled schedule ${id}.\n`);
       });
     });
@@ -124,19 +127,32 @@ export function registerScheduleCommand(program: Command, printer: ConsolePrinte
     });
 }
 
+type ScheduleMethods = 'createSchedule' | 'listSchedules' | 'getSchedule' | 'updateSchedule' | 'deleteSchedule' | 'runScheduleUnattended';
+type ScheduleRuntime = { [K in ScheduleMethods]: (...args: Parameters<MarifoldRuntime[K]>) => ReturnType<MarifoldRuntime[K]> | Promise<Awaited<ReturnType<MarifoldRuntime[K]>>> };
+
 async function withRuntime(
   program: Command,
   printer: ConsolePrinter,
-  action: (runtime: ReturnType<typeof createRuntime>) => Promise<void>,
+  action: (runtime: ScheduleRuntime) => Promise<void>,
 ): Promise<void> {
-  const runtime = createRuntime(program);
+  let local: MarifoldRuntime | undefined;
   try {
+    const selected = program.commands.find(command => command.name() === 'schedule')?.opts().workspace as string | undefined;
+    const api = await workspaceClient(program, selected);
+    const runtime: ScheduleRuntime = api ? {
+      createSchedule: async input => (await api.request<{ schedule: ScheduleState }>('POST', '/v1/schedules', input)).schedule,
+      listSchedules: async () => (await api.request<{ schedules: ScheduleState[] }>('GET', '/v1/schedules')).schedules,
+      getSchedule: async id => (await api.request<{ schedule: ScheduleState }>('GET', `/v1/schedules/${encodeURIComponent(id)}`)).schedule,
+      updateSchedule: async (id, input) => (await api.request<{ schedule: ScheduleState }>('PATCH', `/v1/schedules/${encodeURIComponent(id)}`, input)).schedule,
+      deleteSchedule: async id => (await api.request<{ deleted: boolean }>('DELETE', `/v1/schedules/${encodeURIComponent(id)}`)).deleted,
+      runScheduleUnattended: id => api.request('POST', `/v1/schedules/${encodeURIComponent(id)}/run`, {}),
+    } : local = createRuntime(program);
     await action(runtime);
   } catch (error) {
     printer.printError(error);
     process.exitCode = 1;
   } finally {
-    runtime.close();
+    local?.close();
   }
 }
 

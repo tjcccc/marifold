@@ -184,6 +184,7 @@ export class SkillAppInstanceRegistry {
         instance: cloneSnapshot(record.snapshot),
       });
     }
+    clearOutput(record.snapshot, operation.output);
     if (operation.interactive) return Promise.resolve(this.startInteractive(record, operationName));
     return this.executeLatest(record, operationName, 0);
   }
@@ -694,6 +695,11 @@ function markOutputFresh(snapshot: SkillAppInstanceSnapshot, output: string): vo
   const remaining = (snapshot.staleOutputs ?? []).filter(candidate => candidate !== output);
   if (remaining.length > 0) snapshot.staleOutputs = remaining;
   else delete snapshot.staleOutputs;
+}
+
+function clearOutput(snapshot: SkillAppInstanceSnapshot, output: string): void {
+  snapshot.state[output] = '';
+  markOutputFresh(snapshot, output);
 }
 
 function validateAttachments(inputs: SkillAppAttachmentInput[]): SkillAppAttachmentInput[] {

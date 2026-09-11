@@ -1,5 +1,13 @@
+import { registerWorkspaceScheduleRoutes } from './WorkspaceScheduleRoutes';
+import * as path from 'node:path';
+import { WorkspaceRequestContext } from './WorkspaceRequestContext';
+import { Readable } from 'node:stream';
 import fastify, { FastifyInstance, FastifyReply } from 'fastify';
 import {
+  workspaceTerminal,
+  WorkspaceManager,
+  WorkspaceExecutor,
+  WorkspaceRuns,
   type AgentUsage,
   type SkillAppAttachmentInput,
   type SkillAppDefinition,
@@ -20,6 +28,7 @@ import {
   TaskStatus,
   TaskUpdateInput,
 } from '@marifold/core';
+import { registerWorkspaceRoutes } from './WorkspaceRoutes';
 import { registerProfileRoutes } from './ProfileRoutes';
 import { registerRunRoutes } from './RunRoutes';
 import { registerSecurity, resolveSecurityOptions } from './Security';
@@ -99,6 +108,10 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
     boundHost: host,
   });
 
+  let workspaceManager: WorkspaceManager;
+  try { workspaceManager = new WorkspaceManager(options.loadedConfig.configPath); }
+  catch (error) { runtime.close(); throw error; }
+
   const scheduler = (options.scheduler ?? true)
     ? runtime.createScheduler(message => server.log.info(message))
     : undefined;
@@ -111,7 +124,14 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
   telegramBridge?.start();
   (server as ServiceWithBridge).marifoldTelegram = telegramBridge ? { profile: telegramBridge.profile } : undefined;
 
-  const runRegistry = runtime.createRunRegistry(message => server.log.info(message));
+  const workspaceExecutor = new WorkspaceExecutor(() => runtime.resolveAgentConfigForProfile(), path.join(workspaceManager.store.directory, 'runs'), [options.loadedConfig.configPath, ...Object.values(options.loadedConfig.config.paths).filter((value): value is string => typeof value === 'string'), path.dirname(workspaceManager.store.directory)]);
+  const workspaceRuns = new WorkspaceRuns(runtime, workspaceManager);
+  const workspaceContext = new WorkspaceRequestContext();
+  const runRegistry = runtime.createRunRegistry(message => server.log.info(message), input => workspaceRuns.createRunner(input), workspaceManager.store.runJournal);
+  workspaceManager.onMembershipRemoved = (workspaceId, deviceId) => {
+    for (const run of runRegistry.list()) { const execution = run.execution; if (!run.finishedAt && execution?.workspaceId === workspaceId && (!deviceId || execution.originDeviceId === deviceId || execution.executionDeviceId === deviceId)) runRegistry.cancel(run.id); }
+  };
+  workspaceRuns.setDelegate((parent, input) => { const child = runRegistry.startChild(parent, input); return { runId: child.id, events: runRegistry.events(child.id), cancel: () => { runRegistry.cancel(child.id); } }; });
   const skillAppInstances = runtime.createSkillAppInstanceRegistry();
   // Plain /ask and /chat/stream requests are not RunRegistry entries, but they
   // can still persist a final exchange. Keep session-scoped requests visible
@@ -120,6 +140,10 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
   const activeSessionRequests = new Map<string, number>();
   const activeProfileRequests = new Map<string, number>();
   const beginSessionRequest = (sessionId?: string, profile?: string): (() => void) => {
+    if (sessionId) {
+      const owner = runRegistry.list().find(run => run.sessionId === sessionId && !run.finishedAt);
+      if (owner || activeSessionRequests.has(sessionId)) throw new MarifoldError('SESSION_BUSY', 'Session already has an active request.', { sessionId, ...(owner ? { runId: owner.id } : {}) });
+    }
     if (sessionId) activeSessionRequests.set(sessionId, (activeSessionRequests.get(sessionId) ?? 0) + 1);
     if (profile) activeProfileRequests.set(profile, (activeProfileRequests.get(profile) ?? 0) + 1);
     return () => {
@@ -137,12 +161,37 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
   };
   const hasActiveSessionRequest = (sessionId: string): boolean =>
     (activeSessionRequests.get(sessionId) ?? 0) > 0;
-  registerRunRoutes(server, runRegistry);
+  registerRunRoutes(server, runRegistry, {
+    resolve: (input, body, request) => {
+      if (input.sessionId && activeSessionRequests.has(input.sessionId)) throw new MarifoldError('SESSION_BUSY', 'Session already has an active request.', { sessionId: input.sessionId });
+      return workspaceRuns.resolve(input, {
+      workspaceId: typeof body.workspaceId === 'string' ? body.workspaceId : undefined,
+      executionDeviceId: typeof body.executionDeviceId === 'string' ? body.executionDeviceId : undefined,
+    }, workspaceContext.resolve(request.headers)); },
+    artifact: async (runId, artifactId, reply) => {
+      const run = runRegistry.require(runId); const origin = runRegistry.artifactOrigin(runId, artifactId); const e = origin.run.execution;
+      if (!e || e.executionDeviceId === workspaceManager.store.get(e.workspaceId).hostDeviceId) return false;
+      const artifact = run.artifacts?.find(a => a.id === artifactId);
+      if (!artifact) throw MarifoldError.artifactNotFound(runId, artifactId);
+      reply.type(artifact.mediaType).header('content-disposition', `attachment; filename*=UTF-8''${encodeURIComponent(artifact.name)}`);
+      reply.send(Readable.from((async function* () {
+        for (let offset = 0; offset < artifact.size;) {
+          const chunk = await workspaceManager.execute(e.workspaceId, e.executionDeviceId, 'executor.artifact', { runId: origin.run.id, artifactId: origin.artifactId, offset }) as { data: string };
+          const bytes = Buffer.from(chunk.data, 'base64'); if (!bytes.length) throw new Error('Artifact transfer ended early.');
+          offset += bytes.length; yield bytes;
+        }
+      })()));
+      return true;
+    },
+  });
   registerProfileRoutes(server, runtime, {
     isProfileActive: profile =>
       (activeProfileRequests.get(profile) ?? 0) > 0
       || runRegistry.list().some(run => run.profile === profile && run.finishedAt === undefined),
   });
+
+  registerWorkspaceRoutes(server, workspaceManager, runRegistry, workspaceContext, (operation, input, context) => workspaceExecutor.handle(operation, input, context), security.token, id => workspaceExecutor.cancelWorkspace(id));
+  server.addHook('onClose', async () => workspaceExecutor.close());
 
   const webDir = resolveServiceWebDir(options);
   if (webDir) registerStaticRoutes(server, webDir);
@@ -178,6 +227,17 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
     service: 'marifold',
     apiVersion: API_VERSION,
   }));
+
+  server.post<{ Params: { operation: string } }>('/v1/terminal/:operation', async request => ({ ok: true, result: await workspaceTerminal(runtime, request.params.operation, request.body ?? {}) }));
+
+  let revision = 0; const generation = `${Date.now()}-${Math.random()}`;
+  const unsubscribeChanges = runRegistry.subscribe(() => { revision++; });
+  server.get('/v1/changes', async () => ({ ok: true, revision: `${generation}:${revision}` }));
+  server.addHook('onResponse', async (request, reply) => {
+    if (reply.statusCode < 400 && request.method !== 'GET' && request.method !== 'HEAD'
+      && !request.url.startsWith('/v1/workspaces') && !['/v1/skills/resolve', '/v1/terminal/snapshot'].includes(request.url)) revision++;
+  });
+  server.addHook('onClose', async () => unsubscribeChanges());
 
   server.get('/v1/status', async () => ({
     ok: true,
@@ -596,6 +656,8 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
   // Manually compact a session now (the /compact command): summarize older turns.
   server.post<{ Params: { id: string } }>('/v1/sessions/:id/compact', async request => {
     const body = objectBody(request.body);
+    const endRequest = beginSessionRequest(request.params.id, requiredString(body.profile, 'profile'));
+    try {
     const result = await runtime.compactSession(request.params.id, {
       profile: requiredString(body.profile, 'profile'),
       ...(typeof body.provider === 'string' ? { provider: body.provider } : {}),
@@ -603,6 +665,7 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
       ...(typeof body.think === 'boolean' ? { think: body.think } : {}),
     });
     return { ok: true, ...result };
+    } finally { endRequest(); }
   });
 
   server.post('/v1/ask', async request => {
@@ -634,6 +697,7 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
     }
   });
 
+  registerWorkspaceScheduleRoutes(server, runtime);
   server.get('/v1/schedules', async () => ({
     ok: true,
     schedules: runtime.listSchedules(),
@@ -1000,6 +1064,8 @@ function statusCodeForError(error: MarifoldError): number {
   if (error.code === 'UNAUTHORIZED') return 401;
   if (error.code === 'NETWORK_FORBIDDEN' || error.code === 'ORIGIN_FORBIDDEN') return 403;
   if (error.code === 'RUN_LIMIT_EXCEEDED') return 429;
+  if (error.code === 'SESSION_BUSY') return 409;
+  if (error.code === 'WORKSPACE_OFFLINE') return 503;
   if (error.code === 'PROVIDER_ERROR') return 502;
   return 500;
 }

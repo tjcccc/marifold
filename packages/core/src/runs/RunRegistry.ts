@@ -1,3 +1,5 @@
+import type { AgentRunOptions } from '../agent/AgentRunner';
+import type { WorkspaceExecutionContext } from '@marifold/workspace-protocol';
 import * as crypto from 'crypto';
 import { dirname } from 'path';
 import type { ImageInput } from '@priest-ai/core';
@@ -27,13 +29,16 @@ const MAX_RETAINED_FINISHED_RUNS = 50;
 /** The narrow runtime slice the registry needs, so tests can fake it without a
  * full MarifoldRuntime. `MarifoldRuntime.createRunRegistry()` binds the real one. */
 export interface RunRegistryRuntime {
-  createAgentRunner(profile?: string): AgentRunner;
+  createAgentRunner(profile?: string, input?: RunStartInput): AgentRunner | Promise<AgentRunner>;
   setProfileAgentApproval(profile: string, kind: ToolKind, mode: ApprovalMode): void;
   addProfileTrustedFolder(profile: string, folder: string): string;
   defaultProfile(): string;
 }
 
+export interface RunJournal { load(): Array<{ record: RunRecord; events: SequencedEvent[] }>; save(record: RunRecord, event?: SequencedEvent): void }
+
 export interface RunRegistryOptions {
+  journal?: RunJournal;
   runtime: RunRegistryRuntime;
   /** How long an approval prompt waits for an answer before auto-denying.
    * Matches the Telegram bridge's five-minute window by default. */
@@ -54,6 +59,11 @@ export interface RunRegistryOptions {
 /** What a client may pass when starting a run. Mirrors the AgentRunOptions
  * surface that is safe to accept over the service boundary. */
 export interface RunStartInput {
+  /** Internal coordinator fields; the public request parser never accepts these. */
+  registryRunId?: string;
+  parentRunId?: string;
+  /** Set by the authenticated service boundary, never trusted from request JSON. */
+  execution?: WorkspaceExecutionContext;
   objective: string;
   profile?: string;
   provider?: string;
@@ -72,6 +82,7 @@ export interface RunStartInput {
   /** Binary files staged read-only inside this run's isolated input folder. */
   files?: RunFileInput[];
   instructions?: string[];
+  toolMode?: AgentRunOptions['toolMode'];
   maxIterations?: number;
   forcePlan?: boolean;
   lean?: boolean;
@@ -81,6 +92,8 @@ export interface RunStartInput {
 /** Snapshot view of a run for list/get responses. `status` is the TaskStatus
  * verbatim — `running` until the terminal `done` event lands. */
 export interface RunRecord {
+  parentRunId?: string;
+  execution?: WorkspaceExecutionContext;
   id: string;
   objective: string;
   profile: string;
@@ -119,6 +132,8 @@ interface PendingUserInput {
 }
 
 interface ActiveRun {
+  parentRunId?: string;
+  execution?: WorkspaceExecutionContext;
   id: string;
   objective: string;
   profile: string;
@@ -160,9 +175,13 @@ export class RunRegistry {
   private readonly maxActiveRuns: number;
   private readonly maxBufferedEvents: number;
   private readonly log?: (message: string) => void;
+  private listeners = new Set<() => void>();
+  subscribe(listener: () => void): () => void { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; }
   private closed = false;
+  private readonly journal?: RunJournal;
 
   constructor(options: RunRegistryOptions) {
+    this.journal = options.journal;
     this.runtime = options.runtime;
     this.approvalTimeoutMs = options.approvalTimeoutMs ?? DEFAULT_APPROVAL_TIMEOUT_MS;
     this.userInputTimeoutMs = options.userInputTimeoutMs ?? DEFAULT_USER_INPUT_TIMEOUT_MS;
@@ -170,6 +189,17 @@ export class RunRegistry {
     this.maxActiveRuns = options.maxActiveRuns ?? DEFAULT_MAX_ACTIVE_RUNS;
     this.maxBufferedEvents = options.maxBufferedEvents ?? DEFAULT_MAX_BUFFERED_EVENTS;
     this.log = options.log;
+    for (const { record, events } of this.journal?.load() ?? []) {
+      const interrupted = !record.finishedAt;
+      const run: ActiveRun = { ...record, artifacts: record.artifacts ?? [], status: interrupted ? 'failed' : record.status,
+        summary: interrupted ? 'Interrupted by host restart. Completed effects were not replayed.' : record.summary,
+        finishedAt: record.finishedAt ?? new Date().toISOString(), finished: true,
+        buffer: events, firstSeq: events[0]?.seq ?? record.eventCount + 1, lastSeq: record.eventCount,
+        abort: new AbortController(), steeringQueue: [], grantedKinds: new Set(), trustedFolders: [], waiters: [],
+      };
+      if (interrupted) { const event: SequencedEvent = { seq: ++run.lastSeq, event: { type: 'done', taskId: record.taskId ?? '', status: 'failed', summary: run.summary } }; run.buffer.push(event); this.journal?.save(this.toRecord(run), event); }
+      this.runs.set(run.id, run);
+    }
   }
 
   start(input: RunStartInput): RunRecord {
@@ -179,8 +209,14 @@ export class RunRegistry {
     if (active >= this.maxActiveRuns) throw MarifoldError.runLimitExceeded(this.maxActiveRuns);
 
     const profile = input.profile ?? this.runtime.defaultProfile();
+    if (input.sessionId) {
+      const owner = [...this.runs.values()].find(run => !run.finished && run.sessionId === input.sessionId);
+      if (owner) throw new MarifoldError('SESSION_BUSY', `Session is already running on ${owner.id}.`, { runId: owner.id, sessionId: input.sessionId });
+    }
     const run: ActiveRun = {
       id: this.createRunId(),
+      execution: input.execution,
+      parentRunId: input.parentRunId,
       objective: input.objective,
       profile,
       status: 'running',
@@ -198,6 +234,7 @@ export class RunRegistry {
       waiters: [],
     };
     this.runs.set(run.id, run);
+    this.journal?.save(this.toRecord(run));
     // Detached pump: consume the run generator without blocking the caller,
     // the same detachment the Telegram bridge uses so an approval answer
     // arriving on a later request cannot deadlock the run.
@@ -205,6 +242,21 @@ export class RunRegistry {
       this.log?.(`Run ${run.id} pump failed: ${String(error)}`);
     });
     return this.toRecord(run);
+  }
+
+  startChild(parentRunId: string, input: RunStartInput): RunRecord {
+    const parent = this.runs.get(parentRunId);
+    if (!parent || parent.finished || parent.parentRunId || !parent.execution || input.execution?.workspaceId !== parent.execution.workspaceId) throw MarifoldError.agentRunInvalid('Device delegation is limited to one level within the active workspace.');
+    return this.start({ ...input, sessionId: undefined, parentRunId });
+  }
+
+  artifactOrigin(runId: string, artifactId: string): { run: RunRecord; artifactId: string } {
+    const run = this.require(runId); const artifact = run.artifacts?.find(a => a.id === artifactId);
+    if (!artifact) throw MarifoldError.artifactNotFound(runId, artifactId);
+    if (!artifact.source) return { run, artifactId };
+    const child = this.require(artifact.source.runId);
+    if (child.parentRunId !== run.id || child.execution?.workspaceId !== run.execution?.workspaceId) throw MarifoldError.artifactNotFound(runId, artifactId);
+    return { run: child, artifactId: artifact.source.artifactId };
   }
 
   get(runId: string): RunRecord | undefined {
@@ -226,12 +278,8 @@ export class RunRegistry {
   }
 
   requireArtifact(runId: string, artifactId: string): ResolvedRunArtifact {
-    const run = this.runs.get(runId);
-    if (!run) throw MarifoldError.runNotFound(runId);
-    if (!run.artifacts.some(artifact => artifact.id === artifactId)) {
-      throw MarifoldError.artifactNotFound(runId, artifactId);
-    }
-    const artifact = resolveRunArtifact(runId, artifactId);
+    const source = this.artifactOrigin(runId, artifactId);
+    const artifact = resolveRunArtifact(source.run.id, source.artifactId);
     if (!artifact) throw MarifoldError.artifactNotFound(runId, artifactId);
     return artifact;
   }
@@ -255,10 +303,12 @@ export class RunRegistry {
   }
 
   answerApproval(runId: string, requestId: string, action: RunApprovalAction): { requestId: string; approved: boolean } {
-    const run = this.runs.get(runId);
+    let run = this.runs.get(runId);
     if (!run) throw MarifoldError.runNotFound(runId);
-    const entry = this.pending.get(requestId);
-    if (!entry || entry.runId !== runId) throw MarifoldError.approvalNotFound(requestId);
+    const entry = this.pending.get(this.userInputKey(runId, requestId))
+      ?? [...this.pending.values()].find(p => p.request.id === requestId && this.runs.get(p.runId)?.parentRunId === runId);
+    if (!entry || (entry.runId !== runId && this.runs.get(entry.runId)?.parentRunId !== runId)) throw MarifoldError.approvalNotFound(requestId);
+    run = this.runs.get(entry.runId)!;
 
     switch (action) {
       case 'deny':
@@ -307,8 +357,10 @@ export class RunRegistry {
   ): { requestId: string; accepted: true } {
     const run = this.runs.get(runId);
     if (!run) throw MarifoldError.runNotFound(runId);
-    const entry = this.pendingUserInputs.get(this.userInputKey(runId, requestId));
+    const entry = this.pendingUserInputs.get(this.userInputKey(runId, requestId))
+      ?? [...this.pendingUserInputs.values()].find(p => p.request.id === requestId && this.runs.get(p.runId)?.parentRunId === runId);
     if (!entry) throw MarifoldError.userInputNotFound(requestId);
+    if (typeof value === 'object' && value !== null && 'skipped' in value && value.skipped === true && Object.keys(value).length === 1) { entry.settle(undefined); return { requestId, accepted: true }; }
     const submission = normalizeUserInputSubmission(entry.request, value);
     entry.settle(submission);
     return { requestId, accepted: true };
@@ -329,6 +381,7 @@ export class RunRegistry {
     const run = this.runs.get(runId);
     if (!run) throw MarifoldError.runNotFound(runId);
     if (!run.finished) run.abort.abort();
+    for (const child of this.runs.values()) if (child.parentRunId === runId && !child.finished) child.abort.abort();
     return run.status;
   }
 
@@ -342,7 +395,7 @@ export class RunRegistry {
 
   private async pump(run: ActiveRun, input: RunStartInput): Promise<void> {
     try {
-      const runner = this.runtime.createAgentRunner(input.profile);
+      const runner = await this.runtime.createAgentRunner(input.profile, { ...input, registryRunId: run.id });
       const events = runner.run({
         objective: input.objective,
         profile: input.profile,
@@ -357,6 +410,7 @@ export class RunRegistry {
         files: input.files,
         instructions: input.instructions,
         maxIterations: input.maxIterations,
+        toolMode: input.toolMode,
         forcePlan: input.forcePlan,
         lean: input.lean,
         cwd: input.cwd,
@@ -401,6 +455,7 @@ export class RunRegistry {
     } else if (event.type === 'status') {
       run.status = event.status;
     }
+    this.journal?.save(this.toRecord(run), run.buffer[run.buffer.length - 1]);
     this.notify(run);
   }
 
@@ -451,14 +506,14 @@ export class RunRegistry {
       const settle = (decision: ApprovalDecision): void => {
         clearTimeout(timer);
         run.abort.signal.removeEventListener('abort', onAbort);
-        this.pending.delete(request.id);
+        this.pending.delete(this.userInputKey(run.id, request.id));
         this.notify(run);
         resolve(decision);
       };
       // Cancel must unblock the runner's `await approvalHandler(...)` at once,
       // not after the timeout, so the loop can observe the abort and finish.
       run.abort.signal.addEventListener('abort', onAbort, { once: true });
-      this.pending.set(request.id, { runId: run.id, request, settle });
+      this.pending.set(this.userInputKey(run.id, request.id), { runId: run.id, request, settle });
       this.notify(run);
     });
   }
@@ -489,6 +544,7 @@ export class RunRegistry {
     return new Promise<void>(resolve => {
       const waiter = (): void => {
         signal?.removeEventListener('abort', waiter);
+        const index = run.waiters.indexOf(waiter); if (index >= 0) run.waiters.splice(index, 1);
         resolve();
       };
       run.waiters.push(waiter);
@@ -497,6 +553,7 @@ export class RunRegistry {
   }
 
   private notify(run: ActiveRun): void {
+    for (const listener of this.listeners) listener();
     for (const waiter of run.waiters.splice(0)) waiter();
   }
 
@@ -518,6 +575,8 @@ export class RunRegistry {
   private toRecord(run: ActiveRun): RunRecord {
     return {
       id: run.id,
+      execution: run.execution,
+      parentRunId: run.parentRunId,
       objective: run.objective,
       profile: run.profile,
       status: run.status,
@@ -530,10 +589,10 @@ export class RunRegistry {
       artifacts: [...run.artifacts],
       eventCount: run.lastSeq,
       pendingApprovals: [...this.pending.values()]
-        .filter(entry => entry.runId === run.id)
+        .filter(entry => entry.runId === run.id || this.runs.get(entry.runId)?.parentRunId === run.id)
         .map(entry => entry.request),
       pendingUserInputs: [...this.pendingUserInputs.values()]
-        .filter(entry => entry.runId === run.id)
+        .filter(entry => entry.runId === run.id || this.runs.get(entry.runId)?.parentRunId === run.id)
         .map(entry => entry.request),
     };
   }

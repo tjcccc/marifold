@@ -1,9 +1,9 @@
 {
   "name": "@marifold/web",
-  "version": "0.69.0",
+  "version": "0.70.0",
   "private": true,
   "type": "module",
-  "description": "Marifold Web UI — browser client for the marifold service.",
+  "description": "Marifold Web UI \u2014 browser client for the marifold service.",
   "engines": {
     "node": ">=24.0.0 <25"
   },
@@ -17,7 +17,8 @@
   "dependencies": {
     "fflate": "^0.8.3",
     "react": "^19.2.8",
-    "react-dom": "^19.2.8"
+    "react-dom": "^19.2.8",
+    "@marifold/client": "workspace:*"
   },
   "devDependencies": {
     "@marifold/core": "workspace:*",

@@ -195,6 +195,7 @@ export function macSandboxProfile(
     `(allow file-read* (literal ${schemeString(executablePath)}))`,
     ...ancestorAllows,
     ...readAllows,
+    ...(workspace.deniedRoots ?? []).map(root => `(deny file-read* file-write* (require-all (subpath ${schemeString(root)}) (require-not (subpath ${schemeString(workspace.rootDir)}))))`),
   ].join('');
 }
 

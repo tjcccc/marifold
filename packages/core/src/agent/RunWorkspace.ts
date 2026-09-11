@@ -66,6 +66,7 @@ export interface RunWorkspace {
   /** Exact host files explicitly granted read-only. Their parent directories
    * are not capabilities and must not become listable. */
   readOnlyFiles: string[];
+  deniedRoots?: string[];
   readRoots: string[];
   writeRoots: string[];
   /** Roots outside the user's home. Shell calls touching this capability set
@@ -76,6 +77,7 @@ export interface RunWorkspace {
 }
 
 export interface CreateRunWorkspaceOptions {
+  deniedRoots?: string[];
   id: string;
   cwd?: string;
   trustedFolders?: string[];
@@ -150,6 +152,7 @@ export function createRunWorkspace(options: CreateRunWorkspaceOptions): RunWorks
     userHome,
     readOnlyRoots,
     readOnlyFiles,
+    deniedRoots: uniquePaths([path.join(marifoldHome(), 'workspaces'), ...(options.deniedRoots ?? [])]),
     readRoots,
     writeRoots,
     externalRoots,
@@ -257,6 +260,10 @@ export function isExactPath(target: string, candidates: string[]): boolean {
 
 export function isOutsideUserHome(target: string, workspace: RunWorkspace): boolean {
   return !isInside(canonicalPath(target), workspace.userHome);
+}
+
+export function isDeniedRunPath(target: string, workspace: RunWorkspace): boolean {
+  return !isInsideAnyRoot(target, [workspace.rootDir]) && isInsideAnyRoot(target, workspace.deniedRoots ?? []);
 }
 
 export function isSensitiveHostPath(target: string, workspace: RunWorkspace): boolean {

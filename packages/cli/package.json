@@ -1,6 +1,6 @@
 {
   "name": "marifold",
-  "version": "0.69.0",
+  "version": "0.70.0",
   "description": "Marifold CLI",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -11,7 +11,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc && chmod +x dist/index.js",
+    "build": "tsc && chmod +x dist/index.js && node scripts/stage-bridge.mjs",
     "cli": "node dist/index.js",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests"
@@ -20,12 +20,14 @@
     "@marifold/core": "workspace:*",
     "@marifold/service": "workspace:*",
     "@marifold/tui": "workspace:*",
-    "commander": "^15.0.0"
+    "commander": "^15.0.0",
+    "@marifold/client": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^24.13.3",
     "typescript": "^7.0.2",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.10",
+    "@marifold/bridge": "workspace:*"
   },
   "engines": {
     "node": ">=24.0.0 <25"

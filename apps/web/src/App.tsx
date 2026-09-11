@@ -1,7 +1,10 @@
+import { startupWorkspaces } from '@marifold/client';
+import { useWorkspaceChangePublisher } from './state/workspaceChanges';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createApiClient, MarifoldApiError } from './api/client';
 import { getStatus } from './api/misc';
-import { ConnectionPopover } from './components/ConnectionPopover';
+import { WorkspacePopover } from './components/WorkspacePopover';
+import type { WorkspaceSummary } from './api/types';
 import type { WorkspaceView } from './components/WorkspaceTabs';
 import type { Route } from './lib/route';
 import { visualViewportGeometry } from './lib/visualViewport';
@@ -10,6 +13,7 @@ import { ConfigScreen } from './screens/config/ConfigScreen';
 import { useRoute } from './screens/useRoute';
 import type { ServerConnection } from './state/connection';
 import {
+  THIS_SERVER_ID,
   activeConnection,
   apiSettings,
   loadConnections,
@@ -27,7 +31,12 @@ const LAST_APPS_ROUTE_PREFIX = 'marifold.lastAppsRoute.';
 export function App() {
   const [route, navigate] = useRoute();
   const [theme, setTheme] = useTheme();
+  const [openingWorkspace, setOpeningWorkspace] = useState(true);
   const [connections, setConnections] = useState(loadConnections);
+  const executionDevice = useRef<string | undefined>(undefined);
+  const [selectedDevice, setSelectedDevice] = useState<string | undefined>();
+  const [workspaceAvailable, setWorkspaceAvailable] = useState(true);
+  const [workspaceNotice, setWorkspaceNotice] = useState<string | undefined>();
   const [connectionEpoch, setConnectionEpoch] = useState(0);
   const [connectionOpen, setConnectionOpen] = useState(false);
   const [connectionProblem, setConnectionProblem] = useState<string | undefined>();
@@ -123,9 +132,34 @@ export function App() {
   }, []);
 
   const client = useMemo(
-    () => createApiClient(apiSettings(currentConnection)),
-    [currentConnection.baseUrl, currentConnection.token],
+    () => createApiClient({ ...apiSettings(currentConnection), executionDevice: () => executionDevice.current }),
+    [currentConnection.baseUrl, currentConnection.token, currentConnection.workspaceId],
   );
+
+  useEffect(() => {
+    let cancelled = false;
+    const local = connections.servers.find(c => c.id === THIS_SERVER_ID)!;
+    void startupWorkspaces<WorkspaceSummary>(createApiClient(apiSettings(local))).then(result => {
+      if (cancelled) return;
+      const preferred = result.workspaces.find(w => w.id === result.defaultId);
+      if (!preferred && !currentConnection.workspaceId) return;
+      const target: ServerConnection = preferred?.online
+        ? { id: `workspace-${preferred.id}`, name: preferred.name, workspaceId: preferred.id, token: local.token }
+        : local;
+      const next = upsertAndActivateConnection(connections, target);
+      saveConnections(next); setConnections(next); setConnectionEpoch(epoch => epoch + 1);
+      navigate(loadLastAgentRoute(target.id));
+      if (preferred && !preferred.online) setWorkspaceNotice(`${preferred.name} is offline. Opened Local for this launch.`);
+    }).catch(() => {
+      if (!cancelled && currentConnection.workspaceId) {
+        const next = upsertAndActivateConnection(connections, local); saveConnections(next); setConnections(next);
+        setWorkspaceNotice('Workspace unavailable. Opened Local for this launch.'); navigate(loadLastAgentRoute(local.id));
+      }
+    }).finally(() => { if (!cancelled) setOpeningWorkspace(false); });
+    return () => { cancelled = true; };
+  }, []);
+
+  useWorkspaceChangePublisher(client, setWorkspaceAvailable);
 
   const onUnauthorized = useCallback(() => {
     setConnectionProblem('The service rejected the request — set the bearer token it expects.');
@@ -146,6 +180,8 @@ export function App() {
     }
 
     const switchingServers = currentConnection.id !== connection.id;
+    if (switchingServers) { executionDevice.current = undefined; setSelectedDevice(undefined); }
+    setWorkspaceNotice(undefined);
     const next = upsertAndActivateConnection(connections, connection);
     saveConnections(next);
     setConnections(next);
@@ -190,8 +226,10 @@ export function App() {
 
   return (
     <div className={styles.shell}>
+      {currentConnection.workspaceId && !workspaceAvailable && <div role="status" className={styles.workspaceNotice}>{currentConnection.name} is unavailable. This conversation stays in its workspace; reconnect or choose Local explicitly.</div>}
+      {workspaceNotice && <div role="status" className={styles.workspaceNotice}>{workspaceNotice}<button onClick={() => setWorkspaceNotice(undefined)}>Dismiss</button></div>}
       <main key={`${currentConnection.id}:${connectionEpoch}`} className={styles.content}>
-        {route.view === 'config' ? (
+        {openingWorkspace ? <div role="status" className={styles.workspaceNotice}>Opening workspace…</div> : route.view === 'config' ? (
           <ConfigScreen
             client={client}
             route={route}
@@ -201,7 +239,7 @@ export function App() {
             onThemeChange={setTheme}
             onOpenConnection={() => setConnectionOpen(true)}
             onOpenSettings={onOpenSettings}
-            connectionName={currentConnection.name}
+            connectionName={currentConnection.workspaceId && selectedDevice ? `${currentConnection.name} · tools: ${selectedDevice === 'host' ? 'host' : 'selected device'}` : currentConnection.name}
             onDone={() => navigate(settingsReturnRoute.current)}
             onOpenAgent={() => navigate(lastAgentRoute.current)}
             onOpenApps={() => navigate(lastAppsRoute.current)}
@@ -218,14 +256,16 @@ export function App() {
             onOpenConnection={() => setConnectionOpen(true)}
             onOpenSettings={onOpenSettings}
             connectionId={currentConnection.id}
-            connectionName={currentConnection.name}
+            connectionName={currentConnection.workspaceId && selectedDevice ? `${currentConnection.name} · tools: ${selectedDevice === 'host' ? 'host' : 'selected device'}` : currentConnection.name}
             workspaceView={route.view}
             onWorkspaceViewChange={onWorkspaceViewChange}
           />
         )}
       </main>
       {connectionOpen ? (
-        <ConnectionPopover
+        <WorkspacePopover
+          executionDevice={selectedDevice}
+          onExecutionDevice={id => { executionDevice.current = id; setSelectedDevice(id); }}
           store={connections}
           problem={connectionProblem}
           onConnect={onConnect}

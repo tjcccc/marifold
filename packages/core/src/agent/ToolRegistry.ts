@@ -8,9 +8,14 @@ import type {
   UserInputSubmission,
 } from './UserInput';
 
+export class UncertainToolOutcomeError extends Error {}
+
 export type AgentToolKind = ToolKind | 'interaction';
 
 export interface ToolExecutionContext {
+  /** Nested device work may forward progress and approval events through its parent. */
+  emitEvent?: (event: import('./AgentEvents').AgentEvent) => void;
+  callId?: string;
   /** Working directory the run was started from. Filesystem tools resolve
    * relative paths against it and treat it as the workspace boundary. */
   cwd: string;
@@ -62,7 +67,7 @@ export interface AgentTool {
   summarizeCall(input: Record<string, JSONValue>): string;
   /** Flag calls that exceed the tool kind's normal risk (e.g. writes outside
    * the workspace). Escalated calls always require interactive approval. */
-  assessRisk?(input: Record<string, JSONValue>, ctx: ToolExecutionContext): ToolRiskAssessment;
+  assessRisk?(input: Record<string, JSONValue>, ctx: ToolExecutionContext): ToolRiskAssessment | Promise<ToolRiskAssessment>;
   execute(input: Record<string, JSONValue>, ctx: ToolExecutionContext): Promise<ToolExecutionResult>;
 }
 

@@ -7,6 +7,7 @@ export interface ServerConnection {
   name: string;
   baseUrl?: string;
   token?: string;
+  workspaceId?: string;
 }
 
 export interface ConnectionStore {
@@ -17,6 +18,7 @@ export interface ConnectionStore {
 export interface ConnectionSettings {
   baseUrl?: string;
   token?: string;
+  workspaceId?: string;
 }
 
 export const THIS_SERVER_ID = 'this-server';
@@ -61,6 +63,7 @@ export function apiSettings(server: ServerConnection): ConnectionSettings {
   return {
     ...(server.baseUrl ? { baseUrl: server.baseUrl } : {}),
     ...(server.token ? { token: server.token } : {}),
+    ...(server.workspaceId ? { workspaceId: server.workspaceId } : {}),
   };
 }
 
@@ -144,12 +147,13 @@ function normalizeStore(value: unknown): ConnectionStore {
 
 function normalizeStoredConnection(value: unknown): ServerConnection | undefined {
   if (!value || typeof value !== 'object') return undefined;
-  const candidate = value as { id?: unknown; name?: unknown; baseUrl?: unknown; token?: unknown };
+  const candidate = value as { id?: unknown; name?: unknown; baseUrl?: unknown; token?: unknown; workspaceId?: unknown };
   if (typeof candidate.id !== 'string' || !candidate.id) return undefined;
   const token = typeof candidate.token === 'string' && candidate.token ? candidate.token : undefined;
   if (candidate.id === THIS_SERVER_ID) {
     return { id: THIS_SERVER_ID, name: 'This server', ...(token ? { token } : {}) };
   }
+  if (typeof candidate.workspaceId === 'string' && /^[A-Za-z0-9_-]{1,100}$/.test(candidate.workspaceId) && typeof candidate.name === 'string') return { id: candidate.id, name: normalizeServerName(candidate.name), workspaceId: candidate.workspaceId, ...(token ? { token } : {}) };
   if (typeof candidate.name !== 'string' || typeof candidate.baseUrl !== 'string') return undefined;
   return {
     id: candidate.id,
@@ -161,6 +165,7 @@ function normalizeStoredConnection(value: unknown): ServerConnection | undefined
 
 function normalizeConnection(connection: ServerConnection): ServerConnection {
   const token = connection.token?.trim();
+  if (connection.workspaceId && /^[A-Za-z0-9_-]{1,100}$/.test(connection.workspaceId)) return { id: connection.id, name: normalizeServerName(connection.name), workspaceId: connection.workspaceId, ...(token ? { token } : {}) };
   if (connection.id === THIS_SERVER_ID) {
     return { id: THIS_SERVER_ID, name: 'This server', ...(token ? { token } : {}) };
   }
@@ -175,7 +180,7 @@ function normalizeConnection(connection: ServerConnection): ServerConnection {
 function migrateLegacyConnection(raw: string | null): ConnectionStore {
   if (!raw) return defaultConnectionStore();
   try {
-    const legacy = JSON.parse(raw) as { baseUrl?: unknown; token?: unknown };
+    const legacy = JSON.parse(raw) as { baseUrl?: unknown; token?: unknown; workspaceId?: unknown };
     const token = typeof legacy.token === 'string' && legacy.token ? legacy.token : undefined;
     if (typeof legacy.baseUrl !== 'string' || !legacy.baseUrl) {
       return {

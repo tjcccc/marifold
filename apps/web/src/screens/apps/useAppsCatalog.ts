@@ -1,3 +1,4 @@
+import { useWorkspaceChanges } from '../../state/workspaceChanges';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { listApps } from '../../api/apps';
 import type { ApiClient } from '../../api/client';
@@ -58,6 +59,8 @@ export function useAppsCatalog(
       live = false;
     };
   }, [client, onUnauthorized]);
+
+  useWorkspaceChanges(client, () => { void refresh(); });
 
   const selected = useMemo(
     () => apps.find(app => app.app.name === requestedName) ?? apps[0],

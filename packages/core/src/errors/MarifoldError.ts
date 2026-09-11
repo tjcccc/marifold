@@ -20,6 +20,8 @@ export type MarifoldErrorCode =
   | 'SKILL_NOT_FOUND'
   | 'APP_INVALID'
   | 'APP_NOT_FOUND'
+  | 'WORKSPACE_OFFLINE'
+  | 'SESSION_BUSY'
   | 'RUN_NOT_FOUND'
   | 'ARTIFACT_NOT_FOUND'
   | 'APPROVAL_NOT_FOUND'

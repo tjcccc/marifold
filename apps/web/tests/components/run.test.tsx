@@ -458,7 +458,7 @@ describe('Desktop workspace sidebar', () => {
         onOpenSettings={onOpenSettings}
       />,
     );
-    fireEvent.click(screen.getByText('Connection'));
+    fireEvent.click(screen.getByText('Workspace'));
     fireEvent.click(screen.getByText('Appearance'));
     fireEvent.click(screen.getByText('Settings'));
     expect(onOpenConnection).toHaveBeenCalledOnce();

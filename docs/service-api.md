@@ -622,3 +622,48 @@ const es = new EventSource(`${base}/v1/runs/${id}/events?access_token=${token}`)
 es.addEventListener('approval_request', e => showDialog(JSON.parse(e.data).request));
 es.addEventListener('done', () => es.close());   // the server also ends the stream
 ```
+
+## Device-hosted workspace API
+
+Workspace management is local to the service receiving the request. The service's
+normal bearer/private-network rules apply. Pairing and relay messages are separate
+from the local HTTP API; see [workspaces](workspaces.md) for identity and recovery.
+
+| Method | Path | Body / result |
+| --- | --- | --- |
+| GET | `/v1/workspaces` | Public summaries and `defaultId`; no private keys |
+| POST | `/v1/workspaces` | `{name, bridgeUrl, registrationToken}` → workspace + invitation |
+| POST | `/v1/workspaces/join` | `{bridgeUrl, invitation, executor?}` → paired workspace |
+| PUT | `/v1/workspaces/default` | `{id}`; `local` or saved workspace ID/name |
+| PUT | `/v1/workspaces/:id/executor` | `{enabled}`; local guest opt-in/out |
+| DELETE | `/v1/workspaces/:id` | Stop sharing/disconnect; preserve local application data |
+| POST | `/v1/workspaces/:id/manage/:operation` | `rename` (`{name}`), `invite`, `devices`, `revoke` (`{deviceId}`) |
+| * | `/v1/workspaces/:id/api/v1/...` | Allowlisted host application operations |
+| GET | `/v1/changes` | Process generation + change revision for refreshing shared views |
+
+Workspace application requests use `Idempotency-Key` for mutations. They expose the
+existing application contract under the workspace prefix, including run SSE and
+chunked artifacts. The relay cannot select another workspace through that facade.
+Host-local service/path settings, raw credentials and nested workspace management
+are unavailable there. `WORKSPACE_OFFLINE` is HTTP 503. Event following reconnects
+from `Last-Event-ID`; it never starts a replacement run.
+
+`POST /v1/runs` additionally accepts `workspaceId`, `executionDeviceId` (ID or `host`)
+and `toolMode`. Workspace provenance supplies the actual origin and overrides
+client workspace claims. Returned run records contain `execution` with
+`workspaceId`, `originDeviceId`, `executionDeviceId`; child runs also have
+`parentRunId`. These internal fields cannot be supplied in public run JSON.
+Skills default to the host. An incompatible explicit target is rejected.
+
+Child approvals/clarifications are answerable from the parent run. Remote execution
+accepts only per-call approval. Input cards can be explicitly dismissed with
+`{skipped: true}`; ordinary submissions still require every question's answer.
+Artifacts forwarded from children include a server-authored `source`; clients use
+the parent's artifact URL, whose origin is independently verified by the server.
+
+Schedule writes are shared: `POST /v1/schedules` creates from
+`{name, objective, cron, profile?, enabled?}`; `PATCH /v1/schedules/:id` updates those
+fields; `DELETE /v1/schedules/:id` removes; `POST /v1/schedules/:id/run` runs once
+under the existing unattended policy on the host. Shared terminal clients also use
+explicit `POST /v1/terminal/:operation` methods for profile, Skill and memory
+operations; there is no arbitrary runtime-method invocation endpoint.

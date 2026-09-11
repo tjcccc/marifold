@@ -39,7 +39,7 @@ export function SidebarSystemFooter({
     <div className={styles.footer} aria-label="System controls">
       <button className={styles.row} onClick={onOpenConnection}>
         <span className={styles.icon}><ConnectionGlyph /></span>
-        <span>Connection</span>
+        <span>Workspace</span>
         {connectionName ? <span className={styles.value} aria-hidden>{connectionName}</span> : null}
       </button>
       <button className={styles.row} onClick={() => onThemeChange(nextThemePreference(theme))}>

@@ -1,3 +1,4 @@
+import { useWorkspaceChanges } from '../../state/workspaceChanges';
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import type { ApiClient } from '../../api/client';
 import { MarifoldApiError } from '../../api/client';
@@ -447,6 +448,13 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
   }, [client]);
   refreshRunsRef.current = () => { void refreshRuns(); };
   reloadSessionRef.current = () => { if (sessionId) void loadSession(sessionId); };
+
+  useWorkspaceChanges(client, () => {
+    void refreshProfiles(); void refreshSessions(); void refreshRuns();
+    void getModels(client).then(models => setModelOptions(models.options)).catch(() => undefined);
+    if (profileName) void getSkills(client, profileName).then(setSkills).catch(() => undefined);
+    if (sessionId && !activeRun(threadRef.current)) void loadSession(sessionId);
+  });
 
   const selectProfile = useCallback(
     (name: string) => {

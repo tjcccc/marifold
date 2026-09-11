@@ -1,3 +1,4 @@
+import { createBridge, MemoryRelayStore } from '../../../../apps/bridge/dist/index.js';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -113,12 +114,20 @@ const remoteServer = createMarifoldService({ loadedConfig: remoteLoadedConfig, s
 await remoteServer.listen({ host: '127.0.0.1', port: 32142 });
 process.stdout.write('Remote Marifold fixture listening at http://127.0.0.1:32142\n');
 
+const bridgeServer = createBridge(new MemoryRelayStore(), 'fixture-registration-token-32-characters');
+await new Promise(resolve => bridgeServer.listen(32144, '127.0.0.1', resolve));
+const bridgeUrl = 'http://127.0.0.1:32144';
+const hosted = await remoteServer.inject({ method: 'POST', url: '/v1/workspaces', headers: { authorization: 'Bearer remote-fixture-token' }, payload: { name: 'Home workspace', bridgeUrl, registrationToken: 'fixture-registration-token-32-characters' } });
+if (hosted.statusCode !== 200) throw new Error('Fixture host creation failed.');
+const joined = await server.inject({ method: 'POST', url: '/v1/workspaces/join', payload: { bridgeUrl, invitation: hosted.json().invitation } });
+if (joined.statusCode !== 200) throw new Error('Fixture guest pairing failed.');
 let closing = false;
 async function close() {
   if (closing) return;
   closing = true;
   await remoteServer.close().catch(() => undefined);
   await server.close().catch(() => undefined);
+  bridgeServer.closeAllConnections(); bridgeServer.close();
   fs.rmSync(stateDir, { recursive: true, force: true });
   process.exit(0);
 }
