@@ -7,10 +7,7 @@ import {
 } from './ProviderRegistry';
 import { proxyDispatcher } from '../util/proxy';
 
-// The ChatGPT Codex catalog requires a Codex client version and gates catalog
-// entries against it. This is a catalog-protocol compatibility version, not the
-// Marifold package version; update it when adopting a newer Codex catalog shape.
-const CHATGPT_MODEL_CATALOG_CLIENT_VERSION = '0.149.0';
+import { chatGptCatalogVersion } from './ChatGptCatalogVersion';
 
 export interface ProviderSummary {
   name: string;
@@ -318,7 +315,7 @@ export class ProviderInspector {
     }
     const baseModelsUrl = openAIModelsUrl(baseUrl, { providerName });
     const url = providerName === 'chatgpt'
-      ? `${baseModelsUrl}?client_version=${CHATGPT_MODEL_CATALOG_CLIENT_VERSION}`
+      ? `${baseModelsUrl}?client_version=${await chatGptCatalogVersion()}`
       : baseModelsUrl;
     try {
       const init: RequestInit = {

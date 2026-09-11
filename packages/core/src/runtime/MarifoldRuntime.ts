@@ -1627,9 +1627,15 @@ export class MarifoldRuntime {
             enabled: settings.think,
             ...(settings.think ? { effort: 'high', summary: 'auto' as const } : {}),
           }
-        : neutralReasoning && settings.think
-          ? { enabled: true, effort: 'high', summary: 'auto' }
-          : undefined,
+        : neutralReasoning && /^gpt-6-astra(?:-|$)/.test(settings.model)
+          ? {
+              enabled: true,
+              effort: settings.think ? 'medium' : 'low',
+              ...(settings.think ? { summary: 'auto' as const } : {}),
+            }
+          : neutralReasoning && settings.think
+            ? { enabled: true, effort: 'high', summary: 'auto' }
+            : undefined,
       providerOptions: Object.keys(providerOptions).length > 0 ? providerOptions : undefined,
     };
   }

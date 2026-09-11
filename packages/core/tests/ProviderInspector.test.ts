@@ -4,6 +4,10 @@ import { ProviderInspector } from '../src';
 import { LoadedMarifoldConfig } from '../src/config/ConfigSchema';
 import { openAIChatCompletionsUrl, openAIModelsUrl, openAIResponsesUrl } from '../src/config/OpenAICompatUrls';
 
+vi.mock('../src/config/ChatGptCatalogVersion', () => ({
+  chatGptCatalogVersion: async () => '0.154.0',
+}));
+
 afterEach(() => {
   vi.unstubAllGlobals();
   delete process.env.TEST_OPENAI_KEY;
@@ -197,6 +201,7 @@ describe('ProviderInspector', () => {
     };
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({
       models: [
+        { slug: 'gpt-6-astra', visibility: 'list', supported_in_api: true },
         { slug: 'gpt-5.6-sol', visibility: 'list', supported_in_api: true },
         { slug: 'gpt-5.6-luna', visibility: 'list', supported_in_api: true },
         { slug: 'gpt-hidden', visibility: 'hide', supported_in_api: true },
@@ -210,12 +215,12 @@ describe('ProviderInspector', () => {
 
     expect(result).toMatchObject({
       reachable: true,
-      models: ['gpt-5.6-luna', 'gpt-5.6-sol'],
-      message: '2 model(s) available.',
+      models: ['gpt-5.6-luna', 'gpt-5.6-sol', 'gpt-6-astra'],
+      message: '3 model(s) available.',
     });
     const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     const headers = new Headers(init.headers);
-    expect(url).toBe('https://chatgpt.com/backend-api/codex/models?client_version=0.149.0');
+    expect(url).toBe('https://chatgpt.com/backend-api/codex/models?client_version=0.154.0');
     expect(headers.get('Authorization')).toBe('Bearer access-token');
     expect(headers.get('chatgpt-account-id')).toBe('acct_123');
     expect(headers.get('originator')).toBe('codex_cli_rs');

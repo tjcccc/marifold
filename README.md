@@ -379,6 +379,18 @@ cors_origins = ["http://127.0.0.1:5173"] # exact-match browser origins allowed t
 
 With no token resolved, auth is off; loopback and private-network access remain available. With no `cors_origins`, cross-origin browser requests are rejected; a hosted Web UI reached through the same loopback, LAN, or Tailscale address is same-origin and needs no allowlist entry. `marifold service --token/--token-env/--cors-origin` override the config per start. When enabled, auth covers `/v1/*`; `/health` and hosted static files stay reachable. Authentication protects the API but never admits public source addresses.
 
+GPT-6 Astra uses `low` reasoning in normal mode and `medium` with thinking
+enabled. Thinking mode also requests reasoning summaries. Other models retain
+their existing reasoning defaults.
+
+ChatGPT model discovery queries the signed-in Codex catalog. Its required client
+version uses `MARIFOLD_CHATGPT_CATALOG_CLIENT_VERSION` when set to a numeric
+`major.minor.patch` version; otherwise it uses the newer of the bundled baseline
+(`0.154.0`) and the `client_version` in `$CODEX_HOME/models_cache.json` (default
+`~/.codex/models_cache.json`). Codex is optional: missing or invalid metadata
+uses the baseline. Local cached models and Codex credentials are never imported.
+Restart a running service after changing the environment override.
+
 ### Service token workflow
 
 The bearer token is an optional, user-chosen shared secret for marifold's

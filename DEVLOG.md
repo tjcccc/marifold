@@ -2,6 +2,20 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-09-11 — v0.69.2 — GPT-6 catalog discovery and reasoning defaults
+
+- Fixed ChatGPT catalog version gating that omitted GPT-6 Astra despite account
+  access. Use newer local Codex catalog version metadata when available, a
+  verified `0.154.0` fallback, and an optional environment override. Models
+  continue to come from the authenticated provider API.
+- Set GPT-6 Astra reasoning to `low` normally and `medium` with thinking enabled,
+  retaining thinking summaries and other models' existing defaults.
+- Confirmed the live catalog includes Astra with `0.154.0` and omits it with
+  `0.149.0`; user confirmed Astra appears in Marifold after the fix.
+- Verified workspace typecheck/build/test (760 tests: core 393, service 62,
+  TUI 63, CLI 29, Web 213). Reused these passing checks for the checkpoint;
+  subsequent changes only synchronize release versions and documentation.
+
 ## 2026-09-03 — v0.69.1 — Clear explicit SkillApp results while running
 
 - Cleared only the bound output when a button-triggered SkillApp operation

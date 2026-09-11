@@ -487,6 +487,50 @@ describe('MarifoldRuntime', () => {
     }
   });
 
+  it.each([
+    ['gpt-6-astra', false, 'low'],
+    ['gpt-6-astra', true, 'medium'],
+    ['gpt-6-astra-2026-09-01', true, 'medium'],
+    ['gpt-5.6-sol', true, 'high'],
+    ['gpt-5.6-sol', false, undefined],
+  ] as const)('maps %s thinking=%s to %s reasoning', async (model, think, effort) => {
+    const dir = tempDir();
+    const config: MarifoldConfig = {
+      default: { provider: 'chatgpt', model, profile: 'default', think: false },
+      models: { options: [`chatgpt/${model}`] },
+      memory: { sizeLimit: 50000, contextLimit: 2400 },
+      paths: {
+        profilesDir: path.join(dir, 'profiles'),
+        sessionsDb: path.join(dir, 'sessions.db'),
+        tasksDir: path.join(dir, 'tasks'),
+      },
+      providers: {
+        chatgpt: { type: 'openai-compatible', baseUrl: 'https://chatgpt.com/backend-api/codex', apiKey: 'test-token' },
+      },
+    };
+    let body: Record<string, unknown> | undefined;
+    vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      body = JSON.parse(String(init?.body));
+      return new Response([
+        'data: {"type":"response.output_text.delta","delta":"ok"}',
+        'data: {"type":"response.completed"}',
+        'data: [DONE]',
+      ].join('\n\n') + '\n\n', { headers: { 'Content-Type': 'text/event-stream' } });
+    }));
+    const runtime = new MarifoldRuntime({
+      loadedConfig: { config, configPath: path.join(dir, 'config.toml'), foundConfig: true },
+    });
+    try {
+      const response = await runtime.ask({ prompt: 'Hello', think });
+      expect(response.ok).toBe(true);
+      expect(body?.reasoning).toEqual(effort
+        ? { effort, ...(think ? { summary: 'auto' } : {}) }
+        : undefined);
+    } finally {
+      runtime.close();
+    }
+  });
+
   it('passes thinking mode to supported providers', async () => {
     const dir = tempDir();
     const config: MarifoldConfig = {
