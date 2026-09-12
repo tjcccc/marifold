@@ -2,6 +2,16 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-09-12 — v0.70.6 — Workspace version synchronization
+
+- Synchronize every workspace package and the CLI with the root release version,
+  including the previously omitted client, workspace protocol, and private bridge.
+- Update the version policy and release guidance; add `pnpm check:versions` to
+  root typecheck and regressions for new packages, private apps, and CLI drift.
+- Validation: reused passing workspace typecheck/build and all 33 CLI tests;
+  checked synchronized 0.70.6 versions and refreshed the lockfile with pnpm.
+- npm publishing deferred until the next publication.
+
 ## 2026-09-12 — v0.70.5 — SkillApp clipboard fallback
 
 - Reuse the shared copy component for SkillApp textarea and Markdown outputs,

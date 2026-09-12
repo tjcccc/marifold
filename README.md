@@ -137,6 +137,11 @@ pnpm install
 pnpm build
 ```
 
+All workspace packages, including private apps, share the root `package.json`
+release version. Update them together with the CLI version in
+`packages/cli/src/index.ts`; run `pnpm check:versions` before publishing.
+`pnpm typecheck` also checks version consistency.
+
 After building or linking the source workspace, create local configuration:
 
 ```bash
