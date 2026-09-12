@@ -4,10 +4,12 @@ export interface CopyButtonProps {
   text: string;
   label: string;
   className?: string;
+  disabled?: boolean;
+  variant?: 'icon' | 'text';
 }
 
 /** Compact clipboard action with accessible copied/failed feedback. */
-export function CopyButton({ text, label, className }: CopyButtonProps) {
+export function CopyButton({ text, label, className, disabled, variant = 'icon' }: CopyButtonProps) {
   const [status, setStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const resetTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
@@ -36,11 +38,12 @@ export function CopyButton({ text, label, className }: CopyButtonProps) {
     <button
       type="button"
       className={className}
+      disabled={disabled}
       aria-label={accessibleLabel}
       title={accessibleLabel}
       onClick={() => void copy()}
     >
-      {status === 'copied' ? <CheckGlyph /> : <CopyGlyph />}
+      {variant === 'text' ? accessibleLabel : status === 'copied' ? <CheckGlyph /> : <CopyGlyph />}
     </button>
   );
 }

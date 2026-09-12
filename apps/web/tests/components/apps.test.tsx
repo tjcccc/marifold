@@ -108,6 +108,44 @@ function AppsHarness({ client }: { client: ApiClient }) {
 }
 
 describe('AppsScreen', () => {
+  it.each(['textarea', 'markdown'] as const)('copies %s output without the Clipboard API and reports failures', async (component) => {
+    const value = '# Output\n\nHello **世界**.';
+    const app: SkillAppDefinition = {
+      ...skillTranslator,
+      layout: [{ component, label: 'Output', bind: 'result', copyable: true }],
+    };
+    const request = vi.fn(async () => ({
+      instance: { id: 'copy', appName: 'translator', state: { result: value } },
+    }));
+    const clipboard = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
+    const execCommand = Object.getOwnPropertyDescriptor(document, 'execCommand');
+    const copy = vi.fn(() => {
+      const selected = document.querySelector('textarea[readonly][style]') as HTMLTextAreaElement;
+      expect(selected.value.slice(selected.selectionStart, selected.selectionEnd)).toBe(value);
+      return true;
+    });
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: undefined });
+    Object.defineProperty(document, 'execCommand', { configurable: true, value: copy });
+    try {
+      render(<AppsScreen client={{ baseUrl: '', request } as unknown as ApiClient} onUnauthorized={noop} app={app} />);
+      const button = await screen.findByRole('button', { name: 'Copy' });
+      await waitFor(() => expect((button as HTMLButtonElement).disabled).toBe(false));
+      fireEvent.click(button);
+      expect(await screen.findByRole('button', { name: 'Copied' })).toBeTruthy();
+      expect(copy).toHaveBeenCalledWith('copy');
+      expect(document.querySelector('textarea[readonly][style]')).toBeNull();
+      copy.mockReturnValue(false);
+      fireEvent.click(button);
+      expect(await screen.findByRole('button', { name: 'Copy failed' })).toBeTruthy();
+      expect(document.querySelector('textarea[readonly][style]')).toBeNull();
+    } finally {
+      if (clipboard) Object.defineProperty(navigator, 'clipboard', clipboard);
+      else Reflect.deleteProperty(navigator, 'clipboard');
+      if (execCommand) Object.defineProperty(document, 'execCommand', execCommand);
+      else Reflect.deleteProperty(document, 'execCommand');
+    }
+  });
+
   it('keeps the active form mounted across workspace catalog refreshes', async () => {
     let finishRefresh: (value: unknown) => void = () => {};
     let catalogReads = 0;

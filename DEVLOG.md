@@ -2,6 +2,16 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-09-12 — v0.70.5 — SkillApp clipboard fallback
+
+- Reuse the shared copy component for SkillApp textarea and Markdown outputs,
+  with a fallback when the Clipboard API is unavailable and visible copied/failed
+  feedback. Preserve text buttons, disabled behavior, and existing pointer styling.
+- Add regressions for both output types covering Unicode/multiline selection,
+  fallback failure feedback, and temporary textarea cleanup.
+- Validation: workspace typecheck/build and all 800 tests passed (optional real
+  Redis test skipped). Native Fedora browser behavior remains unverified.
+
 ## 2026-09-11 — v0.70.4 — SkillApp background refresh fix
 
 - Keep the active SkillApp form mounted while workspace notifications refresh
