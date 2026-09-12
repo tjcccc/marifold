@@ -26,14 +26,16 @@ export function useAppsCatalog(
 
   const refresh = useCallback(async (): Promise<void> => {
     setError(undefined);
-    setLoading(true);
     try {
-      setApps(await listApps(client));
+      const next = await listApps(client);
+      // Workspace changes include unrelated activity; preserve the active form.
+      setApps(current => next.map(app => {
+        const previous = current.find(candidate => candidate.app.name === app.app.name);
+        return previous && JSON.stringify(previous) === JSON.stringify(app) ? previous : app;
+      }));
     } catch (reason) {
       if (reason instanceof MarifoldApiError && reason.code === 'UNAUTHORIZED') onUnauthorized();
       setError(reason instanceof Error ? reason.message : String(reason));
-    } finally {
-      setLoading(false);
     }
   }, [client, onUnauthorized]);
 

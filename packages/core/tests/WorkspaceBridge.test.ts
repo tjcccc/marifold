@@ -1,9 +1,10 @@
 import { mkdtempSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createBridge, MemoryRelayStore } from '../../../apps/bridge/src';
 import { WorkspaceManager } from '../src/workspace/WorkspaceManager';
+import { BridgePeer } from '../src/workspace/bridge/BridgePeer';
 
 const cleanup: Array<() => void> = [];
 afterEach(() => {
@@ -17,6 +18,41 @@ function manager() {
   return m;
 }
 describe('workspace bridge', () => {
+  it('keeps ordinary requests responsive during concurrent encrypted file transfers', async () => {
+    class DelayedRelay extends MemoryRelayStore {
+      override async publish(workspace: string, device: string, packet: string) {
+        await new Promise(resolve => setTimeout(resolve, 10));
+        await super.publish(workspace, device, packet);
+      }
+    }
+    const bridge = createBridge(new DelayedRelay(), 'c'.repeat(32));
+    await new Promise<void>(resolve => bridge.listen(0, '127.0.0.1', resolve));
+    cleanup.push(() => { bridge.closeAllConnections(); bridge.close(); });
+    const url = `http://127.0.0.1:${(bridge.address() as { port: number }).port}`;
+    const host = manager();
+    const guest = manager();
+    const file = { data: 'unmodified file bytes '.repeat(100000) };
+    host.start(async (operation, input) => operation === 'download' ? file : input);
+    guest.start(async () => null);
+    const created = await host.create('Home', url, 'c'.repeat(32));
+    const joined = await guest.add(url, created.invitation);
+    let downloaded = false;
+    let uploaded = false;
+    const download = guest.request(joined.id, 'download', {}).then(value => {
+      downloaded = true;
+      expect(value).toEqual(file);
+    });
+    const upload = guest.request(joined.id, 'upload', file).then(value => {
+      uploaded = true;
+      expect(value).toEqual(file);
+    });
+    await new Promise(resolve => setTimeout(resolve, 100));
+    expect(await guest.request(joined.id, 'small-read', { online: true })).toEqual({ online: true });
+    expect(downloaded).toBe(false);
+    expect(uploaded).toBe(false);
+    await Promise.all([download, upload]);
+    expect(guest.list()[0].online).toBe(true);
+  }, 20000);
   it('pairs, forwards only authenticated workspace operations, and deduplicates effects', async () => {
     const bridge = createBridge(new MemoryRelayStore(), 'a'.repeat(32));
     await new Promise<void>((resolve) => bridge.listen(0, '127.0.0.1', resolve));
@@ -50,6 +86,15 @@ describe('workspace bridge', () => {
     const third = manager();
     third.start(async () => null);
     await expect(third.add(url, created.invitation)).rejects.toThrow('invalid or expired');
+    const request = vi.spyOn(BridgePeer.prototype, 'request').mockRejectedValueOnce(new Error('Workspace request timed out.'));
+    try {
+      await expect(guest.request(joined.id, 'api', { method: 'GET', path: '/v1/profiles' }))
+        .rejects.toMatchObject({ code: 'WORKSPACE_TIMEOUT' });
+      expect(request.mock.calls[0]?.[5]).toBe(60000);
+      expect(guest.list()[0].online).toBe(true);
+    } finally {
+      request.mockRestore();
+    }
   }, 20000);
   it('reconnects interrupted transfers without repeating effects and supports executor revocation', async () => {
     const bridge = createBridge(new MemoryRelayStore(), 'b'.repeat(32));

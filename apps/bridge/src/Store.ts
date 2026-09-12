@@ -120,6 +120,7 @@ export class RedisRelayStore implements RelayStore {
     let closed = false;
     let reading = false;
     let again = false;
+    let deliveredThrough: string | undefined;
     const read = async () => {
       if (closed) return;
       if (reading) {
@@ -130,8 +131,16 @@ export class RedisRelayStore implements RelayStore {
       try {
         do {
           again = false;
-          const rows = await this.redis.xrange(key, `${Date.now() - RELAY_RETENTION_MS}-0`, '+', 'COUNT', 128);
-          for (const [id, fields] of rows) if (!closed) deliver(id, fields[1]);
+          const rows = await this.redis.xrange(key, deliveredThrough ?? `${Date.now() - RELAY_RETENTION_MS}-0`, '+', 'COUNT', 128);
+          // WebSockets already deliver reliably within one connection. Replaying
+          // every unacknowledged row on each publish amplifies bulk traffic.
+          // A new receiver starts without a cursor and replays retained rows.
+          for (const [id, fields] of rows) {
+            if (closed) break;
+            if (id === deliveredThrough) continue;
+            deliver(id, fields[1]);
+            deliveredThrough = id;
+          }
         } while (again && !closed);
       } finally {
         reading = false;

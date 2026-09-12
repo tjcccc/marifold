@@ -1,4 +1,5 @@
 export type { ImageInput, JSONValue as PriestJSONValue, ToolCall, ToolDefinition } from '@priest-ai/core';
+export { avatarThumbnail } from './images/AvatarThumbnail';
 export { AgentRunner } from './agent/AgentRunner';
 export type { AgentEngineContext, AgentRunnerDeps, AgentRunOptions } from './agent/AgentRunner';
 export type { AgentEvent, AgentUsage } from './agent/AgentEvents';
@@ -406,6 +407,8 @@ export {
   resolveUserPath,
 } from './workspace/WorkspacePaths';
 export { WorkspaceManager } from './workspace/WorkspaceManager';
+export { artifactReadLength, workspaceArtifactStream } from './workspace/WorkspaceArtifactTransfer';
+export type { ArtifactChunk } from './workspace/WorkspaceArtifactTransfer';
 export type { WorkspaceOperationContext } from './workspace/WorkspaceManager';
 export { WorkspaceStore } from './workspace/WorkspaceStore';
 export type { WorkspaceConnection } from './workspace/WorkspaceStore';

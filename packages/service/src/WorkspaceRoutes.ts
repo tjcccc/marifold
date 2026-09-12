@@ -4,7 +4,7 @@ import type { WorkspaceRequestContext } from './WorkspaceRequestContext';
 import * as fs from 'node:fs';
 import { Readable } from 'node:stream';
 import type { FastifyInstance } from 'fastify';
-import { WorkspaceManager, type RunRegistry, type WorkspaceOperationContext } from '@marifold/core';
+import { artifactReadLength, workspaceArtifactStream, WorkspaceManager, type ArtifactChunk, type RunRegistry, type WorkspaceOperationContext } from '@marifold/core';
 import { objectBody, requiredString } from './Validation';
 
 /** Only application resources can traverse the bridge. Device-local configuration
@@ -65,17 +65,19 @@ export function registerWorkspaceRoutes(
       const offset = body.offset;
       if (typeof offset !== 'number' || !Number.isSafeInteger(offset) || offset < 0)
         throw new Error('Invalid artifact offset.');
+      const length = artifactReadLength(body.length);
       if (e && e.executionDeviceId !== manager.store.get(e.workspaceId).hostDeviceId)
         return manager.execute(e.workspaceId, e.executionDeviceId, 'executor.artifact', {
           runId: origin.run.id,
           artifactId: origin.artifactId,
           offset,
+          length,
         });
       const artifact = registry.requireArtifact(runId, artifactId);
       if (offset > artifact.size) throw new Error('Invalid artifact offset.');
       const fd = fs.openSync(artifact.path, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
       try {
-        const bytes = Buffer.alloc(Math.min(32768, artifact.size - offset));
+        const bytes = Buffer.alloc(Math.min(length, artifact.size - offset));
         const n = fs.readSync(fd, bytes, 0, bytes.length, offset);
         return { data: bytes.subarray(0, n).toString('base64'), size: artifact.size };
       } finally {
@@ -236,19 +238,12 @@ export function registerWorkspaceRoutes(
         .header('content-disposition', `attachment; filename*=UTF-8''${encodeURIComponent(item.name)}`);
       return reply.send(
         Readable.from(
-          (async function* () {
-            for (let offset = 0; offset < item.size; ) {
-              const chunk = (await manager.request(request.params.id, 'artifact.read', {
-                runId: artifact[1],
-                artifactId: artifact[2],
-                offset,
-              })) as { data: string };
-              const bytes = Buffer.from(chunk.data, 'base64');
-              if (!bytes.length) throw new Error('Artifact transfer ended early.');
-              offset += bytes.length;
-              yield bytes;
-            }
-          })(),
+          workspaceArtifactStream(item.size, (offset, length) => manager.request(request.params.id, 'artifact.read', {
+            runId: artifact[1],
+            artifactId: artifact[2],
+            offset,
+            length,
+          }) as Promise<ArtifactChunk>),
         ),
       );
     }

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { useState } from 'react';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ApiClient } from '../../src/api/client';
 import type { SkillAppDefinition } from '../../src/api/types';
@@ -108,6 +108,86 @@ function AppsHarness({ client }: { client: ApiClient }) {
 }
 
 describe('AppsScreen', () => {
+  it.each(['textarea', 'markdown'] as const)('copies %s output without the Clipboard API and reports failures', async (component) => {
+    const value = '# Output\n\nHello **世界**.';
+    const app: SkillAppDefinition = {
+      ...skillTranslator,
+      layout: [{ component, label: 'Output', bind: 'result', copyable: true }],
+    };
+    const request = vi.fn(async () => ({
+      instance: { id: 'copy', appName: 'translator', state: { result: value } },
+    }));
+    const clipboard = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
+    const execCommand = Object.getOwnPropertyDescriptor(document, 'execCommand');
+    const copy = vi.fn(() => {
+      const selected = document.querySelector('textarea[readonly][style]') as HTMLTextAreaElement;
+      expect(selected.value.slice(selected.selectionStart, selected.selectionEnd)).toBe(value);
+      return true;
+    });
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: undefined });
+    Object.defineProperty(document, 'execCommand', { configurable: true, value: copy });
+    try {
+      render(<AppsScreen client={{ baseUrl: '', request } as unknown as ApiClient} onUnauthorized={noop} app={app} />);
+      const button = await screen.findByRole('button', { name: 'Copy' });
+      await waitFor(() => expect((button as HTMLButtonElement).disabled).toBe(false));
+      fireEvent.click(button);
+      expect(await screen.findByRole('button', { name: 'Copied' })).toBeTruthy();
+      expect(copy).toHaveBeenCalledWith('copy');
+      expect(document.querySelector('textarea[readonly][style]')).toBeNull();
+      copy.mockReturnValue(false);
+      fireEvent.click(button);
+      expect(await screen.findByRole('button', { name: 'Copy failed' })).toBeTruthy();
+      expect(document.querySelector('textarea[readonly][style]')).toBeNull();
+    } finally {
+      if (clipboard) Object.defineProperty(navigator, 'clipboard', clipboard);
+      else Reflect.deleteProperty(navigator, 'clipboard');
+      if (execCommand) Object.defineProperty(document, 'execCommand', execCommand);
+      else Reflect.deleteProperty(document, 'execCommand');
+    }
+  });
+
+  it('keeps the active form mounted across workspace catalog refreshes', async () => {
+    let finishRefresh: (value: unknown) => void = () => {};
+    let catalogReads = 0;
+    const request = vi.fn(async (method: string, path: string) => {
+      if (path === '/v1/apps') {
+        if (++catalogReads === 1) return { apps: structuredClone([skillTranslator]) };
+        return new Promise(resolve => { finishRefresh = resolve; });
+      }
+      if (method === 'POST' && path === '/v1/apps/translator/instances') {
+        return { instance: { id: 'stable', appName: 'translator', state: {
+          source: 'Keep this input', targetLanguage: 'English', result: 'Existing output',
+        } } };
+      }
+      throw new Error(`Unexpected request: ${method} ${path}`);
+    });
+    const client = { baseUrl: '', request } as unknown as ApiClient;
+    render(<AppsHarness client={client} />);
+    await waitFor(() => expect((screen.getByLabelText('Input') as HTMLTextAreaElement).value).toBe('Keep this input'));
+    const input = screen.getByLabelText('Input');
+    input.focus();
+    for (let i = 0; i < 3; i++) {
+      await act(async () => {
+        window.dispatchEvent(new CustomEvent('marifold-workspace-changed', { detail: '' }));
+      });
+      expect(screen.getByLabelText('Input')).toBe(input);
+      expect(screen.queryByText('Loading apps…')).toBeNull();
+      await act(async () => { finishRefresh({ apps: structuredClone([skillTranslator]) }); });
+      expect(screen.getByLabelText('Input')).toBe(input);
+      expect(document.activeElement).toBe(input);
+      expect((input as HTMLTextAreaElement).value).toBe('Keep this input');
+    }
+    expect(request.mock.calls.filter(([, path]) => path.includes('instances'))).toHaveLength(1);
+
+    await act(async () => {
+      window.dispatchEvent(new CustomEvent('marifold-workspace-changed', { detail: '' }));
+    });
+    const updated = structuredClone(skillTranslator);
+    updated.app.title = 'Updated Translation';
+    await act(async () => { finishRefresh({ apps: [updated] }); });
+    expect(await screen.findByRole('heading', { name: 'Updated Translation' })).toBeTruthy();
+  });
+
   it('runs a SkillApp, preserves stale output, and keeps metrics in Activity', async () => {
     let state = { source: '', targetLanguage: 'English', result: '' };
     let staleOutputs: string[] | undefined;

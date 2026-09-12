@@ -57,6 +57,9 @@ short: what shipped (one line each), what's next, and what's deliberately deferr
 
 ## Next
 
+- **Bridge setup**: simplify installation and configuration, reducing manual steps
+  for bringing a personal bridge online and pairing devices.
+
 - **App expansion**: conditional visibility, repeaters, typed artifacts,
   richer design/canvas previews, controlled file export, `$app-creator`, and
   approval-aware effectful actions.

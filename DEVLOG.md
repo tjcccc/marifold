@@ -2,6 +2,80 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-09-12 — v0.70.5 — SkillApp clipboard fallback
+
+- Reuse the shared copy component for SkillApp textarea and Markdown outputs,
+  with a fallback when the Clipboard API is unavailable and visible copied/failed
+  feedback. Preserve text buttons, disabled behavior, and existing pointer styling.
+- Add regressions for both output types covering Unicode/multiline selection,
+  fallback failure feedback, and temporary textarea cleanup.
+- Validation: workspace typecheck/build and all 800 tests passed (optional real
+  Redis test skipped). Native Fedora browser behavior remains unverified.
+
+## 2026-09-11 — v0.70.4 — SkillApp background refresh fix
+
+- Keep the active SkillApp form mounted while workspace notifications refresh
+  the catalog. Reuse unchanged definitions so unrelated activity does not reopen
+  the instance, reset Activity, or interrupt input focus.
+- Regression coverage repeats background refreshes, checks preserved input/focus
+  and a single instance open, and confirms changed definitions still reach the UI.
+- Future work: simplify bridge setup and reduce manual installation/configuration steps.
+- Validation: workspace typecheck/build passed; all 798 tests passed on retry
+  (optional real Redis test skipped). The first run hit a five-second timeout in
+  the existing artifact-transfer test; no code changes were needed for the retry.
+
+## 2026-09-11 — v0.70.3 — Relay delivery amplification and safe updates (in testing)
+
+- Live v0.70.2 testing exposed repeated Redis inbox delivery under concurrent
+  chunks: original-avatar downloads regressed and a seven-file burst overloaded
+  the old relay. Keep sequential transfers until the relay advertises fixed delivery.
+- Track a delivery cursor per Redis subscription; retain unacknowledged entries
+  for reconnect replay without resending them on every publish.
+- Add `workspace bridge update` for installer-managed Linux deployments. Stage
+  and build a release, preserve local Dockerfile/mirror settings and all runtime
+  configuration, replace only the bridge, and restore the prior image on failure.
+  No Redis/Caddy container replacement or data/config regeneration.
+- Relay cursor, legacy relay fallback and installer preservation/rollback tests
+  added. Full typecheck/build/test passed (797 tests; optional real Redis skipped),
+  plus 8 installer fixtures. An 8 MiB encrypted local transfer preserved every byte.
+- User deployed the updater on ECS; public health advertises the new relay mode.
+  All 24 live guest requests passed, including seven concurrent original avatars
+  (3,063,975 bytes total), with all seven hashes matching the host and Home staying
+  online. Session/change reads completed in 0.6 seconds at burst start; additional
+  reads during the burst completed in 0.07–1.27 seconds. Bulk throughput remains
+  limited: the full seven-file burst took 54.2 seconds. Live reboot/rollback and
+  broader workspace acceptance remain pending.
+
+## 2026-09-11 — v0.70.2 — Bounded concurrent workspace transfers (in testing)
+
+- Pipeline authenticated bulk chunks with a negotiated four-chunk window and an
+  eight-chunk connection budget. Preserve sequential delivery for older peers,
+  bounded assembly, sender-bound acknowledgments and disconnect cleanup.
+- Stream artifacts with four reads ahead and up to 128 KiB per read, retaining
+  older 32 KiB readers and verifying lengths without changing file contents.
+- Save new Web avatars as 512px WebP (PNG fallback); keep existing avatars intact.
+  Live testing later exposed a relay bottleneck; see the v0.70.3 follow-up above.
+- Added multi-megabyte byte-integrity, mixed-traffic, ordering, compatibility,
+  read-ahead, disconnect and full artifact-route regressions. Full typecheck/build/test
+  passed (795 tests; optional real Redis skipped). Chromium avatar saving produced
+  a valid 512px WebP from a synthetic PNG. Live throughput acceptance failed on
+  the older ECS relay despite passing local tests; see v0.70.3.
+
+## 2026-09-11 — v0.70.1 — Workspace avatar traffic and recovery (in testing)
+
+- Reproduced concurrent avatar downloads on the paired MacBook causing profile,
+  session and change requests to hit the 10-second read deadline while Home was online.
+- Web avatars now request bounded 256px WebP thumbnails; stored originals remain
+  available. Allow 60 seconds for bridge reads and distinguish connected-host
+  timeouts (504) from offline hosts (503). Refresh views after a connection recovers,
+  even when the host revision has not changed.
+- Added thumbnail, response/ETag, timeout-classification and recovery regressions.
+  Full typecheck/build/test passed (784 tests; optional real Redis test skipped).
+- Deployed to both Macs. Three live concurrent request rounds passed (30/30 HTTP
+  200, all under four seconds); Home stayed online. Guest Web UI navigation and
+  refresh loaded the avatar and all 13 sessions without an offline warning.
+  Broader workspace acceptance remains in testing.
+
 ## 2026-09-11 — v0.70.0 — Device-hosted personal workspaces (in testing)
 
 - Added `workspace bridge install` and a portable Linux setup wizard for Docker

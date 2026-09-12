@@ -181,14 +181,15 @@ export class WorkspaceManager {
       (operation === 'api' && record(input).method === 'GET');
     let result: unknown;
     try {
-      result = await peer.request(operation, input, c.hostDeviceId, c.host, requestId, read ? 10000 : 120000);
+      result = await peer.request(operation, input, c.hostDeviceId, c.host, requestId, read ? 60000 : 120000);
     } catch (error) {
       if (
         !peer.online ||
-        this.hostStatus.get(c.id) !== true ||
-        (read && error instanceof Error && error.message.includes('timed out'))
+        this.hostStatus.get(c.id) !== true
       )
         throw new MarifoldError('WORKSPACE_OFFLINE', 'Workspace host is unavailable.');
+      if (read && error instanceof Error && error.message.includes('timed out'))
+        throw new MarifoldError('WORKSPACE_TIMEOUT', 'Workspace request timed out while the bridge remained connected.');
       throw error;
     }
     if (operation === 'rename' && typeof record(result).name === 'string')

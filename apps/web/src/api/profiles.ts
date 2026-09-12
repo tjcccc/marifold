@@ -141,7 +141,7 @@ export async function deleteAvatar(client: ApiClient, name: string): Promise<Pro
 
 /** Avatar bytes via the authorized client; undefined when the profile has none. */
 export async function fetchAvatarBlob(client: ApiClient, name: string): Promise<Blob | undefined> {
-  return client.blob(`/v1/profiles/${encodeURIComponent(name)}/avatar`);
+  return client.blob(`/v1/profiles/${encodeURIComponent(name)}/avatar?thumbnail=1`);
 }
 
 export interface CreateProfileInput {

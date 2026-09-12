@@ -24,6 +24,7 @@ import type {
 } from '../../api/types';
 import type { PreparedAttachment } from '../../lib/attachments';
 import { fileToBase64, prepareFiles } from '../../lib/attachments';
+import { CopyButton } from '../../components/CopyButton';
 import { Markdown as MarkdownView } from '../../components/Markdown';
 import { ApprovalSheet } from '../agent/ApprovalSheet';
 import { QuestionSheet } from '../agent/QuestionSheet';
@@ -924,14 +925,13 @@ function SkillMarkdown({
             </button>
           ) : null}
           {item.copyable ? (
-            <button
+            <CopyButton
               className={styles.copyButton}
               disabled={locked || !value}
-              onClick={() => void navigator.clipboard?.writeText(value)}
-              type="button"
-            >
-              Copy
-            </button>
+              text={value}
+              label="Copy"
+              variant="text"
+            />
           ) : null}
         </span>
       </span>
@@ -1035,13 +1035,12 @@ function SkillTextarea({
             </span>
           ) : null}
           {item.copyable ? (
-            <button
+            <CopyButton
               className={styles.copyButton}
-              onClick={() => void navigator.clipboard?.writeText(value)}
-              type="button"
-            >
-              Copy
-            </button>
+              text={value}
+              label="Copy"
+              variant="text"
+            />
           ) : null}
         </span>
       </span>

@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import { FastifyInstance } from 'fastify';
 import {
   ApprovalMode,
+  avatarThumbnail,
   MarifoldError,
   MarifoldRuntime,
   ProfileFileKind,
@@ -77,7 +78,9 @@ export function registerProfileRoutes(
 
   // Raw image bytes (not the JSON envelope): <img>-friendly apart from auth —
   // token-bearing clients fetch with headers and render a blob URL.
-  server.get<{ Params: { name: string } }>('/v1/profiles/:name/avatar', async (request, reply) => {
+  server.get<{ Params: { name: string }; Querystring: { thumbnail?: string } }>('/v1/profiles/:name/avatar', async (request, reply) => {
+    if (request.query.thumbnail !== undefined && request.query.thumbnail !== '1')
+      throw new MarifoldError('PROFILE_INVALID', 'thumbnail must be 1 when supplied.');
     runtime.getProfile(request.params.name);
     const avatar = runtime.getProfileAvatar(request.params.name);
     if (!avatar) {
@@ -88,15 +91,16 @@ export function registerProfileRoutes(
       };
     }
     const stat = fs.statSync(avatar.path);
-    const etag = `"${Math.round(stat.mtimeMs)}-${stat.size}"`;
+    const thumbnail = request.query.thumbnail === '1';
+    const etag = `"${Math.round(stat.mtimeMs)}-${stat.size}${thumbnail ? '-thumbnail-v1' : ''}"`;
     if (request.headers['if-none-match'] === etag) {
       reply.status(304);
       return reply.send();
     }
-    reply.header('content-type', avatar.mediaType);
+    reply.header('content-type', thumbnail ? 'image/webp' : avatar.mediaType);
     reply.header('etag', etag);
     reply.header('cache-control', 'no-cache');
-    return reply.send(fs.createReadStream(avatar.path));
+    return reply.send(thumbnail ? await avatarThumbnail(avatar.path) : fs.createReadStream(avatar.path));
   });
 
   server.put<{ Params: { name: string } }>('/v1/profiles/:name/avatar', async request => {

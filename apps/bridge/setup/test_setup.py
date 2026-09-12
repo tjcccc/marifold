@@ -90,6 +90,68 @@ class InstallerTests(unittest.TestCase):
             self.assertEqual(calls[-1][-4:], ["-T", "bridge", "node", "health.cjs"])
             self.assertIn("registration-token", output.getvalue())
 
+    def update_fixture(self, root):
+        source = self.package(root)
+        target = root / "install"
+        installer.prepare(source, target, None, None)
+        dockerfile = target / "package/Dockerfile"
+        dockerfile.write_text(dockerfile.read_text().replace("node:24-bookworm-slim", "mirror.example.com/node:24-bookworm-slim"))
+        return source, target
+
+    def docker(self, args, cwd=None):
+        if args[-3:] == ["ps", "--quiet", "bridge"]:
+            return "a" * 64
+        if args[:2] == ["docker", "inspect"]:
+            return "sha256:" + "b" * 64
+        return ""
+
+    def test_update_preserves_configuration_mirror_and_other_services(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            source, target = self.update_fixture(Path(temporary))
+            retained = {name: (target / name).read_bytes() for name in ("bridge.env", "registration-token", "redis.conf", "installation.json")}
+            before = json.loads((target / "compose.json").read_text())
+            (source / "dist/serve.js").write_text("// updated bridge")
+            with patch.object(installer, "run", side_effect=self.docker) as command, contextlib.redirect_stdout(io.StringIO()):
+                installer.update(source, target)
+            after = json.loads((target / "compose.json").read_text())
+            package = Path(after["services"]["bridge"]["build"]["context"])
+            self.assertEqual((package / "dist/serve.js").read_text(), "// updated bridge")
+            self.assertIn("mirror.example.com", (package / "Dockerfile").read_text())
+            self.assertFalse((package / ".env").exists())
+            self.assertEqual(after["services"]["redis"], before["services"]["redis"])
+            self.assertEqual(after["volumes"], before["volumes"])
+            for name, contents in retained.items():
+                self.assertEqual((target / name).read_bytes(), contents)
+            calls = [call.args[0] for call in command.call_args_list]
+            deploy = next(args for args in calls if "up" in args)
+            self.assertIn("--no-deps", deploy)
+            self.assertIn("--no-build", deploy)
+            self.assertEqual(deploy[-1], "bridge")
+            self.assertTrue(list(target.glob("release-*-rollback.json")))
+
+    def test_failed_update_restores_previous_image_and_build_failure_leaves_config_intact(self):
+        for fail_at in ("build", "up", "health.cjs"):
+            with self.subTest(fail_at=fail_at), tempfile.TemporaryDirectory() as temporary:
+                source, target = self.update_fixture(Path(temporary))
+                original = (target / "compose.json").read_bytes()
+                failed = False
+                def docker(args, cwd=None):
+                    nonlocal failed
+                    if fail_at in args and not failed:
+                        failed = True
+                        raise RuntimeError("fixture failure")
+                    return self.docker(args, cwd)
+                with patch.object(installer, "run", side_effect=docker) as command, contextlib.redirect_stdout(io.StringIO()), self.assertRaises(RuntimeError):
+                    installer.update(source, target)
+                if fail_at == "build":
+                    self.assertEqual((target / "compose.json").read_bytes(), original)
+                    self.assertFalse(any("up" in call.args[0] for call in command.call_args_list))
+                else:
+                    restored = json.loads((target / "compose.json").read_text())
+                    self.assertTrue(restored["services"]["bridge"]["image"].endswith("-previous"))
+                    self.assertEqual(restored["services"]["bridge"]["build"]["context"], "./package")
+                    self.assertEqual(sum("up" in call.args[0] for call in command.call_args_list), 2)
+
     def test_external_failure_output_is_not_leaked(self):
         failure = subprocess.CompletedProcess(["docker"], 1, "secret-url", "secret-password")
         with patch.object(installer.subprocess, "run", return_value=failure):

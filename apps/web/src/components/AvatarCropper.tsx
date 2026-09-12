@@ -14,8 +14,8 @@ export interface AvatarCropperProps {
 /**
  * Square avatar crop + zoom (Apple/social style). The user positions and zooms
  * within a circular preview; on save the visible square is drawn to a 512²
- * canvas and exported as a **lossless PNG** — so a large input is downscaled on
- * save while the stored file stays small.
+ * canvas and exported as compressed WebP, preserving transparency. Browsers
+ * without WebP encoding support fall back to PNG.
  */
 export function AvatarCropper({ file, busy, onCancel, onConfirm }: AvatarCropperProps) {
   const [src, setSrc] = useState<string>();
@@ -78,8 +78,8 @@ export function AvatarCropper({ file, busy, onCancel, onConfirm }: AvatarCropper
     const source = VIEWPORT / scale;
     ctx.drawImage(img, -offset.x / scale, -offset.y / scale, source, source, 0, 0, OUTPUT, OUTPUT);
     canvas.toBlob(blob => {
-      if (blob) onConfirm(new File([blob], 'avatar.png', { type: 'image/png' }));
-    }, 'image/png');
+      if (blob) onConfirm(new File([blob], blob.type === 'image/webp' ? 'avatar.webp' : 'avatar.png', { type: blob.type }));
+    }, 'image/webp', 0.85);
   }
 
   return (

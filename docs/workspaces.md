@@ -1,7 +1,11 @@
 # Device-hosted workspaces
 
-**Status: in testing (v0.70.0).** Local automated checks have passed; live cloud,
-Linux Docker/reboot, public HTTPS, and host–guest acceptance remain pending.
+**Status: in testing (v0.70.3).** Local automated checks and paired Mac
+profile/avatar/session reads through an Aliyun ECS bridge over public HTTPS
+have passed, including Web UI refresh. The ECS update and seven concurrent original
+avatar downloads passed with matching file hashes and a responsive session list.
+Bulk speed is still connection-dependent: the live 3 MB burst took 54 seconds.
+Reboot recovery, live rollback and broader host–guest acceptance remain pending.
 
 A workspace belongs to one person. Hosting shares this device's existing local
 `.marifold` configuration, profiles, sessions, Skills, Apps and schedules. The host
@@ -232,8 +236,15 @@ Vercel WebSocket functions require Redis coordination because function instances
 and connections can rotate. Durable Redis inboxes contain at most 128 encrypted
 frames per recipient for five minutes. Messages expire after one minute. Large
 application payloads use authenticated chunks with acknowledgment, transfer-size
-limits and assembly expiry. Artifact downloads use 32 KiB chunks independently of
-the application-message cap. Redis must preserve host and revocation metadata.
+limits and assembly expiry. Updated devices negotiate four chunks in flight per
+transfer, with eight bulk chunks total per connection; ordinary requests do not
+wait for a whole file transfer. Older receivers and relays retain sequential delivery.
+The relay delivers each inbox entry once per connection, replaying unacknowledged
+entries after reconnect instead of repeating them on every publish.
+Artifact downloads request up to 128 KiB per read with four reads ahead, preserving
+byte order and bounded memory; older hosts fall back to 32 KiB reads. Redis must
+preserve host and revocation metadata. Update both Mac services and the ECS bridge
+with `marifold workspace bridge update` to enable concurrent bulk transfers.
 
 An operation has a stable request ID and input hash. The receiving endpoint journals
 mutations before execution. Reconnection resends the same operation ID; completed
@@ -276,3 +287,11 @@ need your cloud account and second device; local tests do not claim to replace t
 Cloud-owned workspaces, offline editing, automatic conflict merging, browser-only
 pairing, iOS, Keychain, role tiers, other deployment providers and privileged OS
 maintenance helpers are deferred. The local HTTP service remains private-network-only.
+
+Web avatar saves crop to 512px and compress as WebP at quality 85, preserving
+transparency (PNG fallback where WebP encoding is unavailable). Existing saved
+avatars remain unchanged. Displays use 256px WebP thumbnails to keep image traffic
+from delaying workspace navigation. Other file transfers preserve original bytes.
+Bridge reads have a 60-second
+deadline; a connected-host timeout reports `WORKSPACE_TIMEOUT` (HTTP 504), distinct
+from `WORKSPACE_OFFLINE` (HTTP 503). Recovered connections refresh open data views.

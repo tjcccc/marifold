@@ -23,7 +23,7 @@ export function createBridge(store: RelayStore, registrationToken: string) {
     // Accept the Vercel function entry as well as the original rewritten URL.
     const route = req.url === '/api/bridge' ? (req.method === 'POST' ? '/v1/hosts' : '/health') : req.url;
     if (req.method === 'GET' && route === '/health') {
-      res.end(JSON.stringify({ service: 'marifold-bridge', version: 1 }));
+      res.end(JSON.stringify({ service: 'marifold-bridge', version: 1, deliveryReplay: 'on-reconnect' }));
       return;
     }
     if (req.method !== 'POST' || route !== '/v1/hosts') {
@@ -136,7 +136,7 @@ export function createBridge(store: RelayStore, registrationToken: string) {
               return;
             }
             clearTimeout(timer);
-            ws.send(JSON.stringify({ type: 'ready', hostDeviceId: host.hostDeviceId }));
+            ws.send(JSON.stringify({ type: 'ready', hostDeviceId: host.hostDeviceId, deliveryReplay: 'on-reconnect' }));
             return;
           }
           if (

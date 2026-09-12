@@ -531,7 +531,7 @@ describe('config editing routes', () => {
       expect(missing.statusCode).toBe(404);
       expect(missing.json().error.code).toBe('AVATAR_NOT_FOUND');
 
-      const png = Buffer.from('not-a-real-png-but-bytes');
+      const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAAFElEQVQImWP4f4bh/xkGEP5/hgEANj4HLWp2abcAAAAASUVORK5CYII=', 'base64');
       const put = await server.inject({
         method: 'PUT',
         url: '/v1/profiles/painter/avatar',
@@ -546,6 +546,13 @@ describe('config editing routes', () => {
       expect(got.rawPayload.equals(png)).toBe(true);
       const etag = got.headers.etag as string;
       expect(etag).toBeTruthy();
+
+      const thumbnail = await server.inject('/v1/profiles/painter/avatar?thumbnail=1');
+      expect(thumbnail.statusCode).toBe(200);
+      expect(thumbnail.headers['content-type']).toBe('image/webp');
+      expect(thumbnail.headers.etag).not.toBe(etag);
+      expect(thumbnail.rawPayload.subarray(0, 4).toString()).toBe('RIFF');
+      expect((await server.inject('/v1/profiles/painter/avatar?thumbnail=2')).statusCode).toBe(400);
 
       const cached = await server.inject({
         method: 'GET',

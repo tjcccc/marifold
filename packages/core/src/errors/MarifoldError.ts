@@ -21,6 +21,7 @@ export type MarifoldErrorCode =
   | 'APP_INVALID'
   | 'APP_NOT_FOUND'
   | 'WORKSPACE_OFFLINE'
+  | 'WORKSPACE_TIMEOUT'
   | 'SESSION_BUSY'
   | 'RUN_NOT_FOUND'
   | 'ARTIFACT_NOT_FOUND'

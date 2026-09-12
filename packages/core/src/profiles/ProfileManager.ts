@@ -24,9 +24,8 @@ const AVATAR_MEDIA_TYPES: Record<string, string> = {
 /** Media assets (avatars, and future banners/exports) live under this subdir
  * so binaries don't clutter the profile root next to INSTRUCTIONS.md. */
 const ASSETS_DIR = 'assets';
-// The web client crops + downscales to 512² and re-encodes lossless PNG before
-// upload, so the stored file stays small; this ceiling guards the processed
-// output (a lossless 512² PNG can exceed 1 MB for detailed images).
+// The web client crops to 512² and compresses as WebP. Keep the existing limit
+// for API clients, older avatars and browsers that fall back to PNG.
 const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
 
 const PROFILE_INSTRUCTIONS_STUB = `# {name}

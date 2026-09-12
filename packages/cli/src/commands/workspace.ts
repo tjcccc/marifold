@@ -28,17 +28,18 @@ export function registerWorkspaceCommand(program: Command, printer: ConsolePrint
   const group = program.command('workspace').description('Host or join a personal device-hosted workspace.');
   const bridge = group
     .command('bridge')
-    .description('Prepare or install a personal workspace bridge.');
-  bridge
-    .command('install')
-    .description('Install and start a persistent bridge on this Linux server with Docker Compose.')
-    .option('--start', 'Start an existing installer-managed deployment without replacing configuration.')
-    .action((options: { start?: boolean }) => {
+    .description('Prepare, install or update a personal workspace bridge.');
+  for (const mode of ['install', 'update'] as const) {
+    const command = bridge.command(mode).description(mode === 'install'
+      ? 'Install and start a persistent bridge on this Linux server with Docker Compose.'
+      : 'Update the installed Linux bridge, preserving configuration and retaining a rollback image.');
+    if (mode === 'install') command.option('--start', 'Start an existing installer-managed deployment without replacing configuration.');
+    command.action((options: { start?: boolean }) => {
       try {
         if (process.platform !== 'linux') throw new Error('Run this command on your Linux bridge server. Use bridge prepare to create a transferable package on this device.');
         const script = path.join(__dirname, '..', 'bridge-template', 'setup.sh');
         if (!fs.existsSync(script)) throw new Error('Bridge installer is missing. Rebuild or reinstall Marifold.');
-        const args = ['bash', script, ...(options.start ? ['--start'] : [])];
+        const args = ['bash', script, ...(mode === 'update' ? ['--update'] : options.start ? ['--start'] : [])];
         const result = process.getuid?.() === 0
           ? spawnSync(args[0]!, args.slice(1), { stdio: 'inherit' })
           : spawnSync('sudo', args, { stdio: 'inherit' });
@@ -49,6 +50,7 @@ export function registerWorkspaceCommand(program: Command, printer: ConsolePrint
         process.exitCode = 1;
       }
     });
+  }
   bridge
     .command('prepare <directory>')
     .description('Write a standalone Vercel deployment package; create no cloud resources.')
