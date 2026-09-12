@@ -2,6 +2,14 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-09-12 — v0.70.7 — Workspace select arrow styling
+
+- Preserve the shared select arrow's size, position, and no-repeat settings by
+  using background-color in workspace fields; reserve right padding for the arrow.
+- Validation: reused passing workspace typecheck/build and isolated Chromium
+  rendering checks in light, dark, and automatic themes. Version check passed
+  with every workspace package and the CLI synchronized to 0.70.7.
+
 ## 2026-09-12 — v0.70.6 — Workspace version synchronization
 
 - Synchronize every workspace package and the CLI with the root release version,

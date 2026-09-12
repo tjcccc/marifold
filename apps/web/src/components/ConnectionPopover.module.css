@@ -257,6 +257,19 @@
 }
 
 .editor { overflow-y: auto; }
-.field textarea, .field select { min-width: 0; border: 1px solid var(--separator); border-radius: var(--radius-sm); background: var(--surface-2); color: var(--text); padding: 7px 9px; font-size: 13px; }
+.field textarea,
+.field select {
+  min-width: 0;
+  border: 1px solid var(--separator);
+  border-radius: var(--radius-sm);
+  background-color: var(--surface-2);
+  color: var(--text);
+  padding: 7px 9px;
+  font-size: 13px;
+}
+
+.field select {
+  padding-right: 30px;
+}
 .popover { overflow-y: auto; }
 .actions { flex-wrap: wrap; }
