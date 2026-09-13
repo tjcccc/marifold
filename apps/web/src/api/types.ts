@@ -12,6 +12,7 @@ import type {
   ApprovalRequest,
   ImageInput,
   MarifoldAgentConfig,
+  MarifoldWebSearchConfig,
   MemoryEntry,
   PartialAgentConfig,
   ProfileDetail,
@@ -132,7 +133,7 @@ export interface PublicConfig {
   webSearch?: {
     enabled: boolean;
     maxResults: number;
-    provider: 'duckduckgo' | 'firecrawl' | 'ollama';
+    provider: MarifoldWebSearchConfig['provider'];
     apiKeyEnv?: string;
     scrape?: boolean;
     proxy?: string;

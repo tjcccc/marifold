@@ -177,3 +177,11 @@ real service over disposable profile/session storage, and runs the desktop
 workspace flows in Chromium, including profile/session search, Office uploads,
 archive/drafts, image galleries, accessible dialogs, and global settings. Browser artifacts stay under
 `output/playwright/`.
+
+## Open-session updates
+
+An open conversation keeps its local transcript while workspace notifications
+refresh navigation metadata. Runs started in that view continue streaming normally.
+To see transcript changes or runs started on another device, reload the page or
+switch away and reopen the session; workspace notifications do not reload the
+conversation or automatically attach newly started remote runs.

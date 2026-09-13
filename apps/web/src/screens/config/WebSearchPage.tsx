@@ -22,15 +22,15 @@ export function WebSearchPage({ search, busy, onSave }: WebSearchPageProps) {
       <header className={styles.pageHeader}>
         <div>
           <div className={styles.pageTitle}>Web search</div>
-          <div className={styles.pageSub}>Configure Marifold's fallback search. Supported models use provider-hosted search first, even when this fallback is off.</div>
+          <div className={styles.pageSub}>Use model-native search first, with built-in search as the default fallback. Turning web search off disables both.</div>
         </div>
       </header>
 
       <section className={styles.card}>
         <div className={styles.fieldRow}>
-          <span className={styles.fieldLabel}>Marifold fallback</span>
+          <span className={styles.fieldLabel}>Web search enabled</span>
           <Toggle
-            label="Marifold fallback"
+            label="Web search enabled"
             value={search.enabled}
             busy={busy}
             onChange={value => onSave('enabled', String(value))}
@@ -45,6 +45,7 @@ export function WebSearchPage({ search, busy, onSave }: WebSearchPageProps) {
             disabled={busy}
             onChange={event => onSave('provider', event.target.value)}
           >
+            <option value="builtin">Built-in — experimental (default)</option>
             <option value="duckduckgo">DuckDuckGo — keyless</option>
             <option value="firecrawl">Firecrawl</option>
             <option value="ollama">Ollama Cloud</option>
@@ -88,6 +89,10 @@ export function WebSearchPage({ search, busy, onSave }: WebSearchPageProps) {
         </div>
       </section>
 
+      {search.provider === 'builtin' ? (
+        <div className={styles.note}>No API key needed. Queries go directly to public search engines from the workspace host. Experimental search may be blocked on some networks.</div>
+      ) : null}
+
       {search.provider === 'ollama' ? (
         <div className={styles.note}>
           Ollama search is an account-backed cloud service. Queries leave this machine for ollama.com; local Ollama models still call it through Marifold's fallback tool.
@@ -96,7 +101,7 @@ export function WebSearchPage({ search, busy, onSave }: WebSearchPageProps) {
 
       <section className={styles.card}>
         <div className={styles.cardTitle}>Connection</div>
-        <EditableText
+        {search.provider === 'firecrawl' || search.provider === 'ollama' ? <EditableText
           id="search-key-env"
           label="API key env"
           value={keyEnvValue}
@@ -108,7 +113,7 @@ export function WebSearchPage({ search, busy, onSave }: WebSearchPageProps) {
             onSave('api_key_env', apiKeyEnv?.trim() ?? '');
             setApiKeyEnv(undefined);
           }}
-        />
+        /> : null}
         <EditableText
           id="search-proxy"
           label="Proxy"
@@ -122,13 +127,13 @@ export function WebSearchPage({ search, busy, onSave }: WebSearchPageProps) {
             setProxy(undefined);
           }}
         />
-        <div className={styles.fieldRow}>
+        {search.provider !== 'builtin' ? <div className={styles.fieldRow}>
           <span className={styles.fieldLabel}>Inline API key</span>
           <span className={styles.fieldStatic}>
             {search.hasApiKey ? 'configured' : 'not configured'}
             <span className={styles.fieldHint}> — the value never crosses the wire</span>
           </span>
-        </div>
+        </div> : null}
       </section>
     </div>
   );

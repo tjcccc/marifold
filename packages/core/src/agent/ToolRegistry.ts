@@ -31,6 +31,8 @@ export interface ToolExecutionContext {
 }
 
 export interface ToolExecutionResult {
+  /** Turn-local research progress; never provider/page-authored instructions. */
+  webResearch?: { sourceCount?: number; sourceUrls?: string[] };
   /** Output returned to the model. */
   content: string;
   /** Images made visible to the next model iteration by an attachment tool.

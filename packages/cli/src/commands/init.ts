@@ -4,6 +4,7 @@ import {
   MarifoldError,
   ProviderType,
   WorkspaceInitializer,
+  resolveWebSearchConfig,
 } from '@marifold/core';
 import { InteractivePrompt } from '../input/InteractivePrompt';
 import { isPromptAbortError } from '../input/PromptAbort';
@@ -49,7 +50,7 @@ export function registerInitCommand(program: Command, printer: ConsolePrinter): 
     .option('--apps-dir <path>', 'Apps directory.')
     .option('--base-url <url>', 'Provider base URL.')
     .option('--api-key-env <name>', 'Environment variable containing the provider API key.')
-    .option('--search-provider <name>', 'Fallback web search provider: duckduckgo, firecrawl, ollama, or off.')
+    .option('--search-provider <name>', 'Fallback web search provider: builtin, duckduckgo, firecrawl, ollama, or off.')
     .option('--search-api-key-env <name>', 'Env var holding the selected search provider API key.')
     .action(async (options: InitOptions) => {
       const rootOptions = program.opts<RootCommandOptions>();
@@ -79,18 +80,16 @@ export function registerInitCommand(program: Command, printer: ConsolePrinter): 
         // the chosen model and next steps are printed after the picker.
         printer.printInitResult(result, interactive ? { showModel: false, showNextSteps: false } : {});
 
-        if (interactive) {
-          await runInteractiveSetup(program, printer);
-          return;
-        }
         if (options.searchProvider) {
           const manager = new ConfigManager(loadConfig(program));
           manager.updateWebSearch(searchUpdateFromFlags({
             provider: options.searchProvider,
             apiKeyEnv: options.searchApiKeyEnv,
           }));
-          process.stdout.write(`Fallback web search: ${manager.config.webSearch?.provider ?? 'duckduckgo'}\n`);
+          const search = resolveWebSearchConfig(manager.config.webSearch);
+          process.stdout.write(search.enabled ? `Web search: native first, ${search.provider} fallback.\n` : 'Web search: off.\n');
         }
+        if (interactive) await runInteractiveSetup(program, printer);
       } catch (error) {
         printer.printError(error);
         process.exitCode = 1;
@@ -98,7 +97,7 @@ export function registerInitCommand(program: Command, printer: ConsolePrinter): 
     });
 }
 
-/** Pick a default model (and optionally enable fallback web search) after init, so
+/** Pick a default model after init, so
  * a first run never points at a model the user doesn't have. Reuses the same
  * provider/model picker as `marifold model add`/`model default`. */
 async function runInteractiveSetup(program: Command, printer: ConsolePrinter): Promise<void> {
@@ -123,10 +122,10 @@ async function runInteractiveSetup(program: Command, printer: ConsolePrinter): P
     }
     process.stdout.write(style.bold(`Default model: ${provider}/${model}\n`));
 
-    if (await readYesNo(getPrompt(), style, 'Enable fallback web search (DuckDuckGo, no API key)?', false)) {
-      manager.updateWebSearch(searchUpdateFromFlags({ provider: 'duckduckgo' }));
-      process.stdout.write('Fallback web search: duckduckgo\n');
-    }
+    const search = resolveWebSearchConfig(manager.config.webSearch);
+    process.stdout.write(search.enabled
+      ? `Web search: native first, ${search.provider === 'builtin' ? 'built-in experimental' : search.provider} fallback.\n`
+      : 'Web search: off. Enable it later with `marifold config search --provider builtin`.\n');
 
     process.stdout.write('\nDone. Run `marifold` to start.\n');
     process.stdout.write(style.dim('(Change the default model later with `marifold model default`.)\n'));
@@ -140,19 +139,6 @@ async function runInteractiveSetup(program: Command, printer: ConsolePrinter): P
   } finally {
     prompt?.close();
   }
-}
-
-async function readYesNo(
-  prompt: InteractivePrompt,
-  style: TerminalStyle,
-  label: string,
-  def: boolean,
-): Promise<boolean> {
-  const answer = await prompt.readUserMessage(style.bold(`${label}${def ? ' [Y/n] ' : ' [y/N] '}`));
-  if (answer === undefined) return def;
-  const value = answer.trim().toLowerCase();
-  if (!value) return def;
-  return value === 'y' || value === 'yes';
 }
 
 function parseProviderType(value?: string): ProviderType | undefined {

@@ -294,4 +294,7 @@ avatars remain unchanged. Displays use 256px WebP thumbnails to keep image traff
 from delaying workspace navigation. Other file transfers preserve original bytes.
 Bridge reads have a 60-second
 deadline; a connected-host timeout reports `WORKSPACE_TIMEOUT` (HTTP 504), distinct
-from `WORKSPACE_OFFLINE` (HTTP 503). Recovered connections refresh open data views.
+from `WORKSPACE_OFFLINE` (HTTP 503). Recovered connections refresh navigation metadata and other data views. Open
+conversation transcripts stay unchanged; reload the page or reopen the session
+to see messages and runs started on another device. Runs already followed by
+that view continue streaming.

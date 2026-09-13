@@ -191,6 +191,35 @@
   background: color-mix(in srgb, var(--danger) 10%, transparent);
 }
 
+.deviceList {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.deviceRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.deviceRow .remove {
+  align-self: center;
+  margin-top: 0;
+  flex-shrink: 0;
+  padding-block: 1px;
+}
+
+.hostRow:not(:last-child) {
+  margin-bottom: 4px;
+}
+
+.hostName {
+  color: var(--text-2);
+  font-weight: 700;
+}
+
 .actions {
   display: flex;
   justify-content: flex-end;
@@ -257,6 +286,19 @@
 }
 
 .editor { overflow-y: auto; }
-.field textarea, .field select { min-width: 0; border: 1px solid var(--separator); border-radius: var(--radius-sm); background: var(--surface-2); color: var(--text); padding: 7px 9px; font-size: 13px; }
+.field textarea,
+.field select {
+  min-width: 0;
+  border: 1px solid var(--separator);
+  border-radius: var(--radius-sm);
+  background-color: var(--surface-2);
+  color: var(--text);
+  padding: 7px 9px;
+  font-size: 13px;
+}
+
+.field select {
+  padding-right: 30px;
+}
 .popover { overflow-y: auto; }
 .actions { flex-wrap: wrap; }

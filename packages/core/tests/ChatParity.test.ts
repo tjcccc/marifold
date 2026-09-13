@@ -86,7 +86,7 @@ describe('search formatting', () => {
     ]);
     expect(block).toContain('## Web search results for: weather');
     expect(block).toContain('1. **Forecast**');
-    expect(formatSearchContext(block)).toContain('Do not request another web search');
+    expect(formatSearchContext(block)).toContain('refine the query within the tool budget');
     expect(formatSearchResults('nothing', [])).toContain('returned no results');
   });
 });
@@ -312,7 +312,7 @@ describe('chat tool loop', () => {
       ]);
     }));
 
-    const runtime = runtimeFor(dir, baseConfig(dir));
+    const runtime = runtimeFor(dir, baseConfig(dir, { webSearch: { enabled: false, provider: 'builtin', maxResults: 5 } }));
     try {
       const text = await collectStream(runtime.stream({ prompt: 'Hello', memories: false }));
       expect(text).toBe('plain');
@@ -324,7 +324,7 @@ describe('chat tool loop', () => {
     }
   });
 
-  it('uses ChatGPT hosted web search while the Marifold fallback is disabled', async () => {
+  it.each([true, false])('honors the global search switch for ChatGPT (enabled=%s)', async (enabled) => {
     const dir = tempDir();
     const bodies: Array<Record<string, unknown>> = [];
     vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
@@ -357,7 +357,7 @@ describe('chat tool loop', () => {
           apiKey: 'test-access-token',
         },
       },
-      webSearch: { enabled: false, provider: 'duckduckgo', maxResults: 5 },
+      webSearch: { enabled, provider: 'duckduckgo', maxResults: 5 },
     });
     const runtime = runtimeFor(dir, config);
     try {
@@ -365,10 +365,18 @@ describe('chat tool loop', () => {
         prompt: 'Search for something current.',
         memories: false,
       }))).toBe('Current answer.');
-      expect(bodies[0].tools).toEqual(expect.arrayContaining([{ type: 'web_search' }]));
-      expect(JSON.stringify(bodies[0].tools)).not.toContain('"name":"web_search"');
+      if (enabled) {
+        expect(bodies[0].tools).toEqual(expect.arrayContaining([{ type: 'web_search' }]));
+        expect(JSON.stringify(bodies[0].tools)).not.toContain('read_web_page');
+      }
+      else {
+        expect(JSON.stringify(bodies[0].tools ?? [])).not.toContain('web_search');
+        expect(JSON.stringify(bodies[0].tools ?? [])).not.toContain('read_web_page');
+      }
+      expect(JSON.stringify(bodies[0].tools ?? [])).not.toContain('"name":"web_search"');
       expect(bodies[0]).not.toHaveProperty('max_output_tokens');
-      expect(JSON.stringify(bodies[0].input)).toContain('Provider-hosted web search is available');
+      expect(JSON.stringify(bodies[0].input)).toContain(enabled
+        ? 'Provider-hosted web search is available' : 'Web search is unavailable');
     } finally {
       runtime.close();
     }
@@ -406,7 +414,7 @@ describe('chat tool loop', () => {
           apiKey: 'test-xai-token',
         },
       },
-      webSearch: { enabled: false, provider: 'duckduckgo', maxResults: 5 },
+      webSearch: { enabled: true, provider: 'duckduckgo', maxResults: 5 },
     });
     const runtime = runtimeFor(dir, config);
     try {
@@ -415,7 +423,8 @@ describe('chat tool loop', () => {
         memories: false,
       }))).toBe('Current Grok answer.');
       expect(urls).toEqual(['https://api.x.ai/v1/responses']);
-      expect(bodies[0].tools).toEqual([{ type: 'web_search' }]);
+      expect(bodies[0].tools).toEqual(expect.arrayContaining([{ type: 'web_search' }]));
+      expect(JSON.stringify(bodies[0].tools ?? [])).not.toContain('"name":"web_search"');
       expect(JSON.stringify(bodies[0].input)).toContain('Provider-hosted web search is available');
     } finally {
       runtime.close();
@@ -454,7 +463,7 @@ describe('chat tool loop', () => {
           apiKey: 'test-bailian-key',
         },
       },
-      webSearch: { enabled: false, provider: 'duckduckgo', maxResults: 5 },
+      webSearch: { enabled: true, provider: 'duckduckgo', maxResults: 5 },
     });
     const runtime = runtimeFor(dir, config);
     try {
@@ -464,7 +473,7 @@ describe('chat tool loop', () => {
       }))).toBe('Current Qwen answer.');
       expect(urls).toEqual(['https://dashscope.aliyuncs.com/compatible-mode/v1/responses']);
       expect(bodies[0].tools).toEqual(expect.arrayContaining([{ type: 'web_search' }]));
-      expect(JSON.stringify(bodies[0].tools)).not.toContain('"name":"web_search"');
+      expect(JSON.stringify(bodies[0].tools ?? [])).not.toContain('"name":"web_search"');
     } finally {
       runtime.close();
     }
@@ -493,7 +502,7 @@ describe('chat tool loop', () => {
           apiKey: 'test-bailian-key',
         },
       },
-      webSearch: { enabled: false, provider: 'duckduckgo', maxResults: 5 },
+      webSearch: { enabled: true, provider: 'duckduckgo', maxResults: 5 },
     });
     const runtime = runtimeFor(dir, config);
     try {
@@ -503,7 +512,7 @@ describe('chat tool loop', () => {
       }))).toBe('Current Qwen Plus answer.');
       expect(urls).toEqual(['https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions']);
       expect(bodies[0].enable_search).toBe(true);
-      expect(bodies[0].tools).toBeUndefined();
+      expect(JSON.stringify(bodies[0].tools ?? [])).not.toContain('"name":"web_search"');
       expect(JSON.stringify(bodies[0].messages)).toContain('Provider-hosted web search is available');
     } finally {
       runtime.close();
@@ -614,7 +623,7 @@ describe('chat tool loop', () => {
       ]);
       expect(queries).toEqual(['Tokyo weather']);
       expect(bodies[0].tools).toEqual(expect.arrayContaining([{ type: 'web_search' }]));
-      expect(JSON.stringify(bodies[0].tools)).not.toContain('"name":"web_search"');
+      expect(JSON.stringify(bodies[0].tools ?? [])).not.toContain('"name":"web_search"');
       expect(bodies[1].tools).toEqual(expect.arrayContaining([
         expect.objectContaining({ type: 'function', function: expect.objectContaining({ name: 'web_search' }) }),
       ]));
@@ -724,7 +733,7 @@ describe('chat tool loop', () => {
         { type: 'web_search' },
         expect.objectContaining({ type: 'function', name: 'read_file' }),
       ]);
-      expect(JSON.stringify(bodies[0].tools)).not.toContain('"name":"web_search"');
+      expect(JSON.stringify(bodies[0].tools ?? [])).not.toContain('"name":"web_search"');
     } finally {
       runtime.close();
     }

@@ -63,7 +63,7 @@ The service defaults to loopback. Explicit non-loopback binds accept only direct
 
 ## Versioning
 
-- marifold uses Semantic Versioning. The authoritative version sites are the root `package.json`, `packages/cli/package.json`, `packages/core/package.json`, `packages/service/package.json`, `packages/tui/package.json`, `apps/web/package.json`, and the `.version(...)` value in `packages/cli/src/index.ts`; keep all seven synchronized.
+- marifold uses synchronized Semantic Versioning: root `package.json` defines the release version. Keep every workspace manifest (`packages/*/package.json` and `apps/*/package.json`, including private packages) and `.version(...)` in `packages/cli/src/index.ts` equal to it. New workspace packages join this policy automatically. Run `pnpm check:versions` before publishing.
 - For a release checkpoint, update the matching `DEVLOG.md` heading and refresh `pnpm-lock.yaml` with pnpm when the manifest changes affect it.
 
 ## Validation

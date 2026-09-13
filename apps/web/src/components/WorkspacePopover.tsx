@@ -234,27 +234,30 @@ export function WorkspacePopover(props: Props) {
                       Skills and Apps run on the host. Approve each remote tool call here before it runs on the selected
                       device.
                     </span>
-                    {devices.map((d) => (
-                      <div key={d.id} className={styles.titleRow}>
-                        <span className={styles.hint}>
-                          {d.name} {d.host ? '(host)' : d.id === workspace.deviceId ? '(this device)' : ''} · {d.online ? 'online' : 'offline'}
-                        </span>
-                        {!d.host && (
-                          <button
-                            className={styles.remove}
-                            disabled={busy}
-                            onClick={() =>
-                              void perform(async () => {
-                                await manage('revoke', { deviceId: d.id });
-                                setDevices((ds) => ds.filter((item) => item.id !== d.id));
-                              })
-                            }
-                          >
-                            Revoke
-                          </button>
-                        )}
-                      </div>
-                    ))}
+                    <div className={styles.deviceList}>
+                      {devices.map((d) => (
+                        <div key={d.id} className={`${styles.deviceRow} ${d.host ? styles.hostRow : ''}`}>
+                          <span className={styles.hint}>
+                            {d.host ? <strong className={styles.hostName}>{d.name}</strong> : d.name}{' '}
+                            {d.host ? '(host)' : d.id === workspace.deviceId ? '(this device)' : ''} · {d.online ? 'online' : 'offline'}
+                          </span>
+                          {!d.host && (
+                            <button
+                              className={styles.remove}
+                              disabled={busy}
+                              onClick={() =>
+                                void perform(async () => {
+                                  await manage('revoke', { deviceId: d.id });
+                                  setDevices((ds) => ds.filter((item) => item.id !== d.id));
+                                })
+                              }
+                            >
+                              Revoke
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                     {workspace.role === 'guest' && (
                       <label className={styles.hint}>
                         <input

@@ -1,3 +1,4 @@
+import { WEB_ANSWER_STYLE, webResearchGuidance } from '../search/WebResearchGuidance';
 import {
   ImageInput,
   JSONValue,
@@ -187,6 +188,9 @@ interface LoopState {
    * Keeping them active across later tool iterations prevents a skill from
    * losing visual context while it resolves another required input. */
   activeImages: ImageInput[];
+  webSourceUrls?: string[];
+  webPageAttempted?: boolean;
+  emptyResponseFollowup?: string;
 }
 
 /**
@@ -457,6 +461,37 @@ export class AgentRunner {
         if (response.reasoning?.summary) {
           yield { type: 'reasoning', summary: response.reasoning.summary };
         }
+        if (calls.length === 0 && !text.trim()) {
+          if (!state.emptyResponseFollowup && iterations < maxIterations) {
+            state.emptyResponseFollowup = 'Your previous response contained no visible answer or tool call. Continue from the tool results already available; do not repeat completed tool actions. Answer naturally in the user’s language with supported facts first and a short source link; explain any material gap without narrating the search. If further evidence is essential and tool budget remains, call the appropriate tool. Do not return an empty response.';
+            this.deps.taskStore.appendEvent(task.id, { kind: 'decision', message: 'Retrying once after an empty model response.' });
+            continue;
+          }
+          const message = 'The model returned no final answer. The run could not complete; please retry.';
+          yield { type: 'error', code: 'AGENT_EMPTY_RESPONSE', message };
+          await persistSessionTurn(failedSessionOutcome(message), 'failed');
+          yield* this.finish(task.id, 'failed', message, 'Retry the run or use a different model.', usage, workspace);
+          return;
+        }
+        if (calls.length === 0 && webSearchMode === 'fallback' && state.webSourceUrls?.length
+          && !state.webPageAttempted && iterations < maxIterations
+          && this.toolDefinitions(webSearchMode, runOptions.instructions).some(tool => tool.name === 'read_web_page')) {
+          const sourceCall: ToolCall = {
+            id: `source_${crypto.randomBytes(4).toString('hex')}`,
+            name: 'read_web_page', arguments: { url: state.webSourceUrls[0]! },
+          };
+          this.deps.taskStore.appendEvent(task.id, {
+            kind: 'decision', message: 'Marifold is inspecting the top search source before accepting a final answer.',
+          });
+          // Record the real runner-initiated call for coherent tool-result replay.
+          // It follows the same validation, approval, cancellation and limits as
+          // a model-selected read; never publish the premature draft as final.
+          if (state.mode === 'native') state.exchange.push({ kind: 'assistant', toolCalls: [sourceCall] });
+          else state.transcript.push(`Marifold requested source inspection: ${String(sourceCall.arguments.url)}`);
+          yield* this.executeCall(task.id, sourceCall, runOptions, state, toolContext,
+            new Set(this.toolDefinitions(webSearchMode, runOptions.instructions).map(tool => tool.name)));
+          continue;
+        }
         if (text) yield { type: 'text', text, phase: calls.length > 0 ? 'progress' : 'final' };
 
         if (calls.length === 0) {
@@ -548,6 +583,7 @@ export class AgentRunner {
       return;
     }
 
+    if (call.name === 'read_web_page') state.webPageAttempted = true;
     const decision = yield* this.resolveApproval(call, tool, summary, options, toolContext);
     if (!decision.approved) {
       const message = `Tool call denied${decision.reason ? `: ${decision.reason}` : '.'}`;
@@ -562,6 +598,9 @@ export class AgentRunner {
     let resultSummary = summary;
     try {
       const result = yield* this.executeWithEvents(tool, call.arguments, { ...toolContext, callId: call.id });
+      if (call.name === 'web_search' && !result.isError && result.webResearch?.sourceUrls?.length) {
+        state.webSourceUrls = result.webResearch.sourceUrls.filter(url => typeof url === 'string').slice(0, 10);
+      }
       content = result.content;
       isError = result.isError ?? false;
       resultSummary = result.summary ?? summary;
@@ -806,7 +845,7 @@ export class AgentRunner {
       profile,
       prompt: options.lean
         ? options.objective
-        : `Objective: ${options.objective}\n\nUse tools only when the objective genuinely requires reading or writing files, running commands, searching the web, or delegating. Many objectives — greetings, questions, explanations, drafting text — need no tools at all; for those, answer directly from your own knowledge. Do not invent tool calls. When the objective is complete, reply with a short final answer describing the outcome.`,
+        : `Objective: ${options.objective}\n\nUse tools only when the objective genuinely requires reading or writing files, running commands, searching the web, or delegating. Many objectives — greetings, questions, explanations, drafting text — need no tools at all; for those, answer directly from your own knowledge. Do not invent tool calls. For a question, give the answer the user asked for. For an action request, briefly report what changed. Tool activity is supporting work, not the final deliverable.`,
       context: this.agentContext(state, workspace, webSearchMode, options.instructions, options.lean),
       ...(options.memory && options.memory.length > 0 ? { memory: options.memory } : {}),
       ...(options.sessionId ? { session: { id: options.sessionId, createIfMissing: true } } : {}),
@@ -839,10 +878,10 @@ export class AgentRunner {
   ): string[] {
     const toolDefinitions = this.toolDefinitions(webSearchMode, instructions);
     const webSearchContext = webSearchMode === 'native'
-      ? 'Provider-hosted web search is available for this run. Use it for web/current-information requests; Marifold fallback search is not exposed while native search is available.'
+      ? 'Provider-hosted web search is available for this run. Use it for web/current-information requests; Marifold fallback search is not exposed while native search is available. ' + WEB_ANSWER_STYLE
       : webSearchMode === 'unavailable'
         ? 'Web search is unavailable for this run. If the objective requires browsing or current information, say clearly that you cannot access web search; do not imply that you searched.'
-        : 'Marifold fallback web search is available through the web_search tool.';
+        : webResearchGuidance();
     const attachments = workspace.attachments.length > 0
       ? [
           'Attachments uploaded for this run:',
@@ -879,6 +918,7 @@ export class AgentRunner {
       'Prefer answering directly. Reach for a tool only when the objective cannot be completed from your own knowledge — never use a tool just to demonstrate one.',
       'After changing files or producing an observable result, use the narrowest relevant tool for a focused check before claiming success. Report the evidence you actually observed; do not invent results or perform a separate self-grade.',
       webSearchContext,
+      ...(state.emptyResponseFollowup ? [state.emptyResponseFollowup] : []),
       workspaceContext,
     ];
     // Skill instructions are authoritative for this run — lead with them.
@@ -911,7 +951,7 @@ export class AgentRunner {
       .map(tool => tool.definition);
     return webSearchMode === 'fallback'
       ? definitions
-      : definitions.filter(tool => tool.name !== 'web_search');
+      : definitions.filter(tool => !['web_search', 'read_web_page'].includes(tool.name));
   }
 
   private extractTurn(response: PriestResponse, state: LoopState): { text: string; calls: ToolCall[] } {
