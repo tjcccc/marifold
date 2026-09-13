@@ -2,6 +2,31 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-09-13 — v0.71.1 — Search recovery and source citations
+
+- Clarify the fallback research loop: search for missing current/external facts,
+  inspect original sources, refine for evidence gaps, and use the latest request's
+  subject and date. Continue once on short English/Chinese search promises with
+  no tool call; repeated matching promises fail visibly within existing budgets.
+- Inspect available search sources before handling an empty model response.
+  Preserve approval, cancellation, read-attempt, and iteration boundaries.
+- Render source citations as compact domain tags after sentence punctuation,
+  with title/URL previews on hover or keyboard focus and Escape dismissal.
+  Support legacy citations; preserve ordinary links and artifact downloads.
+  No third-party metadata requests are made for previews.
+- Mark final links matching successful search/page-read URLs before emitting and
+  saving agent answers, including redirected sources. Models no longer need to
+  reproduce the citation marker for those URLs; old saved answers are retained.
+- Add regressions and a custom-objective local-model harness. Reused the passing
+  full workspace gate (864 tests, optional Redis skipped), followed by passing
+  typecheck/build and all 231 Web tests after punctuation changes. The first
+  full run hit a transient TUI resume assertion; its rerun passed unchanged.
+- Live local Gemma completed search/read/analysis in about 93 seconds, using a
+  secondary source. User testing with Gemma 31B showed current-year search and
+  clearer cited answers. Source selection, corroboration, and model reasoning
+  remain experimental limitations; these observations do not verify rankings.
+- Synchronize all workspace manifests and the CLI to 0.71.1.
+
 ## 2026-09-13 — v0.71.0 — Experimental built-in web research
 
 - Enable native-first search by default with keyless DuckDuckGo HTML / Brave

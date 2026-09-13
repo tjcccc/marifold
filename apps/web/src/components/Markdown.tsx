@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import type { InlineNode, MarkdownBlock } from '../lib/markdown';
 import { parseMarkdown } from '../lib/markdown';
+import { SourceCitation } from './SourceCitation';
 import { CopyButton } from './CopyButton';
 import styles from './Markdown.module.css';
 
@@ -159,6 +160,7 @@ function Inline({ nodes, resolveSandboxLink }: { nodes: InlineNode[]; resolveSan
               </em>
             );
           case 'link':
+            if (node.citation) return <SourceCitation key={index} href={node.href} title={inlineText(node.children)} />;
             if (node.href.startsWith('sandbox:')) {
               const onClick = resolveSandboxLink?.(node.href);
               return onClick ? (
@@ -180,4 +182,8 @@ function Inline({ nodes, resolveSandboxLink }: { nodes: InlineNode[]; resolveSan
       })}
     </>
   );
+}
+
+function inlineText(nodes: InlineNode[]): string {
+  return nodes.map(node => 'text' in node ? node.text : 'children' in node ? inlineText(node.children) : ' ').join('');
 }

@@ -66,8 +66,20 @@ The agent receives the host date/timezone and instructions to choose useful
 keywords, inspect promising sources, check dates, refine insufficient searches,
 and cite the facts it actually found. Both native and fallback answers should
 lead with the requested facts in the user's language, using brief conversational
-prose and an unobtrusive parenthetical source link, such as
-`（来源：[Source name](URL)）` in Chinese or `(Source: [Source name](URL))` in English.
+prose and a source citation formatted as `[Source or page title](URL "source")`.
+The Web UI renders these citations as compact domain tags. Hover or keyboard
+focus shows the supplied title and URL; click opens the source. Escape dismisses
+the preview. No preview requests or external favicon loads are made. Existing
+parenthetical `Source` and `来源` links also render as tags, while ordinary links
+remain unchanged. Sentence-ending punctuation is displayed before citation tags,
+even when the model writes it after the links. Other Markdown clients retain a normal clickable source link.
+For fallback agent runs, Marifold also adds the citation marker to unmarked
+answer links whose URLs match successful search or page-read results (including
+redirect destinations). The marked answer is both emitted and persisted, so
+this does not depend on the model reproducing the marker. Matching ignores URL
+fragments but never treats every link on the same domain as a source. Historical
+unmarked answers are not rewritten; native-search and chat answers still rely
+on the citation format supplied by the model.
 Brief attribution such as “According to the
 weather site” is fine. Routine search narration and lists of sites
 belong outside the final answer unless the user asks for research details.
@@ -258,3 +270,36 @@ answered as Shanghai; whether the mismatch came from the query, source selection
 or final synthesis has not been established. Relative-date news answers also
 used an ambiguous search-snapshot date. Latest-request location matching and
 source-date verification remain follow-up work, alongside engine availability.
+
+### Evidence-driven research and premature search plans
+
+Fallback guidance explicitly distinguishes stable questions from missing current
+or external evidence. For a named article, models are asked to find and read the
+original, gather further context for actual gaps, and separate the author's
+claims from their own assessment. Result count alone does not determine whether
+to continue. The latest request controls subject, location, and calendar dates.
+
+Normal agent runs get one additional opportunity within the existing iteration
+cap when a short English or Chinese reply explicitly promises to search without
+calling a web tool. The premature reply is not emitted as a final answer. The
+model chooses its query and still follows ordinary tool approval and budgets.
+A repeated matching promise ends as an incomplete-research failure. Native
+search, lean skill runs, unavailable search, and runs that already attempted a
+web tool do not use this recovery. This is a narrow language heuristic, not a
+general answer-quality judge; it can miss other phrasing or languages. Chat
+receives the shared guidance but does not use the agent-only recovery.
+
+Use `node scripts/search-research-eval.mjs --objective "Your research question"`
+for a disposable local-model test. Evaluate evidence and final content separately
+from tool execution; guidance and retries cannot guarantee model reasoning quality.
+
+A live local Gemma test for the Dario article completed in about 93 seconds with
+one search, one runner-initiated page read, and a Chinese pros/cons response. It
+selected a secondary article and did not independently corroborate it. This
+demonstrates completing the tool loop, not verified analytical accuracy or
+reliable original-source selection.
+
+Source inspection takes priority over empty-response recovery when a successful
+search returned URLs but no page was attempted. This applies even if the model
+returns no text or tool calls. Once a read has been attempted (including denial),
+the existing bounded empty-response retry/failure behavior applies.

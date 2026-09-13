@@ -1,3 +1,5 @@
+import { isUnfulfilledSearchPromise, WEB_RESEARCH_CONTINUATION } from '../search/WebResearchContinuation';
+import { markSourceCitations } from '../search/SourceCitations';
 import { WEB_ANSWER_STYLE, webResearchGuidance } from '../search/WebResearchGuidance';
 import {
   ImageInput,
@@ -191,6 +193,8 @@ interface LoopState {
   webSourceUrls?: string[];
   webPageAttempted?: boolean;
   emptyResponseFollowup?: string;
+  searchPromiseFollowup?: boolean;
+  webToolAttempted?: boolean;
 }
 
 /**
@@ -461,18 +465,6 @@ export class AgentRunner {
         if (response.reasoning?.summary) {
           yield { type: 'reasoning', summary: response.reasoning.summary };
         }
-        if (calls.length === 0 && !text.trim()) {
-          if (!state.emptyResponseFollowup && iterations < maxIterations) {
-            state.emptyResponseFollowup = 'Your previous response contained no visible answer or tool call. Continue from the tool results already available; do not repeat completed tool actions. Answer naturally in the user’s language with supported facts first and a short source link; explain any material gap without narrating the search. If further evidence is essential and tool budget remains, call the appropriate tool. Do not return an empty response.';
-            this.deps.taskStore.appendEvent(task.id, { kind: 'decision', message: 'Retrying once after an empty model response.' });
-            continue;
-          }
-          const message = 'The model returned no final answer. The run could not complete; please retry.';
-          yield { type: 'error', code: 'AGENT_EMPTY_RESPONSE', message };
-          await persistSessionTurn(failedSessionOutcome(message), 'failed');
-          yield* this.finish(task.id, 'failed', message, 'Retry the run or use a different model.', usage, workspace);
-          return;
-        }
         if (calls.length === 0 && webSearchMode === 'fallback' && state.webSourceUrls?.length
           && !state.webPageAttempted && iterations < maxIterations
           && this.toolDefinitions(webSearchMode, runOptions.instructions).some(tool => tool.name === 'read_web_page')) {
@@ -492,10 +484,37 @@ export class AgentRunner {
             new Set(this.toolDefinitions(webSearchMode, runOptions.instructions).map(tool => tool.name)));
           continue;
         }
-        if (text) yield { type: 'text', text, phase: calls.length > 0 ? 'progress' : 'final' };
+        if (calls.length === 0 && !text.trim()) {
+          if (!state.emptyResponseFollowup && iterations < maxIterations) {
+            state.emptyResponseFollowup = 'Your previous response contained no visible answer or tool call. Continue from the tool results already available; do not repeat completed tool actions. Answer naturally in the user’s language with supported facts first and a short source link; explain any material gap without narrating the search. If further evidence is essential and tool budget remains, call the appropriate tool. Do not return an empty response.';
+            this.deps.taskStore.appendEvent(task.id, { kind: 'decision', message: 'Retrying once after an empty model response.' });
+            continue;
+          }
+          const message = 'The model returned no final answer. The run could not complete; please retry.';
+          yield { type: 'error', code: 'AGENT_EMPTY_RESPONSE', message };
+          await persistSessionTurn(failedSessionOutcome(message), 'failed');
+          yield* this.finish(task.id, 'failed', message, 'Retry the run or use a different model.', usage, workspace);
+          return;
+        }
+        if (calls.length === 0 && webSearchMode === 'fallback' && !state.webToolAttempted
+          && !runOptions.lean && isUnfulfilledSearchPromise(text)
+          && this.toolDefinitions(webSearchMode, runOptions.instructions).some(tool => tool.name === 'web_search')) {
+          if (!state.searchPromiseFollowup && iterations < maxIterations) {
+            state.searchPromiseFollowup = true;
+            this.deps.taskStore.appendEvent(task.id, { kind: 'decision', message: 'Continuing once after a search promise without a tool call.' });
+            continue;
+          }
+          const message = 'The model stopped at a search plan without using the available search tool.';
+          yield { type: 'error', code: 'AGENT_INCOMPLETE_RESEARCH', message };
+          await persistSessionTurn(failedSessionOutcome(message), 'failed');
+          yield* this.finish(task.id, 'failed', message, 'Retry the run or use a different model.', usage, workspace);
+          return;
+        }
+        const visibleText = calls.length === 0 ? markSourceCitations(text, state.webSourceUrls ?? []) : text;
+        if (visibleText) yield { type: 'text', text: visibleText, phase: calls.length > 0 ? 'progress' : 'final' };
 
         if (calls.length === 0) {
-          finalText = text;
+          finalText = visibleText;
           break;
         }
 
@@ -583,6 +602,7 @@ export class AgentRunner {
       return;
     }
 
+    if (call.name === 'web_search' || call.name === 'read_web_page') state.webToolAttempted = true;
     if (call.name === 'read_web_page') state.webPageAttempted = true;
     const decision = yield* this.resolveApproval(call, tool, summary, options, toolContext);
     if (!decision.approved) {
@@ -598,8 +618,9 @@ export class AgentRunner {
     let resultSummary = summary;
     try {
       const result = yield* this.executeWithEvents(tool, call.arguments, { ...toolContext, callId: call.id });
-      if (call.name === 'web_search' && !result.isError && result.webResearch?.sourceUrls?.length) {
-        state.webSourceUrls = result.webResearch.sourceUrls.filter(url => typeof url === 'string').slice(0, 10);
+      if ((call.name === 'web_search' || call.name === 'read_web_page') && !result.isError && result.webResearch?.sourceUrls?.length) {
+        state.webSourceUrls = [...new Set([...(state.webSourceUrls ?? []),
+          ...result.webResearch.sourceUrls.filter(url => typeof url === 'string')])].slice(0, 40);
       }
       content = result.content;
       isError = result.isError ?? false;
@@ -845,7 +866,7 @@ export class AgentRunner {
       profile,
       prompt: options.lean
         ? options.objective
-        : `Objective: ${options.objective}\n\nUse tools only when the objective genuinely requires reading or writing files, running commands, searching the web, or delegating. Many objectives — greetings, questions, explanations, drafting text — need no tools at all; for those, answer directly from your own knowledge. Do not invent tool calls. For a question, give the answer the user asked for. For an action request, briefly report what changed. Tool activity is supporting work, not the final deliverable.`,
+        : `Objective: ${options.objective}\n\nUse tools only when the objective genuinely requires reading or writing files, running commands, searching the web, or delegating. Greetings, timeless explanations, and drafting from supplied information often need no tools. Questions about current facts or unfamiliar external sources require evidence: use available search and page-reading tools before answering. Do not invent tool calls. For a question, give the answer the user asked for. For an action request, briefly report what changed. Tool activity is supporting work, not the final deliverable.`,
       context: this.agentContext(state, workspace, webSearchMode, options.instructions, options.lean),
       ...(options.memory && options.memory.length > 0 ? { memory: options.memory } : {}),
       ...(options.sessionId ? { session: { id: options.sessionId, createIfMissing: true } } : {}),
@@ -915,10 +936,11 @@ export class AgentRunner {
     }
     const context = [
       'You are running as the Marifold agent. Stay focused on the stated objective and keep replies concise.',
-      'Prefer answering directly. Reach for a tool only when the objective cannot be completed from your own knowledge — never use a tool just to demonstrate one.',
+      'Answer directly when reliable information is already available. For current facts or external sources missing from context, gather evidence with the available tools before answering. Never use tools merely to demonstrate them.',
       'After changing files or producing an observable result, use the narrowest relevant tool for a focused check before claiming success. Report the evidence you actually observed; do not invent results or perform a separate self-grade.',
       webSearchContext,
       ...(state.emptyResponseFollowup ? [state.emptyResponseFollowup] : []),
+      ...(state.searchPromiseFollowup && !state.webToolAttempted ? [WEB_RESEARCH_CONTINUATION] : []),
       workspaceContext,
     ];
     // Skill instructions are authoritative for this run — lead with them.
