@@ -13,7 +13,7 @@ export type InlineNode =
   | { type: 'code'; text: string }
   | { type: 'strong'; children: InlineNode[] }
   | { type: 'em'; children: InlineNode[] }
-  | { type: 'link'; href: string; children: InlineNode[] };
+  | { type: 'link'; href: string; citation?: boolean; children: InlineNode[] };
 
 export type TableAlignment = 'left' | 'center' | 'right' | undefined;
 
@@ -214,7 +214,7 @@ function listItem(line: string): { ordered: boolean; text: string } | undefined 
 }
 
 const INLINE_PATTERN =
-  /((?: {2,}|\\)\n)|(`[^`]+`)|(\*\*[^*]+\*\*)|(\*[^*\s][^*]*\*)|(\[[^\]]+\]\(((?:https?:\/\/|sandbox:)[^\s)]+)\))/;
+  /((?: {2,}|\\)\n)|(`[^`]+`)|(\*\*[^*]+\*\*)|(\*[^*\s][^*]*\*)|(\[[^\]]+\]\(((?:https?:\/\/|sandbox:)[^\s)]+)(?:\s+"(source)")?\))/;
 
 export function parseInline(text: string): InlineNode[] {
   const nodes: InlineNode[] = [];
@@ -240,9 +240,45 @@ export function parseInline(text: string): InlineNode[] {
       // an artifact published for the same run.
       const label = token.slice(1, token.indexOf(']'));
       const href = match[6];
-      nodes.push({ type: 'link', href, children: parseInline(label) });
+      nodes.push({ type: 'link', href, ...(match[7] && /^https?:/.test(href) ? { citation: true } : {}), children: parseInline(label) });
     }
     rest = rest.slice(match.index + token.length);
+  }
+  // Recognize older source wrappers without reclassifying ordinary links.
+  for (let i = 1; i < nodes.length - 1; i++) {
+    const before = nodes[i - 1], link = nodes[i], after = nodes[i + 1];
+    if (before.type !== 'text' || link.type !== 'link' || after.type !== 'text' || !/^https?:/.test(link.href)) continue;
+    const opening = /[（(]\s*(?:来源|source)\s*[:：]\s*$/i;
+    if (opening.test(before.text) && /^\s*[）)]/.test(after.text)) {
+      before.text = before.text.replace(opening, '');
+      after.text = after.text.replace(/^\s*[）)]/, '');
+      link.citation = true;
+    }
+  }
+  // Citations annotate the completed sentence, including when models emit
+  // punctuation after one or more source links.
+  for (let i = 0; i < nodes.length; i++) {
+    const node = nodes[i];
+    if (node.type !== 'link' || !node.citation) continue;
+    let end = i + 1;
+    while (end < nodes.length) {
+      const next = nodes[end];
+      if (next.type === 'link' && next.citation) { end++; continue; }
+      if (next.type === 'text' && /^[ \t]*$/.test(next.text)
+        && nodes[end + 1]?.type === 'link' && (nodes[end + 1] as Extract<InlineNode, { type: 'link' }>).citation) {
+        end++;
+        continue;
+      }
+      break;
+    }
+    const after = nodes[end];
+    if (after?.type !== 'text') continue;
+    const punctuation = /^[ \t]*([。！？.!?]+)/.exec(after.text);
+    if (!punctuation) continue;
+    after.text = after.text.slice(punctuation[0].length);
+    const before = nodes[i - 1];
+    if (before?.type === 'text') before.text = before.text.replace(/[ \t]+$/, '') + punctuation[1];
+    else { nodes.splice(i, 0, { type: 'text', text: punctuation[1] }); i++; }
   }
   return nodes;
 }

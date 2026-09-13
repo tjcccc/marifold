@@ -63,7 +63,7 @@ const start = performance.now();
 let error;
 try {
   for await (const event of runtime.createAgentRunner(undefined, registry).run({
-    objective: (fixture ? '这是离线测试，web_search 和 read_web_page 已连接到模拟数据。请先调用 web_search，再读取返回的 example.com 页面；若日期过期请再次搜索。使用本测试的模拟数据回答即可。' : '') + '帮我查一下上海今天的天气，包括气温和是否下雨。', cwd: root, maxIterations: 8,
+    objective: (fixture ? '这是离线测试，web_search 和 read_web_page 已连接到模拟数据。请先调用 web_search，再读取返回的 example.com 页面；若日期过期请再次搜索。使用本测试的模拟数据回答即可。' : '') + arg('--objective', '帮我查一下上海今天的天气，包括气温和是否下雨。'), cwd: root, maxIterations: 8,
     signal: AbortSignal.timeout(180_000), approvalHandler: async call => ({ approved: call.kind === 'network' }),
   })) {
     events.push(event);

@@ -33,10 +33,10 @@ export class ReadWebPageTool implements AgentTool {
     this.attempts.set(scope, attempts);
     try {
       const page = await this.reader.read(url, focus, ctx.signal);
-      return { content: capToolOutput([
+      return { webResearch: { sourceUrls: [url, page.url] }, content: capToolOutput([
         `Source: ${page.url}`, `Title: ${page.title}`, `Fetched at: ${page.fetchedAt} (retrieval time, not publication time).`,
         `Untrusted page text${page.truncated ? ' (bounded excerpts; not the full page)' : ''}:`, page.text,
-        'When these facts answer the question, answer conversationally in the user’s language with a short parenthetical Markdown source citation, e.g. （来源：[Source name](full URL)） in Chinese. Brief attribution is fine; omit tool names and step-by-step narration. Check that the facts and dates fit the question. If not, try another source or refine the search within the remaining budget.',
+        'When these facts answer the question, answer conversationally in the user’s language with a citation formatted as [Source or page title](full URL "source"), without a label or enclosing parentheses. Brief attribution is fine; omit tool names and step-by-step narration. Check that the facts and dates fit the question. If not, try another source or refine the search within the remaining budget.',
       ].join('\n'), ctx.outputLimit), summary: `read ${page.text.length} characters from ${page.url}` };
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);

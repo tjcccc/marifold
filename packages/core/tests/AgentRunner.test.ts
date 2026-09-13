@@ -89,15 +89,79 @@ async function collect(events: AsyncGenerator<AgentEvent>): Promise<AgentEvent[]
 const planResponse = response({ text: '{"title": "Test plan", "steps": ["Read the file", "Summarize"]}' });
 
 describe('AgentRunner', () => {
+  it.each(['native', 'control-block'] as const)('continues a search promise through research and persists the answer (%s)', async toolMode => {
+    const call = (name: string, args: Record<string, string>) => toolMode === 'native'
+      ? response({ toolCalls: [{ id: name, name, arguments: args }] })
+      : response({ text: `<tool_call name="${name}">${JSON.stringify(args)}</tool_call>` });
+    const engine = new ScriptedEngine([
+      response({ text: 'I need to search for the original article before answering.' }),
+      call('web_search', { query: 'original article' }),
+      call('read_web_page', { url: 'https://example.com/article' }),
+      call('web_search', { query: 'independent evidence' }),
+      response({ text: 'The proposal has benefits and tradeoffs. [Article](https://example.com/article)' }),
+    ]);
+    const persistTurn = vi.fn(async () => {});
+    const { runner } = makeRunner(engine, [
+      fakeTool({ name: 'web_search', kind: 'network' }),
+      fakeTool({ name: 'read_web_page', kind: 'network', execute: async () => ({ content: 'Article evidence', webResearch: { sourceUrls: ['https://example.com/article'] } }) }),
+    ], { toolMode }, { persistTurn,
+      prepareEngine: async () => ({ engine, config: { provider: 'mock', model: 'test-model' }, webSearchMode: 'fallback' }),
+    });
+    const events = await collect(runner.run({ objective: 'Assess this article.', cwd: tempDir(), sessionId: 'research', approvalHandler: async () => ({ approved: true }) }));
+    expect(engine.requests).toHaveLength(5);
+    expect(engine.requests[1].context?.join(' ')).toContain('made no tool call');
+    expect(engine.requests[2].context?.join(' ')).not.toContain('made no tool call');
+    expect(events.filter(e => e.type === 'tool_request')).toHaveLength(3);
+    expect(events.filter(e => e.type === 'text')).toEqual([{ type: 'text', phase: 'final', text: 'The proposal has benefits and tradeoffs. [Article](https://example.com/article "source")' }]);
+    expect(persistTurn.mock.calls[0]).toContain('The proposal has benefits and tradeoffs. [Article](https://example.com/article "source")');
+  });
+
+  it.each([1, 5])('fails visibly on a repeated search promise within the iteration cap %s', async maxIterations => {
+    const engine = new ScriptedEngine([response({ text: '我需要搜索原文才能回答。' })]);
+    const { runner } = makeRunner(engine, [fakeTool({ name: 'web_search', kind: 'network' })], {}, {
+      prepareEngine: async () => ({ engine, config: { provider: 'mock', model: 'test-model' }, webSearchMode: 'fallback' }),
+    });
+    const events = await collect(runner.run({ objective: 'Assess the article.', cwd: tempDir(), maxIterations }));
+    expect(engine.requests).toHaveLength(Math.min(maxIterations, 2));
+    expect(events).toContainEqual(expect.objectContaining({ type: 'error', code: 'AGENT_INCOMPLETE_RESEARCH' }));
+    expect(events.at(-1)).toMatchObject({ type: 'done', status: 'failed' });
+  });
+
+  it.each(['native', 'unavailable'] as const)('does not retry search promises in %s search mode', async webSearchMode => {
+    const engine = new ScriptedEngine([response({ text: 'I need to search for this.' })]);
+    const { runner } = makeRunner(engine, [], {}, {
+      prepareEngine: async () => ({ engine, config: { provider: 'mock', model: 'test-model' }, webSearchMode }),
+    });
+    await collect(runner.run({ objective: 'Question', cwd: tempDir() }));
+    expect(engine.requests).toHaveLength(1);
+  });
+
+  it('does not retry after a denied search', async () => {
+    const engine = new ScriptedEngine([
+      response({ toolCalls: [{ id: 'search', name: 'web_search', arguments: { query: 'article' } }] }),
+      response({ text: 'I need to search for this.' }),
+    ]);
+    const execute = vi.fn(async () => ({ content: 'unused' }));
+    const { runner } = makeRunner(engine, [fakeTool({ name: 'web_search', kind: 'network', execute })], {}, {
+      prepareEngine: async () => ({ engine, config: { provider: 'mock', model: 'test-model' }, webSearchMode: 'fallback' }),
+    });
+    await collect(runner.run({ objective: 'Question', cwd: tempDir(), approvalHandler: async () => ({ approved: false }) }));
+    expect(engine.requests).toHaveLength(2);
+    expect(execute).not.toHaveBeenCalled();
+  });
+
   it.each([
-    ['native', true], ['native', false], ['control-block', true], ['control-block', false],
-  ] as const)('reads a source when the model stops after search (%s, approved=%s)', async (toolMode, approved) => {
+    ['native', true, 'Premature answer.'], ['native', false, 'Premature answer.'],
+    ['control-block', true, 'Premature answer.'], ['control-block', false, 'Premature answer.'],
+    ['native', true, ''], ['native', false, ''],
+    ['control-block', true, ''], ['control-block', false, ''],
+  ] as const)('reads a source when the model stops after search (%s, approved=%s, draft=%s)', async (toolMode, approved, draft) => {
     const engine = new ScriptedEngine([
       toolMode === 'native'
         ? response({ toolCalls: [{ id: 'search', name: 'web_search', arguments: { query: 'weather' } }] })
         : response({ text: '<tool_call name="web_search">{"query":"weather"}</tool_call>' }),
-      response({ text: 'Premature answer.' }),
-      response({ text: approved ? 'Verified answer with source.' : 'Page reading was declined.' }),
+      response({ text: draft }),
+      response({ text: approved ? 'Verified [source](https://public.org).' : 'Page reading was declined.' }),
     ]);
     const search = fakeTool({ name: 'web_search', kind: 'network', execute: async () => ({ content: 'https://public.org', webResearch: { sourceCount: 1, sourceUrls: ['https://public.org'] } }) });
     const readExecution = vi.fn(async () => ({ content: 'Temperature: 24°C' }));
@@ -110,12 +174,30 @@ describe('AgentRunner', () => {
     }));
     expect(engine.requests).toHaveLength(3);
     expect(readExecution).toHaveBeenCalledTimes(approved ? 1 : 0);
+    if (approved) expect(events).toContainEqual({ type: 'text', phase: 'final', text: 'Verified [source](https://public.org "source").' });
     const requests = events.filter(event => event.type === 'tool_request');
     expect(requests).toHaveLength(2);
     expect(requests[1]).toMatchObject({ call: { tool: 'read_web_page', input: { url: 'https://public.org' } } });
     expect(events.some(event => event.type === 'text' && event.text === 'Premature answer.')).toBe(false);
     expect(events.at(-1)).toMatchObject({ type: 'done', status: 'completed' });
     expect(JSON.stringify(engine.requests[2])).toContain(approved ? 'Temperature: 24°C' : 'Tool call denied');
+  });
+
+  it('does not repeat source inspection when the model remains empty after reading', async () => {
+    const engine = new ScriptedEngine([
+      response({ toolCalls: [{ id: 'search', name: 'web_search', arguments: { query: 'article' } }] }),
+      response({ text: '' }),
+    ]);
+    const read = vi.fn(async () => ({ content: 'Article evidence' }));
+    const { runner } = makeRunner(engine, [
+      fakeTool({ name: 'web_search', kind: 'network', execute: async () => ({ content: 'Found article', webResearch: { sourceUrls: ['https://example.com/article'] } }) }),
+      fakeTool({ name: 'read_web_page', kind: 'network', execute: read }),
+    ], {}, { prepareEngine: async () => ({ engine, config: { provider: 'mock', model: 'test-model' }, webSearchMode: 'fallback' }) });
+    const events = await collect(runner.run({ objective: 'Analyze article', cwd: tempDir(), maxIterations: 8, approvalHandler: async () => ({ approved: true }) }));
+    expect(read).toHaveBeenCalledTimes(1);
+    expect(engine.requests).toHaveLength(4);
+    expect(events).toContainEqual(expect.objectContaining({ type: 'error', code: 'AGENT_EMPTY_RESPONSE' }));
+    expect(events.at(-1)).toMatchObject({ type: 'done', status: 'failed' });
   });
 
   it.each(['native', 'control-block'] as const)('recovers once from an empty response after a tool (%s)', async toolMode => {
