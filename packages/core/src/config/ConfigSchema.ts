@@ -41,15 +41,15 @@ export interface MarifoldMemoryConfig {
   contextLimit: number;
 }
 
-export type WebSearchProvider = 'duckduckgo' | 'firecrawl' | 'ollama';
+export type WebSearchProvider = 'builtin' | 'duckduckgo' | 'firecrawl' | 'ollama';
 
 export interface MarifoldWebSearchConfig {
-  /** Enables Marifold's caller-executed fallback web_search tool in chat and
-   * agent mode. Provider-hosted search remains available when supported.
+  /** Enables web search in chat and agent mode, preferring provider-hosted
+   * search and otherwise using the configured fallback. False disables both.
    * Agent calls additionally honor the `network` approval policy. */
   enabled: boolean;
   maxResults: number;
-  /** Active fallback backend. Defaults to the keyless DuckDuckGo floor;
+  /** Active fallback backend. Defaults to experimental built-in direct search;
    * `firecrawl` adds AI-ready scraped results and `ollama` uses Ollama Cloud's
    * account-backed search API (both BYOK). */
   provider: WebSearchProvider;
@@ -67,9 +67,9 @@ export interface MarifoldWebSearchConfig {
 }
 
 export const DEFAULT_WEB_SEARCH_CONFIG: MarifoldWebSearchConfig = {
-  enabled: false,
+  enabled: true,
   maxResults: 5,
-  provider: 'duckduckgo',
+  provider: 'builtin',
 };
 
 export function resolveWebSearchConfig(partial?: Partial<MarifoldWebSearchConfig>): MarifoldWebSearchConfig {

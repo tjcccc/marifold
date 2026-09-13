@@ -1,4 +1,5 @@
 import { MarifoldWebSearchConfig } from '../config/ConfigSchema';
+import { BuiltInSearchBackend } from './BuiltInSearchBackend';
 import { DuckDuckGoBackend } from './DuckDuckGoBackend';
 import { FirecrawlBackend } from './FirecrawlBackend';
 import { OllamaSearchBackend } from './OllamaSearchBackend';
@@ -11,6 +12,7 @@ import { SearchBackend } from './SearchBackend';
  * cascade):
  *   - `firecrawl` → FirecrawlBackend (BYOK; AI-ready scraped results)
  *   - `ollama`    → OllamaSearchBackend (BYOK; Ollama Cloud search)
+ *   - `builtin` → BuiltInSearchBackend (default, experimental direct engine access)
  *   - else        → DuckDuckGoBackend (keyless best-effort floor)
  *
  * Provider-hosted model search resolves separately through the provider/model
@@ -18,6 +20,7 @@ import { SearchBackend } from './SearchBackend';
  * while that native path is active.
  */
 export function createSearchBackend(config: MarifoldWebSearchConfig): SearchBackend {
+  if (config.provider === 'builtin') return new BuiltInSearchBackend({ proxy: config.proxy });
   if (config.provider === 'firecrawl') {
     return new FirecrawlBackend({
       apiKey: config.apiKey,

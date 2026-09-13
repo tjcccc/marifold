@@ -89,6 +89,70 @@ async function collect(events: AsyncGenerator<AgentEvent>): Promise<AgentEvent[]
 const planResponse = response({ text: '{"title": "Test plan", "steps": ["Read the file", "Summarize"]}' });
 
 describe('AgentRunner', () => {
+  it.each([
+    ['native', true], ['native', false], ['control-block', true], ['control-block', false],
+  ] as const)('reads a source when the model stops after search (%s, approved=%s)', async (toolMode, approved) => {
+    const engine = new ScriptedEngine([
+      toolMode === 'native'
+        ? response({ toolCalls: [{ id: 'search', name: 'web_search', arguments: { query: 'weather' } }] })
+        : response({ text: '<tool_call name="web_search">{"query":"weather"}</tool_call>' }),
+      response({ text: 'Premature answer.' }),
+      response({ text: approved ? 'Verified answer with source.' : 'Page reading was declined.' }),
+    ]);
+    const search = fakeTool({ name: 'web_search', kind: 'network', execute: async () => ({ content: 'https://public.org', webResearch: { sourceCount: 1, sourceUrls: ['https://public.org'] } }) });
+    const readExecution = vi.fn(async () => ({ content: 'Temperature: 24°C' }));
+    const read = fakeTool({ name: 'read_web_page', kind: 'network', execute: readExecution });
+    const { runner } = makeRunner(engine, [search, read], { toolMode }, {
+      prepareEngine: async () => ({ engine, config: { provider: 'mock', model: 'test-model' }, webSearchMode: 'fallback' }),
+    });
+    const events = await collect(runner.run({ objective: 'Find current weather.', cwd: tempDir(),
+      approvalHandler: async request => ({ approved: request.tool === 'web_search' || approved }),
+    }));
+    expect(engine.requests).toHaveLength(3);
+    expect(readExecution).toHaveBeenCalledTimes(approved ? 1 : 0);
+    const requests = events.filter(event => event.type === 'tool_request');
+    expect(requests).toHaveLength(2);
+    expect(requests[1]).toMatchObject({ call: { tool: 'read_web_page', input: { url: 'https://public.org' } } });
+    expect(events.some(event => event.type === 'text' && event.text === 'Premature answer.')).toBe(false);
+    expect(events.at(-1)).toMatchObject({ type: 'done', status: 'completed' });
+    expect(JSON.stringify(engine.requests[2])).toContain(approved ? 'Temperature: 24°C' : 'Tool call denied');
+  });
+
+  it.each(['native', 'control-block'] as const)('recovers once from an empty response after a tool (%s)', async toolMode => {
+    const engine = new ScriptedEngine([
+      toolMode === 'native'
+        ? response({ toolCalls: [{ id: 'page', name: 'read_web_page', arguments: {} }] })
+        : response({ text: '<tool_call name="read_web_page">{}</tool_call>' }),
+      response({ text: '   ' }),
+      response({ text: 'The source reports a forecast of 23–30°C.' }),
+    ]);
+    const persistTurn = vi.fn(async () => {});
+    const { runner } = makeRunner(engine, [fakeTool({ name: 'read_web_page', kind: 'network' })], { toolMode }, {
+      persistTurn,
+      prepareEngine: async () => ({ engine, config: { provider: 'mock', model: 'test-model' }, webSearchMode: 'fallback' }),
+    });
+    const events = await collect(runner.run({ objective: 'Read the weather source.', cwd: tempDir(), sessionId: 'empty-recovery',
+      approvalHandler: async () => ({ approved: true }),
+    }));
+    expect(engine.requests).toHaveLength(3);
+    expect(engine.requests[2].context?.join(' ')).toContain('no visible answer or tool call');
+    expect(events.filter(event => event.type === 'text' && event.phase === 'final')).toEqual([
+      { type: 'text', text: 'The source reports a forecast of 23–30°C.', phase: 'final' },
+    ]);
+    expect(events.at(-1)).toMatchObject({ type: 'done', status: 'completed', summary: 'The source reports a forecast of 23–30°C.' });
+    expect(persistTurn).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([1, 5])('fails visibly on empty output within an iteration limit of %s', async maxIterations => {
+    const engine = new ScriptedEngine([response({ text: '' })]);
+    const { runner } = makeRunner(engine, []);
+    const events = await collect(runner.run({ objective: 'Answer the question.', cwd: tempDir(), maxIterations }));
+    expect(engine.requests).toHaveLength(Math.min(2, maxIterations));
+    expect(events).toContainEqual(expect.objectContaining({ type: 'error', code: 'AGENT_EMPTY_RESPONSE' }));
+    expect(events.at(-1)).toMatchObject({ type: 'done', status: 'failed', summary: expect.stringContaining('no final answer') });
+    expect(events.some(event => event.type === 'done' && event.status === 'completed')).toBe(false);
+  });
+
   it('tallies token usage across plan and loop turns', async () => {
     const withUsage = (
       partial: Partial<PriestResponse>,
@@ -146,7 +210,7 @@ describe('AgentRunner', () => {
     const engine = new ScriptedEngine([response({ text: 'Current answer.' })]);
     const { runner } = makeRunner(
       engine,
-      [fakeTool({ name: 'web_search', kind: 'network' }), fakeTool({ name: 'read_file' })],
+      [fakeTool({ name: 'web_search', kind: 'network' }), fakeTool({ name: 'read_web_page', kind: 'network' }), fakeTool({ name: 'read_file' })],
       {},
       {
         prepareEngine: async () => ({
@@ -979,7 +1043,7 @@ describe('AgentRunner', () => {
     expect(engine.requests[1].providerTools).toBeUndefined();
     expect(engine.requests[1].config.providerOptions?.marifold_native_web_search).toBeUndefined();
     expect(engine.requests[1].tools?.map(tool => tool.name)).toContain('web_search');
-    expect(engine.requests[1].context?.join('\n')).toContain('Marifold fallback web search is available');
+    expect(engine.requests[1].context?.join('\n')).toContain('read_web_page opens a public source');
     expect(JSON.stringify(engine.requests[2].toolExchange)).toContain('tool output');
 
     const task = taskStore.get(done.taskId)!;

@@ -116,11 +116,11 @@ export function registerConfigCommand(program: Command, printer: ConsolePrinter)
   config
     .command('search')
     .description("Configure Marifold's fallback web search (DuckDuckGo, Firecrawl, or Ollama Cloud).")
-    .option('--provider <name>', 'Fallback provider: duckduckgo, firecrawl, ollama, or off.')
+    .option('--provider <name>', 'Fallback provider: builtin, duckduckgo, firecrawl, ollama, or off.')
     .option('--api-key-env <name>', 'Env var holding the selected search provider API key.')
     .option('--scrape', 'Firecrawl: scrape each result into markdown (costs more).')
-    .option('--enable', 'Enable Marifold fallback search.')
-    .option('--disable', 'Disable Marifold fallback search; provider-hosted search remains available.')
+    .option('--enable', 'Enable native-first web search.')
+    .option('--disable', 'Disable all web search, including provider-hosted search.')
     .action(async (options: ConfigSearchOptions) => {
       let prompt: InteractivePrompt | undefined;
       try {
@@ -169,14 +169,14 @@ export function searchUpdateFromFlags(options: ConfigSearchOptions): Partial<Mar
   const provider = options.provider?.toLowerCase();
   if (provider === 'off') {
     update.enabled = false;
-  } else if (provider === 'duckduckgo' || provider === 'firecrawl' || provider === 'ollama') {
+  } else if (provider === 'builtin' || provider === 'duckduckgo' || provider === 'firecrawl' || provider === 'ollama') {
     update.provider = provider;
     update.enabled = true;
     if (provider === 'ollama' && !options.apiKeyEnv) {
       update.apiKeyEnv = 'OLLAMA_API_KEY';
     }
   } else if (provider !== undefined) {
-    throw MarifoldError.configInvalid('Expected --provider to be "duckduckgo", "firecrawl", "ollama", or "off".');
+    throw MarifoldError.configInvalid('Expected --provider to be "builtin", "duckduckgo", "firecrawl", "ollama", or "off".');
   }
   if (options.apiKeyEnv) update.apiKeyEnv = options.apiKeyEnv;
   if (options.scrape) update.scrape = true;
@@ -190,12 +190,14 @@ async function searchUpdateInteractive(
   style: TerminalStyle,
 ): Promise<Partial<MarifoldWebSearchConfig>> {
   const provider = await pickOption(getPrompt, style, 'Fallback web search provider:', [
-    { label: 'DuckDuckGo — keyless, best-effort (default)', value: 'duckduckgo' as const },
+    { label: 'Built-in — experimental, no API key (default)', value: 'builtin' as const },
+    { label: 'DuckDuckGo — keyless, best-effort', value: 'duckduckgo' as const },
     { label: 'Firecrawl — AI-ready results (needs an API key)', value: 'firecrawl' as const },
     { label: 'Ollama Cloud — account-backed search (needs an API key)', value: 'ollama' as const },
-    { label: 'Off — disable only Marifold fallback search', value: 'off' as const },
+    { label: 'Off — disable all web search', value: 'off' as const },
   ]);
   if (provider === 'off') return { enabled: false };
+  if (provider === 'builtin') return { provider: 'builtin', enabled: true };
   if (provider === 'duckduckgo') return { provider: 'duckduckgo', enabled: true };
 
   if (provider === 'ollama') {
@@ -264,7 +266,7 @@ async function readLine(prompt: InteractivePrompt, style: TerminalStyle, label: 
 
 function printSearchSummary(config: MarifoldWebSearchConfig | undefined): void {
   if (!config) return;
-  process.stdout.write(`Fallback web search: ${config.provider}${config.enabled ? '' : ' (off; provider-hosted search unaffected)'}\n`);
+  process.stdout.write(`Fallback web search: ${config.provider}${config.enabled ? '' : ' (all web search off)'}\n`);
   if (config.provider === 'firecrawl') {
     const key = config.apiKeyEnv ? `env ${config.apiKeyEnv}` : config.apiKey ? 'stored in config' : 'keyless (rate-limited)';
     process.stdout.write(`  key: ${key}\n  scrape: ${config.scrape ? 'on' : 'off'}\n`);

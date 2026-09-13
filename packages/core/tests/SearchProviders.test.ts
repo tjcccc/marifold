@@ -7,6 +7,7 @@ import {
   ConfigManager,
   createSearchBackend,
   DuckDuckGoBackend,
+  BuiltInSearchBackend,
   FirecrawlBackend,
   MarifoldRuntime,
   OllamaSearchBackend,
@@ -55,6 +56,15 @@ afterEach(() => {
 });
 
 describe('web_search config', () => {
+  it('enables built-in fallback without configuration and preserves explicit off/provider choices', () => {
+    expect(resolveWebSearchConfig()).toMatchObject({ enabled: true, provider: 'builtin' });
+    expect(resolveWebSearchConfig({ enabled: false, provider: 'firecrawl' })).toMatchObject({ enabled: false, provider: 'firecrawl' });
+    const configPath = writeConfig(tempDir());
+    const loaded = new ConfigLoader().load({ configPath });
+    new ConfigManager(loaded).setValue('web_search.provider', 'builtin');
+    expect(new ConfigLoader().load({ configPath }).config.webSearch).toMatchObject({ enabled: true, provider: 'builtin' });
+  });
+
   it('parses provider, api_key_env, and scrape from [web_search]', () => {
     const configPath = writeConfig(tempDir(), `
 [web_search]
@@ -74,13 +84,13 @@ scrape = true
     });
   });
 
-  it('defaults provider to duckduckgo when [web_search] omits it', () => {
+  it('defaults provider to builtin when [web_search] omits it', () => {
     const configPath = writeConfig(tempDir(), `
 [web_search]
 enabled = true
 `);
     const loaded = new ConfigLoader().load({ configPath });
-    expect(loaded.config.webSearch?.provider).toBe('duckduckgo');
+    expect(loaded.config.webSearch?.provider).toBe('builtin');
   });
 
   it('rejects an unknown provider', () => {
@@ -147,11 +157,21 @@ describe('createSearchBackend', () => {
     expect(createSearchBackend(resolveWebSearchConfig({ provider: 'firecrawl' }))).toBeInstanceOf(FirecrawlBackend);
     expect(createSearchBackend(resolveWebSearchConfig({ provider: 'ollama' }))).toBeInstanceOf(OllamaSearchBackend);
     expect(createSearchBackend(resolveWebSearchConfig({ provider: 'duckduckgo' }))).toBeInstanceOf(DuckDuckGoBackend);
-    expect(createSearchBackend(resolveWebSearchConfig(undefined))).toBeInstanceOf(DuckDuckGoBackend);
+    expect(createSearchBackend(resolveWebSearchConfig(undefined))).toBeInstanceOf(BuiltInSearchBackend);
   });
 });
 
 describe('live search configuration', () => {
+  it('does not search directly when the global switch is off', async () => {
+    const configPath = writeConfig(tempDir(), '[web_search]\nenabled = false\n');
+    const fetcher = vi.fn();
+    vi.stubGlobal('fetch', fetcher);
+    const runtime = new MarifoldRuntime({ loadedConfig: new ConfigLoader().load({ configPath }) });
+    try {
+      await expect(runtime.searchWeb('query')).rejects.toThrow('Web search is disabled.');
+      expect(fetcher).not.toHaveBeenCalled();
+    } finally { runtime.close(); }
+  });
   it('rebuilds the fallback backend after a Web/CLI config edit', async () => {
     const configPath = writeConfig(tempDir(), `
 [web_search]

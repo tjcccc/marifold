@@ -2,6 +2,33 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-09-13 — v0.71.0 — Experimental built-in web research
+
+- Enable native-first search by default with keyless DuckDuckGo HTML / Brave
+  HTML fallback. Retain explicit legacy provider choices; global off disables
+  both native and fallback search. Expose the experimental option in Web/CLI
+  settings and use existing host proxy configuration.
+- Add bounded public-page reading with date metadata, redirect validation,
+  direct DNS pinning, cancellation, per-run budgets, and duplicate suppression.
+  When an agent stops after finding sources without reading one, inspect the top
+  source once through normal approval and tool execution before continuing.
+- Guide source/date verification and natural answers in the user's language,
+  with short parenthetical source links. Preserve complete short-page evidence
+  even when focus keywords are supplied. Retry an empty model completion once;
+  repeated emptiness fails visibly instead of showing a successful empty answer.
+- Add parser, routing, config, network, extraction, budget, and agent regressions;
+  include a 30-query benchmark and disposable local-model research harness.
+  Document engine feasibility, evaluation results, proxy behavior, and limits in
+  `docs/web-search.md`.
+- Experimental limits: engine blocking/rate limits remain common. User testing
+  confirmed useful natural answers but also a Xi’an request answered as Shanghai
+  and weak relative-date verification. The cause of the city mismatch is not
+  yet established; successful retrieval does not guarantee factual relevance.
+- Validation: reused the passing full workspace gate (836 tests; optional Redis
+  skipped) and subsequent citation-guidance typecheck/build. Live local Gemma
+  runs demonstrated search, page reading, and cited answers; current-fact accuracy
+  remains inconsistent. All workspace manifests and the CLI synchronize to 0.71.0.
+
 ## 2026-09-13 — v0.70.8 — Stable open conversations
 
 - Stop workspace notifications from reloading the active transcript and remove

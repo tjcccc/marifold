@@ -683,6 +683,17 @@ describe('Global settings pages', () => {
     expect(screen.getByText(/configured/).textContent).not.toContain('test-secret');
   });
 
+  it('offers built-in search without API key setup and turns all search off', async () => {
+    const { WebSearchPage } = await import('../../src/screens/config/WebSearchPage');
+    const onSave = vi.fn();
+    render(<WebSearchPage search={{ enabled: true, provider: 'builtin', maxResults: 5, hasApiKey: false }} busy={false} onSave={onSave} />);
+    expect(screen.getByText(/No API key needed/)).toBeTruthy();
+    expect(screen.queryByLabelText('API key env')).toBeNull();
+    expect(screen.queryByText('Inline API key')).toBeNull();
+    fireEvent.click(screen.getAllByRole('radio', { name: 'Off' })[0]!);
+    expect(onSave).toHaveBeenCalledWith('enabled', 'false');
+  });
+
   it('offers Ollama Cloud as an explicit non-local fallback backend', async () => {
     const { WebSearchPage } = await import('../../src/screens/config/WebSearchPage');
     const onSave = vi.fn();

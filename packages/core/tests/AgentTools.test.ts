@@ -10,6 +10,7 @@ import { ReadAttachmentTool } from '../src/agent/tools/ReadAttachmentTool';
 import { ReadFileTool } from '../src/agent/tools/ReadFileTool';
 import { SearchAttachmentTool } from '../src/agent/tools/SearchAttachmentTool';
 import { ShellExecTool } from '../src/agent/tools/ShellExecTool';
+import { ReadWebPageTool } from '../src/agent/tools/ReadWebPageTool';
 import { WebSearchTool } from '../src/agent/tools/WebSearchTool';
 import { isInsideWorkspace, WriteFileTool } from '../src/agent/tools/WriteFileTool';
 import { SkillManagementTool } from '../src/agent/tools/SkillManagementTool';
@@ -58,6 +59,42 @@ function scopedContext(cwd: string, outputLimit = 100000): ToolExecutionContext 
   };
 }
 
+describe('WebSearchTool', () => {
+  it('bounds attempts and duplicate searches per run while allowing independent runs', async () => {
+    const tool = new WebSearchTool({ search: async () => [] });
+    const ctx = context(tempDir());
+    expect((await tool.execute({ query: 'first' }, ctx)).isError).toBeUndefined();
+    expect((await tool.execute({ query: 'first' }, ctx)).isError).toBe(true);
+    await tool.execute({ query: 'second' }, ctx);
+    await tool.execute({ query: 'third' }, ctx);
+    expect((await tool.execute({ query: 'fourth' }, ctx)).isError).toBe(true);
+    expect((await tool.execute({ query: 'fourth' }, context(tempDir()))).isError).toBeUndefined();
+  });
+  it('bounds page-read attempts and includes source provenance', async () => {
+    const tool = new ReadWebPageTool({ read: async () => ({ url: 'https://public.org', title: 'Source', text: 'Evidence', fetchedAt: '2026-09-13', truncated: false }) } as never);
+    const ctx = context(tempDir());
+    const result = await tool.execute({ url: 'https://public.org' }, ctx);
+    expect(result.content).toContain('not publication time');
+    expect(result.content).toContain('https://public.org');
+    expect((await tool.execute({ url: 'https://public.org' }, ctx)).content).toContain('already attempted');
+    await tool.execute({ url: 'https://public.org/2' }, ctx);
+    await tool.execute({ url: 'https://public.org/3' }, ctx);
+    expect((await tool.execute({ url: 'https://public.org/4' }, ctx)).content).toContain('budget exhausted');
+  });
+  it('exposes backend failure details in the renderer summary and bounds model output', async () => {
+    const tool = new WebSearchTool({ search: async () => { throw new Error('Brave HTML: HTTP 429'); } });
+    const result = await tool.execute({ query: '上海今天的天气' }, context(tempDir()));
+    expect(result.isError).toBe(true);
+    expect(result.summary).toContain('Brave HTML: HTTP 429');
+    expect(result.summary).toContain('上海今天的天气');
+    expect(result.content).toContain('Brave HTML: HTTP 429');
+    const large = new WebSearchTool({ search: async () => { throw new Error('x'.repeat(2000)); } });
+    const bounded = await large.execute({ query: 'test' }, context(tempDir(), 100));
+    expect(bounded.summary.length).toBeLessThan(500);
+    expect(bounded.content).toContain('truncated');
+  });
+});
+
 describe('ToolRegistry', () => {
   it('rejects duplicate tool names', () => {
     const registry = new ToolRegistry();
@@ -91,6 +128,7 @@ describe('ToolRegistry', () => {
       new ShellExecTool(),
       new PythonPackageTool(),
       new WebSearchTool({ search: async () => [] }),
+      new ReadWebPageTool(),
       new DelegateTool({
         ask: async () => ({ ok: true, text: '' }),
         listProfileNames: () => [],

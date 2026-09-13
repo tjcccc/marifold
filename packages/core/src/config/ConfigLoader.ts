@@ -323,10 +323,10 @@ function optionalWebSearchProvider(value: unknown, label: string): WebSearchProv
   if (provider === undefined) {
     return undefined;
   }
-  if (provider === 'duckduckgo' || provider === 'firecrawl' || provider === 'ollama') {
+  if (provider === 'builtin' || provider === 'duckduckgo' || provider === 'firecrawl' || provider === 'ollama') {
     return provider;
   }
-  throw MarifoldError.configInvalid(`Expected ${label} to be "duckduckgo", "firecrawl", or "ollama".`);
+  throw MarifoldError.configInvalid(`Expected ${label} to be "builtin", "duckduckgo", "firecrawl", or "ollama".`);
 }
 
 function optionalPositiveInteger(value: unknown, label: string): number | undefined {

@@ -61,6 +61,9 @@ export { PythonPackageTool } from './agent/tools/PythonPackageTool';
 export { ReadFileTool } from './agent/tools/ReadFileTool';
 export { ShellExecTool } from './agent/tools/ShellExecTool';
 export { WebSearchTool } from './agent/tools/WebSearchTool';
+export { ReadWebPageTool } from './agent/tools/ReadWebPageTool';
+export { WebPageReader } from './search/WebPageReader';
+export type { WebPage } from './search/WebPageReader';
 export { isInsideWorkspace, isInsideAny, WriteFileTool } from './agent/tools/WriteFileTool';
 export { SkillManagementTool } from './agent/tools/SkillManagementTool';
 export type { SkillManagementToolOptions } from './agent/tools/SkillManagementTool';
@@ -105,6 +108,7 @@ export {
   resolveRunArtifact,
 } from './agent/RunArtifacts';
 export type { RunArtifact, ResolvedRunArtifact } from './agent/RunArtifacts';
+export { BuiltInSearchBackend } from './search/BuiltInSearchBackend';
 export { DuckDuckGoBackend } from './search/DuckDuckGoBackend';
 export { FirecrawlBackend } from './search/FirecrawlBackend';
 export type { FirecrawlBackendOptions } from './search/FirecrawlBackend';

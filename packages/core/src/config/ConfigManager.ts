@@ -499,8 +499,8 @@ export class ConfigManager {
         search.maxResults = parsePositiveInteger(value, 'web_search.max_results');
         return;
       case 'provider':
-        if (value !== 'duckduckgo' && value !== 'firecrawl' && value !== 'ollama') {
-          throw MarifoldError.configInvalid('Expected web_search.provider to be duckduckgo, firecrawl, or ollama.');
+        if (value !== 'builtin' && value !== 'duckduckgo' && value !== 'firecrawl' && value !== 'ollama') {
+          throw MarifoldError.configInvalid('Expected web_search.provider to be builtin, duckduckgo, firecrawl, or ollama.');
         }
         search.provider = value;
         return;

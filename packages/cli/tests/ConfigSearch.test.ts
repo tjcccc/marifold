@@ -2,6 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { searchUpdateFromFlags } from '../src/commands/config';
 
 describe('config search flags', () => {
+  it('selects built-in search without credentials and supports a global off switch', () => {
+    expect(searchUpdateFromFlags({ provider: 'builtin' })).toEqual({ provider: 'builtin', enabled: true });
+    expect(searchUpdateFromFlags({ provider: 'off' })).toEqual({ enabled: false });
+  });
+
   it('selects Ollama Cloud with its conventional API-key environment variable', () => {
     expect(searchUpdateFromFlags({ provider: 'ollama' })).toEqual({
       provider: 'ollama',

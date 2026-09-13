@@ -12,6 +12,9 @@ import { ReadAttachmentTool } from '../agent/tools/ReadAttachmentTool';
 import { ReadFileTool } from '../agent/tools/ReadFileTool';
 import { SearchAttachmentTool } from '../agent/tools/SearchAttachmentTool';
 import { ShellExecTool } from '../agent/tools/ShellExecTool';
+import { ReadWebPageTool } from '../agent/tools/ReadWebPageTool';
+import { WebPageReader } from '../search/WebPageReader';
+import { WEB_ANSWER_STYLE, webResearchGuidance } from '../search/WebResearchGuidance';
 import { WebSearchTool } from '../agent/tools/WebSearchTool';
 import { AskUserTool } from '../agent/tools/AskUserTool';
 import { InspectAttachmentTool } from '../agent/tools/InspectAttachmentTool';
@@ -500,6 +503,7 @@ export class MarifoldRuntime {
   /** Run the selected web-search backend directly for non-chat integrations. */
   async searchWeb(query: string, maxResults?: number): Promise<string> {
     const config = resolveWebSearchConfig(this.options.loadedConfig.config.webSearch);
+    if (!config.enabled) throw new Error('Web search is disabled.');
     const results = await this.searchBackend.search(query, maxResults ?? config.maxResults);
     return formatSearchResults(query, results);
   }
@@ -957,7 +961,7 @@ export class MarifoldRuntime {
   createHostContextTools(profile?: string): ToolRegistry {
     const registry = new ToolRegistry();
     for (const tool of this.createDefaultToolRegistry(profile).list()) {
-      if (tool.kind === 'interaction' || ['web_search', 'delegate'].includes(tool.definition.name)) registry.register(tool);
+      if (tool.kind === 'interaction' || ['web_search', 'read_web_page', 'delegate'].includes(tool.definition.name)) registry.register(tool);
     }
     return registry;
   }
@@ -999,6 +1003,7 @@ export class MarifoldRuntime {
     const approval = this.resolveAgentConfigForProfile(profile).approval;
     if (webSearch.enabled && approval.network !== 'deny') {
       registry.register(new WebSearchTool(this.searchBackend, webSearch.maxResults));
+      registry.register(new ReadWebPageTool(new WebPageReader({ proxy: webSearch.proxy })));
     }
     registry.register(new DelegateTool({
       ask: async request => {
@@ -1596,18 +1601,19 @@ export class MarifoldRuntime {
     const agentConfig = this.resolveAgentConfigForProfile(request.profile);
     const approval = agentConfig.approval;
     const tools: AgentTool[] = [];
-    if (webSearchMode === 'fallback') tools.push(new WebSearchTool(this.searchBackend, webSearch.maxResults));
+    if (webSearchMode === 'fallback') tools.push(new WebSearchTool(this.searchBackend, webSearch.maxResults), new ReadWebPageTool(new WebPageReader({ proxy: webSearch.proxy })));
     if (approval.read === 'allow') tools.push(new ReadFileTool());
     if (tools.length === 0) return undefined;
 
     const outputLimit = agentConfig.toolOutputLimit;
+    const toolContext = { cwd: process.cwd(), outputLimit, signal: request.signal };
     return {
       definitions: tools.map(tool => tool.definition),
       execute: async (name, args) => {
         const tool = tools.find(t => t.definition.name === name);
         if (!tool) return { content: `Unknown tool '${name}'.`, isError: true };
         try {
-          const result = await tool.execute(args, { cwd: process.cwd(), outputLimit });
+          const result = await tool.execute(args, toolContext);
           return { content: result.content, isError: result.isError };
         } catch (error) {
           return { content: `Tool '${name}' failed: ${error instanceof Error ? error.message : String(error)}`, isError: true };
@@ -1695,7 +1701,7 @@ export class MarifoldRuntime {
     settings: Pick<MarifoldResolvedSettings, 'profile' | 'provider' | 'model'>,
     modelToolsEnabled = true,
   ): { mode: MarifoldWebSearchMode; nativeStrategy: NativeWebSearchStrategy } {
-    if (!modelToolsEnabled) {
+    if (!modelToolsEnabled || !resolveWebSearchConfig(this.options.loadedConfig.config.webSearch).enabled) {
       return { mode: 'unavailable', nativeStrategy: 'none' };
     }
     const approval = this.resolveAgentConfigForProfile(settings.profile).approval;
@@ -1741,7 +1747,9 @@ export class MarifoldRuntime {
   ): string[] {
     const context = ['Running inside Marifold.'];
     if (webSearchMode === 'native') {
-      context.push('Provider-hosted web search is available for this run. Use it for web or current-information requests; Marifold fallback search is not exposed while native search is available.');
+      context.push('Provider-hosted web search is available for this run. Use it for web or current-information requests; Marifold fallback search is not exposed while native search is available. ' + WEB_ANSWER_STYLE);
+    } else if (webSearchMode === 'fallback') {
+      context.push(webResearchGuidance());
     } else if (webSearchMode === 'unavailable') {
       context.push(WEB_SEARCH_UNAVAILABLE_CONTEXT);
     }

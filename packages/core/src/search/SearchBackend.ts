@@ -5,12 +5,11 @@ export interface SearchResultItem {
 }
 
 /**
- * Pluggable web search backend. DuckDuckGo scraping is the no-API-key
- * default, but it is brittle by nature — keep this interface narrow so
- * Brave/SearXNG/other backends can replace it without touching callers.
+ * Pluggable web search backend. Built-in direct search is the experimental
+ * no-API-key default. Keep callers independent of engine-specific retrieval.
  */
 export interface SearchBackend {
-  search(query: string, maxResults?: number): Promise<SearchResultItem[]>;
+  search(query: string, maxResults?: number, signal?: AbortSignal): Promise<SearchResultItem[]>;
 }
 
 /** Format results as the numbered text block priests injects (search.py). */
@@ -30,7 +29,7 @@ export function formatSearchContext(searchResults: string): string {
   return (
     '## Web search results\n\n'
     + "Use the following web search results to answer the user's current question. "
-    + 'Do not request another web search for this turn. '
+    + 'If needed, read a promising source or refine the query within the tool budget. '
     + 'If the results are insufficient or irrelevant, say what could not be confirmed.\n\n'
     + searchResults
   );

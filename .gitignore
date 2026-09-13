@@ -8,3 +8,4 @@ output/playwright/
 .env.*
 !.env.example
 output/bridge-review*/
+output/search-benchmark*.json
