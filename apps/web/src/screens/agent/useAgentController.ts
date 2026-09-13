@@ -49,7 +49,6 @@ import { RunFollowers } from '../../state/followers';
 import type { ThreadState, UserAttachment } from '../../state/thread';
 import { activeRun, createThreadState, threadReducer } from '../../state/thread';
 
-const RUN_POLL_INTERVAL_MS = 10_000;
 const RUN_SETTLE_POLL_MS = 75;
 const RUN_SETTLE_TIMEOUT_MS = 15_000;
 
@@ -385,16 +384,6 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Poll for runs started elsewhere (Telegram/TUI) while the tab is visible.
-  useEffect(() => {
-    if (!sessionId) return;
-    const timer = setInterval(() => {
-      if (document.visibilityState !== 'visible') return;
-      catchUpRuns(sessionId).catch(() => undefined);
-    }, RUN_POLL_INTERVAL_MS);
-    return () => clearInterval(timer);
-  }, [sessionId, catchUpRuns]);
-
   const refreshProfiles = useCallback(async () => {
     try {
       setProfiles(await listProfiles(client));
@@ -453,7 +442,8 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
     void refreshProfiles(); void refreshSessions(); void refreshRuns();
     void getModels(client).then(models => setModelOptions(models.options)).catch(() => undefined);
     if (profileName) void getSkills(client, profileName).then(setSkills).catch(() => undefined);
-    if (sessionId && !activeRun(threadRef.current)) void loadSession(sessionId);
+    // An open transcript belongs to this view. Remote changes are adopted only
+    // when the user reloads or reopens the session.
   });
 
   const selectProfile = useCallback(

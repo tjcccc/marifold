@@ -28,6 +28,52 @@ const profile: ProfileDetail = {
 };
 
 describe('useAgentController session lifecycle', () => {
+  it.each(['', '/v1/workspaces/guest'])('keeps the open %s transcript unchanged until reopened', async (baseUrl) => {
+    let turns = [{ role: 'user', content: 'Hello' }, { role: 'assistant', content: 'Original answer' }];
+    const request = vi.fn(async (_method: string, path: string) => {
+      if (path === '/v1/profiles') return { profiles: [profile] };
+      if (path === '/v1/models') return { default: {}, options: [] };
+      if (path === '/v1/profiles/prompt-maker') return { profile };
+      if (path.startsWith('/v1/skills?')) return { skills: [] };
+      if (path.startsWith('/v1/sessions?')) return { sessions: [{ id: 'session-a' }] };
+      if (path === '/v1/runs') return { runs: [] };
+      if (path === '/v1/sessions/session-a') return { session: { turns } };
+      if (path === '/v1/sessions/session-b') return { session: { turns: [] } };
+      throw new Error(`Unexpected request: ${path}`);
+    });
+    const client = { baseUrl, request } as unknown as ApiClient;
+    const navigate = vi.fn();
+    const onUnauthorized = vi.fn();
+    const { result } = renderHook(() => useAgentController({ client,
+      route: { view: 'agent', profile: 'prompt-maker', session: 'session-a' },
+      navigate, onUnauthorized,
+    }));
+    await waitFor(() => expect(result.current.thread.items).toHaveLength(2));
+    const original = result.current.thread.items;
+    const sessionReads = () => request.mock.calls.filter(([, path]) => path === '/v1/sessions/session-a').length;
+    const reads = sessionReads();
+    turns = [...turns, { role: 'user', content: 'From another device' }];
+    for (let i = 0; i < 3; i++) {
+      await act(async () => { window.dispatchEvent(new CustomEvent('marifold-workspace-changed', { detail: baseUrl })); });
+      expect(result.current.thread.items).toBe(original);
+      expect(sessionReads()).toBe(reads);
+    }
+    vi.useFakeTimers();
+    const runReads = request.mock.calls.filter(([, path]) => path === '/v1/runs').length;
+    try {
+      await act(async () => { await vi.advanceTimersByTimeAsync(30_000); });
+      expect(request.mock.calls.filter(([, path]) => path === '/v1/runs')).toHaveLength(runReads);
+      expect(result.current.thread.items).toBe(original);
+    } finally {
+      vi.useRealTimers();
+    }
+    act(() => result.current.selectSession('session-b'));
+    await waitFor(() => expect(result.current.thread.items).toHaveLength(0));
+    act(() => result.current.selectSession('session-a'));
+    await waitFor(() => expect(result.current.thread.items).toHaveLength(3));
+    expect(result.current.thread.items[2]).toMatchObject({ text: 'From another device' });
+  });
+
   it('keeps the root Agent route on the profile picker', async () => {
     const client: ApiClient = {
       baseUrl: '',

@@ -2,6 +2,16 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-09-13 — v0.70.8 — Stable open conversations
+
+- Stop workspace notifications from reloading the active transcript and remove
+  polling for newly started remote runs. Responses started in the current view
+  stream normally; reload or reopen the session to see another device's changes.
+- Document manual transcript refresh and cover host/guest views with regressions
+  for repeated notifications, absence of run polling, and reopening updated history.
+- Validation: reused passing workspace typecheck/build and all 220 Web tests;
+  synchronized version check passed. User confirmed the behavior works.
+
 ## 2026-09-12 — v0.70.7 — Workspace select arrow styling
 
 - Preserve the shared select arrow's size, position, and no-repeat settings by
