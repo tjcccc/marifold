@@ -191,6 +191,35 @@
   background: color-mix(in srgb, var(--danger) 10%, transparent);
 }
 
+.deviceList {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.deviceRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.deviceRow .remove {
+  align-self: center;
+  margin-top: 0;
+  flex-shrink: 0;
+  padding-block: 1px;
+}
+
+.hostRow:not(:last-child) {
+  margin-bottom: 4px;
+}
+
+.hostName {
+  color: var(--text-2);
+  font-weight: 700;
+}
+
 .actions {
   display: flex;
   justify-content: flex-end;
