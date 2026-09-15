@@ -5,7 +5,7 @@ import { SourceCitation } from './SourceCitation';
 import { CopyButton } from './CopyButton';
 import styles from './Markdown.module.css';
 
-export type SandboxLinkResolver = (href: string) => (() => void) | undefined;
+export type SandboxLinkResolver = (href: string) => (() => void) | { onClick: () => void; unavailable: boolean } | undefined;
 
 /** Renders assistant markdown from the lib/markdown token tree — React
  * elements only, no innerHTML anywhere. */
@@ -162,10 +162,12 @@ function Inline({ nodes, resolveSandboxLink }: { nodes: InlineNode[]; resolveSan
           case 'link':
             if (node.citation) return <SourceCitation key={index} href={node.href} title={inlineText(node.children)} />;
             if (node.href.startsWith('sandbox:')) {
-              const onClick = resolveSandboxLink?.(node.href);
-              return onClick ? (
-                <button key={index} type="button" onClick={onClick} className={`${styles.link} ${styles.downloadLink}`}>
+              const link = resolveSandboxLink?.(node.href);
+              const unavailable = typeof link === 'object' && link.unavailable;
+              return link ? (
+                <button key={index} type="button" onClick={typeof link === 'function' ? link : link.onClick} disabled={unavailable} className={`${styles.link} ${styles.downloadLink}`}>
                   <Inline nodes={node.children} resolveSandboxLink={resolveSandboxLink} />
+                  {unavailable ? ' (unavailable)' : null}
                 </button>
               ) : (
                 <span key={index}>

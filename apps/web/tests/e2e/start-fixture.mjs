@@ -3,7 +3,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { resolveAgentConfig, SessionResolver } from '../../../../packages/core/dist/index.js';
+import { resolveAgentConfig, SessionResolver, WorkspaceStore, listRunArtifacts } from '../../../../packages/core/dist/index.js';
 import { createMarifoldService } from '../../../../packages/service/dist/index.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -110,6 +110,33 @@ const remoteLoadedConfig = {
   configPath: path.join(remoteStateDir, 'config.toml'),
   foundConfig: true,
 };
+// A deliverable whose live run expired two days ago must still download through
+// the paired guest. All fixture bytes and session state are disposable.
+const artifactRunId = `run_browser_fixture_${Date.now()}`;
+const artifactDirectory = path.join(os.homedir(), '.marifold', 'runs', artifactRunId);
+const artifactOutput = path.join(artifactDirectory, 'output');
+fs.mkdirSync(artifactOutput, { recursive: true });
+fs.writeFileSync(path.join(artifactOutput, 'home-desktop.png'), Buffer.from(png, 'base64'));
+fs.writeFileSync(path.join(artifactOutput, 'expired-desktop.png'), Buffer.from(png, 'base64'));
+const artifactStarted = new Date(Date.now() - 2 * 86400000).toISOString();
+const artifactFinished = new Date(Date.parse(artifactStarted) + 1000).toISOString();
+const artifactSessions = new SessionResolver(remoteLoadedConfig.config.paths.sessionsDb);
+await artifactSessions.appendExchange('session-download', 'remote-only', 'Capture the home desktop.', 'The screenshot is ready.', undefined, {
+  mode: 'agent', provider: 'ollama', model: 'fixture-model', think: false,
+  startedAt: artifactStarted, finishedAt: artifactFinished, latencyMs: 1000,
+});
+artifactSessions.close();
+const artifactStore = new WorkspaceStore(remoteLoadedConfig.configPath);
+const realNow = Date.now;
+try {
+  Date.now = () => Date.parse(artifactFinished);
+  artifactStore.runJournal.save({
+    id: artifactRunId, sessionId: 'session-download', profile: 'remote-only', objective: 'Capture the home desktop.',
+    summary: 'The screenshot is ready.', status: 'completed', createdAt: artifactStarted, finishedAt: artifactFinished,
+    eventCount: 1, artifacts: listRunArtifacts({ outputDir: artifactOutput }), pendingApprovals: [], pendingUserInputs: [],
+  });
+} finally { Date.now = realNow; artifactStore.close(); }
+fs.unlinkSync(path.join(artifactOutput, 'expired-desktop.png'));
 const remoteServer = createMarifoldService({ loadedConfig: remoteLoadedConfig, scheduler: false });
 await remoteServer.listen({ host: '127.0.0.1', port: 32142 });
 process.stdout.write('Remote Marifold fixture listening at http://127.0.0.1:32142\n');
@@ -125,6 +152,7 @@ let closing = false;
 async function close() {
   if (closing) return;
   closing = true;
+  fs.rmSync(artifactDirectory, { recursive: true, force: true });
   await remoteServer.close().catch(() => undefined);
   await server.close().catch(() => undefined);
   bridgeServer.closeAllConnections(); bridgeServer.close();

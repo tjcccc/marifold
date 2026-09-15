@@ -22,6 +22,23 @@ afterEach(() => {
 });
 
 describe('RunWorkspace', () => {
+  it('retains generated downloads while pruning expired scratch state and empty runs', () => {
+    const home = tempDir();
+    const runsDir = path.join(home, '.marifold', 'runs');
+    const options = { cwd: home, userHome: home, runsDir };
+    const generated = createRunWorkspace({ ...options, id: 'run_generated' });
+    const empty = createRunWorkspace({ ...options, id: 'run_empty' });
+    fs.writeFileSync(path.join(generated.outputDir, 'result.txt'), 'durable bytes');
+    fs.writeFileSync(path.join(generated.workDir, 'scratch.txt'), 'temporary');
+    const old = new Date(Date.now() - 2 * 86400000);
+    fs.utimesSync(generated.rootDir, old, old);
+    fs.utimesSync(empty.rootDir, old, old);
+    createRunWorkspace({ ...options, id: 'run_next' });
+    expect(fs.readFileSync(path.join(generated.outputDir, 'result.txt'), 'utf8')).toBe('durable bytes');
+    expect(fs.existsSync(generated.workDir)).toBe(false);
+    expect(fs.existsSync(empty.rootDir)).toBe(false);
+  });
+
   it('creates private run directories and stages binary inputs read-only', () => {
     const home = tempDir();
     const cwd = path.join(home, 'repo');

@@ -1,18 +1,19 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { WorkspaceStore } from '../src/workspace/WorkspaceStore';
 import { WorkspaceExecutor } from '../src/workspace/WorkspaceExecutor';
 import { resolveAgentConfig } from '../src/agent/ApprovalPolicy';
 import { listRunArtifacts } from '../src/agent/RunArtifacts';
 import { runScopedProcess } from '../src/agent/ScopedProcess';
 import type { RunWorkspace } from '../src/agent/RunWorkspace';
-import { RunRegistry } from '../src/runs/RunRegistry';
+import { RunRegistry, type RunRecord } from '../src/runs/RunRegistry';
 
 const dirs: string[] = [];
 const stores: WorkspaceStore[] = [];
 afterEach(() => {
+  vi.restoreAllMocks();
   for (const s of stores.splice(0)) s.close();
   for (const d of dirs.splice(0)) fs.rmSync(d, { recursive: true, force: true });
 });
@@ -27,6 +28,52 @@ function store(config = path.join(directory(), 'config.toml')) {
   return s;
 }
 describe('workspace recovery and device boundaries', () => {
+  it('retains session downloads and child provenance after live expiry, capacity eviction, and restart', async () => {
+    const config = path.join(directory(), 'config.toml');
+    const first = store(config);
+    const now = Date.now();
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(now);
+    const record = (id: string): RunRecord => ({
+      id, objective: 'Screenshot', profile: 'default', status: 'completed',
+      createdAt: new Date(now).toISOString(), finishedAt: new Date(now).toISOString(),
+      eventCount: 2, pendingApprovals: [], pendingUserInputs: [],
+      artifacts: [{ id: 'a'.repeat(24), name: 'home-desktop.png', mediaType: 'image/png', size: 4 }],
+      execution: { workspaceId: 'home', originDeviceId: 'office', executionDeviceId: 'host' },
+    });
+    const child = { ...record('child'), parentRunId: 'parent' };
+    const parent = { ...record('parent'), sessionId: 'session-screenshot', artifacts: [
+      { ...record('parent').artifacts![0], source: { runId: 'child', artifactId: 'a'.repeat(24) } },
+    ] };
+    first.runJournal.save(child);
+    first.runJournal.save(parent);
+    for (let i = 0; i < 60; i++) first.runJournal.save({ ...record(`other-${i}`), sessionId: 'other-session', artifacts: [] });
+    first.close();
+    clock.mockReturnValue(now + 2 * 86400000);
+    const restarted = store(config);
+    const registry = new RunRegistry({ journal: restarted.runJournal, runtime: {
+      createAgentRunner: () => { throw new Error('Must not recreate the screenshot'); },
+      setProfileAgentApproval: () => undefined,
+      addProfileTrustedFolder: (_p, f) => f,
+      defaultProfile: () => 'default',
+    } });
+    try {
+      expect(registry.list()).toEqual([]);
+      expect(registry.list('session-screenshot')).toEqual([parent]);
+      expect(registry.list('unknown-session')).toEqual([]);
+      expect(registry.require('parent')).toEqual(parent);
+      expect(registry.artifactOrigin('parent', 'a'.repeat(24))).toEqual({ run: child, artifactId: 'a'.repeat(24) });
+      expect(() => registry.artifactOrigin('parent', 'b'.repeat(24))).toThrow();
+      expect(registry.require('parent').pendingApprovals).toEqual([]);
+      const events = [];
+      for await (const event of registry.events('parent')) events.push(event);
+      expect(events).toEqual([{ seq: 2, event: { type: 'done', taskId: '', status: 'completed' } }]);
+      const caughtUp = [];
+      for await (const event of registry.events('parent', 2)) caughtUp.push(event);
+      expect(caughtUp).toEqual([]);
+      expect(() => registry.steer('parent', 'capture again')).toThrow();
+    } finally { registry.close(); }
+  });
+
   it('never replays an operation left running by a previous service process', async () => {
     const config = path.join(directory(), 'config.toml');
     const first = store(config);
@@ -88,6 +135,7 @@ describe('workspace recovery and device boundaries', () => {
     first.close();
     const second = new WorkspaceExecutor(() => resolveAgentConfig({}), runs);
     try {
+      expect(await second.handle('executor.artifact', { runId: 'artifact_run', artifactId: artifacts[0].id, metadata: true }, context)).toEqual({ available: true });
       const chunk = (await second.handle(
         'executor.artifact',
         { runId: 'artifact_run', artifactId: artifacts[0].id, offset: 0 },
@@ -105,6 +153,7 @@ describe('workspace recovery and device boundaries', () => {
         second.handle('executor.execute', { runId: 'artifact_run', tool: 'write_file', input: {} }, context),
       ).rejects.toThrow('unavailable');
       fs.rmSync(workspace.outputDir, { recursive: true });
+      expect(await second.handle('executor.artifact', { runId: 'artifact_run', artifactId: artifacts[0].id, metadata: true }, context)).toEqual({ available: false });
       fs.symlinkSync(d, workspace.outputDir);
       expect(listRunArtifacts(workspace)).toEqual([]);
       await expect(

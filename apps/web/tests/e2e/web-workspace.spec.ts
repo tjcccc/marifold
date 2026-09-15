@@ -1,5 +1,35 @@
 import { expect, test } from '@playwright/test';
 import { strToU8, zipSync } from 'fflate';
+import * as fs from 'node:fs/promises';
+
+test('guest downloads an expired-run artifact to the browser and restores it after reload', async ({ page, request }, testInfo) => {
+  await page.goto('/agent');
+  await page.getByRole('button', { name: 'Workspace', exact: true }).click();
+  await page.getByRole('button', { name: /Home workspace Paired/ }).click();
+  await page.getByRole('button', { name: 'Use at startup' }).click();
+  try {
+    await page.getByRole('button', { name: 'Open', exact: true }).click();
+    await expect(page.getByText('remote-only', { exact: true })).toBeVisible();
+    await page.goto('/agent/remote-only/session-download');
+    const button = page.getByRole('button', { name: 'Download home-desktop.png' });
+    for (let attempt = 0; attempt < 2; attempt++) {
+      await expect(button).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Download expired-desktop.png' })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Download expired-desktop.png' })).toBeDisabled();
+      await expect(page.getByRole('status').filter({ hasText: 'This file has expired or was removed.' })).toBeVisible();
+      const [download] = await Promise.all([page.waitForEvent('download'), button.click()]);
+      expect(download.suggestedFilename()).toBe('home-desktop.png');
+      expect(await download.failure()).toBeNull();
+      const saved = testInfo.outputPath(`download-${attempt}.png`);
+      await download.saveAs(saved);
+      expect(await fs.readFile(saved)).toEqual(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl2nGQAAAAASUVORK5CYII=', 'base64'));
+      await page.reload();
+    }
+    await expect(button).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Download expired-desktop.png' })).toBeDisabled();
+    await page.screenshot({ path: '../../output/playwright/unavailable-download.png' });
+  } finally { await request.put('/v1/workspaces/default', { data: { id: 'local' } }); }
+});
 
 test('Agent and Apps reuse one sidebar shell and header toggle', async ({ page }) => {
   await page.goto('/agent');
@@ -209,8 +239,8 @@ test('session dialogs and global settings are keyboard-operable', async ({ page 
 
   await page.getByRole('button', { name: 'Web search' }).click();
   await expect(page.getByText('Web search', { exact: true }).last()).toBeVisible();
-  await page.getByRole('radiogroup', { name: 'Marifold fallback' }).getByRole('radio', { name: 'On' }).click();
-  await expect(page.getByRole('radiogroup', { name: 'Marifold fallback' }).getByRole('radio', { name: 'On' }))
+  await page.getByRole('radiogroup', { name: 'Web search enabled' }).getByRole('radio', { name: 'On' }).click();
+  await expect(page.getByRole('radiogroup', { name: 'Web search enabled' }).getByRole('radio', { name: 'On' }))
     .toHaveAttribute('aria-checked', 'true');
 
   await page.getByRole('button', { name: 'Appearance', exact: true }).click();

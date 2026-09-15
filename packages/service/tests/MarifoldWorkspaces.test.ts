@@ -19,6 +19,7 @@ afterEach(async () => {
     b.close();
   }
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
   for (const dir of generatedRuns.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
   cleanupTempDirs();
 });
@@ -88,7 +89,7 @@ describe('device-hosted workspaces', () => {
         headers: { 'content-type': 'application/json' },
       });
     }));
-    const { run } = await post(p.guest, `${p.prefix}/v1/runs`, { objective: 'Create a fixture artifact.' });
+    const { run } = await post(p.guest, `${p.prefix}/v1/runs`, { objective: 'Create a fixture artifact.', sessionId: 'download-session' });
     let current = run;
     await expect.poll(async () => {
       current = (await p.host.inject(`/v1/runs/${run.id}`)).json().run;
@@ -102,6 +103,24 @@ describe('device-hosted workspaces', () => {
     expect(download.statusCode).toBe(200);
     expect(download.rawPayload).toEqual(original);
     expect(profiles.statusCode).toBe(200);
+    await p.host.close();
+    await p.guest.close();
+    const now = Date.now();
+    vi.spyOn(Date, 'now').mockReturnValue(now + 2 * 86400000);
+    const host = service(p.hostDir);
+    const guest = service(p.guestDir, true);
+    expect((await host.inject('/v1/runs')).json().runs).toEqual([]);
+    await expect.poll(async () => (await guest.inject(`${p.prefix}/v1/runs?sessionId=download-session`)).json().runs?.length).toBe(1);
+    const restored = await guest.inject(`${p.prefix}/v1/runs/${run.id}/artifacts/${current.artifacts[0].id}`);
+    expect(restored.statusCode, restored.body).toBe(200);
+    expect(restored.rawPayload).toEqual(original);
+    expect(restored.headers['content-disposition']).toContain('transfer.bin');
+    expect((await guest.inject(`${p.prefix}/v1/runs/${run.id}/artifacts`)).json().artifacts[0].available).toBe(true);
+    fs.unlinkSync(path.join(generatedRuns[0], 'output', 'transfer.bin'));
+    const unavailable = (await guest.inject(`${p.prefix}/v1/runs/${run.id}/artifacts`)).json().artifacts;
+    expect(unavailable).toEqual([expect.objectContaining({ name: 'transfer.bin', available: false })]);
+    expect((await guest.inject(`${p.prefix}/v1/runs?sessionId=download-session`)).json().runs[0].artifacts).toHaveLength(1);
+    expect((await guest.inject(`${p.prefix}/v1/runs?sessionId=another-session`)).json().runs).toEqual([]);
   }, 20000);
   it('shares the host surface without credentials or nested workspace access', async () => {
     const p = await paired();
@@ -187,6 +206,10 @@ describe('device-hosted workspaces', () => {
     expect(answered.size).toBe(2);
     expect(count).toBe(4);
     expect(prompts[1]).not.toContain('name="delegate_device"');
+    expect(prompts[0]).toContain('workspaceName');
+    expect(prompts[0]).toContain('hostDeviceId');
+    expect(prompts[0]).toContain('use delegate_device if it differs from executionDeviceId');
+    expect(prompts[0]).toContain('do not take a new screenshot');
     expect(current.artifacts).toHaveLength(1);
     expect(current.artifacts[0].source.runId).not.toBe(run.id);
     const download = await p.guest.inject(`${p.prefix}/v1/runs/${run.id}/artifacts/${current.artifacts[0].id}`);

@@ -864,9 +864,7 @@ export class AgentRunner {
     const base: PriestRequest & { providerTools?: MarifoldProviderToolDefinition[] } = {
       config,
       profile,
-      prompt: options.lean
-        ? options.objective
-        : `Objective: ${options.objective}\n\nUse tools only when the objective genuinely requires reading or writing files, running commands, searching the web, or delegating. Greetings, timeless explanations, and drafting from supplied information often need no tools. Questions about current facts or unfamiliar external sources require evidence: use available search and page-reading tools before answering. Do not invent tool calls. For a question, give the answer the user asked for. For an action request, briefly report what changed. Tool activity is supporting work, not the final deliverable.`,
+      prompt: options.objective,
       context: this.agentContext(state, workspace, webSearchMode, options.instructions, options.lean),
       ...(options.memory && options.memory.length > 0 ? { memory: options.memory } : {}),
       ...(options.sessionId ? { session: { id: options.sessionId, createIfMissing: true } } : {}),
@@ -936,7 +934,8 @@ export class AgentRunner {
     }
     const context = [
       'You are running as the Marifold agent. Stay focused on the stated objective and keep replies concise.',
-      'Answer directly when reliable information is already available. For current facts or external sources missing from context, gather evidence with the available tools before answering. Never use tools merely to demonstrate them.',
+      'Use tools only when the objective genuinely requires reading or writing files, running commands, searching the web, or delegating. Greetings, timeless explanations, and drafting from supplied information often need no tools. Answer directly when reliable information is already available. For current facts or external sources missing from context, gather evidence with the available tools before answering. Never use tools merely to demonstrate them. Do not invent tool calls.',
+      'For a question, give the answer the user asked for. For an action request, briefly report what changed. Tool activity is supporting work, not the final deliverable.',
       'After changing files or producing an observable result, use the narrowest relevant tool for a focused check before claiming success. Report the evidence you actually observed; do not invent results or perform a separate self-grade.',
       webSearchContext,
       ...(state.emptyResponseFollowup ? [state.emptyResponseFollowup] : []),
@@ -1008,8 +1007,8 @@ export class AgentRunner {
     const response = await engine.run({
       config,
       profile,
-      prompt: `Objective: ${options.objective}\n\nCreate a short execution plan for this objective. Reply with JSON {"title": string, "steps": string[]} using at most 5 short steps.`,
-      context: ['You are planning an agent task. Reply with JSON only.'],
+      prompt: options.objective,
+      context: ['You are planning an agent task. Create a short execution plan for the user request. Reply with JSON {"title": string, "steps": string[]} using at most 5 short steps. Reply with JSON only.'],
       output: { jsonSchema: PLAN_SCHEMA, jsonSchemaName: 'agent_plan' },
     }, { signal: options.signal });
     if (!response.ok) {

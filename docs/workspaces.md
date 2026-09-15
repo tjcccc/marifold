@@ -164,6 +164,12 @@ The child cannot delegate again. Child approvals, clarifications, results and
 artifacts appear in the parent conversation. Cancelling the parent cancels its
 children. Revoking a device cancels active workspace runs involving that identity.
 
+Device context identifies the workspace name, its host, the requesting device,
+and the execution device separately. A request for the workspace's home desktop
+targets its host; “my current device” means the requesting device. When these
+targets differ from the execution device, the agent must delegate the work or ask
+for clarification before acting.
+
 Guest execution is an explicit, locally revocable opt-in. It supports bounded file
 reading/writing, attachment inspection and the existing macOS shell sandbox.
 Each guest tool call requires a nonpersistent approval; host profile permissions
@@ -179,9 +185,18 @@ never interprets a requesting device's path as an upload; attachments carry byte
 
 Regular files in a run's output directory become authenticated downloadable
 artifacts. Files deliberately written elsewhere stay on that execution device and
-are not automatically copied. Completed guest artifacts remain readable after its
-service restarts, while execution capabilities and grants are never reconstructed.
-Downloads still require the relevant host and output device to be reachable.
+are not automatically copied. Download controls save files on the computer running
+the browser. They do not run a file-copy command on the workspace host.
+Completed artifact references persist separately from live run diagnostics and
+are restored when a session is reopened. Published output files survive the
+24-hour cleanup of temporary run state and remain stored until explicitly removed
+from the output device. Execution capabilities and grants are never reconstructed.
+Downloads still require the relevant host and output device to be reachable;
+files or references removed by older versions cannot be recovered automatically.
+If a retained file expires or is removed, its filename and disabled Download entry
+remain visible with an unavailability notice. The browser checks file availability
+when reopening the conversation. Offline devices remain retryable and are not
+labeled expired.
 
 The remote executor cannot read another workspace's control state, credentials or
 local Marifold data. Shell processes have no general network access, desktop

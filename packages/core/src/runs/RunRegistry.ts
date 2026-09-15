@@ -35,7 +35,12 @@ export interface RunRegistryRuntime {
   defaultProfile(): string;
 }
 
-export interface RunJournal { load(): Array<{ record: RunRecord; events: SequencedEvent[] }>; save(record: RunRecord, event?: SequencedEvent): void }
+export interface RunJournal {
+  load(): Array<{ record: RunRecord; events: SequencedEvent[] }>;
+  save(record: RunRecord, event?: SequencedEvent): void;
+  artifactRun?(runId: string): RunRecord | undefined;
+  sessionArtifactRuns?(sessionId: string): RunRecord[];
+}
 
 export interface RunRegistryOptions {
   journal?: RunJournal;
@@ -261,7 +266,7 @@ export class RunRegistry {
 
   get(runId: string): RunRecord | undefined {
     const run = this.runs.get(runId);
-    return run ? this.toRecord(run) : undefined;
+    return run ? this.toRecord(run) : this.journal?.artifactRun?.(runId);
   }
 
   require(runId: string): RunRecord {
@@ -270,11 +275,14 @@ export class RunRegistry {
     return record;
   }
 
-  list(): RunRecord[] {
+  list(sessionId?: string): RunRecord[] {
     this.sweepFinished();
-    return [...this.runs.values()]
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-      .map(run => this.toRecord(run));
+    const records = new Map((sessionId ? this.journal?.sessionArtifactRuns?.(sessionId) ?? [] : [])
+      .map(run => [run.id, run]));
+    for (const run of this.runs.values()) {
+      if (!sessionId || run.sessionId === sessionId) records.set(run.id, this.toRecord(run));
+    }
+    return [...records.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
 
   requireArtifact(runId: string, artifactId: string): ResolvedRunArtifact {
@@ -289,7 +297,19 @@ export class RunRegistry {
    * the run already finished). `signal` detaches the subscriber early. */
   async *events(runId: string, afterSeq = 0, signal?: AbortSignal): AsyncGenerator<SequencedEvent, void, unknown> {
     const run = this.runs.get(runId);
-    if (!run) throw MarifoldError.runNotFound(runId);
+    if (!run) {
+      const archived = this.journal?.artifactRun?.(runId);
+      if (!archived) throw MarifoldError.runNotFound(runId);
+      // A reconnecting client can finish without reviving expired diagnostics
+      // or any execution/approval capability.
+      if (!signal?.aborted && afterSeq < archived.eventCount) {
+        yield { seq: archived.eventCount, event: {
+          type: 'done', taskId: archived.taskId ?? '', status: archived.status,
+          summary: archived.summary, usage: archived.usage,
+        } };
+      }
+      return;
+    }
     let next = Math.max(afterSeq + 1, run.firstSeq);
     while (true) {
       while (next <= run.lastSeq) {

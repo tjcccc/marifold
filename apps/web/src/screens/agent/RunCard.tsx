@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import type { ApiClient } from '../../api/client';
 import type { RunApprovalAction, UserInputSubmission } from '../../api/types';
 import { formatElapsed, formatRunDuration } from '../../lib/format';
-import { downloadRunArtifact } from '../../lib/runArtifacts';
+import { ARTIFACT_UNAVAILABLE_NOTICE } from '../../lib/runArtifacts';
+import { useArtifactDownloads } from './useArtifactDownloads';
 import type { RunCardState } from '../../state/thread';
 import { ApprovalSheet } from './ApprovalSheet';
 import { QuestionSheet } from './QuestionSheet';
@@ -23,23 +24,7 @@ export interface RunCardProps {
 export function RunCard({ client, run, onCancel, onAnswer, onSubmitInput, onToggle }: RunCardProps) {
   const running = run.status === 'running';
   const showDetails = running || !run.collapsed;
-  const [downloading, setDownloading] = useState<string>();
-  const [artifactError, setArtifactError] = useState<string>();
-
-  async function downloadArtifact(id: string, name: string): Promise<void> {
-    if (!client) return;
-    setDownloading(id);
-    setArtifactError(undefined);
-    try {
-      const artifact = run.artifacts.find(candidate => candidate.id === id);
-      if (!artifact) throw new Error(`Generated file not found: ${name}`);
-      await downloadRunArtifact(client, run.runId, artifact);
-    } catch (error) {
-      setArtifactError(error instanceof Error ? error.message : String(error));
-    } finally {
-      setDownloading(undefined);
-    }
-  }
+  const { downloading, unavailable, error: artifactError, download } = useArtifactDownloads(client, run.runId, run.artifacts);
 
   return (
     <div className={running ? styles.cardRunning : styles.card}>
@@ -136,18 +121,20 @@ export function RunCard({ client, run, onCancel, onAnswer, onSubmitInput, onTogg
       {run.artifacts.length > 0 ? (
         <div className={styles.artifacts} aria-label="Generated files">
           {run.artifacts.map(artifact => (
-            <button
-              key={artifact.id}
-              className={styles.artifact}
-              aria-label={`Download ${artifact.name.split('/').at(-1) || artifact.name}`}
-              disabled={!client || downloading === artifact.id}
-              onClick={() => void downloadArtifact(artifact.id, artifact.name)}
-            >
-              <span aria-hidden>↓</span>
-              <span className={styles.artifactAction}>Download</span>
-              <span className={styles.artifactName}>{artifact.name}</span>
-              <span className={styles.artifactSize}>{formatBytes(artifact.size)}</span>
-            </button>
+            <div key={artifact.id}>
+              <button
+                className={styles.artifact}
+                aria-label={`Download ${artifact.name.split('/').at(-1) || artifact.name}`}
+                disabled={!client || downloading === artifact.id || unavailable.has(artifact.id)}
+                onClick={() => void download(artifact)}
+              >
+                <span aria-hidden>↓</span>
+                <span className={styles.artifactAction}>{unavailable.has(artifact.id) ? 'Unavailable' : 'Download'}</span>
+                <span className={styles.artifactName}>{artifact.name}</span>
+                <span className={styles.artifactSize}>{formatBytes(artifact.size)}</span>
+              </button>
+              {unavailable.has(artifact.id) ? <div className={styles.artifactNotice} role="status">{ARTIFACT_UNAVAILABLE_NOTICE}</div> : null}
+            </div>
           ))}
         </div>
       ) : null}

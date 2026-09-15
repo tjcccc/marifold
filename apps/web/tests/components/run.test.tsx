@@ -41,6 +41,43 @@ function cardFixture(partial: Partial<RunCardState> = {}): RunCardState {
 }
 
 describe('RunCard', () => {
+  it('keeps unavailable downloads visible with a notice after reopening', async () => {
+    const artifacts = [{ id: 'expired', name: 'home-desktop.png', mediaType: 'image/png', size: 4 }];
+    const blob = vi.fn();
+    const request = vi.fn(async () => ({ artifacts: artifacts.map(artifact => ({ ...artifact, available: false })) }));
+    const client = { blob, request } as unknown as ApiClient;
+    const run = cardFixture({ status: 'completed', collapsed: true, artifacts });
+    for (let i = 0; i < 2; i++) {
+      const view = render(<RunCard client={client} run={run} onCancel={() => {}} onAnswer={() => {}} onToggle={() => {}} />);
+      await waitFor(() => expect((screen.getByRole('button', { name: 'Download home-desktop.png' }) as HTMLButtonElement).disabled).toBe(true));
+      expect(screen.getByText('Unavailable')).toBeTruthy();
+      expect(screen.getByRole('status').textContent).toContain('expired or was removed');
+      fireEvent.click(screen.getByRole('button', { name: 'Download home-desktop.png' }));
+      expect(blob).not.toHaveBeenCalled();
+      view.unmount();
+    }
+    expect(request).toHaveBeenCalledWith('GET', '/v1/runs/run_1/artifacts');
+  });
+
+  it('marks a file unavailable if it disappears between checking and downloading', async () => {
+    const artifact = { id: 'removed', name: 'removed.pdf', mediaType: 'application/pdf', size: 4 };
+    const client = { blob: vi.fn(async () => undefined), request: vi.fn(async () => ({ artifacts: [{ ...artifact, available: true }] })) } as unknown as ApiClient;
+    render(<RunCard client={client} run={cardFixture({ status: 'completed', artifacts: [artifact] })} onCancel={() => {}} onAnswer={() => {}} onToggle={() => {}} />);
+    await waitFor(() => expect(client.request).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole('button', { name: 'Download removed.pdf' }));
+    await waitFor(() => expect(screen.getByText('Unavailable')).toBeTruthy());
+    expect((screen.getByRole('button', { name: 'Download removed.pdf' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('keeps an offline device retryable instead of labeling its files expired', async () => {
+    const client = { blob: vi.fn(async () => { throw new Error('Device offline'); }), request: vi.fn(async () => { throw new Error('Device offline'); }) } as unknown as ApiClient;
+    render(<RunCard client={client} run={cardFixture({ status: 'completed', artifacts: [{ id: 'remote', name: 'remote.txt', mediaType: 'text/plain', size: 4 }] })} onCancel={() => {}} onAnswer={() => {}} onToggle={() => {}} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Download remote.txt' }));
+    await waitFor(() => expect(screen.getByText('Device offline')).toBeTruthy());
+    expect((screen.getByRole('button', { name: 'Download remote.txt' }) as HTMLButtonElement).disabled).toBe(false);
+    expect(screen.queryByText('Unavailable')).toBeNull();
+  });
+
   it('renders the working status line with activity, elapsed clock, and cancel', () => {
     const onCancel = vi.fn();
     render(<RunCard run={cardFixture()} onCancel={onCancel} onAnswer={() => {}} onToggle={() => {}} />);
@@ -53,10 +90,13 @@ describe('RunCard', () => {
 
   it('downloads generated artifacts through the authenticated API client', async () => {
     const blob = vi.fn(async () => new Blob(['report'], { type: 'application/pdf' }));
-    const client = { blob } as unknown as ApiClient;
+    const client = { blob, request: vi.fn(async () => ({ artifacts: [] })) } as unknown as ApiClient;
     const createObjectURL = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:report');
     const revokeObjectURL = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
-    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+      expect(this.isConnected).toBe(true);
+      expect(this.download).toBe('report.pdf');
+    });
     const run = cardFixture({
       status: 'completed',
       collapsed: true,
@@ -71,7 +111,8 @@ describe('RunCard', () => {
     await waitFor(() => expect(blob).toHaveBeenCalledWith('/v1/runs/run_1/artifacts/artifact_1'));
     expect(createObjectURL).toHaveBeenCalled();
     expect(click).toHaveBeenCalled();
-    await waitFor(() => expect(revokeObjectURL).toHaveBeenCalledWith('blob:report'));
+    expect(document.querySelector('a[download="report.pdf"]')).toBeNull();
+    expect(revokeObjectURL).not.toHaveBeenCalled();
   });
 
   it('raises the approval sheet and dispatches each action', () => {
@@ -696,7 +737,7 @@ describe('ThreadView', () => {
 
   it('resolves model-authored sandbox links through the same-run artifact API', async () => {
     const blob = vi.fn(async () => new Blob(['workbook']));
-    const client = { blob } as unknown as ApiClient;
+    const client = { blob, request: vi.fn(async () => ({ artifacts: [] })) } as unknown as ApiClient;
     const createObjectURL = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:workbook');
     const revokeObjectURL = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
     const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
@@ -729,7 +770,7 @@ describe('ThreadView', () => {
     await waitFor(() => expect(blob).toHaveBeenCalledWith('/v1/runs/run_1/artifacts/artifact_1'));
     expect(createObjectURL).toHaveBeenCalled();
     expect(click).toHaveBeenCalled();
-    await waitFor(() => expect(revokeObjectURL).toHaveBeenCalledWith('blob:workbook'));
+    expect(revokeObjectURL).not.toHaveBeenCalledWith('blob:workbook');
     expect(screen.queryByText(/sandbox:\//)).toBeNull();
   });
 

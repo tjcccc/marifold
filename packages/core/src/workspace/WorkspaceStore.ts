@@ -67,6 +67,8 @@ export class WorkspaceStore {
       this.db.pragma('busy_timeout = 5000');
       this.db.exec(`
       CREATE TABLE IF NOT EXISTS run_records (id TEXT PRIMARY KEY, record TEXT NOT NULL, expires INTEGER NOT NULL);
+      CREATE TABLE IF NOT EXISTS run_artifacts (id TEXT PRIMARY KEY, session TEXT, record TEXT NOT NULL);
+      CREATE INDEX IF NOT EXISTS run_artifacts_session ON run_artifacts(session);
       CREATE TABLE IF NOT EXISTS run_events (run TEXT NOT NULL, seq INTEGER NOT NULL, event TEXT NOT NULL, PRIMARY KEY(run,seq));
       CREATE TABLE IF NOT EXISTS connections (id TEXT PRIMARY KEY, metadata TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS invitations (workspace TEXT PRIMARY KEY, verifier TEXT NOT NULL, expires INTEGER NOT NULL);
@@ -144,6 +146,10 @@ export class WorkspaceStore {
       record: import('../runs/RunRegistry').RunRecord;
       events: import('../runs/RunRegistry').SequencedEvent[];
     }> => {
+      // Preserve deliverable references from older services before live-run expiry.
+      this.db.exec(`INSERT OR IGNORE INTO run_artifacts
+        SELECT id, json_extract(record, '$.sessionId'), record FROM run_records
+        WHERE json_array_length(record, '$.artifacts') > 0 AND json_extract(record, '$.finishedAt') IS NOT NULL`);
       this.db
         .prepare('DELETE FROM run_events WHERE run IN (SELECT id FROM run_records WHERE expires < ?)')
         .run(Date.now());
@@ -177,12 +183,24 @@ export class WorkspaceStore {
             'INSERT INTO run_records VALUES (?,?,?) ON CONFLICT(id) DO UPDATE SET record=excluded.record,expires=excluded.expires',
           )
           .run(record.id, JSON.stringify(record), Date.now() + 86400000);
+        if (record.finishedAt && record.artifacts?.length) {
+          this.db.prepare('INSERT INTO run_artifacts VALUES (?,?,?) ON CONFLICT(id) DO UPDATE SET session=excluded.session,record=excluded.record')
+            .run(record.id, record.sessionId ?? null, JSON.stringify({ ...record, pendingApprovals: [], pendingUserInputs: [] }));
+        }
         if (event)
           this.db
             .prepare('INSERT OR REPLACE INTO run_events VALUES (?,?,?)')
             .run(record.id, event.seq, JSON.stringify(event.event));
         this.db.prepare('DELETE FROM run_events WHERE run=? AND seq<=?').run(record.id, record.eventCount - 10000);
       })();
+    },
+    artifactRun: (runId: string): import('../runs/RunRegistry').RunRecord | undefined => {
+      const row = this.db.prepare('SELECT record FROM run_artifacts WHERE id=?').get(runId) as { record: string } | undefined;
+      return row ? JSON.parse(row.record) : undefined;
+    },
+    sessionArtifactRuns: (sessionId: string): import('../runs/RunRegistry').RunRecord[] => {
+      const rows = this.db.prepare('SELECT record FROM run_artifacts WHERE session=?').all(sessionId) as { record: string }[];
+      return rows.map(row => JSON.parse(row.record));
     },
   };
   list(): WorkspaceConnection[] {

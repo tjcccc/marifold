@@ -78,6 +78,7 @@ export class WorkspaceExecutor {
         identifier(b.artifactId),
         this.runsDir ?? path.join(marifoldHome(), 'runs'),
       );
+      if (b.metadata === true) return { available: Boolean(artifact) };
       if (!artifact) throw new Error('Artifact is unavailable.');
       const offset = b.offset;
       if (typeof offset !== 'number' || !Number.isSafeInteger(offset) || offset < 0 || offset > artifact.size)

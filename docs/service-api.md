@@ -368,8 +368,9 @@ are in [docs/app.md](app.md).
 An agent run executes a multi-step objective with tools (file read/write,
 shell, web search, profile delegation) under the profile's approval policy.
 The run itself is ephemeral in-service state; its durable record is a task
-(`run.taskId` → `GET /v1/tasks/:taskId`). Finished runs stay queryable for
-~5 minutes.
+(`run.taskId` → `GET /v1/tasks/:taskId`). Live diagnostics retain up to 50 finished
+runs for 24 hours. Completed records with generated files are also stored
+separately for durable downloads, including child-run provenance.
 
 **`POST /v1/runs` → 201**
 
@@ -445,10 +446,11 @@ the agent within those capabilities.
 
 | Route | Returns |
 |---|---|
-| `GET /v1/runs` | All live + recently finished RunRecords, newest first |
-| `GET /v1/runs/:id` | One RunRecord (poll `pendingUserInputs` / `pendingApprovals` if not using SSE) |
-| `GET /v1/runs/:id/events` | Resumable SSE of AgentEvents (below) |
-| `GET /v1/runs/:id/artifacts/:artifactId` | Authenticated download for one regular file emitted from the run output directory. Returns `ARTIFACT_NOT_FOUND` after expiry or for an unknown ID |
+| `GET /v1/runs?sessionId=` | Without a filter: live + recently finished RunRecords. With `sessionId`: that session's retained runs plus durable completed records with generated files. Newest first |
+| `GET /v1/runs/:id` | One live or retained artifact RunRecord (poll `pendingUserInputs` / `pendingApprovals` for live runs if not using SSE) |
+| `GET /v1/runs/:id/events` | Resumable SSE of AgentEvents (below). An archived artifact run returns only its terminal `done` event when the cursor is behind |
+| `GET /v1/runs/:id/artifacts` | Retained file metadata with a fresh optional `available` flag. `false` means the output file is missing; absence means its device could not be checked. Missing files remain in this list |
+| `GET /v1/runs/:id/artifacts/:artifactId` | Authenticated download for one regular file emitted from the run output directory, including after live diagnostics expire. Returns `ARTIFACT_NOT_FOUND` for a missing file or unknown artifact ID |
 | `POST /v1/runs/:id/inputs/:requestId` | Submit every answer for one clarification checkpoint (below) |
 | `POST /v1/runs/:id/approvals/:requestId` | Answer an approval (below) |
 | `POST /v1/runs/:id/steer` `{ "text": "..." }` → 202 | Queue mid-run guidance; applied before the next model turn, echoed as a `steering` event |

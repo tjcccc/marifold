@@ -2,13 +2,15 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { ApiClient } from '../../api/client';
 import { Markdown } from '../../components/Markdown';
+import type { SandboxLinkResolver } from '../../components/Markdown';
 import { CopyButton } from '../../components/CopyButton';
 import { ImagePreviewDialog } from '../../components/ImagePreviewDialog';
 import type { PreviewImage } from '../../components/ImagePreviewDialog';
 import type { RunApprovalAction, UserInputSubmission } from '../../api/types';
 import { splitLeading } from '../../lib/commandSyntax';
 import { formatCostUSD, formatDuration, formatRunDuration, formatTokens } from '../../lib/format';
-import { artifactForSandboxHref, downloadRunArtifact } from '../../lib/runArtifacts';
+import { artifactForSandboxHref, ARTIFACT_UNAVAILABLE_NOTICE } from '../../lib/runArtifacts';
+import { useArtifactDownloads } from './useArtifactDownloads';
 import type { ResponseMetaState, RunCardState, ThreadItem, UserAttachment } from '../../state/thread';
 import { hasRunActivity, isTrivialRun } from '../../state/thread';
 import { RunCard } from './RunCard';
@@ -303,21 +305,17 @@ function AssistantMarkdown({
   run?: RunCardState;
   client?: ApiClient;
 }) {
-  const [downloadError, setDownloadError] = useState<string>();
-  const resolveSandboxLink = (href: string): (() => void) | undefined => {
+  const { unavailable, error: downloadError, download } = useArtifactDownloads(client, run?.runId, source.includes('sandbox:') ? run?.artifacts : undefined);
+  const resolveSandboxLink: SandboxLinkResolver = href => {
     if (!run || !client) return undefined;
     const artifact = artifactForSandboxHref(href, run.runId, run.artifacts);
     if (!artifact) return undefined;
-    return () => {
-      setDownloadError(undefined);
-      void downloadRunArtifact(client, run.runId, artifact).catch(error => {
-        setDownloadError(error instanceof Error ? error.message : String(error));
-      });
-    };
+    return { onClick: () => { void download(artifact); }, unavailable: unavailable.has(artifact.id) };
   };
   return (
     <>
       <Markdown source={source} muted={muted} resolveSandboxLink={resolveSandboxLink} />
+      {unavailable.size > 0 ? <div className={styles.downloadError} role="status">{ARTIFACT_UNAVAILABLE_NOTICE}</div> : null}
       {downloadError ? <div className={styles.downloadError}>{downloadError}</div> : null}
     </>
   );

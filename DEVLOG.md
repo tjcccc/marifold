@@ -2,6 +2,24 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-09-16 — v0.72.0 — Context boundaries and durable workspace downloads
+
+- Send user messages unchanged through agent planning and tool loops; move
+  runtime guidance into instruction context instead of adding `Objective:`.
+- Identify workspace hosts, requesting devices, and execution devices explicitly.
+  Guide named-device delegation and delivery of existing files without recapture.
+- Preserve artifact records and child provenance beyond live-run expiry and
+  retain generated output while cleaning temporary run state. Restore downloads
+  when reopening sessions, including after host and guest restarts.
+- Add session-scoped run retrieval and read-only artifact availability checks.
+  Keep missing files visible with disabled controls and an expiration/removal
+  notice; leave offline devices retryable. Delay browser blob cleanup safely.
+- Reuse passing workspace typecheck/build, package suites, focused recovery and
+  service regressions, and Chromium download/reload checks. Corrected an older
+  browser-test selector for the renamed Web search setting. Optional Redis was
+  skipped. Native browser downloads and transcript image/file cards come next.
+- Synchronize workspace manifests and the CLI to 0.72.0.
+
 ## 2026-09-13 — v0.71.1 — Search recovery and source citations
 
 - Clarify the fallback research loop: search for missing current/external facts,

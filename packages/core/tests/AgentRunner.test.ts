@@ -89,6 +89,27 @@ async function collect(events: AsyncGenerator<AgentEvent>): Promise<AgentEvent[]
 const planResponse = response({ text: '{"title": "Test plan", "steps": ["Read the file", "Summarize"]}' });
 
 describe('AgentRunner', () => {
+  it.each(['native', 'control-block'] as const)('preserves the user message separately from runtime guidance (%s)', async toolMode => {
+    const messages = [
+      "I'll be sharing another video version later\n可以吗",
+      '90000 フォロワー、おめでとうございます！\n这样可以吗',
+      'Objective: Keep this user-written label.\n',
+    ];
+    for (const objective of messages) {
+      const engine = new ScriptedEngine([response({ text: 'Your wording works.' })]);
+      const persistTurn = vi.fn(async () => {});
+      const { runner } = makeRunner(engine, [fakeTool()], { toolMode }, { persistTurn });
+      const events = await collect(runner.run({ objective, cwd: tempDir(), sessionId: 'wording' }));
+
+      expect(events.at(-1)).toMatchObject({ type: 'done', status: 'completed' });
+      expect(engine.requests).toHaveLength(1);
+      expect(engine.requests[0].prompt).toBe(objective);
+      expect(engine.requests[0].context?.join('\n')).toContain('Use tools only when');
+      expect(engine.requests[0].context?.join('\n')).toContain('For a question, give the answer the user asked for.');
+      expect(persistTurn.mock.calls[0]).toContain(objective);
+    }
+  });
+
   it.each(['native', 'control-block'] as const)('continues a search promise through research and persists the answer (%s)', async toolMode => {
     const call = (name: string, args: Record<string, string>) => toolMode === 'native'
       ? response({ toolCalls: [{ id: name, name, arguments: args }] })
@@ -855,8 +876,12 @@ describe('AgentRunner', () => {
     expect(done.status).toBe('completed');
     expect(done.summary).toBe('The file says hello.');
 
-    // The loop prompt steers the model away from gratuitous tool use.
-    expect(engine.requests[1].prompt).toContain('Use tools only when');
+    // Planning and tool iterations preserve the user message; guidance stays in context.
+    for (const request of engine.requests) {
+      expect(request.prompt).toBe('Read a.txt and summarize it.');
+    }
+    expect(engine.requests[0].context?.join('\n')).toContain('Create a short execution plan');
+    expect(engine.requests[1].context?.join('\n')).toContain('Use tools only when');
     expect(engine.requests[1].context?.join('\n')).toContain('focused check before claiming success');
     expect(engine.requests[1].context?.join('\n')).toContain('do not invent results or perform a separate self-grade');
 

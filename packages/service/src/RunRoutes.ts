@@ -26,6 +26,7 @@ const RECONNECT_DELAY_MS = 3000;
 export function registerRunRoutes(server: FastifyInstance, registry: RunRegistry, options: {
   resolve?: (input: RunStartInput, body: Record<string, unknown>, request: FastifyRequest) => Promise<RunStartInput>;
   artifact?: (runId: string, artifactId: string, reply: FastifyReply) => Promise<boolean>;
+  artifactAvailable?: (runId: string, artifactId: string) => Promise<boolean | undefined>;
 } = {}): void {
   server.post('/v1/runs', async (request, reply) => {
     const input = parseRunStartInput(request.body);
@@ -34,12 +35,31 @@ export function registerRunRoutes(server: FastifyInstance, registry: RunRegistry
     return { ok: true, run };
   });
 
-  server.get('/v1/runs', async () => ({ ok: true, runs: registry.list() }));
+  server.get<{ Querystring: { sessionId?: string } }>('/v1/runs', async request => ({
+    ok: true, runs: registry.list(optionalStringField('sessionId', request.query.sessionId).sessionId),
+  }));
 
   server.get<{ Params: { id: string } }>('/v1/runs/:id', async request => ({
     ok: true,
     run: registry.require(request.params.id),
   }));
+
+  server.get<{ Params: { id: string } }>('/v1/runs/:id/artifacts', async request => {
+    const run = registry.require(request.params.id);
+    const artifacts = await Promise.all((run.artifacts ?? []).map(async artifact => {
+      try {
+        const available = options.artifactAvailable
+          ? await options.artifactAvailable(run.id, artifact.id)
+          : Boolean(registry.requireArtifact(run.id, artifact.id));
+        return { ...artifact, available };
+      } catch (error) {
+        // A missing file is permanent until restored. A disconnected device or
+        // network failure is unknown, so the download must remain retryable.
+        return { ...artifact, available: error instanceof MarifoldError && error.code === 'ARTIFACT_NOT_FOUND' ? false : undefined };
+      }
+    }));
+    return { ok: true, artifacts };
+  });
 
   server.get<{ Params: { id: string; artifactId: string } }>(
     '/v1/runs/:id/artifacts/:artifactId',

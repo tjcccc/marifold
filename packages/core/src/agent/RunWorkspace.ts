@@ -3,6 +3,7 @@ import * as os from 'os';
 import * as path from 'path';
 import type { ImageInput } from '@priest-ai/core';
 import { MarifoldError } from '../errors/MarifoldError';
+import { listRunArtifacts } from './RunArtifacts';
 import { marifoldHome } from '../workspace/WorkspacePaths';
 
 export const MAX_RUN_INPUT_BYTES = 16 * 1024 * 1024;
@@ -406,7 +407,15 @@ function pruneRunWorkspaces(runsDir: string): void {
     if (!entry.isDirectory() || !/^(run|task|tool)_[A-Za-z0-9_-]+$/.test(entry.name)) continue;
     const target = path.join(runsDir, entry.name);
     try {
-      if (fs.statSync(target).mtimeMs < cutoff) fs.rmSync(target, { recursive: true, force: true });
+      if (fs.statSync(target).mtimeMs >= cutoff) continue;
+      if (listRunArtifacts({ outputDir: path.join(target, 'output') }).length > 0) {
+        // Downloads outlive disposable inputs, environments, and execution state.
+        for (const child of fs.readdirSync(target)) {
+          if (child !== 'output') fs.rmSync(path.join(target, child), { recursive: true, force: true });
+        }
+      } else {
+        fs.rmSync(target, { recursive: true, force: true });
+      }
     } catch {
       // Cleanup is best-effort; inability to prune an old run must not block a
       // new one.

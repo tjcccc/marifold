@@ -61,7 +61,9 @@ export class WorkspaceRuns {
     const host = this.manager.store.get(workspaceId);
     const devices = this.manager.devices(workspaceId);
     const contextInstructions = [
-      `Device context (metadata): ${JSON.stringify({ workspaceId, originDeviceId: execution.originDeviceId, executionDeviceId, devices })}. All file paths and tools belong to the execution device. Skills and Apps run on the host. Device delegation is limited to this workspace.`,
+      `Device context (metadata): ${JSON.stringify({ workspaceId, workspaceName: host.name, hostDeviceId: host.hostDeviceId, originDeviceId: execution.originDeviceId, executionDeviceId, devices })}. All file paths and tools belong to the execution device. Skills and Apps run on the host. Device delegation is limited to this workspace.`,
+      'The requesting device (originDeviceId) is the user’s current device; it may differ from the execution device and workspace host. A request naming this workspace (for example home) refers to its host, not automatically to the current execution device. Before device-specific work such as taking a desktop screenshot, resolve the named device from this metadata and use delegate_device if it differs from executionDeviceId. If the target is ambiguous or cannot be reached, ask instead of acting on another device.',
+      'Generated files in the run output directory are offered through Download controls in the conversation. Clicking Download transfers bytes to the browser’s device, regardless of which device created the file. Writing to Desktop or Downloads through a tool only writes on the execution device. For a request to send an already generated file, direct the user to its existing Download control; do not take a new screenshot, recreate the file, or delegate another capture just to deliver it. Never claim a browser download completed without evidence.',
     ];
     const registry =
       executionDeviceId === host.hostDeviceId

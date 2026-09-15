@@ -15,8 +15,8 @@ export async function startRun(client: ApiClient, input: RunStartInput): Promise
   return body.run;
 }
 
-export async function listRuns(client: ApiClient): Promise<RunRecord[]> {
-  const body = await client.request<{ runs: RunRecord[] }>('GET', '/v1/runs');
+export async function listRuns(client: ApiClient, sessionId?: string): Promise<RunRecord[]> {
+  const body = await client.request<{ runs: RunRecord[] }>('GET', `/v1/runs${sessionId ? `?sessionId=${encodeURIComponent(sessionId)}` : ''}`);
   return body.runs;
 }
 

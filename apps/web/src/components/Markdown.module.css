@@ -110,6 +110,12 @@
   cursor: pointer;
 }
 
+.downloadLink:disabled {
+  color: var(--text-2);
+  cursor: default;
+  text-decoration: none;
+}
+
 .quote {
   margin: 10px 0;
   padding: 2px 0 2px 14px;

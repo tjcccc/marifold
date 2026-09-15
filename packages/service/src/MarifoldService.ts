@@ -168,6 +168,18 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
       workspaceId: typeof body.workspaceId === 'string' ? body.workspaceId : undefined,
       executionDeviceId: typeof body.executionDeviceId === 'string' ? body.executionDeviceId : undefined,
     }, workspaceContext.resolve(request.headers)); },
+    artifactAvailable: async (runId, artifactId) => {
+      const origin = runRegistry.artifactOrigin(runId, artifactId);
+      const execution = origin.run.execution;
+      if (!execution || execution.executionDeviceId === workspaceManager.store.get(execution.workspaceId).hostDeviceId) {
+        return Boolean(runRegistry.requireArtifact(runId, artifactId));
+      }
+      const result = await workspaceManager.execute(execution.workspaceId, execution.executionDeviceId, 'executor.artifact', {
+        runId: origin.run.id, artifactId: origin.artifactId, metadata: true, offset: 0, length: 1,
+      }) as { available?: boolean; data?: string };
+      // Older peers return bytes instead of metadata for an existing file.
+      return result.available ?? (typeof result.data === 'string' ? true : undefined);
+    },
     artifact: async (runId, artifactId, reply) => {
       const run = runRegistry.require(runId); const origin = runRegistry.artifactOrigin(runId, artifactId); const e = origin.run.execution;
       if (!e || e.executionDeviceId === workspaceManager.store.get(e.workspaceId).hostDeviceId) return false;
