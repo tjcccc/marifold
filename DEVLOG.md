@@ -4,6 +4,8 @@ Cross-session development log. Newest first. Keep entries short: what shipped, w
 
 ## 2026-09-16 — v0.73.1 — CLI package build
 
+- Require clean release builds and packed-version verification in `AGENTS.md`.
+
 - Rebuild the CLI during packing, matching the service packaging hook, so npm
   releases cannot retain an earlier compiled CLI version string. Confirmed the
   published 0.73.0 CLI contained a 0.72.0 string despite its correct manifest.

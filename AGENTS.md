@@ -65,6 +65,7 @@ The service defaults to loopback. Explicit non-loopback binds accept only direct
 
 - marifold uses synchronized Semantic Versioning: root `package.json` defines the release version. Keep every workspace manifest (`packages/*/package.json` and `apps/*/package.json`, including private packages) and `.version(...)` in `packages/cli/src/index.ts` equal to it. New workspace packages join this policy automatically. Run `pnpm check:versions` before publishing.
 - For a release checkpoint, update the matching `DEVLOG.md` heading and refresh `pnpm-lock.yaml` with pnpm when the manifest changes affect it.
+- After a version bump, rebuild from clean output before publishing. Verify packed package versions and the packed CLI's `--version` match the release version.
 
 ## Validation
 
