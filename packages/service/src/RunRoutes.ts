@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import { ArtifactTickets, artifactHeaders } from './ArtifactTickets';
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { createArtifactPreview, isPreviewableArtifact, MarifoldError, RunApprovalAction, RunRegistry, RunStartInput } from '@marifold/core';
+import { createArtifactPreview, artifactPreviewVariant, type ArtifactPreviewVariant, isPreviewableArtifact, MarifoldError, RunApprovalAction, RunRegistry, RunStartInput } from '@marifold/core';
 import { SSE_HEADERS, startSseHeartbeat, writeSse, writeSseRetry } from './Sse';
 import {
   objectBody,
@@ -27,7 +27,7 @@ export function registerRunRoutes(server: FastifyInstance, registry: RunRegistry
   resolve?: (input: RunStartInput, body: Record<string, unknown>, request: FastifyRequest) => Promise<RunStartInput>;
   artifact?: (runId: string, artifactId: string, reply: FastifyReply, inline: boolean) => Promise<boolean>;
   tickets?: ArtifactTickets;
-  preview?: (runId: string, artifactId: string) => Promise<Buffer | undefined>;
+  preview?: (runId: string, artifactId: string, variant: ArtifactPreviewVariant) => Promise<Buffer | undefined>;
   artifactAvailable?: (runId: string, artifactId: string) => Promise<boolean | undefined>;
 } = {}): void {
   server.post('/v1/runs', async (request, reply) => {
@@ -73,10 +73,12 @@ export function registerRunRoutes(server: FastifyInstance, registry: RunRegistry
     '/v1/runs/:id/artifacts/:artifactId',
     (request, reply) => sendArtifact(request.params.id, request.params.artifactId, reply),
   );
-  server.get<{ Params: { id: string; artifactId: string } }>(
+  const previewBytes = async (id: string, artifactId: string, variant: ArtifactPreviewVariant) =>
+    await options.preview?.(id, artifactId, variant) ?? await createArtifactPreview(registry.requireArtifact(id, artifactId), variant);
+  server.get<{ Params: { id: string; artifactId: string }; Querystring: { variant?: string } }>(
     '/v1/runs/:id/artifacts/:artifactId/preview', async (request, reply) => {
       const { id, artifactId } = request.params;
-      const bytes = await options.preview?.(id, artifactId) ?? await createArtifactPreview(registry.requireArtifact(id, artifactId));
+      const bytes = await previewBytes(id, artifactId, artifactPreviewVariant(request.query.variant));
       return reply.type('image/webp').header('cache-control', 'no-store').header('x-content-type-options', 'nosniff').send(bytes);
     },
   );
@@ -91,7 +93,9 @@ export function registerRunRoutes(server: FastifyInstance, registry: RunRegistry
       const available = options.artifactAvailable ? await options.artifactAvailable(id, artifactId) : Boolean(registry.requireArtifact(id, artifactId));
       if (available === false) throw MarifoldError.artifactNotFound(id, artifactId);
       reply.header('cache-control', 'no-store');
-      return { ok: true, ...options.tickets!.issue(response => sendArtifact(id, artifactId, response, purpose === 'image')) };
+      return { ok: true, ...options.tickets!.issue(async response => purpose === 'image'
+        ? response.type('image/webp').header('x-content-type-options', 'nosniff').send(await previewBytes(id, artifactId, 'viewer'))
+        : sendArtifact(id, artifactId, response)) };
     },
   );
 

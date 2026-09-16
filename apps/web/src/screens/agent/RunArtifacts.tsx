@@ -19,9 +19,10 @@ export function RunArtifacts({ client, runId, artifacts }: { client?: ApiClient;
         const missing = unavailable.has(artifact.id);
         const name = artifact.name.split('/').at(-1) || artifact.name;
         return (
-          <div className={styles.file} key={artifact.id}>
+          <div className={`${styles.file} ${isImageArtifact(artifact) ? styles.imageFile : ''}`} key={artifact.id}>
             {client && isImageArtifact(artifact) && !missing ? (
-              <ArtifactThumbnail client={client} runId={runId} artifact={artifact} onPreview={() => setPreview({
+              <ArtifactThumbnail client={client} runId={runId} artifact={artifact} onPreview={src => setPreview({
+                src,
                 alt: name,
                 loadSrc: () => artifactAccessUrl(client, runId, artifact, 'image'),
                 download: () => downloadRunArtifact(client, runId, artifact),
@@ -46,7 +47,7 @@ export function RunArtifacts({ client, runId, artifacts }: { client?: ApiClient;
   );
 }
 
-function ArtifactThumbnail({ client, runId, artifact, onPreview }: { client: ApiClient; runId: string; artifact: RunArtifact; onPreview: () => void }) {
+function ArtifactThumbnail({ client, runId, artifact, onPreview }: { client: ApiClient; runId: string; artifact: RunArtifact; onPreview: (src?: string) => void }) {
   const host = useRef<HTMLButtonElement>(null);
   const [src, setSrc] = useState<string>();
   const [failed, setFailed] = useState(false);
@@ -74,7 +75,7 @@ function ArtifactThumbnail({ client, runId, artifact, onPreview }: { client: Api
   }, [client, runId, artifact.id, attempt]);
   return (
     <button ref={host} className={styles.preview} type="button" aria-label={`${failed ? 'Retry preview of' : 'Preview'} ${artifact.name}`}
-      onClick={() => failed ? setAttempt(value => value + 1) : onPreview()}>
+      onClick={() => failed ? setAttempt(value => value + 1) : onPreview(src)}>
       {src && !failed ? <img src={src} alt={artifact.name} onError={() => setFailed(true)} /> : (
         <span className={styles.placeholder}>{failed ? 'Preview unavailable · Retry' : 'Loading preview…'}</span>
       )}

@@ -327,3 +327,61 @@ from `WORKSPACE_OFFLINE` (HTTP 503). Recovered connections refresh navigation me
 conversation transcripts stay unchanged; reload the page or reopen the session
 to see messages and runs started on another device. Runs already followed by
 that view continue streaming.
+
+
+## Experimental direct file downloads
+
+The WebRTC experiment is **off by default**. It changes only remote original-file
+downloads, not pairing, model requests, thumbnails, or the compressed image viewer.
+Both the requesting service and the file's source service must run this build
+with `MARIFOLD_EXPERIMENTAL_WEBRTC=1`. For guest-owned files reached through the
+host, enable it on the host as well. No bridge redeployment is required.
+
+For a source checkout, build once with `pnpm install && pnpm -r build`. Stop an
+existing managed service before starting a foreground test instance. On both
+Mac and Fedora, run from the updated checkout:
+
+```sh
+MARIFOLD_EXPERIMENTAL_WEBRTC=1 pnpm marifold service start
+```
+
+Keep the usual config/host/port options if your installation needs them. The
+experiment does not open a public HTTP listener, change firewall rules, or install
+a VPN. It opens WebRTC UDP sockets and uses ICE/STUN; existing VPN routing and
+network restrictions can prevent a direct path. The default discovery server is
+`stun:stun.l.google.com:19302`. Set `MARIFOLD_WEBRTC_STUN_URL=stun:hostname:port`
+locally on each service to use another reachable STUN server. This setting is
+not synchronized. Only STUN URLs are accepted; no TURN relay is added. STUN sees
+network addresses, not file contents. Connection descriptions, including DTLS
+fingerprints, travel over the existing authenticated, encrypted workspace RPC.
+The source resolves only already-published artifact IDs within that workspace.
+
+The initial experiment supports files up to 64 MiB, four active/pending downloads
+per service, a 15-second negotiation/idle deadline and a two-minute transfer
+limit. Larger files, unsupported/disabled peers, connectivity failures, changed
+sources, checksum mismatches and timeouts fall back to the existing bridge path.
+Files stream in bounded 16 KiB data-channel messages with 512 KiB credit windows.
+The receiving service stages a private temporary copy and checks its length and
+SHA-256 before serving it to the browser. Therefore browser download progress
+starts **after** the direct transfer completes. Temporary files are removed when
+the response closes; interruption, membership removal and service shutdown close
+active transfers. An abrupt process kill can leave private temporary files in the
+OS temporary directory. There is no persistent original-file cache or resume yet.
+
+To test from Fedora:
+
+1. Open the paired workspace and download an existing image/file from the Mac.
+2. In browser developer tools, preserve the Network log and inspect the
+   `/v1/downloads/...` response. `X-Marifold-Transfer: webrtc` confirms direct file
+   delivery. `bridge` means fallback; `X-Marifold-Direct-Fallback` distinguishes
+   a disabled experiment from an unavailable direct connection.
+3. Compare the same file with the experiment disabled, timing from the click
+   through completion. Check the saved file's size/hash, not just the transfer
+   label. Try both normal and VPN-connected networks.
+4. If connectivity or performance is worse, stop the test service and restart
+   without `MARIFOLD_EXPERIMENTAL_WEBRTC`, or set it to `0`. The existing bridge
+   behavior returns without re-pairing or changing the bridge server.
+
+Local tests cover real data-channel transfer, bounded negotiation, cancellation,
+source changes, authenticated workspace routing, and old-peer bridge fallback.
+They do not establish cross-network performance or Fedora/VPN compatibility.

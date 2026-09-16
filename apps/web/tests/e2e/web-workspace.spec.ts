@@ -40,11 +40,27 @@ test('guest downloads an expired-run artifact to the browser and restores it aft
     expect(await fs.readFile(testInfo.outputPath('worklogs.csv'), 'utf8')).toBe('Date,Hours\n2026-09-16,8\n');
     const thumbnail = files.getByRole('img', { name: 'home-desktop.png' });
     await expect(thumbnail).toBeVisible();
-    expect(await thumbnail.evaluate((node: HTMLImageElement) => node.naturalWidth)).toBe(960);
+    expect(await thumbnail.evaluate((node: HTMLImageElement) => node.naturalWidth)).toBe(480);
+    for (const width of [1440, 390]) {
+      await page.setViewportSize({ width, height: 1100 });
+      // Read both boxes together after the responsive shell has settled.
+      await expect.poll(() => thumbnail.evaluate(node => {
+        const image = node.getBoundingClientRect();
+        const content = node.closest('section')!.getBoundingClientRect();
+        return Math.abs(image.width + 2 - content.width / 2);
+      })).toBeLessThan(1);
+      const imageBox = (await thumbnail.boundingBox())!;
+      expect(Math.abs(imageBox.width / imageBox.height - 1920 / 1080)).toBeLessThan(0.02);
+    }
+    await page.setViewportSize({ width: 1440, height: 1100 });
+    const viewerResponse = page.waitForResponse(response => response.url().includes('/v1/downloads/') && response.request().resourceType() === 'image');
     await page.getByRole('button', { name: 'Preview home-desktop.png', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'home-desktop.png preview' });
     await expect(dialog.getByRole('img')).toBeVisible();
     await expect.poll(() => dialog.getByRole('img').evaluate((node: HTMLImageElement) => node.naturalWidth)).toBe(1920);
+    const viewer = await viewerResponse;
+    expect(viewer.headers()['content-type']).toContain('image/webp');
+    expect((await viewer.body()).length).toBeLessThanOrEqual(1_000_000);
     await dialog.getByRole('button', { name: 'View image at full size' }).click();
     await expect(dialog.getByRole('button', { name: 'Fit image to window' })).toBeVisible();
     const [fullImage] = await Promise.all([page.waitForEvent('download'), dialog.getByRole('button', { name: 'Download image' }).click()]);

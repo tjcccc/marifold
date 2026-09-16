@@ -1,9 +1,13 @@
+import { localStun } from '../../core/tests/helpers/LocalStun';
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
+const sharp = createRequire(require.resolve('@marifold/core'))('sharp');
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { randomBytes } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { resolveAgentConfig } from '@marifold/core';
+import { ArtifactWebRtc, resolveAgentConfig } from '@marifold/core';
 import { createBridge, MemoryRelayStore } from '../../../apps/bridge/src';
 import { createMarifoldService } from '../src';
 import { workspaceApiPath } from '../src/WorkspaceRoutes';
@@ -11,6 +15,7 @@ import { cleanupTempDirs, fixtureLoadedConfig, tempDir } from './helpers';
 
 const servers: FastifyInstance[] = [];
 const generatedRuns: string[] = [];
+const stopStun: Array<() => void> = [];
 const bridges: ReturnType<typeof createBridge>[] = [];
 afterEach(async () => {
   for (const s of servers.splice(0)) await s.close();
@@ -18,6 +23,8 @@ afterEach(async () => {
     b.closeAllConnections();
     b.close();
   }
+  for (const stop of stopStun.splice(0)) stop();
+  vi.unstubAllEnvs();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
   for (const dir of generatedRuns.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
@@ -93,9 +100,16 @@ describe('device-hosted workspaces', () => {
     }
   });
 
-  it('downloads a complete large host artifact while serving ordinary workspace reads', async () => {
+  it.each(['bridge', 'webrtc', 'fallback'])('downloads a complete large host artifact with %s while serving ordinary workspace reads', async transport => {
+    if (transport !== 'bridge') {
+      const stun = await localStun(); stopStun.push(stun.close);
+      vi.stubEnv('MARIFOLD_EXPERIMENTAL_WEBRTC', '1');
+      vi.stubEnv('MARIFOLD_WEBRTC_STUN_URL', stun.url);
+      if (transport === 'fallback') vi.spyOn(ArtifactWebRtc.prototype, 'offerFile').mockRejectedValue(new Error('Old peer'));
+    }
     const p = await paired();
     const original = randomBytes(1024 * 1024 + 17);
+    const image = await sharp({ create: { width: 3000, height: 2000, channels: 3, background: '#407080' } }).png().toBuffer();
     const realFetch = globalThis.fetch;
     vi.stubGlobal('fetch', vi.fn(async (input, init) => {
       if (!String(input).includes('localhost:11434')) return realFetch(input, init);
@@ -105,6 +119,7 @@ describe('device-hosted workspaces', () => {
       if (!output) throw new Error('No fixture output directory.');
       generatedRuns.push(path.dirname(output));
       fs.writeFileSync(path.join(output, 'transfer.bin'), original);
+      fs.writeFileSync(path.join(output, 'image.png'), image);
       return new Response(JSON.stringify({ message: { content: 'Fixture complete.' }, done: true, done_reason: 'stop' }), {
         headers: { 'content-type': 'application/json' },
       });
@@ -115,7 +130,21 @@ describe('device-hosted workspaces', () => {
       current = (await p.host.inject(`/v1/runs/${run.id}`)).json().run;
       return current.status;
     }).toBe('completed');
-    expect(current.artifacts).toHaveLength(1);
+    expect(current.artifacts).toHaveLength(2);
+    current.artifacts.sort((a: { name: string }, b: { name: string }) => b.name.localeCompare(a.name));
+    const imageId = current.artifacts.find((a: { name: string }) => a.name === 'image.png').id;
+    for (const base of [`${p.prefix}/v1/runs/${run.id}/artifacts/${imageId}`, `/v1/runs/${run.id}/artifacts/${imageId}`]) {
+      const server = base.startsWith(p.prefix) ? p.guest : p.host;
+      const thumbnail = await server.inject(`${base}/preview`);
+      expect(await sharp(thumbnail.rawPayload).metadata()).toMatchObject({ width: 480, height: 320, format: 'webp' });
+      const ticket = await post(server, `${base}/access`, { purpose: 'image' });
+      const viewer = await server.inject(ticket.path);
+      expect(viewer.headers['content-type']).toContain('image/webp');
+      expect(viewer.rawPayload.length).toBeLessThanOrEqual(1_000_000);
+      expect((await sharp(viewer.rawPayload).metadata()).width).toBe(2048);
+      const originalTicket = await post(server, `${base}/access`, { purpose: 'download' });
+      expect((await server.inject(originalTicket.path)).rawPayload).toEqual(image);
+    }
     const access = await post(p.guest, `${p.prefix}/v1/runs/${run.id}/artifacts/${current.artifacts[0].id}/access`, { purpose: 'download' });
     expect(access.path).toMatch(/^\/v1\/downloads\/[a-f0-9]{48}$/);
     expect((await p.host.inject(access.path)).statusCode).toBe(410);
@@ -124,6 +153,7 @@ describe('device-hosted workspaces', () => {
       p.guest.inject(`${p.prefix}/v1/profiles`),
     ]);
     expect(download.statusCode).toBe(200);
+    expect(download.headers['x-marifold-transfer']).toBe(transport === 'webrtc' ? 'webrtc' : 'bridge');
     expect(download.rawPayload).toEqual(original);
     expect(download.headers['content-length']).toBe(String(original.length));
     expect(profiles.statusCode).toBe(200);
@@ -139,13 +169,13 @@ describe('device-hosted workspaces', () => {
     expect(restored.statusCode, restored.body).toBe(200);
     expect(restored.rawPayload).toEqual(original);
     expect(restored.headers['content-disposition']).toContain('transfer.bin');
-    expect((await guest.inject(`${p.prefix}/v1/runs/${run.id}/artifacts`)).json().artifacts[0].available).toBe(true);
+    expect((await guest.inject(`${p.prefix}/v1/runs/${run.id}/artifacts`)).json().artifacts.every((a: { available: boolean }) => a.available)).toBe(true);
     fs.unlinkSync(path.join(generatedRuns[0], 'output', 'transfer.bin'));
     const unavailable = (await guest.inject(`${p.prefix}/v1/runs/${run.id}/artifacts`)).json().artifacts;
-    expect(unavailable).toEqual([expect.objectContaining({ name: 'transfer.bin', available: false })]);
-    expect((await guest.inject(`${p.prefix}/v1/runs?sessionId=download-session`)).json().runs[0].artifacts).toHaveLength(1);
+    expect(unavailable).toContainEqual(expect.objectContaining({ name: 'transfer.bin', available: false }));
+    expect((await guest.inject(`${p.prefix}/v1/runs?sessionId=download-session`)).json().runs[0].artifacts).toHaveLength(2);
     expect((await guest.inject(`${p.prefix}/v1/runs?sessionId=another-session`)).json().runs).toEqual([]);
-  }, 20000);
+  }, 40000);
   it('shares the host surface without credentials or nested workspace access', async () => {
     const p = await paired();
     const config = await p.guest.inject(`${p.prefix}/v1/config`);
