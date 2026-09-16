@@ -1,6 +1,6 @@
 {
   "name": "@marifold/web",
-  "version": "0.73.0",
+  "version": "0.73.1",
   "private": true,
   "type": "module",
   "description": "Marifold Web UI \u2014 browser client for the marifold service.",
