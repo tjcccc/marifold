@@ -2,6 +2,15 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-09-16 — v0.73.1 — CLI package build
+
+- Rebuild the CLI during packing, matching the service packaging hook, so npm
+  releases cannot retain an earlier compiled CLI version string. Confirmed the
+  published 0.73.0 CLI contained a 0.72.0 string despite its correct manifest.
+- Audit all six 0.73.0 npm packages against fresh release builds: current runtime
+  functionality matches; only CLI/bridge version metadata differs. Prepare this
+  patch from clean build output to exclude obsolete compiled modules.
+
 ## 2026-09-16 — v0.73.0 — Browser deliverables and request environment
 
 ### Workspace device list
