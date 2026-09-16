@@ -2,6 +2,54 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-09-17 — v0.74.2 — Browser preview caching
+
+- Keep downloaded thumbnail/viewer Blobs in a 16 MiB / 32-entry browser-memory
+  cache per API client. Reuse concurrent requests and repeated viewer opens;
+  isolate connection credentials/workspaces and changed artifact metadata.
+- Fetch viewer bytes through the authenticated preview route, preserving the
+  stable decoded-image swap. Each consumer releases its object URL on close;
+  originals continue to use fresh browser download tickets.
+- Pass workspace typecheck/build, 245 Web tests and all 10 Chromium checks.
+  Verify repeated viewer opens make only one preview request, with cache
+  isolation, eviction, metadata changes and retry-after-error coverage.
+- Synchronize workspace/CLI versions to 0.74.2, refresh the lockfile and rebuild
+  clean output. Verify all six packed versions and packed CLI version; reuse
+  the passing development tests.
+
+## 2026-09-17 — v0.74.1 — Stable image viewer loading
+
+- Fit the thumbnail to the viewer's final frame immediately, preserving its
+  aspect ratio. Decode the larger preview before swapping sources so the image
+  and download button stay in place; enable actual-size zoom after loading.
+- Verify workspace typecheck/build, all 240 Web tests and 10 Chromium checks.
+  Delay the viewer response to confirm stable image/button geometry and a single
+  preview download while the thumbnail remains visible.
+- Synchronize workspace/CLI versions to 0.74.1. Reuse development tests, rebuild
+  clean output, and verify all six packed versions and the packed CLI version.
+- User reports a successful Fedora WebRTC download in approximately one second;
+  broader network/VPN acceptance remains unverified.
+
+## 2026-09-17 — v0.74.0 — Image variants and experimental direct downloads
+
+- Generate and cache source-side WebP variants: 480-pixel / 80 KB transcript
+  thumbnails and a larger viewer capped at 1,000,000 bytes. Display transcript
+  images at half the message-content width with their original aspect ratio;
+  opening/zooming never retrieves originals.
+- Keep originals behind Download. Add opt-in service-to-service WebRTC transfer
+  with authenticated bridge signaling, bounded flow control, private temporary
+  staging and SHA-256 verification before HTTP delivery. Failures/older peers
+  retain the existing bridge download path; the experiment defaults off.
+- Document Fedora testing, transfer response headers, STUN configuration and
+  immediate opt-out. Cross-network performance remains pending user testing.
+- Pass workspace typecheck/build, 902 package tests and all 10 Chromium checks;
+  the optional Redis integration remains skipped. A local 6.28 MB screenshot
+  yields an 18 KB thumbnail (156 ms) and 190 KB viewer (265 ms), with immediate
+  cache reuse. These timings exclude bridge/network transfer.
+- Synchronize all workspace manifests and CLI to 0.74.0; refresh the lockfile,
+  rebuild clean output, and verify all six packed packages and packed CLI version.
+  Reuse development validation plus the passing desktop/phone thumbnail check.
+
 ## 2026-09-16 — v0.73.1 — CLI package build
 
 - Require clean release builds and packed-version verification in `AGENTS.md`.

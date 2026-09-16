@@ -485,8 +485,8 @@ the agent within those capabilities.
 | `GET /v1/runs/:id/events` | Resumable SSE of AgentEvents (below). An archived artifact run returns only its terminal `done` event when the cursor is behind |
 | `GET /v1/runs/:id/artifacts` | Retained file metadata with a fresh optional `available` flag. `false` means the output file is missing; absence means its device could not be checked. Missing files remain in this list |
 | `GET /v1/runs/:id/artifacts/:artifactId` | Authenticated download for one regular file emitted from the run output directory, including after live diagnostics expire. Returns `ARTIFACT_NOT_FOUND` for a missing file or unknown artifact ID |
-| `GET /v1/runs/:id/artifacts/:artifactId/preview` | Authenticated, source-generated WebP thumbnail for PNG/JPEG/WebP outputs, up to 960×720 pixels; rejects oversized or unsupported inputs |
-| `POST /v1/runs/:id/artifacts/:artifactId/access` `{ "purpose": "download" }` | Authenticated creation of a five-minute single-file URL. Returns `{ ok, path, expiresAt }`; `purpose: "image"` allows inline viewing of supported raster formats |
+| `GET /v1/runs/:id/artifacts/:artifactId/preview` | Authenticated, source-generated WebP thumbnail for PNG/JPEG/WebP outputs, up to 480 pixels on the long edge and 80,000 bytes; `?variant=viewer` returns a larger WebP capped at 1,000,000 bytes; rejects oversized or unsupported inputs |
+| `POST /v1/runs/:id/artifacts/:artifactId/access` `{ "purpose": "download" }` | Authenticated creation of a five-minute single-file URL. Returns `{ ok, path, expiresAt }`; `purpose: "image"` serves the compressed viewer variant, never the original |
 | `GET /v1/downloads/:ticket` | Streams one file with Content-Length and the issued attachment/inline disposition. Ticket replaces bearer authentication for this URL only; network, Host, and Origin restrictions still apply |
 | `POST /v1/runs/:id/inputs/:requestId` | Submit every answer for one clarification checkpoint (below) |
 | `POST /v1/runs/:id/approvals/:requestId` | Answer an approval (below) |
@@ -498,8 +498,17 @@ Web clients treat the `artifact` event as authoritative. A model-authored
 exact filename in the same run's artifact list, then download by opaque ID.
 Clients must never fetch or navigate directly to the host path in that target.
 
-The Web UI renders file cards after the final answer and raster thumbnails with
-full-resolution viewing. Work details do not contain download controls. A click
+The Web UI renders file cards after the final answer. Transcript images use half
+the message-content width, preserve aspect ratio, and open a compressed viewer.
+Web previews use the authenticated preview endpoint and keep compressed Blobs in
+a browser-memory cache (16 MiB / 32 entries per API client), sharing in-flight
+requests. Reopening a viewer or revisiting a session reuses those bytes. Server,
+token, and workspace changes create a separate client/cache; reloading the page
+clears the cache. Run IDs, artifact IDs, sizes, media types and preview variants
+identify cache entries. Same-size external file edits require a page reload.
+Object URLs are revoked when the image consumer closes.
+
+Work details do not contain download controls. Clicking Download
 creates an access URL with authenticated POST, then navigates to it so the browser
 owns download progress, cancellation, and the save location. No full-file Blob is
 buffered by the page. Tickets are bounded in memory, expire five minutes after
@@ -512,8 +521,18 @@ For a paired workspace, POST to the workspace-prefixed artifact access route on
 the connected guest service. The returned `path` is relative to that service root,
 not its workspace API prefix. The guest issues the ticket locally and streams
 bounded reads from the source device through the bridge, rechecking membership.
-Thumbnails are rendered on the output device before transport; original image
-bytes are fetched only when opening the full-resolution viewer or downloading.
+Both image variants are generated lazily on the output device before transport.
+The viewer starts at a maximum 2048-pixel long edge, reducing quality and then
+resolution as necessary to meet its 1,000,000-byte ceiling. Originals are fetched
+only for downloads. Source caches are bounded to 32 MiB / 256 variants, keyed by
+file identity and modification metadata, with at most four concurrent encodes.
+Old sources that ignore the variant field return their existing thumbnail.
+
+An optional [experimental WebRTC download transport](workspaces.md#experimental-direct-file-downloads)
+can replace bridge file bytes while retaining authenticated bridge signaling.
+Remote download responses expose `X-Marifold-Transfer: webrtc` or `bridge`;
+bridge responses also expose `X-Marifold-Direct-Fallback: disabled` or `unavailable`.
+Local disk downloads and image variants do not use this experiment.
 
 #### The AgentEvent stream
 

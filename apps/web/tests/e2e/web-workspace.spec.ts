@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Route } from '@playwright/test';
 import { strToU8, zipSync } from 'fflate';
 import * as fs from 'node:fs/promises';
 
@@ -40,11 +40,50 @@ test('guest downloads an expired-run artifact to the browser and restores it aft
     expect(await fs.readFile(testInfo.outputPath('worklogs.csv'), 'utf8')).toBe('Date,Hours\n2026-09-16,8\n');
     const thumbnail = files.getByRole('img', { name: 'home-desktop.png' });
     await expect(thumbnail).toBeVisible();
-    expect(await thumbnail.evaluate((node: HTMLImageElement) => node.naturalWidth)).toBe(960);
+    expect(await thumbnail.evaluate((node: HTMLImageElement) => node.naturalWidth)).toBe(480);
+    for (const width of [1440, 390]) {
+      await page.setViewportSize({ width, height: 1100 });
+      // Read both boxes together after the responsive shell has settled.
+      await expect.poll(() => thumbnail.evaluate(node => {
+        const image = node.getBoundingClientRect();
+        const content = node.closest('section')!.getBoundingClientRect();
+        return Math.abs(image.width + 2 - content.width / 2);
+      })).toBeLessThan(1);
+      const imageBox = (await thumbnail.boundingBox())!;
+      expect(Math.abs(imageBox.width / imageBox.height - 1920 / 1080)).toBeLessThan(0.02);
+    }
+    await page.setViewportSize({ width: 1440, height: 1100 });
+    let releasePreview!: () => void;
+    const previewGate = new Promise<void>(resolve => { releasePreview = resolve; });
+    let previewRequests = 0;
+    const delayPreview = async (route: Route) => {
+      previewRequests++; await previewGate;
+      await route.continue();
+    };
+    await page.route('**/artifacts/*/preview?variant=viewer', delayPreview);
+    const viewerResponse = page.waitForResponse(response => response.url().endsWith('/preview?variant=viewer'));
     await page.getByRole('button', { name: 'Preview home-desktop.png', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'home-desktop.png preview' });
     await expect(dialog.getByRole('img')).toBeVisible();
+    await expect.poll(() => previewRequests).toBe(1);
+    expect(await dialog.getByRole('img').evaluate((node: HTMLImageElement) => node.naturalWidth)).toBe(480);
+    await expect(dialog.getByRole('button', { name: 'View image at full size' })).toBeDisabled();
+    const beforePreview = (await dialog.getByRole('img').boundingBox())!;
+    const beforeDownload = (await dialog.getByRole('button', { name: 'Download image' }).boundingBox())!;
+    expect(beforePreview.width).toBeGreaterThan(480);
+    releasePreview();
     await expect.poll(() => dialog.getByRole('img').evaluate((node: HTMLImageElement) => node.naturalWidth)).toBe(1920);
+    const afterPreview = (await dialog.getByRole('img').boundingBox())!;
+    const afterDownload = (await dialog.getByRole('button', { name: 'Download image' }).boundingBox())!;
+    for (const dimension of ['x', 'y', 'width', 'height'] as const) {
+      expect(Math.abs(afterPreview[dimension] - beforePreview[dimension])).toBeLessThan(1);
+      expect(Math.abs(afterDownload[dimension] - beforeDownload[dimension])).toBeLessThan(1);
+    }
+    expect(previewRequests).toBe(1);
+
+    const viewer = await viewerResponse;
+    expect(viewer.headers()['content-type']).toContain('image/webp');
+    expect((await viewer.body()).length).toBeLessThanOrEqual(1_000_000);
     await dialog.getByRole('button', { name: 'View image at full size' }).click();
     await expect(dialog.getByRole('button', { name: 'Fit image to window' })).toBeVisible();
     const [fullImage] = await Promise.all([page.waitForEvent('download'), dialog.getByRole('button', { name: 'Download image' }).click()]);
@@ -53,6 +92,14 @@ test('guest downloads an expired-run artifact to the browser and restores it aft
     await page.screenshot({ path: '../../output/playwright/artifact-full-image.png' });
     await page.keyboard.press('Escape');
     await expect(dialog).toHaveCount(0);
+    for (let reopen = 0; reopen < 2; reopen++) {
+      await page.getByRole('button', { name: 'Preview home-desktop.png', exact: true }).click();
+      await expect.poll(() => dialog.getByRole('img').evaluate((node: HTMLImageElement) => node.naturalWidth)).toBe(1920);
+      expect(previewRequests).toBe(1);
+      await page.keyboard.press('Escape');
+      await expect(dialog).toHaveCount(0);
+    }
+    await page.unroute('**/artifacts/*/preview?variant=viewer', delayPreview);
     await expect(page.getByRole('button', { name: 'Download expired-desktop.png' })).toBeDisabled();
     await page.getByRole('log', { name: 'Conversation' }).evaluate(node => { node.scrollTop = 0; });
     await page.screenshot({ path: '../../output/playwright/unavailable-download.png' });

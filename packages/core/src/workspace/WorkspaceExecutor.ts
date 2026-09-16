@@ -1,4 +1,5 @@
-import { createArtifactPreview } from '../agent/ArtifactPreview';
+import type { ArtifactWebRtc } from './ArtifactWebRtc';
+import { createArtifactPreview, artifactPreviewVariant } from '../agent/ArtifactPreview';
 import { artifactReadLength } from './WorkspaceArtifactTransfer';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -44,6 +45,7 @@ export class WorkspaceExecutor {
     private readonly config: () => MarifoldAgentConfig,
     private readonly runsDir?: string,
     private readonly protectedPaths: string[] = [],
+    private readonly transfers?: ArtifactWebRtc,
   ) {
     for (const tool of executionTools()) this.registry.register(tool);
     this.timer = setInterval(() => {
@@ -81,7 +83,11 @@ export class WorkspaceExecutor {
       );
       if (b.metadata === true) return { available: Boolean(artifact) };
       if (!artifact) throw new Error('Artifact is unavailable.');
-      if (b.preview === true) return { data: (await createArtifactPreview(artifact)).toString('base64') };
+      if (b.offer !== undefined) {
+        if (!this.transfers) throw new Error('Direct downloads unavailable.');
+        return this.transfers.offerFile(artifact, b.offer, context.workspaceId);
+      }
+      if (b.preview === true) return { data: (await createArtifactPreview(artifact, artifactPreviewVariant(b.variant))).toString('base64') };
       const offset = b.offset;
       if (typeof offset !== 'number' || !Number.isSafeInteger(offset) || offset < 0 || offset > artifact.size)
         throw new Error('Invalid artifact offset.');

@@ -3,9 +3,10 @@ import type { ApiClient } from '../../api/client';
 import type { RunArtifact } from '../../api/types';
 import { ImagePreviewDialog } from '../../components/ImagePreviewDialog';
 import type { PreviewImage } from '../../components/ImagePreviewDialog';
-import { artifactAccessUrl, artifactPath, ARTIFACT_UNAVAILABLE_NOTICE, downloadRunArtifact, isImageArtifact } from '../../lib/runArtifacts';
+import { ARTIFACT_UNAVAILABLE_NOTICE, downloadRunArtifact, isImageArtifact } from '../../lib/runArtifacts';
 import { useArtifactDownloads } from './useArtifactDownloads';
 import styles from './RunArtifacts.module.css';
+import { artifactPreviewBlob } from '../../lib/artifactPreviewCache';
 
 /** Deliverables belong to the answer and remain visible independently of logs. */
 export function RunArtifacts({ client, runId, artifacts }: { client?: ApiClient; runId: string; artifacts: RunArtifact[] }) {
@@ -19,11 +20,13 @@ export function RunArtifacts({ client, runId, artifacts }: { client?: ApiClient;
         const missing = unavailable.has(artifact.id);
         const name = artifact.name.split('/').at(-1) || artifact.name;
         return (
-          <div className={styles.file} key={artifact.id}>
+          <div className={`${styles.file} ${isImageArtifact(artifact) ? styles.imageFile : ''}`} key={artifact.id}>
             {client && isImageArtifact(artifact) && !missing ? (
-              <ArtifactThumbnail client={client} runId={runId} artifact={artifact} onPreview={() => setPreview({
+              <ArtifactThumbnail client={client} runId={runId} artifact={artifact} onPreview={(src, aspectRatio) => setPreview({
+                src,
+                aspectRatio,
                 alt: name,
-                loadSrc: () => artifactAccessUrl(client, runId, artifact, 'image'),
+                loadBlob: () => artifactPreviewBlob(client, runId, artifact, 'viewer'),
                 download: () => downloadRunArtifact(client, runId, artifact),
               })} />
             ) : null}
@@ -46,7 +49,7 @@ export function RunArtifacts({ client, runId, artifacts }: { client?: ApiClient;
   );
 }
 
-function ArtifactThumbnail({ client, runId, artifact, onPreview }: { client: ApiClient; runId: string; artifact: RunArtifact; onPreview: () => void }) {
+function ArtifactThumbnail({ client, runId, artifact, onPreview }: { client: ApiClient; runId: string; artifact: RunArtifact; onPreview: (src?: string, aspectRatio?: number) => void }) {
   const host = useRef<HTMLButtonElement>(null);
   const [src, setSrc] = useState<string>();
   const [failed, setFailed] = useState(false);
@@ -58,7 +61,7 @@ function ArtifactThumbnail({ client, runId, artifact, onPreview }: { client: Api
     setFailed(false);
     const load = async () => {
       try {
-        const blob = await client.blob(`${artifactPath(runId, artifact.id)}/preview`);
+        const blob = await artifactPreviewBlob(client, runId, artifact, 'thumbnail');
         if (cancelled) return;
         if (!blob) { setFailed(true); return; }
         objectUrl = URL.createObjectURL(blob);
@@ -71,10 +74,14 @@ function ArtifactThumbnail({ client, runId, artifact, onPreview }: { client: Api
     if (observer && host.current) observer.observe(host.current);
     else void load();
     return () => { cancelled = true; observer?.disconnect(); if (objectUrl) URL.revokeObjectURL(objectUrl); };
-  }, [client, runId, artifact.id, attempt]);
+  }, [client, runId, artifact.id, artifact.size, artifact.mediaType, attempt]);
   return (
     <button ref={host} className={styles.preview} type="button" aria-label={`${failed ? 'Retry preview of' : 'Preview'} ${artifact.name}`}
-      onClick={() => failed ? setAttempt(value => value + 1) : onPreview()}>
+      onClick={() => {
+        if (failed) { setAttempt(value => value + 1); return; }
+        const image = host.current?.querySelector('img');
+        onPreview(src, image?.naturalHeight ? image.naturalWidth / image.naturalHeight : undefined);
+      }}>
       {src && !failed ? <img src={src} alt={artifact.name} onError={() => setFailed(true)} /> : (
         <span className={styles.placeholder}>{failed ? 'Preview unavailable · Retry' : 'Loading preview…'}</span>
       )}

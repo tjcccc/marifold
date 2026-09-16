@@ -108,7 +108,7 @@ export {
   resolveRunArtifact,
 } from './agent/RunArtifacts';
 export type { RunArtifact, ResolvedRunArtifact } from './agent/RunArtifacts';
-export { createArtifactPreview, isPreviewableArtifact } from './agent/ArtifactPreview';
+export { createArtifactPreview, isPreviewableArtifact, artifactPreviewVariant, ARTIFACT_VIEWER_MAX_BYTES, type ArtifactPreviewVariant } from './agent/ArtifactPreview';
 export { BuiltInSearchBackend } from './search/BuiltInSearchBackend';
 export { DuckDuckGoBackend } from './search/DuckDuckGoBackend';
 export { FirecrawlBackend } from './search/FirecrawlBackend';
@@ -428,3 +428,5 @@ export { workspaceTerminal } from './workspace/WorkspaceTerminal';
 
 export { environmentContext, artifactPresentation, parseClientEnvironment } from './runtime/RuntimeEnvironment';
 export type { ClientInterface, ClientEnvironment, RuntimeEnvironment } from './runtime/RuntimeEnvironment';
+
+export { ArtifactWebRtc, type ArtifactWebRtcOptions } from './workspace/ArtifactWebRtc';

@@ -15,7 +15,7 @@ it('renders a bounded thumbnail while preserving the original full-resolution im
   fs.writeFileSync(file, original);
   const artifact = { ...listRunArtifacts({ outputDir })[0], path: file };
   const preview = await createArtifactPreview(artifact);
-  expect(await sharp(preview).metadata()).toMatchObject({ width: 960, height: 540, format: 'webp' });
+  expect(await sharp(preview).metadata()).toMatchObject({ width: 480, height: 270, format: 'webp' });
   expect(preview.length).toBeLessThan(original.length);
   expect(fs.readFileSync(file)).toEqual(original);
   await expect(createArtifactPreview({ ...artifact, mediaType: 'image/svg+xml' })).rejects.toThrow('no image preview');
@@ -26,3 +26,28 @@ it('renders a bounded thumbnail while preserving the original full-resolution im
   fs.truncateSync(file, 33 * 1024 * 1024);
   await expect(createArtifactPreview(artifact)).rejects.toThrow('too large');
 });
+
+it('caps both variants, caches them independently and invalidates changed sources', async () => {
+  const { randomBytes } = await import('node:crypto');
+  const outputDir = fs.mkdtempSync(path.join(os.tmpdir(), 'artifact-preview-')); directories.push(outputDir);
+  const file = path.join(outputDir, 'noise.png');
+  const original = await sharp(randomBytes(2048 * 2048 * 3), { raw: { width: 2048, height: 2048, channels: 3 } }).png().toBuffer();
+  fs.writeFileSync(file, original);
+  const artifact = { ...listRunArtifacts({ outputDir })[0], path: file };
+  const [viewer, sameViewer, thumbnail] = await Promise.all([
+    createArtifactPreview(artifact, 'viewer'), createArtifactPreview(artifact, 'viewer'), createArtifactPreview(artifact),
+  ]);
+  expect(viewer).toBe(sameViewer);
+  expect(viewer.length).toBeLessThanOrEqual(1_000_000);
+  expect(thumbnail.length).toBeLessThanOrEqual(80_000);
+  expect((await sharp(viewer).metadata()).width).toBeGreaterThan(480);
+  expect(await sharp(thumbnail).metadata()).toMatchObject({ width: 480, height: 480 });
+  expect(await createArtifactPreview(artifact, 'viewer')).toBe(viewer);
+  expect(fs.readFileSync(file)).toEqual(original);
+  fs.writeFileSync(file, await sharp({ create: { width: 320, height: 200, channels: 3, background: 'red' } }).png().toBuffer());
+  const changed = await createArtifactPreview(artifact, 'viewer');
+  expect(changed).not.toEqual(viewer);
+  expect(await sharp(changed).metadata()).toMatchObject({ width: 320, height: 200 });
+  fs.unlinkSync(file);
+  await expect(createArtifactPreview(artifact, 'viewer')).rejects.toThrow();
+}, 30000);
