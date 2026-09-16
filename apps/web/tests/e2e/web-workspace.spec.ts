@@ -57,11 +57,11 @@ test('guest downloads an expired-run artifact to the browser and restores it aft
     const previewGate = new Promise<void>(resolve => { releasePreview = resolve; });
     let previewRequests = 0;
     const delayPreview = async (route: Route) => {
-      if (route.request().resourceType() === 'image') { previewRequests++; await previewGate; }
+      previewRequests++; await previewGate;
       await route.continue();
     };
-    await page.route('**/v1/downloads/*', delayPreview);
-    const viewerResponse = page.waitForResponse(response => response.url().includes('/v1/downloads/') && response.request().resourceType() === 'image');
+    await page.route('**/artifacts/*/preview?variant=viewer', delayPreview);
+    const viewerResponse = page.waitForResponse(response => response.url().endsWith('/preview?variant=viewer'));
     await page.getByRole('button', { name: 'Preview home-desktop.png', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'home-desktop.png preview' });
     await expect(dialog.getByRole('img')).toBeVisible();
@@ -80,7 +80,7 @@ test('guest downloads an expired-run artifact to the browser and restores it aft
       expect(Math.abs(afterDownload[dimension] - beforeDownload[dimension])).toBeLessThan(1);
     }
     expect(previewRequests).toBe(1);
-    await page.unroute('**/v1/downloads/*', delayPreview);
+
     const viewer = await viewerResponse;
     expect(viewer.headers()['content-type']).toContain('image/webp');
     expect((await viewer.body()).length).toBeLessThanOrEqual(1_000_000);
@@ -92,6 +92,14 @@ test('guest downloads an expired-run artifact to the browser and restores it aft
     await page.screenshot({ path: '../../output/playwright/artifact-full-image.png' });
     await page.keyboard.press('Escape');
     await expect(dialog).toHaveCount(0);
+    for (let reopen = 0; reopen < 2; reopen++) {
+      await page.getByRole('button', { name: 'Preview home-desktop.png', exact: true }).click();
+      await expect.poll(() => dialog.getByRole('img').evaluate((node: HTMLImageElement) => node.naturalWidth)).toBe(1920);
+      expect(previewRequests).toBe(1);
+      await page.keyboard.press('Escape');
+      await expect(dialog).toHaveCount(0);
+    }
+    await page.unroute('**/artifacts/*/preview?variant=viewer', delayPreview);
     await expect(page.getByRole('button', { name: 'Download expired-desktop.png' })).toBeDisabled();
     await page.getByRole('log', { name: 'Conversation' }).evaluate(node => { node.scrollTop = 0; });
     await page.screenshot({ path: '../../output/playwright/unavailable-download.png' });

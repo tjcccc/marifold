@@ -500,7 +500,15 @@ Clients must never fetch or navigate directly to the host path in that target.
 
 The Web UI renders file cards after the final answer. Transcript images use half
 the message-content width, preserve aspect ratio, and open a compressed viewer.
-Work details do not contain download controls. A click
+Web previews use the authenticated preview endpoint and keep compressed Blobs in
+a browser-memory cache (16 MiB / 32 entries per API client), sharing in-flight
+requests. Reopening a viewer or revisiting a session reuses those bytes. Server,
+token, and workspace changes create a separate client/cache; reloading the page
+clears the cache. Run IDs, artifact IDs, sizes, media types and preview variants
+identify cache entries. Same-size external file edits require a page reload.
+Object URLs are revoked when the image consumer closes.
+
+Work details do not contain download controls. Clicking Download
 creates an access URL with authenticated POST, then navigates to it so the browser
 owns download progress, cancellation, and the save location. No full-file Blob is
 buffered by the page. Tickets are bounded in memory, expire five minutes after

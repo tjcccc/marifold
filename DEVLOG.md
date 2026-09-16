@@ -2,6 +2,21 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-09-17 — v0.74.2 — Browser preview caching
+
+- Keep downloaded thumbnail/viewer Blobs in a 16 MiB / 32-entry browser-memory
+  cache per API client. Reuse concurrent requests and repeated viewer opens;
+  isolate connection credentials/workspaces and changed artifact metadata.
+- Fetch viewer bytes through the authenticated preview route, preserving the
+  stable decoded-image swap. Each consumer releases its object URL on close;
+  originals continue to use fresh browser download tickets.
+- Pass workspace typecheck/build, 245 Web tests and all 10 Chromium checks.
+  Verify repeated viewer opens make only one preview request, with cache
+  isolation, eviction, metadata changes and retry-after-error coverage.
+- Synchronize workspace/CLI versions to 0.74.2, refresh the lockfile and rebuild
+  clean output. Verify all six packed versions and packed CLI version; reuse
+  the passing development tests.
+
 ## 2026-09-17 — v0.74.1 — Stable image viewer loading
 
 - Fit the thumbnail to the viewer's final frame immediately, preserving its

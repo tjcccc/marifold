@@ -1,6 +1,6 @@
 {
   "name": "@marifold/bridge",
-  "version": "0.74.1",
+  "version": "0.74.2",
   "private": true,
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

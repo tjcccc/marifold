@@ -7,6 +7,7 @@ export interface PreviewImage {
   alt: string;
   aspectRatio?: number;
   loadSrc?: () => Promise<string>;
+  loadBlob?: () => Promise<Blob>;
   download?: () => Promise<void>;
 }
 
@@ -79,14 +80,17 @@ export function ImagePreviewDialog({ images, initialIndex, loadImage, onClose }:
   useEffect(() => {
     setResolvedSrc(current?.src);
     setFitRatio(current?.aspectRatio);
-    setLoadingPreview(Boolean(current?.loadSrc));
+    setLoadingPreview(Boolean(current?.loadSrc || current?.loadBlob));
     setError(undefined);
     setZoomed(false);
-    if (current?.loadSrc) {
+    if (current?.loadSrc || current?.loadBlob) {
       let cancelled = false;
       const image = new Image();
-      current.loadSrc().then(async src => {
+      let objectUrl: string | undefined;
+      const source = current.loadBlob ? current.loadBlob() : current.loadSrc!();
+      source.then(async value => {
         if (cancelled) return;
+        const src = typeof value === 'string' ? value : (objectUrl = URL.createObjectURL(value));
         image.src = src;
         await image.decode();
         if (cancelled) return;
@@ -99,7 +103,7 @@ export function ImagePreviewDialog({ images, initialIndex, loadImage, onClose }:
           setError(error instanceof Error ? error.message : 'Could not load the image.');
         }
       });
-      return () => { cancelled = true; image.src = ''; };
+      return () => { cancelled = true; image.src = ''; if (objectUrl) URL.revokeObjectURL(objectUrl); };
     }
     if (current?.src || !current?.sourcePath || !loadImage) return;
     let cancelled = false;
@@ -114,7 +118,7 @@ export function ImagePreviewDialog({ images, initialIndex, loadImage, onClose }:
       cancelled = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [current?.sourcePath, current?.src, current?.aspectRatio, current?.loadSrc, loadImage]);
+  }, [current?.sourcePath, current?.src, current?.aspectRatio, current?.loadSrc, current?.loadBlob, loadImage]);
   if (!current) return null;
 
   function move(delta: number): void {

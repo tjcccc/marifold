@@ -3,9 +3,10 @@ import type { ApiClient } from '../../api/client';
 import type { RunArtifact } from '../../api/types';
 import { ImagePreviewDialog } from '../../components/ImagePreviewDialog';
 import type { PreviewImage } from '../../components/ImagePreviewDialog';
-import { artifactAccessUrl, artifactPath, ARTIFACT_UNAVAILABLE_NOTICE, downloadRunArtifact, isImageArtifact } from '../../lib/runArtifacts';
+import { ARTIFACT_UNAVAILABLE_NOTICE, downloadRunArtifact, isImageArtifact } from '../../lib/runArtifacts';
 import { useArtifactDownloads } from './useArtifactDownloads';
 import styles from './RunArtifacts.module.css';
+import { artifactPreviewBlob } from '../../lib/artifactPreviewCache';
 
 /** Deliverables belong to the answer and remain visible independently of logs. */
 export function RunArtifacts({ client, runId, artifacts }: { client?: ApiClient; runId: string; artifacts: RunArtifact[] }) {
@@ -25,7 +26,7 @@ export function RunArtifacts({ client, runId, artifacts }: { client?: ApiClient;
                 src,
                 aspectRatio,
                 alt: name,
-                loadSrc: () => artifactAccessUrl(client, runId, artifact, 'image'),
+                loadBlob: () => artifactPreviewBlob(client, runId, artifact, 'viewer'),
                 download: () => downloadRunArtifact(client, runId, artifact),
               })} />
             ) : null}
@@ -60,7 +61,7 @@ function ArtifactThumbnail({ client, runId, artifact, onPreview }: { client: Api
     setFailed(false);
     const load = async () => {
       try {
-        const blob = await client.blob(`${artifactPath(runId, artifact.id)}/preview`);
+        const blob = await artifactPreviewBlob(client, runId, artifact, 'thumbnail');
         if (cancelled) return;
         if (!blob) { setFailed(true); return; }
         objectUrl = URL.createObjectURL(blob);
@@ -73,7 +74,7 @@ function ArtifactThumbnail({ client, runId, artifact, onPreview }: { client: Api
     if (observer && host.current) observer.observe(host.current);
     else void load();
     return () => { cancelled = true; observer?.disconnect(); if (objectUrl) URL.revokeObjectURL(objectUrl); };
-  }, [client, runId, artifact.id, attempt]);
+  }, [client, runId, artifact.id, artifact.size, artifact.mediaType, attempt]);
   return (
     <button ref={host} className={styles.preview} type="button" aria-label={`${failed ? 'Retry preview of' : 'Preview'} ${artifact.name}`}
       onClick={() => {
