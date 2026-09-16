@@ -261,13 +261,14 @@ describe('MarifoldService security', () => {
         headers: {
           origin: 'http://localhost:5173',
           'access-control-request-method': 'POST',
-          'access-control-request-headers': 'content-type',
+          'access-control-request-headers': 'content-type, authorization, idempotency-key',
         },
       });
       expect(preflight.statusCode).toBe(204);
       expect(preflight.headers['access-control-allow-origin']).toBe('http://localhost:5173');
       expect(preflight.headers['access-control-allow-methods']).toContain('POST');
       expect(preflight.headers['access-control-allow-headers']).toContain('last-event-id');
+      expect(preflight.headers['access-control-allow-headers']).toContain('idempotency-key');
 
       const allowed = await server.inject({
         method: 'GET',

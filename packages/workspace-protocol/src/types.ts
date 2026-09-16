@@ -36,6 +36,8 @@ export interface Invitation {
 export interface WorkspaceDevice {
   id: string;
   name: string;
+  /** Membership enrollment time in Unix milliseconds; absent on older hosts. */
+  joinedAt?: number;
   platform: string;
   architecture: string;
   executor: boolean;

@@ -1,3 +1,4 @@
+import type { RuntimeEnvironment } from '../runtime/RuntimeEnvironment';
 import type { AgentRunOptions } from '../agent/AgentRunner';
 import type { WorkspaceExecutionContext } from '@marifold/workspace-protocol';
 import * as crypto from 'crypto';
@@ -64,6 +65,7 @@ export interface RunRegistryOptions {
 /** What a client may pass when starting a run. Mirrors the AgentRunOptions
  * surface that is safe to accept over the service boundary. */
 export interface RunStartInput {
+  environment?: RuntimeEnvironment;
   /** Internal coordinator fields; the public request parser never accepts these. */
   registryRunId?: string;
   parentRunId?: string;
@@ -417,6 +419,7 @@ export class RunRegistry {
     try {
       const runner = await this.runtime.createAgentRunner(input.profile, { ...input, registryRunId: run.id });
       const events = runner.run({
+        environment: input.environment,
         objective: input.objective,
         profile: input.profile,
         provider: input.provider,

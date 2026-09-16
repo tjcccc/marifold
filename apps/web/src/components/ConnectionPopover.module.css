@@ -191,6 +191,13 @@
   background: color-mix(in srgb, var(--danger) 10%, transparent);
 }
 
+.deviceHeading {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-2);
+}
+
 .deviceList {
   display: flex;
   flex-direction: column;

@@ -108,6 +108,7 @@ export {
   resolveRunArtifact,
 } from './agent/RunArtifacts';
 export type { RunArtifact, ResolvedRunArtifact } from './agent/RunArtifacts';
+export { createArtifactPreview, isPreviewableArtifact } from './agent/ArtifactPreview';
 export { BuiltInSearchBackend } from './search/BuiltInSearchBackend';
 export { DuckDuckGoBackend } from './search/DuckDuckGoBackend';
 export { FirecrawlBackend } from './search/FirecrawlBackend';
@@ -424,3 +425,6 @@ export { WorkspaceRuns } from './workspace/WorkspaceRuns';
 export type { WorkspaceSummary, WorkspaceDevice, WorkspaceExecutionContext } from '@marifold/workspace-protocol';
 
 export { workspaceTerminal } from './workspace/WorkspaceTerminal';
+
+export { environmentContext, artifactPresentation, parseClientEnvironment } from './runtime/RuntimeEnvironment';
+export type { ClientInterface, ClientEnvironment, RuntimeEnvironment } from './runtime/RuntimeEnvironment';

@@ -19,7 +19,7 @@ export class DeviceDelegateTool implements AgentTool {
   readonly definition = {
     name: 'delegate_device',
     description:
-      'Ask another online device in this personal workspace to carry out one bounded objective with this profile and model. The child cannot delegate again. Approval is required. Use the device name or ID from the device context. Filesystem paths belong to the selected device; do not translate them from the requesting device.',
+      'Ask another online device in this personal workspace to carry out one bounded objective with this profile and model. The child cannot delegate again. Approval is required. Use host for the workspace host, or a device name or ID returned by list_devices. Filesystem paths belong to the selected device; do not translate them from the requesting device.',
     parameters: {
       type: 'object',
       properties: { device: { type: 'string' }, objective: { type: 'string' } },

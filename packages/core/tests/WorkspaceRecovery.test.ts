@@ -1,4 +1,5 @@
 import * as fs from 'node:fs';
+import sharp from 'sharp';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -152,6 +153,11 @@ describe('workspace recovery and device boundaries', () => {
       await expect(
         second.handle('executor.execute', { runId: 'artifact_run', tool: 'write_file', input: {} }, context),
       ).rejects.toThrow('unavailable');
+      fs.writeFileSync(path.join(workspace.outputDir, 'desktop.png'), await sharp({ create: { width: 1920, height: 1080, channels: 3, background: '#37576a' } }).png().toBuffer());
+      const image = listRunArtifacts(workspace).find(artifact => artifact.name === 'desktop.png')!;
+      const preview = await second.handle('executor.artifact', { runId: 'artifact_run', artifactId: image.id, preview: true }, context) as { data: string };
+      expect(await sharp(Buffer.from(preview.data, 'base64')).metadata()).toMatchObject({ width: 960, height: 540, format: 'webp' });
+      await expect(second.handle('executor.artifact', { runId: 'artifact_run', artifactId: image.id, preview: true }, { ...context, workspaceId: 'office' })).rejects.toThrow('unavailable');
       fs.rmSync(workspace.outputDir, { recursive: true });
       expect(await second.handle('executor.artifact', { runId: 'artifact_run', artifactId: artifacts[0].id, metadata: true }, context)).toEqual({ available: false });
       fs.symlinkSync(d, workspace.outputDir);

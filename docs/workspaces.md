@@ -183,10 +183,24 @@ writes there, without replacing usernames or translating absolute paths. For an
 ordinary guest execution, paths instead belong to that selected guest. The service
 never interprets a requesting device's path as an upload; attachments carry bytes.
 
+Each model turn receives a small environment block with the runtime time,
+timezone, client interface (`terminal`, `web`, `desktop`, or `mobile` when known),
+and whether the request is local or remote to the workspace host. The connection
+establishes origin; client text cannot change it. Device inventories are fetched
+with `list_devices` only when needed, and `delegate_device` accepts `host` or a
+resolved device name/ID. Delegated runs preserve the originating interface and
+timezone. Terminal replies report execution-device paths; graphical clients use
+file cards and previews. A remote path is not a file saved on the browser device.
+
 Regular files in a run's output directory become authenticated downloadable
 artifacts. Files deliberately written elsewhere stay on that execution device and
 are not automatically copied. Download controls save files on the computer running
-the browser. They do not run a file-copy command on the workspace host.
+the browser. They do not run a file-copy command on the workspace host. Files
+appear in cards below the final answer; PNG/JPEG/WebP outputs show thumbnails
+with full-resolution viewing and download controls. Working details remain
+collapsible above the answer. A download click creates a short-lived scoped URL
+on the connected service, then the browser streams it directly and shows normal
+download progress. Thumbnails are resized on the source device before transfer.
 Completed artifact references persist separately from live run diagnostics and
 are restored when a session is reopened. Published output files survive the
 24-hour cleanup of temporary run state and remain stored until explicitly removed

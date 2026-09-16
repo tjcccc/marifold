@@ -1,7 +1,7 @@
 import * as fs from 'fs';
-import * as path from 'path';
+import { ArtifactTickets, artifactHeaders } from './ArtifactTickets';
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { MarifoldError, RunApprovalAction, RunRegistry, RunStartInput } from '@marifold/core';
+import { createArtifactPreview, isPreviewableArtifact, MarifoldError, RunApprovalAction, RunRegistry, RunStartInput } from '@marifold/core';
 import { SSE_HEADERS, startSseHeartbeat, writeSse, writeSseRetry } from './Sse';
 import {
   objectBody,
@@ -25,7 +25,9 @@ const RECONNECT_DELAY_MS = 3000;
  */
 export function registerRunRoutes(server: FastifyInstance, registry: RunRegistry, options: {
   resolve?: (input: RunStartInput, body: Record<string, unknown>, request: FastifyRequest) => Promise<RunStartInput>;
-  artifact?: (runId: string, artifactId: string, reply: FastifyReply) => Promise<boolean>;
+  artifact?: (runId: string, artifactId: string, reply: FastifyReply, inline: boolean) => Promise<boolean>;
+  tickets?: ArtifactTickets;
+  preview?: (runId: string, artifactId: string) => Promise<Buffer | undefined>;
   artifactAvailable?: (runId: string, artifactId: string) => Promise<boolean | undefined>;
 } = {}): void {
   server.post('/v1/runs', async (request, reply) => {
@@ -61,15 +63,35 @@ export function registerRunRoutes(server: FastifyInstance, registry: RunRegistry
     return { ok: true, artifacts };
   });
 
+  const sendArtifact = async (runId: string, artifactId: string, reply: FastifyReply, inline = false) => {
+    if (await options.artifact?.(runId, artifactId, reply, inline)) return reply;
+    const artifact = registry.requireArtifact(runId, artifactId);
+    artifactHeaders(reply, artifact, inline);
+    return reply.send(fs.createReadStream(artifact.path, { fd: fs.openSync(artifact.path, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW), autoClose: true }));
+  };
   server.get<{ Params: { id: string; artifactId: string } }>(
     '/v1/runs/:id/artifacts/:artifactId',
-    async (request, reply) => {
-      if (await options.artifact?.(request.params.id, request.params.artifactId, reply)) return reply;
-      const artifact = registry.requireArtifact(request.params.id, request.params.artifactId);
-      reply.header('content-type', artifact.mediaType);
-      reply.header('content-length', String(artifact.size));
-      reply.header('content-disposition', attachmentDisposition(path.basename(artifact.name)));
-      return reply.send(fs.createReadStream(artifact.path));
+    (request, reply) => sendArtifact(request.params.id, request.params.artifactId, reply),
+  );
+  server.get<{ Params: { id: string; artifactId: string } }>(
+    '/v1/runs/:id/artifacts/:artifactId/preview', async (request, reply) => {
+      const { id, artifactId } = request.params;
+      const bytes = await options.preview?.(id, artifactId) ?? await createArtifactPreview(registry.requireArtifact(id, artifactId));
+      return reply.type('image/webp').header('cache-control', 'no-store').header('x-content-type-options', 'nosniff').send(bytes);
+    },
+  );
+  if (options.tickets) server.post<{ Params: { id: string; artifactId: string } }>(
+    '/v1/runs/:id/artifacts/:artifactId/access', async (request, reply) => {
+      const { id, artifactId } = request.params;
+      const artifact = registry.require(id).artifacts?.find(item => item.id === artifactId);
+      if (!artifact) throw MarifoldError.artifactNotFound(id, artifactId);
+      const purpose = objectBody(request.body).purpose;
+      if (purpose !== 'download' && purpose !== 'image') throw MarifoldError.configInvalid('Invalid file access purpose.');
+      if (purpose === 'image' && !isPreviewableArtifact(artifact.mediaType)) throw MarifoldError.configInvalid('This file is not a previewable image.');
+      const available = options.artifactAvailable ? await options.artifactAvailable(id, artifactId) : Boolean(registry.requireArtifact(id, artifactId));
+      if (available === false) throw MarifoldError.artifactNotFound(id, artifactId);
+      reply.header('cache-control', 'no-store');
+      return { ok: true, ...options.tickets!.issue(response => sendArtifact(id, artifactId, response, purpose === 'image')) };
     },
   );
 
@@ -116,11 +138,6 @@ export function registerRunRoutes(server: FastifyInstance, registry: RunRegistry
     reply.status(202);
     return { ok: true, status };
   });
-}
-
-function attachmentDisposition(name: string): string {
-  const fallback = name.replace(/[^\x20-\x7E]/g, '_').replace(/["\\]/g, '_') || 'artifact';
-  return `attachment; filename="${fallback}"; filename*=UTF-8''${encodeURIComponent(name)}`;
 }
 
 async function streamRunEvents(

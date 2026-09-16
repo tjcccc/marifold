@@ -1,3 +1,4 @@
+import { WorkspaceDevicesTool } from './WorkspaceDevicesTool';
 import { DeviceDelegateTool, type DeviceChildRun } from './DeviceDelegateTool';
 import type { JSONValue } from '@priest-ai/core';
 import { record, randomId } from '@marifold/workspace-protocol';
@@ -52,7 +53,7 @@ export class WorkspaceRuns {
     const device = devices.find((d) => d.id === executionDeviceId);
     if (!device || !device.online || !device.executor)
       throw new Error('The selected execution device is unavailable or has disabled execution.');
-    return { ...input, execution: { workspaceId: connection.id, originDeviceId: originId, executionDeviceId } };
+    return { ...input, environment: { ...input.environment, request: input.environment?.request === 'remote' || originId !== connection.hostDeviceId ? 'remote' : 'local' }, execution: { workspaceId: connection.id, originDeviceId: originId, executionDeviceId } };
   }
   createRunner(input: RunStartInput): AgentRunner {
     const execution = input.execution;
@@ -61,24 +62,28 @@ export class WorkspaceRuns {
     const host = this.manager.store.get(workspaceId);
     const devices = this.manager.devices(workspaceId);
     const contextInstructions = [
-      `Device context (metadata): ${JSON.stringify({ workspaceId, workspaceName: host.name, hostDeviceId: host.hostDeviceId, originDeviceId: execution.originDeviceId, executionDeviceId, devices })}. All file paths and tools belong to the execution device. Skills and Apps run on the host. Device delegation is limited to this workspace.`,
-      'The requesting device (originDeviceId) is the user’s current device; it may differ from the execution device and workspace host. A request naming this workspace (for example home) refers to its host, not automatically to the current execution device. Before device-specific work such as taking a desktop screenshot, resolve the named device from this metadata and use delegate_device if it differs from executionDeviceId. If the target is ambiguous or cannot be reached, ask instead of acting on another device.',
-      'Generated files in the run output directory are offered through Download controls in the conversation. Clicking Download transfers bytes to the browser’s device, regardless of which device created the file. Writing to Desktop or Downloads through a tool only writes on the execution device. For a request to send an already generated file, direct the user to its existing Download control; do not take a new screenshot, recreate the file, or delegate another capture just to deliver it. Never claim a browser download completed without evidence.',
+      `Tools and paths belong to ${executionDeviceId === host.hostDeviceId ? 'the workspace host' : 'the selected execution device'}. For a named-device or host task, use list_devices to resolve the target and delegate_device if needed. For an existing file, use its published reference; do not recapture or recreate it merely to deliver it.`,
     ];
     const registry =
       executionDeviceId === host.hostDeviceId
         ? this.runtime.createDefaultToolRegistry(input.profile)
         : this.runtime.createHostContextTools(input.profile);
+    registry.register(new WorkspaceDevicesTool(() => ({
+      workspace: { id: workspaceId, name: host.name, hostDeviceId: host.hostDeviceId },
+      executionDeviceId,
+      devices: this.manager.devices(workspaceId),
+    })));
     if (!input.parentRunId && !input.lean && input.registryRunId && this.delegate) {
       registry.register(
         new DeviceDelegateTool(async (selected, objective) => {
           const matches = this.manager
             .devices(workspaceId)
-            .filter((d) => d.id === selected || d.name === selected || (selected === 'host' && d.host));
+            .filter((d) => d.id === selected || d.name === selected || ((selected === 'host' || selected === host.name) && d.host));
           if (matches.length !== 1) throw new Error('Device name is ambiguous or unknown; use its ID.');
           const child = await this.resolve(
             {
               objective,
+              environment: input.environment,
               profile: input.profile,
               provider: input.provider,
               model: input.model,
@@ -149,7 +154,7 @@ export class WorkspaceRuns {
     }
     return this.runtime.createAgentRunner(input.profile, registry, undefined, {
       contextInstructions,
-      deviceInstructions: `This run uses a model on the workspace host and tools on execution device ${executionDeviceId}. The requesting device is ${execution.originDeviceId}. All tool paths, home directory, and operating system belong to the execution device. Do not substitute host paths. Skills and Apps must be run on the host in a separate run.`,
+      deviceInstructions: 'Tools run on the selected execution device. All tool paths, home directory, and operating system belong to it. Do not substitute host paths. Skills and Apps run on the workspace host in a separate run.',
       createWorkspace: async (options) => {
         runId = options.id;
         const workspace = (await request('executor.prepare', {

@@ -13,6 +13,7 @@ import { artifactForSandboxHref, ARTIFACT_UNAVAILABLE_NOTICE } from '../../lib/r
 import { useArtifactDownloads } from './useArtifactDownloads';
 import type { ResponseMetaState, RunCardState, ThreadItem, UserAttachment } from '../../state/thread';
 import { hasRunActivity, isTrivialRun } from '../../state/thread';
+import { RunArtifacts } from './RunArtifacts';
 import { RunCard } from './RunCard';
 import styles from './ThreadView.module.css';
 
@@ -67,9 +68,16 @@ export function ThreadView({
   // already stream prose (their thinking line comes down at that point).
   const runs = new Map<string, RunCardState>();
   const proseRuns = new Set<string>();
+  const finalItems = new Map<string, string>();
+  const workItems = new Map<string, ThreadItem[]>();
   for (const item of items) {
     if (item.kind === 'run') runs.set(item.run.runId, item.run);
-    else if (item.kind === 'assistant' && item.runId) proseRuns.add(item.runId);
+    else if (item.kind === 'assistant' && item.runId) {
+      proseRuns.add(item.runId);
+      if (item.runPhase === 'progress' || item.runPhase === 'reasoning') {
+        workItems.set(item.runId, [...(workItems.get(item.runId) ?? []), item]);
+      } else finalItems.set(item.runId, item.id);
+    }
   }
 
   return (
@@ -87,6 +95,8 @@ export function ThreadView({
             item={item}
             runs={runs}
             proseRuns={proseRuns}
+            finalItems={finalItems}
+            workItems={workItems}
             onCancelRun={onCancelRun}
             onAnswerApproval={onAnswerApproval}
             onSubmitUserInput={onSubmitUserInput}
@@ -117,6 +127,8 @@ function ThreadItemView({
   item,
   runs,
   proseRuns,
+  finalItems,
+  workItems,
   onCancelRun,
   onAnswerApproval,
   onSubmitUserInput,
@@ -132,6 +144,8 @@ function ThreadItemView({
   item: ThreadItem;
   runs: Map<string, RunCardState>;
   proseRuns: Set<string>;
+  finalItems: Map<string, string>;
+  workItems: Map<string, ThreadItem[]>;
   editing: boolean;
   onStartEditing: () => void;
   onCancelEditing: () => void;
@@ -222,6 +236,7 @@ function ThreadItemView({
     case 'assistant': {
       const run = item.runId ? runs.get(item.runId) : undefined;
       const secondary = item.runPhase === 'progress' || item.runPhase === 'reasoning';
+      if (secondary && run) return null;
       const meta = !secondary && !item.streaming
         ? run && run.status !== 'running'
           ? runMetaText(run)
@@ -234,6 +249,9 @@ function ThreadItemView({
         <div className={styles.assistant} data-run-phase={item.runPhase}>
           <AssistantMarkdown source={item.markdown} muted={secondary} run={run} client={client} />
           {item.streaming ? <span className={styles.cursor} aria-hidden /> : null}
+          {run && finalItems.get(run.runId) === item.id && !item.streaming ? (
+            <RunArtifacts client={client} runId={run.runId} artifacts={run.artifacts} />
+          ) : null}
           {meta || copyable ? (
             <div className={styles.responseFooter}>
               {copyable ? (
@@ -261,7 +279,8 @@ function ThreadItemView({
     }
     case 'run': {
       const run = item.run;
-      if (!hasRunActivity(run)) {
+      const work = workItems.get(run.runId) ?? [];
+      if (!hasRunActivity(run) && !work.length) {
         // No tools/plan/approval: nothing card-worthy. While the model is
         // still silent, show an inline thinking line; once prose streams (or
         // the run completes) the response itself carries the state.
@@ -281,14 +300,22 @@ function ThreadItemView({
         // footer is still the only place that tells the user what happened.
       }
       return (
-        <RunCard
-          client={client}
-          run={run}
-          onCancel={() => onCancelRun(run.runId)}
-          onAnswer={(requestId, action) => onAnswerApproval(run.runId, requestId, action)}
-          onSubmitInput={(requestId, submission) => onSubmitUserInput?.(run.runId, requestId, submission)}
-          onToggle={() => onToggleRun(run.runId)}
-        />
+        <>
+          <RunCard
+            run={run}
+            onCancel={() => onCancelRun(run.runId)}
+            onAnswer={(requestId, action) => onAnswerApproval(run.runId, requestId, action)}
+            onSubmitInput={(requestId, submission) => onSubmitUserInput?.(run.runId, requestId, submission)}
+            onToggle={() => onToggleRun(run.runId)}
+          >
+            {work.map(detail => detail.kind === 'assistant' ? (
+              <div key={detail.id} data-run-phase={detail.runPhase}>
+                <AssistantMarkdown source={detail.markdown} muted run={run} client={client} />
+              </div>
+            ) : null)}
+          </RunCard>
+          {!finalItems.has(run.runId) && run.status !== 'running' ? <RunArtifacts client={client} runId={run.runId} artifacts={run.artifacts} /> : null}
+        </>
       );
     }
   }

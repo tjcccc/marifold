@@ -1,3 +1,4 @@
+import { environmentContext, artifactPresentation, type RuntimeEnvironment } from '../runtime/RuntimeEnvironment';
 import { isUnfulfilledSearchPromise, WEB_RESEARCH_CONTINUATION } from '../search/WebResearchContinuation';
 import { markSourceCitations } from '../search/SourceCitations';
 import { WEB_ANSWER_STYLE, webResearchGuidance } from '../search/WebResearchGuidance';
@@ -51,6 +52,7 @@ const NATIVE_WEB_SEARCH_COMPAT_OPTION = 'marifold_native_web_search';
 const NATIVE_WEB_SEARCH_CHAT_OPTION = 'enable_search';
 
 export interface AgentRunOptions {
+  environment?: RuntimeEnvironment;
   objective: string;
   profile?: string;
   provider?: string;
@@ -132,6 +134,7 @@ export interface AgentEngineContext {
 }
 
 export interface AgentRunnerDeps {
+  environment?: RuntimeEnvironment;
   createWorkspace?: (options: CreateRunWorkspaceOptions) => Promise<RunWorkspace>;
   listArtifacts?: (workspace: RunWorkspace) => Promise<RunArtifact[]>;
   taskStore: TaskStore;
@@ -223,10 +226,9 @@ export class AgentRunner {
     const builtInInstructions = options.lean
       ? []
       : (this.deps.resolveBuiltInInstructions?.(options.objective, settings.profile) ?? []);
-    const instructions = [...(this.deps.contextInstructions ?? []), ...builtInInstructions, ...(options.instructions ?? [])];
-    let runOptions: AgentRunOptions = instructions.length > 0
-      ? { ...options, instructions }
-      : options;
+    const environment = { ...this.deps.environment, ...options.environment };
+    const instructions = [environmentContext(environment), artifactPresentation(environment), ...(this.deps.contextInstructions ?? []), ...builtInInstructions, ...(options.instructions ?? [])];
+    let runOptions: AgentRunOptions = { ...options, environment, instructions };
     if (runOptions.images && this.deps.prepareImages) {
       runOptions = {
         ...runOptions,
@@ -914,7 +916,7 @@ export class AgentRunner {
       `Working directory: ${workspace.cwd}. Relative tool paths resolve against it.`,
       `User home: ${workspace.userHome}. In tool paths and shell commands, ~ refers to this directory.`,
       `Isolated run directory: ${workspace.rootDir}. Its internal runtime home is ${workspace.homeDir}.`,
-      `${attachments}\nHonor explicit destination paths from the user; otherwise write generated deliverables to ${workspace.outputDir}. Regular output files are published to clients automatically, so mention their filenames normally and do not invent sandbox:, file:, or host-path download links. Temporary scripts and environments belong in ${workspace.workDir}.`,
+      `${attachments}\nHonor explicit destination paths from the user; otherwise write generated deliverables to ${workspace.outputDir}. Regular output files are published to clients automatically. Follow the interface-specific file presentation guidance; never invent sandbox: or file: download URLs. Temporary scripts and environments belong in ${workspace.workDir}.`,
       ...(this.deps.registry.get('ask_user')?.kind === 'interaction' ? [
         'ask_user is optional. Use it only when essential information is missing and a reasonable assumption could materially change the result. Otherwise proceed. Batch all currently known questions into one call, and call it without other tools in that response.',
       ] : []),
@@ -1008,7 +1010,7 @@ export class AgentRunner {
       config,
       profile,
       prompt: options.objective,
-      context: ['You are planning an agent task. Create a short execution plan for the user request. Reply with JSON {"title": string, "steps": string[]} using at most 5 short steps. Reply with JSON only.'],
+      context: [environmentContext(options.environment), 'You are planning an agent task. Create a short execution plan for the user request. Reply with JSON {"title": string, "steps": string[]} using at most 5 short steps. Reply with JSON only.'],
       output: { jsonSchema: PLAN_SCHEMA, jsonSchemaName: 'agent_plan' },
     }, { signal: options.signal });
     if (!response.ok) {

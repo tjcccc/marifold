@@ -46,7 +46,7 @@ export async function runTui(options: RunTuiOptions): Promise<void> {
   }
 
   if (options.service) {
-    const local = new MarifoldRuntime({ loadedConfig: options.loadedConfig });
+    const local = new MarifoldRuntime({ loadedConfig: options.loadedConfig, environment: { interface: 'terminal' } });
     process.stdout.write('\x1b[?2004h');
     try {
       const app = render(<WorkspaceShell local={local} loadedConfig={options.loadedConfig} service={options.service} profile={options.profile} resume={options.resume} version={readVersion()} />, { exitOnCtrlC: false });
@@ -63,7 +63,7 @@ export async function runTui(options: RunTuiOptions): Promise<void> {
     return;
   }
 
-  const runtime = new MarifoldRuntime({ loadedConfig: options.loadedConfig });
+  const runtime = new MarifoldRuntime({ loadedConfig: options.loadedConfig, environment: { interface: 'terminal' } });
   try {
     let profile = options.profile;
     let settings = tryResolve(runtime, profile);

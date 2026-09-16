@@ -1,3 +1,4 @@
+import { environmentContext, type RuntimeEnvironment } from './RuntimeEnvironment';
 import type { AgentRunnerDeps } from '../agent/AgentRunner';
 import type { RunStartInput, RunJournal } from '../runs/RunRegistry';
 import { ImageInput, JSONValue, PriestConfig, PriestEngine, PriestRequest, PriestResponse, ToolDefinition, ToolExchangeTurn, UsageInfo } from '@priest-ai/core';
@@ -102,6 +103,7 @@ const NATIVE_WEB_SEARCH_COMPAT_OPTION = 'marifold_native_web_search';
 const WEB_SEARCH_UNAVAILABLE_CONTEXT = 'Web search is unavailable for this run. If the user asks you to browse or search the web, or their question requires current information, say clearly that you cannot access web search; do not imply that you searched.';
 
 export interface MarifoldRuntimeOptions {
+  environment?: RuntimeEnvironment;
   loadedConfig: LoadedMarifoldConfig;
   /** Override the web search backend (tests, alternative engines). */
   searchBackend?: SearchBackend;
@@ -151,6 +153,7 @@ export class MarifoldRuntime {
   async ask(request: MarifoldRunRequest): Promise<MarifoldAskResponse> {
     const startedAtMs = Date.now();
     const startedAt = new Date(startedAtMs).toISOString();
+    const environment = environmentContext({ ...this.options.environment, ...request.environment });
     const settings = this.resolveSettings(request);
     const preparedImages = await prepareImageInputs(request.images, { optimize: request.originalImages !== true });
     await this.refreshProviderCredentialsIfNeeded(settings.provider);
@@ -180,6 +183,7 @@ export class MarifoldRuntime {
         ? { id: request.sessionId, createIfMissing: true }
         : undefined,
       context: [
+        environment,
         ...this.runtimeContext(memory, request.prompt, memoryOn, webSearchMode),
         ...this.editHistoryContext(request, settings),
         ...(request.instructions ?? []),
@@ -300,6 +304,7 @@ export class MarifoldRuntime {
   ): AsyncGenerator<string, void, unknown> {
     const startedAtMs = Date.now();
     const startedAt = new Date(startedAtMs).toISOString();
+    const environment = environmentContext({ ...this.options.environment, ...request.environment });
     const settings = this.resolveSettings(request);
     const preparedImages = await prepareImageInputs(request.images, { optimize: request.originalImages !== true });
     await this.refreshProviderCredentialsIfNeeded(settings.provider);
@@ -334,6 +339,7 @@ export class MarifoldRuntime {
         ? { id: request.sessionId, createIfMissing: true }
         : undefined,
       context: [
+        environment,
         ...this.runtimeContext(memory, request.prompt, memoryOn, webSearchMode),
         ...this.editHistoryContext(request, settings),
         ...(request.instructions ?? []),
@@ -862,6 +868,7 @@ export class MarifoldRuntime {
     } = {},
   ): AgentRunner {
     return new AgentRunner({
+      environment: this.options.environment,
       deniedRoots: [path.join(path.dirname(this.options.loadedConfig.configPath), 'workspaces')],
       contextInstructions: runtimeOptions.contextInstructions,
       createWorkspace: runtimeOptions.createWorkspace,

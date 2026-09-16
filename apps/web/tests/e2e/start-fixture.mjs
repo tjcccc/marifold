@@ -1,5 +1,6 @@
 import { createBridge, MemoryRelayStore } from '../../../../apps/bridge/dist/index.js';
 import * as fs from 'node:fs';
+import { createRequire } from 'node:module';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -116,7 +117,10 @@ const artifactRunId = `run_browser_fixture_${Date.now()}`;
 const artifactDirectory = path.join(os.homedir(), '.marifold', 'runs', artifactRunId);
 const artifactOutput = path.join(artifactDirectory, 'output');
 fs.mkdirSync(artifactOutput, { recursive: true });
-fs.writeFileSync(path.join(artifactOutput, 'home-desktop.png'), Buffer.from(png, 'base64'));
+const sharp = createRequire(path.join(root, 'packages/core/package.json'))('sharp');
+const artifactPng = await sharp({ create: { width: 1920, height: 1080, channels: 3, background: '#37576a' } }).png().toBuffer();
+fs.writeFileSync(path.join(artifactOutput, 'home-desktop.png'), artifactPng);
+fs.writeFileSync(path.join(artifactOutput, 'worklogs.csv'), 'Date,Hours\n2026-09-16,8\n');
 fs.writeFileSync(path.join(artifactOutput, 'expired-desktop.png'), Buffer.from(png, 'base64'));
 const artifactStarted = new Date(Date.now() - 2 * 86400000).toISOString();
 const artifactFinished = new Date(Date.parse(artifactStarted) + 1000).toISOString();

@@ -6,7 +6,7 @@ export interface RootCommandOptions {
 }
 
 export function createRuntime(program: Command): MarifoldRuntime {
-  return new MarifoldRuntime({ loadedConfig: loadConfig(program) });
+  return new MarifoldRuntime({ loadedConfig: loadConfig(program), environment: { interface: 'terminal' } });
 }
 
 export function loadConfig(program: Command): LoadedMarifoldConfig {

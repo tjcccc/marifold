@@ -73,6 +73,26 @@ async function paired(executor = false) {
   };
 }
 describe('device-hosted workspaces', () => {
+  it('preserves a remote browser origin through the host-local workspace facade', async () => {
+    const p = await paired();
+    const prompts: string[] = [];
+    const realFetch = globalThis.fetch;
+    vi.stubGlobal('fetch', vi.fn(async (input, init) => {
+      if (!String(input).includes('localhost:11434')) return realFetch(input, init);
+      const request = JSON.parse(String(init?.body));
+      prompts.push(request.messages.map((message: { content: string }) => message.content).join('\n'));
+      return new Response(JSON.stringify({ message: { content: 'Hello.' }, done: true, done_reason: 'stop' }), { headers: { 'content-type': 'application/json' } });
+    }));
+    for (const [ip, expected] of [['127.0.0.1', 'local'], ['192.0.2.10', 'remote']]) {
+      const result = await p.host.inject({ method: 'POST', url: `${p.prefix}/v1/ask`, remoteAddress: ip, payload: {
+        prompt: 'Hello', environment: { interface: 'web', timezone: 'UTC', request: 'local' },
+      } });
+      expect(result.statusCode, result.body).toBe(200);
+      expect(prompts.at(-1)).toContain(`request: ${expected}`);
+      expect(prompts.at(-1)).toContain('interface: web');
+    }
+  });
+
   it('downloads a complete large host artifact while serving ordinary workspace reads', async () => {
     const p = await paired();
     const original = randomBytes(1024 * 1024 + 17);
@@ -96,12 +116,16 @@ describe('device-hosted workspaces', () => {
       return current.status;
     }).toBe('completed');
     expect(current.artifacts).toHaveLength(1);
+    const access = await post(p.guest, `${p.prefix}/v1/runs/${run.id}/artifacts/${current.artifacts[0].id}/access`, { purpose: 'download' });
+    expect(access.path).toMatch(/^\/v1\/downloads\/[a-f0-9]{48}$/);
+    expect((await p.host.inject(access.path)).statusCode).toBe(410);
     const [download, profiles] = await Promise.all([
-      p.guest.inject(`${p.prefix}/v1/runs/${run.id}/artifacts/${current.artifacts[0].id}`),
+      p.guest.inject(access.path),
       p.guest.inject(`${p.prefix}/v1/profiles`),
     ]);
     expect(download.statusCode).toBe(200);
     expect(download.rawPayload).toEqual(original);
+    expect(download.headers['content-length']).toBe(String(original.length));
     expect(profiles.statusCode).toBe(200);
     await p.host.close();
     await p.guest.close();
@@ -175,10 +199,11 @@ describe('device-hosted workspaces', () => {
         prompts.push(context);
         const step = count++;
         let text = 'The device task is complete.';
-        if (step === 0)
+        if (step === 0) text = '<tool_call name="list_devices">{}</tool_call>';
+        if (step === 1)
           text =
             '<tool_call name="delegate_device">{"device":"host","objective":"Create a small report file."}</tool_call>';
-        if (step === 1) {
+        if (step === 2) {
           const output = /otherwise write generated deliverables to (.+?)\. Regular output files/.exec(context)?.[1];
           if (!output) throw new Error('No output directory in child context.');
           generatedRuns.push(path.dirname(output));
@@ -189,7 +214,7 @@ describe('device-hosted workspaces', () => {
         });
       }),
     );
-    const { run } = await post(p.guest, `${p.prefix}/v1/runs`, { objective: 'Ask the host to create a report.' });
+    const { run } = await post(p.guest, `${p.prefix}/v1/runs`, { objective: 'Ask the host to create a report.', environment: { interface: 'terminal', timezone: 'Asia/Tokyo', request: 'local' } });
     const answered = new Set<string>();
     let current = run;
     for (let i = 0; i < 200; i++) {
@@ -204,12 +229,19 @@ describe('device-hosted workspaces', () => {
     }
     expect(current.status).toBe('completed');
     expect(answered.size).toBe(2);
-    expect(count).toBe(4);
-    expect(prompts[1]).not.toContain('name="delegate_device"');
-    expect(prompts[0]).toContain('workspaceName');
-    expect(prompts[0]).toContain('hostDeviceId');
-    expect(prompts[0]).toContain('use delegate_device if it differs from executionDeviceId');
-    expect(prompts[0]).toContain('do not take a new screenshot');
+    expect(count).toBe(5);
+    expect(prompts[2]).not.toContain('name="delegate_device"');
+    expect(prompts[0]).not.toContain('Device context (metadata)');
+    expect(prompts[0]).not.toContain('hostDeviceId');
+    expect(prompts[1]).toContain('hostDeviceId');
+    expect(prompts[0]).toContain('do not recapture or recreate');
+    for (const prompt of prompts) {
+      expect(prompt).toContain('interface: terminal');
+      expect(prompt).toContain('timezone: Asia/Tokyo');
+      expect(prompt).toContain('request: remote');
+      expect(prompt).toContain('Terminal output has no Download controls');
+      expect(prompt).not.toContain('Clicking Download transfers');
+    }
     expect(current.artifacts).toHaveLength(1);
     expect(current.artifacts[0].source.runId).not.toBe(run.id);
     const download = await p.guest.inject(`${p.prefix}/v1/runs/${run.id}/artifacts/${current.artifacts[0].id}`);

@@ -85,6 +85,40 @@ the bearer token but are not subject to browser CORS.
 fetch-based SSE with the header; the query form exists only for
 `EventSource` and may appear in local logs.
 
+## Request environment
+
+`POST /v1/ask`, `POST /v1/chat/stream`, and `POST /v1/runs` accept an optional
+`environment` object with `interface: "terminal" | "web" | "desktop" | "mobile"`
+and a valid `timezone` name, for example `{ "interface": "web", "timezone": "Asia/Shanghai" }`.
+Web and terminal clients send these hints automatically. Older clients may omit
+them; the runtime uses its timezone and omits an unknown interface.
+
+The runtime adds a compact instruction block, separate from the user message:
+
+```text
+<environment>
+time: 2026-09-16T08:00:00+08:00
+timezone: Asia/Shanghai
+interface: web
+request: remote
+</environment>
+```
+
+Time comes from the runtime clock with the selected timezone's current offset.
+The service derives `request: local|remote` relative to the workspace host from
+the direct peer and authenticated workspace provenance, including requests through
+its own workspace facade. Client-supplied `request` and `time` fields have no
+authority. Loopback and the host's own network addresses count as local;
+forwarded IP headers are not trusted. This is presentation context, not a device
+selection or permission grant.
+
+The block is refreshed for each turn, inherited by device delegation, and never
+prepended to the user prompt or stored as conversation text. It contains no
+location, working directory, workspace inventory, or delivery flags. Filesystem
+tools retain their separate execution-path context. `list_devices` supplies
+workspace and device details on demand. Terminal answers use absolute paths on
+the execution device; graphical clients attach generated files and image previews.
+
 ## CORS and origin policy
 
 Browser access is allowlist-only, exact-match against `cors_origins`:
@@ -451,6 +485,9 @@ the agent within those capabilities.
 | `GET /v1/runs/:id/events` | Resumable SSE of AgentEvents (below). An archived artifact run returns only its terminal `done` event when the cursor is behind |
 | `GET /v1/runs/:id/artifacts` | Retained file metadata with a fresh optional `available` flag. `false` means the output file is missing; absence means its device could not be checked. Missing files remain in this list |
 | `GET /v1/runs/:id/artifacts/:artifactId` | Authenticated download for one regular file emitted from the run output directory, including after live diagnostics expire. Returns `ARTIFACT_NOT_FOUND` for a missing file or unknown artifact ID |
+| `GET /v1/runs/:id/artifacts/:artifactId/preview` | Authenticated, source-generated WebP thumbnail for PNG/JPEG/WebP outputs, up to 960×720 pixels; rejects oversized or unsupported inputs |
+| `POST /v1/runs/:id/artifacts/:artifactId/access` `{ "purpose": "download" }` | Authenticated creation of a five-minute single-file URL. Returns `{ ok, path, expiresAt }`; `purpose: "image"` allows inline viewing of supported raster formats |
+| `GET /v1/downloads/:ticket` | Streams one file with Content-Length and the issued attachment/inline disposition. Ticket replaces bearer authentication for this URL only; network, Host, and Origin restrictions still apply |
 | `POST /v1/runs/:id/inputs/:requestId` | Submit every answer for one clarification checkpoint (below) |
 | `POST /v1/runs/:id/approvals/:requestId` | Answer an approval (below) |
 | `POST /v1/runs/:id/steer` `{ "text": "..." }` → 202 | Queue mid-run guidance; applied before the next model turn, echoed as a `steering` event |
@@ -460,6 +497,23 @@ Web clients treat the `artifact` event as authoritative. A model-authored
 `sandbox:` Markdown target is only a presentation hint: it may resolve to an
 exact filename in the same run's artifact list, then download by opaque ID.
 Clients must never fetch or navigate directly to the host path in that target.
+
+The Web UI renders file cards after the final answer and raster thumbnails with
+full-resolution viewing. Work details do not contain download controls. A click
+creates an access URL with authenticated POST, then navigates to it so the browser
+owns download progress, cancellation, and the save location. No full-file Blob is
+buffered by the page. Tickets are bounded in memory, expire five minutes after
+issuance, and are cleared on service restart; expiration does not delete the file
+or its transcript card. Clicking again requests a fresh ticket. Transfers already
+started can finish after ticket expiry. Range resumption is not currently provided.
+Ticket responses and file bytes are marked `no-store`; URLs contain no service token.
+
+For a paired workspace, POST to the workspace-prefixed artifact access route on
+the connected guest service. The returned `path` is relative to that service root,
+not its workspace API prefix. The guest issues the ticket locally and streams
+bounded reads from the source device through the bridge, rechecking membership.
+Thumbnails are rendered on the output device before transport; original image
+bytes are fetched only when opening the full-resolution viewer or downloading.
 
 #### The AgentEvent stream
 

@@ -18,6 +18,7 @@ export interface ServiceSecurityOptions extends ResolvedServiceSecurityOptions {
   access: 'loopback' | 'private';
   /** Explicit listen host, used as an allowed Host value in private mode. */
   boundHost: string;
+  authorizeArtifact?: (request: FastifyRequest) => boolean;
 }
 
 export function resolveSecurityOptions(
@@ -33,7 +34,7 @@ export function resolveSecurityOptions(
 }
 
 const CORS_METHODS = 'GET,POST,PATCH,DELETE,OPTIONS';
-const CORS_HEADERS = 'authorization, content-type, last-event-id';
+const CORS_HEADERS = 'authorization, content-type, last-event-id, idempotency-key';
 const CORS_MAX_AGE = '600';
 /** Host values a default loopback-bound service legitimately sees. */
 const LOOPBACK_HOST = /^(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/i;
@@ -80,6 +81,7 @@ export function registerSecurity(server: FastifyInstance, options: ServiceSecuri
     // a raw-URL prefix) so variants like //v1/x or /v1/../v1/x can't slip past
     // the check regardless of how strictly the router matches them.
     if (!isApiPath(request.url)) return;
+    if (options.authorizeArtifact?.(request)) return;
     const presented = extractToken(request);
     if (!presented || !timingSafeEqualString(presented, options.token)) {
       throw MarifoldError.unauthorized();

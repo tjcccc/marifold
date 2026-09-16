@@ -24,6 +24,13 @@ export function WorkspacePopover(props: Props) {
   const [executor, setExecutor] = useState(false);
   const [invitation, setInvitation] = useState('');
   const [devices, setDevices] = useState<Array<WorkspaceDevice & { host: boolean }>>([]);
+  const sortedDevices = useMemo(() => [...devices].sort((a, b) => {
+    if (a.host !== b.host) return a.host ? -1 : 1;
+    const aJoined = Number.isFinite(a.joinedAt) ? a.joinedAt! : Infinity;
+    const bJoined = Number.isFinite(b.joinedAt) ? b.joinedAt! : Infinity;
+    if (aJoined !== bJoined) return aJoined < bJoined ? -1 : 1;
+    return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }) || a.id.localeCompare(b.id);
+  }), [devices]);
   const [error, setError] = useState(props.problem);
   const [busy, setBusy] = useState(false);
   const [deviceChoice, setDeviceChoice] = useState(props.executionDevice);
@@ -221,7 +228,7 @@ export function WorkspacePopover(props: Props) {
                       >
                         <option value="auto">Automatic · this device if enabled</option>
                         <option value="host">Workspace host</option>
-                        {devices
+                        {sortedDevices
                           .filter((d) => !d.host)
                           .map((d) => (
                             <option key={d.id} value={d.id} disabled={!d.online || !d.executor}>
@@ -234,30 +241,33 @@ export function WorkspacePopover(props: Props) {
                       Skills and Apps run on the host. Approve each remote tool call here before it runs on the selected
                       device.
                     </span>
-                    <div className={styles.deviceList}>
-                      {devices.map((d) => (
-                        <div key={d.id} className={`${styles.deviceRow} ${d.host ? styles.hostRow : ''}`}>
-                          <span className={styles.hint}>
-                            {d.host ? <strong className={styles.hostName}>{d.name}</strong> : d.name}{' '}
-                            {d.host ? '(host)' : d.id === workspace.deviceId ? '(this device)' : ''} · {d.online ? 'online' : 'offline'}
-                          </span>
-                          {!d.host && (
-                            <button
-                              className={styles.remove}
-                              disabled={busy}
-                              onClick={() =>
-                                void perform(async () => {
-                                  await manage('revoke', { deviceId: d.id });
-                                  setDevices((ds) => ds.filter((item) => item.id !== d.id));
-                                })
-                              }
-                            >
-                              Revoke
-                            </button>
-                          )}
-                        </div>
-                      ))}
-                    </div>
+                    <section aria-labelledby="workspace-devices-title">
+                      <h3 id="workspace-devices-title" className={styles.deviceHeading}>Devices</h3>
+                      <div className={styles.deviceList} role="list">
+                        {sortedDevices.map((d) => (
+                          <div role="listitem" key={d.id} className={`${styles.deviceRow} ${d.host ? styles.hostRow : ''}`}>
+                            <span className={styles.hint}>
+                              {d.host ? <strong className={styles.hostName}>{d.name}</strong> : d.name}{' '}
+                              {d.host ? '(host)' : d.id === workspace.deviceId ? '(this device)' : ''} · {d.online ? 'online' : 'offline'}
+                            </span>
+                            {!d.host && (
+                              <button
+                                className={styles.remove}
+                                disabled={busy}
+                                onClick={() =>
+                                  void perform(async () => {
+                                    await manage('revoke', { deviceId: d.id });
+                                    setDevices((ds) => ds.filter((item) => item.id !== d.id));
+                                  })
+                                }
+                              >
+                                Revoke
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </section>
                     {workspace.role === 'guest' && (
                       <label className={styles.hint}>
                         <input

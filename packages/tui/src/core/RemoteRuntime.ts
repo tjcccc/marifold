@@ -25,7 +25,7 @@ export class RemoteRuntime implements TuiRuntime {
   private snapshot: Snapshot[] = [];
   loadedConfig!: LoadedMarifoldConfig;
   constructor(options: ApiClientOptions) {
-    this.api = createApiClient(options);
+    this.api = createApiClient({ ...options, interface: 'terminal' });
   }
   async refresh(): Promise<void> {
     const [snapshot, config] = await Promise.all([

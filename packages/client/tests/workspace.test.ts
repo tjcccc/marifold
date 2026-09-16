@@ -54,3 +54,19 @@ it('resumes an interrupted event stream without replaying a start request', asyn
   expect(fetch.mock.calls[1][1].headers['Last-Event-ID'] ?? fetch.mock.calls[1][1].headers['last-event-id']).toBe('1');
   expect(fetch.mock.calls.every(([, options]) => options.method === 'GET')).toBe(true);
 });
+
+it('sends interface and timezone on model requests without adding them to stored user text or unrelated APIs', async () => {
+  const fetch = vi.fn(async (_url: unknown, _init?: RequestInit) => new Response('{"ok":true}'));
+  vi.stubGlobal('fetch', fetch);
+  const client = createApiClient({ interface: 'terminal', timezone: 'Asia/Shanghai', workspaceId: 'home' });
+  await client.request('POST', '/v1/runs', { objective: 'Exact prompt.' });
+  await client.request('POST', '/v1/ask', { prompt: 'Exact question.' });
+  await client.stream('/v1/chat/stream', { method: 'POST', body: { prompt: 'Exact chat.' } });
+  await client.request('POST', '/v1/runs/run/cancel', {});
+  for (const [, init] of fetch.mock.calls.slice(0, 3)) {
+    const body = JSON.parse(String(init?.body));
+    expect(body.environment).toEqual({ interface: 'terminal', timezone: 'Asia/Shanghai' });
+    expect(body.objective ?? body.prompt).toMatch(/^Exact (prompt|question|chat)\.$/);
+  }
+  expect(JSON.parse(String(fetch.mock.calls[3][1]?.body))).toEqual({});
+});

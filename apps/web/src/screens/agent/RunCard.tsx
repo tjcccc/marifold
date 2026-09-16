@@ -1,16 +1,14 @@
 import { useEffect, useState } from 'react';
-import type { ApiClient } from '../../api/client';
+import type { ReactNode } from 'react';
 import type { RunApprovalAction, UserInputSubmission } from '../../api/types';
 import { formatElapsed, formatRunDuration } from '../../lib/format';
-import { ARTIFACT_UNAVAILABLE_NOTICE } from '../../lib/runArtifacts';
-import { useArtifactDownloads } from './useArtifactDownloads';
 import type { RunCardState } from '../../state/thread';
 import { ApprovalSheet } from './ApprovalSheet';
 import { QuestionSheet } from './QuestionSheet';
 import styles from './RunCard.module.css';
 
 export interface RunCardProps {
-  client?: ApiClient;
+  children?: ReactNode;
   run: RunCardState;
   onCancel: () => void;
   onAnswer: (requestId: string, action: RunApprovalAction) => void;
@@ -21,10 +19,9 @@ export interface RunCardProps {
 /** A live agent run inline in the thread (design "THE RUN" + 1b edge states):
  * status line with elapsed + Cancel, plan checklist, folding tool rows,
  * steering pills, the approval sheet, and the collapsed ✓ footer. */
-export function RunCard({ client, run, onCancel, onAnswer, onSubmitInput, onToggle }: RunCardProps) {
+export function RunCard({ children, run, onCancel, onAnswer, onSubmitInput, onToggle }: RunCardProps) {
   const running = run.status === 'running';
   const showDetails = running || !run.collapsed;
-  const { downloading, unavailable, error: artifactError, download } = useArtifactDownloads(client, run.runId, run.artifacts);
 
   return (
     <div className={running ? styles.cardRunning : styles.card}>
@@ -53,6 +50,7 @@ export function RunCard({ client, run, onCancel, onAnswer, onSubmitInput, onTogg
 
       {showDetails ? (
         <div className={styles.details}>
+          {children}
           {run.plan && run.plan.length > 0 ? (
             <ul className={styles.plan}>
               {run.plan.map(step => (
@@ -115,31 +113,6 @@ export function RunCard({ client, run, onCancel, onAnswer, onSubmitInput, onTogg
           ))}
         </div>
       ) : null}
-
-      {/* Deliverables are the result of the run, not diagnostic activity.
-       * Keep them available when a finished run's details are collapsed. */}
-      {run.artifacts.length > 0 ? (
-        <div className={styles.artifacts} aria-label="Generated files">
-          {run.artifacts.map(artifact => (
-            <div key={artifact.id}>
-              <button
-                className={styles.artifact}
-                aria-label={`Download ${artifact.name.split('/').at(-1) || artifact.name}`}
-                disabled={!client || downloading === artifact.id || unavailable.has(artifact.id)}
-                onClick={() => void download(artifact)}
-              >
-                <span aria-hidden>↓</span>
-                <span className={styles.artifactAction}>{unavailable.has(artifact.id) ? 'Unavailable' : 'Download'}</span>
-                <span className={styles.artifactName}>{artifact.name}</span>
-                <span className={styles.artifactSize}>{formatBytes(artifact.size)}</span>
-              </button>
-              {unavailable.has(artifact.id) ? <div className={styles.artifactNotice} role="status">{ARTIFACT_UNAVAILABLE_NOTICE}</div> : null}
-            </div>
-          ))}
-        </div>
-      ) : null}
-
-      {artifactError ? <div className={styles.error}>{artifactError}</div> : null}
 
       {run.approval ? (
         <ApprovalSheet
@@ -229,10 +202,4 @@ function footerText(run: RunCardState): string {
 
 function durationText(run: RunCardState): string {
   return formatRunDuration(run.startedAt, run.finishedAt);
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
