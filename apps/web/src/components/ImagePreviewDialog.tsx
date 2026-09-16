@@ -5,6 +5,7 @@ export interface PreviewImage {
   src?: string;
   sourcePath?: string;
   alt: string;
+  aspectRatio?: number;
   loadSrc?: () => Promise<string>;
   download?: () => Promise<void>;
 }
@@ -20,6 +21,8 @@ export interface ImagePreviewDialogProps {
 export function ImagePreviewDialog({ images, initialIndex, loadImage, onClose }: ImagePreviewDialogProps) {
   const [index, setIndex] = useState(() => clampIndex(initialIndex, images.length));
   const [resolvedSrc, setResolvedSrc] = useState<string>();
+  const [fitRatio, setFitRatio] = useState<number>();
+  const [loadingPreview, setLoadingPreview] = useState(false);
   const [error, setError] = useState<string>();
   const [downloading, setDownloading] = useState(false);
   const [zoomed, setZoomed] = useState(false);
@@ -75,12 +78,28 @@ export function ImagePreviewDialog({ images, initialIndex, loadImage, onClose }:
   const current = images[index];
   useEffect(() => {
     setResolvedSrc(current?.src);
+    setFitRatio(current?.aspectRatio);
+    setLoadingPreview(Boolean(current?.loadSrc));
     setError(undefined);
     setZoomed(false);
     if (current?.loadSrc) {
       let cancelled = false;
-      current.loadSrc().then(src => { if (!cancelled) setResolvedSrc(src); }).catch(error => { if (!cancelled) setError(error instanceof Error ? error.message : 'Could not load the image.'); });
-      return () => { cancelled = true; };
+      const image = new Image();
+      current.loadSrc().then(async src => {
+        if (cancelled) return;
+        image.src = src;
+        await image.decode();
+        if (cancelled) return;
+        setFitRatio(current.aspectRatio ?? image.naturalWidth / image.naturalHeight);
+        setResolvedSrc(src);
+        setLoadingPreview(false);
+      }).catch(error => {
+        if (!cancelled) {
+          setLoadingPreview(false);
+          setError(error instanceof Error ? error.message : 'Could not load the image.');
+        }
+      });
+      return () => { cancelled = true; image.src = ''; };
     }
     if (current?.src || !current?.sourcePath || !loadImage) return;
     let cancelled = false;
@@ -95,7 +114,7 @@ export function ImagePreviewDialog({ images, initialIndex, loadImage, onClose }:
       cancelled = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [current?.sourcePath, current?.src, current?.loadSrc, loadImage]);
+  }, [current?.sourcePath, current?.src, current?.aspectRatio, current?.loadSrc, loadImage]);
   if (!current) return null;
 
   function move(delta: number): void {
@@ -135,7 +154,9 @@ export function ImagePreviewDialog({ images, initialIndex, loadImage, onClose }:
       <div className={styles.stage} onClick={event => event.stopPropagation()}>
         <div className={zoomed ? styles.zoomed : undefined}>
           {resolvedSrc ? (
-            <button type="button" className={styles.zoom} aria-label={zoomed ? 'Fit image to window' : 'View image at full size'} onClick={() => setZoomed(value => !value)}>
+            <button type="button" className={`${styles.zoom} ${!zoomed && fitRatio ? styles.fitted : ''}`}
+              style={!zoomed && fitRatio ? { width: `min(var(--preview-width), calc(var(--preview-height) * ${fitRatio}))`, aspectRatio: fitRatio } : undefined}
+              disabled={loadingPreview} aria-busy={loadingPreview} aria-label={zoomed ? 'Fit image to window' : 'View image at full size'} onClick={() => setZoomed(value => !value)}>
               <img className={styles.image} src={resolvedSrc} alt={current.alt} onError={() => { setResolvedSrc(undefined); setError('Could not load the image. Close the preview and try again.'); }} />
             </button>
           ) : !error ? (

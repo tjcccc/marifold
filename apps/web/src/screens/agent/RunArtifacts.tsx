@@ -21,8 +21,9 @@ export function RunArtifacts({ client, runId, artifacts }: { client?: ApiClient;
         return (
           <div className={`${styles.file} ${isImageArtifact(artifact) ? styles.imageFile : ''}`} key={artifact.id}>
             {client && isImageArtifact(artifact) && !missing ? (
-              <ArtifactThumbnail client={client} runId={runId} artifact={artifact} onPreview={src => setPreview({
+              <ArtifactThumbnail client={client} runId={runId} artifact={artifact} onPreview={(src, aspectRatio) => setPreview({
                 src,
+                aspectRatio,
                 alt: name,
                 loadSrc: () => artifactAccessUrl(client, runId, artifact, 'image'),
                 download: () => downloadRunArtifact(client, runId, artifact),
@@ -47,7 +48,7 @@ export function RunArtifacts({ client, runId, artifacts }: { client?: ApiClient;
   );
 }
 
-function ArtifactThumbnail({ client, runId, artifact, onPreview }: { client: ApiClient; runId: string; artifact: RunArtifact; onPreview: (src?: string) => void }) {
+function ArtifactThumbnail({ client, runId, artifact, onPreview }: { client: ApiClient; runId: string; artifact: RunArtifact; onPreview: (src?: string, aspectRatio?: number) => void }) {
   const host = useRef<HTMLButtonElement>(null);
   const [src, setSrc] = useState<string>();
   const [failed, setFailed] = useState(false);
@@ -75,7 +76,11 @@ function ArtifactThumbnail({ client, runId, artifact, onPreview }: { client: Api
   }, [client, runId, artifact.id, attempt]);
   return (
     <button ref={host} className={styles.preview} type="button" aria-label={`${failed ? 'Retry preview of' : 'Preview'} ${artifact.name}`}
-      onClick={() => failed ? setAttempt(value => value + 1) : onPreview(src)}>
+      onClick={() => {
+        if (failed) { setAttempt(value => value + 1); return; }
+        const image = host.current?.querySelector('img');
+        onPreview(src, image?.naturalHeight ? image.naturalWidth / image.naturalHeight : undefined);
+      }}>
       {src && !failed ? <img src={src} alt={artifact.name} onError={() => setFailed(true)} /> : (
         <span className={styles.placeholder}>{failed ? 'Preview unavailable · Retry' : 'Loading preview…'}</span>
       )}

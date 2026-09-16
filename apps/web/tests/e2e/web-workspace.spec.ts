@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Route } from '@playwright/test';
 import { strToU8, zipSync } from 'fflate';
 import * as fs from 'node:fs/promises';
 
@@ -53,11 +53,34 @@ test('guest downloads an expired-run artifact to the browser and restores it aft
       expect(Math.abs(imageBox.width / imageBox.height - 1920 / 1080)).toBeLessThan(0.02);
     }
     await page.setViewportSize({ width: 1440, height: 1100 });
+    let releasePreview!: () => void;
+    const previewGate = new Promise<void>(resolve => { releasePreview = resolve; });
+    let previewRequests = 0;
+    const delayPreview = async (route: Route) => {
+      if (route.request().resourceType() === 'image') { previewRequests++; await previewGate; }
+      await route.continue();
+    };
+    await page.route('**/v1/downloads/*', delayPreview);
     const viewerResponse = page.waitForResponse(response => response.url().includes('/v1/downloads/') && response.request().resourceType() === 'image');
     await page.getByRole('button', { name: 'Preview home-desktop.png', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'home-desktop.png preview' });
     await expect(dialog.getByRole('img')).toBeVisible();
+    await expect.poll(() => previewRequests).toBe(1);
+    expect(await dialog.getByRole('img').evaluate((node: HTMLImageElement) => node.naturalWidth)).toBe(480);
+    await expect(dialog.getByRole('button', { name: 'View image at full size' })).toBeDisabled();
+    const beforePreview = (await dialog.getByRole('img').boundingBox())!;
+    const beforeDownload = (await dialog.getByRole('button', { name: 'Download image' }).boundingBox())!;
+    expect(beforePreview.width).toBeGreaterThan(480);
+    releasePreview();
     await expect.poll(() => dialog.getByRole('img').evaluate((node: HTMLImageElement) => node.naturalWidth)).toBe(1920);
+    const afterPreview = (await dialog.getByRole('img').boundingBox())!;
+    const afterDownload = (await dialog.getByRole('button', { name: 'Download image' }).boundingBox())!;
+    for (const dimension of ['x', 'y', 'width', 'height'] as const) {
+      expect(Math.abs(afterPreview[dimension] - beforePreview[dimension])).toBeLessThan(1);
+      expect(Math.abs(afterDownload[dimension] - beforeDownload[dimension])).toBeLessThan(1);
+    }
+    expect(previewRequests).toBe(1);
+    await page.unroute('**/v1/downloads/*', delayPreview);
     const viewer = await viewerResponse;
     expect(viewer.headers()['content-type']).toContain('image/webp');
     expect((await viewer.body()).length).toBeLessThanOrEqual(1_000_000);

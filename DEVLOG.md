@@ -2,6 +2,19 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-09-17 — v0.74.1 — Stable image viewer loading
+
+- Fit the thumbnail to the viewer's final frame immediately, preserving its
+  aspect ratio. Decode the larger preview before swapping sources so the image
+  and download button stay in place; enable actual-size zoom after loading.
+- Verify workspace typecheck/build, all 240 Web tests and 10 Chromium checks.
+  Delay the viewer response to confirm stable image/button geometry and a single
+  preview download while the thumbnail remains visible.
+- Synchronize workspace/CLI versions to 0.74.1. Reuse development tests, rebuild
+  clean output, and verify all six packed versions and the packed CLI version.
+- User reports a successful Fedora WebRTC download in approximately one second;
+  broader network/VPN acceptance remains unverified.
+
 ## 2026-09-17 — v0.74.0 — Image variants and experimental direct downloads
 
 - Generate and cache source-side WebP variants: 480-pixel / 80 KB transcript
