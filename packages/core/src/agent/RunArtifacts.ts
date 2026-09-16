@@ -14,6 +14,8 @@ export interface RunArtifact {
   name: string;
   mediaType: string;
   size: number;
+  /** Read-only availability check; absent when the output device cannot be checked. */
+  available?: boolean;
 }
 
 export interface ResolvedRunArtifact extends RunArtifact {

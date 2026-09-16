@@ -5,6 +5,8 @@ export interface PreviewImage {
   src?: string;
   sourcePath?: string;
   alt: string;
+  loadSrc?: () => Promise<string>;
+  download?: () => Promise<void>;
 }
 
 export interface ImagePreviewDialogProps {
@@ -18,6 +20,10 @@ export interface ImagePreviewDialogProps {
 export function ImagePreviewDialog({ images, initialIndex, loadImage, onClose }: ImagePreviewDialogProps) {
   const [index, setIndex] = useState(() => clampIndex(initialIndex, images.length));
   const [resolvedSrc, setResolvedSrc] = useState<string>();
+  const [error, setError] = useState<string>();
+  const [downloading, setDownloading] = useState(false);
+  const [zoomed, setZoomed] = useState(false);
+  const downloadRef = useRef<HTMLButtonElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
@@ -46,8 +52,9 @@ export function ImagePreviewDialog({ images, initialIndex, loadImage, onClose }:
       } else if (event.key === 'Tab') {
         const controls = [
           closeRef.current,
-          ...document.querySelectorAll<HTMLButtonElement>(`.${styles.arrow}`),
-        ].filter((item): item is HTMLButtonElement => Boolean(item));
+          downloadRef.current,
+          ...document.querySelectorAll<HTMLButtonElement>(`.${styles.arrow}, .${styles.zoom}`),
+        ].filter((item): item is HTMLButtonElement => Boolean(item) && !item!.disabled);
         if (controls.length === 0) return;
         const current = controls.indexOf(document.activeElement as HTMLButtonElement);
         const next = event.shiftKey
@@ -68,19 +75,27 @@ export function ImagePreviewDialog({ images, initialIndex, loadImage, onClose }:
   const current = images[index];
   useEffect(() => {
     setResolvedSrc(current?.src);
+    setError(undefined);
+    setZoomed(false);
+    if (current?.loadSrc) {
+      let cancelled = false;
+      current.loadSrc().then(src => { if (!cancelled) setResolvedSrc(src); }).catch(error => { if (!cancelled) setError(error instanceof Error ? error.message : 'Could not load the image.'); });
+      return () => { cancelled = true; };
+    }
     if (current?.src || !current?.sourcePath || !loadImage) return;
     let cancelled = false;
     let objectUrl: string | undefined;
     loadImage(current.sourcePath).then(blob => {
-      if (cancelled || !blob) return;
+      if (cancelled) return;
+      if (!blob) { setError('This image is no longer available.'); return; }
       objectUrl = URL.createObjectURL(blob);
       setResolvedSrc(objectUrl);
-    }).catch(() => undefined);
+    }).catch(() => { if (!cancelled) setError('Could not load the image. Close the preview and try again.'); });
     return () => {
       cancelled = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [current?.sourcePath, current?.src, loadImage]);
+  }, [current?.sourcePath, current?.src, current?.loadSrc, loadImage]);
   if (!current) return null;
 
   function move(delta: number): void {
@@ -118,11 +133,30 @@ export function ImagePreviewDialog({ images, initialIndex, loadImage, onClose }:
         </button>
       ) : null}
       <div className={styles.stage} onClick={event => event.stopPropagation()}>
-        {resolvedSrc ? (
-          <img className={styles.image} src={resolvedSrc} alt={current.alt} />
-        ) : (
-          <div className={styles.loading} role="status">Loading image…</div>
-        )}
+        <div className={zoomed ? styles.zoomed : undefined}>
+          {resolvedSrc ? (
+            <button type="button" className={styles.zoom} aria-label={zoomed ? 'Fit image to window' : 'View image at full size'} onClick={() => setZoomed(value => !value)}>
+              <img className={styles.image} src={resolvedSrc} alt={current.alt} onError={() => { setResolvedSrc(undefined); setError('Could not load the image. Close the preview and try again.'); }} />
+            </button>
+          ) : !error ? (
+            <div className={styles.loading} role="status">Loading image…</div>
+          ) : null}
+        </div>
+        {current.download ? <button ref={downloadRef} className={styles.download} type="button" disabled={downloading}
+          aria-label={downloading ? 'Starting download…' : 'Download image'}
+          title="Download image" aria-busy={downloading}
+          onClick={async event => {
+            event.stopPropagation();
+            setDownloading(true);
+            try { await current.download!(); }
+            catch (error) { setError(error instanceof Error ? error.message : 'Download failed.'); }
+            finally { setDownloading(false); }
+          }}>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
+              <path d="M12 3v12m-5-5 5 5 5-5M5 16v5h14v-5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button> : null}
+        {error ? <div className={styles.loading} role="alert">{error}</div> : null}
         {multiple ? <div className={styles.counter}>{index + 1} / {images.length}</div> : null}
       </div>
       {multiple ? (

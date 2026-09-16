@@ -1,0 +1,31 @@
+.files {
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+  max-width: 720px;
+}
+.file {
+  overflow: hidden;
+  border: 1px solid var(--separator);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+.download {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 14px 16px;
+  text-align: left;
+  color: var(--text);
+}
+.download:hover:not(:disabled) { background: var(--surface-2); }
+.download:disabled { cursor: default; color: var(--text-3); }
+.download:focus-visible, .preview:focus-visible { outline: 2px solid var(--brand-fill); outline-offset: -3px; }
+.label { display: grid; gap: 4px; flex: 1; min-width: 0; }
+.name { overflow-wrap: anywhere; font-size: 14px; }
+.detail { font-size: 12px; color: var(--text-3); }
+.preview { display: block; width: 100%; cursor: zoom-in; }
+.preview img { display: block; width: 100%; max-height: 480px; object-fit: contain; }
+.placeholder { display: grid; place-items: center; min-height: 180px; font-size: 13px; color: var(--text-3); }
+.notice { padding: 0 16px 12px; margin: 0; color: var(--text-3); font-size: 12px; }

@@ -36,7 +36,7 @@ describe('useAgentController session lifecycle', () => {
       if (path === '/v1/profiles/prompt-maker') return { profile };
       if (path.startsWith('/v1/skills?')) return { skills: [] };
       if (path.startsWith('/v1/sessions?')) return { sessions: [{ id: 'session-a' }] };
-      if (path === '/v1/runs') return { runs: [] };
+      if (path === '/v1/runs' || path.startsWith('/v1/runs?')) return { runs: [] };
       if (path === '/v1/sessions/session-a') return { session: { turns } };
       if (path === '/v1/sessions/session-b') return { session: { turns: [] } };
       throw new Error(`Unexpected request: ${path}`);
@@ -253,7 +253,7 @@ describe('useAgentController session lifecycle', () => {
         if (method === 'GET' && path === '/v1/profiles/prompt-maker') return { profile: legacyChatProfile } as never;
         if (method === 'GET' && path === '/v1/skills?profile=prompt-maker') return { skills: [] } as never;
         if (method === 'GET' && path.startsWith('/v1/sessions?')) return { sessions: [] } as never;
-        if (method === 'GET' && path === '/v1/runs') return { runs: [] } as never;
+        if (method === 'GET' && (path === '/v1/runs' || path.startsWith('/v1/runs?'))) return { runs: [] } as never;
         if (method === 'POST' && path === '/v1/runs') {
           const input = body as { objective: string; sessionId: string };
           return {
@@ -347,7 +347,7 @@ describe('useAgentController session lifecycle', () => {
         if (method === 'GET' && path === '/v1/sessions/session_new') {
           throw new MarifoldApiError(404, { code: 'NOT_FOUND', message: 'not persisted yet' });
         }
-        if (method === 'GET' && path === '/v1/runs') return { runs: [] } as never;
+        if (method === 'GET' && (path === '/v1/runs' || path.startsWith('/v1/runs?'))) return { runs: [] } as never;
         if (method === 'POST' && path === '/v1/runs') return { run } as never;
         throw new Error(`Unexpected request: ${method} ${path}`);
       },
@@ -436,7 +436,7 @@ describe('useAgentController session lifecycle', () => {
         if (method === 'GET' && path === '/v1/sessions/session_skill') {
           throw new MarifoldApiError(404, { code: 'NOT_FOUND', message: 'not persisted yet' });
         }
-        if (method === 'GET' && path === '/v1/runs') return { runs: [] } as never;
+        if (method === 'GET' && (path === '/v1/runs' || path.startsWith('/v1/runs?'))) return { runs: [] } as never;
         if (method === 'POST' && path === '/v1/skills/resolve') {
           expect(body).toEqual({
             invocation: '$make-prompt "summer morning"',
@@ -515,7 +515,7 @@ describe('useAgentController session lifecycle', () => {
         if (method === 'GET' && path === '/v1/sessions/session_chat_skill') {
           throw new MarifoldApiError(404, { code: 'NOT_FOUND', message: 'not persisted yet' });
         }
-        if (method === 'GET' && path === '/v1/runs') return { runs: [] } as never;
+        if (method === 'GET' && (path === '/v1/runs' || path.startsWith('/v1/runs?'))) return { runs: [] } as never;
         if (method === 'POST' && path === '/v1/skills/resolve') {
           return {
             invocation: {
@@ -615,7 +615,7 @@ describe('useAgentController session lifecycle', () => {
             },
           } as never;
         }
-        if (method === 'GET' && path === '/v1/runs') return { runs: [] } as never;
+        if (method === 'GET' && (path === '/v1/runs' || path.startsWith('/v1/runs?'))) return { runs: [] } as never;
         throw new Error(`Unexpected request: ${method} ${path}`);
       },
       stream: async () => new Response(),
@@ -693,7 +693,7 @@ describe('useAgentController session lifecycle', () => {
             },
           } as never;
         }
-        if (method === 'GET' && path === '/v1/runs') return { runs: [] } as never;
+        if (method === 'GET' && (path === '/v1/runs' || path.startsWith('/v1/runs?'))) return { runs: [] } as never;
         if (method === 'PATCH' && path === '/v1/sessions/session_actions') {
           current = { ...current, ...(body as Partial<SessionSummary>) };
           return { session: { ...current, turns: [] } } as never;
@@ -790,7 +790,7 @@ describe('useAgentController session lifecycle', () => {
             },
           } as never;
         }
-        if (method === 'GET' && path === '/v1/runs') return { runs: [] } as never;
+        if (method === 'GET' && (path === '/v1/runs' || path.startsWith('/v1/runs?'))) return { runs: [] } as never;
         if (method === 'POST' && path === '/v1/runs') {
           expect(body).toMatchObject({
             objective: 'Updated conversation 2',
@@ -888,7 +888,7 @@ describe('useAgentController session lifecycle', () => {
             },
           } as never;
         }
-        if (method === 'GET' && path === '/v1/runs') return { runs: [finished] } as never;
+        if (method === 'GET' && (path === '/v1/runs' || path.startsWith('/v1/runs?'))) return { runs: [finished] } as never;
         throw new Error(`Unexpected request: ${method} ${path}`);
       },
       stream: async () => new Response(),

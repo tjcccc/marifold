@@ -157,6 +157,7 @@ export class WorkspaceManager {
         return {
           id: m.deviceId,
           name: m.name,
+          joinedAt: m.issuedAt,
           host,
           platform: host ? os.platform() : (p?.platform ?? ''),
           architecture: host ? os.arch() : (p?.architecture ?? ''),

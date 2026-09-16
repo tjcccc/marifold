@@ -400,7 +400,8 @@ describe('threadReducer', () => {
     );
 
     expect(state.catchUp).toEqual([]);
-    expect(state.items.map(item => item.kind)).toEqual(['user', 'assistant', 'run', 'user', 'assistant']);
+    expect(state.items.map(item => item.kind)).toEqual(['user', 'run', 'assistant', 'user', 'assistant']);
+    expect(state.items[2]).toMatchObject({ kind: 'assistant', runId: 'run_artifact', runPhase: 'final' });
     expect(card(state, 'run_artifact')).toMatchObject({
       status: 'completed',
       collapsed: true,

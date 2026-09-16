@@ -1,3 +1,4 @@
+import type { RuntimeEnvironment } from './RuntimeEnvironment';
 import type { ImageInput } from '@priest-ai/core';
 import type { ProfileMode } from '../config/ConfigSchema';
 
@@ -7,6 +8,7 @@ export type MarifoldWebSearchMode = 'native' | 'fallback' | 'unavailable';
 export type MarifoldProviderToolDefinition = { type: 'web_search' };
 
 export interface MarifoldRunRequest {
+  environment?: RuntimeEnvironment;
   prompt: string;
   profile?: string;
   provider?: string;

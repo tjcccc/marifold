@@ -1,5 +1,63 @@
 import { expect, test } from '@playwright/test';
 import { strToU8, zipSync } from 'fflate';
+import * as fs from 'node:fs/promises';
+
+test('guest downloads an expired-run artifact to the browser and restores it after reload', async ({ page, request }, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 1100 });
+  await page.goto('/agent');
+  await page.getByRole('button', { name: 'Workspace', exact: true }).click();
+  await page.getByRole('button', { name: /Home workspace Paired/ }).click();
+  await page.getByRole('button', { name: 'Use at startup' }).click();
+  try {
+    await page.getByRole('button', { name: 'Open', exact: true }).click();
+    await expect(page.getByText('remote-only', { exact: true })).toBeVisible();
+    await page.goto('/agent/remote-only/session-download');
+    const button = page.getByRole('button', { name: 'Download home-desktop.png' });
+    for (let attempt = 0; attempt < 2; attempt++) {
+      await expect(button).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Download expired-desktop.png' })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Download expired-desktop.png' })).toBeDisabled();
+      await expect(page.getByRole('status').filter({ hasText: 'This file has expired or was removed.' })).toBeVisible();
+      const [download] = await Promise.all([page.waitForEvent('download'), button.click()]);
+      expect(download.suggestedFilename()).toBe('home-desktop.png');
+      expect(await download.failure()).toBeNull();
+      const saved = testInfo.outputPath(`download-${attempt}.png`);
+      await download.saveAs(saved);
+      const bytes = await fs.readFile(saved);
+      expect(bytes.subarray(1, 4).toString()).toBe('PNG');
+      expect(bytes.readUInt32BE(16)).toBe(1920);
+      expect(bytes.readUInt32BE(20)).toBe(1080);
+      expect(download.url()).toMatch(/^http:\/\/127\.0\.0\.1:32141\/v1\/downloads\/[a-f0-9]{48}$/);
+      await page.reload();
+    }
+    await expect(button).toBeVisible();
+    const files = page.getByRole('region', { name: 'Generated files' });
+    const answer = page.getByText('The screenshot is ready.', { exact: true });
+    expect((await files.boundingBox())!.y).toBeGreaterThan((await answer.boundingBox())!.y);
+    await expect(page.getByRole('button', { name: 'Download worklogs.csv' })).toBeVisible();
+    const [document] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Download worklogs.csv' }).click()]);
+    await document.saveAs(testInfo.outputPath('worklogs.csv'));
+    expect(await fs.readFile(testInfo.outputPath('worklogs.csv'), 'utf8')).toBe('Date,Hours\n2026-09-16,8\n');
+    const thumbnail = files.getByRole('img', { name: 'home-desktop.png' });
+    await expect(thumbnail).toBeVisible();
+    expect(await thumbnail.evaluate((node: HTMLImageElement) => node.naturalWidth)).toBe(960);
+    await page.getByRole('button', { name: 'Preview home-desktop.png', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: 'home-desktop.png preview' });
+    await expect(dialog.getByRole('img')).toBeVisible();
+    await expect.poll(() => dialog.getByRole('img').evaluate((node: HTMLImageElement) => node.naturalWidth)).toBe(1920);
+    await dialog.getByRole('button', { name: 'View image at full size' }).click();
+    await expect(dialog.getByRole('button', { name: 'Fit image to window' })).toBeVisible();
+    const [fullImage] = await Promise.all([page.waitForEvent('download'), dialog.getByRole('button', { name: 'Download image' }).click()]);
+    expect(fullImage.suggestedFilename()).toBe('home-desktop.png');
+    expect(await fullImage.failure()).toBeNull();
+    await page.screenshot({ path: '../../output/playwright/artifact-full-image.png' });
+    await page.keyboard.press('Escape');
+    await expect(dialog).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Download expired-desktop.png' })).toBeDisabled();
+    await page.getByRole('log', { name: 'Conversation' }).evaluate(node => { node.scrollTop = 0; });
+    await page.screenshot({ path: '../../output/playwright/unavailable-download.png' });
+  } finally { await request.put('/v1/workspaces/default', { data: { id: 'local' } }); }
+});
 
 test('Agent and Apps reuse one sidebar shell and header toggle', async ({ page }) => {
   await page.goto('/agent');
@@ -43,6 +101,12 @@ test('Connection switches the local Web shell between named Marifold servers', a
   await page.reload();
   await expect(page.getByText('remote-only', { exact: true })).toBeVisible();
   await expect(page.getByText('Remote fixture', { exact: true })).toBeVisible();
+
+  await page.goto('/agent/remote-only/session-download');
+  const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Download home-desktop.png' }).click()]);
+  expect(download.url()).toMatch(/^http:\/\/127\.0\.0\.1:32142\/v1\/downloads\/[a-f0-9]{48}$/);
+  expect(await download.failure()).toBeNull();
+  await expect(page.getByRole('img', { name: 'home-desktop.png' })).toBeVisible();
 
   await page.getByRole('button', { name: 'Workspace' }).click();
   await page.getByRole('button', { name: 'Direct servers' }).click();
@@ -209,8 +273,8 @@ test('session dialogs and global settings are keyboard-operable', async ({ page 
 
   await page.getByRole('button', { name: 'Web search' }).click();
   await expect(page.getByText('Web search', { exact: true }).last()).toBeVisible();
-  await page.getByRole('radiogroup', { name: 'Marifold fallback' }).getByRole('radio', { name: 'On' }).click();
-  await expect(page.getByRole('radiogroup', { name: 'Marifold fallback' }).getByRole('radio', { name: 'On' }))
+  await page.getByRole('radiogroup', { name: 'Web search enabled' }).getByRole('radio', { name: 'On' }).click();
+  await expect(page.getByRole('radiogroup', { name: 'Web search enabled' }).getByRole('radio', { name: 'On' }))
     .toHaveAttribute('aria-checked', 'true');
 
   await page.getByRole('button', { name: 'Appearance', exact: true }).click();

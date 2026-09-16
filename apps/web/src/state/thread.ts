@@ -348,7 +348,8 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
           // reload. A retained run record is only needed to restore transient
           // metadata such as generated-file downloads.
           if ((run.artifacts?.length ?? 0) > 0) {
-            next = insert(next, durableResponseIndex + 1, { kind: 'run', run: cardFromRecord(run) });
+            next = { ...next, items: next.items.map((item, index) => index === durableResponseIndex && item.kind === 'assistant' ? { ...item, runId: run.id, runPhase: 'final' as const } : item) };
+            next = insert(next, durableResponseIndex, { kind: 'run', run: cardFromRecord(run) });
           }
           continue;
         }

@@ -2,6 +2,74 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-09-16 — v0.73.0 — Browser deliverables and request environment
+
+### Workspace device list
+
+- Label the workspace device section and pin the host first. Order guests by
+  membership enrollment time (oldest first), then alphabetically for equal or
+  unavailable dates. Guests without dates follow dated guests; older hosts
+  remain compatible. Use the same order in the execution-device selector.
+- Verify workspace typecheck/build, two device-list rendering regressions, and
+  three workspace bridge tests including enrollment-time delivery. An unrelated
+  transfer test timed out during concurrent suites and passed on focused rerun.
+
+### Compact request environment
+
+- Add runtime time/offset, timezone, interface, and local/remote request origin
+  as a small instruction block across plain chat, agent loops, and planning.
+  Preserve user messages and saved conversation text unchanged.
+- Send interface/timezone hints from Web and both terminal clients. Derive origin
+  from direct connections and authenticated workspace provenance, including the
+  host-local workspace facade. Preserve environment through device delegation.
+- Replace browser-only file guidance with interface-specific presentation. Keep
+  device inventories out of ordinary prompts and resolve them with `list_devices`.
+  Keep execution paths in filesystem-tool context, outside the environment block.
+- Verify workspace typecheck/build, all package suites (893 tests), and 10 Chromium
+  regressions. Cover offset/DST formatting, plain-chat persistence, planning/tool
+  context, terminal/Web payloads, forged-origin rejection, and delegated runs.
+  Optional Redis integration remains skipped.
+
+### Browser downloads and transcript deliverables
+
+- Move generated files below the final answer and group run commentary into
+  collapsible working details. Restore the answer/file association on reload.
+- Position the image download icon outside the preview, centered 32px below it,
+  with an accessible label and space reserved on smaller screens.
+- Add lazy source-generated raster thumbnails and a full-resolution image viewer
+  with fit/actual-size controls, keyboard navigation, and browser downloads.
+- Exchange authenticated artifact requests for bounded five-minute file URLs on
+  the connected service. Stream local or paired-workspace files with known size
+  into the browser download manager; keep bearer credentials out of file URLs.
+- Keep unavailable file cards and expiration/removal notices visible after reload.
+  Offline sources remain retryable. Original files and durable references outlive
+  short-lived access URLs and temporary run diagnostics.
+- Allow the client's idempotency header in configured CORS preflights so
+  authenticated file-access requests also work through direct remote servers.
+- Validate with workspace typecheck/build, 884 package tests, all 10 Chromium
+  regressions, and focused reruns after the final preview/CORS fixes. Verify
+  paired-workspace and bearer-protected direct-server browser downloads, image
+  dimensions, reload persistence, ticket scope/expiry, and streaming before
+  source completion. Optional Redis integration remains skipped.
+
+## 2026-09-16 — v0.72.0 — Context boundaries and durable workspace downloads
+
+- Send user messages unchanged through agent planning and tool loops; move
+  runtime guidance into instruction context instead of adding `Objective:`.
+- Identify workspace hosts, requesting devices, and execution devices explicitly.
+  Guide named-device delegation and delivery of existing files without recapture.
+- Preserve artifact records and child provenance beyond live-run expiry and
+  retain generated output while cleaning temporary run state. Restore downloads
+  when reopening sessions, including after host and guest restarts.
+- Add session-scoped run retrieval and read-only artifact availability checks.
+  Keep missing files visible with disabled controls and an expiration/removal
+  notice; leave offline devices retryable. Delay browser blob cleanup safely.
+- Reuse passing workspace typecheck/build, package suites, focused recovery and
+  service regressions, and Chromium download/reload checks. Corrected an older
+  browser-test selector for the renamed Web search setting. Optional Redis was
+  skipped. Native browser downloads and transcript image/file cards come next.
+- Synchronize workspace manifests and the CLI to 0.72.0.
+
 ## 2026-09-13 — v0.71.1 — Search recovery and source citations
 
 - Clarify the fallback research loop: search for missing current/external facts,

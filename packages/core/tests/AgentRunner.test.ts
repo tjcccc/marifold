@@ -89,6 +89,53 @@ async function collect(events: AsyncGenerator<AgentEvent>): Promise<AgentEvent[]
 const planResponse = response({ text: '{"title": "Test plan", "steps": ["Read the file", "Summarize"]}' });
 
 describe('AgentRunner', () => {
+  it.each(['terminal', 'web'] as const)('keeps %s environment separate across planning, tools, and persisted history', async interfaceName => {
+    const engine = new ScriptedEngine([
+      planResponse,
+      response({ text: '<tool_call name="read_file">{"path":"a.txt"}</tool_call>' }),
+      response({ text: 'Ready.' }),
+    ]);
+    const persistTurn = vi.fn(async () => {});
+    const { runner } = makeRunner(engine, [fakeTool()], { toolMode: 'control-block' }, { persistTurn, environment: { interface: interfaceName } });
+    await collect(runner.run({ objective: 'Read this file.', cwd: tempDir(), forcePlan: true, sessionId: 'env', environment: { timezone: 'Asia/Shanghai', request: 'remote' } }));
+    expect(engine.requests).toHaveLength(3);
+    for (const request of engine.requests) {
+      expect(request.prompt).toBe('Read this file.');
+      const context = request.context!.join('\n');
+      expect(context.match(/<environment>/g)).toHaveLength(1);
+      expect(context).toContain(`interface: ${interfaceName}`);
+      expect(context).toContain('timezone: Asia/Shanghai');
+      expect(context).toContain('request: remote');
+      const block = context.match(/<environment>[\s\S]*?<\/environment>/)![0];
+      expect(block).not.toMatch(/workspace:|delivery:|cwd:|executor:|requester:/);
+    }
+    const context = engine.requests[1].context!.join('\n');
+    expect(context).toContain(interfaceName === 'terminal' ? 'absolute saved paths' : 'attached below the answer');
+    expect(JSON.stringify(persistTurn.mock.calls)).not.toContain('<environment>');
+    expect(persistTurn.mock.calls[0]).toContain('Read this file.');
+  });
+
+  it.each(['native', 'control-block'] as const)('preserves the user message separately from runtime guidance (%s)', async toolMode => {
+    const messages = [
+      "I'll be sharing another video version later\n可以吗",
+      '90000 フォロワー、おめでとうございます！\n这样可以吗',
+      'Objective: Keep this user-written label.\n',
+    ];
+    for (const objective of messages) {
+      const engine = new ScriptedEngine([response({ text: 'Your wording works.' })]);
+      const persistTurn = vi.fn(async () => {});
+      const { runner } = makeRunner(engine, [fakeTool()], { toolMode }, { persistTurn });
+      const events = await collect(runner.run({ objective, cwd: tempDir(), sessionId: 'wording' }));
+
+      expect(events.at(-1)).toMatchObject({ type: 'done', status: 'completed' });
+      expect(engine.requests).toHaveLength(1);
+      expect(engine.requests[0].prompt).toBe(objective);
+      expect(engine.requests[0].context?.join('\n')).toContain('Use tools only when');
+      expect(engine.requests[0].context?.join('\n')).toContain('For a question, give the answer the user asked for.');
+      expect(persistTurn.mock.calls[0]).toContain(objective);
+    }
+  });
+
   it.each(['native', 'control-block'] as const)('continues a search promise through research and persists the answer (%s)', async toolMode => {
     const call = (name: string, args: Record<string, string>) => toolMode === 'native'
       ? response({ toolCalls: [{ id: name, name, arguments: args }] })
@@ -855,8 +902,12 @@ describe('AgentRunner', () => {
     expect(done.status).toBe('completed');
     expect(done.summary).toBe('The file says hello.');
 
-    // The loop prompt steers the model away from gratuitous tool use.
-    expect(engine.requests[1].prompt).toContain('Use tools only when');
+    // Planning and tool iterations preserve the user message; guidance stays in context.
+    for (const request of engine.requests) {
+      expect(request.prompt).toBe('Read a.txt and summarize it.');
+    }
+    expect(engine.requests[0].context?.join('\n')).toContain('Create a short execution plan');
+    expect(engine.requests[1].context?.join('\n')).toContain('Use tools only when');
     expect(engine.requests[1].context?.join('\n')).toContain('focused check before claiming success');
     expect(engine.requests[1].context?.join('\n')).toContain('do not invent results or perform a separate self-grade');
 

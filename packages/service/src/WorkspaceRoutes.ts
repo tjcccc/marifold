@@ -1,10 +1,12 @@
+import { requestOrigin } from './RequestEnvironment';
 import { SSE_HEADERS, writeSse, startSseHeartbeat } from './Sse';
 import type { SequencedEvent, RunRecord } from '@marifold/core';
 import type { WorkspaceRequestContext } from './WorkspaceRequestContext';
 import * as fs from 'node:fs';
 import { Readable } from 'node:stream';
-import type { FastifyInstance } from 'fastify';
-import { artifactReadLength, workspaceArtifactStream, WorkspaceManager, type ArtifactChunk, type RunRegistry, type WorkspaceOperationContext } from '@marifold/core';
+import { ArtifactTickets, artifactHeaders } from './ArtifactTickets';
+import type { FastifyInstance, FastifyReply } from 'fastify';
+import { createArtifactPreview, isPreviewableArtifact, MarifoldError, type RunArtifact, artifactReadLength, workspaceArtifactStream, WorkspaceManager, type ArtifactChunk, type RunRegistry, type WorkspaceOperationContext } from '@marifold/core';
 import { objectBody, requiredString } from './Validation';
 
 /** Only application resources can traverse the bridge. Device-local configuration
@@ -30,6 +32,7 @@ export function registerWorkspaceRoutes(
   executor: (operation: string, input: unknown, context: WorkspaceOperationContext) => Promise<unknown>,
   token?: string,
   cancelExecution?: (workspaceId: string) => void,
+  tickets?: ArtifactTickets,
 ): void {
   const application = async (
     operation: string,
@@ -62,6 +65,11 @@ export function registerWorkspaceRoutes(
       const origin = registry.artifactOrigin(runId, artifactId);
       const e = origin.run.execution;
       if (!run.artifacts?.some((a) => a.id === artifactId)) throw new Error('Artifact not found.');
+      if (body.preview === true) {
+        if (e && e.executionDeviceId !== manager.store.get(e.workspaceId).hostDeviceId)
+          return manager.execute(e.workspaceId, e.executionDeviceId, 'executor.artifact', { runId: origin.run.id, artifactId: origin.artifactId, preview: true });
+        return { data: (await createArtifactPreview(registry.requireArtifact(runId, artifactId))).toString('base64') };
+      }
       const offset = body.offset;
       if (typeof offset !== 'number' || !Number.isSafeInteger(offset) || offset < 0)
         throw new Error('Invalid artifact offset.');
@@ -94,7 +102,7 @@ export function registerWorkspaceRoutes(
       if (!/^(default\.|memory\.|agent\.|web_search\.(enabled|max_results|provider|api_key_env|scrape)$)/.test(key))
         throw new Error('This setting belongs to the host device and must be edited locally.');
     }
-    const response = await contextStore.inject(context, (provenance) =>
+    const response = await contextStore.inject({ ...context, remoteRequest: body.remoteRequest === true }, (provenance) =>
       server.inject({
         method: method as 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE',
         url,
@@ -218,39 +226,47 @@ export function registerWorkspaceRoutes(
       }
     },
   );
+  const remoteArtifact = async (workspaceId: string, runId: string, artifactId: string): Promise<RunArtifact> => {
+    const response = await manager.request(workspaceId, 'api', {
+      method: 'GET', path: `/v1/runs/${runId}/artifacts`,
+    }) as { status: number; body: string };
+    if (response.status !== 200) throw new Error('Could not check the file on its source device.');
+    const result = JSON.parse(Buffer.from(response.body, 'base64').toString('utf8'));
+    const item = result.artifacts?.find((a: RunArtifact) => a.id === artifactId) as RunArtifact | undefined;
+    if (!item || item.available === false) throw MarifoldError.artifactNotFound(runId, artifactId);
+    return item;
+  };
+  const sendRemoteArtifact = async (workspaceId: string, runId: string, artifactId: string, reply: FastifyReply, inline = false) => {
+    const item = await remoteArtifact(workspaceId, runId, artifactId);
+    artifactHeaders(reply, item, inline);
+    return reply.send(Readable.from(workspaceArtifactStream(item.size, (offset, length) =>
+      manager.request(workspaceId, 'artifact.read', { runId, artifactId, offset, length }) as Promise<ArtifactChunk>)));
+  };
   server.all<{ Params: { id: string; '*': string } }>('/v1/workspaces/:id/api/*', async (request, reply) => {
     const suffix = request.url.slice(request.url.indexOf('/api/') + 4);
     if (!workspaceApiPath(request.method, suffix)) throw new Error('Unsupported workspace application route.');
-    const artifact = /^\/v1\/runs\/([^/]+)\/artifacts\/([^/?]+)$/.exec(suffix);
-    if (request.method === 'GET' && artifact) {
-      const response = (await manager.request(request.params.id, 'api', {
-        method: 'GET',
-        path: `/v1/runs/${artifact[1]}`,
-      })) as { body: string };
-      const run = JSON.parse(Buffer.from(response.body, 'base64').toString('utf8')).run;
-      const item = run?.artifacts?.find((a: { id: string }) => a.id === artifact[2]);
-      if (!item)
-        return reply
-          .code(404)
-          .send({ ok: false, error: { code: 'ARTIFACT_NOT_FOUND', message: 'Artifact not found.' } });
-      reply
-        .type(item.mediaType)
-        .header('content-disposition', `attachment; filename*=UTF-8''${encodeURIComponent(item.name)}`);
-      return reply.send(
-        Readable.from(
-          workspaceArtifactStream(item.size, (offset, length) => manager.request(request.params.id, 'artifact.read', {
-            runId: artifact[1],
-            artifactId: artifact[2],
-            offset,
-            length,
-          }) as Promise<ArtifactChunk>),
-        ),
-      );
+    const artifact = /^\/v1\/runs\/([^/]+)\/artifacts\/([^/?]+)(?:\/(access|preview))?$/.exec(suffix);
+    if (artifact) {
+      const [, runId, artifactId, action] = artifact;
+      const workspaceId = request.params.id;
+      if (request.method === 'GET' && !action) return sendRemoteArtifact(workspaceId, runId, artifactId, reply);
+      if (request.method === 'GET' && action === 'preview') {
+        const result = await manager.request(workspaceId, 'artifact.read', { runId, artifactId, preview: true }) as { data: string };
+        return reply.type('image/webp').header('cache-control', 'no-store').header('x-content-type-options', 'nosniff').send(Buffer.from(result.data, 'base64'));
+      }
+      if (request.method === 'POST' && action === 'access' && tickets) {
+        const purpose = objectBody(request.body).purpose;
+        if (purpose !== 'download' && purpose !== 'image') throw MarifoldError.configInvalid('Invalid file access purpose.');
+        const item = await remoteArtifact(workspaceId, runId, artifactId);
+        if (purpose === 'image' && !isPreviewableArtifact(item.mediaType)) throw MarifoldError.configInvalid('This file is not a previewable image.');
+        reply.header('cache-control', 'no-store');
+        return { ok: true, ...tickets.issue(response => sendRemoteArtifact(workspaceId, runId, artifactId, response, purpose === 'image')) };
+      }
     }
     const result = (await manager.request(
       request.params.id,
       'api',
-      { method: request.method, path: suffix, ...(request.body !== undefined ? { body: request.body } : {}) },
+      { method: request.method, path: suffix, remoteRequest: requestOrigin(request) === 'remote', ...(request.body !== undefined ? { body: request.body } : {}) },
       typeof request.headers['idempotency-key'] === 'string' ? request.headers['idempotency-key'] : undefined,
     )) as { status: number; contentType?: string; disposition?: string; body: string };
     reply.code(result.status);

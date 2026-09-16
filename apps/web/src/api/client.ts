@@ -7,5 +7,5 @@ export function defaultBaseUrl(): string {
   return import.meta.env?.DEV ? 'http://127.0.0.1:32140' : '';
 }
 export function createApiClient(options: ApiClientOptions = {}) {
-  return createTransport({ ...options, baseUrl: options.baseUrl ?? defaultBaseUrl() });
+  return createTransport({ interface: 'web', ...options, baseUrl: options.baseUrl ?? defaultBaseUrl() });
 }

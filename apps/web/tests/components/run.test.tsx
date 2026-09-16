@@ -5,12 +5,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 // Auto-cleanup hooks into vitest globals, which this workspace doesn't enable.
 afterEach(cleanup);
 import type { RunApprovalAction } from '../../src/api/types';
-import type { ApiClient } from '../../src/api/client';
+import { MarifoldApiError, type ApiClient } from '../../src/api/client';
 import { MobileWorkspaceNavigation } from '../../src/components/MobileWorkspaceNavigation';
 import { ResizableSidebar } from '../../src/components/ResizableSidebar';
 import { SidebarSystemFooter } from '../../src/components/SidebarChrome';
 import type { RunCardState } from '../../src/state/thread';
 import { InputBar } from '../../src/screens/agent/InputBar';
+import { RunArtifacts } from '../../src/screens/agent/RunArtifacts';
 import { RunCard } from '../../src/screens/agent/RunCard';
 import { SessionList } from '../../src/screens/agent/SessionList';
 import { ThreadHeader } from '../../src/screens/agent/ThreadHeader';
@@ -41,6 +42,43 @@ function cardFixture(partial: Partial<RunCardState> = {}): RunCardState {
 }
 
 describe('RunCard', () => {
+  it('keeps unavailable downloads visible with a notice after reopening', async () => {
+    const artifacts = [{ id: 'expired', name: 'home-desktop.png', mediaType: 'image/png', size: 4 }];
+    const blob = vi.fn();
+    const request = vi.fn(async (_method: string, _path: string) => ({ artifacts: artifacts.map(artifact => ({ ...artifact, available: false })) }));
+    const client = { blob, request } as unknown as ApiClient;
+    const run = cardFixture({ status: 'completed', collapsed: true, artifacts });
+    for (let i = 0; i < 2; i++) {
+      const view = render(<RunArtifacts client={client} runId={run.runId} artifacts={run.artifacts} />);
+      await waitFor(() => expect((screen.getByRole('button', { name: 'Download home-desktop.png' }) as HTMLButtonElement).disabled).toBe(true));
+      expect(screen.getByText(/^Unavailable/)).toBeTruthy();
+      expect(screen.getByRole('status').textContent).toContain('expired or was removed');
+      fireEvent.click(screen.getByRole('button', { name: 'Download home-desktop.png' }));
+      expect(request.mock.calls.every(call => call[0] !== 'POST')).toBe(true);
+      view.unmount();
+    }
+    expect(request).toHaveBeenCalledWith('GET', '/v1/runs/run_1/artifacts');
+  });
+
+  it('marks a file unavailable if it disappears between checking and downloading', async () => {
+    const artifact = { id: 'removed', name: 'removed.pdf', mediaType: 'application/pdf', size: 4 };
+    const client = { blob: vi.fn(), request: vi.fn(async (method: string) => { if (method === 'POST') throw new MarifoldApiError(404, { code: 'ARTIFACT_NOT_FOUND', message: 'File removed' }); return { artifacts: [{ ...artifact, available: true }] }; }) } as unknown as ApiClient;
+    render(<RunArtifacts client={client} runId="run_1" artifacts={[artifact]} />);
+    await waitFor(() => expect(client.request).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole('button', { name: 'Download removed.pdf' }));
+    await waitFor(() => expect(screen.getByText(/^Unavailable/)).toBeTruthy());
+    expect((screen.getByRole('button', { name: 'Download removed.pdf' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('keeps an offline device retryable instead of labeling its files expired', async () => {
+    const client = { blob: vi.fn(async () => { throw new Error('Device offline'); }), request: vi.fn(async () => { throw new Error('Device offline'); }) } as unknown as ApiClient;
+    render(<RunArtifacts client={client} runId="run_1" artifacts={[{ id: 'remote', name: 'remote.txt', mediaType: 'text/plain', size: 4 }]} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Download remote.txt' }));
+    await waitFor(() => expect(screen.getByText('Device offline')).toBeTruthy());
+    expect((screen.getByRole('button', { name: 'Download remote.txt' }) as HTMLButtonElement).disabled).toBe(false);
+    expect(screen.queryByText('Unavailable')).toBeNull();
+  });
+
   it('renders the working status line with activity, elapsed clock, and cancel', () => {
     const onCancel = vi.fn();
     render(<RunCard run={cardFixture()} onCancel={onCancel} onAnswer={() => {}} onToggle={() => {}} />);
@@ -53,25 +91,31 @@ describe('RunCard', () => {
 
   it('downloads generated artifacts through the authenticated API client', async () => {
     const blob = vi.fn(async () => new Blob(['report'], { type: 'application/pdf' }));
-    const client = { blob } as unknown as ApiClient;
+    const client = { baseUrl: '', blob, request: vi.fn(async () => ({ artifacts: [], path: '/v1/downloads/' + 'a'.repeat(48) })) } as unknown as ApiClient;
     const createObjectURL = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:report');
     const revokeObjectURL = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
-    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+      expect(this.isConnected).toBe(true);
+      expect(this.download).toBe('report.pdf');
+    });
     const run = cardFixture({
       status: 'completed',
       collapsed: true,
       artifacts: [{ id: 'artifact_1', name: 'reports/report.pdf', mediaType: 'application/pdf', size: 6 }],
     });
 
-    render(<RunCard client={client} run={run} onCancel={() => {}} onAnswer={() => {}} onToggle={() => {}} />);
+    render(<RunArtifacts client={client} runId={run.runId} artifacts={run.artifacts} />);
     expect(screen.getByRole('button', { name: /Download report\.pdf/ })).toBeTruthy();
     expect(screen.queryByText('Guidance applied — “keep it under one page”')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: /report\.pdf/ }));
 
-    await waitFor(() => expect(blob).toHaveBeenCalledWith('/v1/runs/run_1/artifacts/artifact_1'));
-    expect(createObjectURL).toHaveBeenCalled();
+    await waitFor(() => expect(click).toHaveBeenCalled());
+    expect(client.request).toHaveBeenCalledWith('POST', '/v1/runs/run_1/artifacts/artifact_1/access', { purpose: 'download' });
+    expect(blob).not.toHaveBeenCalled();
+    expect(createObjectURL).not.toHaveBeenCalled();
     expect(click).toHaveBeenCalled();
-    await waitFor(() => expect(revokeObjectURL).toHaveBeenCalledWith('blob:report'));
+    expect(document.querySelector('a[download="report.pdf"]')).toBeNull();
+    expect(revokeObjectURL).not.toHaveBeenCalled();
   });
 
   it('raises the approval sheet and dispatches each action', () => {
@@ -689,14 +733,14 @@ describe('ThreadView', () => {
         onToggleRun={() => {}}
       />,
     );
-    expect(screen.getByText('Checking the skill files.').closest('[data-run-phase="progress"]')).toBeTruthy();
+    expect(screen.queryByText('Checking the skill files.')).toBeNull();
     expect(screen.getByText('The final prompt.').closest('[data-run-phase="final"]')).toBeTruthy();
     expect(screen.getAllByText('2s · 512 tokens')).toHaveLength(1);
   });
 
   it('resolves model-authored sandbox links through the same-run artifact API', async () => {
     const blob = vi.fn(async () => new Blob(['workbook']));
-    const client = { blob } as unknown as ApiClient;
+    const client = { baseUrl: '', blob, request: vi.fn(async () => ({ artifacts: [], path: '/v1/downloads/' + 'a'.repeat(48) })) } as unknown as ApiClient;
     const createObjectURL = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:workbook');
     const revokeObjectURL = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
     const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
@@ -726,10 +770,12 @@ describe('ThreadView', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Download workbook' }));
-    await waitFor(() => expect(blob).toHaveBeenCalledWith('/v1/runs/run_1/artifacts/artifact_1'));
-    expect(createObjectURL).toHaveBeenCalled();
+    await waitFor(() => expect(click).toHaveBeenCalled());
+    expect(client.request).toHaveBeenCalledWith('POST', '/v1/runs/run_1/artifacts/artifact_1/access', { purpose: 'download' });
+    expect(blob).not.toHaveBeenCalled();
+    expect(createObjectURL).not.toHaveBeenCalled();
     expect(click).toHaveBeenCalled();
-    await waitFor(() => expect(revokeObjectURL).toHaveBeenCalledWith('blob:workbook'));
+    expect(revokeObjectURL).not.toHaveBeenCalledWith('blob:workbook');
     expect(screen.queryByText(/sandbox:\//)).toBeNull();
   });
 

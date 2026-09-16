@@ -1,3 +1,4 @@
+import { createArtifactPreview } from '../agent/ArtifactPreview';
 import { artifactReadLength } from './WorkspaceArtifactTransfer';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -78,7 +79,9 @@ export class WorkspaceExecutor {
         identifier(b.artifactId),
         this.runsDir ?? path.join(marifoldHome(), 'runs'),
       );
+      if (b.metadata === true) return { available: Boolean(artifact) };
       if (!artifact) throw new Error('Artifact is unavailable.');
+      if (b.preview === true) return { data: (await createArtifactPreview(artifact)).toString('base64') };
       const offset = b.offset;
       if (typeof offset !== 'number' || !Number.isSafeInteger(offset) || offset < 0 || offset > artifact.size)
         throw new Error('Invalid artifact offset.');

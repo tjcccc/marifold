@@ -26,7 +26,7 @@ describe('createApiClient', () => {
     await client.request('POST', '/v1/runs', { objective: 'hi' });
     const init = mock.mock.calls[0][1] as RequestInit;
     expect((init.headers as Record<string, string>).authorization).toBe('Bearer sekret');
-    expect(init.body).toBe(JSON.stringify({ objective: 'hi' }));
+    expect(JSON.parse(String(init.body))).toEqual({ objective: 'hi', environment: { interface: 'web', timezone: Intl.DateTimeFormat().resolvedOptions().timeZone } });
   });
 
   it('turns the error envelope into a typed MarifoldApiError', async () => {

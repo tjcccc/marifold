@@ -15,7 +15,7 @@ export async function workspaceClient(
     if ((selected && selected !== 'local') || device) throw error;
     return undefined;
   }
-  const local = createApiClient(settings);
+  const local = createApiClient({ ...settings, interface: 'terminal' });
   if (selected === 'local') {
     if (device) throw new Error('Select a workspace before choosing an execution device.');
     return undefined;
@@ -34,7 +34,7 @@ export async function workspaceClient(
     process.stderr.write('Default workspace is offline. Using Local for this command.\n');
     return undefined;
   }
-  return createApiClient({ ...settings, workspaceId: matches[0]!.id, executionDevice: () => device });
+  return createApiClient({ ...settings, interface: 'terminal', workspaceId: matches[0]!.id, executionDevice: () => device });
 }
 export async function* remoteAgent(
   api: ApiClient,

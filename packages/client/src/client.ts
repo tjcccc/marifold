@@ -5,6 +5,8 @@ export interface ApiErrorBody {
 }
 
 export interface ApiClientOptions {
+  interface?: 'terminal' | 'web' | 'desktop' | 'mobile';
+  timezone?: string;
   /** '' = same-origin (the service hosting the built app). */
   baseUrl?: string;
   token?: string;
@@ -21,6 +23,8 @@ export interface StreamInit {
 
 export interface ApiClient {
   readonly baseUrl: string;
+  /** Connected service origin, before a workspace proxy prefix. */
+  readonly serverUrl?: string;
   request<T>(method: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE', path: string, body?: unknown): Promise<T>;
   /** Open an SSE response; the caller consumes `response.body` via parseSse. */
   stream(path: string, init?: StreamInit): Promise<Response>;
@@ -57,11 +61,17 @@ export function createApiClient(options: ApiClientOptions = {}): ApiClient {
     };
   }
 
+  function withEnvironment(path: string, body: unknown): unknown {
+    if (!options.interface || !['/v1/runs', '/v1/ask', '/v1/chat/stream'].includes(path) || !body || typeof body !== 'object') return body;
+    return { ...body, environment: { interface: options.interface, timezone: options.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone } };
+  }
+
   async function request<T>(
     method: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE',
     path: string,
     body?: unknown,
   ): Promise<T> {
+    if (method === 'POST') body = withEnvironment(path, body);
     const run =
       typeof body === 'object' && body !== null
         ? (body as { lean?: boolean; userTurn?: string; objective?: string })
@@ -91,6 +101,7 @@ export function createApiClient(options: ApiClientOptions = {}): ApiClient {
   }
 
   async function stream(path: string, init: StreamInit = {}): Promise<Response> {
+    if (init.method === 'POST') init = { ...init, body: withEnvironment(path, init.body) };
     const response = await fetch(`${baseUrl}${path}`, {
       method: init.method ?? 'GET',
       headers: headers({
@@ -120,7 +131,7 @@ export function createApiClient(options: ApiClientOptions = {}): ApiClient {
     return response.blob();
   }
 
-  return { baseUrl, request, stream, blob };
+  return { baseUrl, serverUrl: localBase, request, stream, blob };
 }
 
 async function parseJson(response: Response): Promise<unknown> {

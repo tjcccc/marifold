@@ -77,6 +77,9 @@ describe('workspace bridge', () => {
     const joined = await guest.add(url, created.invitation);
     expect(joined.online).toBe(true);
     expect(joined.name).toBe('Home');
+    const membership = guest.store.get(joined.id).certificate!.membership;
+    const inventory = await guest.request(joined.id, 'devices', {}) as { devices: Array<{ id: string; joinedAt?: number }> };
+    expect(inventory.devices.find(d => d.id === joined.deviceId)?.joinedAt).toBe(membership.issuedAt);
     const id = 'request_1';
     expect(await guest.request(joined.id, 'test', { text: 'private' }, id)).toEqual({ text: 'private' });
     expect(await guest.request(joined.id, 'test', { text: 'private' }, id)).toEqual({ text: 'private' });

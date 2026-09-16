@@ -209,9 +209,9 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
    * banner other recently finished runs. */
   const catchUpRuns = useCallback(
     async (forSession: string) => {
-      const runs = await listRuns(client);
+      const [runs, sessionRuns] = await Promise.all([listRuns(client), listRuns(client, forSession)]);
       setRuns(runs);
-      const mine = runs.filter(
+      const mine = sessionRuns.filter(
         run => run.sessionId === forSession && !ignoredFinishedRunIdsRef.current.has(run.id),
       );
       const finished: RunRecord[] = [];
