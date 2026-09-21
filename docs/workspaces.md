@@ -172,9 +172,12 @@ for clarification before acting.
 
 Guest execution is an explicit, locally revocable opt-in. It supports bounded file
 reading/writing, attachment inspection and the existing macOS shell sandbox.
-Each guest tool call requires a nonpersistent approval; host profile permissions
+Guest file and shell calls require a nonpersistent approval; host profile permissions
 cannot widen the guest's local policy. “Always” and “Trust” are rejected for these
-calls. Disabling this device's executor cancels its active executions. Pairing alone
+calls. Uploading an attachment grants ID-scoped `inspect_attachment`,
+`read_attachment`, and `search_attachment` access without another prompt, as on
+the host. Inspected guest images return bytes to the host's model, never guest-local
+image paths. Disabling this device's executor cancels its active executions. Pairing alone
 does not enable shell or filesystem execution.
 
 Skills, SkillApps and schedules run on the host in this version. Their paths retain
@@ -321,7 +324,10 @@ Web avatar saves crop to 512px and compress as WebP at quality 85, preserving
 transparency (PNG fallback where WebP encoding is unavailable). Existing saved
 avatars remain unchanged. Displays use 256px WebP thumbnails to keep image traffic
 from delaying workspace navigation. Other file transfers preserve original bytes.
-Bridge reads have a 60-second
+Transcript images request host-generated WebP thumbnails (up to 480px and 80,000
+bytes); opening the image viewer still fetches the stored image. Executor requests,
+including attachment preparation and transfers, have a 120-second deadline and
+retain the same request ID across recovery. Bridge reads have a 60-second
 deadline; a connected-host timeout reports `WORKSPACE_TIMEOUT` (HTTP 504), distinct
 from `WORKSPACE_OFFLINE` (HTTP 503). Recovered connections refresh navigation metadata and other data views. Open
 conversation transcripts stay unchanged; reload the page or reopen the session

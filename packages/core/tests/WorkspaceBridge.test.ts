@@ -150,9 +150,12 @@ describe('workspace bridge', () => {
     );
     expect(executions).toBe(0);
     await guest.setExecutor(joined.id, true);
+    const executionRequests = vi.spyOn(BridgePeer.prototype, 'request');
     expect(await host.execute(joined.id, joined.deviceId, 'executor.prepare', { runId: 'two' })).toEqual({
       executed: true,
     });
+    expect(executionRequests.mock.calls.find(call => call[0] === 'executor.prepare')?.[5]).toBe(120000);
+    executionRequests.mockRestore();
     await host.request(joined.id, 'revoke', { deviceId: joined.deviceId });
     await expect.poll(() => guest.list()[0].online, { timeout: 20000 }).toBe(false);
     await expect(guest.request(joined.id, 'anything', {}, 'revoked_request')).rejects.toThrow();

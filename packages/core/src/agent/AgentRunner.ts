@@ -16,6 +16,7 @@ import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { isDeepStrictEqual } from 'node:util';
 import { stripMemoryControls } from '../memory/MemoryControls';
 import { buildHistoryContext, HistoryTurn } from './AgentHistory';
 import { MarifoldProviderToolDefinition, MarifoldResolvedSettings, MarifoldRunRequest, MarifoldWebSearchMode } from '../runtime/MarifoldTypes';
@@ -193,6 +194,7 @@ interface LoopState {
    * Keeping them active across later tool iterations prevents a skill from
    * losing visual context while it resolves another required input. */
   activeImages: ImageInput[];
+  deniedCalls: Pick<ToolCall, 'name' | 'arguments'>[];
   webSourceUrls?: string[];
   webPageAttempted?: boolean;
   emptyResponseFollowup?: string;
@@ -323,6 +325,7 @@ export class AgentRunner {
       toolSummaries: [],
       steeringNotes: [],
       activeImages: [],
+      deniedCalls: [],
     };
 
     let sessionTurnPersisted = false;
@@ -606,9 +609,17 @@ export class AgentRunner {
 
     if (call.name === 'web_search' || call.name === 'read_web_page') state.webToolAttempted = true;
     if (call.name === 'read_web_page') state.webPageAttempted = true;
-    const decision = yield* this.resolveApproval(call, tool, summary, options, toolContext);
+    const previouslyDenied = state.deniedCalls.some(denied =>
+      denied.name === call.name && isDeepStrictEqual(denied.arguments, call.arguments));
+    const decision = previouslyDenied
+      ? { approved: false, reason: 'This call was already denied in this run. Do not retry it or work around the denial.' }
+      : yield* this.resolveApproval(call, tool, summary, options, toolContext);
+    if (previouslyDenied) {
+      yield { type: 'approval_decision', requestId: call.id, approved: false, source: 'policy', reason: decision.reason };
+    }
     if (!decision.approved) {
-      const message = `Tool call denied${decision.reason ? `: ${decision.reason}` : '.'}`;
+      if (!previouslyDenied) state.deniedCalls.push({ name: call.name, arguments: structuredClone(call.arguments) });
+      const message = `Tool call denied${decision.reason ? `: ${decision.reason}` : '.'} Do not retry this call or seek another route to the denied access. Continue only with independent authorized work; otherwise explain the limitation and answer from available information.`;
       yield { type: 'tool_result', callId: call.id, tool: call.name, summary: 'denied', isError: true };
       this.deps.taskStore.appendEvent(taskId, { kind: 'decision', message: `Denied ${summary}${decision.reason ? ` (${decision.reason})` : ''}` });
       this.recordToolResult(taskId, state, call, message, true, 'denied', false);
@@ -938,6 +949,8 @@ export class AgentRunner {
       'You are running as the Marifold agent. Stay focused on the stated objective and keep replies concise.',
       'Use tools only when the objective genuinely requires reading or writing files, running commands, searching the web, or delegating. Greetings, timeless explanations, and drafting from supplied information often need no tools. Answer directly when reliable information is already available. For current facts or external sources missing from context, gather evidence with the available tools before answering. Never use tools merely to demonstrate them. Do not invent tool calls.',
       'For a question, give the answer the user asked for. For an action request, briefly report what changed. Tool activity is supporting work, not the final deliverable.',
+      'Treat discussion, tentative ideas (such as "maybe I should update the workflow"), and requests for advice as conversation, not authorization to inspect or change files. Earlier tasks in conversation history do not authorize continuing them when the current message is discussion. Investigate or act when the user requests it.',
+      'After a denied tool call, do not retry it or use another tool or path to obtain the same access. If a directory is empty, do not repeatedly list it or explore parent and sibling directories without a task-relevant reason. Use the available evidence, or explain what information is missing.',
       'After changing files or producing an observable result, use the narrowest relevant tool for a focused check before claiming success. Report the evidence you actually observed; do not invent results or perform a separate self-grade.',
       webSearchContext,
       ...(state.emptyResponseFollowup ? [state.emptyResponseFollowup] : []),

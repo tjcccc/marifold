@@ -2,6 +2,87 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-09-21 — v0.74.3 — Workspace image handoff and UI feedback
+
+- Synchronize all workspace/CLI versions, refresh the lockfile (unchanged), and
+  rebuild clean output. Reuse passing full-suite and subsequent Web validation.
+
+### Download feedback and taller composer
+
+- Animate the file download icon while preparing access, then show a check and
+  “Download started” after handing the download to the browser. Respect reduced
+  motion and preserve error/retry handling.
+- Increase the composer minimum to two text lines on desktop and mobile while
+  retaining automatic growth and aligned highlighting.
+- Pass workspace typecheck/build and all 255 Web tests.
+
+### Remember acknowledged catch-up notices
+
+- Persist Show/dismiss acknowledgements in bounded browser storage scoped to the
+  server/workspace API URL so page reloads do not restore read notifications.
+  Keep an in-memory fallback when storage is unavailable.
+- Pass workspace typecheck/build and all 255 Web tests, including persistence,
+  workspace isolation, and unavailable-storage coverage.
+
+### Sidebar list loading feedback
+
+- Show animated profile/session loading labels while initial lists or session
+  search/archive results are pending. Suppress premature empty states and respect
+  reduced-motion preferences. Clear loading after success or failure.
+- Pass workspace typecheck/build, all existing Web tests, and focused controller
+  tests for delayed profile/session success and failure. Rebuilt UI is available
+  on both local services after refresh.
+
+### Transcript thumbnails and preparation timeout
+
+- Fetch host-generated transcript thumbnails capped at 480px / 80,000 bytes;
+  preserve stored image bytes for the viewer. Share the bounded preview encoder
+  with generated artifacts.
+- Give all remote executor requests 120 seconds, including attachment preparation
+  previously limited to 10 seconds. Preserve request IDs and retry semantics.
+- Pass workspace typecheck/build and all 917 tests (optional Redis test skipped).
+  Restart host 32140 and temporary guest 32141. Verify the failed request's image
+  thumbnail through the real bridge: 15,046 bytes in 0.07s versus 1,029,848 stored
+  bytes. User confirmed the subsequent guest image request works.
+
+### Run log path wrapping
+
+- Wrap long run-log text and error paths within the card, preserving error line
+  breaks instead of expanding the transcript horizontally.
+- Pass workspace typecheck/build; verify long-path wrapping in Chromium at
+  320px and 760px container widths using the built styles.
+
+### Workspace device visibility
+
+- Add extra right-pane padding only while the Workspace panel overflows. Use
+  primary theme text for online devices and keep offline devices muted.
+- Pass workspace typecheck/build and five related component tests. Verify dark
+  and light themes and padding with/without overflow in the temporary guest UI.
+
+### Session loading feedback
+
+- Show a spinner and “Loading conversation…” while fetching saved messages,
+  with reduced-motion support and sending disabled until loading finishes.
+  Ignore late session and run responses after navigating elsewhere.
+- Pass workspace typecheck/build and all 251 Web tests. Verify the loading state
+  and completed transcript in Chromium against the temporary guest service with
+  a delayed bridge session request. Rebuilt assets are available on port 32141.
+
+### Guest attachment inspection and denied-call retries
+
+- Return inspected guest image bytes to the host model instead of guest-local
+  paths. Bound reads to staged attachments, reject symlinks and changed sizes,
+  and retain URL references without fetching them on the executor.
+- Preserve upload authorization for ID-scoped attachment inspection, reads, and
+  searches. Ordinary guest file/shell calls still require nonpersistent approval.
+- Clarify discussion-only intent and denial handling in agent guidance. Suppress
+  repeated approval prompts for identical denied calls within the same run.
+- Pass workspace typecheck/build, version consistency, and all 911 tests; the
+  optional Redis test remains skipped. Exercise chunked image replies over a
+  local encrypted bridge with a mocked provider, retained image context, and no
+  attachment approval prompts. Host and temporary guest were updated, and the
+  user confirmed successful image recognition through the bridge.
+
 ## 2026-09-17 — v0.74.2 — Browser preview caching
 
 - Keep downloaded thumbnail/viewer Blobs in a 16 MiB / 32-entry browser-memory

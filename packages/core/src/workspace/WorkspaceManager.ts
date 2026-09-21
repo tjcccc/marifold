@@ -216,7 +216,7 @@ export class WorkspaceManager {
       device,
       member.certificate.membership.identity,
       requestId,
-      operation === 'executor.execute' ? 120000 : 10000,
+      120000,
     );
   }
   async remove(id: string): Promise<void> {

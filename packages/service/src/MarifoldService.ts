@@ -6,6 +6,7 @@ import * as path from 'node:path';
 import { WorkspaceRequestContext } from './WorkspaceRequestContext';
 import fastify, { FastifyInstance, FastifyReply } from 'fastify';
 import {
+  createImagePreview,
   workspaceTerminal,
   WorkspaceManager,
   WorkspaceExecutor,
@@ -583,7 +584,10 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
 
   server.get<{
     Params: { id: string; userTurnIndex: string; attachmentIndex: string };
+    Querystring: { thumbnail?: string };
   }>('/v1/sessions/:id/attachments/:userTurnIndex/:attachmentIndex', async (request, reply) => {
+    if (request.query.thumbnail !== undefined && request.query.thumbnail !== '1')
+      throw MarifoldError.configInvalid('thumbnail must be 1 when supplied.');
     const userTurnIndex = nonNegativeIntegerPath(request.params.userTurnIndex, 'userTurnIndex');
     const attachmentIndex = nonNegativeIntegerPath(request.params.attachmentIndex, 'attachmentIndex');
     const attachment = runtime.getSessionAttachment(request.params.id, userTurnIndex, attachmentIndex);
@@ -597,11 +601,13 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
         },
       };
     }
+    const thumbnail = request.query.thumbnail === '1';
+    const bytes = Buffer.from(attachment.data, 'base64');
     reply
-      .type(attachment.mediaType)
+      .type(thumbnail ? 'image/webp' : attachment.mediaType)
       .header('cache-control', 'private, max-age=60')
       .header('x-content-type-options', 'nosniff');
-    return reply.send(Buffer.from(attachment.data, 'base64'));
+    return reply.send(thumbnail ? await createImagePreview(bytes) : bytes);
   });
 
   server.patch<{ Params: { id: string } }>('/v1/sessions/:id', async (request, reply) => {

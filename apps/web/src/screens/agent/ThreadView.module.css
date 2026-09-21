@@ -32,6 +32,32 @@
   font-size: 13px;
 }
 
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: var(--text-2);
+  font-size: 14px;
+}
+
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--text-3);
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: sessionSpin 0.8s linear infinite;
+}
+
+@keyframes sessionSpin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner { animation: none; }
+}
+
 .userTurn {
   align-self: flex-end;
   max-width: 78%;

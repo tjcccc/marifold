@@ -67,6 +67,7 @@
 }
 
 .input {
+  min-height: calc(2lh + 6px);
   display: block;
   width: 100%;
   border: none;

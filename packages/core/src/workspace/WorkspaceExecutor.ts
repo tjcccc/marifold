@@ -5,7 +5,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { digest, identifier, randomId, record } from '@marifold/workspace-protocol';
 import type { JSONValue } from '@priest-ai/core';
-import { createRunWorkspace, type RunWorkspace } from '../agent/RunWorkspace';
+import { createRunWorkspace, MAX_RUN_INPUT_BYTES, type RunWorkspace } from '../agent/RunWorkspace';
 import { listRunArtifacts, resolveRunArtifact } from '../agent/RunArtifacts';
 import { ToolRegistry, type AgentTool, type ToolExecutionContext } from '../agent/ToolRegistry';
 import { InspectAttachmentTool } from '../agent/tools/InspectAttachmentTool';
@@ -151,6 +151,10 @@ export class WorkspaceExecutor {
       signal: run.abort.signal,
     };
     const risk = (await tool.assessRisk?.(input, toolContext)) ?? { escalate: false };
+    // Uploading grants ID-scoped inspection only, not arbitrary remote file access.
+    const trustedAttachment = risk.trusted === true && [
+      'inspect_attachment', 'read_attachment', 'search_attachment',
+    ].includes(tool.definition.name);
     const blocked = risk.blocked || (!risk.trusted && this.config().approval[tool.kind] === 'deny');
     const hash = digest(JSON.stringify([tool.definition.name, input]));
     if (operation === 'executor.assess') {
@@ -163,11 +167,11 @@ export class WorkspaceExecutor {
         blocked,
         grant,
         persistable: false,
-        trusted: false,
-        escalate: true,
+        trusted: trustedAttachment,
+        escalate: !trustedAttachment,
         reason: blocked
           ? (risk.reason ?? 'Denied by execution device policy.')
-          : (risk.reason ?? 'Approve this call on the selected device.'),
+          : (risk.reason ?? (trustedAttachment ? 'Read access granted by this upload.' : 'Approve this call on the selected device.')),
       };
     }
     if (operation !== 'executor.execute') throw new Error('Unsupported executor operation.');
@@ -175,6 +179,30 @@ export class WorkspaceExecutor {
     run.grants.delete(String(b.grant));
     if (blocked || !grant || grant.hash !== hash || grant.expires < Date.now())
       throw new Error('Execution grant is invalid or expired.');
-    return tool.execute(input, toolContext);
+    const result = await tool.execute(input, toolContext);
+    if (!result.images?.length) return result;
+    // The provider runs on the host. A guest-local path cannot be opened there.
+    let remaining = MAX_RUN_INPUT_BYTES;
+    const images = result.images.map(image => {
+      if (!image.path) return image;
+      const attachment = run.workspace.attachments.find(item => item.image?.path === image.path);
+      if (!attachment) throw new Error('Image is not an attachment in this run.');
+      const fd = fs.openSync(image.path, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
+      try {
+        const stat = fs.fstatSync(fd);
+        if (!stat.isFile() || stat.size !== attachment.size || stat.size > remaining) {
+          throw new Error('Staged image changed or exceeds the attachment limit.');
+        }
+        const bytes = Buffer.alloc(stat.size);
+        if (fs.readSync(fd, bytes, 0, bytes.length, 0) !== bytes.length) {
+          throw new Error('Could not read the complete staged image.');
+        }
+        remaining -= bytes.length;
+        return { data: bytes.toString('base64'), mediaType: image.mediaType };
+      } finally {
+        fs.closeSync(fd);
+      }
+    });
+    return { ...result, images };
   }
 }

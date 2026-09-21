@@ -140,6 +140,10 @@
   padding: 6px 10px;
 }
 
+.scrollingEditor {
+  padding-inline-end: 14px;
+}
+
 .sameOriginNote {
   padding: 10px;
   border-radius: var(--radius-sm);
@@ -211,6 +215,10 @@
   gap: 16px;
 }
 
+.deviceOnline {
+  color: var(--text);
+}
+
 .deviceRow .remove {
   align-self: center;
   margin-top: 0;
@@ -223,7 +231,7 @@
 }
 
 .hostName {
-  color: var(--text-2);
+  color: inherit;
   font-weight: 700;
 }
 

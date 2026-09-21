@@ -10,7 +10,7 @@ import { artifactPreviewBlob } from '../../lib/artifactPreviewCache';
 
 /** Deliverables belong to the answer and remain visible independently of logs. */
 export function RunArtifacts({ client, runId, artifacts }: { client?: ApiClient; runId: string; artifacts: RunArtifact[] }) {
-  const { unavailable, downloading, error, download } = useArtifactDownloads(client, runId, artifacts);
+  const { unavailable, downloading, started, error, download } = useArtifactDownloads(client, runId, artifacts);
   const [preview, setPreview] = useState<PreviewImage>();
   useEffect(() => { setPreview(undefined); }, [client, runId]);
   if (!artifacts.length) return null;
@@ -31,13 +31,16 @@ export function RunArtifacts({ client, runId, artifacts }: { client?: ApiClient;
               })} />
             ) : null}
             <button className={styles.download} type="button" aria-label={`Download ${name}`}
+              aria-busy={downloading === artifact.id}
               disabled={!client || missing || downloading === artifact.id} onClick={() => void download(artifact)}>
               <span aria-hidden>{isImageArtifact(artifact) ? '▧' : '▤'}</span>
               <span className={styles.label}>
                 <span className={styles.name}>{name}</span>
-                <span className={styles.detail}>{missing ? 'Unavailable' : downloading === artifact.id ? 'Starting download…' : 'Download'} · {formatBytes(artifact.size)}</span>
+                <span className={styles.detail} aria-live="polite">{missing ? 'Unavailable' : downloading === artifact.id ? 'Starting download…' : started === artifact.id ? 'Download started' : 'Download'} · {formatBytes(artifact.size)}</span>
               </span>
-              <span aria-hidden>↓</span>
+              <span aria-hidden className={downloading === artifact.id ? styles.spinner : started === artifact.id ? styles.started : undefined}>
+                {downloading === artifact.id ? '' : started === artifact.id ? '✓' : '↓'}
+              </span>
             </button>
             {missing ? <p className={styles.notice} role="status">{ARTIFACT_UNAVAILABLE_NOTICE}</p> : null}
           </div>
