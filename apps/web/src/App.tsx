@@ -149,7 +149,7 @@ export function App() {
       const next = upsertAndActivateConnection(connections, target);
       saveConnections(next); setConnections(next); setConnectionEpoch(epoch => epoch + 1);
       navigate(loadLastAgentRoute(target.id));
-      if (preferred && !preferred.online) setWorkspaceNotice(`${preferred.name} is offline. Opened Local for this launch.`);
+      if (preferred && !preferred.online) setWorkspaceNotice(preferred.versionError ?? `${preferred.name} is offline. Opened Local for this launch.`);
     }).catch(() => {
       if (!cancelled && currentConnection.workspaceId) {
         const next = upsertAndActivateConnection(connections, local); saveConnections(next); setConnections(next);

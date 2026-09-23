@@ -106,6 +106,8 @@ describe('AgentRunner', () => {
       expect(context).toContain(`interface: ${interfaceName}`);
       expect(context).toContain('timezone: Asia/Shanghai');
       expect(context).toContain('request: remote');
+      expect(context).toContain('provider: "mock"');
+      expect(context).toContain('requested_model: "test-model"');
       const block = context.match(/<environment>[\s\S]*?<\/environment>/)![0];
       expect(block).not.toMatch(/workspace:|delivery:|cwd:|executor:|requester:/);
     }
@@ -1068,6 +1070,39 @@ describe('AgentRunner', () => {
     expect(types).toContain('approval_request');
     const decision = events.find(e => e.type === 'approval_decision') as Extract<AgentEvent, { type: 'approval_decision' }>;
     expect(decision).toMatchObject({ approved: true, source: 'user' });
+  });
+
+  it.each(['native', 'control-block'] as const)('does not prompt again for a denied call (%s)', async toolMode => {
+    const toolResponse = (id: string, args: Record<string, string>) => response(toolMode === 'native'
+      ? { toolCalls: [{ id, name: 'read_file', arguments: args }] }
+      : { text: `<tool_call name="read_file">${JSON.stringify(args)}</tool_call>` });
+    const engine = new ScriptedEngine([
+      toolResponse('first', { path: 'rules.md', mode: 'text' }),
+      toolResponse('retry', { mode: 'text', path: 'rules.md' }),
+      toolResponse('independent', { path: 'uploaded.txt' }),
+      response({ text: 'I can discuss the workflow using the supplied information.' }),
+      toolResponse('new', { path: 'rules.md', mode: 'text' }),
+      response({ text: 'Stopped.' }),
+    ]);
+    const execute = vi.fn(async () => ({ content: 'available information' }));
+    const assessRisk = vi.fn(() => ({ escalate: true }));
+    const approvalHandler = vi.fn(async (request: { input: Record<string, unknown> }) => ({
+      approved: request.input.path === 'uploaded.txt',
+      reason: 'User denied access',
+    }));
+    const { runner } = makeRunner(engine, [fakeTool({ execute, assessRisk })], { toolMode });
+    const events = await collect(runner.run({ objective: 'Discuss this workflow.', cwd: tempDir(), approvalHandler }));
+    expect(approvalHandler).toHaveBeenCalledTimes(2);
+    expect(assessRisk).toHaveBeenCalledTimes(2);
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(events.filter(event => event.type === 'tool_result' && event.summary === 'denied')).toHaveLength(2);
+    expect(JSON.stringify(engine.requests[2])).toContain('already denied in this run');
+    expect(engine.requests[0].context?.join('\n')).toContain('tentative ideas');
+    expect(events.at(-1)).toMatchObject({ type: 'done', status: 'completed' });
+
+    // A fresh run can request authorization again.
+    await collect(runner.run({ objective: 'Read the rules.', cwd: tempDir(), approvalHandler }));
+    expect(approvalHandler).toHaveBeenCalledTimes(3);
   });
 
   it('stops at the iteration cap with a failed task', async () => {

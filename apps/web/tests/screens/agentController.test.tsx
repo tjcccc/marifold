@@ -28,6 +28,115 @@ const profile: ProfileDetail = {
 };
 
 describe('useAgentController session lifecycle', () => {
+  it.each(['success', 'failure'] as const)('shows list loading until requests finish with %s', async outcome => {
+    let finishProfiles!: (value: unknown) => void;
+    let failProfiles!: (error: Error) => void;
+    let finishSessions!: (value: unknown) => void;
+    let failSessions!: (error: Error) => void;
+    const profiles = new Promise((resolve, reject) => { finishProfiles = resolve; failProfiles = reject; });
+    const sessions = new Promise((resolve, reject) => { finishSessions = resolve; failSessions = reject; });
+    const request = vi.fn(async (_method: string, path: string) => {
+      if (path === '/v1/profiles') return profiles;
+      if (path === '/v1/models') return { default: {}, options: [] };
+      if (path === '/v1/profiles/prompt-maker') return { profile };
+      if (path.startsWith('/v1/skills?')) return { skills: [] };
+      if (path.startsWith('/v1/sessions?')) return sessions;
+      if (path === '/v1/runs' || path.startsWith('/v1/runs?')) return { runs: [] };
+      throw new Error(`Unexpected request: ${path}`);
+    });
+    const client = { request } as unknown as ApiClient;
+    const navigate = vi.fn();
+    const onUnauthorized = vi.fn();
+    const { result } = renderHook(() => useAgentController({
+      client,
+      route: { view: 'agent', profile: 'prompt-maker' },
+      navigate, onUnauthorized,
+    }));
+    expect(result.current.profilesLoading).toBe(true);
+    expect(result.current.sessionsLoading).toBe(true);
+    await waitFor(() => expect(request.mock.calls.some(call => call[1].startsWith('/v1/sessions?'))).toBe(true));
+    await act(async () => {
+      if (outcome === 'success') finishProfiles({ profiles: [profile] });
+      else failProfiles(new Error('Profiles unavailable'));
+    });
+    expect(result.current.profilesLoading).toBe(false);
+    expect(result.current.sessionsLoading).toBe(true);
+    await act(async () => {
+      if (outcome === 'success') finishSessions({ sessions: [] });
+      else failSessions(new Error('Sessions unavailable'));
+    });
+    expect(result.current.sessionsLoading).toBe(false);
+  });
+
+  it.each(['success', 'error'] as const)('keeps loading the selected session after a stale %s', async outcome => {
+    let finishA!: (value: unknown) => void;
+    let failA!: (error: Error) => void;
+    let finishB!: (value: unknown) => void;
+    const pendingA = new Promise((resolve, reject) => { finishA = resolve; failA = reject; });
+    const pendingB = new Promise(resolve => { finishB = resolve; });
+    const request = vi.fn(async (_method: string, path: string) => {
+      if (path === '/v1/profiles') return { profiles: [profile] };
+      if (path === '/v1/models') return { default: {}, options: [] };
+      if (path === '/v1/profiles/prompt-maker') return { profile };
+      if (path.startsWith('/v1/skills?')) return { skills: [] };
+      if (path.startsWith('/v1/sessions?')) return { sessions: [] };
+      if (path === '/v1/runs' || path.startsWith('/v1/runs?')) return { runs: [] };
+      if (path === '/v1/sessions/session-a') return pendingA;
+      if (path === '/v1/sessions/session-b') return pendingB;
+      throw new Error(`Unexpected request: ${path}`);
+    });
+    const client = { request } as unknown as ApiClient;
+    const navigate = vi.fn();
+    const onUnauthorized = vi.fn();
+    const { result } = renderHook(() => useAgentController({ client,
+      route: { view: 'agent', profile: 'prompt-maker', session: 'session-a' },
+      navigate, onUnauthorized,
+    }));
+    expect(result.current.sessionLoading).toBe(true);
+    act(() => result.current.selectSession('session-b'));
+    await act(async () => {
+      if (outcome === 'success') finishA({ session: { turns: [{ role: 'assistant', content: 'Old conversation' }] } });
+      else failA(new Error('Old request failed'));
+    });
+    expect(result.current.sessionLoading).toBe(true);
+    expect(result.current.thread.items).toEqual([]);
+    await act(async () => finishB({ session: { turns: [{ role: 'assistant', content: 'Selected conversation' }] } }));
+    expect(result.current.sessionLoading).toBe(false);
+    expect(result.current.thread.items).toMatchObject([{ kind: 'assistant', markdown: 'Selected conversation' }]);
+  });
+
+  it.each(['empty', 'failure', 'leave'] as const)('clears session loading on %s', async outcome => {
+    let resolveSession!: (value: unknown) => void;
+    let rejectSession!: (error: Error) => void;
+    const pending = new Promise((resolve, reject) => { resolveSession = resolve; rejectSession = reject; });
+    const request = vi.fn(async (_method: string, path: string) => {
+      if (path === '/v1/profiles') return { profiles: [profile] };
+      if (path === '/v1/models') return { default: {}, options: [] };
+      if (path === '/v1/profiles/prompt-maker') return { profile };
+      if (path.startsWith('/v1/skills?')) return { skills: [] };
+      if (path.startsWith('/v1/sessions?')) return { sessions: [] };
+      if (path === '/v1/runs' || path.startsWith('/v1/runs?')) return { runs: [] };
+      if (path === '/v1/sessions/session-a') return pending;
+      throw new Error(`Unexpected request: ${path}`);
+    });
+    const client = { request } as unknown as ApiClient;
+    const navigate = vi.fn();
+    const onUnauthorized = vi.fn();
+    const { result } = renderHook(() => useAgentController({ client,
+      route: { view: 'agent', profile: 'prompt-maker', session: 'session-a' },
+      navigate, onUnauthorized,
+    }));
+    expect(result.current.sessionLoading).toBe(true);
+    if (outcome === 'leave') act(() => result.current.showProfiles());
+    await act(async () => {
+      if (outcome === 'failure') rejectSession(new Error('Bridge unavailable'));
+      else resolveSession({ session: { turns: outcome === 'empty' ? [] : [{ role: 'assistant', content: 'Stale' }] } });
+    });
+    expect(result.current.sessionLoading).toBe(false);
+    if (outcome === 'failure') expect(result.current.thread.items).toMatchObject([{ kind: 'notice', text: 'Bridge unavailable' }]);
+    else expect(result.current.thread.items).toEqual([]);
+  });
+
   it.each(['', '/v1/workspaces/guest'])('keeps the open %s transcript unchanged until reopened', async (baseUrl) => {
     let turns = [{ role: 'user', content: 'Hello' }, { role: 'assistant', content: 'Original answer' }];
     const request = vi.fn(async (_method: string, path: string) => {

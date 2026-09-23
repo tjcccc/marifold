@@ -20,6 +20,7 @@ import type {
   SignedMembership,
   WorkspaceSummary,
 } from '@marifold/workspace-protocol';
+import { MARIFOLD_VERSION } from './MarifoldVersion';
 
 export interface WorkspaceConnection extends Omit<WorkspaceSummary, 'online'> {
   identity: PrivateIdentity;
@@ -269,6 +270,7 @@ export class WorkspaceStore {
       .run(c.id, digest(secret), expiresAt);
     const invitation: Invitation = {
       version: 1,
+      appVersion: MARIFOLD_VERSION,
       workspaceId: c.id,
       bridgeUrl: c.bridgeUrl,
       host: c.host,

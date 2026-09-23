@@ -295,7 +295,7 @@ export function InputBar(props: InputBarProps) {
           <textarea
             ref={textareaRef}
             className={styles.input}
-            rows={1}
+            rows={2}
             value={text}
             placeholder={
               props.steering ? 'Reply — the run keeps going; guidance is picked up mid-task' : 'Message the agent…'

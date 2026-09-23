@@ -1,3 +1,4 @@
+import { SidebarLoading } from './SidebarLoading';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent, ReactNode } from 'react';
 import { createPortal } from 'react-dom';
@@ -11,6 +12,7 @@ import styles from './ProfileSidebar.module.css';
 
 export interface ProfileSidebarProps {
   client: ApiClient;
+  loading?: boolean;
   profiles: ProfileSummary[];
   selected?: string;
   /** Profiles with a run currently working (live sub-line). */
@@ -47,6 +49,7 @@ export type ProfileSidebarContentProps = Omit<ProfileSidebarProps, 'footer'>;
 export function ProfileSidebarContent({
   client,
   profiles,
+  loading = false,
   selected,
   workingProfiles,
   onSelect,
@@ -168,8 +171,9 @@ export function ProfileSidebarContent({
           </button>
         ) : null}
       </div>
-      <div ref={listRef} id="profile-list" className={styles.list}>
-        {filteredProfiles.length === 0 ? (
+      <div ref={listRef} id="profile-list" className={styles.list} aria-busy={loading}>
+        {loading ? <SidebarLoading label="Loading profiles…" /> : null}
+        {!loading && filteredProfiles.length === 0 ? (
           <div className={styles.empty} role="status">
             {profiles.length === 0 ? 'No profiles yet.' : 'No matching profiles.'}
           </div>

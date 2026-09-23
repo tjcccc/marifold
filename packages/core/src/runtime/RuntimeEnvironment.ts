@@ -29,7 +29,11 @@ export function parseClientEnvironment(value: unknown): ClientEnvironment {
 }
 
 /** Rebuilt for each user turn and kept outside both prompt text and history. */
-export function environmentContext(environment: RuntimeEnvironment = {}, now = new Date()): string {
+export function environmentContext(
+  environment: RuntimeEnvironment = {},
+  now = new Date(),
+  model?: { provider: string; model: string },
+): string {
   const client = parseClientEnvironment(environment);
   const timezone = client.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
   const parts = new Intl.DateTimeFormat('en-CA', {
@@ -44,8 +48,17 @@ export function environmentContext(environment: RuntimeEnvironment = {}, now = n
     `timezone: ${timezone}`,
     ...(client.interface ? [`interface: ${client.interface}`] : []),
     `request: ${environment.request === 'remote' ? 'remote' : 'local'}`,
+    ...(model ? [
+      `provider: ${environmentValue(model.provider)}`,
+      `requested_model: ${environmentValue(model.model)}`,
+    ] : []),
     '</environment>',
   ].join('\n');
+}
+
+function environmentValue(value: string): string {
+  return JSON.stringify(value).replace(/[<>&]/g, character =>
+    `\\u${character.charCodeAt(0).toString(16).padStart(4, '0')}`);
 }
 
 export function artifactPresentation(environment?: RuntimeEnvironment): string {

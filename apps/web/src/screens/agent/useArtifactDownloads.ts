@@ -8,6 +8,7 @@ const NO_ARTIFACTS: RunArtifact[] = [];
 export function useArtifactDownloads(client?: ApiClient, runId?: string, artifacts: RunArtifact[] = NO_ARTIFACTS) {
   const [unavailable, setUnavailable] = useState<Set<string>>(new Set());
   const [downloading, setDownloading] = useState<string>();
+  const [started, setStarted] = useState<string>();
   const [error, setError] = useState<string>();
 
   useEffect(() => {
@@ -27,9 +28,11 @@ export function useArtifactDownloads(client?: ApiClient, runId?: string, artifac
   async function download(artifact: RunArtifact): Promise<void> {
     if (!client || !runId || unavailable.has(artifact.id)) return;
     setDownloading(artifact.id);
+    setStarted(undefined);
     setError(undefined);
     try {
       await downloadRunArtifact(client, runId, artifact);
+      setStarted(artifact.id);
     } catch (error) {
       if (error instanceof ArtifactUnavailableError) setUnavailable(current => new Set([...current, artifact.id]));
       else setError(error instanceof Error ? error.message : String(error));
@@ -38,5 +41,5 @@ export function useArtifactDownloads(client?: ApiClient, runId?: string, artifac
     }
   }
 
-  return { unavailable, downloading, error, download };
+  return { unavailable, downloading, started, error, download };
 }

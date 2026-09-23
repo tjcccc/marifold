@@ -20,7 +20,7 @@ import type { AgentEvent } from '../../src/api/types';
  */
 
 const tempDirs: string[] = [];
-const TINY_PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl2nGQAAAAASUVORK5CYII=';
+const TINY_PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAAE0lEQVQImWP4z8DwnwGM/zMwAAAf7gP9qS/A4gAAAABJRU5ErkJggg==';
 
 function tempDir(): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'marifold-web-e2e-'));
@@ -117,6 +117,12 @@ describe('web client ↔ real service', () => {
       const attachment = await client.blob('/v1/sessions/image-chat/attachments/0/0');
       expect(attachment?.type).toBe('image/png');
       expect(Buffer.from(await attachment!.arrayBuffer()).toString('base64')).toBe(TINY_PNG);
+      const thumbnail = await client.blob('/v1/sessions/image-chat/attachments/0/0?thumbnail=1');
+      expect(thumbnail?.type).toBe('image/webp');
+      expect(thumbnail!.size).toBeLessThanOrEqual(80_000);
+      expect(Buffer.from(await thumbnail!.arrayBuffer()).subarray(0, 4).toString()).toBe('RIFF');
+      const original = await client.blob('/v1/sessions/image-chat/attachments/0/0');
+      expect(Buffer.from(await original!.arrayBuffer()).toString('base64')).toBe(TINY_PNG);
     } finally {
       await server.close();
     }

@@ -22,6 +22,7 @@ import type {
 } from '@marifold/workspace-protocol';
 
 export interface PeerOptions {
+  appVersion: string;
   bridgeUrl: string;
   workspaceId: string;
   deviceId: string;
@@ -107,7 +108,7 @@ export class BridgePeer {
     if (Buffer.byteLength(JSON.stringify(input ?? null)) > 29 * 1024 * 1024)
       return Promise.reject(new Error('Workspace request exceeds the transfer limit.'));
     return new Promise((resolve, reject) => {
-      const request: WorkspaceRequest = { type: 'request', id, operation, input };
+      const request: WorkspaceRequest = { type: 'request', id, operation, input, appVersion: this.options.appVersion };
       const timer = setTimeout(() => {
         this.pending.delete(id);
         reject(

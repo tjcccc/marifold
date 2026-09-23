@@ -20,7 +20,9 @@ export function artifactPreviewVariant(value: unknown): ArtifactPreviewVariant {
   throw new Error('Invalid image preview variant.');
 }
 
-async function encode(bytes: Buffer, variant: ArtifactPreviewVariant): Promise<Buffer> {
+export async function createImagePreview(bytes: Buffer, variant: ArtifactPreviewVariant = 'thumbnail'): Promise<Buffer> {
+  variant = artifactPreviewVariant(variant);
+  if (bytes.length > 32 * 1024 * 1024) throw new Error('Image is too large to preview.');
   const limit = variant === 'viewer' ? ARTIFACT_VIEWER_MAX_BYTES : 80_000;
   let edge = variant === 'viewer' ? 2048 : 480;
   while (edge >= 120) {
@@ -62,7 +64,7 @@ export async function createArtifactPreview(artifact: ResolvedRunArtifact, varia
         || bytes.subarray(0, 3).equals(Buffer.from([255, 216, 255]))
         || (bytes.subarray(0, 4).toString() === 'RIFF' && bytes.subarray(8, 12).toString() === 'WEBP');
       if (!raster) throw new Error('This file is not a supported raster image.');
-      const result = await encode(bytes, variant);
+      const result = await createImagePreview(bytes, variant);
       const after = await file.stat();
       if (after.size !== stat.size || after.mtimeMs !== stat.mtimeMs || after.ctimeMs !== stat.ctimeMs)
         throw new Error('Image changed while preparing its preview.');

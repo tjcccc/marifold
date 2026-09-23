@@ -351,4 +351,47 @@ describe('device-hosted workspaces', () => {
     });
     expect(fresh.statusCode).toBeGreaterThanOrEqual(400);
   }, 20000);
+
+  it('sends guest image bytes to the host model without attachment approval prompts', async () => {
+    const p = await paired(true);
+    // Larger than a bridge frame: inspection must also survive chunked replies.
+    const image = await sharp(randomBytes(256 * 256 * 3), { raw: { width: 256, height: 256, channels: 3 } }).png().toBuffer();
+    const data = image.toString('base64');
+    const received: string[][] = [];
+    const replies = [
+      '<tool_call name="inspect_attachment">{"attachment_id":"attachment-2"}</tool_call>',
+      '<tool_call name="read_attachment">{"attachment_id":"attachment-1"}</tool_call>',
+      '<tool_call name="search_attachment">{"attachment_id":"attachment-1","query":"workflow"}</tool_call>',
+      'The screenshot and workflow note are visible.',
+    ];
+    const realFetch = globalThis.fetch;
+    vi.stubGlobal('fetch', vi.fn(async (input, init) => {
+      if (!String(input).includes('localhost:11434')) return realFetch(input, init);
+      const request = JSON.parse(String(init?.body));
+      received.push(request.messages.flatMap((message: { images?: string[] }) => message.images ?? []));
+      return new Response(JSON.stringify({ message: { content: replies[received.length - 1] }, done: true, done_reason: 'stop' }), {
+        headers: { 'content-type': 'application/json' },
+      });
+    }));
+    const { run } = await post(p.guest, `${p.prefix}/v1/runs`, {
+      objective: 'Discuss this screenshot and note.',
+      images: [{ data, mediaType: 'image/png' }],
+      originalImages: true,
+      files: [{ name: 'note.txt', mediaType: 'text/plain', data: Buffer.from('Discuss the workflow.').toString('base64') }],
+    });
+    expect(run.execution.executionDeviceId).toBe(p.device);
+    let status;
+    for (let i = 0; i < 250; i++) {
+      const current = (await p.host.inject(`/v1/runs/${run.id}`)).json().run;
+      expect(current.pendingApprovals).toEqual([]);
+      if (current.finishedAt) { status = current.status; break; }
+      await new Promise(resolve => setTimeout(resolve, 20));
+    }
+    expect(status).toBe('completed');
+    expect(received).toEqual([[], [data], [data], [data]]);
+    const events = await p.guest.inject(`${p.prefix}/v1/runs/${run.id}/events`);
+    expect(events.body).not.toContain('event: approval_request');
+    expect(events.body).not.toContain('"isError":true');
+    expect(events.body).toContain('The screenshot and workflow note are visible.');
+  }, 20000);
 });

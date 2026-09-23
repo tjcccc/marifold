@@ -108,7 +108,7 @@ export {
   resolveRunArtifact,
 } from './agent/RunArtifacts';
 export type { RunArtifact, ResolvedRunArtifact } from './agent/RunArtifacts';
-export { createArtifactPreview, isPreviewableArtifact, artifactPreviewVariant, ARTIFACT_VIEWER_MAX_BYTES, type ArtifactPreviewVariant } from './agent/ArtifactPreview';
+export { createImagePreview, createArtifactPreview, isPreviewableArtifact, artifactPreviewVariant, ARTIFACT_VIEWER_MAX_BYTES, type ArtifactPreviewVariant } from './agent/ArtifactPreview';
 export { BuiltInSearchBackend } from './search/BuiltInSearchBackend';
 export { DuckDuckGoBackend } from './search/DuckDuckGoBackend';
 export { FirecrawlBackend } from './search/FirecrawlBackend';

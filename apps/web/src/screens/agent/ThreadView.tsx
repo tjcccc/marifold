@@ -20,6 +20,7 @@ import styles from './ThreadView.module.css';
 export interface ThreadViewProps {
   client?: ApiClient;
   items: ThreadItem[];
+  loading?: boolean;
   onCancelRun: (runId: string) => void;
   onAnswerApproval: (runId: string, requestId: string, action: RunApprovalAction) => void;
   onSubmitUserInput?: (runId: string, requestId: string, submission: UserInputSubmission) => void;
@@ -37,6 +38,7 @@ export interface ThreadViewProps {
 export function ThreadView({
   client,
   items,
+  loading = false,
   onCancelRun,
   onAnswerApproval,
   onSubmitUserInput,
@@ -81,9 +83,14 @@ export function ThreadView({
   }
 
   return (
-    <div ref={scrollRef} className={styles.scroll} onScroll={onScroll} role="log" aria-label="Conversation">
+    <div ref={scrollRef} className={styles.scroll} onScroll={onScroll} role="log" aria-label="Conversation" aria-busy={loading}>
       <div className={styles.thread}>
-        {items.length === 0 ? (
+        {loading ? (
+          <div className={`${styles.empty} ${styles.loading}`} role="status">
+            <span className={styles.spinner} aria-hidden="true" />
+            <span>Loading conversation…</span>
+          </div>
+        ) : items.length === 0 ? (
           <div className={styles.empty}>
             <div className={styles.emptyTitle}>What should we work on?</div>
             <div className={styles.emptyHint}>Plain questions get answers; tasks run with tools.</div>
@@ -376,7 +383,7 @@ function LazyTranscriptImage({
     let cancelled = false;
     let objectUrl: string | undefined;
     const load = () => {
-      client.blob(sourcePath).then(blob => {
+      client.blob(`${sourcePath}${sourcePath.includes('?') ? '&' : '?'}thumbnail=1`).then(blob => {
         if (cancelled || !blob) return;
         objectUrl = URL.createObjectURL(blob);
         setSrc(objectUrl);

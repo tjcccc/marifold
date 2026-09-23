@@ -1,11 +1,12 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { SessionResolver } from '@marifold/core';
 import { createMarifoldService } from '../src';
 import { cleanupTempDirs, fixtureLoadedConfig, tempDir } from './helpers';
 
 afterEach(() => {
+  vi.unstubAllGlobals();
   cleanupTempDirs();
 });
 
@@ -418,6 +419,64 @@ describe('config editing routes', () => {
       const unknown = await server.inject({ method: 'GET', url: '/v1/providers/ghost/models' });
       expect(unknown.statusCode).toBe(200);
       expect(unknown.json()).toMatchObject({ provider: 'ghost', models: [] });
+    } finally {
+      await server.close();
+    }
+  });
+
+  it('refreshes an expired xAI credential through its proxy before listing models', async () => {
+    const loadedConfig = fixtureLoadedConfig(tempDir());
+    loadedConfig.config.providers.xai = {
+      type: 'openai-compatible',
+      baseUrl: 'https://api.x.ai/v1',
+      proxy: 'http://127.0.0.1:7890',
+      apiKey: 'expired-access',
+      oauthToken: 'saved-refresh',
+      apiKeyExpiresAt: 1,
+    };
+    const requests: Array<{ url: string; init?: RequestInit }> = [];
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      requests.push({ url, init });
+      return new Response(JSON.stringify(url.includes('/oauth2/token')
+        ? { access_token: 'fresh-access', refresh_token: 'rotated-refresh', expires_in: 3600 }
+        : { data: [{ id: 'grok-4.7' }] }), { status: 200 });
+    }));
+    const server = createMarifoldService({ loadedConfig, scheduler: false });
+    try {
+      const result = await server.inject({ method: 'GET', url: '/v1/providers/xai/models' });
+      expect(result.statusCode).toBe(200);
+      expect(result.json()).toMatchObject({ reachable: true, models: ['grok-4.7'] });
+      expect(requests.map(request => request.url)).toEqual([
+        'https://auth.x.ai/oauth2/token',
+        'https://api.x.ai/v1/models',
+      ]);
+      expect(requests.every(request => Boolean((request.init as RequestInit & { dispatcher?: unknown })?.dispatcher))).toBe(true);
+      expect((requests[1].init?.headers as Record<string, string>).Authorization).toBe('Bearer fresh-access');
+      expect(loadedConfig.config.providers.xai.apiKey).toBe('fresh-access');
+      expect(loadedConfig.config.providers.xai.oauthToken).toBe('rotated-refresh');
+    } finally {
+      await server.close();
+    }
+  });
+
+  it('shows xAI fallback models and a reauthentication hint when refresh fails', async () => {
+    const loadedConfig = fixtureLoadedConfig(tempDir());
+    loadedConfig.config.providers.xai = {
+      type: 'openai-compatible',
+      baseUrl: 'https://api.x.ai/v1',
+      apiKey: 'expired-access',
+      oauthToken: 'saved-refresh',
+      apiKeyExpiresAt: 1,
+    };
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('rejected', { status: 401 })));
+    const server = createMarifoldService({ loadedConfig, scheduler: false });
+    try {
+      const result = await server.inject({ method: 'GET', url: '/v1/providers/xai/models' });
+      expect(result.statusCode).toBe(200);
+      expect(result.json()).toMatchObject({ reachable: false, models: expect.arrayContaining(['grok-4.7']) });
+      expect(result.json().message).toContain('marifold provider reauth xai');
+      expect(result.json().message).toContain('Showing registry models');
     } finally {
       await server.close();
     }

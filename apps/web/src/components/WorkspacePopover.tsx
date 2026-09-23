@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createApiClient } from '../api/client';
 import type { WorkspaceSummary, WorkspaceDevice } from '../api/types';
 import { apiSettings, THIS_SERVER_ID, type ServerConnection } from '../state/connection';
@@ -11,6 +11,8 @@ interface Props extends ConnectionPopoverProps {
 }
 export function WorkspacePopover(props: Props) {
   const dialog = useRef<HTMLDivElement>(null);
+  const editor = useRef<HTMLDivElement>(null);
+  const [editorOverflows, setEditorOverflows] = useState(false);
   const local = props.store.servers.find((c) => c.id === THIS_SERVER_ID)!;
   const api = useMemo(() => createApiClient(apiSettings(local)), [local.token]);
   const [workspaces, setWorkspaces] = useState<WorkspaceSummary[]>([]);
@@ -36,6 +38,18 @@ export function WorkspacePopover(props: Props) {
   const [deviceChoice, setDeviceChoice] = useState(props.executionDevice);
   const [confirmRemove, setConfirmRemove] = useState(false);
   const workspace = workspaces.find((w) => w.id === selected);
+  useLayoutEffect(() => {
+    const node = editor.current;
+    if (!node) return;
+    const measure = () => setEditorOverflows(node.scrollHeight > node.clientHeight);
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(node);
+    // Both viewport changes and asynchronously loaded content affect overflow.
+    for (const child of node.children) observer.observe(child);
+    return () => observer.disconnect();
+  });
   useEffect(() => {
     const previous = document.activeElement instanceof HTMLElement ? document.activeElement : undefined;
     dialog.current?.querySelector<HTMLElement>('button, input')?.focus();
@@ -196,14 +210,15 @@ export function WorkspacePopover(props: Props) {
                   >
                     <span>{w.name}</span>
                     <span className={styles.serverUrl}>
-                      {w.role === 'host' ? 'Hosted here' : 'Paired'} · {w.online ? 'Online' : 'Offline'}
+                      {w.role === 'host' ? 'Hosted here' : 'Paired'} · {w.versionError ? 'Version mismatch' : w.online ? 'Online' : 'Offline'}
                     </span>
                   </button>
                 ))}
               </div>
-              <div className={styles.editor}>
+              <div ref={editor} className={`${styles.editor} ${editorOverflows ? styles.scrollingEditor : ''}`}>
                 {workspace ? (
                   <>
+                    {workspace.versionError ? <div role="alert" className={styles.problem}>{workspace.versionError}</div> : null}
                     <label className={styles.field}>
                       Workspace name
                       <input value={name} maxLength={80} onChange={(e) => setName(e.target.value)} disabled={busy} />
@@ -246,7 +261,7 @@ export function WorkspacePopover(props: Props) {
                       <div className={styles.deviceList} role="list">
                         {sortedDevices.map((d) => (
                           <div role="listitem" key={d.id} className={`${styles.deviceRow} ${d.host ? styles.hostRow : ''}`}>
-                            <span className={styles.hint}>
+                            <span className={`${styles.hint} ${d.online ? styles.deviceOnline : ''}`}>
                               {d.host ? <strong className={styles.hostName}>{d.name}</strong> : d.name}{' '}
                               {d.host ? '(host)' : d.id === workspace.deviceId ? '(this device)' : ''} · {d.online ? 'online' : 'offline'}
                             </span>

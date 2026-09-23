@@ -9,6 +9,7 @@ import { resolveAgentConfig } from '../src/agent/ApprovalPolicy';
 import { listRunArtifacts } from '../src/agent/RunArtifacts';
 import { runScopedProcess } from '../src/agent/ScopedProcess';
 import type { RunWorkspace } from '../src/agent/RunWorkspace';
+import type { ToolExecutionResult, ToolRiskAssessment } from '../src/agent/ToolRegistry';
 import { RunRegistry, type RunRecord } from '../src/runs/RunRegistry';
 
 const dirs: string[] = [];
@@ -29,6 +30,47 @@ function store(config = path.join(directory(), 'config.toml')) {
   return s;
 }
 describe('workspace recovery and device boundaries', () => {
+  it('returns portable inspected images and trusts only attachment tools', async () => {
+    const d = directory();
+    const executor = new WorkspaceExecutor(() => resolveAgentConfig({ approval: { read: 'deny' } }), path.join(d, 'runs'));
+    const context = { workspaceId: 'workspace', senderDeviceId: 'host', hostDeviceId: 'host' };
+    const data = (await sharp({ create: { width: 8, height: 8, channels: 3, background: '#123456' } }).png().toBuffer()).toString('base64');
+    try {
+      const workspace = await executor.handle('executor.prepare', {
+        runId: 'image_run', images: [{ data, mediaType: 'image/png' }, { url: 'https://example.com/image.png', mediaType: 'image/png' }],
+      }, context) as RunWorkspace;
+      for (const [id, image] of [
+        ['attachment-1', { data, mediaType: 'image/png' }],
+        ['attachment-2', { url: 'https://example.com/image.png', mediaType: 'image/png' }],
+      ] as const) {
+        const call = { runId: 'image_run', tool: 'inspect_attachment', input: { attachment_id: id } };
+        const risk = await executor.handle('executor.assess', call, context) as ToolRiskAssessment & { grant: string };
+        expect(risk).toMatchObject({ trusted: true, escalate: false, persistable: false, blocked: false });
+        const result = await executor.handle('executor.execute', { ...call, grant: risk.grant }, context) as ToolExecutionResult;
+        expect(JSON.parse(JSON.stringify(result)).images).toEqual([image]);
+        await expect(executor.handle('executor.execute', { ...call, grant: risk.grant }, context)).rejects.toThrow('invalid or expired');
+      }
+      const read = await executor.handle('executor.assess', {
+        runId: 'image_run', tool: 'read_file', input: { path: workspace.workDir },
+      }, context) as ToolRiskAssessment;
+      expect(read).toMatchObject({ trusted: false, escalate: true, blocked: true });
+      const invalid = { runId: 'image_run', tool: 'inspect_attachment', input: { attachment_id: '/etc/passwd' } };
+      const risk = await executor.handle('executor.assess', invalid, context) as { grant: string };
+      const result = await executor.handle('executor.execute', { ...invalid, grant: risk.grant }, context) as ToolExecutionResult;
+      expect(result.isError).toBe(true);
+      expect(result.images).toBeUndefined();
+
+      const imagePath = workspace.attachments[0].path!;
+      fs.unlinkSync(imagePath);
+      fs.writeFileSync(path.join(d, 'private.png'), Buffer.from(data, 'base64'));
+      fs.symlinkSync(path.join(d, 'private.png'), imagePath);
+      const call = { runId: 'image_run', tool: 'inspect_attachment', input: { attachment_id: 'attachment-1' } };
+      const grant = await executor.handle('executor.assess', call, context) as { grant: string };
+      await expect(executor.handle('executor.execute', { ...call, grant: grant.grant }, context)).rejects.toThrow();
+    } finally {
+      executor.close();
+    }
+  });
   it('retains session downloads and child provenance after live expiry, capacity eviction, and restart', async () => {
     const config = path.join(directory(), 'config.toml');
     const first = store(config);

@@ -551,6 +551,18 @@ describe('Mobile workspace navigation', () => {
 });
 
 describe('ThreadView', () => {
+  it('shows loading status instead of the empty conversation prompt until loaded', () => {
+    const props = { items: [], onCancelRun: vi.fn(), onAnswerApproval: vi.fn(), onToggleRun: vi.fn() };
+    const { rerender } = render(<ThreadView {...props} loading />);
+    expect(screen.getByRole('status').textContent).toBe('Loading conversation…');
+    expect(screen.getByRole('log').getAttribute('aria-busy')).toBe('true');
+    expect(screen.queryByText('What should we work on?')).toBeNull();
+    rerender(<ThreadView {...props} loading={false} />);
+    expect(screen.queryByRole('status')).toBeNull();
+    expect(screen.getByRole('log').getAttribute('aria-busy')).toBe('false');
+    expect(screen.getByText('What should we work on?')).toBeTruthy();
+  });
+
   it('copies a complete response and exact fenced code from their own actions', async () => {
     const writeText = vi.fn(async () => undefined);
     Object.defineProperty(navigator, 'clipboard', {

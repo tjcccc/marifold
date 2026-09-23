@@ -1,3 +1,4 @@
+import { SidebarLoading } from './SidebarLoading';
 import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { createPortal } from 'react-dom';
@@ -10,6 +11,7 @@ import styles from './SessionList.module.css';
 const MENU_WIDTH = 184;
 
 export interface SessionListProps {
+  loading?: boolean;
   sessions: SessionSummary[];
   selected?: string;
   profileName: string;
@@ -53,6 +55,7 @@ export type SessionListContentProps = Omit<SessionListProps, 'footer'>;
 /** Session-specific body for the persistent workspace sidebar. */
 export function SessionListContent({
   sessions,
+  loading = false,
   selected,
   profileName,
   profileDisplayName = profileName,
@@ -252,8 +255,9 @@ export function SessionListContent({
           onChange={event => onSearchChange(event.target.value)}
         />
       </div>
-      <div className={styles.list}>
-        {sessions.length === 0 ? (
+      <div className={styles.list} aria-busy={loading}>
+        {loading ? <SidebarLoading label="Loading sessions…" /> : null}
+        {!loading && sessions.length === 0 ? (
           <div className={styles.empty}>
             {search ? 'No matching sessions.' : showArchived ? 'No archived sessions.' : 'No sessions yet.'}
           </div>

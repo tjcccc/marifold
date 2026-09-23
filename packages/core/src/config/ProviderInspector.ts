@@ -317,12 +317,12 @@ export class ProviderInspector {
     const url = providerName === 'chatgpt'
       ? `${baseModelsUrl}?client_version=${await chatGptCatalogVersion()}`
       : baseModelsUrl;
+    const dispatcher = proxyDispatcher(options.proxy);
     try {
       const init: RequestInit = {
         headers,
         signal: AbortSignal.timeout(5000),
       };
-      const dispatcher = proxyDispatcher(options.proxy);
       const response = await fetch(url, dispatcher ? { ...init, dispatcher } as RequestInit : init);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const body = await response.json() as OpenAICompatibleModelsResponse;
@@ -342,8 +342,10 @@ export class ProviderInspector {
       return {
         reachable: false,
         models: [],
-        message: `Could not connect to ${url}: ${error instanceof Error ? error.message : String(error)}`,
+        message: `Could not list models from ${url}: ${error instanceof Error ? error.message : String(error)}`,
       };
+    } finally {
+      await dispatcher?.close();
     }
   }
 

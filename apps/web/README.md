@@ -180,6 +180,11 @@ archive/drafts, image galleries, accessible dialogs, and global settings. Browse
 
 ## Open-session updates
 
+Opening a saved session shows a spinner and “Loading conversation…” until its
+messages arrive. Sending is disabled during that fetch. Switching sessions ignores
+late responses from the previous selection; an empty-session prompt appears only
+after loading completes. The spinner respects reduced-motion preferences.
+
 An open conversation keeps its local transcript while workspace notifications
 refresh navigation metadata. Runs started in that view continue streaming normally.
 To see transcript changes or runs started on another device, reload the page or

@@ -176,6 +176,7 @@ export function AgentScreen(props: AgentScreenProps) {
       ) : controller.profileName ? (
         <SessionListContent
           sessions={controller.sessions}
+          loading={controller.sessionsLoading}
           selected={controller.sessionId}
           profileName={controller.profileName}
           profileDisplayName={controller.profileDetail?.displayName}
@@ -218,6 +219,7 @@ export function AgentScreen(props: AgentScreenProps) {
         <ProfileSidebarContent
           client={props.client}
           profiles={controller.profiles}
+          loading={controller.profilesLoading}
           selected={controller.profileName}
           workingProfiles={workingProfiles}
           onSelect={name => {
@@ -311,6 +313,7 @@ export function AgentScreen(props: AgentScreenProps) {
               client={props.client}
               key={controller.sessionId ?? 'new-session'}
               items={controller.thread.items}
+              loading={controller.sessionLoading}
               scrollToBottomRequest={scrollToBottomRequest}
               onCancelRun={runId => void controller.cancel(runId)}
               onAnswerApproval={(runId, requestId, action) => void controller.answer(runId, requestId, action)}
@@ -323,7 +326,7 @@ export function AgentScreen(props: AgentScreenProps) {
               draftKey={`${props.connectionId}:${controller.profileName}:${controller.sessionId ?? 'new'}`}
               steering={controller.steeringRun !== undefined}
               responding={controller.responding}
-              disabled={controller.sending}
+              disabled={controller.sending || controller.sessionLoading}
               think={controller.think}
               onToggleThink={() => controller.setThink(!controller.think)}
               modelOptions={controller.modelOptions}

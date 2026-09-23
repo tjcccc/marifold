@@ -34,7 +34,7 @@ import { exchangeGitHubTokenForCopilotToken } from '../config/GitHubCopilotAuth'
 import { createSearchBackend } from '../search/createSearchBackend';
 import { formatSearchResults, SearchBackend } from '../search/SearchBackend';
 import { ProviderFactory, type NativeWebSearchStrategy } from '../config/ProviderFactory';
-import { isGitHubCopilotResponsesModelId } from '../config/ProviderRegistry';
+import { getProviderRegistryEntry, isGitHubCopilotResponsesModelId } from '../config/ProviderRegistry';
 import { MarifoldError } from '../errors/MarifoldError';
 import { prepareImageInputs } from '../images/ImageOptimizer';
 import { MemoryStore } from '../memory/MemoryStore';
@@ -153,8 +153,8 @@ export class MarifoldRuntime {
   async ask(request: MarifoldRunRequest): Promise<MarifoldAskResponse> {
     const startedAtMs = Date.now();
     const startedAt = new Date(startedAtMs).toISOString();
-    const environment = environmentContext({ ...this.options.environment, ...request.environment });
     const settings = this.resolveSettings(request);
+    const environment = environmentContext({ ...this.options.environment, ...request.environment }, new Date(startedAtMs), settings);
     const preparedImages = await prepareImageInputs(request.images, { optimize: request.originalImages !== true });
     await this.refreshProviderCredentialsIfNeeded(settings.provider);
     const replacing = request.replaceUserTurnIndex !== undefined;
@@ -304,8 +304,8 @@ export class MarifoldRuntime {
   ): AsyncGenerator<string, void, unknown> {
     const startedAtMs = Date.now();
     const startedAt = new Date(startedAtMs).toISOString();
-    const environment = environmentContext({ ...this.options.environment, ...request.environment });
     const settings = this.resolveSettings(request);
+    const environment = environmentContext({ ...this.options.environment, ...request.environment }, new Date(startedAtMs), settings);
     const preparedImages = await prepareImageInputs(request.images, { optimize: request.originalImages !== true });
     await this.refreshProviderCredentialsIfNeeded(settings.provider);
     let aggregateUsage: UsageInfo | undefined;
@@ -705,7 +705,17 @@ export class MarifoldRuntime {
   }
 
   /** Models a provider actually serves right now (CLI `model list --live`). */
-  listProviderModels(provider: string): Promise<ProviderModelList> {
+  async listProviderModels(provider: string): Promise<ProviderModelList> {
+    try {
+      await this.refreshProviderCredentialsIfNeeded(provider);
+    } catch (error) {
+      return {
+        provider,
+        reachable: false,
+        models: getProviderRegistryEntry(provider)?.knownModels ?? [],
+        message: `${error instanceof Error ? error.message : String(error)} Showing registry models.`,
+      };
+    }
     return new ProviderInspector(this.options.loadedConfig).listModels(provider);
   }
 

@@ -282,10 +282,9 @@ const REGISTRY: ProviderRegistryEntry[] = [
     // credential (no special backend or account header, unlike ChatGPT).
     defaultBaseUrl: 'https://api.x.ai/v1',
     apiKeyEnv: 'XAI_API_KEY',
-    // Fallback list only, shown when live /v1/models can't be fetched. These are
-    // the models a SuperGrok subscription exposes (per Grok Build CLI); the
-    // picker also accepts a custom id. Live listing is authoritative.
-    knownModels: ['grok-4.5', 'grok-composer-2.5-fast'],
+    // Fallback suggestions only. Availability depends on the credential;
+    // live listing is authoritative, and the picker accepts a custom ID.
+    knownModels: ['grok-4.7', 'grok-4.5', 'grok-composer-2.5-fast'],
   },
   {
     name: 'custom',

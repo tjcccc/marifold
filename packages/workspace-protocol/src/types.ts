@@ -27,6 +27,7 @@ export interface SignedMembership {
 }
 export interface Invitation {
   version: 1;
+  appVersion?: string;
   workspaceId: string;
   bridgeUrl: string;
   host: PublicIdentity;
@@ -52,6 +53,7 @@ export interface WorkspaceSummary {
   deviceId: string;
   hostDeviceId: string;
   online: boolean;
+  versionError?: string;
 }
 export interface WorkspaceExecutionContext {
   workspaceId: string;
@@ -77,6 +79,7 @@ export interface WorkspaceRequest {
   id: string;
   operation: string;
   input: unknown;
+  appVersion?: string;
 }
 export interface WorkspaceResponse {
   type: 'response';
