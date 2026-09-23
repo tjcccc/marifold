@@ -2,6 +2,7 @@ import type { ThemePreference } from '../theme/theme';
 import { nextThemePreference } from '../theme/theme';
 import { MarigoldLogo } from './MarigoldLogo';
 import styles from './SidebarChrome.module.css';
+import { version } from '../../package.json';
 
 export interface SidebarBrandProps {
   /** Larger identity treatment for the root profile view. */
@@ -55,6 +56,7 @@ export function SidebarSystemFooter({
       >
         <span className={styles.icon}><SettingsGlyph /></span>
         <span>Settings</span>
+        <span className={styles.value} aria-label={`Marifold version ${version}`}>v{version}</span>
       </button>
     </div>
   );

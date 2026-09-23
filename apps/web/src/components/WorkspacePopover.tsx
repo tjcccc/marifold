@@ -210,7 +210,7 @@ export function WorkspacePopover(props: Props) {
                   >
                     <span>{w.name}</span>
                     <span className={styles.serverUrl}>
-                      {w.role === 'host' ? 'Hosted here' : 'Paired'} · {w.online ? 'Online' : 'Offline'}
+                      {w.role === 'host' ? 'Hosted here' : 'Paired'} · {w.versionError ? 'Version mismatch' : w.online ? 'Online' : 'Offline'}
                     </span>
                   </button>
                 ))}
@@ -218,6 +218,7 @@ export function WorkspacePopover(props: Props) {
               <div ref={editor} className={`${styles.editor} ${editorOverflows ? styles.scrollingEditor : ''}`}>
                 {workspace ? (
                   <>
+                    {workspace.versionError ? <div role="alert" className={styles.problem}>{workspace.versionError}</div> : null}
                     <label className={styles.field}>
                       Workspace name
                       <input value={name} maxLength={80} onChange={(e) => setName(e.target.value)} disabled={busy} />

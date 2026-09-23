@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type { ApiClient } from '../../api/client';
 import type { AddModelInput, ModelsView } from '../../api/misc';
 import { getProviderModels } from '../../api/misc';
@@ -21,6 +21,9 @@ export function ModelsPage(props: ModelsPageProps) {
   const [addModelName, setAddModelName] = useState('');
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [suggestionsFor, setSuggestionsFor] = useState<string | undefined>();
+  const [suggestionsMessage, setSuggestionsMessage] = useState('');
+  const [suggestionsReachable, setSuggestionsReachable] = useState<boolean | null>(null);
+  const suggestionsRequest = useRef(0);
 
   if (!props.models) return <div className={styles.empty}>Loading…</div>;
 
@@ -30,13 +33,31 @@ export function ModelsPage(props: ModelsPageProps) {
       : '';
 
   async function loadSuggestions(provider: string): Promise<void> {
-    if (!provider || provider === suggestionsFor) return;
+    if (!provider) {
+      suggestionsRequest.current++;
+      setSuggestionsFor(undefined);
+      setSuggestions([]);
+      setSuggestionsMessage('');
+      setSuggestionsReachable(null);
+      return;
+    }
+    if (provider === suggestionsFor) return;
+    const request = ++suggestionsRequest.current;
     setSuggestionsFor(provider);
+    setSuggestions([]);
+    setSuggestionsMessage('');
+    setSuggestionsReachable(null);
     try {
       const live = await getProviderModels(props.client, provider);
+      if (request !== suggestionsRequest.current) return;
       setSuggestions(live.models);
-    } catch {
+      setSuggestionsMessage(live.message);
+      setSuggestionsReachable(live.reachable);
+    } catch (error) {
+      if (request !== suggestionsRequest.current) return;
       setSuggestions([]);
+      setSuggestionsMessage(error instanceof Error ? error.message : 'Could not load model suggestions.');
+      setSuggestionsReachable(false);
     }
   }
 
@@ -145,9 +166,13 @@ export function ModelsPage(props: ModelsPageProps) {
             </button>
           </div>
         </div>
-        {suggestionsFor && suggestions.length > 0 ? (
+        {suggestionsFor ? (
           <div className={styles.note}>
-            {suggestions.length} models live on {suggestionsFor} — the field suggests them as you type.
+            {suggestionsReachable === null && !suggestionsMessage
+              ? 'Loading model suggestions…'
+              : suggestionsReachable === true
+              ? `${suggestions.length} models returned by ${suggestionsFor}.`
+              : `${suggestionsMessage} You can enter a model ID manually.`}
           </div>
         ) : null}
       </section>

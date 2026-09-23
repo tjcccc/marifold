@@ -78,6 +78,14 @@ describe('ProviderInspector', () => {
     expect(result.message).toContain('registry models');
   });
 
+  it('keeps xAI fallback suggestions distinct from a live catalog', async () => {
+    const result = await new ProviderInspector(testConfig()).listModels('xai');
+
+    expect(result.reachable).toBeNull();
+    expect(result.models).toContain('grok-4.7');
+    expect(result.message).toContain('registry models');
+  });
+
   it('lists only supported registry models for GitHub Copilot fallback', async () => {
     const loadedConfig = testConfig();
 

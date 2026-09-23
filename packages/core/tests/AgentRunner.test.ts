@@ -106,6 +106,8 @@ describe('AgentRunner', () => {
       expect(context).toContain(`interface: ${interfaceName}`);
       expect(context).toContain('timezone: Asia/Shanghai');
       expect(context).toContain('request: remote');
+      expect(context).toContain('provider: "mock"');
+      expect(context).toContain('requested_model: "test-model"');
       const block = context.match(/<environment>[\s\S]*?<\/environment>/)![0];
       expect(block).not.toMatch(/workspace:|delivery:|cwd:|executor:|requester:/);
     }

@@ -426,6 +426,7 @@ describe('chat tool loop', () => {
       expect(bodies[0].tools).toEqual(expect.arrayContaining([{ type: 'web_search' }]));
       expect(JSON.stringify(bodies[0].tools ?? [])).not.toContain('"name":"web_search"');
       expect(JSON.stringify(bodies[0].input)).toContain('Provider-hosted web search is available');
+      expect(JSON.stringify(bodies[0].input)).toContain('requested_model: \\"grok-4.6\\"');
     } finally {
       runtime.close();
     }

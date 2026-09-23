@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createBridge, MemoryRelayStore } from '../../../apps/bridge/src';
 import { WorkspaceManager } from '../src/workspace/WorkspaceManager';
 import { BridgePeer } from '../src/workspace/bridge/BridgePeer';
+import { MARIFOLD_VERSION } from '../src/workspace/MarifoldVersion';
 
 const cleanup: Array<() => void> = [];
 afterEach(() => {
@@ -18,6 +19,54 @@ function manager() {
   return m;
 }
 describe('workspace bridge', () => {
+  it('rejects invitations from a different Marifold release before pairing', async () => {
+    const guest = manager();
+    const invitation = Buffer.from(JSON.stringify({
+      version: 1,
+      appVersion: '0.0.0',
+      expiresAt: Date.now() + 60_000,
+      bridgeUrl: 'http://127.0.0.1:1234',
+      workspaceId: 'test',
+      host: {},
+      secret: 'unused',
+    })).toString('base64url');
+
+    await expect(guest.add('http://127.0.0.1:1234', invitation)).rejects.toThrow(
+      `this device runs ${MARIFOLD_VERSION}, host runs 0.0.0`,
+    );
+    expect(guest.list()).toEqual([]);
+  });
+
+  it('marks an existing pairing unavailable when the host reports another release', async () => {
+    const bridge = createBridge(new MemoryRelayStore(), 'v'.repeat(32));
+    await new Promise<void>(resolve => bridge.listen(0, '127.0.0.1', resolve));
+    cleanup.push(() => { bridge.closeAllConnections(); bridge.close(); });
+    const url = `http://127.0.0.1:${(bridge.address() as { port: number }).port}`;
+    const host = manager();
+    const guest = manager();
+    host.start(async (_operation, input) => input);
+    guest.start(async () => null);
+    const created = await host.create('Home', url, 'v'.repeat(32));
+    const joined = await guest.add(url, created.invitation);
+    const internals = guest as unknown as {
+      peers: Map<string, BridgePeer>;
+      checkHost: (connection: ReturnType<typeof guest.store.get>) => Promise<void>;
+    };
+    const peer = internals.peers.get(joined.id)!;
+    const status = vi.spyOn(peer, 'request').mockResolvedValueOnce({ version: '0.0.0' });
+    await internals.checkHost(guest.store.get(joined.id));
+    status.mockRestore();
+
+    expect(guest.list()[0]).toMatchObject({ online: false, versionError: expect.stringContaining('host runs') });
+    await expect(guest.request(joined.id, 'api', { method: 'GET', path: '/v1/status' })).rejects.toThrow(
+      'Workspace version mismatch',
+    );
+    const oldPeer = peer as BridgePeer & { options: { appVersion: string } };
+    oldPeer.options.appVersion = '0.0.0';
+    await expect(peer.request('api', { method: 'GET', path: '/v1/status' })).rejects.toThrow(
+      'Workspace version mismatch',
+    );
+  }, 20000);
   it('keeps ordinary requests responsive during concurrent encrypted file transfers', async () => {
     class DelayedRelay extends MemoryRelayStore {
       override async publish(workspace: string, device: string, packet: string) {

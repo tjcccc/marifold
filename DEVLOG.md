@@ -2,6 +2,21 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-09-23 — v0.75.0 — Model identity and workspace compatibility
+
+- Show the release version beside Settings in the Web sidebar. Reject guest
+  workspace pairing and requests when host and guest releases differ; warn on
+  existing mismatches and check guest version before delegated execution.
+- Refresh expiring xAI OAuth credentials before live model listing through the
+  configured proxy. Distinguish live results from registry suggestions, surface
+  listing errors, and include Grok 4.7 as a fallback suggestion.
+- Give chat and agent turns the resolved provider and requested model in their
+  ephemeral environment context, including planning; keep client hints from
+  supplying model identity.
+- Clean-build all packages, then pass workspace typecheck and 927 tests (one
+  optional bridge test skipped). Confirm all six public package tarballs and
+  the packed CLI report 0.75.0; the refreshed lockfile is unchanged.
+
 ## 2026-09-21 — v0.74.3 — Workspace image handoff and UI feedback
 
 - Synchronize all workspace/CLI versions, refresh the lockfile (unchanged), and

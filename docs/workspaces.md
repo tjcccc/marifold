@@ -1,6 +1,6 @@
 # Device-hosted workspaces
 
-**Status: in testing (v0.70.3).** Local automated checks and paired Mac
+**Status: in testing (v0.75.0).** Local automated checks and paired Mac
 profile/avatar/session reads through an Aliyun ECS bridge over public HTTPS
 have passed, including Web UI refresh. The ECS update and seven concurrent original
 avatar downloads passed with matching file hashes and a responsive session list.
@@ -11,6 +11,11 @@ A workspace belongs to one person. Hosting shares this device's existing local
 `.marifold` configuration, profiles, sessions, Skills, Apps and schedules. The host
 retains the model credentials and authoritative data. A guest joins a live view;
 it does not copy the host's database or become another host when disconnected.
+
+The host and every guest must run the exact same Marifold release. An invitation
+from a different release is rejected before pairing. Existing pairings remain
+unavailable after one device updates until the other device updates too; the Web
+workspace control shows a version mismatch warning. Update all devices together.
 
 Each Mac runs `marifold service`. CLI, TUI and the service-hosted Web UI use that
 local service's outbound bridge connection, so neither Mac needs an inbound port

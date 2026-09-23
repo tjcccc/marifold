@@ -18,6 +18,7 @@ import type {
 } from '@marifold/workspace-protocol';
 import { WorkspaceStore, WorkspaceConnection } from './WorkspaceStore';
 import { BridgePeer } from './bridge/BridgePeer';
+import { MARIFOLD_VERSION, workspaceVersionError } from './MarifoldVersion';
 
 export interface WorkspaceOperationContext {
   workspaceId: string;
@@ -28,7 +29,8 @@ export class WorkspaceManager {
   readonly store: WorkspaceStore;
   private peers = new Map<string, BridgePeer>();
   private hostStatus = new Map<string, boolean>();
-  private presence = new Map<string, { seen: number; platform: string; architecture: string; executor: boolean }>();
+  private versionErrors = new Map<string, string>();
+  private presence = new Map<string, { seen: number; platform: string; architecture: string; executor: boolean; version: string }>();
   onMembershipRemoved?: (workspaceId: string, deviceId?: string) => void;
   private heartbeat?: ReturnType<typeof setInterval>;
   private remoteHandler?: (operation: string, input: unknown, context: WorkspaceOperationContext) => Promise<unknown>;
@@ -62,6 +64,7 @@ export class WorkspaceManager {
         hostDeviceId,
         executor,
         online: role === 'host' ? Boolean(this.peers.get(id)?.online) : this.hostStatus.get(id) === true,
+        ...(this.versionErrors.has(id) ? { versionError: this.versionErrors.get(id) } : {}),
       }));
   }
   async create(
@@ -99,11 +102,14 @@ export class WorkspaceManager {
       typeof invitation.secret !== 'string'
     )
       throw new Error('Invitation expired or belongs to a different bridge.');
+    const versionError = workspaceVersionError(invitation.appVersion);
+    if (versionError) throw new Error(versionError);
     const workspaceId = identifier(invitation.workspaceId);
     if (this.store.list().some((c) => c.id === workspaceId)) throw new Error('Workspace already connected.');
     const identity = await createIdentity();
     const pendingId = `pending_${randomId()}`;
     const temporary = new BridgePeer({
+      appVersion: MARIFOLD_VERSION,
       bridgeUrl: invitation.bridgeUrl,
       workspaceId,
       deviceId: pendingId,
@@ -171,10 +177,12 @@ export class WorkspaceManager {
     if (c.role === 'host')
       return this.dispatch(
         c,
-        { type: 'request', operation, input, id: requestId },
+        { type: 'request', operation, input, id: requestId, appVersion: MARIFOLD_VERSION },
         { id: c.deviceId, identity: c.host, certificate: c.certificate },
       );
     const peer = this.peers.get(c.id);
+    const versionError = this.versionErrors.get(c.id);
+    if (versionError) throw new Error(versionError);
     if (!peer?.online || this.hostStatus.get(c.id) !== true)
       throw new MarifoldError('WORKSPACE_OFFLINE', 'Workspace host is offline.');
     const read =
@@ -208,8 +216,13 @@ export class WorkspaceManager {
     if (c.role !== 'host') throw new Error('Only the workspace host coordinates execution.');
     const member = this.store.devices(c.id).find((d) => d.certificate.membership.deviceId === device && !d.revoked);
     if (!member) throw new Error('Execution device is not a workspace member.');
+    if (this.presence.get(`${c.id}:${device}`)?.version !== MARIFOLD_VERSION)
+      throw new Error('Execution device version differs from the workspace host. Update both devices to the same version.');
     const peer = this.peers.get(c.id);
     if (!peer?.online) throw new MarifoldError('WORKSPACE_OFFLINE', 'Execution device is unavailable.');
+    const status = record(await peer.request('status', {}, device, member.certificate.membership.identity, randomId(), 10000));
+    if (status.version !== MARIFOLD_VERSION)
+      throw new Error('Execution device version differs from the workspace host. Update both devices to the same version.');
     return peer.request(
       operation,
       input,
@@ -240,6 +253,7 @@ export class WorkspaceManager {
     this.peers.get(c.id)?.close();
     this.peers.delete(c.id);
     this.hostStatus.delete(c.id);
+    this.versionErrors.delete(c.id);
     this.store.remove(c.id);
   }
   async setExecutor(id: string, enabled: boolean): Promise<void> {
@@ -251,6 +265,7 @@ export class WorkspaceManager {
   private connect(c: WorkspaceConnection): BridgePeer {
     this.peers.get(c.id)?.close();
     const peer = new BridgePeer({
+      appVersion: MARIFOLD_VERSION,
       bridgeUrl: c.bridgeUrl,
       workspaceId: c.id,
       deviceId: c.deviceId,
@@ -295,6 +310,13 @@ export class WorkspaceManager {
           10000,
         ),
       );
+      const versionError = workspaceVersionError(status.version);
+      if (versionError) {
+        this.versionErrors.set(c.id, versionError);
+        this.hostStatus.set(c.id, false);
+        return;
+      }
+      this.versionErrors.delete(c.id);
       if (typeof status.name === 'string' && status.name !== c.name) this.store.rename(c.id, status.name);
       this.hostStatus.set(c.id, true);
     } catch {
@@ -307,7 +329,13 @@ export class WorkspaceManager {
     sender: { id: string; identity: PublicIdentity; certificate?: SignedMembership },
   ): Promise<unknown> {
     const context = { workspaceId: c.id, senderDeviceId: sender.id, hostDeviceId: c.hostDeviceId };
+    if (request.operation === 'status' && c.role === 'host' && request.appVersion !== MARIFOLD_VERSION)
+      return { version: MARIFOLD_VERSION };
+    const versionError = workspaceVersionError(request.appVersion, c.role === 'host' ? 'guest' : 'host');
+    if (versionError) throw new Error(versionError);
     if (c.role === 'guest') {
+      if (request.operation === 'status' && sender.id === c.hostDeviceId)
+        return { version: MARIFOLD_VERSION };
       if (sender.id !== c.hostDeviceId || !this.store.get(c.id).executor || !request.operation.startsWith('executor.'))
         throw new Error('This device has not enabled this execution capability.');
       if (!this.executorHandler) throw new Error('Executor unavailable.');
@@ -328,8 +356,9 @@ export class WorkspaceManager {
         platform: String(info.platform ?? ''),
         architecture: String(info.architecture ?? ''),
         executor: info.executor === true,
+        version: MARIFOLD_VERSION,
       });
-      return { name: this.store.get(c.id).name, hostDeviceId: c.hostDeviceId };
+      return { name: this.store.get(c.id).name, hostDeviceId: c.hostDeviceId, version: MARIFOLD_VERSION };
     }
     if (sender.certificate && ['run.events', 'artifact.read'].includes(request.operation))
       return this.remoteHandler!(request.operation, request.input, context);

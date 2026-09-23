@@ -229,7 +229,7 @@ export class AgentRunner {
       ? []
       : (this.deps.resolveBuiltInInstructions?.(options.objective, settings.profile) ?? []);
     const environment = { ...this.deps.environment, ...options.environment };
-    const instructions = [environmentContext(environment), artifactPresentation(environment), ...(this.deps.contextInstructions ?? []), ...builtInInstructions, ...(options.instructions ?? [])];
+    const instructions = [environmentContext(environment, new Date(startedAtMs), settings), artifactPresentation(environment), ...(this.deps.contextInstructions ?? []), ...builtInInstructions, ...(options.instructions ?? [])];
     let runOptions: AgentRunOptions = { ...options, environment, instructions };
     if (runOptions.images && this.deps.prepareImages) {
       runOptions = {
@@ -384,7 +384,7 @@ export class AgentRunner {
         const plan = await this.buildPlan(
           engine,
           withoutNativeWebSearchCompat(config),
-          settings.profile,
+          settings,
           runOptions,
         );
         const planned = this.deps.taskStore.update(task.id, {
@@ -1012,7 +1012,7 @@ export class AgentRunner {
   private async buildPlan(
     engine: AgentEngine,
     config: PriestConfig,
-    profile: string,
+    settings: MarifoldResolvedSettings,
     options: AgentRunOptions,
   ): Promise<{ title: string; steps: string[] }> {
     const fallback = {
@@ -1021,9 +1021,9 @@ export class AgentRunner {
     };
     const response = await engine.run({
       config,
-      profile,
+      profile: settings.profile,
       prompt: options.objective,
-      context: [environmentContext(options.environment), 'You are planning an agent task. Create a short execution plan for the user request. Reply with JSON {"title": string, "steps": string[]} using at most 5 short steps. Reply with JSON only.'],
+      context: [environmentContext(options.environment, new Date(), settings), 'You are planning an agent task. Create a short execution plan for the user request. Reply with JSON {"title": string, "steps": string[]} using at most 5 short steps. Reply with JSON only.'],
       output: { jsonSchema: PLAN_SCHEMA, jsonSchemaName: 'agent_plan' },
     }, { signal: options.signal });
     if (!response.ok) {
