@@ -1,3 +1,5 @@
+import { DeviceExecution } from '../agent/DeviceExecution';
+import { ShellJobStatusTool } from '../agent/tools/ShellJobStatusTool';
 import type { ArtifactWebRtc } from './ArtifactWebRtc';
 import { createArtifactPreview, artifactPreviewVariant } from '../agent/ArtifactPreview';
 import { artifactReadLength } from './WorkspaceArtifactTransfer';
@@ -18,14 +20,15 @@ import { marifoldHome } from './WorkspacePaths';
 import type { WorkspaceOperationContext } from './WorkspaceManager';
 import type { MarifoldAgentConfig } from '../agent/ApprovalPolicy';
 
-export function executionTools(): AgentTool[] {
+export function executionTools(device?: DeviceExecution): AgentTool[] {
   return [
     new InspectAttachmentTool(),
     new ReadAttachmentTool(),
     new SearchAttachmentTool(),
     new ReadFileTool(),
     new WriteFileTool(),
-    new ShellExecTool(),
+    new ShellExecTool(device),
+    new ShellJobStatusTool(device),
   ];
 }
 interface Execution {
@@ -46,8 +49,9 @@ export class WorkspaceExecutor {
     private readonly runsDir?: string,
     private readonly protectedPaths: string[] = [],
     private readonly transfers?: ArtifactWebRtc,
+    device?: DeviceExecution,
   ) {
-    for (const tool of executionTools()) this.registry.register(tool);
+    for (const tool of executionTools(device)) this.registry.register(tool);
     this.timer = setInterval(() => {
       for (const [id, run] of this.runs)
         if (run.lease < Date.now()) {

@@ -931,7 +931,7 @@ export class AgentRunner {
       ...(this.deps.registry.get('ask_user')?.kind === 'interaction' ? [
         'ask_user is optional. Use it only when essential information is missing and a reasonable assumption could materially change the result. Otherwise proceed. Batch all currently known questions into one call, and call it without other tools in that response.',
       ] : []),
-      'shell_exec has no network access and can write only the working directory, configured trusted folders, and private run directories even after execution approval. Use write_file for an explicit output path elsewhere. Use python_package_install for approved Python dependencies; it installs only into this run’s disposable uv environment.',
+      'shell_exec defaults to scoped access: no network and writes limited to the working directory, configured trusted folders, and private run directories. If shell_job_status reports full mode on this device, explicit shell_exec access=full can use the OS account’s normal permissions after per-call approval; it does not grant administrator rights. Full-access calls return durable job IDs: retrieve completion with shell_job_status before claiming success, and inspect recent jobs after a lost response rather than retrying the command. Use write_file for an explicit output path elsewhere. Use python_package_install for approved Python dependencies; it installs only into this run’s disposable uv environment.',
     ].join('\n');
     // Lean run (skills): minimal framing — the instructions are authoritative,
     // and we ask for only the final output to avoid plan/preamble/reasoning prose.

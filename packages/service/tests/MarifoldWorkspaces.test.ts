@@ -7,7 +7,7 @@ import * as path from 'node:path';
 import { randomBytes } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ArtifactWebRtc, resolveAgentConfig } from '@marifold/core';
+import { ArtifactWebRtc, DeviceExecution, resolveAgentConfig } from '@marifold/core';
 import { createBridge, MemoryRelayStore } from '../../../apps/bridge/src';
 import { createMarifoldService } from '../src';
 import { workspaceApiPath } from '../src/WorkspaceRoutes';
@@ -295,6 +295,59 @@ describe('device-hosted workspaces', () => {
     expect(download.body).toBe('child artifact');
     const replay = await requester.inject(`${api}/v1/runs/${run.id}/events`);
     expect(replay.body.match(/event: done/g)).toHaveLength(1);
+  }, 20000);
+  it.each(['guest-to-host', 'local-host-to-guest'])('executes full-access jobs %s using only destination opt-in', async direction => {
+    const p = await paired(true);
+    const localHost = direction === 'local-host-to-guest';
+    const targetDir = localHost ? p.guestDir : p.hostDir;
+    const device = new DeviceExecution(path.join(targetDir, 'config.toml'));
+    device.setMode('full');
+    const requester = localHost ? p.host : p.guest;
+    const api = localHost ? '' : p.prefix;
+    const marker = path.join(targetDir, 'full-access-result.txt');
+    let count = 0;
+    const realFetch = globalThis.fetch;
+    vi.stubGlobal('fetch', vi.fn(async (input, init) => {
+      if (!String(input).includes('localhost:11434')) return realFetch(input, init);
+      const request = JSON.parse(String(init?.body));
+      const context = request.messages.map((m: { content: string }) => m.content).join('\n');
+      const output = /otherwise write generated deliverables to (.+?)\. Regular output files/.exec(context)?.[1];
+      if (output) generatedRuns.push(path.dirname(output));
+      const step = count++;
+      let text = 'The device task completed.';
+      if (step === 0) text = `<tool_call name="delegate_device">${JSON.stringify({ device: localHost ? p.device : 'host', objective: 'Run the approved full-access job and retrieve its result.' })}</tool_call>`;
+      if (step === 1) text = `<tool_call name="shell_exec">${JSON.stringify({ command: `printf full-access > '${marker}'`, access: 'full' })}</tool_call>`;
+      if (step === 2) {
+        const [job] = device.recent();
+        expect(job).toBeDefined();
+        text = `<tool_call name="shell_job_status">${JSON.stringify({ job_id: job.id, wait_seconds: 10 })}</tool_call>`;
+      }
+      return new Response(JSON.stringify({ message: { content: text }, done: true, done_reason: 'stop' }), { headers: { 'content-type': 'application/json' } });
+    }));
+    const { run } = await post(requester, `${api}/v1/runs`, { objective: 'Run a full-access job on the other device.' });
+    let current = run;
+    let shellApproved = false;
+    const answered = new Set<string>();
+    for (let i = 0; i < 300; i++) {
+      current = (await p.host.inject(`/v1/runs/${run.id}`)).json().run;
+      for (const approval of current.pendingApprovals) {
+        if (answered.has(approval.id)) continue;
+        answered.add(approval.id);
+        if (approval.tool === 'shell_exec') {
+          expect(fs.existsSync(marker)).toBe(false);
+          expect(approval.persistable).toBe(false);
+          shellApproved = true;
+        }
+        await post(requester, `${api}/v1/runs/${run.id}/approvals/${approval.id}`, { action: 'once' });
+      }
+      if (current.finishedAt) break;
+      await new Promise(resolve => setTimeout(resolve, 20));
+    }
+    expect(shellApproved).toBe(true);
+    expect(current.status).toBe('completed');
+    expect(fs.readFileSync(marker, 'utf8')).toBe('full-access');
+    expect(device.recent()[0].state).toBe('succeeded');
+    expect(new DeviceExecution(path.join(localHost ? p.hostDir : p.guestDir, 'config.toml')).mode()).toBe('scoped');
   }, 20000);
   it('runs the host model on the guest executor with once-only approval and session ownership', async () => {
     const p = await paired(true);

@@ -430,3 +430,6 @@ export { environmentContext, artifactPresentation, parseClientEnvironment } from
 export type { ClientInterface, ClientEnvironment, RuntimeEnvironment } from './runtime/RuntimeEnvironment';
 
 export { ArtifactWebRtc, type ArtifactWebRtcOptions } from './workspace/ArtifactWebRtc';
+
+export { DeviceExecution, type DeviceExecutionMode, type DeviceJob } from './agent/DeviceExecution';
+export { TailscaleControl } from './agent/TailscaleControl';

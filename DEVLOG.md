@@ -2,6 +2,28 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-09-29 — v0.76.0 — Device-local full execution
+
+- Add local `execution mode scoped|full` opt-in, shared local/remote
+  `shell_exec access=full`, per-call approval, and OS-account execution on macOS
+  and Linux. The default scoped sandbox remains unchanged.
+- Persist detached shell jobs and expose `shell_job_status` / `execution jobs`
+  so bridge loss and run cancellation do not interrupt recovery commands.
+- Add an optional standalone macOS Tailscale preflight/restart workflow using
+  existing OS permissions, with bounded startup recovery and separate restart
+  and VPN readiness results. No administrator permissions are installed.
+- Document MacBook Pro setup and real-device testing in `docs/device-execution.md`.
+  Real macOS Tailscale restart remains unverified.
+- Pass workspace typecheck/build and 941 tests (one optional bridge test
+  skipped), including bidirectional full-access bridge tests. In disposable OrbStack Linux, Marifold jobs restart a real test Tailscale
+  daemon, report injected startup failure, and recover it; tunnel checks verify
+  failure and recovery. A full-access job also completes across a forced bridge
+  socket disconnect, followed by successful bridge execution. No personal tailnet
+  or real Mac VPN was stopped.
+- Synchronize manifests and CLI to 0.76.0; refresh the unchanged lockfile. Reuse
+  the full development suite, pass a clean build/typecheck and five bridge/version
+  tests, and verify six package versions plus the packed CLI version.
+
 ## 2026-09-28 — v0.75.1 — Local Home device delegation
 
 - Attach local service agent runs to this device's hosted workspace so Home
