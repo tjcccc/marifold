@@ -1,11 +1,20 @@
 # Device-hosted workspaces
 
-**Status: in testing (v0.75.0).** Local automated checks and paired Mac
+**Status: in testing (v0.75.1).** Local automated checks and paired Mac
 profile/avatar/session reads through an Aliyun ECS bridge over public HTTPS
 have passed, including Web UI refresh. The ECS update and seven concurrent original
 avatar downloads passed with matching file hashes and a responsive session list.
 Bulk speed is still connection-dependent: the live 3 MB burst took 54 seconds.
 Reboot recovery, live rollback and broader host–guest acceptance remain pending.
+
+A disposable OrbStack Linux guest with a local HTTPS bridge and a private test
+tailnet passed file delegation in both directions, bridge execution while
+Tailscale was stopped or failed to start, tunnel recovery, and guest-service
+reconnection. The model was mocked; bridge transport, filesystem operations and
+Tailscale were real. Test controls performed daemon stop/start outside Marifold.
+Linux shell execution was correctly refused because its sandbox adapter is not
+implemented. This does not validate restarting Tailscale on a remote Mac or prove
+that a particular device's bridge route is independent of its VPN/proxy settings.
 
 A workspace belongs to one person. Hosting shares this device's existing local
 `.marifold` configuration, profiles, sessions, Skills, Apps and schedules. The host
@@ -168,6 +177,12 @@ approval and starts one child in the same workspace, using the same profile/mode
 The child cannot delegate again. Child approvals, clarifications, results and
 artifacts appear in the parent conversation. Cancelling the parent cancels its
 children. Revoking a device cancels active workspace runs involving that identity.
+
+Local conversations on a device hosting a workspace also receive these device
+tools, including when the startup default is Local. Home can delegate to an
+opted-in guest through the bridge without SSH or Tailscale. Joining another
+workspace does not attach local conversations to it. Delegation retains the
+guest's scoped execution limits; it does not grant privileged service management.
 
 Device context identifies the workspace name, its host, the requesting device,
 and the execution device separately. A request for the workspace's home desktop

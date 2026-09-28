@@ -75,6 +75,7 @@ async function paired(executor = false) {
     guestDir,
     url,
     id: joined.workspace.id,
+    hostDevice: created.workspace.hostDeviceId,
     device: joined.workspace.deviceId,
     prefix: `/v1/workspaces/${joined.workspace.id}/api`,
   };
@@ -215,8 +216,11 @@ describe('device-hosted workspaces', () => {
     expect(workspaceApiPath('GET', '/v1/profiles/%2e%2e/workspaces')).toBe(false);
     expect(workspaceApiPath('POST', '/v1/workspaces/other/api/v1/runs')).toBe(false);
   });
-  it('delegates once within a workspace and exposes child approvals and artifacts on the parent', async () => {
+  it.each(['guest-to-host', 'local-host-to-guest'])('delegates %s through the bridge and exposes child approvals and artifacts on the parent', async direction => {
     const p = await paired(true);
+    const localHost = direction === 'local-host-to-guest';
+    const requester = localHost ? p.host : p.guest;
+    const api = localHost ? '' : p.prefix;
     let count = 0;
     const prompts: string[] = [];
     const realFetch = globalThis.fetch;
@@ -232,7 +236,7 @@ describe('device-hosted workspaces', () => {
         if (step === 0) text = '<tool_call name="list_devices">{}</tool_call>';
         if (step === 1)
           text =
-            '<tool_call name="delegate_device">{"device":"host","objective":"Create a small report file."}</tool_call>';
+            `<tool_call name="delegate_device">${JSON.stringify({ device: localHost ? p.device : 'host', objective: 'Create a small report file.' })}</tool_call>`;
         if (step === 2) {
           const output = /otherwise write generated deliverables to (.+?)\. Regular output files/.exec(context)?.[1];
           if (!output) throw new Error('No output directory in child context.');
@@ -244,7 +248,12 @@ describe('device-hosted workspaces', () => {
         });
       }),
     );
-    const { run } = await post(p.guest, `${p.prefix}/v1/runs`, { objective: 'Ask the host to create a report.', environment: { interface: 'terminal', timezone: 'Asia/Tokyo', request: 'local' } });
+    const { run } = await post(requester, `${api}/v1/runs`, { objective: `Ask the ${localHost ? 'guest' : 'host'} to create a report.`, environment: { interface: 'terminal', timezone: 'Asia/Tokyo', request: 'local' } });
+    expect(run.execution).toMatchObject({
+      workspaceId: p.id,
+      originDeviceId: localHost ? p.hostDevice : p.device,
+      executionDeviceId: localHost ? p.hostDevice : p.device,
+    });
     const answered = new Set<string>();
     let current = run;
     for (let i = 0; i < 200; i++) {
@@ -252,7 +261,7 @@ describe('device-hosted workspaces', () => {
       for (const approval of current.pendingApprovals)
         if (!answered.has(approval.id)) {
           answered.add(approval.id);
-          await post(p.guest, `${p.prefix}/v1/runs/${run.id}/approvals/${approval.id}`, { action: 'once' });
+          await post(requester, `${api}/v1/runs/${run.id}/approvals/${approval.id}`, { action: 'once' });
         }
       if (current.finishedAt) break;
       await new Promise((r) => setTimeout(r, 20));
@@ -265,19 +274,26 @@ describe('device-hosted workspaces', () => {
     expect(prompts[0]).not.toContain('hostDeviceId');
     expect(prompts[1]).toContain('hostDeviceId');
     expect(prompts[0]).toContain('do not recapture or recreate');
+    expect(prompts[0]).toContain('not SSH or Tailscale');
     for (const prompt of prompts) {
       expect(prompt).toContain('interface: terminal');
       expect(prompt).toContain('timezone: Asia/Tokyo');
-      expect(prompt).toContain('request: remote');
+      expect(prompt).toContain(`request: ${localHost ? 'local' : 'remote'}`);
       expect(prompt).toContain('Terminal output has no Download controls');
       expect(prompt).not.toContain('Clicking Download transfers');
     }
     expect(current.artifacts).toHaveLength(1);
     expect(current.artifacts[0].source.runId).not.toBe(run.id);
-    const download = await p.guest.inject(`${p.prefix}/v1/runs/${run.id}/artifacts/${current.artifacts[0].id}`);
+    const child = (await p.host.inject(`/v1/runs/${current.artifacts[0].source.runId}`)).json().run;
+    expect(child.execution).toMatchObject({
+      workspaceId: p.id,
+      originDeviceId: run.execution.originDeviceId,
+      executionDeviceId: localHost ? p.device : p.hostDevice,
+    });
+    const download = await requester.inject(`${api}/v1/runs/${run.id}/artifacts/${current.artifacts[0].id}`);
     expect(download.statusCode, download.body).toBe(200);
     expect(download.body).toBe('child artifact');
-    const replay = await p.guest.inject(`${p.prefix}/v1/runs/${run.id}/events`);
+    const replay = await requester.inject(`${api}/v1/runs/${run.id}/events`);
     expect(replay.body.match(/event: done/g)).toHaveLength(1);
   }, 20000);
   it('runs the host model on the guest executor with once-only approval and session ownership', async () => {

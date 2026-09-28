@@ -30,7 +30,9 @@ export class WorkspaceRuns {
     selection: { workspaceId?: string; executionDeviceId?: string },
     origin?: WorkspaceOperationContext,
   ): Promise<RunStartInput> {
-    const workspaceId = origin?.workspaceId ?? selection.workspaceId;
+    // Hosting shares this same local workspace; local runs need its device tools too.
+    const workspaceId = origin?.workspaceId ?? selection.workspaceId ??
+      this.manager.store.list().find(connection => connection.role === 'host')?.id;
     if (!workspaceId) {
       if (selection.executionDeviceId) throw new Error('Select a workspace before an execution device.');
       return input;
@@ -63,6 +65,7 @@ export class WorkspaceRuns {
     const devices = this.manager.devices(workspaceId);
     const contextInstructions = [
       `Tools and paths belong to ${executionDeviceId === host.hostDeviceId ? 'the workspace host' : 'the selected execution device'}. For a named-device or host task, use list_devices to resolve the target and delegate_device if needed. For an existing file, use its published reference; do not recapture or recreate it merely to deliver it.`,
+      'Device delegation uses the workspace bridge connection, not SSH or Tailscale, and does not require shell network access or device login credentials. Check list_devices before claiming a device is unavailable. Guest execution requires its executor opt-in and once-only approvals; it supports scoped file and shell work, but not privileged service management or desktop control. For permission questions, explain these capabilities and limits without starting work.',
     ];
     const registry =
       executionDeviceId === host.hostDeviceId

@@ -2,6 +2,28 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-09-28 — v0.75.1 — Local Home device delegation
+
+- Attach local service agent runs to this device's hosted workspace so Home
+  conversations receive `list_devices` and `delegate_device`, including with
+  Local as the startup default. Joined workspaces remain explicitly selected.
+- Explain bridge-based execution and its permission limits to the model; retain
+  guest executor opt-in, once-only approvals and scoped filesystem/shell access.
+- Pass workspace typecheck/build and 928 tests (one optional bridge test skipped),
+  including Home-to-guest and guest-to-Home delegation, forwarded approvals,
+  execution-device identities and artifact downloads.
+- Verify real HTTP/WebSocket transport and macOS shell execution with a local
+  mocked model. A disposable OrbStack Linux guest additionally passes file
+  execution while its real Tailscale tunnel is stopped or fails to start, tunnel
+  recovery and guest-service reconnection through a local HTTPS bridge.
+- Test controls perform daemon management outside Marifold. Linux shell execution
+  remains fail-closed; privileged service management and a real-device macOS
+  Tailscale restart remain unimplemented/unverified.
+- Synchronize all workspace/CLI versions to 0.75.1, refresh the lockfile
+  (unchanged), and pass typecheck plus a clean build. Reuse the full development
+  suite and rerun five bridge/version tests; verify all six package tarballs,
+  internal package dependencies and the packed CLI version.
+
 ## 2026-09-23 — v0.75.0 — Model identity and workspace compatibility
 
 - Show the release version beside Settings in the Web sidebar. Reject guest
