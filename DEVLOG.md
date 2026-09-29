@@ -2,6 +2,22 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-09-29 — v0.77.3 — Live OAuth credential reload
+
+- Reload saved xAI, ChatGPT, and Copilot credentials before provider requests so
+  CLI reauthentication takes effect in running services and TUIs.
+- Serialize refreshes within a process and preserve concurrent reauthentication
+  and unrelated saved config changes. Separate processes/devices still need
+  independent rotating credentials.
+- Add six regressions for live xAI reauthentication, concurrent refreshes,
+  in-flight sign-in replacement, config preservation, and failure recovery.
+- User confirmed xAI works after reauthentication and service restart.
+- Reuse passing workspace build/typecheck, 506 core tests, 263 Web tests,
+  65 TUI tests, and 35 CLI tests. The full suite retains one service artifact
+  streaming failure outside the OAuth path; nine tests were skipped.
+- Synchronize versions to 0.77.3 and verify a clean release build, package
+  versions, and the packed CLI version. Live xAI refresh remains unverified.
+
 ## 2026-09-29 — v0.77.2 — Inline composer completion
 
 - Complete `/`, `$`, and `@` tokens at the cursor anywhere after whitespace,

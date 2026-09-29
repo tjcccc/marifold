@@ -29,6 +29,7 @@ import { AgentTool, ToolRegistry } from '../agent/ToolRegistry';
 import { ChatGptRefreshedTokens, refreshChatGptAccessToken } from '../config/ChatGptTokenRefresh';
 import { XaiRefreshedTokens, refreshXaiAccessToken } from '../config/XaiTokenRefresh';
 import { ConfigManager } from '../config/ConfigManager';
+import { withOAuthCredentials } from '../config/OAuthCredentials';
 import type { ConfigAddProviderOptions } from '../config/ConfigManager';
 import { LoadedMarifoldConfig, ProfileDetail, ProfileMode, ProfileSummary, ProviderType, resolveWebSearchConfig, SessionDetail, SessionSummary } from '../config/ConfigSchema';
 import { ProviderInspector } from '../config/ProviderInspector';
@@ -1548,67 +1549,37 @@ export class MarifoldRuntime {
   private async refreshProviderCredentialsIfNeeded(providerName: string): Promise<void> {
     if (providerName !== 'github_copilot' && providerName !== 'chatgpt' && providerName !== 'xai') return;
 
-    const provider = this.options.loadedConfig.config.providers[providerName];
-    if (!provider?.oauthToken) return;
-    if (provider.apiKeyEnv && process.env[provider.apiKeyEnv]) return;
+    await withOAuthCredentials(this.options.loadedConfig, providerName, async provider => {
+      if (!provider.oauthToken) return;
+      if (provider.apiKeyEnv && process.env[provider.apiKeyEnv]) return;
 
-    const refreshWindowSeconds = 60;
-    const nowSeconds = Math.floor(Date.now() / 1000);
-    if (
-      provider.apiKey
-      && provider.apiKeyExpiresAt !== undefined
-      && provider.apiKeyExpiresAt > nowSeconds + refreshWindowSeconds
-    ) {
-      return;
-    }
+      const nowSeconds = Math.floor(Date.now() / 1000);
+      if (provider.apiKey && provider.apiKeyExpiresAt !== undefined
+        && provider.apiKeyExpiresAt > nowSeconds + 60) return;
 
-    if (providerName === 'github_copilot') {
       try {
-        const refreshed = await exchangeGitHubTokenForCopilotToken(provider.oauthToken);
-        provider.apiKey = refreshed.token;
-        provider.baseUrl = refreshed.baseUrl;
-        provider.apiKeyExpiresAt = refreshed.expiresAt;
-        new ConfigManager(this.options.loadedConfig).save();
+        if (providerName === 'github_copilot') {
+          const refreshed = await exchangeGitHubTokenForCopilotToken(provider.oauthToken);
+          return { apiKey: refreshed.token, baseUrl: refreshed.baseUrl, apiKeyExpiresAt: refreshed.expiresAt };
+        }
+        if (providerName === 'xai') {
+          const refreshed: XaiRefreshedTokens = await refreshXaiAccessToken(provider.oauthToken, provider.proxy);
+          return { apiKey: refreshed.apiKey, oauthToken: refreshed.refreshToken, apiKeyExpiresAt: refreshed.expiresAt };
+        }
+        // Legacy ChatGPT credentials may be valid without a reported expiry.
+        if (provider.apiKey && provider.apiKeyExpiresAt === undefined) return;
+        const refreshed: ChatGptRefreshedTokens = await refreshChatGptAccessToken(provider.oauthToken);
+        return {
+          apiKey: refreshed.apiKey, oauthToken: refreshed.refreshToken, apiKeyExpiresAt: refreshed.expiresAt,
+          ...(refreshed.accountId ? { accountId: refreshed.accountId } : {}),
+        };
       } catch (error) {
+        const label = providerName === 'xai' ? 'xAI' : providerName === 'chatgpt' ? 'ChatGPT' : 'GitHub Copilot';
         throw MarifoldError.configInvalid(
-          `GitHub Copilot authorization could not be refreshed: ${error instanceof Error ? error.message : String(error)}. Run marifold provider reauth github_copilot to authorize again.`,
+          `${label} authorization could not be refreshed: ${error instanceof Error ? error.message : String(error)}. Run marifold provider reauth ${providerName} to sign in again.`,
         );
       }
-      return;
-    }
-
-    if (providerName === 'xai') {
-      try {
-        const refreshed: XaiRefreshedTokens = await refreshXaiAccessToken(provider.oauthToken, provider.proxy);
-        provider.apiKey = refreshed.apiKey;
-        provider.oauthToken = refreshed.refreshToken;
-        provider.apiKeyExpiresAt = refreshed.expiresAt;
-        new ConfigManager(this.options.loadedConfig).save();
-      } catch (error) {
-        throw MarifoldError.configInvalid(
-          `xAI authorization could not be refreshed: ${error instanceof Error ? error.message : String(error)}. Run marifold provider reauth xai to sign in again.`,
-        );
-      }
-      return;
-    }
-
-    // chatgpt: refresh the API credential from the stored OAuth refresh token.
-    // ChatGPT credentials without an apiKeyExpiresAt were issued before
-    // refresh support and may still be valid — only refresh when expiry is
-    // known or the key is missing.
-    if (provider.apiKey && provider.apiKeyExpiresAt === undefined) return;
-    try {
-      const refreshed: ChatGptRefreshedTokens = await refreshChatGptAccessToken(provider.oauthToken);
-      provider.apiKey = refreshed.apiKey;
-      provider.oauthToken = refreshed.refreshToken;
-      provider.apiKeyExpiresAt = refreshed.expiresAt;
-      if (refreshed.accountId) provider.accountId = refreshed.accountId;
-      new ConfigManager(this.options.loadedConfig).save();
-    } catch (error) {
-      throw MarifoldError.configInvalid(
-        `ChatGPT authorization could not be refreshed: ${error instanceof Error ? error.message : String(error)}. Run marifold provider reauth chatgpt to sign in again.`,
-      );
-    }
+    });
   }
 
   /** Caller-executed tools for chat turns. Marifold web_search is advertised

@@ -3,6 +3,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MarifoldRuntime } from '../src';
+import { ConfigManager } from '../src/config/ConfigManager';
 import { MarifoldConfig } from '../src/config/ConfigSchema';
 import { formatSearchContext, formatSearchResults, SearchBackend } from '../src/search/SearchBackend';
 
@@ -901,7 +902,6 @@ describe('ChatGPT credential refresh', () => {
   it('refreshes an expired chatgpt credential before the provider call and persists it', async () => {
     const dir = tempDir();
     const configPath = path.join(dir, 'config.toml');
-    fs.writeFileSync(configPath, '');
     const config = baseConfig(dir, {
       default: { provider: 'chatgpt', model: 'gpt-4o-mini', profile: 'default', think: false },
       providers: {
@@ -940,6 +940,7 @@ describe('ChatGPT credential refresh', () => {
       }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     }));
 
+    new ConfigManager({ config, configPath, foundConfig: true }).save();
     const runtime = new MarifoldRuntime({ loadedConfig: { config, configPath, foundConfig: true } });
     try {
       const response = await runtime.ask({ prompt: 'Hi', memories: false });
