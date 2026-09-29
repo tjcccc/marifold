@@ -2,6 +2,20 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-09-29 — v0.77.1 — Web sudo approval fixes
+
+- Mark the masked sudo field as one-time entry to discourage Chrome login
+  saving; clarify that Marifold's no-storage promise does not control browser
+  password managers. Browser acceptance remains a manual check.
+- Preserve the encrypted sudo response through AgentScreen's approval callback.
+  The screen previously dropped it, so the service rejected correct password
+  entry as missing encrypted authorization.
+- Add a full-screen regression covering password entry through the approval API
+  body and successful target-side decryption, without exposing plaintext.
+- Reuse passing development typecheck/build, 259 Web tests, and the three
+  focused sudo tests after the autocomplete change. Verify synchronized 0.77.1
+  versions, a clean rebuild, all six packed packages, and the packed CLI version.
+
 ## 2026-09-29 — v0.77.0 — Device mentions and requester-side sudo
 
 - Add leading `@device` completion to the Web composer using live workspace

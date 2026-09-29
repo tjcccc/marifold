@@ -19,6 +19,7 @@ describe('requester-side sudo approval', () => {
     render(<ApprovalSheet request={{ id: 'approval', tool: 'sudo_exec', kind: 'shell', summary: 'id -u', input: { command: 'id -u' }, escalated: true, persistable: false, sudo }} onAnswer={answer} />);
     const input = screen.getByLabelText(`Password for ${sudo.account} on ${sudo.device}`) as HTMLInputElement;
     expect(input.type).toBe('password');
+    expect(input.autocomplete).toBe('one-time-code');
     fireEvent.change(input, { target: { value: 'ui-secret-canary' } });
     fireEvent.click(screen.getByText('Authorize sudo once'));
     await waitFor(() => expect(answer).toHaveBeenCalledOnce());

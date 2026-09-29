@@ -86,10 +86,12 @@ export function ApprovalSheet({ request, busy, onAnswer }: ApprovalSheetProps) {
         <div className={styles.text}>
           <label>
             Administrator password for {request.sudo.account} on {request.sudo.device}
-            <input className={styles.password} ref={password} type="password" autoComplete="off" autoCapitalize="none" spellCheck={false}
+            {/* Chrome ignores autocomplete=off on password fields. This is a
+                per-action secret, not a website login to save or autofill. */}
+            <input className={styles.password} ref={password} type="password" autoComplete="one-time-code" autoCapitalize="none" spellCheck={false}
               aria-label={`Password for ${request.sudo.account} on ${request.sudo.device}`} disabled={busy || encrypting} />
           </label>
-          <div className={styles.meta}>Encrypted for this device and command only. Not saved or sent to the AI. Expires in five minutes.</div>
+          <div className={styles.meta}>Encrypted for this device and command only. Not saved by Marifold or sent to the AI. Expires in five minutes.</div>
           {error ? <div role="alert">{error}</div> : null}
         </div>
       ) : null}

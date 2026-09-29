@@ -128,7 +128,12 @@ The Web UI displays a password field in the approval dialog on the device where
 you sent the request. It identifies the target hostname, target OS account, and
 command. Enter **that target account's password**, not the requesting device's
 password. TUI and CLI clients collect it privately on the requesting terminal.
-The password is never requested in chat or through `ask_user`.
+The password is never requested in chat or through `ask_user`. The Web field
+uses a one-time-entry autocomplete hint to discourage browser login saving.
+Browsers and extensions control their own password managers; Marifold cannot
+guarantee they honor that hint. If a save prompt appears, choose **Never** for
+this site. This does not change the password: enter the target account's normal
+password.
 
 The requesting client encrypts the password for an ephemeral RSA-OAEP/SHA-256
 key generated on the target. Authorization is bound to the command and a unique
