@@ -34,11 +34,14 @@ export class WorkspaceRuns {
     selection: { workspaceId?: string; executionDeviceId?: string },
     origin?: WorkspaceOperationContext,
   ): Promise<RunStartInput> {
-    const mention = /^@(?:"([^"\r\n]+)"|([^\s"]+))(?:\s+([\s\S]*))?$/.exec(input.objective);
-    if (input.objective.startsWith('@') && (!mention || !mention[3]?.trim()))
-      throw new Error('Use @device followed by a task.');
-    if (mention && /^[$/]/.test(mention[3]!.trim()))
-      throw new Error('Use a plain task after @device; run skills and commands separately.');
+    const mentions = [...input.objective.matchAll(/(^|\s)@(?:"([^"\r\n]+)"|([^\s"]+))(?=\s|$)/g)];
+    if (mentions.length > 1) throw new Error('Select one @device per task.');
+    const mention = mentions[0];
+    const task = mention ? (input.objective.slice(0, mention.index) + input.objective.slice(mention.index! + mention[0].length)).trim() : input.objective;
+    if ((input.objective.startsWith('@') && !mention) || (mention && !task))
+      throw new Error('Use @device with a task.');
+    if (mention && /^[$/]/.test(task))
+      throw new Error('Use a plain task with @device; run skills and commands separately.');
     // Hosting shares this same local workspace; local runs need its device tools too.
     const workspaceId = origin?.workspaceId ?? selection.workspaceId ??
       this.manager.store.list().find(connection => connection.role === 'host')?.id;
@@ -51,7 +54,7 @@ export class WorkspaceRuns {
     const originId = origin?.senderDeviceId ?? connection.deviceId;
     const devices = this.manager.devices(connection.id);
     const skill = input.lean || /^\s*\$[\w-]+/.test(input.userTurn ?? input.objective);
-    const name = mention?.[1] ?? mention?.[2];
+    const name = mention?.[2] ?? mention?.[3];
     const matches = name ? devices.filter(d => d.id === name || d.name.toLowerCase() === name.toLowerCase()) : [];
     if (name && matches.length !== 1) throw new Error('The mentioned device is unknown or ambiguous. Select a device from the @ menu.');
     const explicit = name ? matches[0]!.id : selection.executionDeviceId;

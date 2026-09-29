@@ -652,7 +652,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
 
       const running = activeRun(threadRef.current);
       if (running) {
-        if (trimmed.startsWith('@')) {
+        if (/(^|\s)@/.test(trimmed)) {
           dispatch({ type: 'notice', tone: 'warn', text: 'Wait for this run to finish, or stop it, before starting a task on an @device.' });
           return false;
         }

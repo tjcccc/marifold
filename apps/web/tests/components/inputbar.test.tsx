@@ -320,3 +320,18 @@ describe('InputBar device mentions', () => {
     expect(onSubmit).toHaveBeenCalledWith('@STJC-M1P-2.local run id -u');
   });
 });
+
+it.each([
+  ['Is there a command /', 'Is there a command /help '],
+  ['Please use this skill $trans', 'Please use this skill $translate '],
+  ['Close the @ wechat', 'Close the @STJC-M1P-2.local wechat'],
+])('completes inline token in %s without removing surrounding text', (value, expected) => {
+  const { textarea, onSubmit } = renderBar();
+  fireEvent.focus(textarea);
+  const caret = value.includes('@') ? value.indexOf('@') + 1 : value.length;
+  fireEvent.change(textarea, { target: { value, selectionStart: caret } });
+  fireEvent.keyDown(textarea, { key: 'Tab' });
+  expect(textarea.value).toBe(expected);
+  expect(onSubmit).not.toHaveBeenCalled();
+  expect(textarea.selectionStart).toBe(expected.includes(' wechat') ? expected.indexOf(' wechat') + 1 : expected.length);
+});

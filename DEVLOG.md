@@ -2,6 +2,21 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-09-29 — v0.77.2 — Inline composer completion
+
+- Complete `/`, `$`, and `@` tokens at the cursor anywhere after whitespace,
+  preserving text before/after the token and highlighting inline selections.
+- Route inline device mentions before execution and reject multiple targets.
+  Inline command/skill references remain prompt text; direct invocation stays
+  at the beginning of the message. Preserve email and path handling.
+- Cover the three reported examples, caret placement, inline device routing,
+  conflicting targets, and ordinary email/path text.
+- Reuse passing typecheck/build and 963 tests (one optional bridge test skipped).
+  Verify synchronized 0.77.2 versions, a clean rebuild, all six packed packages,
+  and the packed CLI version.
+- User confirmed Home-to-MacBook Pro sudo execution, Tailscale restart, and
+  closing WeChat on the guest.
+
 ## 2026-09-29 — v0.77.1 — Web sudo approval fixes
 
 - Mark the masked sudo field as one-time entry to discourage Chrome login

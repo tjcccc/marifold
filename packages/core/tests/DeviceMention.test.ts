@@ -34,3 +34,11 @@ describe('explicit device mentions', () => {
     }
   });
 });
+
+it('routes inline device mentions and rejects conflicting targets', async () => {
+  const result = await fixture().resolve({ objective: 'Close the @STJC-M1P-2.local wechat' }, {});
+  expect(result.execution?.executionDeviceId).toBe('guest');
+  await expect(fixture().resolve({ objective: 'Close on @guest and @Home' }, {})).rejects.toThrow('one @device');
+  await expect(fixture().resolve({ objective: 'Close on @missing' }, {})).rejects.toThrow('unknown');
+  expect((await fixture().resolve({ objective: 'Email me@example.com' }, {})).execution?.executionDeviceId).toBe('home');
+});

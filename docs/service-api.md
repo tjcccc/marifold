@@ -769,7 +769,8 @@ for capability, memory, and OS-permission limits.
 `GET /v1/execution-devices` lists devices for the active workspace, including
 online/executor status. It is read-only and available through the workspace
 bridge; a local service without a hosted workspace returns an empty list.
-A leading `@name task`, `@"name with spaces" task`, or `@device-id task` in a run
-objective selects that device before execution, overriding the default
-`executionDeviceId`. Matching names is case-insensitive and must be unique.
+A whitespace-delimited `@name`, `@"name with spaces"`, or `@device-id` anywhere
+in a run objective selects that device before execution, overriding the default
+`executionDeviceId`. Matching names is case-insensitive and must be unique; multiple device mentions
+in one objective are rejected.
 Missing or unavailable targets fail rather than falling back to local execution.

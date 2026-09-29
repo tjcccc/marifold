@@ -90,7 +90,7 @@ after their originating agent run ended may require a new run to retrieve them.
 
 ## Choose a device with @
 
-In the Web composer, type `@` at the start of a message to list online devices
+In the Web composer, type `@` at the start of a message or after whitespace to list online devices
 with execution enabled in the current workspace. Type part of a name to filter;
 use the arrow keys and Enter/Tab, or click, to insert it. For example:
 
@@ -98,7 +98,9 @@ use the arrow keys and Enter/Tab, or click, to insert it. For example:
 @STJC-M1P-2.local use sudo_exec to run id -u, then retrieve the result.
 ```
 
-The service resolves the mention to a device ID before starting the run. It
+Inline mentions such as `Close WeChat on @STJC-M1P-2.local` work too.
+Use one device mention per message. The service resolves the mention to a device
+ID before starting the run. It
 applies to that message and overrides the default execution-device selection.
 The original message remains in history. Unknown, ambiguous, offline, or
 execution-disabled targets fail without falling back to Home. The list refreshes
@@ -109,8 +111,9 @@ completion, with the device name displayed alongside it. A bare name without
 `@` remains ordinary natural-language input. Mentions select devices within the
 current workspace; they do not switch workspace connections or grant access.
 Start a new turn after the current run finishes (or stop it) to select another
-device. Use a plain task after the mention; `/commands` and `$skills` remain
-separate leading-token actions.
+device. Autocomplete for `/commands` and `$skills` also works within a sentence.
+Inline selections remain prompt text; deterministic slash commands and direct
+skill invocation still require their token at the start of the message.
 
 ## Password authorization from the requesting device
 

@@ -15,10 +15,10 @@ describe('commandSyntax', () => {
   });
 
   it('menuQuery follows the leading token while its caret is being edited', () => {
-    expect(menuQuery('$mak')).toEqual({ sigil: '$', query: 'mak', end: 4 });
-    expect(menuQuery('/mo')).toEqual({ sigil: '/', query: 'mo', end: 3 });
-    expect(menuQuery('/')).toEqual({ sigil: '/', query: '', end: 1 });
-    expect(menuQuery('/mod existing args', 4)).toEqual({ sigil: '/', query: 'mod', end: 4 });
+    expect(menuQuery('$mak')).toEqual({ sigil: '$', query: 'mak', start: 0, end: 4 });
+    expect(menuQuery('/mo')).toEqual({ sigil: '/', query: 'mo', start: 0, end: 3 });
+    expect(menuQuery('/')).toEqual({ sigil: '/', query: '', start: 0, end: 1 });
+    expect(menuQuery('/mod existing args', 4)).toEqual({ sigil: '/', query: 'mod', start: 0, end: 4 });
     expect(menuQuery('/mod existing args')).toBeUndefined(); // caret is in the args
     expect(menuQuery('/model ')).toBeUndefined();
     expect(menuQuery('hello')).toBeUndefined();
@@ -43,4 +43,13 @@ describe('commandSyntax', () => {
       'model', 'btw', 'stop', 'remember', 'forget', 'context-window', 'compact',
     ]);
   });
+});
+
+it('finds inline tokens at the caret without matching emails or paths', () => {
+  expect(menuQuery('Please use $mak')).toEqual({ sigil: '$', query: 'mak', start: 11, end: 15 });
+  expect(menuQuery('Is there a command /')).toEqual({ sigil: '/', query: '', start: 19, end: 20 });
+  expect(menuQuery('Close the @ wechat', 11)).toEqual({ sigil: '@', query: '', start: 10, end: 11 });
+  expect(menuQuery('email me@example.com')).toBeUndefined();
+  expect(menuQuery('open /tmp/file')).toBeUndefined();
+  expect(menuQuery('https://example.com')).toBeUndefined();
 });
