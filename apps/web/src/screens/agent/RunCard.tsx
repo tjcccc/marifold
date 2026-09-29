@@ -1,3 +1,4 @@
+import type { SudoResponse } from '../../api/types';
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { RunApprovalAction, UserInputSubmission } from '../../api/types';
@@ -11,7 +12,7 @@ export interface RunCardProps {
   children?: ReactNode;
   run: RunCardState;
   onCancel: () => void;
-  onAnswer: (requestId: string, action: RunApprovalAction) => void;
+  onAnswer: (requestId: string, action: RunApprovalAction, sudoResponse?: SudoResponse) => void;
   onSubmitInput?: (requestId: string, submission: UserInputSubmission) => void;
   onToggle: () => void;
 }
@@ -118,7 +119,7 @@ export function RunCard({ children, run, onCancel, onAnswer, onSubmitInput, onTo
         <ApprovalSheet
           request={run.approval}
           busy={run.approvalBusy}
-          onAnswer={action => onAnswer(run.approval!.id, action)}
+          onAnswer={(action, sudoResponse) => onAnswer(run.approval!.id, action, sudoResponse)}
         />
       ) : null}
 

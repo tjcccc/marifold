@@ -316,7 +316,7 @@ export function AgentScreen(props: AgentScreenProps) {
               loading={controller.sessionLoading}
               scrollToBottomRequest={scrollToBottomRequest}
               onCancelRun={runId => void controller.cancel(runId)}
-              onAnswerApproval={(runId, requestId, action) => void controller.answer(runId, requestId, action)}
+              onAnswerApproval={(runId, requestId, action, sudoResponse) => void controller.answer(runId, requestId, action, sudoResponse)}
               onSubmitUserInput={(runId, requestId, submission) => void controller.answerInput(runId, requestId, submission)}
               onToggleRun={controller.toggleRun}
               onEditUserMessage={controller.resendEdited}
@@ -336,6 +336,7 @@ export function AgentScreen(props: AgentScreenProps) {
               onAttachFiles={files => void controller.addFiles(files)}
               onRemoveAttachment={controller.removeAttachment}
               skills={controller.skills}
+              devices={controller.devices}
               enterSubmits={!mobile}
               onSubmit={text => {
                 setScrollToBottomRequest(request => request + 1);

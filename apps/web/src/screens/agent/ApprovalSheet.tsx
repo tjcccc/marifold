@@ -1,5 +1,6 @@
-import { useEffect } from 'react';
-import type { ApprovalRequest, RunApprovalAction, ToolKind } from '../../api/types';
+import { useEffect, useRef, useState } from 'react';
+import type { ApprovalRequest, RunApprovalAction, SudoResponse, ToolKind } from '../../api/types';
+import { encryptSudoPassword } from '../../lib/sudoCredentials';
 import styles from './ApprovalSheet.module.css';
 
 const KIND_ACTION_LABEL: Record<ToolKind, string> = {
@@ -13,7 +14,7 @@ const KIND_ACTION_LABEL: Record<ToolKind, string> = {
 export interface ApprovalSheetProps {
   request: ApprovalRequest;
   busy?: boolean;
-  onAnswer: (action: RunApprovalAction) => void;
+  onAnswer: (action: RunApprovalAction, sudoResponse?: SudoResponse) => void;
 }
 
 /**
@@ -22,18 +23,47 @@ export interface ApprovalSheetProps {
  * "Trust this folder" for an escalated file write, else "Always allow <kind>".
  */
 export function ApprovalSheet({ request, busy, onAnswer }: ApprovalSheetProps) {
+  const password = useRef<HTMLInputElement>(null);
+  const [encrypting, setEncrypting] = useState(false);
+  const [error, setError] = useState('');
+  const activeRequest = useRef(request.id);
+  activeRequest.current = request.id;
+  useEffect(() => {
+    activeRequest.current = request.id;
+    if (password.current) password.current.value = '';
+    setError('');
+    return () => { activeRequest.current = ''; if (password.current) password.current.value = ''; };
+  }, [request.id]);
+  async function answer(action: RunApprovalAction): Promise<void> {
+    if (busy || encrypting) return;
+    if (!request.sudo || action === 'deny') {
+      if (password.current) password.current.value = '';
+      onAnswer(action);
+      return;
+    }
+    if (action !== 'once') return;
+    setEncrypting(true);
+    setError('');
+    try {
+      const pending = encryptSudoPassword(request.sudo, password.current?.value ?? '');
+      if (password.current) password.current.value = '';
+      const encrypted = await pending;
+      if (activeRequest.current === request.id) onAnswer('once', encrypted);
+    } catch (error) { setError(error instanceof Error ? error.message : 'Could not encrypt authorization.'); }
+    finally { setEncrypting(false); }
+  }
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent): void {
       if (event.key === 'Enter' && (event.metaKey || event.ctrlKey) && !busy) {
         event.preventDefault();
-        onAnswer('once');
+        void answer('once');
       }
     }
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [busy, onAnswer]);
+  }, [busy, encrypting, onAnswer, request]);
 
-  const canPersist = request.persistable !== false;
+  const canPersist = !request.sudo && request.persistable !== false;
   const trustFolder = canPersist && request.escalatedPath !== undefined;
 
   return (
@@ -52,8 +82,21 @@ export function ApprovalSheet({ request, busy, onAnswer }: ApprovalSheetProps) {
           </div>
         </div>
       </div>
+      {request.sudo ? (
+        <div className={styles.text}>
+          <label>
+            Administrator password for {request.sudo.account} on {request.sudo.device}
+            {/* Chrome ignores autocomplete=off on password fields. This is a
+                per-action secret, not a website login to save or autofill. */}
+            <input className={styles.password} ref={password} type="password" autoComplete="one-time-code" autoCapitalize="none" spellCheck={false}
+              aria-label={`Password for ${request.sudo.account} on ${request.sudo.device}`} disabled={busy || encrypting} />
+          </label>
+          <div className={styles.meta}>Encrypted for this device and command only. Not saved by Marifold or sent to the AI. Expires in five minutes.</div>
+          {error ? <div role="alert">{error}</div> : null}
+        </div>
+      ) : null}
       <div className={styles.actions}>
-        <button className={styles.deny} disabled={busy} onClick={() => onAnswer('deny')}>
+        <button className={styles.deny} disabled={busy || encrypting} onClick={() => void answer('deny')}>
           Deny
         </button>
         {canPersist ? (
@@ -65,8 +108,8 @@ export function ApprovalSheet({ request, busy, onAnswer }: ApprovalSheetProps) {
             {trustFolder ? 'Trust this folder' : `Always allow ${KIND_ACTION_LABEL[request.kind]}`}
           </button>
         ) : null}
-        <button className={styles.allow} disabled={busy} onClick={() => onAnswer('once')}>
-          Allow once <span className={styles.kbd}>⌘⏎</span>
+        <button className={styles.allow} disabled={busy || encrypting} onClick={() => void answer('once')}>
+          {request.sudo ? 'Authorize sudo once' : 'Allow once'} <span className={styles.kbd}>⌘⏎</span>
         </button>
       </div>
     </div>

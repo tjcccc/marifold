@@ -1,3 +1,6 @@
+import { SudoExecTool } from '../agent/tools/SudoExecTool';
+import { DeviceExecution } from '../agent/DeviceExecution';
+import { ShellJobStatusTool } from '../agent/tools/ShellJobStatusTool';
 import { environmentContext, type RuntimeEnvironment } from './RuntimeEnvironment';
 import type { AgentRunnerDeps } from '../agent/AgentRunner';
 import type { RunStartInput, RunJournal } from '../runs/RunRegistry';
@@ -993,7 +996,10 @@ export class MarifoldRuntime {
     registry.register(new SearchAttachmentTool());
     registry.register(new ReadFileTool());
     registry.register(new WriteFileTool());
-    registry.register(new ShellExecTool());
+    const deviceExecution = new DeviceExecution(this.options.loadedConfig.configPath);
+    registry.register(new ShellExecTool(deviceExecution));
+    registry.register(new SudoExecTool(deviceExecution));
+    registry.register(new ShellJobStatusTool(deviceExecution));
     registry.register(new PythonPackageTool());
     registry.register(new SkillManagementTool({
       store: this.createSkillStore(resolvedProfile),

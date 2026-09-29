@@ -13,6 +13,8 @@ export class UncertainToolOutcomeError extends Error {}
 export type AgentToolKind = ToolKind | 'interaction';
 
 export interface ToolExecutionContext {
+  /** Private encrypted credential channel, never a model-authored argument. */
+  sudoResponse?: import('./SudoCredentials').SudoResponse;
   /** Nested device work may forward progress and approval events through its parent. */
   emitEvent?: (event: import('./AgentEvents').AgentEvent) => void;
   callId?: string;
@@ -44,6 +46,7 @@ export interface ToolExecutionResult {
 }
 
 export interface ToolRiskAssessment {
+  sudo?: import('./SudoCredentials').SudoChallenge;
   /** Hard policy denial. Unlike escalation, the user cannot approve this call. */
   blocked?: boolean;
   /** True forces interactive approval even when policy says allow. */

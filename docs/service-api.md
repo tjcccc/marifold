@@ -742,3 +742,35 @@ fields; `DELETE /v1/schedules/:id` removes; `POST /v1/schedules/:id/run` runs on
 under the existing unattended policy on the host. Shared terminal clients also use
 explicit `POST /v1/terminal/:operation` methods for profile, Skill and memory
 operations; there is no arbitrary runtime-method invocation endpoint.
+
+
+### Secure sudo approvals
+
+A `sudo_exec` approval includes `request.sudo` with `{ id, publicKey, expiresAt,
+device, account }`. The public key is base64 DER SPKI for RSA-2048. A capable
+requesting client collects the target account password in a dedicated private
+field, encrypts its UTF-8 bytes with RSA-OAEP/SHA-256 and the UTF-8 challenge ID
+as OAEP label, and POSTs `{ action: "once", sudoResponse: { id, ciphertext } }`
+to the existing run approval endpoint. Ciphertext is base64; plaintext is never
+an API field. Responses contain only request ID and approval status.
+
+The encrypted credential travels in the private execution context, outside tool
+arguments and `AgentEvent`. It is never replayed in SSE or stored in task/model
+context. The target checks local mode, command binding, expiration, and one-time
+grant consumption before decrypting. Missing, stale, mismatched, persistent, or
+malformed authorization fails closed. `deny` takes no credential. Ordinary
+approval requests reject unsolicited credential responses. See
+[device execution](device-execution.md#password-authorization-from-the-requesting-device)
+for capability, memory, and OS-permission limits.
+
+
+### Execution-device mentions
+
+`GET /v1/execution-devices` lists devices for the active workspace, including
+online/executor status. It is read-only and available through the workspace
+bridge; a local service without a hosted workspace returns an empty list.
+A whitespace-delimited `@name`, `@"name with spaces"`, or `@device-id` anywhere
+in a run objective selects that device before execution, overriding the default
+`executionDeviceId`. Matching names is case-insensitive and must be unique; multiple device mentions
+in one objective are rejected.
+Missing or unavailable targets fail rather than falling back to local execution.

@@ -57,7 +57,7 @@ export async function* remoteAgent(
       yield event;
       if (event.type === 'approval_request')
         void Promise.resolve(approvalHandler?.(event.request))
-          .then((decision) => post(`approvals/${event.request.id}`, { action: decision?.approved ? 'once' : 'deny' }))
+          .then((decision) => post(`approvals/${event.request.id}`, { action: decision?.approved ? 'once' : 'deny', ...(decision?.approved && decision.sudoResponse ? { sudoResponse: decision.sudoResponse } : {}) }))
           .catch((error) => process.stderr.write(`Approval could not be delivered: ${error.message}\n`));
       if (event.type === 'user_input_request')
         void Promise.resolve(userInputHandler?.(event.request))

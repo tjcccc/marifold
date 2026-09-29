@@ -228,7 +228,7 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
     });
   }, []);
 
-  const resolveApproval = useCallback((choice: ApprovalChoice) => {
+  const resolveApproval = useCallback((choice: ApprovalChoice, sudoResponse?: import('@marifold/core').SudoResponse) => {
     const request = stateRef.current.approval;
     const resolve = approvalResolverRef.current;
     approvalResolverRef.current = null;
@@ -243,7 +243,7 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
       if (folder) trustFolderForProfile(folder);   // escalated write → trust the folder
       else persistApprovalKind(request.kind);       // ordinary call → allow this kind
     }
-    resolve({ approved: true });
+    resolve({ approved: true, ...(sudoResponse ? { sudoResponse } : {}) });
   }, []);
 
   // --- Clarification questions --------------------------------------------

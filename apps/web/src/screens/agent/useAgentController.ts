@@ -1,3 +1,4 @@
+import type { SudoResponse, WorkspaceDevice } from '../../api/types';
 import { SeenRuns } from '../../lib/seenRuns';
 import { useWorkspaceChanges } from '../../state/workspaceChanges';
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
@@ -67,6 +68,7 @@ export interface AgentController {
   profileDetail?: ProfileDetail;
   /** Skills for the composer's $-autocomplete (active-profile-scoped). */
   skills: SkillHint[];
+  devices: SkillHint[];
   sessions: SessionSummary[];
   sessionSearch: string;
   setSessionSearch: (value: string) => void;
@@ -106,7 +108,7 @@ export interface AgentController {
   deleteSession: (id: string) => Promise<boolean>;
   cancel: (runId: string) => Promise<void>;
   stop: () => Promise<boolean>;
-  answer: (runId: string, requestId: string, action: RunApprovalAction) => Promise<void>;
+  answer: (runId: string, requestId: string, action: RunApprovalAction, sudoResponse?: SudoResponse) => Promise<void>;
   answerInput: (runId: string, requestId: string, submission: UserInputSubmission) => Promise<void>;
   toggleRun: (runId: string) => void;
   expandCatchUp: (run: RunRecord) => void;
@@ -125,6 +127,24 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
   const [profiles, setProfiles] = useState<ProfileSummary[]>([]);
   const [profileDetail, setProfileDetail] = useState<ProfileDetail | undefined>();
   const [skills, setSkills] = useState<SkillHint[]>([]);
+  const [devices, setDevices] = useState<SkillHint[]>([]);
+  useEffect(() => {
+    let stopped = false;
+    const refresh = async () => {
+      try {
+        const result = await client.request<{ devices: WorkspaceDevice[] }>('GET', '/v1/execution-devices');
+        if (stopped) return;
+        setDevices(result.devices.filter(d => d.online && d.executor).map(d => {
+          const duplicate = result.devices.filter(other => other.name.toLowerCase() === d.name.toLowerCase()).length > 1;
+          const name = duplicate || /["\r\n]/.test(d.name) ? d.id : /\s/.test(d.name) ? `"${d.name}"` : d.name;
+          return { name, usage: `@${name}`, description: `${d.name} · ${d.platform}${duplicate ? ` · ${d.id}` : ''}` };
+        }));
+      } catch { if (!stopped) setDevices([]); }
+    };
+    void refresh();
+    const timer = setInterval(() => void refresh(), 10_000);
+    return () => { stopped = true; clearInterval(timer); };
+  }, [client]);
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [persistedSessionIds, setPersistedSessionIds] = useState<ReadonlySet<string>>(() => new Set());
   const [sessionSearch, setSessionSearch] = useState('');
@@ -632,6 +652,10 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
 
       const running = activeRun(threadRef.current);
       if (running) {
+        if (/(^|\s)@/.test(trimmed)) {
+          dispatch({ type: 'notice', tone: 'warn', text: 'Wait for this run to finish, or stop it, before starting a task on an @device.' });
+          return false;
+        }
         try {
           await steerRun(client, running.runId, trimmed);
           return true;
@@ -1075,10 +1099,10 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
   );
 
   const answer = useCallback(
-    async (runId: string, requestId: string, action: RunApprovalAction) => {
+    async (runId: string, requestId: string, action: RunApprovalAction, sudoResponse?: SudoResponse) => {
       dispatch({ type: 'approval_submitting', runId });
       try {
-        await answerApproval(client, runId, requestId, action);
+        await answerApproval(client, runId, requestId, action, sudoResponse);
         // The approval_decision event on the stream clears the sheet.
       } catch (error) {
         const gone = error instanceof MarifoldApiError && error.code === 'APPROVAL_NOT_FOUND';
@@ -1145,6 +1169,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
     profileName,
     profileDetail,
     skills,
+    devices,
     sessions,
     sessionSearch,
     setSessionSearch,

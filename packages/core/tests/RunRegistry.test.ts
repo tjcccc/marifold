@@ -12,6 +12,7 @@ import { AskUserTool } from '../src/agent/tools/AskUserTool';
 import { MarifoldError } from '../src/errors/MarifoldError';
 import { RunRegistry, RunRegistryOptions, SequencedEvent } from '../src/runs/RunRegistry';
 import { TaskStore } from '../src/tasks/TaskStore';
+import { SudoCredentials, encryptSudoPassword } from '../src/agent/SudoCredentials';
 
 const tempDirs: string[] = [];
 const registries: RunRegistry[] = [];
@@ -176,6 +177,40 @@ describe('RunRegistry', () => {
     expect(tail).toEqual(all.slice(1));
   });
 
+  it('keeps sudo responses outside event replay, task/model context, and persistent grants', async () => {
+    const vault = new SudoCredentials();
+    const sudo = vault.create('id -u');
+    let executed = false;
+    const tool = fakeTool({ name: 'sudo_exec', kind: 'shell',
+      assessRisk: () => ({ escalate: true, persistable: false, sudo }),
+      execute: async (_input, context) => {
+        const password = vault.consume('id -u', context.sudoResponse!);
+        expect(password.toString()).toBe('registry-secret-canary');
+        password.fill(0);
+        executed = true;
+        return { content: 'administrator job started' };
+      },
+    });
+    const { registry, engines, grants } = makeRegistry([
+      response({ toolCalls: [{ id: 'sudo_call', name: 'sudo_exec', arguments: { command: 'id -u' } }] }),
+      response({ text: 'Done.' }),
+    ], [tool]);
+    const record = registry.start({ objective: 'Run privileged command.', cwd: tempDir() });
+    const stream = registry.events(record.id, 0);
+    await pullUntil(stream, e => e.type === 'approval_request');
+    expect(() => registry.answerApproval(record.id, 'sudo_call', 'once')).toThrow();
+    const encrypted = encryptSudoPassword(sudo, 'registry-secret-canary');
+    expect(() => registry.answerApproval(record.id, 'sudo_call', 'always', encrypted)).toThrow();
+    registry.answerApproval(record.id, 'sudo_call', 'once', encrypted);
+    await drain(stream);
+    expect(executed).toBe(true);
+    expect(grants).toEqual([]);
+    const replay = JSON.stringify(await drain(registry.events(record.id, 0)));
+    for (const text of [replay, JSON.stringify(engines.map(e => e.requests)), JSON.stringify(registry.require(record.id))]) {
+      expect(text).not.toContain('registry-secret-canary');
+      expect(text).not.toContain(encrypted.ciphertext);
+    }
+  });
   it('parks an ask-gated tool call until a client answers "once"', async () => {
     let executed = 0;
     const tool = fakeTool({

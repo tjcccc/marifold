@@ -1,3 +1,4 @@
+import type { SudoResponse } from './types';
 import type { ApiClient } from './client';
 import { MarifoldApiError } from './client';
 import { parseSse } from './sse';
@@ -30,11 +31,12 @@ export async function answerApproval(
   runId: string,
   requestId: string,
   action: RunApprovalAction,
+  sudoResponse?: SudoResponse,
 ): Promise<{ requestId: string; approved: boolean }> {
   return client.request(
     'POST',
     `/v1/runs/${encodeURIComponent(runId)}/approvals/${encodeURIComponent(requestId)}`,
-    { action },
+    { action, ...(sudoResponse ? { sudoResponse } : {}) },
   );
 }
 

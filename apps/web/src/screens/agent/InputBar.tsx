@@ -3,7 +3,7 @@ import type { SkillHint } from '../../api/misc';
 import { ImagePreviewDialog } from '../../components/ImagePreviewDialog';
 import type { PreviewImage } from '../../components/ImagePreviewDialog';
 import type { OfficeFileKind, PreparedAttachment } from '../../lib/attachments';
-import { menuQuery, splitLeading, WEB_COMMANDS } from '../../lib/commandSyntax';
+import { menuQuery, highlightTokens, WEB_COMMANDS } from '../../lib/commandSyntax';
 import type { Suggestion } from '../../lib/commandSyntax';
 import styles from './InputBar.module.css';
 
@@ -28,6 +28,7 @@ export interface InputBarProps {
   onRemoveAttachment?: (index: number) => void;
   /** Available skills for the `$` autocomplete (from GET /v1/skills). */
   skills?: SkillHint[];
+  devices?: Suggestion[];
   /** Plain Enter submits on desktop; mobile leaves it to the textarea as a line break. */
   enterSubmits?: boolean;
   onSubmit: (text: string) => void;
@@ -67,8 +68,8 @@ export function InputBar(props: InputBarProps) {
   }, [props.draftKey]);
 
   const menu = menuQuery(text, caret);
-  const source: Suggestion[] = menu?.sigil === '/' ? WEB_COMMANDS : (props.skills ?? []);
-  const matches = menu ? source.filter(item => item.name.startsWith(menu.query)).slice(0, MAX_SUGGESTIONS) : [];
+  const source: Suggestion[] = menu?.sigil === '/' ? WEB_COMMANDS : menu?.sigil === '@' ? (props.devices ?? []) : (props.skills ?? []);
+  const matches = menu ? source.filter(item => (menu.sigil === '@' ? item.name.replace(/^"|"$/g, '').toLowerCase().startsWith(menu.query.toLowerCase()) : item.name.startsWith(menu.query))).slice(0, MAX_SUGGESTIONS) : [];
   const menuOpen = focused && !dismissed && matches.length > 0;
   const active = Math.min(activeIndex, Math.max(0, matches.length - 1));
   const sigil = menu?.sigil ?? '$';
@@ -120,8 +121,9 @@ export function InputBar(props: InputBarProps) {
     const head = `${sigil}${item.name}`;
     const suffix = menu ? text.slice(menu.end) : '';
     const separator = suffix.length === 0 ? ' ' : '';
-    const completed = `${head}${separator}${suffix}`;
-    const completedCaret = head.length + (separator.length > 0 || suffix.length > 0 ? 1 : 0);
+    const prefix = menu ? text.slice(0, menu.start) : '';
+    const completed = `${prefix}${head}${separator}${suffix}`;
+    const completedCaret = prefix.length + head.length + (separator.length > 0 || suffix.length > 0 ? 1 : 0);
     completionCaretRef.current = completedCaret;
     setText(completed);
     writeDraft(props.draftKey, completed);
@@ -192,7 +194,7 @@ export function InputBar(props: InputBarProps) {
     return () => window.cancelAnimationFrame(frame);
   }
 
-  const { token, rest } = splitLeading(text);
+  const highlighted = highlightTokens(text);
   // A div does not allocate the textarea's final empty line for a trailing
   // newline. The zero-width sentinel keeps both scroll heights identical.
   const trailingLineSentinel = text.endsWith('\n') ? '\u200b' : null;
@@ -259,7 +261,7 @@ export function InputBar(props: InputBarProps) {
       <div className={styles.bar}>
         <div className={styles.inputWrap}>
           {menuOpen ? (
-            <ul className={styles.menu} role="listbox" aria-label={sigil === '/' ? 'Commands' : 'Skills'}>
+            <ul className={styles.menu} role="listbox" aria-label={sigil === '/' ? 'Commands' : sigil === '@' ? 'Devices' : 'Skills'}>
               {matches.map((item, index) => (
                 <li
                   key={item.name}
@@ -280,17 +282,12 @@ export function InputBar(props: InputBarProps) {
             </ul>
           ) : null}
           {/* Highlight layer behind the transparent textarea: same text, with the
-              leading $skill token colored. */}
+              inline command, skill, and device tokens colored. */}
           <div className={styles.highlight} ref={highlightRef} aria-hidden>
-            {token ? (
-              <>
-                <span className={styles.skillToken}>{token}</span>
-                {rest}
-                {trailingLineSentinel}
-              </>
-            ) : (
-              <>{text}{trailingLineSentinel}</>
-            )}
+            {highlighted.map((part, index) => part.token
+              ? <span key={index} className={styles.skillToken}>{part.text}</span>
+              : part.text)}
+            {trailingLineSentinel}
           </div>
           <textarea
             ref={textareaRef}

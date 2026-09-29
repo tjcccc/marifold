@@ -1,38 +1,56 @@
 /**
- * Grammar for the composer's leading tokens — `$skill` (model-backed, runs
- * through the backend) and `/command` (deterministic web action). Mirrors the
+ * Grammar for the composer's tokens — `$skill` (model-backed, runs
+ * through the backend), `/command` (deterministic web action), and `@device`. Mirrors the
  * TUI's `$<name>` / `/<name> [args]`. Names are alphanumeric-led with letters,
  * numbers, underscores, and hyphens.
  */
 
-export type Sigil = '$' | '/';
+export type Sigil = '$' | '/' | '@';
 
 /** A leading token: sigil + name at a word boundary (space or end), so a path
  * like `/a/b` is NOT mistaken for a command. */
 const LEADING = /^([$/])([a-zA-Z0-9][\w-]*)(?=\s|$)/;
-/** A leading sigil + partial name, optionally followed by existing arguments. */
-const QUERY = /^([$/])([\w-]*)(?=\s|$)/;
 /** A full `/command [args]` line (name is the whole first word). */
 const COMMAND_LINE = /^\/([a-zA-Z0-9][\w-]*)(?:\s+([\s\S]*))?$/;
 
 /** The leading `$skill`/`/command` token if the text starts with one. */
 export function leadingToken(text: string): { sigil: Sigil; token: string } | undefined {
+  if (text.startsWith('@')) {
+    const mention = /^@(?:"[^"\r\n]+"|[^\s"]+)(?=\s|$)/.exec(text);
+    return mention ? { sigil: '@', token: mention[0] } : undefined;
+  }
   const match = LEADING.exec(text);
   return match ? { sigil: match[1] as Sigil, token: match[0] } : undefined;
 }
 
-/** The leading sigil + partial name while the caret is editing that token.
- * Existing arguments may remain after it; moving the caret into those args
- * closes the menu. `end` is the replacement boundary for completion. */
+/** Complete only the whitespace-delimited token containing the caret.
+ * Keep full replacement bounds so editing a token's middle preserves its args. */
 export function menuQuery(
   text: string,
   caret = text.length,
-): { sigil: Sigil; query: string; end: number } | undefined {
-  const match = QUERY.exec(text);
-  if (!match) return undefined;
-  const end = match[0].length;
-  if (caret < 1 || caret > end) return undefined;
-  return { sigil: match[1] as Sigil, query: match[2], end };
+): { sigil: Sigil; query: string; start: number; end: number } | undefined {
+  const tokens = /(^|\s)(@(?:"[^"\r\n]*"?|[^\s"]*)|[$/][\w-]*)(?=\s|$)/g;
+  for (const match of text.matchAll(tokens)) {
+    const start = match.index! + match[1].length;
+    const token = match[2];
+    const end = start + token.length;
+    if (caret <= start || caret > end) continue;
+    return { sigil: token[0] as Sigil, query: token.slice(1).replace(/^"|"$/g, ''), start, end };
+  }
+  return undefined;
+}
+
+/** Preserve all characters while highlighting inline composer tokens. */
+export function highlightTokens(text: string): Array<{ text: string; token?: boolean }> {
+  const parts: Array<{ text: string; token?: boolean }> = [];
+  let end = 0;
+  for (const match of text.matchAll(/(^|\s)(@(?:"[^"\r\n]+"|[^\s"]+)|[$/][a-zA-Z0-9][\w-]*)(?=\s|$)/g)) {
+    const start = match.index! + match[1].length;
+    parts.push({ text: text.slice(end, start) }, { text: match[2], token: true });
+    end = start + match[2].length;
+  }
+  parts.push({ text: text.slice(end) });
+  return parts;
 }
 
 /** Split a message into its leading token and the remainder, for highlighting. */

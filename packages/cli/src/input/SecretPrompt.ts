@@ -1,15 +1,14 @@
 import { stdin as input, stdout as output } from 'process';
-import { InteractivePrompt } from './InteractivePrompt';
+import type { InteractivePrompt } from './InteractivePrompt';
 import { PromptAbortError } from './PromptAbort';
 
-export async function readSecretLine(label: string, getFallbackPrompt: () => InteractivePrompt): Promise<string> {
+export async function readSecretLine(label: string, getFallbackPrompt: () => InteractivePrompt, trim = true): Promise<string> {
   if (!input.isTTY || !output.isTTY || typeof input.setRawMode !== 'function') {
     const answer = await getFallbackPrompt().readUserMessage(label);
     if (answer === undefined) throw new PromptAbortError();
     return answer.trim();
   }
 
-  output.write(label);
   const rawMode = Boolean(input.isRaw);
   let value = '';
   let settled = false;
@@ -29,7 +28,7 @@ export async function readSecretLine(label: string, getFallbackPrompt: () => Int
       settled = true;
       cleanup();
       output.write('\n');
-      resolve(value.trim());
+      resolve(trim ? value.trim() : value);
     };
 
     const abort = (): void => {
@@ -59,5 +58,8 @@ export async function readSecretLine(label: string, getFallbackPrompt: () => Int
     };
 
     input.on('data', onData);
+    // Do not advertise readiness until terminal echo is disabled and the
+    // private reader is attached; pasted input can arrive immediately.
+    output.write(label);
   });
 }

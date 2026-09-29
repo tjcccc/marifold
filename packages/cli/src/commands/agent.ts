@@ -1,5 +1,5 @@
 import { workspaceClient, remoteAgent } from './WorkspaceClient';
-import { AgentEvent, ApprovalDecision, ApprovalRequest } from '@marifold/core';
+import { AgentEvent, ApprovalDecision, ApprovalRequest, encryptSudoPassword } from '@marifold/core';
 import { Command } from 'commander';
 import { InteractivePrompt } from '../input/InteractivePrompt';
 import { ConsolePrinter } from '../output/ConsolePrinter';
@@ -88,6 +88,14 @@ async function promptForApproval(
     ? `\n${style.yellow(`! ${request.escalationReason}`)}`
     : '';
   process.stdout.write(`${style.yellow('approve?')} [${request.kind}] ${request.summary}${escalation}\n`);
+  if (request.sudo) {
+    let password = '';
+    try {
+      password = await prompt.readPassword(`Password for ${request.sudo.account}@${request.sudo.device} (not saved; Ctrl+C cancels): `);
+      return { approved: true, sudoResponse: encryptSudoPassword(request.sudo, password) };
+    } catch { return { approved: false, reason: 'Secure sudo authorization cancelled or unavailable.' }; }
+    finally { password = ''; }
+  }
   const answer = await prompt.readUserMessage('  y/N > ');
   const approved = answer !== undefined && ['y', 'yes'].includes(answer.trim().toLowerCase());
   return approved ? { approved: true } : { approved: false, reason: 'declined at the prompt' };

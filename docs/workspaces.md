@@ -1,6 +1,6 @@
 # Device-hosted workspaces
 
-**Status: in testing (v0.75.1).** Local automated checks and paired Mac
+**Status: in testing (v0.76.0).** Local automated checks and paired Mac
 profile/avatar/session reads through an Aliyun ECS bridge over public HTTPS
 have passed, including Web UI refresh. The ECS update and seven concurrent original
 avatar downloads passed with matching file hashes and a responsive session list.
@@ -11,9 +11,10 @@ A disposable OrbStack Linux guest with a local HTTPS bridge and a private test
 tailnet passed file delegation in both directions, bridge execution while
 Tailscale was stopped or failed to start, tunnel recovery, and guest-service
 reconnection. The model was mocked; bridge transport, filesystem operations and
-Tailscale were real. Test controls performed daemon stop/start outside Marifold.
-Linux shell execution was correctly refused because its sandbox adapter is not
-implemented. This does not validate restarting Tailscale on a remote Mac or prove
+Tailscale were real. A subsequent full-access test performed daemon restart,
+reported an injected startup failure, and recovered the daemon through approved
+Marifold shell jobs. Scoped Linux shell execution remains refused because its
+sandbox adapter is not implemented. This does not validate restarting Tailscale on a remote Mac or prove
 that a particular device's bridge route is independent of its VPN/proxy settings.
 
 A workspace belongs to one person. Hosting shares this device's existing local
@@ -182,7 +183,7 @@ Local conversations on a device hosting a workspace also receive these device
 tools, including when the startup default is Local. Home can delegate to an
 opted-in guest through the bridge without SSH or Tailscale. Joining another
 workspace does not attach local conversations to it. Delegation retains the
-guest's scoped execution limits; it does not grant privileged service management.
+guest's local execution policy. See [device execution](device-execution.md) for locally enabled full access and durable jobs.
 
 Device context identifies the workspace name, its host, the requesting device,
 and the execution device separately. A request for the workspace's home desktop
@@ -191,13 +192,15 @@ targets differ from the execution device, the agent must delegate the work or as
 for clarification before acting.
 
 Guest execution is an explicit, locally revocable opt-in. It supports bounded file
-reading/writing, attachment inspection and the existing macOS shell sandbox.
+reading/writing, attachment inspection and the existing macOS shell sandbox. A
+separate local full-access opt-in enables approved shell commands with the
+execution account’s OS permissions on macOS and Linux.
 Guest file and shell calls require a nonpersistent approval; host profile permissions
 cannot widen the guest's local policy. “Always” and “Trust” are rejected for these
 calls. Uploading an attachment grants ID-scoped `inspect_attachment`,
 `read_attachment`, and `search_attachment` access without another prompt, as on
 the host. Inspected guest images return bytes to the host's model, never guest-local
-image paths. Disabling this device's executor cancels its active executions. Pairing alone
+image paths. Disabling this device's executor cancels its active agent runs; already-started full-access jobs continue to completion. Pairing alone
 does not enable shell or filesystem execution.
 
 Skills, SkillApps and schedules run on the host in this version. Their paths retain
@@ -235,11 +238,12 @@ remain visible with an unavailability notice. The browser checks file availabili
 when reopening the conversation. Offline devices remain retryable and are not
 labeled expired.
 
-The remote executor cannot read another workspace's control state, credentials or
-local Marifold data. Shell processes have no general network access, desktop
-control or service-management privileges. Installing Python packages remotely and
-privileged helpers such as restarting a Tailscale daemon are outside this initial
-executor scope. Existing host Skill/package-install capabilities are unchanged.
+Scoped execution cannot read another workspace's control state, credentials or
+local Marifold data, and scoped shell processes have no general network or desktop
+control. Explicit full-access commands use the destination account's permissions,
+including access to its data and network; administrator and macOS privacy grants
+remain OS requirements. The dedicated remote Python package tool remains outside
+this executor scope. Existing host Skill/package-install capabilities are unchanged.
 
 ## Data, pairing and isolation
 
@@ -337,8 +341,9 @@ host-offline behavior and device revocation before depending on it. These checks
 need your cloud account and second device; local tests do not claim to replace them.
 
 Cloud-owned workspaces, offline editing, automatic conflict merging, browser-only
-pairing, iOS, Keychain, role tiers, other deployment providers and privileged OS
-maintenance helpers are deferred. The local HTTP service remains private-network-only.
+pairing, iOS, Keychain, role tiers, other deployment providers and automatic
+installation of privileged OS helpers are deferred. The optional standalone
+Tailscale workflow uses existing OS permissions; see [device execution](device-execution.md). The local HTTP service remains private-network-only.
 
 Web avatar saves crop to 512px and compress as WebP at quality 85, preserving
 transparency (PNG fallback where WebP encoding is unavailable). Existing saved

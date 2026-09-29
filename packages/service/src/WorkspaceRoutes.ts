@@ -17,6 +17,7 @@ export function workspaceApiPath(method: string, raw: string): boolean {
     return false;
   const pathname = raw.split('?')[0];
   if (/%2f|%5c|%2e/i.test(pathname) || pathname.split('/').some((p) => p === '.' || p === '..')) return false;
+  if (pathname === '/v1/execution-devices') return method === 'GET';
   return (
     /^\/v1\/(status|changes|ask|config|providers|models|profiles|sessions|skills|apps|app-instances|runs|tasks|schedules|terminal)(?:\/[A-Za-z0-9_%.-]+)*$/.test(
       pathname,

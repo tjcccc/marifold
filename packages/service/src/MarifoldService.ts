@@ -1,4 +1,4 @@
-import { ArtifactWebRtc } from '@marifold/core';
+import { ArtifactWebRtc, DeviceExecution } from '@marifold/core';
 import { remoteArtifactDownload } from './RemoteArtifactDownload';
 import { requestEnvironment } from './RequestEnvironment';
 import { registerWorkspaceScheduleRoutes } from './WorkspaceScheduleRoutes';
@@ -134,7 +134,7 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
 
   const artifactTransfers = new ArtifactWebRtc();
   server.addHook('onClose', async () => artifactTransfers.close());
-  const workspaceExecutor = new WorkspaceExecutor(() => runtime.resolveAgentConfigForProfile(), path.join(workspaceManager.store.directory, 'runs'), [options.loadedConfig.configPath, ...Object.values(options.loadedConfig.config.paths).filter((value): value is string => typeof value === 'string'), path.dirname(workspaceManager.store.directory)], artifactTransfers);
+  const workspaceExecutor = new WorkspaceExecutor(() => runtime.resolveAgentConfigForProfile(), path.join(workspaceManager.store.directory, 'runs'), [options.loadedConfig.configPath, ...Object.values(options.loadedConfig.config.paths).filter((value): value is string => typeof value === 'string'), path.dirname(workspaceManager.store.directory)], artifactTransfers, new DeviceExecution(options.loadedConfig.configPath));
   const workspaceRuns = new WorkspaceRuns(runtime, workspaceManager);
   const workspaceContext = new WorkspaceRequestContext();
   const runRegistry = runtime.createRunRegistry(message => server.log.info(message), input => workspaceRuns.createRunner(input), workspaceManager.store.runJournal);
@@ -172,6 +172,9 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
   };
   const hasActiveSessionRequest = (sessionId: string): boolean =>
     (activeSessionRequests.get(sessionId) ?? 0) > 0;
+  server.get('/v1/execution-devices', async request => ({
+    ok: true, devices: workspaceRuns.devices(workspaceContext.resolve(request.headers)),
+  }));
   registerRunRoutes(server, runRegistry, {
     tickets: artifactTickets,
     preview: async (runId, artifactId, variant) => {

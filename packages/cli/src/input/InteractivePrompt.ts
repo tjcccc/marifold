@@ -1,13 +1,22 @@
 import * as readline from 'readline/promises';
 import { stdin as input, stdout as output } from 'process';
 import { PromptBackError } from './PromptAbort';
+import { readSecretLine } from './SecretPrompt';
 
 export class InteractivePrompt {
-  private readonly interface = readline.createInterface({
+  private interface = readline.createInterface({
     input,
     output,
     terminal: Boolean(input.isTTY && output.isTTY),
   });
+
+  async readPassword(label: string): Promise<string> {
+    if (!input.isTTY || !output.isTTY) throw new Error('Sudo authorization requires a secure interactive terminal or the Web UI.');
+    // Close readline so it cannot echo the secret or retain it in history.
+    this.interface.close();
+    try { return await readSecretLine(label, () => { throw new Error('Secure terminal required.'); }, false); }
+    finally { this.interface = readline.createInterface({ input, output, terminal: true }); }
+  }
 
   async readUserMessage(
     label = 'user> ',

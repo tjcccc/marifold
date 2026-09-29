@@ -7,7 +7,7 @@ import * as path from 'node:path';
 import { randomBytes } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ArtifactWebRtc, resolveAgentConfig } from '@marifold/core';
+import { ArtifactWebRtc, DeviceExecution, encryptSudoPassword, resolveAgentConfig } from '@marifold/core';
 import { createBridge, MemoryRelayStore } from '../../../apps/bridge/src';
 import { createMarifoldService } from '../src';
 import { workspaceApiPath } from '../src/WorkspaceRoutes';
@@ -81,6 +81,13 @@ async function paired(executor = false) {
   };
 }
 describe('device-hosted workspaces', () => {
+  it('lists execution targets through the active workspace bridge', async () => {
+    const p = await paired(true);
+    const response = await p.guest.inject({ method: 'GET', url: `${p.prefix}/v1/execution-devices` });
+    expect(response.statusCode, response.body).toBe(200);
+    expect(response.json().devices.map((d: { id: string }) => d.id)).toEqual(expect.arrayContaining([p.hostDevice, p.device]));
+    expect(workspaceApiPath('POST', '/v1/execution-devices')).toBe(false);
+  });
   it('preserves a remote browser origin through the host-local workspace facade', async () => {
     const p = await paired();
     const prompts: string[] = [];
@@ -295,6 +302,127 @@ describe('device-hosted workspaces', () => {
     expect(download.body).toBe('child artifact');
     const replay = await requester.inject(`${api}/v1/runs/${run.id}/events`);
     expect(replay.body.match(/event: done/g)).toHaveLength(1);
+  }, 20000);
+  it.each(['guest-to-host', 'local-host-to-guest'])('executes full-access jobs %s using only destination opt-in', async direction => {
+    const p = await paired(true);
+    const localHost = direction === 'local-host-to-guest';
+    const targetDir = localHost ? p.guestDir : p.hostDir;
+    const device = new DeviceExecution(path.join(targetDir, 'config.toml'));
+    device.setMode('full');
+    const requester = localHost ? p.host : p.guest;
+    const api = localHost ? '' : p.prefix;
+    const marker = path.join(targetDir, 'full-access-result.txt');
+    let count = 0;
+    const realFetch = globalThis.fetch;
+    vi.stubGlobal('fetch', vi.fn(async (input, init) => {
+      if (!String(input).includes('localhost:11434')) return realFetch(input, init);
+      const request = JSON.parse(String(init?.body));
+      const context = request.messages.map((m: { content: string }) => m.content).join('\n');
+      const output = /otherwise write generated deliverables to (.+?)\. Regular output files/.exec(context)?.[1];
+      if (output) generatedRuns.push(path.dirname(output));
+      const step = count++;
+      let text = 'The device task completed.';
+      if (step === 0) text = `<tool_call name="delegate_device">${JSON.stringify({ device: localHost ? p.device : 'host', objective: 'Run the approved full-access job and retrieve its result.' })}</tool_call>`;
+      if (step === 1) text = `<tool_call name="shell_exec">${JSON.stringify({ command: `printf full-access > '${marker}'`, access: 'full' })}</tool_call>`;
+      if (step === 2) {
+        const [job] = device.recent();
+        expect(job).toBeDefined();
+        text = `<tool_call name="shell_job_status">${JSON.stringify({ job_id: job.id, wait_seconds: 10 })}</tool_call>`;
+      }
+      return new Response(JSON.stringify({ message: { content: text }, done: true, done_reason: 'stop' }), { headers: { 'content-type': 'application/json' } });
+    }));
+    const { run } = await post(requester, `${api}/v1/runs`, { objective: 'Run a full-access job on the other device.' });
+    let current = run;
+    let shellApproved = false;
+    const answered = new Set<string>();
+    for (let i = 0; i < 300; i++) {
+      current = (await p.host.inject(`/v1/runs/${run.id}`)).json().run;
+      for (const approval of current.pendingApprovals) {
+        if (answered.has(approval.id)) continue;
+        answered.add(approval.id);
+        if (approval.tool === 'shell_exec') {
+          expect(fs.existsSync(marker)).toBe(false);
+          expect(approval.persistable).toBe(false);
+          shellApproved = true;
+        }
+        await post(requester, `${api}/v1/runs/${run.id}/approvals/${approval.id}`, { action: 'once' });
+      }
+      if (current.finishedAt) break;
+      await new Promise(resolve => setTimeout(resolve, 20));
+    }
+    expect(shellApproved).toBe(true);
+    expect(current.status).toBe('completed');
+    expect(fs.readFileSync(marker, 'utf8')).toBe('full-access');
+    expect(device.recent()[0].state).toBe('succeeded');
+    expect(new DeviceExecution(path.join(localHost ? p.hostDir : p.guestDir, 'config.toml')).mode()).toBe('scoped');
+  }, 20000);
+  it.each(['home-to-guest', 'guest-to-home', 'guest-to-guest'])('forwards encrypted sudo authorization %s without exposing credentials to the host model', async direction => {
+    const p = await paired(true);
+    let targetDir = direction === 'guest-to-home' ? p.hostDir : p.guestDir;
+    let target = direction === 'guest-to-home' ? p.hostDevice : p.device;
+    if (direction === 'guest-to-guest') {
+      targetDir = tempDir();
+      const extra = service(targetDir, true);
+      const { invitation } = await post(p.host, `/v1/workspaces/${p.id}/manage/invite`, {});
+      const joined = await post(extra, '/v1/workspaces/join', { bridgeUrl: p.url, invitation, executor: true });
+      target = joined.workspace.deviceId;
+    }
+    new DeviceExecution(path.join(targetDir, 'config.toml')).setMode('full');
+    const requester = direction === 'home-to-guest' ? p.host : p.guest;
+    const prefix = direction === 'home-to-guest' ? '' : p.prefix;
+    let decrypted = false;
+    // Real transport and decryption; never invoke sudo on the developer Mac.
+    vi.spyOn(DeviceExecution.prototype, 'start').mockImplementation(async function (_command, _cwd, environment, password) {
+      expect(this.directory).toContain(targetDir);
+      expect(password?.toString()).toBe('bridge-password-canary');
+      expect(JSON.stringify(environment)).not.toContain('bridge-password-canary');
+      decrypted = true;
+      return { id: 'fixture-job', createdAt: new Date().toISOString(), state: 'queued' };
+    });
+    let count = 0;
+    const prompts: string[] = [];
+    const realFetch = globalThis.fetch;
+    vi.stubGlobal('fetch', vi.fn(async (input, init) => {
+      if (!String(input).includes('localhost:11434')) return realFetch(input, init);
+      const context = JSON.parse(String(init?.body)).messages.map((m: { content: string }) => m.content).join('\n');
+      prompts.push(context);
+      const output = /otherwise write generated deliverables to (.+?)\. Regular output files/.exec(context)?.[1];
+      if (output) generatedRuns.push(path.dirname(output));
+      const step = count++;
+      const text = step === 0
+        ? `<tool_call name="delegate_device">${JSON.stringify({ device: target, objective: 'Run id -u with administrator authorization.' })}</tool_call>`
+        : step === 1 ? '<tool_call name="sudo_exec">{"command":"id -u"}</tool_call>' : 'Job submitted.';
+      return new Response(JSON.stringify({ message: { content: text }, done: true, done_reason: 'stop' }), { headers: { 'content-type': 'application/json' } });
+    }));
+    const { run } = await post(requester, `${prefix}/v1/runs`, { objective: 'Run administrator identity check on the target.' });
+    const answered = new Set<string>();
+    let current = run;
+    let ciphertext = '';
+    for (let i = 0; i < 300; i++) {
+      current = (await p.host.inject(`/v1/runs/${run.id}`)).json().run;
+      for (const approval of current.pendingApprovals) {
+        if (answered.has(approval.id)) continue;
+        answered.add(approval.id);
+        const sudoResponse = approval.sudo ? encryptSudoPassword(approval.sudo, 'bridge-password-canary') : undefined;
+        if (sudoResponse) {
+          ciphertext = sudoResponse.ciphertext;
+          const missing = await requester.inject({ method: 'POST', url: `${prefix}/v1/runs/${run.id}/approvals/${approval.id}`, payload: { action: 'once' } });
+          expect(missing.statusCode).toBeGreaterThanOrEqual(400);
+          expect(decrypted).toBe(false);
+        }
+        await post(requester, `${prefix}/v1/runs/${run.id}/approvals/${approval.id}`, { action: 'once', ...(sudoResponse ? { sudoResponse } : {}) });
+      }
+      if (current.finishedAt) break;
+      await new Promise(resolve => setTimeout(resolve, 20));
+    }
+    expect(current.status).toBe('completed');
+    expect(decrypted).toBe(true);
+    expect(ciphertext).not.toBe('');
+    const replay = await requester.inject(`${prefix}/v1/runs/${run.id}/events`);
+    for (const text of [replay.body, ...prompts]) {
+      expect(text).not.toContain('bridge-password-canary');
+      expect(text).not.toContain(ciphertext);
+    }
   }, 20000);
   it('runs the host model on the guest executor with once-only approval and session ownership', async () => {
     const p = await paired(true);
