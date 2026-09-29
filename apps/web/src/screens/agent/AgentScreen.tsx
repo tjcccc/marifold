@@ -336,6 +336,7 @@ export function AgentScreen(props: AgentScreenProps) {
               onAttachFiles={files => void controller.addFiles(files)}
               onRemoveAttachment={controller.removeAttachment}
               skills={controller.skills}
+              devices={controller.devices}
               enterSubmits={!mobile}
               onSubmit={text => {
                 setScrollToBottomRequest(request => request + 1);

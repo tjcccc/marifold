@@ -24,6 +24,7 @@ function renderBar(onSubmit = vi.fn()) {
       modelOptions={[]}
       onSelectModel={() => {}}
       skills={skills}
+      devices={[{ name: 'STJC-M1P-2.local', usage: '@STJC-M1P-2.local', description: 'Office Mac' }]}
       onSubmit={onSubmit}
       onStop={() => {}}
     />,
@@ -303,5 +304,19 @@ describe('InputBar composer interactions', () => {
 
     expect(mirror.textContent).toBe(json);
     expect(mirror.scrollTop).toBe(240);
+  });
+});
+
+
+describe('InputBar device mentions', () => {
+  it('filters device names, completes the target and preserves the task', () => {
+    const { textarea, onSubmit } = renderBar();
+    fireEvent.focus(textarea);
+    fireEvent.change(textarea, { target: { value: '@stjc run id -u', selectionStart: 5 } });
+    expect(screen.getByRole('listbox', { name: 'Devices' })).toBeTruthy();
+    fireEvent.keyDown(textarea, { key: 'Tab' });
+    expect(textarea.value).toBe('@STJC-M1P-2.local run id -u');
+    fireEvent.keyDown(textarea, { key: 'Enter' });
+    expect(onSubmit).toHaveBeenCalledWith('@STJC-M1P-2.local run id -u');
   });
 });

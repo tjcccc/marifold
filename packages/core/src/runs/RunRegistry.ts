@@ -1,3 +1,4 @@
+import { parseSudoResponse } from '../agent/SudoCredentials';
 import type { RuntimeEnvironment } from '../runtime/RuntimeEnvironment';
 import type { AgentRunOptions } from '../agent/AgentRunner';
 import type { WorkspaceExecutionContext } from '@marifold/workspace-protocol';
@@ -324,13 +325,23 @@ export class RunRegistry {
     }
   }
 
-  answerApproval(runId: string, requestId: string, action: RunApprovalAction): { requestId: string; approved: boolean } {
+  answerApproval(runId: string, requestId: string, action: RunApprovalAction, credential?: unknown): { requestId: string; approved: boolean } {
     let run = this.runs.get(runId);
     if (!run) throw MarifoldError.runNotFound(runId);
     const entry = this.pending.get(this.userInputKey(runId, requestId))
       ?? [...this.pending.values()].find(p => p.request.id === requestId && this.runs.get(p.runId)?.parentRunId === runId);
     if (!entry || (entry.runId !== runId && this.runs.get(entry.runId)?.parentRunId !== runId)) throw MarifoldError.approvalNotFound(requestId);
     run = this.runs.get(entry.runId)!;
+    let sudoResponse: import('../agent/SudoCredentials').SudoResponse | undefined;
+    if (entry.request.sudo && action !== 'deny') {
+      try { sudoResponse = parseSudoResponse(credential); }
+      catch { throw MarifoldError.agentRunInvalid('A valid encrypted sudo authorization is required.'); }
+      if (action !== 'once' || sudoResponse.id !== entry.request.sudo.id || entry.request.sudo.expiresAt <= Date.now()) {
+        throw MarifoldError.agentRunInvalid('This sudo authorization expired or does not match this command.');
+      }
+    } else if (credential !== undefined) {
+      throw MarifoldError.agentRunInvalid('Unexpected sudo authorization.');
+    }
 
     switch (action) {
       case 'deny':
@@ -367,7 +378,7 @@ export class RunRegistry {
         entry.settle({ approved: true });
         return { requestId, approved: true };
       default: // 'once'
-        entry.settle({ approved: true });
+        entry.settle({ approved: true, ...(sudoResponse ? { sudoResponse } : {}) });
         return { requestId, approved: true };
     }
   }

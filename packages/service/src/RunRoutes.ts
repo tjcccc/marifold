@@ -113,7 +113,7 @@ export function registerRunRoutes(server: FastifyInstance, registry: RunRegistry
     '/v1/runs/:id/approvals/:requestId',
     async request => {
       const action = parseApprovalAction(request.body);
-      const result = registry.answerApproval(request.params.id, request.params.requestId, action);
+      const result = registry.answerApproval(request.params.id, request.params.requestId, action, objectBody(request.body).sudoResponse);
       return { ok: true, ...result };
     },
   );

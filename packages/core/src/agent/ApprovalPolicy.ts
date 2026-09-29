@@ -69,6 +69,8 @@ export function resolveAgentConfig(partial?: PartialAgentConfig): MarifoldAgentC
 }
 
 export interface ApprovalRequest {
+  /** Public challenge only; the credential response never enters AgentEvent. */
+  sudo?: import('./SudoCredentials').SudoChallenge;
   id: string;
   tool: string;
   kind: ToolKind;
@@ -89,6 +91,7 @@ export interface ApprovalRequest {
 }
 
 export interface ApprovalDecision {
+  sudoResponse?: import('./SudoCredentials').SudoResponse;
   approved: boolean;
   reason?: string;
 }

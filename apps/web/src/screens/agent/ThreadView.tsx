@@ -1,3 +1,4 @@
+import type { SudoResponse } from '../../api/types';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { ApiClient } from '../../api/client';
@@ -22,7 +23,7 @@ export interface ThreadViewProps {
   items: ThreadItem[];
   loading?: boolean;
   onCancelRun: (runId: string) => void;
-  onAnswerApproval: (runId: string, requestId: string, action: RunApprovalAction) => void;
+  onAnswerApproval: (runId: string, requestId: string, action: RunApprovalAction, sudoResponse?: SudoResponse) => void;
   onSubmitUserInput?: (runId: string, requestId: string, submission: UserInputSubmission) => void;
   onToggleRun: (runId: string) => void;
   /** Regenerate one user→assistant exchange in place from an inline editor. */
@@ -311,7 +312,7 @@ function ThreadItemView({
           <RunCard
             run={run}
             onCancel={() => onCancelRun(run.runId)}
-            onAnswer={(requestId, action) => onAnswerApproval(run.runId, requestId, action)}
+            onAnswer={(requestId, action, sudoResponse) => onAnswerApproval(run.runId, requestId, action, sudoResponse)}
             onSubmitInput={(requestId, submission) => onSubmitUserInput?.(run.runId, requestId, submission)}
             onToggle={() => onToggleRun(run.runId)}
           >

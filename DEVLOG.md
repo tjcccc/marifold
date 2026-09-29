@@ -2,6 +2,27 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-09-29 — v0.77.0 — Device mentions and requester-side sudo
+
+- Add leading `@device` completion to the Web composer using live workspace
+  device discovery, with keyboard selection and existing token highlighting.
+- Resolve mentions on the host before execution; keep targets per-message and
+  fail closed for unknown, ambiguous, offline, or disabled devices.
+- Cover routing/default precedence, quoted names, invalid targets, bridge device
+  discovery, and completion that preserves existing task text.
+- Add general `sudo_exec` with a fresh, command-bound encrypted password prompt
+  on the requesting Web UI/TUI/CLI; target full access and OS sudo policy remain
+  required.
+- Carry encrypted responses outside model/tool inputs and event replay; keep
+  target keys transient and pass decrypted credentials only through private
+  process pipes. Ignore sudo's cached authentication and never persist passwords.
+- Verify encrypted bridge flow in all three directions, credential expiry/replay
+  rejection, masked UI input, and real Linux sudo success/failure in OrbStack.
+  Native macOS sudo acceptance remains a real-device test.
+- Pass workspace typecheck/build and 957 tests (one optional bridge test skipped).
+  Synchronize release versions to 0.77.0; refresh the unchanged lockfile, rebuild
+  from clean output, and verify all six packed packages and packed CLI version.
+
 ## 2026-09-29 — v0.76.0 — Device-local full execution
 
 - Add local `execution mode scoped|full` opt-in, shared local/remote

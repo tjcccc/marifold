@@ -433,3 +433,5 @@ export { ArtifactWebRtc, type ArtifactWebRtcOptions } from './workspace/Artifact
 
 export { DeviceExecution, type DeviceExecutionMode, type DeviceJob } from './agent/DeviceExecution';
 export { TailscaleControl } from './agent/TailscaleControl';
+
+export { encryptSudoPassword, type SudoChallenge, type SudoResponse } from './agent/SudoCredentials';

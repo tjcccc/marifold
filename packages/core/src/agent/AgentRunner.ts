@@ -630,7 +630,7 @@ export class AgentRunner {
     let isError = false;
     let resultSummary = summary;
     try {
-      const result = yield* this.executeWithEvents(tool, call.arguments, { ...toolContext, callId: call.id });
+      const result = yield* this.executeWithEvents(tool, call.arguments, { ...toolContext, callId: call.id, sudoResponse: decision.sudoResponse });
       if ((call.name === 'web_search' || call.name === 'read_web_page') && !result.isError && result.webResearch?.sourceUrls?.length) {
         state.webSourceUrls = [...new Set([...(state.webSourceUrls ?? []),
           ...result.webResearch.sourceUrls.filter(url => typeof url === 'string')])].slice(0, 40);
@@ -742,7 +742,7 @@ export class AgentRunner {
     summary: string,
     options: AgentRunOptions,
     toolContext: ToolExecutionContext,
-  ): AsyncGenerator<AgentEvent, { approved: boolean; reason?: string }, unknown> {
+  ): AsyncGenerator<AgentEvent, import('./ApprovalPolicy').ApprovalDecision, unknown> {
     const risk = await tool.assessRisk?.(call.arguments, toolContext) ?? { escalate: false };
     if (risk.blocked) {
       const reason = risk.reason ?? 'blocked by the run security policy';
@@ -786,9 +786,15 @@ export class AgentRunner {
       ...(risk.reason ? { escalationReason: risk.reason } : {}),
       ...(risk.targetPath ? { escalatedPath: risk.targetPath } : {}),
       ...(risk.persistable === false ? { persistable: false } : {}),
+      ...(risk.sudo ? { sudo: risk.sudo } : {}),
     };
     yield { type: 'approval_request', request };
     const decision = await options.approvalHandler(request);
+    if (risk.sudo && decision.approved && (decision.sudoResponse?.id !== risk.sudo.id || risk.sudo.expiresAt <= Date.now())) {
+      decision.approved = false;
+      decision.reason = 'A fresh encrypted sudo authorization is required; this client did not supply one.';
+      delete decision.sudoResponse;
+    }
     yield {
       type: 'approval_decision',
       requestId: call.id,
@@ -931,7 +937,7 @@ export class AgentRunner {
       ...(this.deps.registry.get('ask_user')?.kind === 'interaction' ? [
         'ask_user is optional. Use it only when essential information is missing and a reasonable assumption could materially change the result. Otherwise proceed. Batch all currently known questions into one call, and call it without other tools in that response.',
       ] : []),
-      'shell_exec defaults to scoped access: no network and writes limited to the working directory, configured trusted folders, and private run directories. If shell_job_status reports full mode on this device, explicit shell_exec access=full can use the OS account’s normal permissions after per-call approval; it does not grant administrator rights. Full-access calls return durable job IDs: retrieve completion with shell_job_status before claiming success, and inspect recent jobs after a lost response rather than retrying the command. Use write_file for an explicit output path elsewhere. Use python_package_install for approved Python dependencies; it installs only into this run’s disposable uv environment.',
+      'shell_exec defaults to scoped access: no network and writes limited to the working directory, configured trusted folders, and private run directories. If shell_job_status reports full mode on this device, explicit shell_exec access=full can use the OS account’s normal permissions after per-call approval; it does not grant administrator rights. For user-authorized commands that require sudo authentication, use sudo_exec and its secure requester-side password dialog; never ask for passwords through chat or ask_user, or put them in tool arguments/files. Full-access calls return durable job IDs: retrieve completion with shell_job_status before claiming success, and inspect recent jobs after a lost response rather than retrying the command. Use write_file for an explicit output path elsewhere. Use python_package_install for approved Python dependencies; it installs only into this run’s disposable uv environment.',
     ].join('\n');
     // Lean run (skills): minimal framing — the instructions are authoritative,
     // and we ask for only the final output to avoid plan/preamble/reasoning prose.

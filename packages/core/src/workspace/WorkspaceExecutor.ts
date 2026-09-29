@@ -1,3 +1,5 @@
+import { SudoExecTool } from '../agent/tools/SudoExecTool';
+import { parseSudoResponse } from '../agent/SudoCredentials';
 import { DeviceExecution } from '../agent/DeviceExecution';
 import { ShellJobStatusTool } from '../agent/tools/ShellJobStatusTool';
 import type { ArtifactWebRtc } from './ArtifactWebRtc';
@@ -28,6 +30,7 @@ export function executionTools(device?: DeviceExecution): AgentTool[] {
     new ReadFileTool(),
     new WriteFileTool(),
     new ShellExecTool(device),
+    new SudoExecTool(device),
     new ShellJobStatusTool(device),
   ];
 }
@@ -35,7 +38,7 @@ interface Execution {
   workspace: RunWorkspace;
   abort: AbortController;
   lease: number;
-  grants: Map<string, { hash: string; expires: number }>;
+  grants: Map<string, { hash: string; expires: number; sudoId?: string }>;
   completed: boolean;
 }
 /** A device owns its own capability construction. Host paths, trusted folders,
@@ -153,6 +156,7 @@ export class WorkspaceExecutor {
       trustedFolders: this.config().trustedFolders,
       outputLimit: this.config().toolOutputLimit,
       signal: run.abort.signal,
+      ...(operation === 'executor.execute' && b.sudoResponse !== undefined ? { sudoResponse: parseSudoResponse(b.sudoResponse) } : {}),
     };
     const risk = (await tool.assessRisk?.(input, toolContext)) ?? { escalate: false };
     // Uploading grants ID-scoped inspection only, not arbitrary remote file access.
@@ -165,7 +169,7 @@ export class WorkspaceExecutor {
       const grant = randomId();
       for (const [id, g] of run.grants) if (g.expires < Date.now()) run.grants.delete(id);
       if (run.grants.size >= 128) throw new Error('Too many outstanding execution grants.');
-      if (!blocked) run.grants.set(grant, { hash, expires: Date.now() + 6 * 60 * 1000 });
+      if (!blocked) run.grants.set(grant, { hash, expires: Date.now() + 6 * 60 * 1000, ...(risk.sudo ? { sudoId: risk.sudo.id } : {}) });
       return {
         ...risk,
         blocked,
@@ -181,7 +185,7 @@ export class WorkspaceExecutor {
     if (operation !== 'executor.execute') throw new Error('Unsupported executor operation.');
     const grant = run.grants.get(String(b.grant));
     run.grants.delete(String(b.grant));
-    if (blocked || !grant || grant.hash !== hash || grant.expires < Date.now())
+    if (blocked || !grant || grant.hash !== hash || grant.expires < Date.now() || grant.sudoId !== toolContext.sudoResponse?.id)
       throw new Error('Execution grant is invalid or expired.');
     const result = await tool.execute(input, toolContext);
     if (!result.images?.length) return result;

@@ -2,6 +2,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
+import { SudoCredentials } from './SudoCredentials';
 
 export type DeviceExecutionMode = 'scoped' | 'full';
 export interface DeviceJob {
@@ -17,6 +18,7 @@ export interface DeviceJob {
 
 /** Local-only policy: intentionally absent from config APIs and workspace RPC. */
 export class DeviceExecution {
+  readonly sudo = new SudoCredentials();
   readonly directory: string;
   constructor(configPath: string) {
     const resolved = path.resolve(configPath);
@@ -38,7 +40,7 @@ export class DeviceExecution {
     writePrivateJson(path.join(this.directory, 'policy.json'), { mode });
   }
 
-  async start(command: string, cwd: string, environment: NodeJS.ProcessEnv): Promise<DeviceJob> {
+  async start(command: string, cwd: string, environment: NodeJS.ProcessEnv, password?: Buffer): Promise<DeviceJob> {
     if (this.mode() !== 'full') throw new Error('Full access is disabled on this device. Enable it locally with marifold execution mode full.');
     if (process.platform !== 'darwin' && process.platform !== 'linux') throw new Error('Full access currently supports macOS and Linux.');
     const worker = path.join(__dirname, 'DeviceExecutionWorker.js');
@@ -54,9 +56,9 @@ export class DeviceExecution {
       commandHash: createHash('sha256').update(command).digest('hex') };
     writePrivateJson(path.join(directory, 'result.json'), job);
     // Environment remains in memory; credentials are never serialized into the job.
-    writePrivateJson(path.join(directory, 'request.json'), { command, cwd });
+    writePrivateJson(path.join(directory, 'request.json'), { command, cwd, sudo: password !== undefined });
     const child = spawn(process.execPath, [worker, directory], {
-      detached: true, stdio: 'ignore', env: environment,
+      detached: true, stdio: ['pipe', 'ignore', 'ignore'], env: environment,
     });
     await new Promise<void>((resolve, reject) => {
       child.once('spawn', resolve);
@@ -66,6 +68,9 @@ export class DeviceExecution {
         reject(error);
       });
     });
+    // Only an anonymous pipe carries the password, never argv, env, or a file.
+    child.stdin?.on('error', () => { /* Worker startup failure is reported by job status. */ });
+    await new Promise<void>(resolve => child.stdin!.end(password, resolve));
     child.unref();
     return job;
   }

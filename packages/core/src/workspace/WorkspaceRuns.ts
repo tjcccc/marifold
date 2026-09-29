@@ -25,16 +25,25 @@ export class WorkspaceRuns {
     private readonly runtime: MarifoldRuntime,
     private readonly manager: WorkspaceManager,
   ) {}
+  devices(origin?: WorkspaceOperationContext) {
+    const id = origin?.workspaceId ?? this.manager.store.list().find(c => c.role === 'host')?.id;
+    return id ? this.manager.devices(id) : [];
+  }
   async resolve(
     input: RunStartInput,
     selection: { workspaceId?: string; executionDeviceId?: string },
     origin?: WorkspaceOperationContext,
   ): Promise<RunStartInput> {
+    const mention = /^@(?:"([^"\r\n]+)"|([^\s"]+))(?:\s+([\s\S]*))?$/.exec(input.objective);
+    if (input.objective.startsWith('@') && (!mention || !mention[3]?.trim()))
+      throw new Error('Use @device followed by a task.');
+    if (mention && /^[$/]/.test(mention[3]!.trim()))
+      throw new Error('Use a plain task after @device; run skills and commands separately.');
     // Hosting shares this same local workspace; local runs need its device tools too.
     const workspaceId = origin?.workspaceId ?? selection.workspaceId ??
       this.manager.store.list().find(connection => connection.role === 'host')?.id;
     if (!workspaceId) {
-      if (selection.executionDeviceId) throw new Error('Select a workspace before an execution device.');
+      if (selection.executionDeviceId || mention) throw new Error('Select a workspace before an execution device.');
       return input;
     }
     const connection = this.manager.store.get(workspaceId);
@@ -42,7 +51,10 @@ export class WorkspaceRuns {
     const originId = origin?.senderDeviceId ?? connection.deviceId;
     const devices = this.manager.devices(connection.id);
     const skill = input.lean || /^\s*\$[\w-]+/.test(input.userTurn ?? input.objective);
-    const explicit = selection.executionDeviceId;
+    const name = mention?.[1] ?? mention?.[2];
+    const matches = name ? devices.filter(d => d.id === name || d.name.toLowerCase() === name.toLowerCase()) : [];
+    if (name && matches.length !== 1) throw new Error('The mentioned device is unknown or ambiguous. Select a device from the @ menu.');
+    const explicit = name ? matches[0]!.id : selection.executionDeviceId;
     const executionDeviceId =
       explicit === 'host'
         ? connection.hostDeviceId
@@ -65,7 +77,7 @@ export class WorkspaceRuns {
     const devices = this.manager.devices(workspaceId);
     const contextInstructions = [
       `Tools and paths belong to ${executionDeviceId === host.hostDeviceId ? 'the workspace host' : 'the selected execution device'}. For a named-device or host task, use list_devices to resolve the target and delegate_device if needed. For an existing file, use its published reference; do not recapture or recreate it merely to deliver it.`,
-      'Device delegation uses the workspace bridge connection, not SSH or Tailscale, and does not require shell network access or device login credentials. Check list_devices before claiming a device is unavailable. Guest execution requires its executor opt-in and once-only approvals; shell_exec defaults to scoped access. Check shell_job_status on the execution device: when full access is locally enabled, shell_exec access=full has that device account’s normal filesystem, network, process and application permissions. Administrator and macOS privacy permissions still depend on the device. Full-access jobs continue after disconnect/cancellation; retrieve their status rather than repeating uncertain commands. For permission questions, explain these capabilities and limits without starting work.',
+      'Device delegation uses the workspace bridge connection, not SSH or Tailscale, and does not require shell network access or device login credentials. Check list_devices before claiming a device is unavailable. Guest execution requires its executor opt-in and once-only approvals; shell_exec defaults to scoped access. Check shell_job_status on the execution device: when full access is locally enabled, shell_exec access=full has that device account’s normal filesystem, network, process and application permissions. For administrator commands that need a password, use sudo_exec: its secure approval prompts on the requesting device, not the execution device. Never collect passwords in chat, ask_user, shell arguments or files. macOS privacy permissions still depend on the device. Full-access jobs continue after disconnect/cancellation; retrieve their status rather than repeating uncertain commands. For permission questions, explain these capabilities and limits without starting work.',
     ];
     const registry =
       executionDeviceId === host.hostDeviceId
@@ -143,7 +155,7 @@ export class WorkspaceRuns {
           try {
             return (await request(
               'executor.execute',
-              { runId, tool: tool.definition.name, input: value, grant: permission },
+              { runId, tool: tool.definition.name, input: value, grant: permission, ...(context.sudoResponse ? { sudoResponse: context.sudoResponse } : {}) },
               randomId(),
             )) as ToolExecutionResult;
           } catch (error) {

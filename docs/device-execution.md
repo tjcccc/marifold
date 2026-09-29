@@ -88,6 +88,84 @@ or a service manager terminating the entire service process group can interrupt
 it. There is no automatic replay on startup. Output files from jobs finishing
 after their originating agent run ended may require a new run to retrieve them.
 
+## Choose a device with @
+
+In the Web composer, type `@` at the start of a message to list online devices
+with execution enabled in the current workspace. Type part of a name to filter;
+use the arrow keys and Enter/Tab, or click, to insert it. For example:
+
+```text
+@STJC-M1P-2.local use sudo_exec to run id -u, then retrieve the result.
+```
+
+The service resolves the mention to a device ID before starting the run. It
+applies to that message and overrides the default execution-device selection.
+The original message remains in history. Unknown, ambiguous, offline, or
+execution-disabled targets fail without falling back to Home. The list refreshes
+every ten seconds; the service checks availability again at submission.
+
+Names with spaces use `@"Office Mac"`. Duplicate names use the device ID in the
+completion, with the device name displayed alongside it. A bare name without
+`@` remains ordinary natural-language input. Mentions select devices within the
+current workspace; they do not switch workspace connections or grant access.
+Start a new turn after the current run finishes (or stop it) to select another
+device. Use a plain task after the mention; `/commands` and `$skills` remain
+separate leading-token actions.
+
+## Password authorization from the requesting device
+
+For a privileged task, the agent uses `sudo_exec` with the exact command to run
+as root on the destination. The destination must have full execution enabled,
+its shell policy must permit individual approval, and its OS account must be
+allowed to use sudo. The general command runner invokes a root `/bin/sh`, so a
+sudoers rule permitting only a specific executable will not authorize it.
+Marifold does not change sudoers. Ordinary user operations continue through `shell_exec`.
+If an existing OS policy already authorizes a noninteractive command, the agent
+can use an approved full-access shell command; `sudo_exec` explicitly requests a
+fresh password each time it is used.
+
+The Web UI displays a password field in the approval dialog on the device where
+you sent the request. It identifies the target hostname, target OS account, and
+command. Enter **that target account's password**, not the requesting device's
+password. TUI and CLI clients collect it privately on the requesting terminal.
+The password is never requested in chat or through `ask_user`.
+
+The requesting client encrypts the password for an ephemeral RSA-OAEP/SHA-256
+key generated on the target. Authorization is bound to the command and a unique
+challenge, expires after five minutes, and can be consumed only once. The host
+model never receives the credential. The bridge sees encrypted traffic; the
+workspace host relays an encrypted password when the target is another device.
+The target decrypts it only at execution and pipes it directly to the detached
+worker, which supplies it to `sudo -k -S`. The command itself receives `/dev/null`
+as stdin, including when sudo's policy does not consume a password.
+
+No plaintext password is written to Marifold configuration, task state,
+transcripts, events, job records, command arguments, environment, or logs. The
+worker does not update sudo's authentication cache. Password buffers are cleared
+when consumed; client text fields are cleared on submission/cancellation and
+references are discarded. JavaScript does not guarantee immediate erasure of
+all temporary string copies from physical memory. Passwords are limited to 128
+UTF-8 bytes without NUL or line breaks.
+
+Wrong passwords produce a failed job, with no automatic retry. A new privileged
+attempt requires a new approval and password. Cancellation before submission or
+expiry prevents execution. After acceptance, the existing durable-job behavior
+applies: cancelling the chat does not kill an already-started privileged command.
+
+Web password entry requires HTTPS or localhost (Web Crypto); there is no
+plaintext fallback. Non-TTY CLI clients and older clients without secure
+credential support fail closed. Telegram has no password collection UI and
+cannot authorize these calls. This flow uses the target account's normal sudo
+policy; it cannot replace Accessibility, system-extension approval, hardware
+security keys, interactive multi-factor PAM conversations, or other local OS
+consent mechanisms.
+
+To test from Home: “On my MacBook Pro, use `sudo_exec` to run `id -u`, then
+retrieve its job result.” Approve on Home and enter the MacBook Pro account's
+password there. A successful result is `0`. Test a harmless command before
+restarting networking. Install the new build on the host, target, and requesting
+client/service so all three understand the credential channel.
+
 ## Standalone macOS Tailscale test
 
 The optional workflow supports the app downloaded from tailscale.com, with
@@ -109,7 +187,10 @@ authorization for exactly:
 ```
 
 If it reports that a password is required, full access alone is insufficient for
-an unattended restart. Configure a narrowly limited OS authorization locally;
+an unattended restart. The new `sudo_exec` dialog supports individually approved
+privileged commands with a password; it does not populate a sudo cache for this
+noninteractive CLI helper. To use the helper unchanged, configure narrowly
+limited OS authorization locally;
 do not grant unrestricted passwordless sudo or run the whole service as root.
 A temporary interactive sudo authentication may not apply to the service's
 noninteractive session. The preflight does not change permissions.

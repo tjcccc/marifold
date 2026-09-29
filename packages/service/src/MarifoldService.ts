@@ -172,6 +172,9 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
   };
   const hasActiveSessionRequest = (sessionId: string): boolean =>
     (activeSessionRequests.get(sessionId) ?? 0) > 0;
+  server.get('/v1/execution-devices', async request => ({
+    ok: true, devices: workspaceRuns.devices(workspaceContext.resolve(request.headers)),
+  }));
   registerRunRoutes(server, runRegistry, {
     tickets: artifactTickets,
     preview: async (runId, artifactId, variant) => {

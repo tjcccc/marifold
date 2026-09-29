@@ -28,6 +28,7 @@ export interface InputBarProps {
   onRemoveAttachment?: (index: number) => void;
   /** Available skills for the `$` autocomplete (from GET /v1/skills). */
   skills?: SkillHint[];
+  devices?: Suggestion[];
   /** Plain Enter submits on desktop; mobile leaves it to the textarea as a line break. */
   enterSubmits?: boolean;
   onSubmit: (text: string) => void;
@@ -67,8 +68,8 @@ export function InputBar(props: InputBarProps) {
   }, [props.draftKey]);
 
   const menu = menuQuery(text, caret);
-  const source: Suggestion[] = menu?.sigil === '/' ? WEB_COMMANDS : (props.skills ?? []);
-  const matches = menu ? source.filter(item => item.name.startsWith(menu.query)).slice(0, MAX_SUGGESTIONS) : [];
+  const source: Suggestion[] = menu?.sigil === '/' ? WEB_COMMANDS : menu?.sigil === '@' ? (props.devices ?? []) : (props.skills ?? []);
+  const matches = menu ? source.filter(item => (menu.sigil === '@' ? item.name.replace(/^"|"$/g, '').toLowerCase().startsWith(menu.query.toLowerCase()) : item.name.startsWith(menu.query))).slice(0, MAX_SUGGESTIONS) : [];
   const menuOpen = focused && !dismissed && matches.length > 0;
   const active = Math.min(activeIndex, Math.max(0, matches.length - 1));
   const sigil = menu?.sigil ?? '$';
@@ -259,7 +260,7 @@ export function InputBar(props: InputBarProps) {
       <div className={styles.bar}>
         <div className={styles.inputWrap}>
           {menuOpen ? (
-            <ul className={styles.menu} role="listbox" aria-label={sigil === '/' ? 'Commands' : 'Skills'}>
+            <ul className={styles.menu} role="listbox" aria-label={sigil === '/' ? 'Commands' : sigil === '@' ? 'Devices' : 'Skills'}>
               {matches.map((item, index) => (
                 <li
                   key={item.name}

@@ -1,3 +1,6 @@
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
+const { SudoCredentials } = require('../../core/dist/agent/SudoCredentials');
 import { describe, expect, it, vi } from 'vitest';
 import { render } from 'ink-testing-library';
 import type { ApprovalRequest, UserInputRequest } from '@marifold/core';
@@ -69,6 +72,27 @@ describe('Transcript', () => {
 
 describe('ApprovalModal', () => {
   const request: ApprovalRequest = { id: 'c', tool: 'write_note', kind: 'write', summary: 'write ./n.md', input: {}, escalated: false };
+
+  it('masks sudo entry, encrypts on Enter, and never renders or forwards the password', async () => {
+    const vault = new SudoCredentials();
+    const sudo = vault.create('id -u');
+    const onResolve = vi.fn();
+    const view = render(<ApprovalModal request={{ ...request, tool: 'sudo_exec', kind: 'shell', escalated: true, persistable: false, sudo }} onResolve={onResolve} />);
+    await delay();
+    view.stdin.write('terminal-secret-canary');
+    await delay();
+    expect(view.lastFrame()).not.toContain('terminal-secret-canary');
+    expect(view.lastFrame()).toContain('•');
+    expect(onResolve).not.toHaveBeenCalled();
+    view.stdin.write('\r');
+    await delay();
+    expect(onResolve).toHaveBeenCalledOnce();
+    expect(JSON.stringify(onResolve.mock.calls)).not.toContain('terminal-secret-canary');
+    const bytes = vault.consume('id -u', onResolve.mock.calls[0][1]);
+    expect(bytes.toString()).toBe('terminal-secret-canary');
+    bytes.fill(0);
+    view.unmount();
+  });
 
   it('previews the tool input (file content) so the user sees what is approved', () => {
     const withContent: ApprovalRequest = {

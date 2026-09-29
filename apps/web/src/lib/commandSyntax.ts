@@ -1,11 +1,11 @@
 /**
  * Grammar for the composer's leading tokens — `$skill` (model-backed, runs
- * through the backend) and `/command` (deterministic web action). Mirrors the
+ * through the backend), `/command` (deterministic web action), and `@device`. Mirrors the
  * TUI's `$<name>` / `/<name> [args]`. Names are alphanumeric-led with letters,
  * numbers, underscores, and hyphens.
  */
 
-export type Sigil = '$' | '/';
+export type Sigil = '$' | '/' | '@';
 
 /** A leading token: sigil + name at a word boundary (space or end), so a path
  * like `/a/b` is NOT mistaken for a command. */
@@ -17,6 +17,10 @@ const COMMAND_LINE = /^\/([a-zA-Z0-9][\w-]*)(?:\s+([\s\S]*))?$/;
 
 /** The leading `$skill`/`/command` token if the text starts with one. */
 export function leadingToken(text: string): { sigil: Sigil; token: string } | undefined {
+  if (text.startsWith('@')) {
+    const mention = /^@(?:"[^"\r\n]+"|[^\s"]+)(?=\s|$)/.exec(text);
+    return mention ? { sigil: '@', token: mention[0] } : undefined;
+  }
   const match = LEADING.exec(text);
   return match ? { sigil: match[1] as Sigil, token: match[0] } : undefined;
 }
@@ -28,6 +32,11 @@ export function menuQuery(
   text: string,
   caret = text.length,
 ): { sigil: Sigil; query: string; end: number } | undefined {
+  if (text.startsWith('@')) {
+    const mention = /^@(?:"([^"\r\n]*)"?|([^\s"]*))/.exec(text);
+    if (!mention || caret < 1 || caret > mention[0].length) return undefined;
+    return { sigil: '@', query: mention[1] ?? mention[2], end: mention[0].length };
+  }
   const match = QUERY.exec(text);
   if (!match) return undefined;
   const end = match[0].length;
