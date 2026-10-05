@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { render } from 'ink-testing-library';
+import { TerminalInput } from '../src/core/TerminalInput.js';
 import { InputBox } from '../src/ui/InputBox.js';
 import { listCommandCompletions } from '../src/core/commands.js';
 
@@ -16,7 +17,10 @@ function renderInput(overrides: Partial<Parameters<typeof InputBox>[0]> = {}) {
     skills: [{ name: 'translate' }, { name: 'make-midjourney-prompt' }],
     ...overrides,
   };
-  return { onSubmit, ...render(<InputBox {...props} />) };
+  const result = render(<InputBox {...props} />);
+  const input = new TerminalInput(process.stdin, false);
+  input.on('data', (chunk: Buffer) => result.stdin.write(chunk.toString()));
+  return { onSubmit, ...result, stdin: { write: (chunk: string) => input.write(chunk) }, unmount: () => { input.destroy(); result.unmount(); } };
 }
 
 describe('InputBox', () => {
@@ -43,6 +47,60 @@ describe('InputBox', () => {
     const frame = lastFrame() ?? '';
     expect(frame).toContain('ab');
     expect(frame).not.toMatch(/ac|abc/);
+  });
+
+  it.each([
+    ['readline', '\x1bb', '\x1bf'],
+    ['Option arrows', '\x1b[1;3D', '\x1b[1;3C'],
+    ['Ctrl arrows', '\x1b[1;5D', '\x1b[1;5C'],
+  ])('moves by words with %s, including punctuation boundaries', async (_name, left, right) => {
+    const { stdin, onSubmit, unmount } = renderInput();
+    try {
+      stdin.write('first,second third');
+      await delay();
+      stdin.write(left);
+      await delay();
+      stdin.write(left);
+      await delay();
+      stdin.write(right);
+      await delay();
+      stdin.write('X');
+      await delay();
+      stdin.write('\r');
+      await vi.waitFor(() => expect(onSubmit).toHaveBeenCalledWith('first,secondX third', []));
+    } finally { unmount(); }
+  });
+
+  it.each(['\x1b\x7f', '\x1b\b', '\x1b[127;3u'])('deletes the previous word with Option+Backspace (%j), retaining text after the caret', async sequence => {
+    const { stdin, onSubmit, unmount } = renderInput();
+    try {
+      stdin.write('first second third');
+      await delay();
+      stdin.write('\x1bb'); // start of third
+      await delay();
+      stdin.write(sequence); // delete second and the separator before third
+      await delay();
+      stdin.write('\r');
+      await vi.waitFor(() => expect(onSubmit).toHaveBeenCalledWith('first third', []));
+    } finally { unmount(); }
+  });
+
+  it('handles word-editing boundaries and multiline Unicode without splitting graphemes', async () => {
+    const { stdin, onSubmit, unmount } = renderInput();
+    try {
+      stdin.write('\x1bb'); // beginning of empty draft
+      await delay();
+      stdin.write('\x1b\x7f');
+      await delay();
+      stdin.write('one\n  cafe\u0301 😀   ');
+      await delay();
+      stdin.write('\x1b\x7f'); // skip separators and delete the previous Unicode word
+      await delay();
+      stdin.write('\x1bf'); // already at the end
+      await delay();
+      stdin.write('\r');
+      await vi.waitFor(() => expect(onSubmit).toHaveBeenCalledWith('one\n  ', []));
+    } finally { unmount(); }
   });
 
   it('submits on Enter', async () => {

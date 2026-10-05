@@ -14,6 +14,7 @@ interface Props {
   profile?: string;
   resume?: string | boolean;
   version: string;
+  fullscreen?: boolean;
 }
 interface Entry {
   key: string;
@@ -192,10 +193,12 @@ export function WorkspaceShell(props: Props) {
   };
   return (
     <Box flexDirection="column">
-      <Text dimColor>{notice}</Text>
+      {!props.fullscreen || !entry ? <Text dimColor>{notice}</Text> : null}
       {entry && (
         <App
           key={entry.key}
+          fullscreen={props.fullscreen}
+          workspaceNotice={props.fullscreen ? notice : undefined}
           runtime={entry.runtime}
           loadedConfig={entry.config}
           initial={entry.initial}

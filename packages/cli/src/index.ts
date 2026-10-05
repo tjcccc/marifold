@@ -24,13 +24,15 @@ const printer = new ConsolePrinter();
 const program = new Command()
   .name('marifold')
   .description('Marifold local-first AI workspace CLI.')
-  .version('0.77.3')
+  .version('0.78.0')
   // Allow a root --profile (for the bare-`marifold` TUI launch) to coexist with
   // subcommand options of the same name: root options must precede the
   // subcommand, and options after the subcommand bind to it.
   .enablePositionalOptions()
   .option('--config <path>', 'Path to Marifold config.toml.')
   .option('--profile <name>', 'Profile to launch the TUI with.')
+  .option('--fullscreen', 'Use the full-screen TUI with mouse editing and selection copying (default unless disabled in config).')
+  .option('--no-fullscreen', 'Use the inline TUI with native terminal scrollback.')
   .option(
     '--resume [id]',
     'Resume a session: bare --resume continues the most recent session for the profile; --resume <id> continues that specific session.',
@@ -54,7 +56,7 @@ registerWorkspaceCommand(program, printer);
 registerExecutionCommand(program, printer);
 
 // Bare `marifold` (or `marifold --profile x`) launches the Ink TUI. The TUI is
-// an ESM-only package (Ink v7); the CLI is CommonJS, so import it through a
+// an ESM-only package (Ink v8); the CLI is CommonJS, so import it through a
 // real dynamic import the TypeScript CommonJS emit will not downlevel into a
 // require() (which would throw ERR_REQUIRE_ESM).
 const importEsm = new Function('specifier', 'return import(specifier);') as (
@@ -70,13 +72,14 @@ program.action(async () => {
     process.exitCode = 1;
     return;
   }
-  const options = program.opts<{ profile?: string; resume?: string | boolean }>();
+  const options = program.opts<{ profile?: string; resume?: string | boolean; fullscreen?: boolean }>();
   const loadedConfig = loadConfig(program);
   const { runTui } = await importEsm('@marifold/tui');
   let service; try { service = localServiceSettings(loadedConfig); } catch { /* Standalone local TUI remains available. */ }
   await runTui({
     loadedConfig,
     service,
+    fullscreen: options.fullscreen,
     ...(options.profile ? { profile: options.profile } : {}),
     ...(options.resume !== undefined ? { resume: options.resume } : {}),
   });

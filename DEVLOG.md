@@ -2,6 +2,31 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-10-05 — v0.78.0 — Full-screen TUI
+
+- Upgrade the TUI to stable Ink 8.0.0 / React 19.3.0 with matching React types;
+  use Ink's terminal-size hook and preserve modified Enter through the input boundary.
+- Default to full-screen with configurable `[tui] fullscreen`; explicit launch
+  flags override environment preferences and config. `--no-fullscreen` retains
+  inline scrollback for both local and service-connected workspaces. Preserve
+  TUI preferences across config rewrites and support `config get/set tui.fullscreen`.
+- Keep the composer pinned beneath a bounded, cached transcript viewport. Add
+  wheel/page scrolling, paused history following, mouse caret placement, and
+  drag selection with copy on release and stable text during streaming.
+- Align history hints with the transcript, show `Copied` at the right edge,
+  and remove fenced code block borders.
+- Add Option/Alt word movement and backward word deletion, with Ctrl-arrow
+  and readline Alt+B/Alt+F support and Unicode word boundaries.
+- Use grapheme/cell-aware input editing and wrapping; preserve literal bracketed
+  pastes and restore terminal modes on normal exit, SIGTERM, and SIGHUP.
+- Local selection copying uses platform utilities; SSH/fallback copying uses
+  terminal-controlled OSC 52. Real terminal clipboard acceptance remains user-dependent.
+- Verify workspace typecheck/build and all package tests (86 TUI tests); peer
+  and synchronized-version checks pass. PTY checks cover mouse drag/copy, click
+  editing, submission, normal exit, SIGTERM/SIGHUP cleanup, and inline override.
+- Synchronize versions to 0.78.0, rebuild from clean output, and verify all six
+  packed package versions and the packed CLI version.
+
 ## 2026-09-29 — v0.77.3 — Live OAuth credential reload
 
 - Reload saved xAI, ChatGPT, and Copilot credentials before provider requests so

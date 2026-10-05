@@ -26,6 +26,7 @@ import { appReducer, createInitialState, type Mode, type NoticeTone, type Transc
 import { parseInput } from '../core/inputGrammar.js';
 import { listCommandCompletions, listCommands, runCommand, type CommandContext } from '../core/commands.js';
 import { bindSkillArgs, skillUsage } from '../core/skills.js';
+import { FullScreen } from './FullScreen.js';
 import { Header } from './Header.js';
 import { TranscriptRow, topGap } from './Transcript.js';
 import { InputBox, type CompletionItem } from './InputBox.js';
@@ -42,6 +43,8 @@ const READ_FILE_CHAR_LIMIT = 100000;
 
 export interface AppProps {
   runtime: TuiRuntime;
+  fullscreen?: boolean;
+  workspaceNotice?: string;
   workspaceCommand?: (args: string) => Promise<string>;
   deviceCommand?: (args: string) => Promise<string>;
   loadedConfig: LoadedMarifoldConfig;
@@ -73,8 +76,8 @@ interface PendingSkill {
   index: number;
 }
 
-export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCommand }: AppProps): React.ReactElement {
-  const { exit } = useApp();
+export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCommand, fullscreen = false, workspaceNotice }: AppProps): React.ReactElement {
+  const { exit, suspendTerminal } = useApp();
   const [state, dispatch] = useReducer(
     appReducer,
     createInitialState({
@@ -125,13 +128,18 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
   const [staticEpoch, setStaticEpoch] = useState(0);
   const wasResizing = useRef(false);
   const repaint = useCallback(() => {
+    if (fullscreen) {
+      // Ink's resume forces a full redraw while preserving composer state.
+      void suspendTerminal(async () => {}).catch(() => {});
+      return;
+    }
     (stdout ?? process.stdout).write('\x1b[2J\x1b[3J\x1b[H');
     setStaticEpoch(epoch => epoch + 1);
-  }, [stdout]);
+  }, [stdout, fullscreen, suspendTerminal]);
   useEffect(() => {
-    if (wasResizing.current && !resizing) repaint();
+    if (!fullscreen && wasResizing.current && !resizing) repaint();
     wasResizing.current = resizing;
-  }, [resizing, repaint]);
+  }, [resizing, repaint, fullscreen]);
   // Anchor the run clock here so it survives RunStatus unmounting during a
   // resize burst (`!resizing && state.running` below). If RunStatus owned the
   // start time, remounting after the resize settled would restart it at 0.
@@ -156,8 +164,8 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
     const ids = state.transcript.map(item => item.id);
     const appendedOnly = prevItemIds.current.every((id, index) => ids[index] === id);
     prevItemIds.current = ids;
-    if (!appendedOnly) repaint();
-  }, [state.transcript, repaint]);
+    if (!fullscreen && !appendedOnly) repaint();
+  }, [state.transcript, repaint, fullscreen]);
 
   // Mutable run plumbing (does not drive rendering directly).
   const abortRef = useRef<AbortController | null>(null);
@@ -1078,6 +1086,29 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
   const liveItem = state.streamingAssistant ? state.transcript[state.transcript.length - 1] : undefined;
   const staticItems: StaticEntry[] = [{ id: BANNER_ID }, ...committed];
 
+  const footer = (
+    <Box flexDirection="column">
+      {(!resizing || fullscreen) && state.running ? (
+        <RunStatus startedAt={runStartedAt.current} activity={state.activity} think={think} steeringQueued={steeringCount} />
+      ) : null}
+      {activeOverlay ?? (
+        <InputBox
+          onSubmit={handleSubmit}
+          onInterrupt={handleInterrupt}
+          history={history}
+          commands={commandItems}
+          skills={skillItems}
+          resizing={resizing && !fullscreen}
+          placeholder={pendingSkill ? `value for ${pendingSkill.missing[pendingSkill.index]}` : planNext ? 'planned · your next message will be planned step-by-step' : 'message the agent · /help'}
+        />
+      )}
+      {(!resizing || fullscreen) ? <StatusLine state={state} /> : null}
+    </Box>
+  );
+  if (fullscreen) {
+    return <FullScreen items={state.transcript} header={<Header state={state} />} footer={footer} keyboardActive={!activeOverlay} workspaceNotice={workspaceNotice} />;
+  }
+
   return (
     <Box flexDirection="column">
       <Static key={staticEpoch} items={staticItems}>
@@ -1108,21 +1139,7 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
             <TranscriptRow item={liveItem} />
           </Box>
         ) : null}
-        {!resizing && state.running ? (
-          <RunStatus startedAt={runStartedAt.current} activity={state.activity} think={think} steeringQueued={steeringCount} />
-        ) : null}
-        {activeOverlay ?? (
-          <InputBox
-            onSubmit={handleSubmit}
-            onInterrupt={handleInterrupt}
-            history={history}
-            commands={commandItems}
-            skills={skillItems}
-            resizing={resizing}
-            placeholder={pendingSkill ? `value for ${pendingSkill.missing[pendingSkill.index]}` : planNext ? 'planned · your next message will be planned step-by-step' : 'message the agent · /help'}
-          />
-        )}
-        {!resizing ? <StatusLine state={state} /> : null}
+        {footer}
       </Box>
     </Box>
   );

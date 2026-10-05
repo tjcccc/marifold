@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { render } from 'ink-testing-library';
 import { ConfigLoader, MarifoldRuntime, WorkspaceInitializer } from '@marifold/core';
 import { App } from '../src/ui/App.js';
@@ -63,6 +63,20 @@ describe('App', () => {
 
     unmount();
     runtime.close();
+  });
+
+  it('preserves the full-screen draft when Ctrl+L redraws the terminal', async () => {
+    const { runtime, loadedConfig } = workspace();
+    const initial = { profile: 'default', provider: 'ollama', model: 'test-model', think: false, cwd: '/tmp/work', version: '0.0.0-test' };
+    const { lastFrame, stdin, unmount } = render(<App runtime={runtime} loadedConfig={loadedConfig} initial={initial} fullscreen />);
+    try {
+      await vi.waitFor(() => expect(lastFrame()).toContain('marifold'));
+      stdin.write('keep this draft');
+      await vi.waitFor(() => expect(lastFrame()).toContain('keep this draft'));
+      stdin.write('\x0c');
+      await delay();
+      await vi.waitFor(() => expect(lastFrame()).toContain('keep this draft'));
+    } finally { unmount(); runtime.close(); }
   });
 
   it('switches profile via the picker (Enter) and the direct /profile <name> form', async () => {

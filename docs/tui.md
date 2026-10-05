@@ -12,6 +12,7 @@ CommonJS CLI loads through a dynamic `import()`.
 ```bash
 marifold                 # launch the TUI on the default profile (agent mode)
 marifold --profile work  # launch on a named profile
+marifold --fullscreen    # alternate screen, mouse editing, and drag-to-copy
 ```
 
 Bare `marifold` (no subcommand) launches the TUI. `marifold agent` remains the
@@ -29,6 +30,47 @@ When no profile resolves a provider/model (e.g. before configuring a default),
 the bare launch shows a profile picker; otherwise it goes straight to the
 prompt.
 
+## Full-screen mode
+
+The terminal stack uses Ink 8 and React 19.3. Full-screen mode is the default
+for both local and service-connected workspaces. To use inline scrollback by
+default, add this to your local `config.toml`:
+
+```toml
+[tui]
+fullscreen = false
+```
+
+You can also use `marifold config set tui.fullscreen false`. Launch flags
+`--fullscreen` and `--no-fullscreen` override the setting for one launch.
+`MARIFOLD_FULLSCREEN=1` or `0` overrides the config as a shell preference;
+explicit launch flags take precedence over that environment variable.
+
+Full-screen mode keeps the composer below a bounded transcript viewport:
+
+- Mouse wheel and Page Up/Page Down scroll history. Scrolling up pauses automatic
+  following while new replies arrive; reaching the bottom or Ctrl+End follows
+  the latest output again. Submitting a new prompt also follows the latest turn.
+- Clicking the composer positions the caret, including in wrapped Chinese text,
+  combining characters, and emoji. The existing keyboard editing and completion
+  controls remain available.
+- Dragging across transcript text highlights it and copies it on mouse release.
+  The displayed transcript stays stable during selection, even while a reply
+  streams. Scroll, submit a prompt, or press Ctrl+End to return to live output.
+  A click without a selection leaves the clipboard unchanged.
+
+Selections copy displayed text, including visual line wraps. `/copy` copies the
+original response text. Local selection copying uses the existing platform
+clipboard utility (`pbcopy`, `clip`, or `xclip`). SSH sessions and local utility
+failures use OSC 52; the client terminal must allow clipboard writes. tmux also
+needs to allow the clipboard sequence/passthrough. If the terminal blocks OSC 52,
+marifold cannot detect that refusal.
+
+The alternate screen restores the prior shell display on exit; its transcript
+is available through saved sessions rather than native terminal scrollback.
+Use inline mode for terminal-native selection and scrollback. Mouse capture is
+only enabled for full-screen launches, and is released on exit.
+
 ## Input grammar
 
 - **plain text** → talk to the agent; it answers directly or uses tools as needed.
@@ -45,6 +87,9 @@ prompt.
   Ctrl+U deletes to start; Ctrl+W deletes the previous word; Backspace removes
   the character before the cursor (including the macOS DEL byte), while Del
   removes the character under the cursor.
+- **Word editing**: Option/Alt+Left and Option/Alt+Right move by word;
+  Option/Alt+Backspace deletes the previous word. Ctrl+Left/Right and
+  Alt+B/Alt+F also move by word. The terminal must send Option as Alt/Meta.
 - **Tab completion** completes `/command` and `$skill` names.
 - **Cancel/exit**: Esc or Ctrl+C cancels a running task; when idle, press Ctrl+C
   twice to exit.

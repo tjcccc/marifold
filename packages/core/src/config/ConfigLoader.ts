@@ -80,6 +80,7 @@ export class ConfigLoader {
       memory: this.normalizeMemory(memoryRaw),
       paths: this.normalizePaths(pathsRaw),
       providers: this.normalizeProviders(providersRaw),
+      ...(raw.tui !== undefined ? { tui: { fullscreen: optionalBoolean(asObject(raw.tui, 'tui').fullscreen, 'tui.fullscreen') ?? true } } : {}),
       ...(raw.agent !== undefined ? { agent: resolveAgentConfig(parsePartialAgentConfig(raw.agent, 'agent')) } : {}),
       ...(raw.web_search !== undefined ? { webSearch: this.normalizeWebSearch(asObject(raw.web_search, 'web_search')) } : {}),
       ...(raw.channel !== undefined ? { channels: this.normalizeChannels(asObject(raw.channel, 'channel')) } : {}),

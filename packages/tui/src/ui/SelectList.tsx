@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Box, Text, useInput, useStdout } from 'ink';
+import { Box, Text, useInput, useWindowSize } from 'ink';
 import { ACCENT, DIM } from './theme.js';
 import { padTo, truncate } from './text.js';
 
@@ -30,8 +30,7 @@ export function SelectList({
 }): React.ReactElement {
   const [index, setIndex] = useState(0);
   const clamped = Math.min(index, Math.max(0, items.length - 1));
-  const { stdout } = useStdout();
-  const columns = stdout?.columns ?? 80;
+  const { columns } = useWindowSize();
 
   // Window items around the selection so a long list never overflows the frame
   // (reserve rows for border, title, and the footer hint). Also cap to a fixed
