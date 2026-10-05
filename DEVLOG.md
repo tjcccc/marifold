@@ -2,6 +2,15 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## Unreleased — pnpm 12 workspace tooling
+
+- Pin pnpm 12.9.1 in the root package manager field for every workspace package
+  and document Corepack setup. Retain existing application dependency resolutions;
+  pnpm adds its own package-manager metadata to the lockfile.
+- Verify root and package-directory version selection, frozen-lockfile install,
+  synchronized package versions, workspace typechecks, and workspace build.
+  No application tests rerun for this tooling-only change.
+
 ## 2026-10-05 — v0.79.0 — Exclusive sessions and composer token editing
 
 - Reserve open sessions across Web pages, local TUI processes, and remote TUI

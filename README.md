@@ -128,12 +128,14 @@ marifold service start --daemon
 ```
 
 For source development, the repository's `.nvmrc` pins the current LTS patch,
-and `packageManager` pins the compatible pnpm release.
+and the root `packageManager` pins pnpm 12.9.1 for all workspace packages.
+Use Corepack so commands from the root or any package directory select that version.
 
 Install and build:
 
 ```bash
 nvm use
+corepack enable
 pnpm install
 pnpm build
 ```
