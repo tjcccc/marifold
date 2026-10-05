@@ -126,6 +126,7 @@ export { DEFAULT_WEB_SEARCH_CONFIG, resolveWebSearchConfig } from './config/Conf
 export type {
   LoadedMarifoldConfig,
   MarifoldConfig,
+  MarifoldTuiConfig,
   MarifoldDefaultConfig,
   MarifoldMemoryConfig,
   MarifoldPathsConfig,

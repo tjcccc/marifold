@@ -85,6 +85,10 @@
   text-transform: capitalize;
 }
 
+.version {
+  text-transform: none;
+}
+
 @media (max-width: 899px) {
   .brand,
   .brandProminent {

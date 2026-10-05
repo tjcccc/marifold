@@ -63,3 +63,14 @@ export function copyToClipboard(text: string): Promise<void> {
     child.stdin.end(text);
   });
 }
+
+/** Selection copying targets the local clipboard, or the client terminal over
+ * SSH. OSC 52 support and permission are controlled by the terminal. */
+export async function copyTerminalSelection(text: string): Promise<void> {
+  if (!process.env.SSH_TTY && !process.env.SSH_CONNECTION) {
+    try { await copyToClipboard(text); return; } catch { /* Try the terminal clipboard. */ }
+  }
+  if (!process.stdout.isTTY) throw new Error('Terminal clipboard is unavailable.');
+  const sequence = `\x1b]52;c;${Buffer.from(text).toString('base64')}\x07`;
+  process.stdout.write(process.env.TMUX ? `\x1bPtmux;${sequence.replaceAll('\x1b', '\x1b\x1b')}\x1b\\` : sequence);
+}

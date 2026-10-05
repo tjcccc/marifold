@@ -10,6 +10,7 @@ type Reads =
 type AsyncMethods =
   | 'listSessions'
   | 'getSession'
+  | 'getSessionAttachment'
   | 'setProfileAgentApproval'
   | 'addProfileTrustedFolder'
   | 'migrateProfileInstructions'
@@ -25,4 +26,9 @@ export type TuiRuntime = Pick<MarifoldRuntime, Reads> & {
   [K in AsyncMethods]: (
     ...args: Parameters<MarifoldRuntime[K]>
   ) => ReturnType<MarifoldRuntime[K]> | Promise<Awaited<ReturnType<MarifoldRuntime[K]>>>;
-} & { createAgentRunner(profile?: string): Pick<AgentRunner, 'run'>; refresh?: () => Promise<void> };
+} & {
+  acquireSession?: (id: string) => void | Promise<void>;
+  releaseSession?: (id: string) => void | Promise<void>;
+  createAgentRunner(profile?: string): Pick<AgentRunner, 'run'>;
+  refresh?: () => Promise<void>;
+};

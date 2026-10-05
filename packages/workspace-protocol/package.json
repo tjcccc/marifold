@@ -1,6 +1,6 @@
 {
   "name": "@marifold/workspace-protocol",
-  "version": "0.77.3",
+  "version": "0.79.0",
   "private": false,
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

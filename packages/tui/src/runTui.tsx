@@ -1,7 +1,12 @@
+import { sessionPromptHistory, type InputHistoryEntry } from './core/promptHistory.js';
 import type { ApiClientOptions } from '@marifold/client';
+import type { ReactNode } from 'react';
+import { TerminalInput, MOUSE_ENABLE, MOUSE_DISABLE } from './core/TerminalInput.js';
+import { MouseContext } from './ui/Mouse.js';
+import { resolveFullscreen } from './core/tuiSettings.js';
 import { WorkspaceShell } from './ui/WorkspaceShell.js';
 import { readFileSync } from 'fs';
-import { Box, render, Text } from 'ink';
+import { Box, render, Text, type Instance } from 'ink';
 import { MarifoldRuntime } from '@marifold/core';
 import type { LoadedMarifoldConfig, MarifoldResolvedSettings, ProfileSummary } from '@marifold/core';
 import { App } from './ui/App.js';
@@ -21,6 +26,8 @@ function readVersion(): string {
 
 export interface RunTuiOptions {
   service?: ApiClientOptions;
+  /** Override configured alternate-screen rendering and mouse interactions. */
+  fullscreen?: boolean;
   loadedConfig: LoadedMarifoldConfig;
   /** Profile to launch with; defaults to the configured default profile. */
   profile?: string;
@@ -45,13 +52,13 @@ export async function runTui(options: RunTuiOptions): Promise<void> {
     return;
   }
 
+  const fullscreen = resolveFullscreen(options.fullscreen, options.loadedConfig.config.tui);
+
   if (options.service) {
     const local = new MarifoldRuntime({ loadedConfig: options.loadedConfig, environment: { interface: 'terminal' } });
-    process.stdout.write('\x1b[?2004h');
     try {
-      const app = render(<WorkspaceShell local={local} loadedConfig={options.loadedConfig} service={options.service} profile={options.profile} resume={options.resume} version={readVersion()} />, { exitOnCtrlC: false });
-      await app.waitUntilExit();
-    } finally { process.stdout.write('\x1b[?2004l'); local.close(); }
+      await renderSession(<WorkspaceShell local={local} loadedConfig={options.loadedConfig} service={options.service} profile={options.profile} resume={options.resume} version={readVersion()} fullscreen={fullscreen} />, fullscreen);
+    } finally { local.close(); }
     process.exit(process.exitCode ?? 0);
   }
 
@@ -90,13 +97,16 @@ export async function runTui(options: RunTuiOptions): Promise<void> {
     // found, its turns seed the transcript so the prior conversation is shown.
     let resumeSessionId: string | undefined;
     let resumeTranscript: TranscriptItemData[] | undefined;
+    let resumeHistory: InputHistoryEntry[] | undefined;
     if (options.resume !== undefined) {
       const id = typeof options.resume === 'string'
         ? options.resume
         : runtime.listSessions(1, settings.profile, { order: 'recent' })[0]?.id;
+      if (id) runtime.acquireSession(id);
       const detail = id ? runtime.getSession(id) : undefined;
       if (detail) {
         resumeSessionId = detail.id;
+        resumeHistory = sessionPromptHistory(detail);
         resumeTranscript = detail.turns.map(turn => ({ kind: turn.role, text: turn.content }));
       } else if (typeof options.resume === 'string') {
         process.stderr.write(`Session not found: ${options.resume}. Starting a new session.\n`);
@@ -119,27 +129,9 @@ export async function runTui(options: RunTuiOptions): Promise<void> {
       maxContextTokens: settings.maxContextTokens ?? options.loadedConfig.config.default.maxContextTokens,
       ...(resumeSessionId ? { sessionId: resumeSessionId } : {}),
       ...(resumeTranscript ? { transcript: resumeTranscript } : {}),
+      ...(resumeHistory ? { history: resumeHistory } : {}),
     };
-    // Render inline (like Claude Code / Codex), not in the alternate screen: the
-    // banner and transcript live in the terminal's native scrollback, so the
-    // conversation stays scrollable, copyable, and survives after exit — and the
-    // CLI never takes over the whole terminal. Ink 7 clears its live region on
-    // width-decrease (its `resized` handler), so the input area doesn't duplicate
-    // on shrink; committed history is left to the terminal's own reflow.
-    //
-    // Enable bracketed paste so dropped/pasted file paths arrive as one buffered
-    // event (Ink coalesces them) instead of fragmented keystrokes — otherwise a
-    // long dropped path lands as loose text instead of an `[image #n]` token.
-    process.stdout.write('\x1b[?2004h');
-    try {
-      const app = render(
-        <App runtime={runtime} loadedConfig={options.loadedConfig} initial={initial} />,
-        { exitOnCtrlC: false },
-      );
-      await app.waitUntilExit();
-    } finally {
-      process.stdout.write('\x1b[?2004l');
-    }
+    await renderSession(<App runtime={runtime} loadedConfig={options.loadedConfig} initial={initial} fullscreen={fullscreen} />, fullscreen);
   } finally {
     runtime.close();
   }
@@ -183,4 +175,33 @@ function selectProfile(profiles: ProfileSummary[], defaultProfile: string): Prom
       { exitOnCtrlC: false },
     );
   });
+}
+
+/** One owner for terminal modes and input across local/remote renderers. */
+async function renderSession(tree: ReactNode, fullscreen: boolean): Promise<void> {
+  const input = new TerminalInput(process.stdin, fullscreen);
+  process.stdin.pipe(input);
+  process.stdout.write('\x1b[?2004h' + (fullscreen ? MOUSE_ENABLE : ''));
+  let app: Instance | undefined;
+  const restoreModes = () => { process.stdout.write((fullscreen ? MOUSE_DISABLE : '') + '\x1b[?2004l'); };
+  const terminate = () => { process.exitCode = 143; restoreModes(); app?.unmount(); };
+  const hangup = () => { process.exitCode = 129; restoreModes(); app?.unmount(); };
+  // Keep signal listeners registered through unmount: signal-exit otherwise
+  // sees no application listener and re-raises before async cleanup can finish.
+  process.on('SIGTERM', terminate);
+  process.on('SIGHUP', hangup);
+  process.once('exit', restoreModes);
+  try {
+    app = render(<MouseContext.Provider value={fullscreen ? input : undefined}>{tree}</MouseContext.Provider>, {
+      stdin: input, exitOnCtrlC: false, alternateScreen: fullscreen, incrementalRendering: true,
+    });
+    await app.waitUntilExit();
+  } finally {
+    process.off('SIGTERM', terminate);
+    process.off('SIGHUP', hangup);
+    process.off('exit', restoreModes);
+    app?.unmount();
+    restoreModes();
+    input.destroy();
+  }
 }

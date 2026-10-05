@@ -240,6 +240,25 @@ describe('SessionResolver WAL hardening', () => {
 });
 
 describe('SessionResolver turn attachments', () => {
+  it('retains original local paths without storing bytes or exposing paths in transcript metadata', async () => {
+    const dbPath = tempDb();
+    const source = path.join(path.dirname(dbPath), 'source.png');
+    fs.writeFileSync(source, 'original image');
+    const resolver = new SessionResolver(dbPath);
+    await resolver.appendExchange('local', 'default', 'first [image #1]', 'answer', [{ path: source, mediaType: 'image/png' }]);
+    await resolver.appendExchange('local', 'default', 'second [image #1]', 'answer', [{ path: source + '.other', mediaType: 'image/png' }]);
+    resolver.close();
+    const resumed = new SessionResolver(dbPath);
+    expect(resumed.getAttachment('local', 0, 0)).toEqual({ path: source, mediaType: 'image/png' });
+    expect(JSON.stringify(resumed.get('local'))).not.toContain(source);
+    const db = new Database(dbPath, { readonly: true });
+    expect(db.prepare('SELECT data, url, source_path FROM marifold_turn_attachments WHERE user_turn_index = 0').get()).toEqual({ data: '', url: null, source_path: source });
+    db.close();
+    fs.unlinkSync(source);
+    expect(resumed.getAttachment('local', 0, 0)).toEqual({ path: source, mediaType: 'image/png' });
+    resumed.close();
+  });
+
   it('persists embedded images beside the user turn and removes them with the session', async () => {
     const dbPath = tempDb();
     const resolver = new SessionResolver(dbPath);

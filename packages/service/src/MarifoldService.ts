@@ -3,10 +3,12 @@ import { remoteArtifactDownload } from './RemoteArtifactDownload';
 import { requestEnvironment } from './RequestEnvironment';
 import { registerWorkspaceScheduleRoutes } from './WorkspaceScheduleRoutes';
 import * as path from 'node:path';
+import { readFile } from 'node:fs/promises';
 import { WorkspaceRequestContext } from './WorkspaceRequestContext';
 import fastify, { FastifyInstance, FastifyReply } from 'fastify';
 import {
   createImagePreview,
+  prepareImageInputs,
   workspaceTerminal,
   WorkspaceManager,
   WorkspaceExecutor,
@@ -186,7 +188,7 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
     },
     resolve: (input, body, request) => {
       if (input.sessionId && activeSessionRequests.has(input.sessionId)) throw new MarifoldError('SESSION_BUSY', 'Session already has an active request.', { sessionId: input.sessionId });
-      return workspaceRuns.resolve({ ...input, environment: requestEnvironment(request, workspaceContext.resolve(request.headers)) }, {
+      return workspaceRuns.resolve({ ...input, sessionOwner: typeof request.headers['x-marifold-session-owner'] === 'string' ? request.headers['x-marifold-session-owner'] : undefined, environment: requestEnvironment(request, workspaceContext.resolve(request.headers)) }, {
       workspaceId: typeof body.workspaceId === 'string' ? body.workspaceId : undefined,
       executionDeviceId: typeof body.executionDeviceId === 'string' ? body.executionDeviceId : undefined,
     }, workspaceContext.resolve(request.headers)); },
@@ -585,6 +587,29 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
     return { ok: true, session };
   });
 
+  server.post<{ Params: { id: string } }>('/v1/sessions/:id/lease', async request => {
+    const owner = request.headers['x-marifold-session-owner'];
+    if (typeof owner !== 'string' || !/^[a-zA-Z0-9-]{20,100}$/.test(owner)) throw MarifoldError.configInvalid('A session owner identifier is required.');
+    runtime.acquireSession(request.params.id, owner);
+    return { ok: true };
+  });
+  server.delete<{ Params: { id: string } }>('/v1/sessions/:id/lease', async request => {
+    const owner = request.headers['x-marifold-session-owner'];
+    if (typeof owner === 'string') runtime.releaseSession(request.params.id, owner);
+    return { ok: true };
+  });
+  server.addHook('preHandler', async request => {
+    const body = request.body as { sessionId?: unknown } | undefined;
+    const route = request.routeOptions.url ?? '';
+    const sessionId = ['/v1/ask', '/v1/chat/stream', '/v1/runs'].includes(route) && typeof body?.sessionId === 'string'
+      ? body.sessionId
+      : route.startsWith('/v1/sessions/:id') && !route.endsWith('/lease') ? (request.params as { id: string }).id : undefined;
+    if (sessionId) {
+      const owner = request.headers['x-marifold-session-owner'];
+      runtime.assertSessionAvailable(sessionId, typeof owner === 'string' ? owner : 'unclaimed-request');
+    }
+  });
+
   server.get<{
     Params: { id: string; userTurnIndex: string; attachmentIndex: string };
     Querystring: { thumbnail?: string };
@@ -593,7 +618,16 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
       throw MarifoldError.configInvalid('thumbnail must be 1 when supplied.');
     const userTurnIndex = nonNegativeIntegerPath(request.params.userTurnIndex, 'userTurnIndex');
     const attachmentIndex = nonNegativeIntegerPath(request.params.attachmentIndex, 'attachmentIndex');
-    const attachment = runtime.getSessionAttachment(request.params.id, userTurnIndex, attachmentIndex);
+    let attachment = runtime.getSessionAttachment(request.params.id, userTurnIndex, attachmentIndex);
+    if (attachment?.path) {
+      try {
+        const prepared = (await prepareImageInputs([{ path: attachment.path }], { optimize: false })).images[0]!;
+        const data = prepared.data ?? (prepared.path ? (await readFile(prepared.path)).toString('base64') : undefined);
+        attachment = { mediaType: prepared.mediaType ?? attachment.mediaType, data };
+      } catch {
+        attachment = undefined;
+      }
+    }
     if (!attachment?.data) {
       reply.status(404);
       return {
@@ -705,7 +739,7 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
   });
 
   server.post('/v1/ask', async request => {
-    const input = { ...parseRunRequest(request.body), environment: requestEnvironment(request, workspaceContext.resolve(request.headers)) };
+    const input = { ...parseRunRequest(request.body), sessionOwner: typeof request.headers['x-marifold-session-owner'] === 'string' ? request.headers['x-marifold-session-owner'] : undefined, environment: requestEnvironment(request, workspaceContext.resolve(request.headers)) };
     const endRequest = beginSessionRequest(
       input.sessionId,
       input.profile ?? options.loadedConfig.config.default.profile,
@@ -721,7 +755,7 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
   });
 
   server.post('/v1/chat/stream', async (request, reply) => {
-    const input = { ...parseRunRequest(request.body), environment: requestEnvironment(request, workspaceContext.resolve(request.headers)) };
+    const input = { ...parseRunRequest(request.body), sessionOwner: typeof request.headers['x-marifold-session-owner'] === 'string' ? request.headers['x-marifold-session-owner'] : undefined, environment: requestEnvironment(request, workspaceContext.resolve(request.headers)) };
     const endRequest = beginSessionRequest(
       input.sessionId,
       input.profile ?? options.loadedConfig.config.default.profile,

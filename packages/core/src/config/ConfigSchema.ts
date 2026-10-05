@@ -103,6 +103,8 @@ export interface MarifoldProviderConfig {
 }
 
 export interface MarifoldConfig {
+  /** Terminal presentation preferences; full-screen mode defaults to true. */
+  tui?: MarifoldTuiConfig;
   default: MarifoldDefaultConfig;
   models: MarifoldModelsConfig;
   memory: MarifoldMemoryConfig;
@@ -119,6 +121,10 @@ export interface MarifoldConfig {
   /** Normalized [service] section (local HTTP API). Absent when the config
    * file has none; the service falls back to tokenless loopback defaults. */
   service?: MarifoldServiceConfig;
+}
+
+export interface MarifoldTuiConfig {
+  fullscreen: boolean;
 }
 
 /** Settings for the local `marifold service` HTTP API. */

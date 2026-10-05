@@ -33,6 +33,26 @@ function renderBar(onSubmit = vi.fn()) {
 }
 
 describe('InputBar $-autocomplete', () => {
+  it.each(['$some-skill', '/help', '[image #1]'])('deletes %s atomically and preserves surrounding text', token => {
+    const { textarea } = renderBar();
+    const text = `before ${token} after`;
+    fireEvent.change(textarea, { target: { value: text } });
+    textarea.setSelectionRange(7 + token.length, 7 + token.length);
+    fireEvent.keyDown(textarea, { key: 'Backspace' });
+    expect(textarea.value).toBe('before  after');
+    expect(textarea.selectionStart).toBe(7);
+  });
+
+  it('leaves native deletion in charge of selections and IME composition', () => {
+    const { textarea } = renderBar();
+    fireEvent.change(textarea, { target: { value: '$some-skill' } });
+    textarea.setSelectionRange(1, 5);
+    expect(fireEvent.keyDown(textarea, { key: 'Backspace' })).toBe(true);
+    textarea.setSelectionRange(11, 11);
+    fireEvent.compositionStart(textarea);
+    expect(fireEvent.keyDown(textarea, { key: 'Backspace', isComposing: true })).toBe(true);
+  });
+
   it('restores unsent text independently for each session key', () => {
     const base = {
       steering: false,

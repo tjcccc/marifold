@@ -1,3 +1,4 @@
+import { sessionPromptHistory } from '../core/promptHistory.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Box, Text } from 'ink';
 import { createApiClient, startupWorkspaces, type ApiClientOptions } from '@marifold/client';
@@ -14,6 +15,7 @@ interface Props {
   profile?: string;
   resume?: string | boolean;
   version: string;
+  fullscreen?: boolean;
 }
 interface Entry {
   key: string;
@@ -64,6 +66,7 @@ export function WorkspaceShell(props: Props) {
       if (typeof resume === 'string') sessionId = resume;
       else if (resume === true)
         sessionId = (await runtime.listSessions(1, settings.profile, { order: 'recent' }))[0]?.id;
+      if (sessionId) await runtime.acquireSession?.(sessionId);
       const session = sessionId ? await runtime.getSession(sessionId) : undefined;
       if (version !== serial.current) return;
       selected.current = id;
@@ -88,6 +91,7 @@ export function WorkspaceShell(props: Props) {
           version: props.version,
           cwd: id === 'local' ? process.cwd() : `Workspace: ${name}`,
           sessionId: session?.id,
+          history: session ? sessionPromptHistory(session) : [],
           transcript: session?.turns.map((t) => ({ kind: t.role, text: t.content })),
         },
       });
@@ -192,10 +196,12 @@ export function WorkspaceShell(props: Props) {
   };
   return (
     <Box flexDirection="column">
-      <Text dimColor>{notice}</Text>
+      {!props.fullscreen || !entry ? <Text dimColor>{notice}</Text> : null}
       {entry && (
         <App
           key={entry.key}
+          fullscreen={props.fullscreen}
+          workspaceNotice={props.fullscreen ? notice : undefined}
           runtime={entry.runtime}
           loadedConfig={entry.config}
           initial={entry.initial}

@@ -53,10 +53,12 @@ export function createApiClient(options: ApiClientOptions = {}): ApiClient {
     ? `${localBase}/v1/workspaces/${encodeURIComponent(options.workspaceId)}/api`
     : localBase;
   const token = options.token;
+  const sessionOwner = Array.from(globalThis.crypto.getRandomValues(new Uint8Array(24)), byte => byte.toString(16).padStart(2, '0')).join('');
 
   function headers(extra: Record<string, string> = {}): Record<string, string> {
     return {
       ...(token ? { authorization: `Bearer ${token}` } : {}),
+      'x-marifold-session-owner': sessionOwner,
       ...extra,
     };
   }
@@ -81,6 +83,7 @@ export function createApiClient(options: ApiClientOptions = {}): ApiClient {
     if (executionDeviceId && typeof body === 'object' && body !== null) body = { ...body, executionDeviceId };
     const response = await fetch(`${baseUrl}${path}`, {
       method,
+      ...(method === 'DELETE' && path.endsWith('/lease') ? { keepalive: true } : {}),
       headers: headers({
         ...(body !== undefined ? { 'content-type': 'application/json' } : {}),
         ...(method !== 'GET'

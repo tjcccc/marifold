@@ -30,7 +30,7 @@ export function Markdown({ text, muted = false }: { text: string; muted?: boolea
       }
       i += 1; // consume the closing fence (if present)
       blocks.push(
-        <Box key={key++} flexDirection="column" borderStyle="round" borderColor="gray" paddingX={1}>
+        <Box key={key++} flexDirection="column" paddingX={1}>
           {(code.length ? code : ['']).map((c, j) => (
             <Text key={j} color={codeColor}>{c.length ? c : ' '}</Text>
           ))}

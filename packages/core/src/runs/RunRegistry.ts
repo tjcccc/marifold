@@ -66,6 +66,8 @@ export interface RunRegistryOptions {
 /** What a client may pass when starting a run. Mirrors the AgentRunOptions
  * surface that is safe to accept over the service boundary. */
 export interface RunStartInput {
+  /** Client lease identity set by the service boundary, never from request JSON. */
+  sessionOwner?: string;
   environment?: RuntimeEnvironment;
   /** Internal coordinator fields; the public request parser never accepts these. */
   registryRunId?: string;
@@ -430,6 +432,7 @@ export class RunRegistry {
     try {
       const runner = await this.runtime.createAgentRunner(input.profile, { ...input, registryRunId: run.id });
       const events = runner.run({
+        sessionOwner: input.sessionOwner,
         environment: input.environment,
         objective: input.objective,
         profile: input.profile,

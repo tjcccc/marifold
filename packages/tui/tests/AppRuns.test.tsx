@@ -78,6 +78,36 @@ function initial(mode: Mode) {
 const delay = () => new Promise(resolve => setTimeout(resolve, 30));
 
 describe('App run routing', () => {
+  it.each([true, false])('shows live reasoning, collapses completed details, and toggles them with Ctrl+O (fullscreen=%s)', async fullscreen => {
+    let finish!: () => void;
+    const pending = new Promise<void>(resolve => { finish = resolve; });
+    const { runtime } = makeRuntime({ agentRun: async function* () {
+      yield { type: 'reasoning', summary: 'live reasoning detail' };
+      yield { type: 'text', phase: 'progress', text: 'live progress detail' };
+      await pending;
+      yield { type: 'text', phase: 'final', text: 'completed answer' };
+      yield { type: 'done', taskId: 't', status: 'completed' };
+    } });
+    const { stdin, lastFrame, unmount } = render(<App runtime={runtime} loadedConfig={config} initial={initial('agent')} fullscreen={fullscreen} />);
+    try {
+      await delay();
+      stdin.write('hello');
+      await delay();
+      stdin.write('\r');
+      await vi.waitFor(() => expect(lastFrame()).toContain('live progress detail'));
+      expect(lastFrame()).toContain('live reasoning detail');
+      finish();
+      await vi.waitFor(() => expect(lastFrame()).toContain('completed answer'));
+      expect(lastFrame()).not.toContain('live reasoning detail');
+      expect(lastFrame()).not.toContain('live progress detail');
+      stdin.write('\x0f');
+      await vi.waitFor(() => expect(lastFrame()).toContain('live reasoning detail'));
+      expect(lastFrame()).toContain('completed answer');
+      stdin.write('\x0f');
+      await vi.waitFor(() => expect(lastFrame()).not.toContain('live reasoning detail'));
+    } finally { finish(); unmount(); }
+  });
+
   it('refreshes skill completions from the newly selected profile', async () => {
     const { runtime, listSkillsSpy } = makeRuntime({
       skillsByProfile: {

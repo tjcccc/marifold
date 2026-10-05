@@ -8,7 +8,7 @@ export type NoticeTone = 'info' | 'warn' | 'error';
 /** A renderable transcript entry without its assigned id. */
 export type TranscriptItemData =
   | { kind: 'user'; text: string }
-  | { kind: 'assistant'; text: string; muted?: boolean }
+  | { kind: 'assistant'; text: string; muted?: boolean; collapsed?: boolean }
   | { kind: 'notice'; tone: NoticeTone; text: string }
   | { kind: 'plan'; steps: Array<{ id: string; text: string; status: string }> }
   | { kind: 'tool'; tool: string; toolKind?: AgentToolKind; summary: string; phase: 'request' | 'result'; isError?: boolean; callId?: string }
@@ -117,6 +117,20 @@ function withItems(state: AppState, items: TranscriptItemData[]): AppState {
   return items.reduce(withItem, state);
 }
 
+/** Keep completed reasoning available for inspection without crowding the answer. */
+function collapseRunDetails(state: AppState): AppState {
+  return {
+    ...state,
+    transcript: state.transcript.map(item => item.kind === 'assistant' && item.muted
+      ? { ...item, collapsed: true }
+      : item),
+  };
+}
+
+export function visibleTranscript(state: AppState, showDetails = false): TranscriptItem[] {
+  return showDetails ? state.transcript : state.transcript.filter(item => item.kind !== 'assistant' || !item.collapsed);
+}
+
 /**
  * Pure reducer over the whole TUI state. All transcript mutation, streaming,
  * approval, and run lifecycle flows through here so behavior is unit-testable
@@ -172,7 +186,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
     case 'end_assistant':
       return { ...state, streamingAssistant: false };
     case 'set_running':
-      return { ...state, running: action.running, ...(action.running ? {} : { activity: undefined }) };
+      return { ...(action.running ? state : collapseRunDetails(state)), running: action.running, ...(action.running ? {} : { activity: undefined }) };
     case 'set_activity':
       return { ...state, activity: action.activity };
     case 'set_approval':
@@ -247,7 +261,7 @@ function applyAgentEvent(state: AppState, event: AgentEvent): AppState {
       next = { ...next, userInput: undefined, activity: 'thinking' };
       break;
     case 'done':
-      next = { ...next, running: false, activity: undefined, approval: undefined, userInput: undefined };
+      next = { ...collapseRunDetails(next), running: false, activity: undefined, approval: undefined, userInput: undefined };
       break;
     default:
       break;

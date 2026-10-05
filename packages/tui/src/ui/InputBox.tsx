@@ -1,10 +1,18 @@
-import React, { useEffect, useState } from 'react';
-import { Box, Text, useInput, useStdout } from 'ink';
+import { composerTokenBefore } from '@marifold/client';
+import { inputTokens } from '../core/inputTokens.js';
+import React, { useContext, useEffect, useRef, useState } from 'react';
+import { Box, Text, useInput, useWindowSize, measureElement, type DOMElement } from 'ink';
 import * as fs from 'fs';
 import * as path from 'path';
 import { expandHome } from '@marifold/core';
 import { ACCENT, ATTACHMENT, COMMAND, DIM, SKILL } from './theme.js';
+import { copyTerminalSelection } from './appHelpers.js';
 import { padTo, truncate } from './text.js';
+import { SelectionCopyContext, useMouse } from './Mouse.js';
+import { graphemes, previousBoundary, nextBoundary, offsetAtColumn, wrapToVisualLines, locateVisualCursor, inputWindowStart, type VisualLine } from './inputLayout.js';
+
+import type { InputHistoryEntry, PromptImage } from '../core/promptHistory.js';
+export type { InputHistoryEntry } from '../core/promptHistory.js';
 
 const PROMPT = '> ';
 const CONT = '  '; // continuation-line indent, aligned past the prompt
@@ -16,6 +24,7 @@ const MENU_LIMIT = 8;
 // duplicated borders. Windowing the input to a few visual lines keeps the live
 // frame small so Ink always clears it cleanly.
 const MAX_INPUT_ROWS = 8;
+const WORDS = new Intl.Segmenter(undefined, { granularity: 'word' });
 const IMAGE_EXT = /\.(png|jpe?g|gif|webp|bmp)$/i;
 const IMAGE_TOKEN = /\[image #\d+\]/g;
 
@@ -36,7 +45,7 @@ export interface CompletionItem {
 }
 
 /**
- * Multi-line input with a blinking block cursor, history, readline shortcuts,
+ * Multi-line input with a block cursor, history, readline shortcuts,
  * a live completion menu for `/commands` and `$skills`, and image-drop tokens.
  *
  * - Typing `/` or `$` opens a menu of matching commands/skills with their
@@ -47,6 +56,8 @@ export interface CompletionItem {
  *   trailing `\` on Enter also continues. Plain Enter submits.
  * - Ctrl+A/Home & Ctrl+E/End jump to start/end, Ctrl+U deletes to start, Ctrl+K
  *   deletes to end, Ctrl+W deletes a word.
+ * - Option/Alt+Left/Right (or Alt+B/F) move by word; Option/Alt+Backspace
+ *   deletes the previous word. Ctrl+Left/Right also move by word.
  * - Esc and Ctrl+C forward to onInterrupt so the App can cancel a run.
  */
 export function InputBox({
@@ -58,10 +69,10 @@ export function InputBox({
   skills,
   resizing = false,
 }: {
-  onSubmit: (value: string, images: string[]) => void;
+  onSubmit: (value: string, images: PromptImage[]) => void;
   onInterrupt: (reason: 'ctrl-c' | 'escape') => void;
   placeholder?: string;
-  history: string[];
+  history: InputHistoryEntry[];
   commands: CompletionItem[];
   skills: CompletionItem[];
   /** While the terminal is resizing, collapse to a single line and ignore
@@ -69,25 +80,63 @@ export function InputBox({
   resizing?: boolean;
 }): React.ReactElement {
   const [value, setValue] = useState('');
-  const [cursor, setCursor] = useState(0);
+  const [cursor, setCursorState] = useState(0);
+  const cursorRef = useRef(0);
+  const setCursor = (next: number | ((current: number) => number)) => {
+    cursorRef.current = typeof next === 'function' ? next(cursorRef.current) : next;
+    setCursorState(cursorRef.current);
+  };
   const [histIndex, setHistIndex] = useState<number | null>(null);
-  const [histDraft, setHistDraft] = useState('');
-  const [images, setImages] = useState<string[]>([]);
+  const [histDraft, setHistDraft] = useState({ text: '', images: [] as PromptImage[] });
+  const [images, setImages] = useState<PromptImage[]>([]);
   const [menuIndex, setMenuIndex] = useState(0);
   const [menuOpen, setMenuOpen] = useState(true);
 
-  // Terminal width, kept current across resizes, for explicit input wrapping.
-  const { stdout } = useStdout();
-  const [columns, setColumns] = useState(stdout?.columns ?? 80);
+  const { columns, rows } = useWindowSize();
+  const inputRef = useRef<DOMElement>(null);
+  const copySelection = useContext(SelectionCopyContext);
+  const [selection, setSelection] = useState<{ anchor: number; focus: number }>();
+  const drag = useRef<{ anchor: number; focus: number; text: string; visual: VisualLine[]; start: number } | undefined>(undefined);
+  const mouseEnabled = useMouse(event => {
+    if (event.button !== 0 || event.action === 'wheel' || resizing || !inputRef.current) return;
+    const bounds = measureElement(inputRef.current);
+    const inside = event.y >= bounds.y && event.y < bounds.y + bounds.height && event.x >= bounds.x && event.x < bounds.x + bounds.width;
+    if (event.action === 'press') {
+      if (!inside) return;
+      const visual = wrapToVisualLines(value, Math.max(1, columns - PROMPT.length - 1));
+      const caret = locateVisualCursor(visual, cursorRef.current);
+      const start = inputWindowStart(visual.length, caret.line, maxInputRows);
+      const line = visual[start + event.y - bounds.y];
+      if (!line) return;
+      const anchor = line.start + offsetAtColumn(line.text, Math.max(0, event.x - bounds.x - PROMPT.length));
+      drag.current = { anchor, focus: anchor, text: value, visual, start };
+      setSelection(undefined);
+      setCursor(anchor);
+      return;
+    }
+    const snapshot = drag.current;
+    if (!snapshot) return;
+    const row = Math.max(0, Math.min(bounds.height - 1, event.y - bounds.y));
+    const line = snapshot.visual[snapshot.start + row];
+    if (!line) return;
+    const focus = line.start + offsetAtColumn(line.text, Math.max(0, event.x - bounds.x - PROMPT.length));
+    snapshot.focus = focus;
+    setSelection({ anchor: snapshot.anchor, focus });
+    if (event.action === 'release') {
+      drag.current = undefined;
+      setCursor(focus);
+      const text = snapshot.text.slice(Math.min(snapshot.anchor, focus), Math.max(snapshot.anchor, focus));
+      if (text) {
+        if (copySelection) copySelection(text);
+        else void copyTerminalSelection(text).catch(() => {});
+      } else setSelection(undefined);
+    }
+  });
   useEffect(() => {
-    if (!stdout) return;
-    const onResize = (): void => setColumns(stdout.columns ?? 80);
-    stdout.on('resize', onResize);
-    return () => {
-      stdout.off('resize', onResize);
-    };
-  }, [stdout]);
-
+    drag.current = undefined;
+    setSelection(undefined);
+  }, [value, columns, rows, resizing]);
+  const maxInputRows = mouseEnabled ? Math.max(1, Math.min(MAX_INPUT_ROWS, Math.floor(rows / 3))) : MAX_INPUT_ROWS;
   // Reopen the completion menu and reset its selection whenever the input
   // changes. (The cursor is a static block — no blink timer.)
   useEffect(() => {
@@ -95,16 +144,14 @@ export function InputBox({
     setMenuIndex(0);
   }, [value, cursor]);
 
-  // Completion menu follows the leading `/x` or `$x` while the caret is
-  // editing it. Existing arguments may remain after the token.
-  const headMatch = value.match(/^([/$])([\w-]*)(?=\s|$)/);
-  const headEnd = headMatch?.[0].length ?? 0;
-  const editingHead = headMatch !== null && cursor >= 1 && cursor <= headEnd;
-  const sigil = editingHead ? headMatch[1] : '';
-  const partial = editingHead ? headMatch[2] : '';
+  // Completion follows the whitespace-delimited token containing the caret.
+  const tokens = inputTokens(value);
+  const activeToken = tokens.find(token => cursor > token.start && cursor <= token.end);
+  const sigil = activeToken?.sigil ?? '';
+  const partial = activeToken?.name ?? '';
   const pool = sigil === '/' ? commands : sigil === '$' ? skills : [];
   const suggestions = sigil
-    ? pool.filter(item => item.name.startsWith(partial)).slice(0, MENU_LIMIT)
+    ? pool.filter(item => item.name.startsWith(partial)).slice(0, mouseEnabled ? Math.max(1, Math.min(MENU_LIMIT, Math.floor(rows / 4))) : MENU_LIMIT)
     : [];
   const showMenu = menuOpen && suggestions.length > 0;
   const menuIdx = Math.min(menuIndex, Math.max(0, suggestions.length - 1));
@@ -121,10 +168,12 @@ export function InputBox({
 
   const insertNewline = () => set(`${value.slice(0, cursor)}\n${value.slice(cursor)}`, cursor + 1);
   const acceptSuggestion = (name: string) => {
-    const head = `${sigil}${name}`;
-    const suffix = value.slice(headEnd);
+    if (!activeToken) return;
+    const prefix = value.slice(0, activeToken.start);
+    const token = `${sigil}${name}`;
+    const suffix = value.slice(activeToken.end);
     const separator = suffix.length === 0 ? ' ' : '';
-    set(`${head}${separator}${suffix}`, head.length + 1);
+    set(`${prefix}${token}${separator}${suffix}`, prefix.length + token.length + 1);
   };
 
   // The cursor's visual (wrapped) line/column, using the same width as the
@@ -132,10 +181,15 @@ export function InputBox({
   const cursorVisual = (): { line: number; column: number; visual: VisualLine[] } => {
     const width = Math.max(1, columns - PROMPT.length - 1);
     const visual = wrapToVisualLines(value, width);
-    return { ...locateVisualCursor(visual, cursor), visual };
+    return { ...locateVisualCursor(visual, cursorRef.current), visual };
   };
 
   useInput((input, key) => {
+    const cursor = cursorRef.current;
+    if (key.eventType === 'release') return;
+    if (key.pageUp || key.pageDown || (mouseEnabled && key.ctrl && key.end)) return;
+    drag.current = undefined;
+    setSelection(undefined);
     if (key.ctrl && input === 'c') return onInterrupt('ctrl-c');
     if (resizing) return; // ignore typing mid-resize (the box is collapsed)
 
@@ -178,14 +232,18 @@ export function InputBox({
     if ((key.ctrl && input === 'e') || key.end) return setCursor(value.length);
     if (key.ctrl && input === 'u') return set(value.slice(cursor), 0);
     if (key.ctrl && input === 'k') return set(value.slice(0, cursor), cursor);
-    if (key.ctrl && input === 'w') {
-      const start = wordStart(value, cursor);
+    const wordLeft = (key.leftArrow && (key.meta || key.ctrl)) || (key.meta && input === 'b');
+    const wordRight = (key.rightArrow && (key.meta || key.ctrl)) || (key.meta && input === 'f');
+    if (wordLeft) return setCursor(previousWord(value, cursor));
+    if (wordRight) return setCursor(nextWord(value, cursor));
+    if ((key.ctrl && input === 'w') || (key.meta && key.backspace)) {
+      const start = key.meta ? previousWord(value, cursor) : wordStart(value, cursor);
       set(value.slice(0, start) + value.slice(cursor), start);
       return;
     }
 
-    if (key.leftArrow) return setCursor(c => Math.max(0, c - 1));
-    if (key.rightArrow) return setCursor(c => Math.min(value.length, c + 1));
+    if (key.leftArrow) return setCursor(c => previousBoundary(value, c));
+    if (key.rightArrow) return setCursor(c => nextBoundary(value, c));
     // Edge-triggered history (Claude Code style): ↑ recalls history only on the
     // first visual line, ↓ advances it only on the last; otherwise they move the
     // cursor between lines of a multi-line draft. Single-line input has one line
@@ -194,18 +252,26 @@ export function InputBox({
       const { line, column, visual } = cursorVisual();
       if (line === 0) return historyPrev();
       const target = visual[line - 1];
-      return setCursor(target.start + Math.min(column, target.text.length));
+      return setCursor(target.start + offsetAtColumn(target.text, column));
     }
     if (key.downArrow) {
       const { line, column, visual } = cursorVisual();
       if (line >= visual.length - 1) return historyNext();
       const target = visual[line + 1];
-      return setCursor(target.start + Math.min(column, target.text.length));
+      return setCursor(target.start + offsetAtColumn(target.text, column));
     }
 
     if (key.backspace || input === '\x7f' || input === '\b') {
       if (cursor === 0) return;
-      set(value.slice(0, cursor - 1) + value.slice(cursor), cursor - 1);
+      const token = composerTokenBefore(value, cursor);
+      const start = token?.start ?? previousBoundary(value, cursor);
+      let next = value.slice(0, start) + value.slice(cursor);
+      const imageIndex = token?.imageNumber !== undefined ? token.imageNumber - 1 : -1;
+      if (imageIndex >= 0 && imageIndex < images.length && !next.includes(`[image #${imageIndex + 1}]`)) {
+        setImages(current => current.filter((_, index) => index !== imageIndex));
+        next = next.replace(/\[image #(\d+)\]/g, (tag, number: string) => Number(number) > imageIndex + 1 ? `[image #${Number(number) - 1}]` : tag);
+      }
+      set(next, start);
       return;
     }
     // Forward Delete is distinct from Backspace. Fedora terminals commonly
@@ -213,7 +279,7 @@ export function InputBox({
     // character under the cursor and leave the cursor in place.
     if (key.delete) {
       if (cursor >= value.length) return;
-      set(value.slice(0, cursor) + value.slice(cursor + 1), cursor);
+      set(value.slice(0, cursor) + value.slice(nextBoundary(value, cursor)), cursor);
       return;
     }
 
@@ -238,12 +304,18 @@ export function InputBox({
     set(value.slice(0, cursor) + printable + value.slice(cursor), cursor + printable.length);
   });
 
+  function restoreHistoryEntry(entry: InputHistoryEntry): void {
+    const recalled = typeof entry === 'string' ? { text: entry, images: [] } : entry;
+    setValue(recalled.text);
+    setCursor(recalled.text.length);
+    setImages([...recalled.images]);
+  }
+
   function historyPrev(): void {
     if (history.length === 0) return;
     const index = histIndex === null ? history.length - 1 : Math.max(0, histIndex - 1);
-    if (histIndex === null) setHistDraft(value);
-    setValue(history[index]);
-    setCursor(history[index].length);
+    if (histIndex === null) setHistDraft({ text: value, images: [...images] });
+    restoreHistoryEntry(history[index]);
     setHistIndex(index);
   }
 
@@ -251,12 +323,10 @@ export function InputBox({
     if (histIndex === null) return;
     if (histIndex < history.length - 1) {
       const index = histIndex + 1;
-      setValue(history[index]);
-      setCursor(history[index].length);
+      restoreHistoryEntry(history[index]);
       setHistIndex(index);
     } else {
-      setValue(histDraft);
-      setCursor(histDraft.length);
+      restoreHistoryEntry(histDraft);
       setHistIndex(null);
     }
   }
@@ -297,7 +367,7 @@ export function InputBox({
       {/* Plain-text rules (not an Ink border box, which duplicates on resize).
           `columns - 1` avoids the exact-width wrap. */}
       <Text color={ACCENT}>{RULE.repeat(Math.max(1, columns - 1))}</Text>
-      <Box flexDirection="column">{renderLines()}</Box>
+      <Box ref={inputRef} flexDirection="column">{renderLines()}</Box>
       <Text color={ACCENT}>{RULE.repeat(Math.max(1, columns - 1))}</Text>
     </Box>
   );
@@ -326,16 +396,8 @@ export function InputBox({
     const visual = wrapToVisualLines(value, width);
     const { line: cursorLine, column: cursorColumn } = locateVisualCursor(visual, cursor);
 
-    let start = 0;
-    if (visual.length > MAX_INPUT_ROWS) {
-      start = Math.min(Math.max(0, cursorLine - (MAX_INPUT_ROWS - 1)), visual.length - MAX_INPUT_ROWS);
-    }
-    // Color the leading `$name` / `/cmd` head token (line 0 only).
-    const headMatch = value.match(/^([/$])\S*/);
-    const headColor = headMatch ? (headMatch[1] === '$' ? SKILL : COMMAND) : undefined;
-    const headLen = headMatch ? headMatch[0].length : 0;
-
-    const shown = visual.slice(start, start + MAX_INPUT_ROWS);
+    const start = drag.current?.start ?? inputWindowStart(visual.length, cursorLine, maxInputRows);
+    const shown = visual.slice(start, start + maxInputRows);
     return shown.map((vl, idx) => {
       const globalIndex = start + idx;
       return (
@@ -346,9 +408,8 @@ export function InputBox({
           <Box flexGrow={1} flexShrink={1}>
             {renderLine(
               vl.text,
-              globalIndex === cursorLine ? cursorColumn : -1,
-              globalIndex === 0 ? headLen : 0,
-              headColor,
+              globalIndex === cursorLine ? offsetAtColumn(vl.text, cursorColumn) : -1,
+              vl.start,
             )}
           </Box>
         </Box>
@@ -356,10 +417,10 @@ export function InputBox({
     });
   }
 
-  /** Render one line: color the head token (`headLen` chars in `headColor`) and
+  /** Render one line: color inline skill/command tokens and
    * `[image #n]` tokens, and overlay the block cursor — all via a per-character
    * color so the three can overlap (e.g. cursor inside the head). */
-  function renderLine(line: string, cursorCol: number, headLen = 0, headColor?: string): React.ReactElement {
+  function renderLine(line: string, cursorCol: number, lineStart = 0): React.ReactElement {
     const tokenRanges: Array<[number, number]> = [];
     IMAGE_TOKEN.lastIndex = 0;
     let match: RegExpExecArray | null;
@@ -367,86 +428,23 @@ export function InputBox({
       tokenRanges.push([match.index, match.index + match[0].length]);
     }
     const colorAt = (i: number): string | undefined => {
-      if (i < headLen) return headColor;
+      const token = tokens.find(token => lineStart + i >= token.start && lineStart + i < token.end);
+      if (token) return token.sigil === '$' ? SKILL : COMMAND;
       for (const [s, e] of tokenRanges) if (i >= s && i < e) return ATTACHMENT;
       return undefined;
     };
 
     const out: React.ReactNode[] = [];
-    let key = 0;
-    let i = 0;
-    while (i < line.length) {
-      if (i === cursorCol) {
-        out.push(<Text key={key++} color={colorAt(i)} inverse>{line[i]}</Text>);
-        i += 1;
-        continue;
-      }
-      const color = colorAt(i);
-      let j = i + 1;
-      while (j < line.length && j !== cursorCol && colorAt(j) === color) j += 1;
-      out.push(<Text key={key++} color={color}>{line.slice(i, j)}</Text>);
-      i = j;
+    for (const g of graphemes(line)) {
+      out.push(<Text key={g.offset} color={colorAt(g.offset)} inverse={selection && selection.anchor !== selection.focus
+        ? lineStart + g.offset >= Math.min(selection.anchor, selection.focus) && lineStart + g.offset < Math.max(selection.anchor, selection.focus)
+        : g.offset === cursorCol}>{g.text}</Text>);
     }
     if (cursorCol >= line.length && cursorCol >= 0) {
       out.push(<Text key="cur" inverse> </Text>);
     }
     return <Text>{out.length ? out : ' '}</Text>;
   }
-}
-
-interface VisualLine {
-  text: string;
-  /** Flat offset of this visual line's first character within the value. */
-  start: number;
-}
-
-/** Wrap the value into visual lines: split on newlines, then hard-wrap each
- * logical line at `width`. Each entry records where it starts in the value so
- * the cursor can be mapped back. */
-function wrapToVisualLines(value: string, width: number): VisualLine[] {
-  const visual: VisualLine[] = [];
-  let offset = 0;
-  for (const line of value.split('\n')) {
-    if (line.length === 0) {
-      visual.push({ text: '', start: offset });
-    } else {
-      let c = 0;
-      while (c < line.length) {
-        const text = line.slice(c, c + width);
-        visual.push({ text, start: offset + c });
-        c += text.length;
-        // A separator that lands exactly at an automatic wrap boundary should
-        // be consumed by the wrap, not displayed as indentation on the next
-        // visual line. The source value is unchanged.
-        while (c < line.length && line[c] === ' ') c += 1;
-      }
-    }
-    offset += line.length + 1; // account for the consumed newline
-  }
-  if (visual.length === 0) visual.push({ text: '', start: 0 });
-  return visual;
-}
-
-/** Map the flat cursor offset onto its (visual line, column). */
-function locateVisualCursor(visual: VisualLine[], cursor: number): { line: number; column: number } {
-  for (let i = 0; i < visual.length; i += 1) {
-    const start = visual[i].start;
-    const end = start + visual[i].text.length;
-    const nextStart = visual[i + 1]?.start;
-    if (cursor >= start && cursor <= end) {
-      // At a wrap boundary (the next visual line continues the same logical line
-      // at this offset), show the cursor at the start of that next line.
-      if (cursor === end && nextStart === end) continue;
-      return { line: i, column: cursor - start };
-    }
-    // Whitespace consumed at an automatic wrap boundary has no visible column.
-    // Place its caret at the start of the continuation line.
-    if (nextStart !== undefined && cursor > end && cursor < nextStart) {
-      return { line: i + 1, column: 0 };
-    }
-  }
-  const last = visual.length - 1;
-  return { line: last, column: visual[last].text.length };
 }
 
 /** A trimmed, unquoted image path that exists on disk, or null. */
@@ -470,4 +468,22 @@ function wordStart(value: string, cursor: number): number {
   while (i > 0 && value[i - 1] === ' ') i -= 1;
   while (i > 0 && value[i - 1] !== ' ') i -= 1;
   return i;
+}
+
+/** Skip separators and stop at Unicode word boundaries, including CJK text. */
+function previousWord(value: string, cursor: number): number {
+  let start = 0;
+  for (const word of WORDS.segment(value)) {
+    if (word.index >= cursor) break;
+    if (word.isWordLike) start = word.index;
+  }
+  return start;
+}
+
+function nextWord(value: string, cursor: number): number {
+  for (const word of WORDS.segment(value)) {
+    const end = word.index + word.segment.length;
+    if (word.isWordLike && end > cursor) return end;
+  }
+  return value.length;
 }

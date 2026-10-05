@@ -5,6 +5,10 @@ profile = "default"
 timeout_seconds = 300
 think = false
 
+# Full-screen terminal UI is the default; set false for inline scrollback.
+[tui]
+fullscreen = true
+
 [models]
 options = [
   "ollama/gemma4:e4b",

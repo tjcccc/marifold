@@ -1,3 +1,4 @@
+import { sessionPromptHistory, resolvePromptImages, referencedPromptImages, type PromptImage } from '../core/promptHistory.js';
 import type { TuiRuntime } from '../core/TuiRuntime.js';
 import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { Box, Static, useApp, useInput, useStdout } from 'ink';
@@ -22,13 +23,14 @@ import type {
   UserInputHandler,
   UserInputSubmission,
 } from '@marifold/core';
-import { appReducer, createInitialState, type Mode, type NoticeTone, type TranscriptItem, type TranscriptItemData } from '../core/appState.js';
+import { appReducer, createInitialState, visibleTranscript, type Mode, type NoticeTone, type TranscriptItem, type TranscriptItemData } from '../core/appState.js';
 import { parseInput } from '../core/inputGrammar.js';
 import { listCommandCompletions, listCommands, runCommand, type CommandContext } from '../core/commands.js';
 import { bindSkillArgs, skillUsage } from '../core/skills.js';
+import { FullScreen } from './FullScreen.js';
 import { Header } from './Header.js';
 import { TranscriptRow, topGap } from './Transcript.js';
-import { InputBox, type CompletionItem } from './InputBox.js';
+import { InputBox, type CompletionItem, type InputHistoryEntry } from './InputBox.js';
 import { StatusLine } from './StatusLine.js';
 import { RunStatus } from './RunStatus.js';
 import { ApprovalModal, trustTargetFolder, type ApprovalChoice } from './ApprovalModal.js';
@@ -42,6 +44,8 @@ const READ_FILE_CHAR_LIMIT = 100000;
 
 export interface AppProps {
   runtime: TuiRuntime;
+  fullscreen?: boolean;
+  workspaceNotice?: string;
   workspaceCommand?: (args: string) => Promise<string>;
   deviceCommand?: (args: string) => Promise<string>;
   loadedConfig: LoadedMarifoldConfig;
@@ -58,6 +62,7 @@ export interface AppProps {
     sessionId?: string;
     maxContextTokens?: number;
     transcript?: TranscriptItemData[];
+    history?: InputHistoryEntry[];
   };
 }
 
@@ -73,8 +78,8 @@ interface PendingSkill {
   index: number;
 }
 
-export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCommand }: AppProps): React.ReactElement {
-  const { exit } = useApp();
+export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCommand, fullscreen = false, workspaceNotice }: AppProps): React.ReactElement {
+  const { exit, suspendTerminal } = useApp();
   const [state, dispatch] = useReducer(
     appReducer,
     createInitialState({
@@ -91,13 +96,15 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
       ...(initial.transcript ? { transcript: initial.transcript } : {}),
     }),
   );
+  const [showRunDetails, setShowRunDetails] = useState(false);
+  const transcript = useMemo(() => visibleTranscript(state, showRunDetails), [state.transcript, showRunDetails]);
   const [overlay, setOverlay] = useState<Overlay | null>(null);
   const [think, setThink] = useState(initial.think);
   // `/steps` arms a one-shot forced plan for the next model turn (then auto-disarms).
   const [planNext, setPlanNext] = useState(false);
   const [steeringCount, setSteeringCount] = useState(0);
   const [pendingSkill, setPendingSkill] = useState<PendingSkill | null>(null);
-  const [history, setHistory] = useState<string[]>([]);
+  const [history, setHistory] = useState<InputHistoryEntry[]>(() => initial.history ?? (initial.transcript ?? []).flatMap(item => item.kind === 'user' ? [item.text] : []));
   const [skillItems, setSkillItems] = useState<CompletionItem[]>(() => {
     try {
       return runtime.listSkills(initial.profile).map(skill => ({ name: skill.name, hint: skill.description }));
@@ -125,13 +132,18 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
   const [staticEpoch, setStaticEpoch] = useState(0);
   const wasResizing = useRef(false);
   const repaint = useCallback(() => {
+    if (fullscreen) {
+      // Ink's resume forces a full redraw while preserving composer state.
+      void suspendTerminal(async () => {}).catch(() => {});
+      return;
+    }
     (stdout ?? process.stdout).write('\x1b[2J\x1b[3J\x1b[H');
     setStaticEpoch(epoch => epoch + 1);
-  }, [stdout]);
+  }, [stdout, fullscreen, suspendTerminal]);
   useEffect(() => {
     if (wasResizing.current && !resizing) repaint();
     wasResizing.current = resizing;
-  }, [resizing, repaint]);
+  }, [resizing, repaint, fullscreen]);
   // Anchor the run clock here so it survives RunStatus unmounting during a
   // resize burst (`!resizing && state.running` below). If RunStatus owned the
   // start time, remounting after the resize settled would restart it at 0.
@@ -145,6 +157,7 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
   // so it never competes with the picker's or approval modal's key handling.
   useInput((input, key) => {
     if (key.ctrl && input === 'l') repaint();
+    if (key.ctrl && input === 'o') setShowRunDetails(show => !show);
   }, { isActive: !overlay && !state.approval && !state.userInput });
 
   // The committed transcript lives in Ink's <Static>, which is append-only and
@@ -153,11 +166,11 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
   // repaint so the screen reflects the new transcript instead of stale rows.
   const prevItemIds = useRef<string[]>([]);
   useEffect(() => {
-    const ids = state.transcript.map(item => item.id);
+    const ids = transcript.map(item => item.id);
     const appendedOnly = prevItemIds.current.every((id, index) => ids[index] === id);
     prevItemIds.current = ids;
-    if (!appendedOnly) repaint();
-  }, [state.transcript, repaint]);
+    if (!fullscreen && !appendedOnly) repaint();
+  }, [transcript, repaint, fullscreen]);
 
   // Mutable run plumbing (does not drive rendering directly).
   const abortRef = useRef<AbortController | null>(null);
@@ -201,6 +214,32 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
       notify(`Resumed session ${initial.sessionId.slice(0, 8)} — your next message continues it.`, 'info');
     }
   }, [notify, initial.sessionId]);
+
+  useEffect(() => {
+    const id = state.sessionId;
+    if (!id || !runtime.acquireSession) return;
+    let disposed = false;
+    const renew = async () => {
+      try { await runtime.acquireSession!(id); }
+      catch (error) {
+        if (disposed) return;
+        disposed = true;
+        if (stateRef.current.sessionId === id) {
+          abortRef.current?.abort();
+          dispatch({ type: 'new_session' });
+          setHistory([]);
+          notify(errorText(error), 'error');
+        }
+      }
+    };
+    void renew();
+    const timer = setInterval(() => void renew(), 15_000);
+    return () => {
+      disposed = true;
+      clearInterval(timer);
+      void Promise.resolve(runtime.releaseSession?.(id)).catch(() => undefined);
+    };
+  }, [runtime, state.sessionId, notify]);
 
   const refreshSkills = useCallback((profile = stateRef.current.profile) => {
     try {
@@ -306,6 +345,7 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
     let usage: AgentUsage | undefined;
     let doneStatus: string | undefined;
     try {
+      await runtime.acquireSession?.(sessionId);
       const runner = runtime.createAgentRunner(current.profile);
       for await (const event of runner.run({
         objective,
@@ -375,6 +415,7 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
     const startedAt = Date.now();
     let usage: AgentUsage | undefined;
     try {
+      await runtime.acquireSession?.(sessionId);
       for await (const chunk of runtime.stream(
         {
           prompt,
@@ -894,59 +935,79 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
     readFileCmd, setImage, remember, forget, deleteMemory, repaint, runtime, trustFolderForProfile, startTextRun, workspaceCommand, deviceCommand,
   ]);
 
+  const submittingRef = useRef(false);
+
   // --- Input routing -------------------------------------------------------
-  const handleSubmit = useCallback((raw: string, attachedImages: string[] = []) => {
-    const trimmed = raw.trim();
-    if (pendingSkill) {
-      if (trimmed.length === 0) return;
-      fillSkillVariable(trimmed);
-      return;
-    }
-    const parsed = parseInput(raw);
-    // Dropped images (`[image #n]` tokens) attach to the message about to run.
-    // Both the chat path (runChat) and the agent path (runAgent) consume
-    // pendingImagesRef, so this works in either mode for a text/skill turn.
-    if (attachedImages.length > 0) {
-      if (parsed.kind === 'text' || parsed.kind === 'skill' || (parsed.kind === 'command' && parsed.name === 'attach-original')) {
-        for (const file of attachedImages) pendingImagesRef.current.push({ path: file });
-      } else {
-        notify(`Images attach to a message, not /${parsed.kind === 'command' ? 'commands' : 'input'}. Ignored ${attachedImages.length} image(s).`, 'warn');
+  const handleSubmit = useCallback(async (raw: string, attachedImages: PromptImage[] = []) => {
+    if (submittingRef.current) { notify('Wait for the recalled attachments to load.', 'warn'); return; }
+    submittingRef.current = true;
+    try {
+      let trimmed = raw.trim();
+      if (pendingSkill) {
+        if (trimmed.length === 0) return;
+        fillSkillVariable(trimmed);
+        return;
       }
-    }
-    if (parsed.kind !== 'empty') setHistory(entries => [...entries, trimmed]);
-    switch (parsed.kind) {
-      case 'empty':
+      let parsed = parseInput(raw);
+      const sendsMessage = parsed.kind === 'text' || parsed.kind === 'skill' || (parsed.kind === 'command' && parsed.name === 'attach-original');
+      if (sendsMessage && stateRef.current.running) {
+        notify('A task is running. Use /btw to steer or /stop to cancel.', 'warn');
         return;
-      case 'command':
-        // `/attach-original <prompt>` is a one-turn send action. Show the
-        // actual prompt once, not an extra command-echo row before it.
-        if (parsed.name === 'attach-original') {
-          runCommand(commandContext, parsed.name, parsed.args);
+      }
+      if (sendsMessage) {
+        const selected = referencedPromptImages(raw, [...pendingImagesRef.current, ...attachedImages]);
+        raw = selected.text;
+        trimmed = raw.trim();
+        parsed = parseInput(raw);
+        attachedImages = selected.images;
+        pendingImagesRef.current = [];
+      }
+      if (parsed.kind !== 'empty') setHistory(entries => [...entries, { text: trimmed, images: [...attachedImages] }]);
+      // Dropped images (`[image #n]` tokens) attach to the message about to run.
+      // Both the chat path (runChat) and the agent path (runAgent) consume
+      // pendingImagesRef, so this works in either mode for a text/skill turn.
+      if (attachedImages.length > 0) {
+        if (parsed.kind === 'text' || parsed.kind === 'skill' || (parsed.kind === 'command' && parsed.name === 'attach-original')) {
+          pendingImagesRef.current.push(...await resolvePromptImages(runtime, attachedImages));
+        } else {
+          notify(`Images attach to a message, not /${parsed.kind === 'command' ? 'commands' : 'input'}. Ignored ${attachedImages.length} image(s).`, 'warn');
+        }
+      }
+      switch (parsed.kind) {
+        case 'empty':
           return;
-        }
-        // Echo the command as a transcript divider (like a sent message) so its
-        // result is clearly separated from the previous turn.
-        dispatch({ type: 'add_user', text: trimmed });
-        if (!runCommand(commandContext, parsed.name, parsed.args)) {
-          notify(`Unknown command: /${parsed.name}. Type /help.`, 'warn');
-        }
-        return;
-      case 'skill':
-        if (stateRef.current.running) {
-          notify('A task is running. Use /btw to steer or /stop to cancel.', 'warn');
+        case 'command':
+          // `/attach-original <prompt>` is a one-turn send action. Show the
+          // actual prompt once, not an extra command-echo row before it.
+          if (parsed.name === 'attach-original') {
+            runCommand(commandContext, parsed.name, parsed.args);
+            return;
+          }
+          // Echo the command as a transcript divider (like a sent message) so its
+          // result is clearly separated from the previous turn.
+          dispatch({ type: 'add_user', text: trimmed });
+          if (!runCommand(commandContext, parsed.name, parsed.args)) {
+            notify(`Unknown command: /${parsed.name}. Type /help.`, 'warn');
+          }
           return;
-        }
-        runSkill(parsed.name, parsed.argv);
-        return;
-      case 'text':
-        if (stateRef.current.running) {
-          notify('A task is running. Use /btw to steer or /stop to cancel.', 'warn');
+        case 'skill':
+          if (stateRef.current.running) {
+            notify('A task is running. Use /btw to steer or /stop to cancel.', 'warn');
+            return;
+          }
+          runSkill(parsed.name, parsed.argv);
           return;
-        }
-        startTextRun(parsed.text);
-        return;
-    }
-  }, [pendingSkill, fillSkillVariable, commandContext, notify, runSkill, startTextRun]);
+        case 'text':
+          if (stateRef.current.running) {
+            notify('A task is running. Use /btw to steer or /stop to cancel.', 'warn');
+            return;
+          }
+          startTextRun(parsed.text);
+          return;
+      }
+    } catch (error) { notify(errorText(error), 'error'); }
+    finally { submittingRef.current = false; }
+  }, [runtime, pendingSkill, fillSkillVariable, commandContext, notify, runSkill, startTextRun]);
 
   const handleInterrupt = useCallback((reason: 'ctrl-c' | 'escape') => {
     if (stateRef.current.running) {
@@ -1011,12 +1072,15 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
           onSelect={async value => {
             try {
             setOverlay(null);
+            await runtime.acquireSession?.(value);
             const detail = await runtime.getSession(value);
             if (!detail) {
+              await runtime.releaseSession?.(value);
               notify(`Session not found: ${value}`, 'error');
               return;
             }
             dispatch({ type: 'new_session', sessionId: detail.id });
+            setHistory(sessionPromptHistory(detail));
             for (const turn of detail.turns) {
               dispatch({ type: 'add_item', item: { kind: turn.role === 'user' ? 'user' : 'assistant', text: turn.content } });
             }
@@ -1074,9 +1138,32 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
   // the input/status don't duplicate on shrink. Committed history is left to the
   // terminal's own reflow — which we keep clean by holding the live region small
   // (the input box bounds its own height).
-  const committed = state.streamingAssistant ? state.transcript.slice(0, -1) : state.transcript;
-  const liveItem = state.streamingAssistant ? state.transcript[state.transcript.length - 1] : undefined;
+  const committed = state.streamingAssistant ? transcript.slice(0, -1) : transcript;
+  const liveItem = state.streamingAssistant ? transcript[transcript.length - 1] : undefined;
   const staticItems: StaticEntry[] = [{ id: BANNER_ID }, ...committed];
+
+  const footer = (
+    <Box flexDirection="column">
+      {(!resizing || fullscreen) && state.running ? (
+        <RunStatus startedAt={runStartedAt.current} activity={state.activity} think={think} steeringQueued={steeringCount} />
+      ) : null}
+      {activeOverlay ?? (
+        <InputBox
+          onSubmit={handleSubmit}
+          onInterrupt={handleInterrupt}
+          history={history}
+          commands={commandItems}
+          skills={skillItems}
+          resizing={resizing && !fullscreen}
+          placeholder={pendingSkill ? `value for ${pendingSkill.missing[pendingSkill.index]}` : planNext ? 'planned · your next message will be planned step-by-step' : 'message the agent · /help'}
+        />
+      )}
+      {(!resizing || fullscreen) ? <StatusLine state={state} /> : null}
+    </Box>
+  );
+  if (fullscreen) {
+    return <FullScreen items={transcript} header={<Header state={state} />} footer={footer} keyboardActive={!activeOverlay} workspaceNotice={workspaceNotice} />;
+  }
 
   return (
     <Box flexDirection="column">
@@ -1108,21 +1195,7 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
             <TranscriptRow item={liveItem} />
           </Box>
         ) : null}
-        {!resizing && state.running ? (
-          <RunStatus startedAt={runStartedAt.current} activity={state.activity} think={think} steeringQueued={steeringCount} />
-        ) : null}
-        {activeOverlay ?? (
-          <InputBox
-            onSubmit={handleSubmit}
-            onInterrupt={handleInterrupt}
-            history={history}
-            commands={commandItems}
-            skills={skillItems}
-            resizing={resizing}
-            placeholder={pendingSkill ? `value for ${pendingSkill.missing[pendingSkill.index]}` : planNext ? 'planned · your next message will be planned step-by-step' : 'message the agent · /help'}
-          />
-        )}
-        {!resizing ? <StatusLine state={state} /> : null}
+        {footer}
       </Box>
     </Box>
   );

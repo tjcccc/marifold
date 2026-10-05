@@ -58,3 +58,12 @@ it('uses the host snapshot and the workspace run contract without local model cr
     throw new Error('No cancelled run should start.');
   expect(calls).toHaveLength(count);
 });
+
+it('restores session image bytes through the authenticated workspace attachment route', async () => {
+  const fetchImage = vi.fn(async () => new Response(new Uint8Array([1, 2, 3]), { headers: { 'content-type': 'image/png' } }));
+  vi.stubGlobal('fetch', fetchImage);
+  const runtime = new RemoteRuntime({ baseUrl: 'http://localhost:32140', workspaceId: 'home', token: 'test-token' });
+  expect(await runtime.getSessionAttachment('saved', 1, 0)).toEqual({ mediaType: 'image/png', data: 'AQID' });
+  expect(fetchImage.mock.calls[0][0]).toBe('http://localhost:32140/v1/workspaces/home/api/v1/sessions/saved/attachments/1/0');
+  expect(fetchImage.mock.calls[0][1]).toMatchObject({ headers: { authorization: 'Bearer test-token' } });
+});

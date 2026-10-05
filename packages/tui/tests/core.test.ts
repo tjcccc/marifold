@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { AgentEvent, MarifoldSkill } from '@marifold/core';
 import { parseInput, tokenizeArgs } from '../src/core/inputGrammar.js';
 import { agentEventToItems } from '../src/core/eventView.js';
-import { appReducer, createInitialState } from '../src/core/appState.js';
+import { appReducer, createInitialState, visibleTranscript } from '../src/core/appState.js';
 import { listCommandCompletions, runCommand, type CommandContext } from '../src/core/commands.js';
 import { bindSkillArgs, skillUsage } from '../src/core/skills.js';
 import { runSummary } from '../src/ui/appHelpers.js';
@@ -326,5 +326,25 @@ describe('skills binding', () => {
 
   it('formats usage', () => {
     expect(skillUsage(skill)).toBe('$translate [language] <text>');
+  });
+});
+
+describe('completed run details', () => {
+  it.each(['done', 'stopped'])('collapses reasoning and progress after a run is %s, retaining answers and errors', ending => {
+    let state = createInitialState({ profile: 'default', provider: 'p', model: 'm', cwd: '/tmp', version: 'test' });
+    state = appReducer(state, { type: 'set_running', running: true });
+    state = appReducer(state, { type: 'reasoning_delta', text: 'private summary' });
+    state = appReducer(state, { type: 'agent_event', event: { type: 'text', phase: 'progress', text: 'working details' } });
+    state = appReducer(state, { type: 'agent_event', event: { type: 'text', phase: 'final', text: 'final answer' } });
+    state = appReducer(state, { type: 'notice', tone: 'error', text: 'visible error' });
+    expect(visibleTranscript(state)).toHaveLength(4);
+    state = appReducer(state, ending === 'done'
+      ? { type: 'agent_event', event: { type: 'done', taskId: 't', status: 'completed' } }
+      : { type: 'set_running', running: false });
+    expect(visibleTranscript(state).map(item => 'text' in item ? item.text : '')).toEqual(['final answer', 'visible error']);
+    expect(visibleTranscript(state, true)).toHaveLength(4);
+    state = appReducer(state, { type: 'set_running', running: true });
+    state = appReducer(state, { type: 'reasoning_delta', text: 'next run' });
+    expect(visibleTranscript(state)).toHaveLength(3);
   });
 });

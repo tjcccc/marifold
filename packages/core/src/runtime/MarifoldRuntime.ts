@@ -1,3 +1,5 @@
+import { SessionLeases } from '../sessions/SessionLeases';
+import { randomUUID as leaseOwnerId } from 'node:crypto';
 import { SudoExecTool } from '../agent/tools/SudoExecTool';
 import { DeviceExecution } from '../agent/DeviceExecution';
 import { ShellJobStatusTool } from '../agent/tools/ShellJobStatusTool';
@@ -117,6 +119,8 @@ export class MarifoldRuntime {
   private readonly profileResolver: ProfileResolver;
   private readonly profileManager: ProfileManager;
   private readonly sessionResolver: SessionResolver;
+  private readonly sessionLeases: SessionLeases;
+  private readonly sessionOwner = leaseOwnerId();
   private readonly providerFactory: ProviderFactory;
   private readonly memoryStore: MemoryStore;
   private readonly taskStore: TaskStore;
@@ -126,6 +130,7 @@ export class MarifoldRuntime {
 
   constructor(private readonly options: MarifoldRuntimeOptions) {
     const { config, configPath } = options.loadedConfig;
+    this.sessionLeases = new SessionLeases(`${config.paths.sessionsDb}.leases`);
     this.profileResolver = new ProfileResolver(config.paths.profilesDir);
     this.profileManager = new ProfileManager(config.paths.profilesDir);
     this.sessionResolver = new SessionResolver(config.paths.sessionsDb);
@@ -155,11 +160,15 @@ export class MarifoldRuntime {
   }
 
   async ask(request: MarifoldRunRequest): Promise<MarifoldAskResponse> {
+    if (request.sessionId) this.assertSessionAvailable(request.sessionId, request.sessionOwner);
     const startedAtMs = Date.now();
     const startedAt = new Date(startedAtMs).toISOString();
     const settings = this.resolveSettings(request);
     const environment = environmentContext({ ...this.options.environment, ...request.environment }, new Date(startedAtMs), settings);
     const preparedImages = await prepareImageInputs(request.images, { optimize: request.originalImages !== true });
+    const historyImages = preparedImages.images.map((image, index) => request.images?.[index]?.path
+      ? { path: path.resolve(request.images[index].path!), mediaType: preparedImages.summaries[index]?.sourceMediaType ?? request.images[index].mediaType }
+      : image);
     await this.refreshProviderCredentialsIfNeeded(settings.provider);
     const replacing = request.replaceUserTurnIndex !== undefined;
     const isolated = request.isolated === true;
@@ -260,13 +269,14 @@ export class MarifoldRuntime {
       aggregateUsage,
     );
     if (finalResponse.ok && request.sessionId) {
+      this.assertSessionAvailable(request.sessionId, request.sessionOwner);
       if (request.replaceUserTurnIndex !== undefined) {
         this.replaceEditedExchange(
           request.sessionId,
           request.replaceUserTurnIndex,
           userTurn,
           stripped.text,
-          preparedImages.images,
+          historyImages,
           responseMetrics,
         );
       } else if (isolated) {
@@ -275,13 +285,13 @@ export class MarifoldRuntime {
           settings.profile,
           userTurn,
           stripped.text,
-          preparedImages.images,
+          historyImages,
           responseMetrics,
         );
       } else {
         if (request.userTurn) this.sessionResolver.replaceLastUserTurn(request.sessionId, request.userTurn);
         this.sessionResolver.replaceLastAssistantTurn(request.sessionId, stripped.text);
-        this.sessionResolver.saveLastUserTurnAttachments(request.sessionId, preparedImages.images);
+        this.sessionResolver.saveLastUserTurnAttachments(request.sessionId, historyImages);
         this.sessionResolver.saveLastResponseMetrics(request.sessionId, responseMetrics);
       }
     }
@@ -306,11 +316,15 @@ export class MarifoldRuntime {
     onComplete?: (summary: { usage?: UsageInfo; latencyMs?: number }) => void,
     onReasoningSummary?: (text: string) => void,
   ): AsyncGenerator<string, void, unknown> {
+    if (request.sessionId) this.assertSessionAvailable(request.sessionId, request.sessionOwner);
     const startedAtMs = Date.now();
     const startedAt = new Date(startedAtMs).toISOString();
     const settings = this.resolveSettings(request);
     const environment = environmentContext({ ...this.options.environment, ...request.environment }, new Date(startedAtMs), settings);
     const preparedImages = await prepareImageInputs(request.images, { optimize: request.originalImages !== true });
+    const historyImages = preparedImages.images.map((image, index) => request.images?.[index]?.path
+      ? { path: path.resolve(request.images[index].path!), mediaType: preparedImages.summaries[index]?.sourceMediaType ?? request.images[index].mediaType }
+      : image);
     await this.refreshProviderCredentialsIfNeeded(settings.provider);
     let aggregateUsage: UsageInfo | undefined;
     const replacing = request.replaceUserTurnIndex !== undefined;
@@ -454,13 +468,14 @@ export class MarifoldRuntime {
           aggregateUsage,
         );
         if (request.sessionId) {
+          this.assertSessionAvailable(request.sessionId, request.sessionOwner);
           if (request.replaceUserTurnIndex !== undefined) {
             this.replaceEditedExchange(
               request.sessionId,
               request.replaceUserTurnIndex,
               userTurn,
               finalText,
-              preparedImages.images,
+              historyImages,
               responseMetrics,
             );
           } else if (isolated) {
@@ -469,13 +484,13 @@ export class MarifoldRuntime {
               settings.profile,
               userTurn,
               finalText,
-              preparedImages.images,
+              historyImages,
               responseMetrics,
             );
           } else {
             if (request.userTurn) this.sessionResolver.replaceLastUserTurn(request.sessionId, request.userTurn);
             this.sessionResolver.replaceLastAssistantTurn(request.sessionId, finalText);
-            this.sessionResolver.saveLastUserTurnAttachments(request.sessionId, preparedImages.images);
+            this.sessionResolver.saveLastUserTurnAttachments(request.sessionId, historyImages);
             this.sessionResolver.saveLastResponseMetrics(request.sessionId, responseMetrics);
           }
         }
@@ -807,6 +822,18 @@ export class MarifoldRuntime {
     return this.sessionResolver.latest(profileName);
   }
 
+  acquireSession(sessionId: string, owner: string = this.sessionOwner): void {
+    this.sessionLeases.acquire(sessionId, owner);
+  }
+
+  releaseSession(sessionId: string, owner: string = this.sessionOwner): void {
+    this.sessionLeases.release(sessionId, owner);
+  }
+
+  assertSessionAvailable(sessionId: string, owner: string = this.sessionOwner): void {
+    this.sessionLeases.assertAvailable(sessionId, owner);
+  }
+
   getSession(sessionId: string): SessionDetail | undefined {
     return this.sessionResolver.get(sessionId);
   }
@@ -815,7 +842,7 @@ export class MarifoldRuntime {
     sessionId: string,
     userTurnIndex: number,
     attachmentIndex: number,
-  ): { mediaType: string; data?: string; url?: string } | undefined {
+  ): { mediaType: string; data?: string; url?: string; path?: string } | undefined {
     return this.sessionResolver.getAttachment(sessionId, userTurnIndex, attachmentIndex);
   }
 
@@ -882,6 +909,7 @@ export class MarifoldRuntime {
     } = {},
   ): AgentRunner {
     return new AgentRunner({
+      checkSession: options => { if (options.sessionId) this.assertSessionAvailable(options.sessionId, options.sessionOwner); },
       environment: this.options.environment,
       deniedRoots: [path.join(path.dirname(this.options.loadedConfig.configPath), 'workspaces')],
       contextInstructions: runtimeOptions.contextInstructions,
@@ -1517,6 +1545,7 @@ export class MarifoldRuntime {
   }
 
   close(): void {
+    this.sessionLeases.close();
     this.sessionResolver.close();
   }
 

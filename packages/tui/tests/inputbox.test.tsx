@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { render } from 'ink-testing-library';
+import { TerminalInput } from '../src/core/TerminalInput.js';
 import { InputBox } from '../src/ui/InputBox.js';
 import { listCommandCompletions } from '../src/core/commands.js';
 
@@ -16,10 +17,43 @@ function renderInput(overrides: Partial<Parameters<typeof InputBox>[0]> = {}) {
     skills: [{ name: 'translate' }, { name: 'make-midjourney-prompt' }],
     ...overrides,
   };
-  return { onSubmit, ...render(<InputBox {...props} />) };
+  const result = render(<InputBox {...props} />);
+  const input = new TerminalInput(process.stdin, false);
+  input.on('data', (chunk: Buffer) => result.stdin.write(chunk.toString()));
+  return { onSubmit, ...result, stdin: { write: (chunk: string) => input.write(chunk) }, unmount: () => { input.destroy(); result.unmount(); } };
 }
 
 describe('InputBox', () => {
+  it.each(['$some-skill', '/help'])('deletes the whole marked token %s with Backspace', async token => {
+    const { stdin, onSubmit, unmount } = renderInput();
+    try {
+      stdin.write(`before ${token}`);
+      await delay();
+      stdin.write('\x7f');
+      await delay();
+      stdin.write('after');
+      await delay();
+      stdin.write('\r');
+      await vi.waitFor(() => expect(onSubmit).toHaveBeenCalledWith('before after', []));
+    } finally { unmount(); }
+  });
+
+  it('deletes an attachment token and removes its image while renumbering remaining tags', async () => {
+    const { stdin, onSubmit, unmount } = renderInput({ history: [{ text: '[image #1] [image #2]', images: ['/tmp/first.png', '/tmp/second.png'] }] });
+    try {
+      stdin.write('\x1b[A');
+      await delay();
+      for (let i = 0; i < ' [image #2]'.length; i++) stdin.write('\x1b[D');
+      await delay();
+      stdin.write('\x7f');
+      await delay();
+      stdin.write('describe');
+      await delay();
+      stdin.write('\r');
+      await vi.waitFor(() => expect(onSubmit).toHaveBeenCalledWith('describe [image #1]', ['/tmp/second.png']));
+    } finally { unmount(); }
+  });
+
   it('types and deletes with backspace (incl. macOS DEL 0x7f)', async () => {
     const { stdin, lastFrame } = renderInput();
     stdin.write('abc');
@@ -43,6 +77,60 @@ describe('InputBox', () => {
     const frame = lastFrame() ?? '';
     expect(frame).toContain('ab');
     expect(frame).not.toMatch(/ac|abc/);
+  });
+
+  it.each([
+    ['readline', '\x1bb', '\x1bf'],
+    ['Option arrows', '\x1b[1;3D', '\x1b[1;3C'],
+    ['Ctrl arrows', '\x1b[1;5D', '\x1b[1;5C'],
+  ])('moves by words with %s, including punctuation boundaries', async (_name, left, right) => {
+    const { stdin, onSubmit, unmount } = renderInput();
+    try {
+      stdin.write('first,second third');
+      await delay();
+      stdin.write(left);
+      await delay();
+      stdin.write(left);
+      await delay();
+      stdin.write(right);
+      await delay();
+      stdin.write('X');
+      await delay();
+      stdin.write('\r');
+      await vi.waitFor(() => expect(onSubmit).toHaveBeenCalledWith('first,secondX third', []));
+    } finally { unmount(); }
+  });
+
+  it.each(['\x1b\x7f', '\x1b\b', '\x1b[127;3u'])('deletes the previous word with Option+Backspace (%j), retaining text after the caret', async sequence => {
+    const { stdin, onSubmit, unmount } = renderInput();
+    try {
+      stdin.write('first second third');
+      await delay();
+      stdin.write('\x1bb'); // start of third
+      await delay();
+      stdin.write(sequence); // delete second and the separator before third
+      await delay();
+      stdin.write('\r');
+      await vi.waitFor(() => expect(onSubmit).toHaveBeenCalledWith('first third', []));
+    } finally { unmount(); }
+  });
+
+  it('handles word-editing boundaries and multiline Unicode without splitting graphemes', async () => {
+    const { stdin, onSubmit, unmount } = renderInput();
+    try {
+      stdin.write('\x1bb'); // beginning of empty draft
+      await delay();
+      stdin.write('\x1b\x7f');
+      await delay();
+      stdin.write('one\n  cafe\u0301 😀   ');
+      await delay();
+      stdin.write('\x1b\x7f'); // skip separators and delete the previous Unicode word
+      await delay();
+      stdin.write('\x1bf'); // already at the end
+      await delay();
+      stdin.write('\r');
+      await vi.waitFor(() => expect(onSubmit).toHaveBeenCalledWith('one\n  ', []));
+    } finally { unmount(); }
   });
 
   it('submits on Enter', async () => {
@@ -76,6 +164,52 @@ describe('InputBox', () => {
     stdin.write('[A'); // up again
     await delay();
     expect(lastFrame()).toContain('first');
+  });
+
+  it('restores image attachments when recalling and modifying a prompt', async () => {
+    const { stdin, onSubmit, unmount } = renderInput({
+      history: [{ text: 'describe [image #1]', images: ['/tmp/original.png'] }],
+    });
+    try {
+      stdin.write('\x1b[A');
+      await delay();
+      stdin.write(' in pink');
+      await delay();
+      stdin.write('\r');
+      await vi.waitFor(() => expect(onSubmit).toHaveBeenCalledWith('describe [image #1] in pink', ['/tmp/original.png']));
+      stdin.write('new message');
+      await delay();
+      stdin.write('\r');
+      await vi.waitFor(() => expect(onSubmit).toHaveBeenLastCalledWith('new message', []));
+    } finally { unmount(); }
+  });
+
+  it('restores draft attachments after browsing history and clears images for text-only entries', async () => {
+    const { stdin, onSubmit, unmount } = renderInput({
+      history: ['text only', { text: 'draft [image #1]', images: ['/tmp/draft.png'] }],
+    });
+    try {
+      stdin.write('\x1b[A');
+      await delay();
+      stdin.write(' edited');
+      await delay();
+      stdin.write('\x1b[A'); // save the edited image draft and browse
+      await delay();
+      stdin.write('\x1b[A'); // text-only history
+      await delay();
+      stdin.write('\x1b[B');
+      await delay();
+      stdin.write('\x1b[B'); // restore the edited image draft
+      await delay();
+      stdin.write('\r');
+      await vi.waitFor(() => expect(onSubmit).toHaveBeenLastCalledWith('draft [image #1] edited', ['/tmp/draft.png']));
+      stdin.write('\x1b[A');
+      await delay();
+      stdin.write('\x1b[A');
+      await delay();
+      stdin.write('\r');
+      await vi.waitFor(() => expect(onSubmit).toHaveBeenLastCalledWith('text only', []));
+    } finally { unmount(); }
   });
 
   it('moves the cursor between lines mid-draft, recalling history only at the first line', async () => {
@@ -119,6 +253,42 @@ describe('InputBox', () => {
     stdin.write('\t');
     await delay();
     expect(lastFrame()).toContain('/think');
+  });
+
+  it.each([
+    ['Update the skill $make-', 'Update the skill $make-midjourney-prompt '],
+    ['Update the skill\n$make-', 'Update the skill\n$make-midjourney-prompt '],
+    ['Please use /th', 'Please use /think '],
+    ['Please use\n/th', 'Please use\n/think '],
+  ])('completes an inline token at the caret: %s', async (draft, expected) => {
+    const { stdin, lastFrame, onSubmit, unmount } = renderInput();
+    try {
+      // Bracketed paste keeps embedded newlines as literal draft content.
+      stdin.write('\x1b[200~' + draft + '\x1b[201~');
+      await delay();
+      expect(lastFrame()).toContain(draft.includes('$') ? 'make-midjourney-prompt' : '/think');
+      stdin.write('\t');
+      await delay();
+      stdin.write('\r');
+      await vi.waitFor(() => expect(onSubmit).toHaveBeenCalledWith(expected, []));
+    } finally { unmount(); }
+  });
+
+  it('preserves surrounding text when completing a token with arguments and reopens the menu at its caret', async () => {
+    const { stdin, onSubmit, unmount } = renderInput();
+    try {
+      stdin.write('before $make- #image after');
+      await delay();
+      stdin.write('\x01');
+      await delay();
+      for (let i = 0; i < 'before $make-'.length; i++) { stdin.write('\x1b[C'); await delay(); }
+      stdin.write('\t');
+      await delay();
+      stdin.write('X');
+      await delay();
+      stdin.write('\r');
+      await vi.waitFor(() => expect(onSubmit).toHaveBeenCalledWith('before $make-midjourney-prompt X#image after', []));
+    } finally { unmount(); }
   });
 
   it('reopens skill suggestions while editing the head token with existing arguments', async () => {

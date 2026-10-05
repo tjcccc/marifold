@@ -34,7 +34,7 @@ export function resolveSecurityOptions(
 }
 
 const CORS_METHODS = 'GET,POST,PATCH,DELETE,OPTIONS';
-const CORS_HEADERS = 'authorization, content-type, last-event-id, idempotency-key';
+const CORS_HEADERS = 'authorization, content-type, last-event-id, idempotency-key, x-marifold-session-owner';
 const CORS_MAX_AGE = '600';
 /** Host values a default loopback-bound service legitimately sees. */
 const LOOPBACK_HOST = /^(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/i;

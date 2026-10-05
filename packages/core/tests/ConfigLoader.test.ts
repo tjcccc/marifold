@@ -195,4 +195,30 @@ web_dir = "/opt/marifold/web"
     fs.writeFileSync(configPath, '[default]\nprofile = "default"\n[service]\ncors_origins = [42]\n');
     expect(() => new ConfigLoader().load({ configPath })).toThrow(/service\.cors_origins/);
   });
+  it('loads and preserves TUI preferences across config edits', () => {
+    const configPath = path.join(tempDir(), 'config.toml');
+    fs.writeFileSync(configPath, '[tui]\nfullscreen = false\n');
+    const loaded = new ConfigLoader().load({ configPath });
+    expect(loaded.config.tui).toEqual({ fullscreen: false });
+    const manager = new ConfigManager(loaded);
+    expect(manager.getValue('tui.fullscreen')).toBe('false');
+    manager.setValue('default.model', 'test-model');
+    expect(new ConfigLoader().load({ configPath }).config.tui?.fullscreen).toBe(false);
+    manager.setValue('tui.fullscreen', 'true');
+    expect(new ConfigLoader().load({ configPath }).config.tui?.fullscreen).toBe(true);
+    expect(() => manager.setValue('tui.fullscreen', 'invalid')).toThrow(/tui\.fullscreen/);
+  });
+
+  it('defaults an empty TUI section to full-screen and rejects invalid types', () => {
+    const configPath = path.join(tempDir(), 'config.toml');
+    fs.writeFileSync(configPath, '[tui]\n');
+    expect(new ConfigLoader().load({ configPath }).config.tui?.fullscreen).toBe(true);
+    fs.writeFileSync(configPath, '');
+    expect(new ConfigManager(new ConfigLoader().load({ configPath })).getValue('tui.fullscreen')).toBe('true');
+    fs.writeFileSync(configPath, '[tui]\nfullscreen = "false"\n');
+    expect(() => new ConfigLoader().load({ configPath })).toThrow(/tui\.fullscreen/);
+    fs.writeFileSync(configPath, 'tui = false\n');
+    expect(() => new ConfigLoader().load({ configPath })).toThrow(/tui/);
+  });
+
 });

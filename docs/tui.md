@@ -12,6 +12,7 @@ CommonJS CLI loads through a dynamic `import()`.
 ```bash
 marifold                 # launch the TUI on the default profile (agent mode)
 marifold --profile work  # launch on a named profile
+marifold --fullscreen    # alternate screen, mouse editing, and drag-to-copy
 ```
 
 Bare `marifold` (no subcommand) launches the TUI. `marifold agent` remains the
@@ -29,6 +30,53 @@ When no profile resolves a provider/model (e.g. before configuring a default),
 the bare launch shows a profile picker; otherwise it goes straight to the
 prompt.
 
+## Full-screen mode
+
+The terminal stack uses Ink 8 and React 19.3. Full-screen mode is the default
+for both local and service-connected workspaces. To use inline scrollback by
+default, add this to your local `config.toml`:
+
+```toml
+[tui]
+fullscreen = false
+```
+
+You can also use `marifold config set tui.fullscreen false`. Launch flags
+`--fullscreen` and `--no-fullscreen` override the setting for one launch.
+`MARIFOLD_FULLSCREEN=1` or `0` overrides the config as a shell preference;
+explicit launch flags take precedence over that environment variable.
+
+Full-screen mode keeps the composer below a bounded transcript viewport:
+
+- Mouse wheel and Page Up/Page Down scroll history. Scrolling up pauses automatic
+  following while new replies arrive; reaching the bottom or Ctrl+End follows
+  the latest output again. Submitting a new prompt also follows the latest turn.
+- Clicking the composer positions the caret, including in wrapped Chinese text,
+  combining characters, and emoji. The existing keyboard editing and completion
+  controls remain available. Dragging within the composer selects draft text
+  and copies it on release without changing the draft; click or type to clear
+  the highlight.
+- Dragging across transcript text highlights it and copies it on mouse release.
+  The displayed transcript stays stable during selection, even while a reply
+  streams. Scroll, submit a prompt, or press Ctrl+End to return to live output.
+  A click without a selection leaves the clipboard unchanged.
+
+Selections copy rendered text with terminal wrapping removed, preserving explicit
+newlines and paragraph breaks. Outer transcript padding is excluded. `/copy` copies the
+original response text. Local selection copying uses the existing platform
+clipboard utility (`pbcopy`, `clip`, or `xclip`). SSH sessions and local utility
+failures use OSC 52; the client terminal must allow clipboard writes. tmux also
+needs to allow the clipboard sequence/passthrough. If the terminal blocks OSC 52,
+marifold cannot detect that refusal.
+
+After a resize settles, full-screen mode redraws the terminal at its new width
+and height while preserving the composer draft. Ctrl+L also forces a redraw.
+
+The alternate screen restores the prior shell display on exit; its transcript
+is available through saved sessions rather than native terminal scrollback.
+Use inline mode for terminal-native selection and scrollback. Mouse capture is
+only enabled for full-screen launches, and is released on exit.
+
 ## Input grammar
 
 - **plain text** → talk to the agent; it answers directly or uses tools as needed.
@@ -45,7 +93,34 @@ prompt.
   Ctrl+U deletes to start; Ctrl+W deletes the previous word; Backspace removes
   the character before the cursor (including the macOS DEL byte), while Del
   removes the character under the cursor.
-- **Tab completion** completes `/command` and `$skill` names.
+- **Prompt history**: Up/Down restores prompts and their attachments. Editing a
+  recalled prompt keeps its images; returning to an unfinished draft restores
+  that draft's attachments. Both `--resume` and `/resume` restore saved inputs.
+  Image numbers are local to each prompt. Missing or out-of-range `[image #N]`
+  references block submission instead of guessing another session image. When
+  tags are present, submission loads only their referenced images and renumbers
+  those tags; unused images from earlier draft edits cannot block the request.
+  Local file uploads retain their original absolute paths, without storing image
+  bytes. Moved or deleted source files fail to load on resubmission. Existing
+  embedded attachments and Web uploads remain readable; their bytes load lazily
+  on resubmission, including from service-connected workspaces. Missing saved
+  images produce an error instead of silently sending only placeholders.
+- **Marked tokens**: Backspace at the end of a `$skill`, `/command`, or
+  `[image #N]` deletes the entire token. Deleting an image tag removes its
+  attachment and renumbers remaining tags. Editing inside a token stays normal.
+- **Session ownership**: An open session is reserved by its page or terminal.
+  Another Web page or TUI cannot open it and receives a session-in-use error.
+  Switching sessions or exiting releases it; after a crash, stale reservations
+  expire within 60 seconds. Clients renew reservations every 15 seconds.
+- **Word editing**: Option/Alt+Left and Option/Alt+Right move by word;
+  Option/Alt+Backspace deletes the previous word. Ctrl+Left/Right and
+  Alt+B/Alt+F also move by word. The terminal must send Option as Alt/Meta.
+- **Tab completion** completes `/command` and `$skill` tokens at the cursor
+  anywhere after whitespace, including later lines, while preserving surrounding
+  text and arguments. These tokens are highlighted throughout the draft.
+- **Run details**: Reasoning summaries and intermediate progress text appear while
+  running and collapse when the run ends. Ctrl+O toggles completed details. Final
+  answers, tool results, and errors remain visible.
 - **Cancel/exit**: Esc or Ctrl+C cancels a running task; when idle, press Ctrl+C
   twice to exit.
 

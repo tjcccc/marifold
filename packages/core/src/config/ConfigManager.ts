@@ -58,7 +58,9 @@ export class ConfigManager {
     const parts = key.split('.');
     if (parts.length < 2) throw MarifoldError.configInvalid(`Unknown config key: ${key}`);
 
-    if (parts[0] === 'default' && parts.length === 2) {
+    if (key === 'tui.fullscreen') {
+      this.config.tui = { fullscreen: parseBoolean(value, key) };
+    } else if (parts[0] === 'default' && parts.length === 2) {
       this.setDefaultValue(parts[1], value);
     } else if (parts[0] === 'paths' && parts.length === 2) {
       this.setPathValue(parts[1], value);
@@ -97,6 +99,7 @@ export class ConfigManager {
   }
 
   private readValue(parts: string[], key: string): unknown {
+    if (key === 'tui.fullscreen') return this.config.tui?.fullscreen ?? true;
     const pick = (section: string, map: Record<string, unknown>, field: string): unknown => {
       if (!(field in map)) throw MarifoldError.configInvalid(`Unknown config key: ${section}.${field}`);
       return map[field];
@@ -658,6 +661,7 @@ export function renderMarifoldConfig(config: MarifoldConfig): string {
 
   const sections = [
     defaultLines.join('\n'),
+    ...(config.tui ? [`[tui]\nfullscreen = ${config.tui.fullscreen}`] : []),
     modelLines.join('\n'),
     memoryLines.join('\n'),
     ...(agentSection ? [agentSection] : []),

@@ -73,6 +73,12 @@ export class RemoteRuntime implements TuiRuntime {
         `/v1/sessions?limit=${limit}${profile ? `&profile=${encodeURIComponent(profile)}` : ''}`,
       )
     ).sessions;
+  acquireSession = async (id: string): Promise<void> => {
+    await this.api.request('POST', `/v1/sessions/${encodeURIComponent(id)}/lease`);
+  };
+  releaseSession = async (id: string): Promise<void> => {
+    await this.api.request('DELETE', `/v1/sessions/${encodeURIComponent(id)}/lease`);
+  };
   getSession: TuiRuntime['getSession'] = async (id) =>
     (
       await this.api.request<{ session: ReturnType<MarifoldRuntime['getSession']> }>(
@@ -80,6 +86,11 @@ export class RemoteRuntime implements TuiRuntime {
         `/v1/sessions/${encodeURIComponent(id)}`,
       )
     ).session;
+  getSessionAttachment: TuiRuntime['getSessionAttachment'] = async (id, userTurnIndex, attachmentIndex) => {
+    const image = await this.api.blob(`/v1/sessions/${encodeURIComponent(id)}/attachments/${userTurnIndex}/${attachmentIndex}`);
+    if (!image) return undefined;
+    return { mediaType: image.type, data: Buffer.from(await image.arrayBuffer()).toString('base64') };
+  };
   setProfileAgentApproval: TuiRuntime['setProfileAgentApproval'] = (profile, kind, mode) =>
     this.mutate('profile.approval', { profile, kind, mode });
   addProfileTrustedFolder: TuiRuntime['addProfileTrustedFolder'] = (profile, folder) =>

@@ -8,6 +8,8 @@ export type MarifoldWebSearchMode = 'native' | 'fallback' | 'unavailable';
 export type MarifoldProviderToolDefinition = { type: 'web_search' };
 
 export interface MarifoldRunRequest {
+  /** Client lease identity set by the service boundary, never from request JSON. */
+  sessionOwner?: string;
   environment?: RuntimeEnvironment;
   prompt: string;
   profile?: string;
