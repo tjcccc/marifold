@@ -3,10 +3,12 @@ import { remoteArtifactDownload } from './RemoteArtifactDownload';
 import { requestEnvironment } from './RequestEnvironment';
 import { registerWorkspaceScheduleRoutes } from './WorkspaceScheduleRoutes';
 import * as path from 'node:path';
+import { readFile } from 'node:fs/promises';
 import { WorkspaceRequestContext } from './WorkspaceRequestContext';
 import fastify, { FastifyInstance, FastifyReply } from 'fastify';
 import {
   createImagePreview,
+  prepareImageInputs,
   workspaceTerminal,
   WorkspaceManager,
   WorkspaceExecutor,
@@ -593,7 +595,16 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
       throw MarifoldError.configInvalid('thumbnail must be 1 when supplied.');
     const userTurnIndex = nonNegativeIntegerPath(request.params.userTurnIndex, 'userTurnIndex');
     const attachmentIndex = nonNegativeIntegerPath(request.params.attachmentIndex, 'attachmentIndex');
-    const attachment = runtime.getSessionAttachment(request.params.id, userTurnIndex, attachmentIndex);
+    let attachment = runtime.getSessionAttachment(request.params.id, userTurnIndex, attachmentIndex);
+    if (attachment?.path) {
+      try {
+        const prepared = (await prepareImageInputs([{ path: attachment.path }], { optimize: false })).images[0]!;
+        const data = prepared.data ?? (prepared.path ? (await readFile(prepared.path)).toString('base64') : undefined);
+        attachment = { mediaType: prepared.mediaType ?? attachment.mediaType, data };
+      } catch {
+        attachment = undefined;
+      }
+    }
     if (!attachment?.data) {
       reply.status(404);
       return {

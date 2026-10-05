@@ -819,7 +819,7 @@ describe('AgentRunner', () => {
     ]);
   });
 
-  it('prepares images once and honors the one-turn original bypass', async () => {
+  it.each(['embedded', 'local'])('prepares %s images once and retains local paths in history', async source => {
     const engine = new ScriptedEngine([response({ text: 'I can see it.' })]);
     const registry = new ToolRegistry();
     registry.register(fakeTool());
@@ -837,12 +837,12 @@ describe('AgentRunner', () => {
 
     await collect(runner.run({
       objective: 'Describe it.',
-      images: [{ data: 'source', mediaType: 'image/png' }],
+      images: source === 'local' ? [{ path: '/tmp/original.png' }] : [{ data: 'source', mediaType: 'image/png' }],
       originalImages: true,
       sessionId: 'image-session',
     }));
 
-    expect(prepareImages).toHaveBeenCalledWith([{ data: 'source', mediaType: 'image/png' }], false);
+    expect(prepareImages).toHaveBeenCalledWith(source === 'local' ? [{ path: '/tmp/original.png' }] : [{ data: 'source', mediaType: 'image/png' }], false);
     expect(engine.requests[0].images).toBeUndefined();
     expect(engine.requests[0].context?.join('\n')).toContain('attachment-1: image-1.png');
     expect(persistTurn).toHaveBeenCalledWith(
@@ -850,7 +850,7 @@ describe('AgentRunner', () => {
       'default',
       'Describe it.',
       'I can see it.',
-      [{ data: 'prepared', mediaType: 'image/png' }],
+      source === 'local' ? [{ path: '/tmp/original.png' }] : [{ data: 'prepared', mediaType: 'image/png' }],
       undefined,
       expect.objectContaining({
         mode: 'agent',

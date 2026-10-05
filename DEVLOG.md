@@ -2,6 +2,23 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-10-05 — v0.78.2 — TUI prompt history and completed run details
+
+- Complete and highlight whitespace-delimited `$skill` and `/command` tokens at
+  the cursor, including inline tokens and later input lines, preserving arguments.
+- Keep local image uploads as original absolute paths in session attachment
+  records rather than encoded bytes. Preserve exact prompt/image associations
+  during recall; missing image references require reattachment instead of guessing
+  another session image. Existing embedded and Web uploads remain readable.
+- Keep host paths out of service transcripts and serve validated local images
+  through the authenticated image route; moved/deleted sources return 404.
+- Collapse reasoning summaries and intermediate progress text when runs end;
+  Ctrl+O reveals completed details. Keep final answers, tool results, and errors
+  visible. Add a blank row above the transcript history hint.
+- Verify local-path persistence, distinct-image recall after restart, missing-file
+  delivery, completion parsing, and live/collapsed reasoning in both TUI layouts.
+  User accepted hint spacing; no visual tests for that presentation-only change.
+
 ## 2026-10-05 — v0.78.1 — TUI selection, resume, and resize fixes
 
 - Keep dropped images with recalled prompts and unfinished drafts. Both startup

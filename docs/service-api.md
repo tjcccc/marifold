@@ -242,7 +242,7 @@ Memory **content** authoring stays model-driven (`memory_save` blocks) — there
 |---|---|
 | `GET /v1/sessions?limit=&profile=&archived=&q=` | Sessions matching the active/archived view and optional case-insensitive title/first-prompt query, with pinned sessions first. Summaries may carry sidebar-only `title?`, `pinned?`, `archived?`, plus the first-user-message `preview?` |
 | `GET /v1/sessions/:id` | Session detail with all turns. Assistant turns may include durable `responseMetrics: { mode, provider, model, think, startedAt, finishedAt, latencyMs, usage? }`; usage may carry input/output/total/cached/reasoning tokens and estimated USD cost. Embedded display-only images are references (`{ kind: "image", mediaType, ref: { userTurnIndex, attachmentIndex } }`) rather than base64; remote attachments retain `url`. Metrics and images are not replayed into model context. 404 `SESSION_NOT_FOUND` |
-| `GET /v1/sessions/:id/attachments/:userTurnIndex/:attachmentIndex` | Authenticated binary delivery for one embedded transcript image, with its stored image content type. `?thumbnail=1` generates a WebP on the host, capped at 480px and 80,000 bytes, for transcript display. The default preserves stored bytes. This keeps large base64 payloads out of session JSON |
+| `GET /v1/sessions/:id/attachments/:userTurnIndex/:attachmentIndex` | Authenticated binary delivery for one embedded or local-path transcript image, with its stored image content type. `?thumbnail=1` generates a WebP on the host, capped at 480px and 80,000 bytes, for transcript display. The default preserves stored bytes or reads the original local file. Local paths stay server-only; moved/deleted source files return 404. This keeps large base64 payloads out of session JSON |
 | `PATCH /v1/sessions/:id` | Update sidebar-only metadata with `{ title?: string \| null, pinned?: boolean, archived?: boolean }`. `null` clears a custom title. Does not change the session id, transcript, model context, or conversation recency. Returns the updated session; 404 `SESSION_NOT_FOUND` |
 | `DELETE /v1/sessions/:id` | `{ deleted: boolean }`. Refuses with `AGENT_RUN_INVALID` while a run for that session is active, preventing its final save from recreating deleted history |
 | `POST /v1/sessions/:id/truncate` | Low-level destructive operation: body `{ fromUserTurnIndex }` deletes that user turn and everything after it. The Web UI does **not** use this for prompt editing. Returns `{ truncated, removedTurns }`; 404 `SESSION_NOT_FOUND` |
@@ -275,8 +275,9 @@ request-scoped instructions and marifold's minimal runtime framing. App routes
 set this server-side from the definition; ordinary clients should not
 use it as a way to bypass profile policy accidentally.
 Embedded/URL image sources are retained beside their user turn so clients can
-restore transcript thumbnails after navigation or reload; local filesystem
-paths are never exposed through this API.
+restore transcript thumbnails after navigation or reload. Local file uploads
+retain only their original paths on the host; paths are never exposed through
+this API. Missing local files return 404 from the image route.
 Successful session-backed chat and agent responses also retain content-free
 completion metrics beside the exchange. Editing replaces that exchange's
 metrics, while truncation/deletion removes the matching companion rows.

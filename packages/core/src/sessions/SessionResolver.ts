@@ -414,7 +414,7 @@ export class SessionResolver {
     sessionId: string,
     userTurnIndex: number,
     attachmentIndex: number,
-  ): { mediaType: string; data?: string; url?: string } | undefined {
+  ): { mediaType: string; data?: string; url?: string; path?: string } | undefined {
     if (!Number.isInteger(userTurnIndex) || userTurnIndex < 0
       || !Number.isInteger(attachmentIndex) || attachmentIndex < 0) {
       throw MarifoldError.configInvalid('Attachment coordinates must be non-negative integers.');
@@ -424,15 +424,18 @@ export class SessionResolver {
     try {
       if (!this.hasAttachmentsTable(db)) return undefined;
       const row = db.prepare(`
-        SELECT media_type AS mediaType, data, url
+        SELECT media_type AS mediaType, data, url,
+          ${this.hasAttachmentPaths(db) ? 'source_path' : 'NULL'} AS sourcePath
         FROM ${ATTACHMENTS_TABLE}
         WHERE session_id = ? AND user_turn_index = ? AND attachment_index = ?
       `).get(sessionId, userTurnIndex, attachmentIndex) as {
         mediaType: string;
         data: string | null;
         url: string | null;
+        sourcePath: string | null;
       } | undefined;
       if (!row) return undefined;
+      if (row.sourcePath !== null) return { mediaType: row.mediaType, path: row.sourcePath };
       return {
         mediaType: row.mediaType,
         ...(row.data !== null ? { data: row.data } : {}),
@@ -799,11 +802,11 @@ export class SessionResolver {
   /** Persist display-only image sources against the newest user turn. Priest
    * intentionally stores text-only session history, so Marifold owns this
    * side table and keeps it out of later model context. Local filesystem paths
-   * are deliberately skipped rather than exposed through the service API. */
+   * stay server-only; local uploads retain paths rather than image bytes. */
   saveLastUserTurnAttachments(sessionId: string, images?: ImageInput[]): void {
     const persistable = (images ?? []).filter(
-      (image): image is ImageInput & ({ data: string } | { url: string }) =>
-        Boolean(image.data || image.url),
+      (image): image is ImageInput & ({ data: string } | { url: string } | { path: string }) =>
+        Boolean(image.path || image.data || image.url),
     );
     if (persistable.length === 0 || !fs.existsSync(this.sessionsDb)) return;
 
@@ -827,8 +830,8 @@ export class SessionResolver {
         `).run(sessionId, userTurnIndex);
         const insert = db.prepare(`
           INSERT INTO ${ATTACHMENTS_TABLE}
-            (session_id, user_turn_index, attachment_index, media_type, data, url)
-          VALUES (?, ?, ?, ?, ?, ?)
+            (session_id, user_turn_index, attachment_index, media_type, data, url, source_path)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
         `);
         for (const [index, image] of persistable.entries()) {
           insert.run(
@@ -836,8 +839,9 @@ export class SessionResolver {
             userTurnIndex,
             index,
             image.mediaType ?? DEFAULT_IMAGE_MEDIA_TYPE,
-            image.data ?? null,
-            image.url ?? null,
+            image.path ? '' : image.data ?? null,
+            image.path ? null : image.url ?? null,
+            image.path ? path.resolve(image.path) : null,
           );
         }
       });
@@ -964,6 +968,13 @@ export class SessionResolver {
       CREATE INDEX IF NOT EXISTS idx_marifold_turn_attachments_session
         ON ${ATTACHMENTS_TABLE} (session_id, user_turn_index);
     `);
+    // Empty data satisfies the legacy source constraint for path-backed records;
+    // no image bytes are retained. Existing embedded records remain unchanged.
+    if (!this.hasAttachmentPaths(db)) db.exec(`ALTER TABLE ${ATTACHMENTS_TABLE} ADD COLUMN source_path TEXT`);
+  }
+
+  private hasAttachmentPaths(db: Database.Database): boolean {
+    return (db.pragma(`table_info(${ATTACHMENTS_TABLE})`) as Array<{ name: string }>).some(column => column.name === 'source_path');
   }
 
   private hasAttachmentsTable(db: Database.Database): boolean {
@@ -1022,7 +1033,7 @@ export class SessionResolver {
     images: ImageInput[],
   ): void {
     const persistable = images.filter(
-      (image): image is ImageInput & ({ data: string } | { url: string }) => Boolean(image.data || image.url),
+      (image): image is ImageInput & ({ data: string } | { url: string } | { path: string }) => Boolean(image.path || image.data || image.url),
     );
     if (persistable.length > 0) this.ensureAttachmentsTable(db);
     if (!this.hasAttachmentsTable(db)) return;
@@ -1033,8 +1044,8 @@ export class SessionResolver {
     if (persistable.length === 0) return;
     const insert = db.prepare(`
       INSERT INTO ${ATTACHMENTS_TABLE}
-        (session_id, user_turn_index, attachment_index, media_type, data, url)
-      VALUES (?, ?, ?, ?, ?, ?)
+        (session_id, user_turn_index, attachment_index, media_type, data, url, source_path)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
     `);
     for (const [index, image] of persistable.entries()) {
       insert.run(
@@ -1042,8 +1053,9 @@ export class SessionResolver {
         userTurnIndex,
         index,
         image.mediaType ?? DEFAULT_IMAGE_MEDIA_TYPE,
-        image.data ?? null,
-        image.url ?? null,
+        image.path ? '' : image.data ?? null,
+        image.path ? null : image.url ?? null,
+        image.path ? path.resolve(image.path) : null,
       );
     }
   }

@@ -1,4 +1,4 @@
-import { sessionPromptHistory, resolvePromptImages, type PromptImage } from '../core/promptHistory.js';
+import { sessionPromptHistory, resolvePromptImages, validatePromptImageReferences, type PromptImage } from '../core/promptHistory.js';
 import type { TuiRuntime } from '../core/TuiRuntime.js';
 import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { Box, Static, useApp, useInput, useStdout } from 'ink';
@@ -23,7 +23,7 @@ import type {
   UserInputHandler,
   UserInputSubmission,
 } from '@marifold/core';
-import { appReducer, createInitialState, type Mode, type NoticeTone, type TranscriptItem, type TranscriptItemData } from '../core/appState.js';
+import { appReducer, createInitialState, visibleTranscript, type Mode, type NoticeTone, type TranscriptItem, type TranscriptItemData } from '../core/appState.js';
 import { parseInput } from '../core/inputGrammar.js';
 import { listCommandCompletions, listCommands, runCommand, type CommandContext } from '../core/commands.js';
 import { bindSkillArgs, skillUsage } from '../core/skills.js';
@@ -96,6 +96,8 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
       ...(initial.transcript ? { transcript: initial.transcript } : {}),
     }),
   );
+  const [showRunDetails, setShowRunDetails] = useState(false);
+  const transcript = useMemo(() => visibleTranscript(state, showRunDetails), [state.transcript, showRunDetails]);
   const [overlay, setOverlay] = useState<Overlay | null>(null);
   const [think, setThink] = useState(initial.think);
   // `/steps` arms a one-shot forced plan for the next model turn (then auto-disarms).
@@ -155,6 +157,7 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
   // so it never competes with the picker's or approval modal's key handling.
   useInput((input, key) => {
     if (key.ctrl && input === 'l') repaint();
+    if (key.ctrl && input === 'o') setShowRunDetails(show => !show);
   }, { isActive: !overlay && !state.approval && !state.userInput });
 
   // The committed transcript lives in Ink's <Static>, which is append-only and
@@ -163,11 +166,11 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
   // repaint so the screen reflects the new transcript instead of stale rows.
   const prevItemIds = useRef<string[]>([]);
   useEffect(() => {
-    const ids = state.transcript.map(item => item.id);
+    const ids = transcript.map(item => item.id);
     const appendedOnly = prevItemIds.current.every((id, index) => ids[index] === id);
     prevItemIds.current = ids;
     if (!fullscreen && !appendedOnly) repaint();
-  }, [state.transcript, repaint, fullscreen]);
+  }, [transcript, repaint, fullscreen]);
 
   // Mutable run plumbing (does not drive rendering directly).
   const abortRef = useRef<AbortController | null>(null);
@@ -918,6 +921,14 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
         return;
       }
       const parsed = parseInput(raw);
+      const sendsMessage = parsed.kind === 'text' || parsed.kind === 'skill' || (parsed.kind === 'command' && parsed.name === 'attach-original');
+      if (sendsMessage && stateRef.current.running) {
+        notify('A task is running. Use /btw to steer or /stop to cancel.', 'warn');
+        return;
+      }
+      if (sendsMessage) {
+        validatePromptImageReferences(trimmed, attachedImages.length + pendingImagesRef.current.length);
+      }
       if (parsed.kind !== 'empty') setHistory(entries => [...entries, { text: trimmed, images: [...attachedImages] }]);
       // Dropped images (`[image #n]` tokens) attach to the message about to run.
       // Both the chat path (runChat) and the agent path (runAgent) consume
@@ -1092,8 +1103,8 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
   // the input/status don't duplicate on shrink. Committed history is left to the
   // terminal's own reflow — which we keep clean by holding the live region small
   // (the input box bounds its own height).
-  const committed = state.streamingAssistant ? state.transcript.slice(0, -1) : state.transcript;
-  const liveItem = state.streamingAssistant ? state.transcript[state.transcript.length - 1] : undefined;
+  const committed = state.streamingAssistant ? transcript.slice(0, -1) : transcript;
+  const liveItem = state.streamingAssistant ? transcript[transcript.length - 1] : undefined;
   const staticItems: StaticEntry[] = [{ id: BANNER_ID }, ...committed];
 
   const footer = (
@@ -1116,7 +1127,7 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
     </Box>
   );
   if (fullscreen) {
-    return <FullScreen items={state.transcript} header={<Header state={state} />} footer={footer} keyboardActive={!activeOverlay} workspaceNotice={workspaceNotice} />;
+    return <FullScreen items={transcript} header={<Header state={state} />} footer={footer} keyboardActive={!activeOverlay} workspaceNotice={workspaceNotice} />;
   }
 
   return (

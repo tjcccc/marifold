@@ -11,6 +11,30 @@ afterEach(() => {
 });
 
 describe('MarifoldService', () => {
+  it('serves path-backed session images without exposing paths and returns 404 for missing files', async () => {
+    const dir = tempDir();
+    const loadedConfig = fixtureLoadedConfig(dir);
+    const source = path.join(dir, 'image.png');
+    const bytes = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl2nGQAAAAASUVORK5CYII=', 'base64');
+    fs.writeFileSync(source, bytes);
+    const sessions = new SessionResolver(loadedConfig.config.paths.sessionsDb);
+    await sessions.appendExchange('local-image', 'default', 'describe', 'answer', [{ path: source }]);
+    sessions.close();
+    const server = createMarifoldService({ loadedConfig, scheduler: false });
+    try {
+      const transcript = await server.inject({ method: 'GET', url: '/v1/sessions/local-image' });
+      expect(transcript.body).not.toContain(source);
+      const image = await server.inject({ method: 'GET', url: '/v1/sessions/local-image/attachments/0/0' });
+      expect(image.statusCode).toBe(200);
+      expect(image.headers['content-type']).toContain('image/png');
+      expect(image.rawPayload).toEqual(bytes);
+      fs.unlinkSync(source);
+      const missing = await server.inject({ method: 'GET', url: '/v1/sessions/local-image/attachments/0/0' });
+      expect(missing.statusCode).toBe(404);
+      expect(missing.body).not.toContain(source);
+    } finally { await server.close(); }
+  });
+
   it('exposes health and sanitized config without secrets', async () => {
     const server = createMarifoldService({ loadedConfig: fixtureLoadedConfig(tempDir()), scheduler: false });
     try {

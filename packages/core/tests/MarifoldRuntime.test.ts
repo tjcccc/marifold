@@ -147,8 +147,10 @@ describe('MarifoldRuntime', () => {
     }
   });
 
-  it('delegates ask to @priest-ai/core and persists SQLite sessions', async () => {
+  it.each(['embedded', 'local'])('delegates ask and persists %s image sources in SQLite sessions', async source => {
     const dir = tempDir();
+    const imagePath = path.join(dir, 'original.png');
+    fs.writeFileSync(imagePath, Buffer.from(TINY_PNG, 'base64'));
     const config: MarifoldConfig = {
       default: {
         provider: 'ollama',
@@ -195,7 +197,7 @@ describe('MarifoldRuntime', () => {
       const response = await runtime.ask({
         prompt: 'Which editor do I like?',
         sessionId: 'test-session',
-        images: [{ data: TINY_PNG, mediaType: 'image/png' }],
+        images: source === 'local' ? [{ path: imagePath }] : [{ data: TINY_PNG, mediaType: 'image/png' }],
         originalImages: true,
       });
 
@@ -226,10 +228,7 @@ describe('MarifoldRuntime', () => {
         think: false,
         latencyMs: expect.any(Number),
       });
-      expect(runtime.getSessionAttachment('test-session', 0, 0)).toEqual({
-        mediaType: 'image/png',
-        data: TINY_PNG,
-      });
+      expect(runtime.getSessionAttachment('test-session', 0, 0)).toEqual(source === 'local' ? { path: imagePath, mediaType: 'image/png' } : { mediaType: 'image/png', data: TINY_PNG });
     } finally {
       runtime.close();
     }

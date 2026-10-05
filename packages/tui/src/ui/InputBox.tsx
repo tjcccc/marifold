@@ -1,3 +1,4 @@
+import { inputTokens } from '../core/inputTokens.js';
 import React, { useContext, useEffect, useRef, useState } from 'react';
 import { Box, Text, useInput, useWindowSize, measureElement, type DOMElement } from 'ink';
 import * as fs from 'fs';
@@ -142,13 +143,11 @@ export function InputBox({
     setMenuIndex(0);
   }, [value, cursor]);
 
-  // Completion menu follows the leading `/x` or `$x` while the caret is
-  // editing it. Existing arguments may remain after the token.
-  const headMatch = value.match(/^([/$])([\w-]*)(?=\s|$)/);
-  const headEnd = headMatch?.[0].length ?? 0;
-  const editingHead = headMatch !== null && cursor >= 1 && cursor <= headEnd;
-  const sigil = editingHead ? headMatch[1] : '';
-  const partial = editingHead ? headMatch[2] : '';
+  // Completion follows the whitespace-delimited token containing the caret.
+  const tokens = inputTokens(value);
+  const activeToken = tokens.find(token => cursor > token.start && cursor <= token.end);
+  const sigil = activeToken?.sigil ?? '';
+  const partial = activeToken?.name ?? '';
   const pool = sigil === '/' ? commands : sigil === '$' ? skills : [];
   const suggestions = sigil
     ? pool.filter(item => item.name.startsWith(partial)).slice(0, mouseEnabled ? Math.max(1, Math.min(MENU_LIMIT, Math.floor(rows / 4))) : MENU_LIMIT)
@@ -168,10 +167,12 @@ export function InputBox({
 
   const insertNewline = () => set(`${value.slice(0, cursor)}\n${value.slice(cursor)}`, cursor + 1);
   const acceptSuggestion = (name: string) => {
-    const head = `${sigil}${name}`;
-    const suffix = value.slice(headEnd);
+    if (!activeToken) return;
+    const prefix = value.slice(0, activeToken.start);
+    const token = `${sigil}${name}`;
+    const suffix = value.slice(activeToken.end);
     const separator = suffix.length === 0 ? ' ' : '';
-    set(`${head}${separator}${suffix}`, head.length + 1);
+    set(`${prefix}${token}${separator}${suffix}`, prefix.length + token.length + 1);
   };
 
   // The cursor's visual (wrapped) line/column, using the same width as the
@@ -388,11 +389,6 @@ export function InputBox({
     const { line: cursorLine, column: cursorColumn } = locateVisualCursor(visual, cursor);
 
     const start = drag.current?.start ?? inputWindowStart(visual.length, cursorLine, maxInputRows);
-    // Color the leading `$name` / `/cmd` head token (line 0 only).
-    const headMatch = value.match(/^([/$])\S*/);
-    const headColor = headMatch ? (headMatch[1] === '$' ? SKILL : COMMAND) : undefined;
-    const headLen = headMatch ? headMatch[0].length : 0;
-
     const shown = visual.slice(start, start + maxInputRows);
     return shown.map((vl, idx) => {
       const globalIndex = start + idx;
@@ -405,8 +401,6 @@ export function InputBox({
             {renderLine(
               vl.text,
               globalIndex === cursorLine ? offsetAtColumn(vl.text, cursorColumn) : -1,
-              globalIndex === 0 ? headLen : 0,
-              headColor,
               vl.start,
             )}
           </Box>
@@ -415,10 +409,10 @@ export function InputBox({
     });
   }
 
-  /** Render one line: color the head token (`headLen` chars in `headColor`) and
+  /** Render one line: color inline skill/command tokens and
    * `[image #n]` tokens, and overlay the block cursor — all via a per-character
    * color so the three can overlap (e.g. cursor inside the head). */
-  function renderLine(line: string, cursorCol: number, headLen = 0, headColor?: string, lineStart = 0): React.ReactElement {
+  function renderLine(line: string, cursorCol: number, lineStart = 0): React.ReactElement {
     const tokenRanges: Array<[number, number]> = [];
     IMAGE_TOKEN.lastIndex = 0;
     let match: RegExpExecArray | null;
@@ -426,7 +420,8 @@ export function InputBox({
       tokenRanges.push([match.index, match.index + match[0].length]);
     }
     const colorAt = (i: number): string | undefined => {
-      if (i < headLen) return headColor;
+      const token = tokens.find(token => lineStart + i >= token.start && lineStart + i < token.end);
+      if (token) return token.sigil === '$' ? SKILL : COMMAND;
       for (const [s, e] of tokenRanges) if (i >= s && i < e) return ATTACHMENT;
       return undefined;
     };

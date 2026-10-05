@@ -225,6 +225,42 @@ describe('InputBox', () => {
     expect(lastFrame()).toContain('/think');
   });
 
+  it.each([
+    ['Update the skill $make-', 'Update the skill $make-midjourney-prompt '],
+    ['Update the skill\n$make-', 'Update the skill\n$make-midjourney-prompt '],
+    ['Please use /th', 'Please use /think '],
+    ['Please use\n/th', 'Please use\n/think '],
+  ])('completes an inline token at the caret: %s', async (draft, expected) => {
+    const { stdin, lastFrame, onSubmit, unmount } = renderInput();
+    try {
+      // Bracketed paste keeps embedded newlines as literal draft content.
+      stdin.write('\x1b[200~' + draft + '\x1b[201~');
+      await delay();
+      expect(lastFrame()).toContain(draft.includes('$') ? 'make-midjourney-prompt' : '/think');
+      stdin.write('\t');
+      await delay();
+      stdin.write('\r');
+      await vi.waitFor(() => expect(onSubmit).toHaveBeenCalledWith(expected, []));
+    } finally { unmount(); }
+  });
+
+  it('preserves surrounding text when completing a token with arguments and reopens the menu at its caret', async () => {
+    const { stdin, onSubmit, unmount } = renderInput();
+    try {
+      stdin.write('before $make- #image after');
+      await delay();
+      stdin.write('\x01');
+      await delay();
+      for (let i = 0; i < 'before $make-'.length; i++) { stdin.write('\x1b[C'); await delay(); }
+      stdin.write('\t');
+      await delay();
+      stdin.write('X');
+      await delay();
+      stdin.write('\r');
+      await vi.waitFor(() => expect(onSubmit).toHaveBeenCalledWith('before $make-midjourney-prompt X#image after', []));
+    } finally { unmount(); }
+  });
+
   it('reopens skill suggestions while editing the head token with existing arguments', async () => {
     const { stdin, lastFrame } = renderInput();
     stdin.write('$ #anime1');

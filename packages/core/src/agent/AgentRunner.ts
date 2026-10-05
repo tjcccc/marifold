@@ -360,7 +360,7 @@ export class AgentRunner {
           settings.profile,
           options.userTurn ?? options.objective,
           assistantText,
-          runOptions.images,
+          runOptions.images?.map((image, index) => options.images?.[index]?.path ? options.images[index] : image),
           options.replaceUserTurnIndex,
           responseMetrics,
         );

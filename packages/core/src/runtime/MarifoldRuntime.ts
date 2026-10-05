@@ -160,6 +160,9 @@ export class MarifoldRuntime {
     const settings = this.resolveSettings(request);
     const environment = environmentContext({ ...this.options.environment, ...request.environment }, new Date(startedAtMs), settings);
     const preparedImages = await prepareImageInputs(request.images, { optimize: request.originalImages !== true });
+    const historyImages = preparedImages.images.map((image, index) => request.images?.[index]?.path
+      ? { path: path.resolve(request.images[index].path!), mediaType: preparedImages.summaries[index]?.sourceMediaType ?? request.images[index].mediaType }
+      : image);
     await this.refreshProviderCredentialsIfNeeded(settings.provider);
     const replacing = request.replaceUserTurnIndex !== undefined;
     const isolated = request.isolated === true;
@@ -266,7 +269,7 @@ export class MarifoldRuntime {
           request.replaceUserTurnIndex,
           userTurn,
           stripped.text,
-          preparedImages.images,
+          historyImages,
           responseMetrics,
         );
       } else if (isolated) {
@@ -275,13 +278,13 @@ export class MarifoldRuntime {
           settings.profile,
           userTurn,
           stripped.text,
-          preparedImages.images,
+          historyImages,
           responseMetrics,
         );
       } else {
         if (request.userTurn) this.sessionResolver.replaceLastUserTurn(request.sessionId, request.userTurn);
         this.sessionResolver.replaceLastAssistantTurn(request.sessionId, stripped.text);
-        this.sessionResolver.saveLastUserTurnAttachments(request.sessionId, preparedImages.images);
+        this.sessionResolver.saveLastUserTurnAttachments(request.sessionId, historyImages);
         this.sessionResolver.saveLastResponseMetrics(request.sessionId, responseMetrics);
       }
     }
@@ -311,6 +314,9 @@ export class MarifoldRuntime {
     const settings = this.resolveSettings(request);
     const environment = environmentContext({ ...this.options.environment, ...request.environment }, new Date(startedAtMs), settings);
     const preparedImages = await prepareImageInputs(request.images, { optimize: request.originalImages !== true });
+    const historyImages = preparedImages.images.map((image, index) => request.images?.[index]?.path
+      ? { path: path.resolve(request.images[index].path!), mediaType: preparedImages.summaries[index]?.sourceMediaType ?? request.images[index].mediaType }
+      : image);
     await this.refreshProviderCredentialsIfNeeded(settings.provider);
     let aggregateUsage: UsageInfo | undefined;
     const replacing = request.replaceUserTurnIndex !== undefined;
@@ -460,7 +466,7 @@ export class MarifoldRuntime {
               request.replaceUserTurnIndex,
               userTurn,
               finalText,
-              preparedImages.images,
+              historyImages,
               responseMetrics,
             );
           } else if (isolated) {
@@ -469,13 +475,13 @@ export class MarifoldRuntime {
               settings.profile,
               userTurn,
               finalText,
-              preparedImages.images,
+              historyImages,
               responseMetrics,
             );
           } else {
             if (request.userTurn) this.sessionResolver.replaceLastUserTurn(request.sessionId, request.userTurn);
             this.sessionResolver.replaceLastAssistantTurn(request.sessionId, finalText);
-            this.sessionResolver.saveLastUserTurnAttachments(request.sessionId, preparedImages.images);
+            this.sessionResolver.saveLastUserTurnAttachments(request.sessionId, historyImages);
             this.sessionResolver.saveLastResponseMetrics(request.sessionId, responseMetrics);
           }
         }
@@ -815,7 +821,7 @@ export class MarifoldRuntime {
     sessionId: string,
     userTurnIndex: number,
     attachmentIndex: number,
-  ): { mediaType: string; data?: string; url?: string } | undefined {
+  ): { mediaType: string; data?: string; url?: string; path?: string } | undefined {
     return this.sessionResolver.getAttachment(sessionId, userTurnIndex, attachmentIndex);
   }
 

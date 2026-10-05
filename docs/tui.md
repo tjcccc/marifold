@@ -93,18 +93,25 @@ only enabled for full-screen launches, and is released on exit.
   Ctrl+U deletes to start; Ctrl+W deletes the previous word; Backspace removes
   the character before the cursor (including the macOS DEL byte), while Del
   removes the character under the cursor.
-- **Prompt history**: Up/Down restores the prompt and its dropped image attachments.
-  Editing a recalled prompt keeps those images attached; returning to an unfinished
-  draft restores its own attachments. Both `--resume` and `/resume` restore saved
-  user prompts to input history. Saved image attachments are loaded on resubmission,
-  including from service-connected workspaces; missing saved images produce an
-  error instead of silently sending only placeholders. Newly dropped images in
-  the current launch are re-read from their original paths, so those files must
-  still exist.
+- **Prompt history**: Up/Down restores prompts and their attachments. Editing a
+  recalled prompt keeps its images; returning to an unfinished draft restores
+  that draft's attachments. Both `--resume` and `/resume` restore saved inputs.
+  Image numbers are local to each prompt. Missing or out-of-range `[image #N]`
+  references block submission instead of guessing another session image.
+  Local file uploads retain their original absolute paths, without storing image
+  bytes. Moved or deleted source files fail to load on resubmission. Existing
+  embedded attachments and Web uploads remain readable; their bytes load lazily
+  on resubmission, including from service-connected workspaces. Missing saved
+  images produce an error instead of silently sending only placeholders.
 - **Word editing**: Option/Alt+Left and Option/Alt+Right move by word;
   Option/Alt+Backspace deletes the previous word. Ctrl+Left/Right and
   Alt+B/Alt+F also move by word. The terminal must send Option as Alt/Meta.
-- **Tab completion** completes `/command` and `$skill` names.
+- **Tab completion** completes `/command` and `$skill` tokens at the cursor
+  anywhere after whitespace, including later lines, while preserving surrounding
+  text and arguments. These tokens are highlighted throughout the draft.
+- **Run details**: Reasoning summaries and intermediate progress text appear while
+  running and collapse when the run ends. Ctrl+O toggles completed details. Final
+  answers, tool results, and errors remain visible.
 - **Cancel/exit**: Esc or Ctrl+C cancels a running task; when idle, press Ctrl+C
   twice to exit.
 

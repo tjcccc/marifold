@@ -138,7 +138,7 @@ export function FullScreen({ items, header, footer, keyboardActive, workspaceNot
           return <Text key={index} wrap="truncate-end">{sliceAnsi(line, 0, start)}<Text inverse>{sliceAnsi(line, start, end)}</Text>{sliceAnsi(line, end)}</Text>;
         })}
       </Box>
-      <Box flexDirection="column" flexShrink={0} maxHeight={Math.max(1, rows - 2)} overflow="hidden">
+      <Box flexDirection="column" paddingTop={1} flexShrink={0} maxHeight={Math.max(1, rows - 2)} overflow="hidden">
         <Box paddingX={1} justifyContent="space-between">
           <Box flexGrow={1} flexShrink={1}>
             <Text dimColor wrap="truncate-end">{offset === null ? 'Wheel / PgUp: history · drag to copy' : 'History paused · PgDn / Ctrl+End: follow latest'}</Text>

@@ -73,6 +73,7 @@ describe('App', () => {
     const sessions = new SessionResolver(loadedConfig.config.paths.sessionsDb);
     await sessions.appendExchange('saved', 'default', 'first prompt', 'first answer');
     await sessions.appendExchange('saved', 'default', 'describe [image #1]', 'second answer', [{ data: 'aW1hZ2U=', mediaType: 'image/png' }]);
+    await sessions.appendExchange('saved', 'default', 'newer [image #1]', 'newer answer', [{ data: 'bmV3ZXI=', mediaType: 'image/png' }]);
     sessions.close();
     const saved = runtime.getSession('saved')!;
     const attachment = vi.spyOn(runtime, 'getSessionAttachment');
@@ -98,7 +99,9 @@ describe('App', () => {
         stdin.write('\r');
         await vi.waitFor(() => expect(lastFrame()).toContain('Resumed session saved'));
       }
-      stdin.write('\x1b[A'); // latest saved prompt
+      stdin.write('\x1b[A'); // newer upload with the same image number
+      await delay();
+      stdin.write('\x1b[A'); // original image-bearing prompt
       await delay();
       stdin.write('\x1b[A'); // previous saved prompt
       await delay();
@@ -115,6 +118,30 @@ describe('App', () => {
       });
       expect(attachment).toHaveBeenCalledWith('saved', 1, 0);
     } finally { unmount(); run.mockRestore(); createRunner.mockRestore(); attachment.mockRestore(); runtime.close(); }
+  });
+
+  it.each(['recalled orphan', 'typed reference'])('rejects a %s without its own attachment after restart', async mode => {
+    const { runtime, loadedConfig } = workspace();
+    const sessions = new SessionResolver(loadedConfig.config.paths.sessionsDb);
+    await sessions.appendExchange('saved', 'default', 'original [image #1]', 'answer', [{ data: 'aW1hZ2U=', mediaType: 'image/png' }]);
+    await sessions.appendExchange('saved', 'default', 'describe [image #1]', 'missing image');
+    sessions.close();
+    const saved = runtime.getSession('saved')!;
+    const runner = runtime.createAgentRunner('default');
+    const run = vi.spyOn(runner, 'run').mockImplementation(async function* () {});
+    const createRunner = vi.spyOn(runtime, 'createAgentRunner').mockReturnValue(runner);
+    const { stdin, lastFrame, unmount } = render(<App runtime={runtime} loadedConfig={loadedConfig} initial={{
+      profile: 'default', provider: 'ollama', model: 'test-model', think: false,
+      cwd: '/tmp/work', version: 'test', sessionId: saved.id, history: sessionPromptHistory(saved),
+    }} />);
+    try {
+      await delay();
+      stdin.write(mode === 'recalled orphan' ? '\x1b[A' : 'describe [image #1]');
+      await delay();
+      stdin.write('\r');
+      await vi.waitFor(() => expect(lastFrame()).toContain('without a matching attachment'));
+      expect(run).not.toHaveBeenCalled();
+    } finally { unmount(); run.mockRestore(); createRunner.mockRestore(); runtime.close(); }
   });
 
   it('redraws the alternate screen after width and height changes without losing the draft', async () => {
