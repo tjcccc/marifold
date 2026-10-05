@@ -24,6 +24,36 @@ function renderInput(overrides: Partial<Parameters<typeof InputBox>[0]> = {}) {
 }
 
 describe('InputBox', () => {
+  it.each(['$some-skill', '/help'])('deletes the whole marked token %s with Backspace', async token => {
+    const { stdin, onSubmit, unmount } = renderInput();
+    try {
+      stdin.write(`before ${token}`);
+      await delay();
+      stdin.write('\x7f');
+      await delay();
+      stdin.write('after');
+      await delay();
+      stdin.write('\r');
+      await vi.waitFor(() => expect(onSubmit).toHaveBeenCalledWith('before after', []));
+    } finally { unmount(); }
+  });
+
+  it('deletes an attachment token and removes its image while renumbering remaining tags', async () => {
+    const { stdin, onSubmit, unmount } = renderInput({ history: [{ text: '[image #1] [image #2]', images: ['/tmp/first.png', '/tmp/second.png'] }] });
+    try {
+      stdin.write('\x1b[A');
+      await delay();
+      for (let i = 0; i < ' [image #2]'.length; i++) stdin.write('\x1b[D');
+      await delay();
+      stdin.write('\x7f');
+      await delay();
+      stdin.write('describe');
+      await delay();
+      stdin.write('\r');
+      await vi.waitFor(() => expect(onSubmit).toHaveBeenCalledWith('describe [image #1]', ['/tmp/second.png']));
+    } finally { unmount(); }
+  });
+
   it('types and deletes with backspace (incl. macOS DEL 0x7f)', async () => {
     const { stdin, lastFrame } = renderInput();
     stdin.write('abc');

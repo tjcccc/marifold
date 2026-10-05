@@ -326,7 +326,7 @@ export function AgentScreen(props: AgentScreenProps) {
               draftKey={`${props.connectionId}:${controller.profileName}:${controller.sessionId ?? 'new'}`}
               steering={controller.steeringRun !== undefined}
               responding={controller.responding}
-              disabled={controller.sending || controller.sessionLoading}
+              disabled={controller.sending || controller.sessionLoading || controller.sessionBlocked}
               think={controller.think}
               onToggleThink={() => controller.setThink(!controller.think)}
               modelOptions={controller.modelOptions}

@@ -35,6 +35,42 @@ afterEach(() => {
 });
 
 describe('App', () => {
+  it('blocks a resumed session held by another runtime and clears its transcript', async () => {
+    const { runtime: owner, loadedConfig } = workspace();
+    const second = new MarifoldRuntime({ loadedConfig });
+    owner.acquireSession('occupied');
+    const { lastFrame, unmount } = render(<App runtime={second} loadedConfig={loadedConfig} initial={{
+      profile: 'default', provider: 'ollama', model: 'test-model', think: false,
+      cwd: '/tmp/work', version: 'test', sessionId: 'occupied',
+      transcript: [{ kind: 'assistant', text: 'other client conversation' }],
+    }} />);
+    try {
+      await vi.waitFor(() => expect(lastFrame()).toContain('in use in another page or terminal'));
+      expect(lastFrame()).not.toContain('other client conversation');
+      expect(() => owner.acquireSession('occupied')).not.toThrow();
+    } finally { unmount(); second.close(); owner.close(); }
+  });
+
+  it('sends only image #3 from a recalled prompt with two unused missing paths', async () => {
+    const { runtime, loadedConfig } = workspace();
+    const runner = runtime.createAgentRunner('default');
+    const run = vi.spyOn(runner, 'run').mockImplementation(async function* () {});
+    const createRunner = vi.spyOn(runtime, 'createAgentRunner').mockReturnValue(runner);
+    const { stdin, unmount } = render(<App runtime={runtime} loadedConfig={loadedConfig} initial={{
+      profile: 'default', provider: 'ollama', model: 'test-model', think: false,
+      cwd: '/tmp/work', version: 'test', history: [{ text: 'describe [image #3]',
+        images: ['/tmp/missing-first.png', '/tmp/missing-second.png', '/tmp/current.png'] }],
+    }} />);
+    try {
+      await delay();
+      stdin.write('\x1b[A');
+      await delay();
+      stdin.write('\r');
+      await vi.waitFor(() => expect(run).toHaveBeenCalledTimes(1));
+      expect(run.mock.calls[0][0]).toMatchObject({ objective: 'describe [image #1]', images: [{ path: '/tmp/current.png' }] });
+    } finally { unmount(); run.mockRestore(); createRunner.mockRestore(); runtime.close(); }
+  });
+
   it('reattaches a dropped image when a sent prompt is recalled and edited', async () => {
     const { runtime, loadedConfig } = workspace();
     const image = path.join(tempDirs.at(-1)!, 'source.png');

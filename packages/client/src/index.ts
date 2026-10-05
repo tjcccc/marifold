@@ -4,3 +4,5 @@ export type { SseFrame } from './sse';
 
 export { followRunEvents } from './followRun';
 export { startupWorkspaces } from './workspaceStartup';
+
+export { composerTokenBefore } from './composerTokens';

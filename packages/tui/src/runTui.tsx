@@ -102,6 +102,7 @@ export async function runTui(options: RunTuiOptions): Promise<void> {
       const id = typeof options.resume === 'string'
         ? options.resume
         : runtime.listSessions(1, settings.profile, { order: 'recent' })[0]?.id;
+      if (id) runtime.acquireSession(id);
       const detail = id ? runtime.getSession(id) : undefined;
       if (detail) {
         resumeSessionId = detail.id;

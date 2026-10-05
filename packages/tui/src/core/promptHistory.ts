@@ -31,3 +31,16 @@ export function validatePromptImageReferences(text: string, imageCount: number):
     throw new Error('This prompt has an image reference without a matching attachment. Recall the original image-bearing prompt or reattach the intended image.');
   }
 }
+
+/** Resolve only explicitly referenced images and keep labels aligned with their inputs. */
+export function referencedPromptImages(text: string, images: PromptImage[]): { text: string; images: PromptImage[] } {
+  validatePromptImageReferences(text, images.length);
+  const referenced = new Set(Array.from(text.matchAll(/\[image #(\d+)\]/g), match => Number(match[1]) - 1));
+  // Older saved turns and /attach can carry images without inline labels.
+  if (!referenced.size) return { text, images };
+  const indices = images.flatMap((_, index) => referenced.has(index) ? [index] : []);
+  return {
+    text: text.replace(/\[image #(\d+)\]/g, (_, number: string) => `[image #${indices.indexOf(Number(number) - 1) + 1}]`),
+    images: indices.map(index => images[index]),
+  };
+}

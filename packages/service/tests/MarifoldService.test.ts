@@ -35,6 +35,31 @@ describe('MarifoldService', () => {
     } finally { await server.close(); }
   });
 
+  it('shares open-session leases with local runtimes and rejects other pages before loading or sending', async () => {
+    const loadedConfig = fixtureLoadedConfig(tempDir());
+    const local = new (await import('@marifold/core')).MarifoldRuntime({ loadedConfig });
+    const server = createMarifoldService({ loadedConfig, scheduler: false });
+    const owner = '11111111-1111-4111-8111-111111111111';
+    const other = '22222222-2222-4222-8222-222222222222';
+    try {
+      local.acquireSession('occupied');
+      const blocked = await server.inject({ method: 'POST', url: '/v1/sessions/occupied/lease', headers: { 'x-marifold-session-owner': owner } });
+      expect(blocked.statusCode).toBe(409);
+      local.releaseSession('occupied');
+      const acquired = await server.inject({ method: 'POST', url: '/v1/sessions/occupied/lease', headers: { 'x-marifold-session-owner': owner } });
+      expect(acquired.statusCode).toBe(200);
+      expect(() => local.acquireSession('occupied')).toThrow('in use');
+      const transcript = await server.inject({ method: 'GET', url: '/v1/sessions/occupied', headers: { 'x-marifold-session-owner': other } });
+      expect(transcript.statusCode).toBe(409);
+      const send = await server.inject({ method: 'POST', url: '/v1/ask', headers: { 'x-marifold-session-owner': other }, payload: { sessionId: 'occupied', prompt: 'hi' } });
+      expect(send.statusCode).toBe(409);
+      await server.inject({ method: 'DELETE', url: '/v1/sessions/occupied/lease', headers: { 'x-marifold-session-owner': other } });
+      expect(() => local.acquireSession('occupied')).toThrow('in use');
+      await server.inject({ method: 'DELETE', url: '/v1/sessions/occupied/lease', headers: { 'x-marifold-session-owner': owner } });
+      local.acquireSession('occupied');
+    } finally { local.close(); await server.close(); }
+  });
+
   it('exposes health and sanitized config without secrets', async () => {
     const server = createMarifoldService({ loadedConfig: fixtureLoadedConfig(tempDir()), scheduler: false });
     try {

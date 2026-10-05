@@ -73,6 +73,12 @@ export class RemoteRuntime implements TuiRuntime {
         `/v1/sessions?limit=${limit}${profile ? `&profile=${encodeURIComponent(profile)}` : ''}`,
       )
     ).sessions;
+  acquireSession = async (id: string): Promise<void> => {
+    await this.api.request('POST', `/v1/sessions/${encodeURIComponent(id)}/lease`);
+  };
+  releaseSession = async (id: string): Promise<void> => {
+    await this.api.request('DELETE', `/v1/sessions/${encodeURIComponent(id)}/lease`);
+  };
   getSession: TuiRuntime['getSession'] = async (id) =>
     (
       await this.api.request<{ session: ReturnType<MarifoldRuntime['getSession']> }>(

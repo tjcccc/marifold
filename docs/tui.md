@@ -97,12 +97,21 @@ only enabled for full-screen launches, and is released on exit.
   recalled prompt keeps its images; returning to an unfinished draft restores
   that draft's attachments. Both `--resume` and `/resume` restore saved inputs.
   Image numbers are local to each prompt. Missing or out-of-range `[image #N]`
-  references block submission instead of guessing another session image.
+  references block submission instead of guessing another session image. When
+  tags are present, submission loads only their referenced images and renumbers
+  those tags; unused images from earlier draft edits cannot block the request.
   Local file uploads retain their original absolute paths, without storing image
   bytes. Moved or deleted source files fail to load on resubmission. Existing
   embedded attachments and Web uploads remain readable; their bytes load lazily
   on resubmission, including from service-connected workspaces. Missing saved
   images produce an error instead of silently sending only placeholders.
+- **Marked tokens**: Backspace at the end of a `$skill`, `/command`, or
+  `[image #N]` deletes the entire token. Deleting an image tag removes its
+  attachment and renumbers remaining tags. Editing inside a token stays normal.
+- **Session ownership**: An open session is reserved by its page or terminal.
+  Another Web page or TUI cannot open it and receives a session-in-use error.
+  Switching sessions or exiting releases it; after a crash, stale reservations
+  expire within 60 seconds. Clients renew reservations every 15 seconds.
 - **Word editing**: Option/Alt+Left and Option/Alt+Right move by word;
   Option/Alt+Backspace deletes the previous word. Ctrl+Left/Right and
   Alt+B/Alt+F also move by word. The terminal must send Option as Alt/Meta.

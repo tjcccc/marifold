@@ -1,3 +1,4 @@
+import { composerTokenBefore } from '@marifold/client';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { SkillHint } from '../../api/misc';
 import { ImagePreviewDialog } from '../../components/ImagePreviewDialog';
@@ -136,6 +137,27 @@ export function InputBar(props: InputBarProps) {
     // Enter commits an active IME composition. It must never also submit the
     // half-composed text (keyCode 229 covers older WebKit behavior).
     if (composingRef.current || event.nativeEvent.isComposing || event.keyCode === 229) return;
+    if (event.key === 'Backspace' && !event.altKey && !event.ctrlKey && !event.metaKey && event.currentTarget.selectionStart === event.currentTarget.selectionEnd) {
+      const token = composerTokenBefore(text, event.currentTarget.selectionStart);
+      if (token) {
+        event.preventDefault();
+        let next = text.slice(0, token.start) + text.slice(token.end);
+        if (token.imageNumber !== undefined && !next.includes(`[image #${token.imageNumber}]`)) {
+          const imageIndices = attachments.flatMap((attachment, index) => attachment.kind === 'image' ? [index] : []);
+          const index = imageIndices[token.imageNumber - 1];
+          if (index !== undefined && props.onRemoveAttachment) {
+            props.onRemoveAttachment(index);
+            next = next.replace(/\[image #(\d+)\]/g, (tag, number: string) => Number(number) > token.imageNumber! ? `[image #${Number(number) - 1}]` : tag);
+          }
+        }
+        completionCaretRef.current = token.start;
+        setText(next);
+        writeDraft(props.draftKey, next);
+        setCaret(token.start);
+        setDismissed(false);
+        return;
+      }
+    }
     // Mobile keyboards expose Enter as the only practical newline control.
     // Leave its native textarea behavior intact; the send button submits.
     if (event.key === 'Enter' && props.enterSubmits === false) return;

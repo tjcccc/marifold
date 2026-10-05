@@ -1,4 +1,4 @@
-import { sessionPromptHistory, resolvePromptImages, validatePromptImageReferences, type PromptImage } from '../core/promptHistory.js';
+import { sessionPromptHistory, resolvePromptImages, referencedPromptImages, type PromptImage } from '../core/promptHistory.js';
 import type { TuiRuntime } from '../core/TuiRuntime.js';
 import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { Box, Static, useApp, useInput, useStdout } from 'ink';
@@ -215,6 +215,32 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
     }
   }, [notify, initial.sessionId]);
 
+  useEffect(() => {
+    const id = state.sessionId;
+    if (!id || !runtime.acquireSession) return;
+    let disposed = false;
+    const renew = async () => {
+      try { await runtime.acquireSession!(id); }
+      catch (error) {
+        if (disposed) return;
+        disposed = true;
+        if (stateRef.current.sessionId === id) {
+          abortRef.current?.abort();
+          dispatch({ type: 'new_session' });
+          setHistory([]);
+          notify(errorText(error), 'error');
+        }
+      }
+    };
+    void renew();
+    const timer = setInterval(() => void renew(), 15_000);
+    return () => {
+      disposed = true;
+      clearInterval(timer);
+      void Promise.resolve(runtime.releaseSession?.(id)).catch(() => undefined);
+    };
+  }, [runtime, state.sessionId, notify]);
+
   const refreshSkills = useCallback((profile = stateRef.current.profile) => {
     try {
       setSkillItems(runtime.listSkills(profile).map(skill => ({ name: skill.name, hint: skill.description })));
@@ -319,6 +345,7 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
     let usage: AgentUsage | undefined;
     let doneStatus: string | undefined;
     try {
+      await runtime.acquireSession?.(sessionId);
       const runner = runtime.createAgentRunner(current.profile);
       for await (const event of runner.run({
         objective,
@@ -388,6 +415,7 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
     const startedAt = Date.now();
     let usage: AgentUsage | undefined;
     try {
+      await runtime.acquireSession?.(sessionId);
       for await (const chunk of runtime.stream(
         {
           prompt,
@@ -914,20 +942,25 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
     if (submittingRef.current) { notify('Wait for the recalled attachments to load.', 'warn'); return; }
     submittingRef.current = true;
     try {
-      const trimmed = raw.trim();
+      let trimmed = raw.trim();
       if (pendingSkill) {
         if (trimmed.length === 0) return;
         fillSkillVariable(trimmed);
         return;
       }
-      const parsed = parseInput(raw);
+      let parsed = parseInput(raw);
       const sendsMessage = parsed.kind === 'text' || parsed.kind === 'skill' || (parsed.kind === 'command' && parsed.name === 'attach-original');
       if (sendsMessage && stateRef.current.running) {
         notify('A task is running. Use /btw to steer or /stop to cancel.', 'warn');
         return;
       }
       if (sendsMessage) {
-        validatePromptImageReferences(trimmed, attachedImages.length + pendingImagesRef.current.length);
+        const selected = referencedPromptImages(raw, [...pendingImagesRef.current, ...attachedImages]);
+        raw = selected.text;
+        trimmed = raw.trim();
+        parsed = parseInput(raw);
+        attachedImages = selected.images;
+        pendingImagesRef.current = [];
       }
       if (parsed.kind !== 'empty') setHistory(entries => [...entries, { text: trimmed, images: [...attachedImages] }]);
       // Dropped images (`[image #n]` tokens) attach to the message about to run.
@@ -1039,8 +1072,10 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
           onSelect={async value => {
             try {
             setOverlay(null);
+            await runtime.acquireSession?.(value);
             const detail = await runtime.getSession(value);
             if (!detail) {
+              await runtime.releaseSession?.(value);
               notify(`Session not found: ${value}`, 'error');
               return;
             }

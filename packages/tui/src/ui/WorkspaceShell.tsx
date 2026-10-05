@@ -66,6 +66,7 @@ export function WorkspaceShell(props: Props) {
       if (typeof resume === 'string') sessionId = resume;
       else if (resume === true)
         sessionId = (await runtime.listSessions(1, settings.profile, { order: 'recent' }))[0]?.id;
+      if (sessionId) await runtime.acquireSession?.(sessionId);
       const session = sessionId ? await runtime.getSession(sessionId) : undefined;
       if (version !== serial.current) return;
       selected.current = id;

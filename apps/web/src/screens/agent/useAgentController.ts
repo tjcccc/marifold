@@ -78,6 +78,7 @@ export interface AgentController {
   sessionId?: string;
   thread: ThreadState;
   sessionLoading: boolean;
+  sessionBlocked: boolean;
   profilesLoading: boolean;
   sessionsLoading: boolean;
   steeringRun?: string;
@@ -151,6 +152,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
   const [showArchivedSessions, setShowArchivedSessions] = useState(false);
   const [runs, setRuns] = useState<RunRecord[]>([]);
   const [sessionId, setSessionId] = useState<string | undefined>(route.session);
+  const [sessionBlocked, setSessionBlocked] = useState(false);
   const [sessionLoading, setSessionLoading] = useState(Boolean(route.session));
   const sessionLoadRef = useRef(0);
   const [think, setThink] = useState(false);
@@ -267,9 +269,12 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
     async (id: string | undefined) => {
       followers.stopAll();
       const loadId = resetThread(id);
+      setSessionBlocked(false);
       if (!id) return;
       setSessionLoading(true);
       try {
+        await client.request('POST', `/v1/sessions/${encodeURIComponent(id)}/lease`);
+        setSessionBlocked(false);
         const detail = await getSession(client, id);
         if (loadId !== sessionLoadRef.current) return;
         rememberPersistedSessionIds([id]);
@@ -316,6 +321,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
         });
       } catch (error) {
         if (loadId !== sessionLoadRef.current) return;
+        if (error instanceof MarifoldApiError && error.code === 'SESSION_BUSY') setSessionBlocked(true);
         // A freshly minted id has no server session yet — that's expected.
         if (!(error instanceof MarifoldApiError && error.status === 404)) {
           handleError(error);
@@ -494,11 +500,37 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
     // when the user reloads or reopens the session.
   });
 
+  useEffect(() => {
+    if (!sessionId) return;
+    let stopped = false;
+    const id = sessionId;
+    const renew = async () => {
+      try { await client.request('POST', `/v1/sessions/${encodeURIComponent(id)}/lease`); }
+      catch (error) {
+        if (stopped) return;
+        stopped = true;
+        setSessionBlocked(true);
+        resetThread(id);
+        handleError(error);
+      }
+    };
+    const timer = setInterval(() => { if (!stopped) void renew(); }, 15_000);
+    const release = () => { void client.request('DELETE', `/v1/sessions/${encodeURIComponent(id)}/lease`).catch(() => undefined); };
+    window.addEventListener('pagehide', release);
+    return () => {
+      stopped = true;
+      clearInterval(timer);
+      window.removeEventListener('pagehide', release);
+      release();
+    };
+  }, [client, sessionId, handleError, resetThread]);
+
   const selectProfile = useCallback(
     (name: string) => {
       abortActiveChat();
       followers.stopAll();
       setSessionId(undefined);
+      setSessionBlocked(false);
       resetThread();
       navigate({ view: 'agent', profile: name });
     },
@@ -509,6 +541,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
     abortActiveChat();
     followers.stopAll();
     setSessionId(undefined);
+    setSessionBlocked(false);
     setProfileDetail(undefined);
     setSessions([]);
     setSkills([]);
@@ -536,7 +569,8 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
     setSessionId(id);
     resetThread(id);
     navigate({ view: 'agent', profile: profileName, session: id });
-  }, [abortActiveChat, profileName, followers, navigate, persistedSessionIds, sessionId, resetThread]);
+    void loadSession(id);
+  }, [abortActiveChat, profileName, followers, navigate, persistedSessionIds, sessionId, resetThread, loadSession]);
 
   const replaceSessionSummary = useCallback((updated: SessionSummary) => {
     rememberPersistedSessionIds([updated.id]);
@@ -689,6 +723,9 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
         setSessionId(sid);
         navigate({ view: 'agent', profile: profileName, session: sid });
       }
+
+      try { await client.request('POST', `/v1/sessions/${encodeURIComponent(sid)}/lease`); }
+      catch (error) { setSessionBlocked(true); handleError(error); return false; }
 
       // Consume the pending attachments: chat images ride the request natively
       // and readable text is inlined for chat parity; every agent-run upload is
@@ -1182,6 +1219,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
     sessionId,
     thread,
     sessionLoading,
+    sessionBlocked,
     profilesLoading,
     sessionsLoading,
     steeringRun: activeRun(thread)?.runId,

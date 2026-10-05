@@ -1,3 +1,4 @@
+import { composerTokenBefore } from '@marifold/client';
 import { inputTokens } from '../core/inputTokens.js';
 import React, { useContext, useEffect, useRef, useState } from 'react';
 import { Box, Text, useInput, useWindowSize, measureElement, type DOMElement } from 'ink';
@@ -262,8 +263,15 @@ export function InputBox({
 
     if (key.backspace || input === '\x7f' || input === '\b') {
       if (cursor === 0) return;
-      const start = previousBoundary(value, cursor);
-      set(value.slice(0, start) + value.slice(cursor), start);
+      const token = composerTokenBefore(value, cursor);
+      const start = token?.start ?? previousBoundary(value, cursor);
+      let next = value.slice(0, start) + value.slice(cursor);
+      const imageIndex = token?.imageNumber !== undefined ? token.imageNumber - 1 : -1;
+      if (imageIndex >= 0 && imageIndex < images.length && !next.includes(`[image #${imageIndex + 1}]`)) {
+        setImages(current => current.filter((_, index) => index !== imageIndex));
+        next = next.replace(/\[image #(\d+)\]/g, (tag, number: string) => Number(number) > imageIndex + 1 ? `[image #${Number(number) - 1}]` : tag);
+      }
+      set(next, start);
       return;
     }
     // Forward Delete is distinct from Backspace. Fedora terminals commonly

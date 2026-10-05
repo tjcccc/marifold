@@ -2,6 +2,20 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-10-05 — v0.79.0 — Exclusive sessions and composer token editing
+
+- Reserve open sessions across Web pages, local TUI processes, and remote TUI
+  clients. Block a second client with a session-in-use message; renew ownership
+  every 15 seconds and recover abandoned claims after 60 seconds.
+- Delete complete `$skill`, `/command`, and `[image #N]` tokens with Backspace
+  at their end in both composers, preserving ordinary text and IME editing.
+  Removing an image tag also removes its attachment and renumbers later tags.
+- Load only the images still referenced by edited or recalled TUI prompts and
+  normalize their display tags, avoiding failures from unused older image paths.
+- Reused the passing workspace suite (1,041 tests, one existing skip) and subsequent
+  targeted TUI checks (18 tests) for the final attachment changes. Verified the
+  synchronized release versions, clean workspace build, and packed CLI version.
+
 ## 2026-10-05 — v0.78.2 — TUI prompt history and completed run details
 
 - Complete and highlight whitespace-delimited `$skill` and `/command` tokens at

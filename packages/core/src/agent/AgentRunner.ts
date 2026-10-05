@@ -53,6 +53,8 @@ const NATIVE_WEB_SEARCH_COMPAT_OPTION = 'marifold_native_web_search';
 const NATIVE_WEB_SEARCH_CHAT_OPTION = 'enable_search';
 
 export interface AgentRunOptions {
+  /** Client lease identity set by the service boundary, never from request JSON. */
+  sessionOwner?: string;
   environment?: RuntimeEnvironment;
   objective: string;
   profile?: string;
@@ -135,6 +137,7 @@ export interface AgentEngineContext {
 }
 
 export interface AgentRunnerDeps {
+  checkSession?: (options: AgentRunOptions) => void;
   environment?: RuntimeEnvironment;
   createWorkspace?: (options: CreateRunWorkspaceOptions) => Promise<RunWorkspace>;
   listArtifacts?: (workspace: RunWorkspace) => Promise<RunArtifact[]>;
@@ -219,6 +222,7 @@ export class AgentRunner {
   constructor(private readonly deps: AgentRunnerDeps) {}
 
   async *run(options: AgentRunOptions): AsyncGenerator<AgentEvent, void, unknown> {
+    this.deps.checkSession?.(options);
     const startedAtMs = Date.now();
     const startedAt = new Date(startedAtMs).toISOString();
     const agentConfig = this.deps.agentConfig;
@@ -338,6 +342,7 @@ export class AgentRunner {
       // append-only runs still keep their submitted prompt and terminal state.
       if (outcome !== 'completed' && options.replaceUserTurnIndex !== undefined) return;
 
+      this.deps.checkSession?.(options);
       sessionTurnPersisted = true;
       let responseMetrics: ResponseMetrics | undefined;
       if (outcome === 'completed') {
