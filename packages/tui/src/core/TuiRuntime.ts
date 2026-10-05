@@ -10,6 +10,7 @@ type Reads =
 type AsyncMethods =
   | 'listSessions'
   | 'getSession'
+  | 'getSessionAttachment'
   | 'setProfileAgentApproval'
   | 'addProfileTrustedFolder'
   | 'migrateProfileInstructions'

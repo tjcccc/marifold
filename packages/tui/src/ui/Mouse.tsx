@@ -9,6 +9,8 @@ export interface MouseEvent {
   shift: boolean;
 }
 
+export const SelectionCopyContext = createContext<((text: string) => void) | undefined>(undefined);
+
 export const MouseContext = createContext<EventEmitter | undefined>(undefined);
 
 export function useMouse(handler: (event: MouseEvent) => void): boolean {

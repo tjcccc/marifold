@@ -1,3 +1,4 @@
+import { sessionPromptHistory, type InputHistoryEntry } from './core/promptHistory.js';
 import type { ApiClientOptions } from '@marifold/client';
 import type { ReactNode } from 'react';
 import { TerminalInput, MOUSE_ENABLE, MOUSE_DISABLE } from './core/TerminalInput.js';
@@ -96,6 +97,7 @@ export async function runTui(options: RunTuiOptions): Promise<void> {
     // found, its turns seed the transcript so the prior conversation is shown.
     let resumeSessionId: string | undefined;
     let resumeTranscript: TranscriptItemData[] | undefined;
+    let resumeHistory: InputHistoryEntry[] | undefined;
     if (options.resume !== undefined) {
       const id = typeof options.resume === 'string'
         ? options.resume
@@ -103,6 +105,7 @@ export async function runTui(options: RunTuiOptions): Promise<void> {
       const detail = id ? runtime.getSession(id) : undefined;
       if (detail) {
         resumeSessionId = detail.id;
+        resumeHistory = sessionPromptHistory(detail);
         resumeTranscript = detail.turns.map(turn => ({ kind: turn.role, text: turn.content }));
       } else if (typeof options.resume === 'string') {
         process.stderr.write(`Session not found: ${options.resume}. Starting a new session.\n`);
@@ -125,6 +128,7 @@ export async function runTui(options: RunTuiOptions): Promise<void> {
       maxContextTokens: settings.maxContextTokens ?? options.loadedConfig.config.default.maxContextTokens,
       ...(resumeSessionId ? { sessionId: resumeSessionId } : {}),
       ...(resumeTranscript ? { transcript: resumeTranscript } : {}),
+      ...(resumeHistory ? { history: resumeHistory } : {}),
     };
     await renderSession(<App runtime={runtime} loadedConfig={options.loadedConfig} initial={initial} fullscreen={fullscreen} />, fullscreen);
   } finally {

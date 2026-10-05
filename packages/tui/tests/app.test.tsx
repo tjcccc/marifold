@@ -1,9 +1,12 @@
+import { PassThrough } from 'node:stream';
+import { render as renderTerminal } from 'ink';
+import { sessionPromptHistory } from '../src/core/promptHistory.js';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { render } from 'ink-testing-library';
-import { ConfigLoader, MarifoldRuntime, WorkspaceInitializer } from '@marifold/core';
+import { ConfigLoader, MarifoldRuntime, SessionResolver, WorkspaceInitializer } from '@marifold/core';
 import { App } from '../src/ui/App.js';
 
 const tempDirs: string[] = [];
@@ -32,6 +35,118 @@ afterEach(() => {
 });
 
 describe('App', () => {
+  it('reattaches a dropped image when a sent prompt is recalled and edited', async () => {
+    const { runtime, loadedConfig } = workspace();
+    const image = path.join(tempDirs.at(-1)!, 'source.png');
+    fs.writeFileSync(image, 'fixture');
+    const runner = runtime.createAgentRunner('default');
+    const run = vi.spyOn(runner, 'run').mockImplementation(async function* () {});
+    const createRunner = vi.spyOn(runtime, 'createAgentRunner').mockReturnValue(runner);
+    const { stdin, unmount } = render(<App runtime={runtime} loadedConfig={loadedConfig} initial={{
+      profile: 'default', provider: 'ollama', model: 'test-model',
+      think: false, cwd: '/tmp/work', version: '0.0.0-test',
+    }} />);
+    try {
+      await delay();
+      stdin.write(image);
+      await delay();
+      stdin.write(' describe');
+      await delay();
+      stdin.write('\r');
+      await vi.waitFor(() => expect(run).toHaveBeenCalledTimes(1));
+      await delay();
+      stdin.write('\x1b[A');
+      await delay();
+      stdin.write(' in pink');
+      await delay();
+      stdin.write('\r');
+      await vi.waitFor(() => expect(run).toHaveBeenCalledTimes(2));
+      expect(run.mock.calls[0][0].images).toEqual([{ path: image }]);
+      expect(run.mock.calls[1][0]).toMatchObject({
+        objective: '[image #1] describe in pink', images: [{ path: image }],
+      });
+    } finally { unmount(); run.mockRestore(); createRunner.mockRestore(); runtime.close(); }
+  });
+
+  it.each(['startup', 'picker'])('recalls saved prompts and lazily restores images after %s resume', async mode => {
+    const { runtime, loadedConfig } = workspace();
+    const sessions = new SessionResolver(loadedConfig.config.paths.sessionsDb);
+    await sessions.appendExchange('saved', 'default', 'first prompt', 'first answer');
+    await sessions.appendExchange('saved', 'default', 'describe [image #1]', 'second answer', [{ data: 'aW1hZ2U=', mediaType: 'image/png' }]);
+    sessions.close();
+    const saved = runtime.getSession('saved')!;
+    const attachment = vi.spyOn(runtime, 'getSessionAttachment');
+    const runner = runtime.createAgentRunner('default');
+    const run = vi.spyOn(runner, 'run').mockImplementation(async function* () {});
+    const createRunner = vi.spyOn(runtime, 'createAgentRunner').mockReturnValue(runner);
+    const { stdin, lastFrame, unmount } = render(<App runtime={runtime} loadedConfig={loadedConfig} initial={{
+      profile: 'default', provider: 'ollama', model: 'test-model',
+      think: false, cwd: '/tmp/work', version: '0.0.0-test',
+      ...(mode === 'startup' ? {
+        sessionId: saved.id,
+        transcript: saved.turns.map(turn => ({ kind: turn.role, text: turn.content })),
+        history: sessionPromptHistory(saved),
+      } : {}),
+    }} />);
+    try {
+      await delay();
+      if (mode === 'picker') {
+        stdin.write('/resume');
+        await delay();
+        stdin.write('\r');
+        await vi.waitFor(() => expect(lastFrame()).toContain('Resume session'));
+        stdin.write('\r');
+        await vi.waitFor(() => expect(lastFrame()).toContain('Resumed session saved'));
+      }
+      stdin.write('\x1b[A'); // latest saved prompt
+      await delay();
+      stdin.write('\x1b[A'); // previous saved prompt
+      await delay();
+      stdin.write('\x1b[B'); // back to latest
+      await delay();
+      expect(attachment).not.toHaveBeenCalled();
+      stdin.write(' in pink');
+      await delay();
+      stdin.write('\r');
+      await vi.waitFor(() => expect(run).toHaveBeenCalledTimes(1));
+      expect(run.mock.calls[0][0]).toMatchObject({
+        sessionId: 'saved', objective: 'describe [image #1] in pink',
+        images: [{ data: 'aW1hZ2U=', mediaType: 'image/png' }],
+      });
+      expect(attachment).toHaveBeenCalledWith('saved', 1, 0);
+    } finally { unmount(); run.mockRestore(); createRunner.mockRestore(); attachment.mockRestore(); runtime.close(); }
+  });
+
+  it('redraws the alternate screen after width and height changes without losing the draft', async () => {
+    const { runtime, loadedConfig } = workspace();
+    const stdout = Object.assign(new PassThrough(), { isTTY: true, columns: 100, rows: 24 });
+    const stdin = Object.assign(new PassThrough(), { isTTY: true, setRawMode: vi.fn(), ref: vi.fn(), unref: vi.fn() });
+    let output = '';
+    stdout.on('data', chunk => { output += chunk.toString(); });
+    const app = renderTerminal(<App runtime={runtime} loadedConfig={loadedConfig} fullscreen initial={{
+      profile: 'default', provider: 'ollama', model: 'test-model',
+      think: false, cwd: '/tmp/work', version: '0.0.0-test',
+      transcript: [{ kind: 'assistant', text: 'A response that wraps as terminal geometry changes. '.repeat(4) }],
+    }} />, { stdin, stdout, stderr: new PassThrough(), alternateScreen: true, incrementalRendering: true, exitOnCtrlC: false, patchConsole: false });
+    try {
+      await vi.waitFor(() => expect(output).toContain('message the agent'));
+      stdin.write('resize draft');
+      await vi.waitFor(() => expect(output).toContain('resize draft'));
+      for (const [columns, rows] of [[40, 18], [120, 30], [120, 20]]) {
+        const count = output.split('\x1b[?1049h').length;
+        stdout.columns = columns;
+        stdout.rows = rows;
+        stdout.emit('resize');
+        await vi.waitFor(() => expect(output.split('\x1b[?1049h').length).toBeGreaterThan(count));
+        const fresh = output.slice(output.lastIndexOf('\x1b[?1049h'));
+        expect(fresh).toContain('resize draft');
+        expect(fresh).toContain('geometry changes.');
+        expect(fresh.split('resize draft')).toHaveLength(2);
+        expect(fresh.split('\n').length).toBeLessThanOrEqual(rows);
+      }
+    } finally { app.unmount(); await app.waitUntilExit(); runtime.close(); stdin.destroy(); stdout.destroy(); }
+  });
+
   it('mounts, shows the header, and handles code-only commands incl. mode switch', async () => {
     const { runtime, loadedConfig } = workspace();
     const initial = {

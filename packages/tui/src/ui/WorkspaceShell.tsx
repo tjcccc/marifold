@@ -1,3 +1,4 @@
+import { sessionPromptHistory } from '../core/promptHistory.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Box, Text } from 'ink';
 import { createApiClient, startupWorkspaces, type ApiClientOptions } from '@marifold/client';
@@ -89,6 +90,7 @@ export function WorkspaceShell(props: Props) {
           version: props.version,
           cwd: id === 'local' ? process.cwd() : `Workspace: ${name}`,
           sessionId: session?.id,
+          history: session ? sessionPromptHistory(session) : [],
           transcript: session?.turns.map((t) => ({ kind: t.role, text: t.content })),
         },
       });

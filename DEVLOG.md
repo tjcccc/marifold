@@ -2,6 +2,24 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-10-05 — v0.78.1 — TUI selection, resume, and resize fixes
+
+- Keep dropped images with recalled prompts and unfinished drafts. Both startup
+  resume and the session picker restore saved user prompts; retained images load
+  lazily on resubmission through local storage or authenticated workspace routes.
+  Missing saved images fail explicitly instead of sending only placeholders.
+- Add composer drag selection and copy-on-release with shared `Copied` feedback.
+  Preserve blank transcript rows while selecting and exclude the left padding
+  from highlighting. Join visual wraps when copying while retaining explicit
+  newlines, paragraph breaks, and code lines.
+- Redraw the alternate screen after width/height resize bursts, preserving drafts
+  and clearing stale rows and borders. Use lighter grey submitted-prompt borders
+  (`#999999`) and preserve the Web Settings version tag's lowercase `v`.
+- User confirmed transcript selection padding and spacing fixes. Reuse focused
+  development regressions and unchanged-package tests. All 101 TUI tests and
+  workspace typecheck pass; verify synchronized 0.78.1 versions, a clean build,
+  all six packed package versions, and the packed CLI version.
+
 ## 2026-10-05 — v0.78.0 — Full-screen TUI
 
 - Upgrade the TUI to stable Ink 8.0.0 / React 19.3.0 with matching React types;

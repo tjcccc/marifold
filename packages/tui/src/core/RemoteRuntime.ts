@@ -80,6 +80,11 @@ export class RemoteRuntime implements TuiRuntime {
         `/v1/sessions/${encodeURIComponent(id)}`,
       )
     ).session;
+  getSessionAttachment: TuiRuntime['getSessionAttachment'] = async (id, userTurnIndex, attachmentIndex) => {
+    const image = await this.api.blob(`/v1/sessions/${encodeURIComponent(id)}/attachments/${userTurnIndex}/${attachmentIndex}`);
+    if (!image) return undefined;
+    return { mediaType: image.type, data: Buffer.from(await image.arrayBuffer()).toString('base64') };
+  };
   setProfileAgentApproval: TuiRuntime['setProfileAgentApproval'] = (profile, kind, mode) =>
     this.mutate('profile.approval', { profile, kind, mode });
   addProfileTrustedFolder: TuiRuntime['addProfileTrustedFolder'] = (profile, folder) =>

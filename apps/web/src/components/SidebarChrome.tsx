@@ -56,7 +56,7 @@ export function SidebarSystemFooter({
       >
         <span className={styles.icon}><SettingsGlyph /></span>
         <span>Settings</span>
-        <span className={styles.value} aria-label={`Marifold version ${version}`}>v{version}</span>
+        <span className={`${styles.value} ${styles.version}`} aria-label={`Marifold version ${version}`}>v{version}</span>
       </button>
     </div>
   );

@@ -1,3 +1,4 @@
+import { sessionPromptHistory, resolvePromptImages, type PromptImage } from '../core/promptHistory.js';
 import type { TuiRuntime } from '../core/TuiRuntime.js';
 import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { Box, Static, useApp, useInput, useStdout } from 'ink';
@@ -29,7 +30,7 @@ import { bindSkillArgs, skillUsage } from '../core/skills.js';
 import { FullScreen } from './FullScreen.js';
 import { Header } from './Header.js';
 import { TranscriptRow, topGap } from './Transcript.js';
-import { InputBox, type CompletionItem } from './InputBox.js';
+import { InputBox, type CompletionItem, type InputHistoryEntry } from './InputBox.js';
 import { StatusLine } from './StatusLine.js';
 import { RunStatus } from './RunStatus.js';
 import { ApprovalModal, trustTargetFolder, type ApprovalChoice } from './ApprovalModal.js';
@@ -61,6 +62,7 @@ export interface AppProps {
     sessionId?: string;
     maxContextTokens?: number;
     transcript?: TranscriptItemData[];
+    history?: InputHistoryEntry[];
   };
 }
 
@@ -100,7 +102,7 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
   const [planNext, setPlanNext] = useState(false);
   const [steeringCount, setSteeringCount] = useState(0);
   const [pendingSkill, setPendingSkill] = useState<PendingSkill | null>(null);
-  const [history, setHistory] = useState<string[]>([]);
+  const [history, setHistory] = useState<InputHistoryEntry[]>(() => initial.history ?? (initial.transcript ?? []).flatMap(item => item.kind === 'user' ? [item.text] : []));
   const [skillItems, setSkillItems] = useState<CompletionItem[]>(() => {
     try {
       return runtime.listSkills(initial.profile).map(skill => ({ name: skill.name, hint: skill.description }));
@@ -137,7 +139,7 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
     setStaticEpoch(epoch => epoch + 1);
   }, [stdout, fullscreen, suspendTerminal]);
   useEffect(() => {
-    if (!fullscreen && wasResizing.current && !resizing) repaint();
+    if (wasResizing.current && !resizing) repaint();
     wasResizing.current = resizing;
   }, [resizing, repaint, fullscreen]);
   // Anchor the run clock here so it survives RunStatus unmounting during a
@@ -902,59 +904,66 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
     readFileCmd, setImage, remember, forget, deleteMemory, repaint, runtime, trustFolderForProfile, startTextRun, workspaceCommand, deviceCommand,
   ]);
 
+  const submittingRef = useRef(false);
+
   // --- Input routing -------------------------------------------------------
-  const handleSubmit = useCallback((raw: string, attachedImages: string[] = []) => {
-    const trimmed = raw.trim();
-    if (pendingSkill) {
-      if (trimmed.length === 0) return;
-      fillSkillVariable(trimmed);
-      return;
-    }
-    const parsed = parseInput(raw);
-    // Dropped images (`[image #n]` tokens) attach to the message about to run.
-    // Both the chat path (runChat) and the agent path (runAgent) consume
-    // pendingImagesRef, so this works in either mode for a text/skill turn.
-    if (attachedImages.length > 0) {
-      if (parsed.kind === 'text' || parsed.kind === 'skill' || (parsed.kind === 'command' && parsed.name === 'attach-original')) {
-        for (const file of attachedImages) pendingImagesRef.current.push({ path: file });
-      } else {
-        notify(`Images attach to a message, not /${parsed.kind === 'command' ? 'commands' : 'input'}. Ignored ${attachedImages.length} image(s).`, 'warn');
+  const handleSubmit = useCallback(async (raw: string, attachedImages: PromptImage[] = []) => {
+    if (submittingRef.current) { notify('Wait for the recalled attachments to load.', 'warn'); return; }
+    submittingRef.current = true;
+    try {
+      const trimmed = raw.trim();
+      if (pendingSkill) {
+        if (trimmed.length === 0) return;
+        fillSkillVariable(trimmed);
+        return;
       }
-    }
-    if (parsed.kind !== 'empty') setHistory(entries => [...entries, trimmed]);
-    switch (parsed.kind) {
-      case 'empty':
-        return;
-      case 'command':
-        // `/attach-original <prompt>` is a one-turn send action. Show the
-        // actual prompt once, not an extra command-echo row before it.
-        if (parsed.name === 'attach-original') {
-          runCommand(commandContext, parsed.name, parsed.args);
+      const parsed = parseInput(raw);
+      if (parsed.kind !== 'empty') setHistory(entries => [...entries, { text: trimmed, images: [...attachedImages] }]);
+      // Dropped images (`[image #n]` tokens) attach to the message about to run.
+      // Both the chat path (runChat) and the agent path (runAgent) consume
+      // pendingImagesRef, so this works in either mode for a text/skill turn.
+      if (attachedImages.length > 0) {
+        if (parsed.kind === 'text' || parsed.kind === 'skill' || (parsed.kind === 'command' && parsed.name === 'attach-original')) {
+          pendingImagesRef.current.push(...await resolvePromptImages(runtime, attachedImages));
+        } else {
+          notify(`Images attach to a message, not /${parsed.kind === 'command' ? 'commands' : 'input'}. Ignored ${attachedImages.length} image(s).`, 'warn');
+        }
+      }
+      switch (parsed.kind) {
+        case 'empty':
           return;
-        }
-        // Echo the command as a transcript divider (like a sent message) so its
-        // result is clearly separated from the previous turn.
-        dispatch({ type: 'add_user', text: trimmed });
-        if (!runCommand(commandContext, parsed.name, parsed.args)) {
-          notify(`Unknown command: /${parsed.name}. Type /help.`, 'warn');
-        }
-        return;
-      case 'skill':
-        if (stateRef.current.running) {
-          notify('A task is running. Use /btw to steer or /stop to cancel.', 'warn');
+        case 'command':
+          // `/attach-original <prompt>` is a one-turn send action. Show the
+          // actual prompt once, not an extra command-echo row before it.
+          if (parsed.name === 'attach-original') {
+            runCommand(commandContext, parsed.name, parsed.args);
+            return;
+          }
+          // Echo the command as a transcript divider (like a sent message) so its
+          // result is clearly separated from the previous turn.
+          dispatch({ type: 'add_user', text: trimmed });
+          if (!runCommand(commandContext, parsed.name, parsed.args)) {
+            notify(`Unknown command: /${parsed.name}. Type /help.`, 'warn');
+          }
           return;
-        }
-        runSkill(parsed.name, parsed.argv);
-        return;
-      case 'text':
-        if (stateRef.current.running) {
-          notify('A task is running. Use /btw to steer or /stop to cancel.', 'warn');
+        case 'skill':
+          if (stateRef.current.running) {
+            notify('A task is running. Use /btw to steer or /stop to cancel.', 'warn');
+            return;
+          }
+          runSkill(parsed.name, parsed.argv);
           return;
-        }
-        startTextRun(parsed.text);
-        return;
-    }
-  }, [pendingSkill, fillSkillVariable, commandContext, notify, runSkill, startTextRun]);
+        case 'text':
+          if (stateRef.current.running) {
+            notify('A task is running. Use /btw to steer or /stop to cancel.', 'warn');
+            return;
+          }
+          startTextRun(parsed.text);
+          return;
+      }
+    } catch (error) { notify(errorText(error), 'error'); }
+    finally { submittingRef.current = false; }
+  }, [runtime, pendingSkill, fillSkillVariable, commandContext, notify, runSkill, startTextRun]);
 
   const handleInterrupt = useCallback((reason: 'ctrl-c' | 'escape') => {
     if (stateRef.current.running) {
@@ -1025,6 +1034,7 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
               return;
             }
             dispatch({ type: 'new_session', sessionId: detail.id });
+            setHistory(sessionPromptHistory(detail));
             for (const turn of detail.turns) {
               dispatch({ type: 'add_item', item: { kind: turn.role === 'user' ? 'user' : 'assistant', text: turn.content } });
             }

@@ -1,12 +1,16 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useContext, useEffect, useRef, useState } from 'react';
 import { Box, Text, useInput, useWindowSize, measureElement, type DOMElement } from 'ink';
 import * as fs from 'fs';
 import * as path from 'path';
 import { expandHome } from '@marifold/core';
 import { ACCENT, ATTACHMENT, COMMAND, DIM, SKILL } from './theme.js';
+import { copyTerminalSelection } from './appHelpers.js';
 import { padTo, truncate } from './text.js';
-import { useMouse } from './Mouse.js';
+import { SelectionCopyContext, useMouse } from './Mouse.js';
 import { graphemes, previousBoundary, nextBoundary, offsetAtColumn, wrapToVisualLines, locateVisualCursor, inputWindowStart, type VisualLine } from './inputLayout.js';
+
+import type { InputHistoryEntry, PromptImage } from '../core/promptHistory.js';
+export type { InputHistoryEntry } from '../core/promptHistory.js';
 
 const PROMPT = '> ';
 const CONT = '  '; // continuation-line indent, aligned past the prompt
@@ -63,10 +67,10 @@ export function InputBox({
   skills,
   resizing = false,
 }: {
-  onSubmit: (value: string, images: string[]) => void;
+  onSubmit: (value: string, images: PromptImage[]) => void;
   onInterrupt: (reason: 'ctrl-c' | 'escape') => void;
   placeholder?: string;
-  history: string[];
+  history: InputHistoryEntry[];
   commands: CompletionItem[];
   skills: CompletionItem[];
   /** While the terminal is resizing, collapse to a single line and ignore
@@ -81,23 +85,55 @@ export function InputBox({
     setCursorState(cursorRef.current);
   };
   const [histIndex, setHistIndex] = useState<number | null>(null);
-  const [histDraft, setHistDraft] = useState('');
-  const [images, setImages] = useState<string[]>([]);
+  const [histDraft, setHistDraft] = useState({ text: '', images: [] as PromptImage[] });
+  const [images, setImages] = useState<PromptImage[]>([]);
   const [menuIndex, setMenuIndex] = useState(0);
   const [menuOpen, setMenuOpen] = useState(true);
 
   const { columns, rows } = useWindowSize();
   const inputRef = useRef<DOMElement>(null);
+  const copySelection = useContext(SelectionCopyContext);
+  const [selection, setSelection] = useState<{ anchor: number; focus: number }>();
+  const drag = useRef<{ anchor: number; focus: number; text: string; visual: VisualLine[]; start: number } | undefined>(undefined);
   const mouseEnabled = useMouse(event => {
-    if (event.action !== 'press' || event.button !== 0 || resizing || !inputRef.current) return;
+    if (event.button !== 0 || event.action === 'wheel' || resizing || !inputRef.current) return;
     const bounds = measureElement(inputRef.current);
-    if (event.y < bounds.y || event.y >= bounds.y + bounds.height || event.x < bounds.x || event.x >= bounds.x + bounds.width) return;
-    const visual = wrapToVisualLines(value, Math.max(1, columns - PROMPT.length - 1));
-    const caret = locateVisualCursor(visual, cursor);
-    const start = inputWindowStart(visual.length, caret.line, maxInputRows);
-    const line = visual[start + event.y - bounds.y];
-    if (line) setCursor(line.start + offsetAtColumn(line.text, Math.max(0, event.x - bounds.x - PROMPT.length)));
+    const inside = event.y >= bounds.y && event.y < bounds.y + bounds.height && event.x >= bounds.x && event.x < bounds.x + bounds.width;
+    if (event.action === 'press') {
+      if (!inside) return;
+      const visual = wrapToVisualLines(value, Math.max(1, columns - PROMPT.length - 1));
+      const caret = locateVisualCursor(visual, cursorRef.current);
+      const start = inputWindowStart(visual.length, caret.line, maxInputRows);
+      const line = visual[start + event.y - bounds.y];
+      if (!line) return;
+      const anchor = line.start + offsetAtColumn(line.text, Math.max(0, event.x - bounds.x - PROMPT.length));
+      drag.current = { anchor, focus: anchor, text: value, visual, start };
+      setSelection(undefined);
+      setCursor(anchor);
+      return;
+    }
+    const snapshot = drag.current;
+    if (!snapshot) return;
+    const row = Math.max(0, Math.min(bounds.height - 1, event.y - bounds.y));
+    const line = snapshot.visual[snapshot.start + row];
+    if (!line) return;
+    const focus = line.start + offsetAtColumn(line.text, Math.max(0, event.x - bounds.x - PROMPT.length));
+    snapshot.focus = focus;
+    setSelection({ anchor: snapshot.anchor, focus });
+    if (event.action === 'release') {
+      drag.current = undefined;
+      setCursor(focus);
+      const text = snapshot.text.slice(Math.min(snapshot.anchor, focus), Math.max(snapshot.anchor, focus));
+      if (text) {
+        if (copySelection) copySelection(text);
+        else void copyTerminalSelection(text).catch(() => {});
+      } else setSelection(undefined);
+    }
   });
+  useEffect(() => {
+    drag.current = undefined;
+    setSelection(undefined);
+  }, [value, columns, rows, resizing]);
   const maxInputRows = mouseEnabled ? Math.max(1, Math.min(MAX_INPUT_ROWS, Math.floor(rows / 3))) : MAX_INPUT_ROWS;
   // Reopen the completion menu and reset its selection whenever the input
   // changes. (The cursor is a static block — no blink timer.)
@@ -150,6 +186,8 @@ export function InputBox({
     const cursor = cursorRef.current;
     if (key.eventType === 'release') return;
     if (key.pageUp || key.pageDown || (mouseEnabled && key.ctrl && key.end)) return;
+    drag.current = undefined;
+    setSelection(undefined);
     if (key.ctrl && input === 'c') return onInterrupt('ctrl-c');
     if (resizing) return; // ignore typing mid-resize (the box is collapsed)
 
@@ -257,12 +295,18 @@ export function InputBox({
     set(value.slice(0, cursor) + printable + value.slice(cursor), cursor + printable.length);
   });
 
+  function restoreHistoryEntry(entry: InputHistoryEntry): void {
+    const recalled = typeof entry === 'string' ? { text: entry, images: [] } : entry;
+    setValue(recalled.text);
+    setCursor(recalled.text.length);
+    setImages([...recalled.images]);
+  }
+
   function historyPrev(): void {
     if (history.length === 0) return;
     const index = histIndex === null ? history.length - 1 : Math.max(0, histIndex - 1);
-    if (histIndex === null) setHistDraft(value);
-    setValue(history[index]);
-    setCursor(history[index].length);
+    if (histIndex === null) setHistDraft({ text: value, images: [...images] });
+    restoreHistoryEntry(history[index]);
     setHistIndex(index);
   }
 
@@ -270,12 +314,10 @@ export function InputBox({
     if (histIndex === null) return;
     if (histIndex < history.length - 1) {
       const index = histIndex + 1;
-      setValue(history[index]);
-      setCursor(history[index].length);
+      restoreHistoryEntry(history[index]);
       setHistIndex(index);
     } else {
-      setValue(histDraft);
-      setCursor(histDraft.length);
+      restoreHistoryEntry(histDraft);
       setHistIndex(null);
     }
   }
@@ -345,7 +387,7 @@ export function InputBox({
     const visual = wrapToVisualLines(value, width);
     const { line: cursorLine, column: cursorColumn } = locateVisualCursor(visual, cursor);
 
-    const start = inputWindowStart(visual.length, cursorLine, maxInputRows);
+    const start = drag.current?.start ?? inputWindowStart(visual.length, cursorLine, maxInputRows);
     // Color the leading `$name` / `/cmd` head token (line 0 only).
     const headMatch = value.match(/^([/$])\S*/);
     const headColor = headMatch ? (headMatch[1] === '$' ? SKILL : COMMAND) : undefined;
@@ -365,6 +407,7 @@ export function InputBox({
               globalIndex === cursorLine ? offsetAtColumn(vl.text, cursorColumn) : -1,
               globalIndex === 0 ? headLen : 0,
               headColor,
+              vl.start,
             )}
           </Box>
         </Box>
@@ -375,7 +418,7 @@ export function InputBox({
   /** Render one line: color the head token (`headLen` chars in `headColor`) and
    * `[image #n]` tokens, and overlay the block cursor — all via a per-character
    * color so the three can overlap (e.g. cursor inside the head). */
-  function renderLine(line: string, cursorCol: number, headLen = 0, headColor?: string): React.ReactElement {
+  function renderLine(line: string, cursorCol: number, headLen = 0, headColor?: string, lineStart = 0): React.ReactElement {
     const tokenRanges: Array<[number, number]> = [];
     IMAGE_TOKEN.lastIndex = 0;
     let match: RegExpExecArray | null;
@@ -390,7 +433,9 @@ export function InputBox({
 
     const out: React.ReactNode[] = [];
     for (const g of graphemes(line)) {
-      out.push(<Text key={g.offset} color={colorAt(g.offset)} inverse={g.offset === cursorCol}>{g.text}</Text>);
+      out.push(<Text key={g.offset} color={colorAt(g.offset)} inverse={selection && selection.anchor !== selection.focus
+        ? lineStart + g.offset >= Math.min(selection.anchor, selection.focus) && lineStart + g.offset < Math.max(selection.anchor, selection.focus)
+        : g.offset === cursorCol}>{g.text}</Text>);
     }
     if (cursorCol >= line.length && cursorCol >= 0) {
       out.push(<Text key="cur" inverse> </Text>);

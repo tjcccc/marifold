@@ -136,6 +136,52 @@ describe('InputBox', () => {
     expect(lastFrame()).toContain('first');
   });
 
+  it('restores image attachments when recalling and modifying a prompt', async () => {
+    const { stdin, onSubmit, unmount } = renderInput({
+      history: [{ text: 'describe [image #1]', images: ['/tmp/original.png'] }],
+    });
+    try {
+      stdin.write('\x1b[A');
+      await delay();
+      stdin.write(' in pink');
+      await delay();
+      stdin.write('\r');
+      await vi.waitFor(() => expect(onSubmit).toHaveBeenCalledWith('describe [image #1] in pink', ['/tmp/original.png']));
+      stdin.write('new message');
+      await delay();
+      stdin.write('\r');
+      await vi.waitFor(() => expect(onSubmit).toHaveBeenLastCalledWith('new message', []));
+    } finally { unmount(); }
+  });
+
+  it('restores draft attachments after browsing history and clears images for text-only entries', async () => {
+    const { stdin, onSubmit, unmount } = renderInput({
+      history: ['text only', { text: 'draft [image #1]', images: ['/tmp/draft.png'] }],
+    });
+    try {
+      stdin.write('\x1b[A');
+      await delay();
+      stdin.write(' edited');
+      await delay();
+      stdin.write('\x1b[A'); // save the edited image draft and browse
+      await delay();
+      stdin.write('\x1b[A'); // text-only history
+      await delay();
+      stdin.write('\x1b[B');
+      await delay();
+      stdin.write('\x1b[B'); // restore the edited image draft
+      await delay();
+      stdin.write('\r');
+      await vi.waitFor(() => expect(onSubmit).toHaveBeenLastCalledWith('draft [image #1] edited', ['/tmp/draft.png']));
+      stdin.write('\x1b[A');
+      await delay();
+      stdin.write('\x1b[A');
+      await delay();
+      stdin.write('\r');
+      await vi.waitFor(() => expect(onSubmit).toHaveBeenLastCalledWith('text only', []));
+    } finally { unmount(); }
+  });
+
   it('moves the cursor between lines mid-draft, recalling history only at the first line', async () => {
     const { stdin, lastFrame } = renderInput({ history: ['oldcmd'] });
     stdin.write('aaa');

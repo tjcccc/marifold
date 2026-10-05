@@ -36,7 +36,7 @@ export function TranscriptRow({ item }: { item: TranscriptItem }): React.ReactEl
       return (
         <Box
           borderStyle="single"
-          borderColor={DIM_ACCENT}
+          borderColor={DIM}
           borderLeft={false}
           borderRight={false}
           width="100%"

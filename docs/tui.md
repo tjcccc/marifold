@@ -53,18 +53,24 @@ Full-screen mode keeps the composer below a bounded transcript viewport:
   the latest output again. Submitting a new prompt also follows the latest turn.
 - Clicking the composer positions the caret, including in wrapped Chinese text,
   combining characters, and emoji. The existing keyboard editing and completion
-  controls remain available.
+  controls remain available. Dragging within the composer selects draft text
+  and copies it on release without changing the draft; click or type to clear
+  the highlight.
 - Dragging across transcript text highlights it and copies it on mouse release.
   The displayed transcript stays stable during selection, even while a reply
   streams. Scroll, submit a prompt, or press Ctrl+End to return to live output.
   A click without a selection leaves the clipboard unchanged.
 
-Selections copy displayed text, including visual line wraps. `/copy` copies the
+Selections copy rendered text with terminal wrapping removed, preserving explicit
+newlines and paragraph breaks. Outer transcript padding is excluded. `/copy` copies the
 original response text. Local selection copying uses the existing platform
 clipboard utility (`pbcopy`, `clip`, or `xclip`). SSH sessions and local utility
 failures use OSC 52; the client terminal must allow clipboard writes. tmux also
 needs to allow the clipboard sequence/passthrough. If the terminal blocks OSC 52,
 marifold cannot detect that refusal.
+
+After a resize settles, full-screen mode redraws the terminal at its new width
+and height while preserving the composer draft. Ctrl+L also forces a redraw.
 
 The alternate screen restores the prior shell display on exit; its transcript
 is available through saved sessions rather than native terminal scrollback.
@@ -87,6 +93,14 @@ only enabled for full-screen launches, and is released on exit.
   Ctrl+U deletes to start; Ctrl+W deletes the previous word; Backspace removes
   the character before the cursor (including the macOS DEL byte), while Del
   removes the character under the cursor.
+- **Prompt history**: Up/Down restores the prompt and its dropped image attachments.
+  Editing a recalled prompt keeps those images attached; returning to an unfinished
+  draft restores its own attachments. Both `--resume` and `/resume` restore saved
+  user prompts to input history. Saved image attachments are loaded on resubmission,
+  including from service-connected workspaces; missing saved images produce an
+  error instead of silently sending only placeholders. Newly dropped images in
+  the current launch are re-read from their original paths, so those files must
+  still exist.
 - **Word editing**: Option/Alt+Left and Option/Alt+Right move by word;
   Option/Alt+Backspace deletes the previous word. Ctrl+Left/Right and
   Alt+B/Alt+F also move by word. The terminal must send Option as Alt/Meta.

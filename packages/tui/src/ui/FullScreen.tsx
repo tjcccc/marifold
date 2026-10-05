@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Box, Text, renderToString, measureElement, useBoxMetrics, useInput, type DOMElement } from 'ink';
 import sliceAnsi from 'slice-ansi';
+import stripAnsi from 'strip-ansi';
+import stringWidth from 'string-width';
 import type { TranscriptItem } from '../core/appState.js';
 import { TranscriptRow, topGap } from './Transcript.js';
 import { useTerminalSize } from './useTerminalSize.js';
-import { useMouse } from './Mouse.js';
-import { orderedSelection, selectedText, type Selection, type Position } from './selection.js';
+import { SelectionCopyContext, useMouse } from './Mouse.js';
+import { mapSelectionLines, orderedSelection, selectedText, type SelectionLine, type Selection, type Position } from './selection.js';
 import { copyTerminalSelection } from './appHelpers.js';
 
 interface Props {
@@ -24,13 +26,13 @@ export function FullScreen({ items, header, footer, keyboardActive, workspaceNot
   const width = Math.max(1, columns - 1);
   const viewport = useRef<DOMElement>(null);
   const metrics = useBoxMetrics(viewport);
-  const [lines, setLines] = useState<string[]>([]);
+  const [lines, setLines] = useState<SelectionLine[]>([]);
   const [offset, setOffset] = useState<number | null>(null);
   const [selection, setSelection] = useState<Selection>();
-  const [frozen, setFrozen] = useState<string[]>();
+  const [frozen, setFrozen] = useState<SelectionLine[]>();
   const [copyStatus, setCopyStatus] = useState('');
-  const drag = useRef<{ selection: Selection; lines: string[]; top: number; offset: number | null } | undefined>(undefined);
-  const cache = useRef(new WeakMap<TranscriptItem, { width: number; lines: string[] }>());
+  const drag = useRef<{ selection: Selection; lines: SelectionLine[]; top: number; offset: number | null } | undefined>(undefined);
+  const cache = useRef(new WeakMap<TranscriptItem, { width: number; lines: SelectionLine[] }>());
   const height = Math.max(1, metrics.height);
   const displayed = frozen ?? lines;
   const maxOffset = Math.max(0, displayed.length - height);
@@ -40,13 +42,17 @@ export function FullScreen({ items, header, footer, keyboardActive, workspaceNot
     // A separate task avoids nesting Ink's synchronous off-screen reconciler
     // inside the live tree's commit/effect pass.
     const task = setImmediate(() => {
-      const result = renderToString(<Box width={width}>{header}</Box>, { columns: width }).split('\n');
+      const headerLines = renderToString(<Box width={width}>{header}</Box>, { columns: width }).split('\n');
+      const result = mapSelectionLines(headerLines, headerLines, 0);
       items.forEach((item, index) => {
         const previous = items[index - 1]?.kind ?? 'banner';
-        if (topGap(item.kind, previous)) result.push('');
+        if (topGap(item.kind, previous)) result.push(...mapSelectionLines([''], [''], 0));
         let entry = cache.current.get(item);
         if (!entry || entry.width !== width) {
-          entry = { width, lines: renderToString(<Box width={width} paddingX={1}><TranscriptRow item={item} /></Box>, { columns: width }).split('\n') };
+          const styled = renderToString(<Box width={width} paddingX={1}><TranscriptRow item={item} /></Box>, { columns: width }).split('\n');
+          const logicalWidth = Math.max(width, ...JSON.stringify(item).split('\\n').map(line => stringWidth(line) + 8));
+          const logical = logicalWidth === width ? styled : renderToString(<Box width={logicalWidth} paddingX={1}><TranscriptRow item={item} /></Box>, { columns: logicalWidth }).split('\n');
+          entry = { width, lines: mapSelectionLines(styled, logical) };
           cache.current.set(item, entry);
         }
         result.push(...entry.lines);
@@ -61,6 +67,10 @@ export function FullScreen({ items, header, footer, keyboardActive, workspaceNot
   useEffect(() => {
     setOffset(null); setSelection(undefined); setFrozen(undefined); setCopyStatus(''); drag.current = undefined;
   }, [width, rows, firstId, lastUserId]);
+
+  const copySelection = (text: string) => {
+    void onCopy(text).then(() => setCopyStatus('Copied'), () => setCopyStatus('Clipboard unavailable · use /copy or inline mode'));
+  };
 
   const scroll = (delta: number) => {
     if (drag.current) return;
@@ -104,7 +114,7 @@ export function FullScreen({ items, header, footer, keyboardActive, workspaceNot
         drag.current = undefined;
         const text = selectedText(source, next);
         if (text) {
-          void onCopy(text).then(() => setCopyStatus('Copied'), () => setCopyStatus('Clipboard unavailable · use /copy or inline mode'));
+          copySelection(text);
         } else {
           setSelection(undefined); setFrozen(undefined); setOffset(snapshot.offset);
         }
@@ -117,11 +127,14 @@ export function FullScreen({ items, header, footer, keyboardActive, workspaceNot
   return (
     <Box width={width} height={Math.max(1, rows - 1)} flexDirection="column" overflow="hidden">
       <Box ref={viewport} flexDirection="column" flexGrow={1} flexShrink={1} minHeight={1} overflow="hidden">
-        {visible.map((line, index) => {
+        {visible.map((entry, index) => {
+          const line = entry.styled;
           const row = top + index;
-          if (!range || row < range[0].row || row > range[1].row) return <Text key={index} wrap="truncate-end">{line || ' '}</Text>;
-          const start = row === range[0].row ? range[0].column : 0;
-          const end = row === range[1].row ? range[1].column : width;
+          if (!line || !range || row < range[0].row || row > range[1].row) return <Text key={index} wrap="truncate-end">{line || ' '}</Text>;
+          // Off-screen rendering turns the transcript's one-cell padding into text.
+          const padding = stripAnsi(line).startsWith(' ') ? 1 : 0;
+          const start = Math.max(padding, row === range[0].row ? range[0].column : 0);
+          const end = Math.max(start, row === range[1].row ? range[1].column : width);
           return <Text key={index} wrap="truncate-end">{sliceAnsi(line, 0, start)}<Text inverse>{sliceAnsi(line, start, end)}</Text>{sliceAnsi(line, end)}</Text>;
         })}
       </Box>
@@ -138,7 +151,7 @@ export function FullScreen({ items, header, footer, keyboardActive, workspaceNot
             {copyStatus ? <Text dimColor wrap="truncate-end">{copyStatus}</Text> : null}
           </Box>
         ) : null}
-        {footer}
+        <SelectionCopyContext.Provider value={copySelection}>{footer}</SelectionCopyContext.Provider>
       </Box>
     </Box>
   );
