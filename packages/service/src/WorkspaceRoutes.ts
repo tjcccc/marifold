@@ -118,6 +118,8 @@ export function registerWorkspaceRoutes(
         headers: {
           ...provenance,
           ...(token ? { authorization: `Bearer ${token}` } : {}),
+          ...(typeof body.sessionOwner === 'string' && /^[a-zA-Z0-9-]{20,100}$/.test(body.sessionOwner)
+            ? { 'x-marifold-session-owner': body.sessionOwner } : {}),
           ...(body.body !== undefined ? { 'content-type': 'application/json' } : {}),
         },
         ...(body.body !== undefined ? { payload: JSON.stringify(body.body) } : {}),
@@ -279,7 +281,10 @@ export function registerWorkspaceRoutes(
     const result = (await manager.request(
       request.params.id,
       'api',
-      { method: request.method, path: suffix, remoteRequest: requestOrigin(request) === 'remote', ...(request.body !== undefined ? { body: request.body } : {}) },
+      { method: request.method, path: suffix, remoteRequest: requestOrigin(request) === 'remote',
+        ...(typeof request.headers['x-marifold-session-owner'] === 'string'
+          ? { sessionOwner: request.headers['x-marifold-session-owner'] } : {}),
+        ...(request.body !== undefined ? { body: request.body } : {}) },
       typeof request.headers['idempotency-key'] === 'string' ? request.headers['idempotency-key'] : undefined,
     )) as { status: number; contentType?: string; disposition?: string; body: string };
     reply.code(result.status);

@@ -2,6 +2,24 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-10-06 — v0.79.1 — Connected workspace sessions and rejoining
+
+- Preserve the client session owner through workspace API forwarding and host
+  injection, fixing session opening failures on connected devices while keeping
+  ownership renewal, competing-client rejection, and owner-only release intact.
+- Allow a fresh invitation from the pinned host to replace an unavailable guest
+  pairing without deleting its workspace entry or startup default. Active pairings
+  and locally hosted workspaces remain protected from replacement.
+- Add Web rejoining with the saved bridge URL and executor preference. Revoking
+  the current device clears its active connection and opens the invitation form;
+  revoking another device keeps the current connection.
+- Verify targeted session forwarding, workspace bridge, and Web popover tests.
+  Live OrbStack checks cover session opening, self-revoke, fresh-invitation rejoin,
+  and transcript reads afterward. User confirmed the mock Web workspace works.
+- Synchronize versions to 0.79.1; clean workspace build and typecheck pass. The
+  full suite passes 1,049 tests with one existing skip. All six packed packages
+  and the packed CLI version match the release.
+
 ## Unreleased — pnpm 12 workspace tooling
 
 - Pin pnpm 12.9.1 in the root package manager field for every workspace package

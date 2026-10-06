@@ -81,6 +81,43 @@ async function paired(executor = false) {
   };
 }
 describe('device-hosted workspaces', () => {
+  it.each(['host', 'guest'] as const)('preserves session ownership through the %s workspace facade', async device => {
+    const p = await paired();
+    const facade = p[device];
+    const realFetch = globalThis.fetch;
+    vi.stubGlobal('fetch', vi.fn(async (input, init) => {
+      if (!String(input).includes('localhost:11434')) return realFetch(input, init);
+      return new Response(JSON.stringify({ message: { content: 'Hello.' }, done: true, done_reason: 'stop' }),
+        { headers: { 'content-type': 'application/json' } });
+    }));
+    const owner = { 'x-marifold-session-owner': '11111111-1111-4111-8111-111111111111' };
+    const other = { 'x-marifold-session-owner': '22222222-2222-4222-8222-222222222222' };
+    const session = `${p.prefix}/v1/sessions/owned-session`;
+    const lease = `${session}/lease`;
+    for (let renewal = 0; renewal < 2; renewal++) {
+      const response = await facade.inject({ method: 'POST', url: lease, headers: owner });
+      expect(response.statusCode, response.body).toBe(200);
+    }
+    const sent = await facade.inject({ method: 'POST', url: `${p.prefix}/v1/ask`, headers: owner,
+      payload: { sessionId: 'owned-session', prompt: 'Hello' } });
+    expect(sent.statusCode, sent.body).toBe(200);
+    const readable = await facade.inject({ method: 'GET', url: session, headers: owner });
+    expect(readable.statusCode, readable.body).toBe(200);
+    const blocked = await facade.inject({ method: 'POST', url: lease, headers: other });
+    expect(blocked.json().error.code).toBe('SESSION_BUSY');
+    const hostBlocked = await p.host.inject({ method: 'GET', url: '/v1/sessions/owned-session', headers: other });
+    expect(hostBlocked.json().error.code).toBe('SESSION_BUSY');
+    const sendBlocked = await facade.inject({ method: 'POST', url: `${p.prefix}/v1/ask`, headers: other,
+      payload: { sessionId: 'owned-session', prompt: 'Hello' } });
+    expect(sendBlocked.json().error.code).toBe('SESSION_BUSY');
+    await facade.inject({ method: 'DELETE', url: lease, headers: other });
+    expect((await facade.inject({ method: 'POST', url: lease, headers: other })).json().error.code).toBe('SESSION_BUSY');
+    const released = await facade.inject({ method: 'DELETE', url: lease, headers: owner });
+    expect(released.statusCode, released.body).toBe(200);
+    const acquired = await facade.inject({ method: 'POST', url: lease, headers: other });
+    expect(acquired.statusCode, acquired.body).toBe(200);
+  });
+
   it('lists execution targets through the active workspace bridge', async () => {
     const p = await paired(true);
     const response = await p.guest.inject({ method: 'GET', url: `${p.prefix}/v1/execution-devices` });

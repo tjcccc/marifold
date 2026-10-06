@@ -105,7 +105,14 @@ export class WorkspaceManager {
     const versionError = workspaceVersionError(invitation.appVersion);
     if (versionError) throw new Error(versionError);
     const workspaceId = identifier(invitation.workspaceId);
-    if (this.store.list().some((c) => c.id === workspaceId)) throw new Error('Workspace already connected.');
+    const existing = this.store.list().find(c => c.id === workspaceId);
+    if (existing) {
+      if (existing.role === 'host') throw new Error('Workspace is hosted on this device.');
+      if (existing.bridgeUrl !== invitation.bridgeUrl || JSON.stringify(existing.host) !== JSON.stringify(invitation.host))
+        throw new Error('Invitation does not match the saved workspace host.');
+      await this.checkHost(existing);
+      if (this.hostStatus.get(workspaceId)) throw new Error('Workspace already connected.');
+    }
     const identity = await createIdentity();
     const pendingId = `pending_${randomId()}`;
     const temporary = new BridgePeer({
@@ -142,7 +149,10 @@ export class WorkspaceManager {
         certificate,
         executor,
       };
+      if (existing) this.onMembershipRemoved?.(c.id);
       this.store.save(c);
+      this.hostStatus.delete(c.id);
+      this.versionErrors.delete(c.id);
       const peer = this.connect(c);
       await peer.ready();
       await this.checkHost(c);

@@ -272,7 +272,12 @@ and is consumed by successful pairing. Creating another invitation invalidates
 unused prior invitations, without changing already-paired device keys. Each paired
 device receives its own host-signed membership. Use `revoke` to invalidate that
 device separately. Recover lost device keys by revoking and re-pairing; there is
-no shared permanent guest token. All paired devices belong to the same owner and
+no shared permanent guest token. A revoked device retains its saved workspace;
+use **Rejoin workspace** with a fresh host invitation to replace the unavailable
+pairing without disconnecting it first. Revoking the current device in the Web UI
+opens the invitation form automatically. Invalid invitations leave the saved pairing
+intact; an active pairing or a locally hosted workspace cannot be replaced by joining.
+All paired devices belong to the same owner and
 can manage the shared workspace. Permission roles are deferred.
 
 Do not copy live workspace state between Macs: it would duplicate device identity

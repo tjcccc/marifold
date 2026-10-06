@@ -123,6 +123,13 @@ export function WorkspacePopover(props: Props) {
   async function manage(operation: string, body: unknown = {}) {
     return api.request<{ invitation?: string }>('POST', `/v1/workspaces/${selected}/manage/${operation}`, body);
   }
+  function rejoin() {
+    setUrl(workspace?.bridgeUrl ?? '');
+    setExecutor(workspace?.executor === true);
+    setSecret('');
+    setInvitation('');
+    setMode('join');
+  }
   async function connect() {
     const connection: ServerConnection = workspace
       ? { id: `workspace-${workspace.id}`, name: workspace.name, workspaceId: workspace.id, token: local.token }
@@ -273,6 +280,13 @@ export function WorkspacePopover(props: Props) {
                                   void perform(async () => {
                                     await manage('revoke', { deviceId: d.id });
                                     setDevices((ds) => ds.filter((item) => item.id !== d.id));
+                                    if (d.id === workspace.deviceId) {
+                                      props.onRemove(`workspace-${workspace.id}`);
+                                      setDeviceChoice(undefined);
+                                      props.onExecutionDevice(undefined);
+                                      rejoin();
+                                    }
+                                    await refresh();
                                   })
                                 }
                               >
@@ -283,6 +297,11 @@ export function WorkspacePopover(props: Props) {
                         ))}
                       </div>
                     </section>
+                    {workspace.role === 'guest' && (
+                      <button className={styles.add} disabled={busy || workspace.online} onClick={rejoin}>
+                        Rejoin workspace
+                      </button>
+                    )}
                     {workspace.role === 'guest' && (
                       <label className={styles.hint}>
                         <input
