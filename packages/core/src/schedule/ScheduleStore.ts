@@ -131,13 +131,25 @@ export class ScheduleStore {
     return next <= now ? next : next;
   }
 
-  /** Enabled schedules whose next firing time has passed. */
-  due(now: Date = new Date()): ScheduleState[] {
-    return this.list().filter(schedule => {
-      if (!schedule.enabled) return false;
-      const next = this.nextRun(schedule, now);
-      return next !== undefined && next <= now;
-    });
+  /** Enabled schedules whose next firing time has passed. An unreadable file
+   * or invalid cron expression is reported and skipped, so one bad schedule
+   * cannot stop every other schedule from firing. */
+  due(now: Date = new Date(), onInvalid?: (file: string, error: unknown) => void): ScheduleState[] {
+    if (!fs.existsSync(this.schedulesDir)) return [];
+    const due: ScheduleState[] = [];
+    for (const entry of fs.readdirSync(this.schedulesDir, { withFileTypes: true })) {
+      if (!entry.isFile() || !entry.name.endsWith('.json')) continue;
+      const file = path.join(this.schedulesDir, entry.name);
+      try {
+        const schedule = this.readFile(file);
+        if (!schedule.enabled) continue;
+        const next = this.nextRun(schedule, now);
+        if (next !== undefined && next <= now) due.push(schedule);
+      } catch (error) {
+        onInvalid?.(file, error);
+      }
+    }
+    return due.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   }
 
   private createScheduleId(): string {

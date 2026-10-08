@@ -5,6 +5,7 @@ import { spawn } from 'node:child_process';
 import { SudoCredentials } from './SudoCredentials';
 
 export type DeviceExecutionMode = 'scoped' | 'full';
+const JOB_RETENTION_MS = 7 * 24 * 60 * 60_000;
 export interface DeviceJob {
   id: string;
   state: 'queued' | 'running' | 'succeeded' | 'failed' | 'unknown';
@@ -48,6 +49,7 @@ export class DeviceExecution {
     const worker = path.join(__dirname, 'DeviceExecutionWorker.js');
     if (!fs.existsSync(worker)) throw new Error('Device worker is missing. Build or reinstall Marifold.');
     this.prepare();
+    this.prune();
     if (this.recent().filter(job => job.state === 'queued' || job.state === 'running').length >= 8) {
       throw new Error('Device already has eight active full-access jobs. Inspect their status before starting more.');
     }
@@ -106,6 +108,19 @@ export class DeviceExecution {
     return fs.readdirSync(this.directory).filter(id => /^[a-f0-9-]{36}$/.test(id))
       .map(id => this.status(id)).filter(job => scope === undefined || job.scope === scope).sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 20)
       .map(({ output: _output, ...job }) => job);
+  }
+
+  /** Drop job records older than a week. Jobs run at most ten minutes, and
+   * every status read scans this directory. */
+  private prune(now = Date.now()): void {
+    for (const id of fs.readdirSync(this.directory).filter(id => /^[a-f0-9-]{36}$/.test(id))) {
+      try {
+        const job = readPrivateJson(path.join(this.directory, id, 'result.json'));
+        if (now - Date.parse(String(job.createdAt)) > JOB_RETENTION_MS) {
+          fs.rmSync(path.join(this.directory, id), { recursive: true, force: true });
+        }
+      } catch { /* Unreadable records stay for inspection. */ }
+    }
   }
 
   private checkDirectory(): void {

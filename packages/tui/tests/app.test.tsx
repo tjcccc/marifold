@@ -88,6 +88,37 @@ describe('App', () => {
     } finally { unmount(); run.mockRestore(); createRunner.mockRestore(); runtime.close(); }
   });
 
+  it('keeps dropped image numbers separate from /image attachments', async () => {
+    const { runtime, loadedConfig } = workspace();
+    const dir = tempDirs.at(-1)!;
+    const commanded = path.join(dir, 'commanded.png');
+    const dropped = path.join(dir, 'dropped.png');
+    fs.writeFileSync(commanded, 'fixture');
+    fs.writeFileSync(dropped, 'fixture');
+    const runner = runtime.createAgentRunner('default');
+    const run = vi.spyOn(runner, 'run').mockImplementation(async function* () {});
+    const createRunner = vi.spyOn(runtime, 'createAgentRunner').mockReturnValue(runner);
+    const { stdin, unmount } = render(<App runtime={runtime} loadedConfig={loadedConfig} initial={{
+      profile: 'default', provider: 'ollama', model: 'test-model', think: false, cwd: '/tmp/work', version: 'test',
+    }} />);
+    try {
+      await delay();
+      stdin.write(`/image ${commanded}`);
+      await delay();
+      stdin.write('\r');
+      await delay();
+      stdin.write('compare ');
+      await delay();
+      stdin.write(dropped); // Dropped file path becomes [image #1].
+      await delay();
+      stdin.write('\r');
+      await vi.waitFor(() => expect(run).toHaveBeenCalledTimes(1));
+      const options = run.mock.calls[0][0] as { objective: string; images: Array<{ path?: string }> };
+      expect(options.objective).toBe('compare [image #1]');
+      expect(options.images.map(image => image.path)).toEqual([dropped, commanded]);
+    } finally { unmount(); run.mockRestore(); createRunner.mockRestore(); runtime.close(); }
+  });
+
   it('reattaches a dropped image when a sent prompt is recalled and edited', async () => {
     const { runtime, loadedConfig } = workspace();
     const image = path.join(tempDirs.at(-1)!, 'source.png');
@@ -149,8 +180,9 @@ describe('App', () => {
         await delay();
         stdin.write('\r');
         await vi.waitFor(() => expect(lastFrame()).toContain('Resume session'));
+        await delay(); // Let the picker subscribe to input before selecting.
         stdin.write('\r');
-        await vi.waitFor(() => expect(lastFrame()).toContain('Resumed session saved'));
+        await vi.waitFor(() => expect(lastFrame()).toContain('Resumed session saved'), { timeout: 3000 });
       }
       stdin.write('\x1b[A'); // newer upload with the same image number
       await delay();

@@ -60,6 +60,26 @@ describe('MarifoldService', () => {
     } finally { local.close(); await server.close(); }
   });
 
+  it('keeps client request errors as 4xx and hides host paths in system errors', async () => {
+    const server = createMarifoldService({ loadedConfig: fixtureLoadedConfig(tempDir()), scheduler: false });
+    server.get('/test/system-error', async () => fs.readFileSync(path.join(tempDir(), 'private-notes', 'missing.txt')));
+    try {
+      const malformed = await server.inject({ method: 'POST', url: '/v1/runs', headers: { 'content-type': 'application/json' }, payload: '{"objective":' });
+      expect(malformed.statusCode).toBe(400);
+      expect(malformed.json().error.code).toBe('REQUEST_INVALID');
+      const unsupported = await server.inject({ method: 'POST', url: '/v1/runs', headers: { 'content-type': 'application/xml' }, payload: '<run/>' });
+      expect(unsupported.statusCode).toBe(415);
+      // A client on another device never sees host paths; one on this device does.
+      const remote = await server.inject({ url: '/test/system-error', remoteAddress: '192.168.1.20' });
+      expect(remote.statusCode).toBe(500);
+      expect(remote.json().error).toEqual({ code: 'INTERNAL_ERROR', message: 'A local file or system operation failed.' });
+      expect(remote.body).not.toContain('private-notes');
+      expect((await server.inject('/test/system-error')).body).toContain('private-notes');
+    } finally {
+      await server.close();
+    }
+  });
+
   it('exposes health and sanitized config without secrets', async () => {
     const server = createMarifoldService({ loadedConfig: fixtureLoadedConfig(tempDir()), scheduler: false });
     try {

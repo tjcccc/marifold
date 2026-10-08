@@ -3,6 +3,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { expect, it, vi } from 'vitest';
+import Database from 'better-sqlite3';
 import { SessionLeases } from '../src/sessions/SessionLeases';
 
 it('excludes independent clients, renews, releases only for the owner, and expires crashed clients', () => {
@@ -72,4 +73,20 @@ it('holds a session for running work through a client release and renews it unti
     other.close();
     fs.rmSync(dir, { recursive: true, force: true });
   }
+});
+
+it('prunes expired lease rows as clients acquire sessions', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'marifold-leases-'));
+  const file = path.join(dir, 'leases.db');
+  let now = 0;
+  const leases = new SessionLeases(file, () => now);
+  try {
+    for (const id of ['a', 'b', 'c']) leases.acquire(id, 'tab');
+    now = 70_000;
+    leases.acquire('d', 'tab');
+    const db = new Database(file, { readonly: true });
+    try {
+      expect((db.prepare('SELECT session_id FROM leases').all() as Array<{ session_id: string }>).map(row => row.session_id)).toEqual(['d']);
+    } finally { db.close(); }
+  } finally { leases.close(); fs.rmSync(dir, { recursive: true, force: true }); }
 });

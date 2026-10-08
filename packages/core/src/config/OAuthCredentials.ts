@@ -39,9 +39,15 @@ export async function withOAuthCredentials(
     if (!update) return;
     const latest = read();
     const current = adopt(latest);
-    // Never overwrite a concurrent reauth, provider removal, or config edit.
-    if (JSON.stringify(current) !== original) return;
-    latest.config.providers[name] = { ...current!, ...update };
+    // Never overwrite a concurrent reauth (a changed credential field) or a
+    // provider removal. Other edits to the provider, such as its proxy, keep
+    // the rotated credentials: the previous refresh token is already consumed.
+    if (!current) return;
+    const before = JSON.parse(original) as MarifoldProviderConfig;
+    const reauthenticated = (Object.keys(update) as (keyof MarifoldProviderConfig)[])
+      .some(key => JSON.stringify(current[key]) !== JSON.stringify(before[key]));
+    if (reauthenticated) return;
+    latest.config.providers[name] = { ...current, ...update };
     new ConfigManager(latest).save();
     adopt(latest);
   });

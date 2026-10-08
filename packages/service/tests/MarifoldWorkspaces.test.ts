@@ -10,7 +10,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ArtifactWebRtc, DeviceExecution, encryptSudoPassword, resolveAgentConfig } from '@marifold/core';
 import { createBridge, MemoryRelayStore } from '../../../apps/bridge/src';
 import { createMarifoldService } from '../src';
-import { workspaceApiPath, workspaceHostOnlyRequest } from '../src/WorkspaceRoutes';
+import { remoteExecution, workspaceApiPath, workspaceHostOnlyRequest } from '../src/WorkspaceRoutes';
 import { cleanupTempDirs, fixtureLoadedConfig, tempDir } from './helpers';
 
 const servers: FastifyInstance[] = [];
@@ -221,6 +221,33 @@ describe('device-hosted workspaces', () => {
     expect((await guest.inject(`${p.prefix}/v1/runs?sessionId=download-session`)).json().runs[0].artifacts).toHaveLength(2);
     expect((await guest.inject(`${p.prefix}/v1/runs?sessionId=another-session`)).json().runs).toEqual([]);
   }, 40000);
+  it('serves artifacts of runs that executed here after their workspace is removed', () => {
+    const manager = { store: { get: (id: string) => {
+      if (id !== 'home') throw new Error('Workspace not found.');
+      return { hostDeviceId: 'host-device' };
+    } } } as never;
+    const execution = (workspaceId: string, executionDeviceId: string) => ({ workspaceId, executionDeviceId, originDeviceId: 'host-device' });
+    expect(remoteExecution(manager, undefined)).toBeUndefined();
+    expect(remoteExecution(manager, execution('home', 'host-device'))).toBeUndefined();
+    expect(remoteExecution(manager, execution('home', 'guest-device'))).toMatchObject({ executionDeviceId: 'guest-device' });
+    // Removed workspace: no device is reachable, so the local lookup decides.
+    expect(remoteExecution(manager, execution('removed', 'host-device'))).toBeUndefined();
+    expect(remoteExecution(manager, execution('removed', 'guest-device'))).toBeUndefined();
+  });
+  it('reports workspace join refusals as client errors', async () => {
+    const p = await paired();
+    await expect.poll(async () => (await p.guest.inject('/v1/workspaces')).json().workspaces[0].online, { timeout: 10000 }).toBe(true);
+    const { invitation } = await post(p.host, `/v1/workspaces/${p.id}/manage/invite`, {});
+    const connected = await p.guest.inject({ method: 'POST', url: '/v1/workspaces/join', payload: { bridgeUrl: p.url, invitation } });
+    expect(connected.statusCode).toBe(409);
+    expect(connected.json().error.code).toBe('WORKSPACE_CONFLICT');
+    const own = await p.host.inject({ method: 'POST', url: '/v1/workspaces/join', payload: { bridgeUrl: p.url, invitation } });
+    expect(own.statusCode).toBe(409);
+    const malformed = await p.guest.inject({ method: 'POST', url: '/v1/workspaces/join', payload: { bridgeUrl: p.url, invitation: 'x'.repeat(16385) } });
+    expect(malformed.statusCode).toBe(400);
+    expect(malformed.json().error.code).toBe('WORKSPACE_INVALID');
+  }, 30000);
+
   it('keeps provider endpoints and credential references with the host', async () => {
     const p = await paired();
     const refused = [
@@ -232,8 +259,8 @@ describe('device-hosted workspaces', () => {
     ] as const;
     for (const request of refused) {
       const response = await p.guest.inject(request);
-      expect(response.statusCode, request.url).toBeGreaterThanOrEqual(400);
-      expect(response.body, request.url).toContain('must be edited locally');
+      expect(response.statusCode, request.url).toBe(403);
+      expect(response.json().error, request.url).toMatchObject({ code: 'HOST_ONLY_SETTING', message: expect.stringContaining('must be edited locally') });
     }
     const added = await p.guest.inject({ method: 'POST', url: `${p.prefix}/v1/models`, payload: { provider: 'ollama', model: 'qwen3:8b' } });
     expect(added.statusCode, added.body).toBe(201);
@@ -248,6 +275,8 @@ describe('device-hosted workspaces', () => {
     const p = await paired();
     const config = await p.guest.inject(`${p.prefix}/v1/config`);
     expect(config.statusCode).toBe(200);
+    expect(config.headers['x-content-type-options']).toBe('nosniff');
+    expect(config.headers['content-security-policy']).toContain('sandbox');
     expect(config.body).not.toContain('test-secret-key');
     expect(config.json().config.models.options).toEqual(['ollama/gemma4:e4b']);
     expect((await p.guest.inject('/v1/config')).json().config.models.options).toEqual([]);

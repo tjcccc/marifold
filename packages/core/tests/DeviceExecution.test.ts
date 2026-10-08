@@ -2,7 +2,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { DeviceExecution, type DeviceJob } from '../src/agent/DeviceExecution';
+import { DeviceExecution, writePrivateJson, type DeviceJob } from '../src/agent/DeviceExecution';
 import { ShellExecTool } from '../src/agent/tools/ShellExecTool';
 import { ShellJobStatusTool } from '../src/agent/tools/ShellJobStatusTool';
 import { WorkspaceExecutor } from '../src/workspace/WorkspaceExecutor';
@@ -92,6 +92,33 @@ describe('device-local full execution', () => {
     fs.writeFileSync(outside, '{"mode":"full"}', { mode: 0o600 });
     fs.symlinkSync(outside, path.join(device.directory, 'policy.json'));
     expect(device.mode()).toBe('scoped');
+  });
+
+  it('drops job records older than a week when starting a job', async () => {
+    const { directory, device } = fixture();
+    device.setMode('full');
+    const fresh = await device.start('printf fresh', directory, process.env);
+    await finished(device, fresh.id);
+    const oldId = '00000000-0000-4000-8000-000000000000';
+    fs.mkdirSync(path.join(device.directory, oldId), { mode: 0o700 });
+    writePrivateJson(path.join(device.directory, oldId, 'result.json'), {
+      id: oldId, state: 'succeeded', createdAt: new Date(Date.now() - 8 * 24 * 60 * 60_000).toISOString(),
+    });
+    expect(device.recent().map(job => job.id)).toContain(oldId);
+    const next = await device.start('printf next', directory, process.env);
+    await finished(device, next.id);
+    expect(device.recent().map(job => job.id).sort()).toEqual([fresh.id, next.id].sort());
+  });
+
+  it('stops a job and its background children at the time limit and reports it', async () => {
+    const { directory, device } = fixture();
+    device.setMode('full');
+    const started = Date.now();
+    const job = await device.start('sleep 30 & sleep 30', directory, { ...process.env, MARIFOLD_TEST_DEVICE_JOB_LIMIT_MS: '1000' });
+    const result = await finished(device, job.id);
+    expect(result.state).toBe('failed');
+    expect(result.output).toContain('exceeded the 1-second limit and was stopped');
+    expect(Date.now() - started).toBeLessThan(9000);
   });
 
   it('remote execution consumes one grant, enforces guest policy, and recovers jobs across executor restart', async () => {

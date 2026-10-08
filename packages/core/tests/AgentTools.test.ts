@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { execFileSync } from 'child_process';
 import { afterEach, describe, expect, it } from 'vitest';
 import { AskUserTool } from '../src/agent/tools/AskUserTool';
 import { DelegateTool } from '../src/agent/tools/DelegateTool';
@@ -549,6 +550,25 @@ describe('InspectAttachmentTool', () => {
 });
 
 describe('ReadFileTool', () => {
+  it.runIf(process.platform !== 'win32')('refuses FIFOs without blocking and bounds very large files', async () => {
+    const dir = tempDir();
+    const fifo = path.join(dir, 'pipe');
+    execFileSync('mkfifo', [fifo]);
+    const started = Date.now();
+    const blocked = await new ReadFileTool().execute({ path: 'pipe' }, context(dir));
+    expect(blocked.isError).toBe(true);
+    expect(blocked.content).toContain('not a regular file');
+    expect(Date.now() - started).toBeLessThan(1000);
+
+    const large = path.join(dir, 'large.log');
+    fs.writeFileSync(large, `HEAD${'x'.repeat(3 * 1024 * 1024)}TAIL`);
+    const read = await new ReadFileTool().execute({ path: 'large.log' }, context(dir, 1000));
+    expect(read.summary).toBe(`read 3.0MB from ${path.join(dir, 'large.log')}`);
+    expect(read.content.startsWith('HEAD')).toBe(true);
+    expect(read.content.endsWith('TAIL')).toBe(true);
+    expect(read.content.length).toBeLessThan(1200);
+  });
+
   it('reads files relative to cwd', async () => {
     const dir = tempDir();
     fs.writeFileSync(path.join(dir, 'a.txt'), 'hello agent');
@@ -806,6 +826,36 @@ describe('PythonPackageTool', () => {
     expect(result.isError).toBe(true);
     expect(result.content).toContain('Refused unsafe Python requirement');
   });
+
+  it.runIf(process.platform === 'darwin')('stops background processes and timed-out process groups', async () => {
+    const dir = tempDir();
+    const ctx = scopedContext(dir);
+    const run = (command: string, timeoutMs: number) => runScopedProcess({
+      executable: '/bin/sh',
+      args: ['-c', command],
+      workspace: ctx.workspace!,
+      timeoutMs,
+      outputLimit: ctx.outputLimit,
+      successSummary: 'finished',
+      failureSummary: 'stopped',
+    });
+    const marker = path.join(dir, 'still-running');
+    let started = Date.now();
+    const background = await run(`(sleep 4; touch ${JSON.stringify(marker)}) & echo started`, 30_000);
+    expect(background).toMatchObject({ summary: 'finished' });
+    expect(background.isError).toBeUndefined();
+    expect(background.content).toContain('started');
+    expect(background.content).toContain('Background processes the command left running were stopped.');
+    expect(Date.now() - started).toBeLessThan(4000);
+
+    started = Date.now();
+    const timedOut = await run(`sleep 30 & sleep 30`, 1000);
+    expect(timedOut.isError).toBe(true);
+    expect(timedOut.content).toContain('timed out after 1s');
+    expect(Date.now() - started).toBeLessThan(4000);
+    await new Promise(resolve => setTimeout(resolve, 3000));
+    expect(fs.existsSync(marker)).toBe(false); // The background child was stopped, not orphaned.
+  }, 15000);
 
   it.skipIf(process.platform !== 'darwin' || !findExecutable('uv'))('hides run inputs from network-enabled package build hooks', async () => {
     const dir = tempDir();

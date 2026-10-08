@@ -102,6 +102,28 @@ describe('live OAuth credentials', () => {
     expect(read(loaded).config.providers.xai!.oauthToken).toBe('rotated');
   });
 
+  it('keeps rotated tokens when the same provider is edited during the refresh', async () => {
+    const loaded = setup();
+    await withOAuthCredentials(loaded, 'xai', async () => {
+      const saved = read(loaded);
+      saved.config.providers.xai!.proxy = 'http://127.0.0.1:7890';
+      new ConfigManager(saved).save();
+      return { apiKey: 'fresh', oauthToken: 'rotated', apiKeyExpiresAt: 2 };
+    });
+    const provider = read(loaded).config.providers.xai!;
+    expect(provider).toMatchObject({ proxy: 'http://127.0.0.1:7890', apiKey: 'fresh', oauthToken: 'rotated' });
+    expect(loaded.config.providers.xai!.oauthToken).toBe('rotated');
+  });
+
+  it('does not overwrite a sign-in that completes during the refresh', async () => {
+    const loaded = setup();
+    await withOAuthCredentials(loaded, 'xai', async () => {
+      reauth(loaded);
+      return { apiKey: 'fresh', oauthToken: 'rotated' };
+    });
+    expect(read(loaded).config.providers.xai!).toMatchObject({ apiKey: 'signed-in', oauthToken: 'new-refresh' });
+  });
+
   it('allows a subsequent sign-in to recover after a failed refresh', async () => {
     const loaded = setup();
     await expect(withOAuthCredentials(loaded, 'xai', async () => { throw new Error('invalid_grant'); }))

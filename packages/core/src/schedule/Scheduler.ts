@@ -23,6 +23,8 @@ export interface SchedulerDeps {
 export class Scheduler {
   private timer: NodeJS.Timeout | undefined;
   private ticking = false;
+  /** Invalid schedule files already reported, so a tick every 30s does not repeat them. */
+  private reported = new Set<string>();
 
   constructor(private readonly deps: SchedulerDeps) {}
 
@@ -49,12 +51,19 @@ export class Scheduler {
     if (this.ticking) return 0;
     this.ticking = true;
     try {
-      const due = this.deps.store.due(now);
+      const invalid = new Set<string>();
+      const due = this.deps.store.due(now, (file, error) => {
+        const message = `Skipping invalid schedule ${file}: ${error instanceof Error ? error.message : String(error)}`;
+        invalid.add(message);
+        if (!this.reported.has(message)) this.deps.log?.(message);
+      });
+      this.reported = invalid;
       for (const schedule of due) {
-        // Record the firing before running so a crash mid-run does not
-        // retrigger the same firing on restart.
-        this.deps.store.update(schedule.id, { lastRunAt: now.toISOString() });
         try {
+          // Record the firing before running so a crash mid-run does not
+          // retrigger the same firing on restart. A schedule removed since the
+          // listing fails here without affecting the others.
+          this.deps.store.update(schedule.id, { lastRunAt: now.toISOString() });
           const result = await this.deps.runSchedule(schedule);
           this.deps.store.update(schedule.id, {
             ...(result.taskId ? { lastTaskId: result.taskId } : {}),

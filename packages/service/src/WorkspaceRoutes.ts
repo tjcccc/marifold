@@ -40,6 +40,27 @@ export function workspaceHostOnlyRequest(method: string, raw: string, body: unkn
   if (pathname === '/v1/models' && method === 'POST') return ['type', 'baseUrl', 'apiKeyEnv'].some((key) => input[key] !== undefined);
   return false;
 }
+/** The workspace execution that produced a run's artifacts, or undefined when
+ * they live on this device. A run that executed here stays local after its
+ * workspace is removed; a removed workspace's other devices are unreachable,
+ * so their artifacts then resolve as missing locally. */
+export function remoteExecution(manager: WorkspaceManager, execution: RunRecord['execution']): RunRecord['execution'] {
+  if (!execution) return undefined;
+  let hostDeviceId: string;
+  try {
+    hostDeviceId = manager.store.get(execution.workspaceId).hostDeviceId;
+  } catch {
+    return undefined;
+  }
+  return execution.executionDeviceId === hostDeviceId ? undefined : execution;
+}
+function forbidden(code: string, message: string): { status: number; contentType: string; body: string } {
+  return {
+    status: 403,
+    contentType: 'application/json; charset=utf-8',
+    body: Buffer.from(JSON.stringify({ ok: false, error: { code, message } })).toString('base64'),
+  };
+}
 export function registerWorkspaceRoutes(
   server: FastifyInstance,
   manager: WorkspaceManager,
@@ -80,24 +101,22 @@ export function registerWorkspaceRoutes(
       const artifactId = requiredString(body.artifactId, 'artifactId');
       const run = registry.require(runId);
       const origin = registry.artifactOrigin(runId, artifactId);
-      const e = origin.run.execution;
+      const e = remoteExecution(manager, origin.run.execution);
       if (!run.artifacts?.some((a) => a.id === artifactId)) throw new Error('Artifact not found.');
       if (body.offer !== undefined) {
         if (!transfers?.enabled) throw new Error('Direct downloads unavailable.');
-        if (e && e.executionDeviceId !== manager.store.get(e.workspaceId).hostDeviceId)
-          return manager.execute(e.workspaceId, e.executionDeviceId, 'executor.artifact', { runId: origin.run.id, artifactId: origin.artifactId, offer: body.offer });
+        if (e) return manager.execute(e.workspaceId, e.executionDeviceId, 'executor.artifact', { runId: origin.run.id, artifactId: origin.artifactId, offer: body.offer });
         return transfers.offerFile(registry.requireArtifact(runId, artifactId), body.offer, context.workspaceId);
       }
       if (body.preview === true) {
-        if (e && e.executionDeviceId !== manager.store.get(e.workspaceId).hostDeviceId)
-          return manager.execute(e.workspaceId, e.executionDeviceId, 'executor.artifact', { runId: origin.run.id, artifactId: origin.artifactId, preview: true, variant: artifactPreviewVariant(body.variant) });
+        if (e) return manager.execute(e.workspaceId, e.executionDeviceId, 'executor.artifact', { runId: origin.run.id, artifactId: origin.artifactId, preview: true, variant: artifactPreviewVariant(body.variant) });
         return { data: (await createArtifactPreview(registry.requireArtifact(runId, artifactId), artifactPreviewVariant(body.variant))).toString('base64') };
       }
       const offset = body.offset;
       if (typeof offset !== 'number' || !Number.isSafeInteger(offset) || offset < 0)
         throw new Error('Invalid artifact offset.');
       const length = artifactReadLength(body.length);
-      if (e && e.executionDeviceId !== manager.store.get(e.workspaceId).hostDeviceId)
+      if (e)
         return manager.execute(e.workspaceId, e.executionDeviceId, 'executor.artifact', {
           runId: origin.run.id,
           artifactId: origin.artifactId,
@@ -118,9 +137,12 @@ export function registerWorkspaceRoutes(
     if (operation !== 'api') throw new Error('Unsupported workspace operation.');
     const method = requiredString(body.method, 'method');
     const url = requiredString(body.path, 'path');
-    if (!workspaceApiPath(method, url)) throw new Error('This operation is not available through a workspace bridge.');
+    // Policy refusals travel back as ordinary API responses, so the requesting
+    // device can show a 403 instead of a bridge failure.
+    if (!workspaceApiPath(method, url))
+      return forbidden('WORKSPACE_FORBIDDEN', 'This operation is not available through a workspace bridge.');
     if (workspaceHostOnlyRequest(method, url, body.body))
-      throw new Error('This setting belongs to the host device and must be edited locally.');
+      return forbidden('HOST_ONLY_SETTING', 'This setting belongs to the host device and must be edited locally.');
     const response = await contextStore.inject({ ...context, remoteRequest: body.remoteRequest === true }, (provenance) =>
       server.inject({
         method: method as 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE',
@@ -300,6 +322,10 @@ export function registerWorkspaceRoutes(
     reply.code(result.status);
     if (result.disposition) reply.header('content-disposition', result.disposition);
     if (result.contentType) reply.type(result.contentType);
+    // The host chooses these bytes and their type. Never let a browser render
+    // them as a document on this service's origin.
+    reply.header('x-content-type-options', 'nosniff');
+    reply.header('content-security-policy', "sandbox; default-src 'none'");
     return reply.send(Buffer.from(result.body, 'base64'));
   });
   server.addHook('onClose', async () => manager.close());

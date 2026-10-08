@@ -32,6 +32,9 @@ export class WorkspaceManager {
   private versionErrors = new Map<string, string>();
   private presence = new Map<string, { seen: number; platform: string; architecture: string; executor: boolean; version: string }>();
   onMembershipRemoved?: (workspaceId: string, deviceId?: string) => void;
+  /** A guest's membership was refused by the bridge (revoked or removed). The
+   * host can no longer reach this device to cancel work it started here. */
+  onPairingRefused?: (workspaceId: string) => void;
   private heartbeat?: ReturnType<typeof setInterval>;
   private remoteHandler?: (operation: string, input: unknown, context: WorkspaceOperationContext) => Promise<unknown>;
   private executorHandler?: (operation: string, input: unknown, context: WorkspaceOperationContext) => Promise<unknown>;
@@ -93,7 +96,7 @@ export class WorkspaceManager {
     }
   }
   async add(url: string, token: string, executor = false): Promise<WorkspaceSummary> {
-    if (token.length > 16384) throw new Error('Invalid invitation.');
+    if (token.length > 16384) throw new MarifoldError('WORKSPACE_INVALID', 'Invalid invitation.');
     const invitation = record(JSON.parse(Buffer.from(token, 'base64url').toString('utf8'))) as unknown as Invitation;
     if (
       invitation.version !== 1 ||
@@ -101,17 +104,24 @@ export class WorkspaceManager {
       bridgeOrigin(url) !== invitation.bridgeUrl ||
       typeof invitation.secret !== 'string'
     )
-      throw new Error('Invitation expired or belongs to a different bridge.');
+      throw new MarifoldError('WORKSPACE_INVALID', 'Invitation expired or belongs to a different bridge.');
     const versionError = workspaceVersionError(invitation.appVersion);
-    if (versionError) throw new Error(versionError);
+    if (versionError) throw new MarifoldError('WORKSPACE_INVALID', versionError);
     const workspaceId = identifier(invitation.workspaceId);
     const existing = this.store.list().find(c => c.id === workspaceId);
     if (existing) {
-      if (existing.role === 'host') throw new Error('Workspace is hosted on this device.');
+      if (existing.role === 'host') throw new MarifoldError('WORKSPACE_CONFLICT', 'Workspace is hosted on this device.');
       if (existing.bridgeUrl !== invitation.bridgeUrl || JSON.stringify(existing.host) !== JSON.stringify(invitation.host))
-        throw new Error('Invitation does not match the saved workspace host.');
+        throw new MarifoldError('WORKSPACE_INVALID', 'Invitation does not match the saved workspace host.');
       await this.checkHost(existing);
-      if (this.hostStatus.get(workspaceId)) throw new Error('Workspace already connected.');
+      if (this.hostStatus.get(workspaceId)) throw new MarifoldError('WORKSPACE_CONFLICT', 'Workspace already connected.');
+      // Replace a saved pairing only after the bridge refused it (revoked or
+      // removed membership). An offline host, a reconnect, or a version
+      // mismatch keeps the pairing, which recovers on its own.
+      const peer = this.peers.get(workspaceId);
+      await peer?.probe();
+      if (!peer?.rejected)
+        throw new MarifoldError('WORKSPACE_CONFLICT', 'This device is still paired with the workspace; it reconnects when the host is reachable.');
     }
     const identity = await createIdentity();
     const pendingId = `pending_${randomId()}`;
@@ -288,8 +298,10 @@ export class WorkspaceManager {
         this.store.devices(c.id).some((d) => !d.revoked && d.certificate.signature === certificate.signature),
       onRequest: (request, sender) => this.dispatch(c, request, sender),
       onStatus: (online) => {
-        if (!online) this.hostStatus.set(c.id, false);
-        else if (c.role === 'host') {
+        if (!online) {
+          this.hostStatus.set(c.id, false);
+          if (c.role === 'guest' && this.peers.get(c.id)?.rejected) this.onPairingRefused?.(c.id);
+        } else if (c.role === 'host') {
           for (const d of this.store.devices(c.id))
             if (d.revoked)
               void this.peers

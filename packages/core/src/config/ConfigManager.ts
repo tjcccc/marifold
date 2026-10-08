@@ -14,6 +14,7 @@ import { resolveAgentConfig } from '../agent/ApprovalPolicy';
 import type { AgentToolMode, ApprovalMode, ToolKind } from '../agent/ApprovalPolicy';
 import { resolveUserPath } from '../workspace/WorkspacePaths';
 import { getProviderRegistryEntry, providerConfigFromRegistry } from './ProviderRegistry';
+import { writeFileAtomic } from '../util/atomicWrite';
 
 export interface ConfigSetResult {
   configPath: string;
@@ -50,7 +51,7 @@ export class ConfigManager {
 
   save(): string {
     fs.mkdirSync(path.dirname(this.configPath), { recursive: true });
-    fs.writeFileSync(this.configPath, renderMarifoldConfig(this.config));
+    writeFileAtomic(this.configPath, renderMarifoldConfig(this.config));
     return this.configPath;
   }
 

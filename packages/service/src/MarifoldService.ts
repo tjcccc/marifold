@@ -1,6 +1,6 @@
 import { ArtifactWebRtc, DeviceExecution } from '@marifold/core';
 import { remoteArtifactDownload } from './RemoteArtifactDownload';
-import { requestEnvironment } from './RequestEnvironment';
+import { requestEnvironment, requestOrigin } from './RequestEnvironment';
 import { registerWorkspaceScheduleRoutes } from './WorkspaceScheduleRoutes';
 import * as path from 'node:path';
 import { readFile } from 'node:fs/promises';
@@ -33,7 +33,7 @@ import {
   TaskStatus,
   TaskUpdateInput,
 } from '@marifold/core';
-import { registerWorkspaceRoutes } from './WorkspaceRoutes';
+import { registerWorkspaceRoutes, remoteExecution } from './WorkspaceRoutes';
 import { registerProfileRoutes } from './ProfileRoutes';
 import { ArtifactTickets, artifactHeaders } from './ArtifactTickets';
 import { registerRunRoutes } from './RunRoutes';
@@ -144,6 +144,12 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
     artifactTransfers.cancelWorkspace(workspaceId);
     for (const run of runRegistry.list()) { const execution = run.execution; if (!run.finishedAt && execution?.workspaceId === workspaceId && (!deviceId || execution.originDeviceId === deviceId || execution.executionDeviceId === deviceId)) runRegistry.cancel(run.id); }
   };
+  // A revoked guest stops executing the host's work at once instead of when
+  // its execution lease expires; the host can no longer reach it to cancel.
+  workspaceManager.onPairingRefused = workspaceId => {
+    workspaceExecutor.cancelWorkspace(workspaceId);
+    artifactTransfers.cancelWorkspace(workspaceId);
+  };
   workspaceRuns.setDelegate((parent, input) => { const child = runRegistry.startChild(parent, input); return { runId: child.id, events: runRegistry.events(child.id), cancel: () => { runRegistry.cancel(child.id); } }; });
   const skillAppInstances = runtime.createSkillAppInstanceRegistry();
   // Plain /ask and /chat/stream requests are not RunRegistry entries, but they
@@ -181,8 +187,8 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
     tickets: artifactTickets,
     preview: async (runId, artifactId, variant) => {
       const origin = runRegistry.artifactOrigin(runId, artifactId);
-      const e = origin.run.execution;
-      if (!e || e.executionDeviceId === workspaceManager.store.get(e.workspaceId).hostDeviceId) return undefined;
+      const e = remoteExecution(workspaceManager, origin.run.execution);
+      if (!e) return undefined;
       const result = await workspaceManager.execute(e.workspaceId, e.executionDeviceId, 'executor.artifact', { runId: origin.run.id, artifactId: origin.artifactId, preview: true, variant }) as { data: string };
       return Buffer.from(result.data, 'base64');
     },
@@ -194,8 +200,8 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
     }, workspaceContext.resolve(request.headers)); },
     artifactAvailable: async (runId, artifactId) => {
       const origin = runRegistry.artifactOrigin(runId, artifactId);
-      const execution = origin.run.execution;
-      if (!execution || execution.executionDeviceId === workspaceManager.store.get(execution.workspaceId).hostDeviceId) {
+      const execution = remoteExecution(workspaceManager, origin.run.execution);
+      if (!execution) {
         return Boolean(runRegistry.requireArtifact(runId, artifactId));
       }
       const result = await workspaceManager.execute(execution.workspaceId, execution.executionDeviceId, 'executor.artifact', {
@@ -205,8 +211,8 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
       return result.available ?? (typeof result.data === 'string' ? true : undefined);
     },
     artifact: async (runId, artifactId, reply, inline) => {
-      const run = runRegistry.require(runId); const origin = runRegistry.artifactOrigin(runId, artifactId); const e = origin.run.execution;
-      if (!e || e.executionDeviceId === workspaceManager.store.get(e.workspaceId).hostDeviceId) return false;
+      const run = runRegistry.require(runId); const origin = runRegistry.artifactOrigin(runId, artifactId); const e = remoteExecution(workspaceManager, origin.run.execution);
+      if (!e) return false;
       const artifact = run.artifacts?.find(a => a.id === artifactId);
       if (!artifact) throw MarifoldError.artifactNotFound(runId, artifactId);
       artifactHeaders(reply, artifact, inline);
@@ -237,8 +243,9 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
     runtime.close();
   });
 
-  server.setErrorHandler((error, _request, reply) => {
-    const normalized = normalizeError(error);
+  server.setErrorHandler((error, request, reply) => {
+    const normalized = normalizeError(error, requestOrigin(request, workspaceContext.resolve(request.headers)) === 'local');
+    if (normalized.statusCode >= 500) request.log.error(error);
     reply.status(normalized.statusCode).send({
       ok: false,
       error: normalized.error,
@@ -1074,7 +1081,7 @@ function publicProvider(provider: MarifoldProviderConfig): JsonObject {
   };
 }
 
-function normalizeError(error: unknown): { statusCode: number; error: JsonObject } {
+function normalizeError(error: unknown, localRequest = false): { statusCode: number; error: JsonObject } {
   if (error instanceof MarifoldError) {
     return {
       statusCode: statusCodeForError(error),
@@ -1084,6 +1091,16 @@ function normalizeError(error: unknown): { statusCode: number; error: JsonObject
         ...(Object.keys(error.details).length > 0 ? { details: error.details } : {}),
       },
     };
+  }
+  // Fastify request errors (malformed JSON, oversized or unsupported bodies)
+  // carry their own client status.
+  const statusCode = (error as { statusCode?: unknown } | undefined)?.statusCode;
+  if (error instanceof Error && typeof statusCode === 'number' && statusCode >= 400 && statusCode < 500) {
+    return { statusCode, error: { code: 'REQUEST_INVALID', message: error.message } };
+  }
+  // Node system errors name host paths; only a client on this device sees them.
+  if (!localRequest && error instanceof Error && typeof (error as NodeJS.ErrnoException).syscall === 'string') {
+    return { statusCode: 500, error: { code: 'INTERNAL_ERROR', message: 'A local file or system operation failed.' } };
   }
   if (error instanceof Error) {
     return {
@@ -1134,7 +1151,8 @@ function statusCodeForError(error: MarifoldError): number {
   if (error.code === 'UNAUTHORIZED') return 401;
   if (error.code === 'NETWORK_FORBIDDEN' || error.code === 'ORIGIN_FORBIDDEN') return 403;
   if (error.code === 'RUN_LIMIT_EXCEEDED') return 429;
-  if (error.code === 'SESSION_BUSY') return 409;
+  if (error.code === 'SESSION_BUSY' || error.code === 'WORKSPACE_CONFLICT') return 409;
+  if (error.code === 'WORKSPACE_INVALID') return 400;
   if (error.code === 'WORKSPACE_OFFLINE') return 503;
   if (error.code === 'WORKSPACE_TIMEOUT') return 504;
   if (error.code === 'PROVIDER_ERROR') return 502;

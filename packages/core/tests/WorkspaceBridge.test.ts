@@ -148,6 +148,24 @@ describe('workspace bridge', () => {
       request.mockRestore();
     }
   }, 20000);
+  it('keeps a valid pairing when a fresh invitation arrives while the host is offline', async () => {
+    const bridge = createBridge(new MemoryRelayStore(), 'b'.repeat(32));
+    await new Promise<void>((resolve) => bridge.listen(0, '127.0.0.1', resolve));
+    cleanup.push(() => { bridge.closeAllConnections(); bridge.close(); });
+    const url = `http://127.0.0.1:${(bridge.address() as { port: number }).port}`;
+    const host = manager();
+    const guest = manager();
+    host.start(async (_operation, input) => input);
+    guest.start(async () => null);
+    const created = await host.create('Home', url, 'b'.repeat(32));
+    const joined = await guest.add(url, created.invitation);
+    await expect.poll(() => guest.list()[0].online, { timeout: 10000 }).toBe(true);
+    const invitation = host.store.invite(joined.id);
+    host.close(); // Host offline; the guest's membership is still valid.
+    const original = guest.store.get(joined.id);
+    await expect(guest.add(url, invitation)).rejects.toThrow('still paired');
+    expect(guest.store.get(joined.id)).toEqual(original);
+  }, 40000);
   it('reconnects interrupted transfers without repeating effects and supports executor revocation', async () => {
     const bridge = createBridge(new MemoryRelayStore(), 'b'.repeat(32));
     const sockets = new Set<import('node:net').Socket>();
@@ -205,9 +223,13 @@ describe('workspace bridge', () => {
     });
     expect(executionRequests.mock.calls.find(call => call[0] === 'executor.prepare')?.[5]).toBe(120000);
     executionRequests.mockRestore();
+    const refused: string[] = [];
+    guest.onPairingRefused = (id) => refused.push(id);
     await host.request(joined.id, 'revoke', { deviceId: joined.deviceId });
     await expect.poll(() => guest.list()[0].online, { timeout: 20000 }).toBe(false);
     await expect(guest.request(joined.id, 'anything', {}, 'revoked_request')).rejects.toThrow();
+    // The revoked guest learns it from the bridge and stops the host's work.
+    await expect.poll(() => refused, { timeout: 20000 }).toContain(joined.id);
     guest.store.setDefault(joined.id);
     const original = guest.store.get(joined.id);
     await expect(guest.add(url, created.invitation)).rejects.toThrow('invalid or expired');

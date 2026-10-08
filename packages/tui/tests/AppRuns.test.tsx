@@ -234,13 +234,15 @@ describe('App run routing', () => {
     stdin.write('/resume');
     await delay();
     stdin.write('\r');
-    await delay();
+    // Wait for each redraw instead of a fixed delay; the picker loads sessions
+    // and the selected transcript asynchronously. A drawn picker subscribes to
+    // input in an effect, so yield once more before pressing Enter.
+    await vi.waitFor(() => expect(lastFrame()).toContain('Earlier question about Fedo'), { timeout: 3000 });
     expect(lastFrame()).toContain('Resume session');
-    expect(lastFrame()).toContain('Earlier question about Fedo');
     expect(listSessionsSpy).toHaveBeenCalledWith(20, 'default', { order: 'recent' });
-    stdin.write('\r');
     await delay();
-    expect(lastFrame()).toContain('Earlier answer');
+    stdin.write('\r');
+    await vi.waitFor(() => expect(lastFrame()).toContain('Earlier answer'), { timeout: 3000 });
     expect(lastFrame()).toContain('Resumed session session-');
     unmount();
   });

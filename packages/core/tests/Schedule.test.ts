@@ -73,6 +73,38 @@ describe('ScheduleStore', () => {
 });
 
 describe('Scheduler', () => {
+  it('keeps firing valid schedules when another schedule file is invalid or removed mid-tick', async () => {
+    const dir = tempDir();
+    const store = new ScheduleStore(dir);
+    const first = store.create({ name: 'first', objective: 'tick', cron: '* * * * *' });
+    const second = store.create({ name: 'second', objective: 'tick', cron: '* * * * *' });
+    fs.writeFileSync(path.join(dir, 'sched_broken.json'), '{"schema": "marifold.schedule.v1", "id": "sched_broken"');
+    const badCron = JSON.parse(fs.readFileSync(path.join(dir, `${second.id}.json`), 'utf-8'));
+    fs.writeFileSync(path.join(dir, 'sched_badcron.json'), JSON.stringify({ ...badCron, id: 'sched_badcron', cron: 'not a cron' }));
+    const logs: string[] = [];
+    const fired: string[] = [];
+    const scheduler = new Scheduler({
+      store,
+      log: message => logs.push(message),
+      runSchedule: async schedule => {
+        // The first schedule to run removes the other before its turn.
+        if (fired.length === 0) store.delete(schedule.id === first.id ? second.id : first.id);
+        fired.push(schedule.id);
+        return { status: 'completed' };
+      },
+    });
+    const now = new Date(Date.now() + 120_000);
+    await scheduler.tick(now);
+    expect(fired).toHaveLength(1);
+    const removed = fired[0] === first.id ? second.id : first.id;
+    expect(logs.filter(line => line.startsWith('Skipping invalid schedule'))).toHaveLength(2);
+    expect(logs.some(line => line.includes(removed) && line.includes('failed'))).toBe(true);
+    await scheduler.tick(new Date(now.getTime() + 120_000));
+    expect(fired).toEqual([fired[0], fired[0]]);
+    // Invalid files are reported once, not on every tick.
+    expect(logs.filter(line => line.startsWith('Skipping invalid schedule'))).toHaveLength(2);
+  });
+
   it('fires due schedules, records the firing first, and stores the task result', async () => {
     const store = new ScheduleStore(tempDir());
     const schedule = store.create({ name: 'minutely', objective: 'tick', cron: '* * * * *' });

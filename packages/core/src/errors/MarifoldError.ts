@@ -30,7 +30,9 @@ export type MarifoldErrorCode =
   | 'RUN_LIMIT_EXCEEDED'
   | 'UNAUTHORIZED'
   | 'NETWORK_FORBIDDEN'
-  | 'ORIGIN_FORBIDDEN';
+  | 'ORIGIN_FORBIDDEN'
+  | 'WORKSPACE_INVALID'
+  | 'WORKSPACE_CONFLICT';
 
 export class MarifoldError extends Error {
   readonly code: MarifoldErrorCode;

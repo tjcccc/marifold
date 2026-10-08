@@ -6,6 +6,7 @@ import { ConfigLoader } from './ConfigLoader';
 import { renderMarifoldConfig } from './ConfigManager';
 import { MarifoldError } from '../errors/MarifoldError';
 import { resolveUserPath } from '../workspace/WorkspacePaths';
+import { writeFileAtomic } from '../util/atomicWrite';
 
 const BACKUP_SCHEMA = 'marifold.config-backup.v1';
 
@@ -108,7 +109,7 @@ export function importConfigBackup(
   }
 
   fs.mkdirSync(path.dirname(loadedConfig.configPath), { recursive: true });
-  fs.writeFileSync(loadedConfig.configPath, backup.configToml);
+  writeFileAtomic(loadedConfig.configPath, backup.configToml);
 
   for (const target of profileTargets) {
     fs.mkdirSync(path.dirname(target.target), { recursive: true });

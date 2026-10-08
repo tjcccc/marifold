@@ -49,6 +49,7 @@ export class BridgePeer {
   private socket?: WebSocket;
   private stopped = false;
   private connected = false;
+  private refusedByBridge = false;
   private retry?: ReturnType<typeof setTimeout>;
   private ping?: ReturnType<typeof setInterval>;
   private retryMs = 1000;
@@ -121,6 +122,20 @@ export class BridgePeer {
       });
     });
   }
+  /** True when the bridge last refused this device's membership. */
+  get rejected(): boolean {
+    return this.refusedByBridge;
+  }
+  /** Ask the bridge whether it still accepts this membership. It checks every
+   * frame, so a ping either returns a pong or closes with a policy error. */
+  async probe(timeoutMs = 3000): Promise<void> {
+    if (!this.connected || this.socket?.readyState !== WebSocket.OPEN) return;
+    const since = this.lastPong;
+    this.socket.send('{"type":"ping"}');
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline && this.lastPong === since && this.connected && !this.refusedByBridge)
+      await new Promise((resolve) => setTimeout(resolve, 50));
+  }
   revoke(deviceId: string): Promise<void> {
     if (!this.connected)
       return Promise.reject(new Error('Bridge unavailable; revocation will be sent after reconnect.'));
@@ -150,18 +165,23 @@ export class BridgePeer {
     url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
     const socket = new WebSocket(url, { maxPayload: 512 * 1024, perMessageDeflate: false });
     this.socket = socket;
+    let closedLocally = false;
     socket.on('message', (bytes) => {
       try {
         void this.receive(JSON.parse(bytes.toString())).catch(() => {
           /* invalid peer frames never reach dispatch */
         });
       } catch {
+        closedLocally = true;
         socket.close(1008, 'Invalid frame');
       }
     });
     socket.on('error', () => undefined);
-    socket.on('close', () => {
+    socket.on('close', (code) => {
       if (this.socket !== socket) return;
+      // The bridge closes with a policy error when it refuses this membership
+      // (revoked, removed, or invalid); network loss never does.
+      if (code === 1008 && !closedLocally) this.refusedByBridge = true;
       this.connected = false;
       this.transfers.reset();
       this.options.onStatus?.(false);
@@ -188,6 +208,7 @@ export class BridgePeer {
       return;
     }
     if (frame.type === 'ready') {
+      this.refusedByBridge = false;
       this.transferWindow = frame.deliveryReplay === 'on-reconnect' ? 4 : 1;
       this.hostDeviceId = String(frame.hostDeviceId);
       if (this.options.hostDeviceId && this.hostDeviceId !== this.options.hostDeviceId) {

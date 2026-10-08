@@ -1,4 +1,4 @@
-import { execFile } from 'child_process';
+import { spawn } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 import { capToolOutput, ToolExecutionResult } from './ToolRegistry';
@@ -42,21 +42,67 @@ export async function runScopedProcess(options: ScopedProcessOptions): Promise<T
   }
 
   const env = scopedEnvironment(options.workspace);
+  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   return new Promise<ToolExecutionResult>(resolve => {
-    const child = execFile(invocation.executable, invocation.args, {
+    // The command gets its own process group: a timeout or cancellation then
+    // also stops background children, which would otherwise keep its output
+    // pipes (and this tool call) open after the shell itself was killed.
+    const child = spawn(invocation.executable, invocation.args, {
       cwd: options.cwd ?? options.workspace.cwd,
       env,
-      timeout: options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
-      maxBuffer: MAX_BUFFER_BYTES,
-    }, (error, stdout, stderr) => {
+      detached: true,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    let stopped: 'timeout' | 'cancel' | 'overflow' | 'background' | undefined;
+    const stop = (reason: 'timeout' | 'cancel' | 'overflow' | 'background') => {
+      stopped ??= reason;
+      try {
+        if (child.pid) process.kill(-child.pid, 'SIGKILL');
+      } catch {
+        child.kill('SIGKILL');
+      }
+    };
+    const output = { stdout: [] as Buffer[], stderr: [] as Buffer[], bytes: 0 };
+    const collect = (stream: 'stdout' | 'stderr') => (chunk: Buffer) => {
+      output.bytes += chunk.length;
+      if (output.bytes > MAX_BUFFER_BYTES) return stop('overflow');
+      output[stream].push(chunk);
+    };
+    child.stdout!.on('data', collect('stdout'));
+    child.stderr!.on('data', collect('stderr'));
+    const timer = setTimeout(() => stop('timeout'), timeoutMs);
+    // Once the command itself exits, anything still holding its output is a
+    // background process it left running; shell_exec stays bounded.
+    let exitCode: number | null = null;
+    let lingering: ReturnType<typeof setTimeout> | undefined;
+    child.once('exit', code => {
+      exitCode = code;
+      lingering = setTimeout(() => stop('background'), 2000);
+    });
+    const cancel = () => stop('cancel');
+    options.signal?.addEventListener('abort', cancel, { once: true });
+    let finished = false;
+    const finish = (code: number | null, failure?: string) => {
+      if (finished) return;
+      finished = true;
+      clearTimeout(timer);
+      clearTimeout(lingering);
+      if (stopped === 'background') code = exitCode;
+      options.signal?.removeEventListener('abort', cancel);
+      const stdout = Buffer.concat(output.stdout).toString('utf8');
+      const stderr = Buffer.concat(output.stderr).toString('utf8');
       const parts: string[] = [];
       if (stdout) parts.push(stdout);
       if (stderr) parts.push(`[stderr]\n${stderr}`);
-      if (error) {
-        const reason = error.killed
-          ? `Command timed out after ${(options.timeoutMs ?? DEFAULT_TIMEOUT_MS) / 1000}s.`
-          : `Command exited with ${(error as { code?: number | string }).code ?? 'an error'}.`;
-        parts.push(reason);
+      if (stopped === 'background') parts.push('Background processes the command left running were stopped.');
+      if ((stopped && stopped !== 'background') || failure || code !== 0) {
+        parts.push(stopped === 'timeout'
+          ? `Command timed out after ${timeoutMs / 1000}s.`
+          : stopped === 'cancel'
+            ? 'Command was cancelled.'
+            : stopped === 'overflow'
+              ? `Command output exceeded ${MAX_BUFFER_BYTES / (1024 * 1024)} MiB and was stopped.`
+              : failure ?? `Command exited with ${code ?? 'an error'}.`);
         resolve({
           content: capToolOutput(parts.join('\n'), options.outputLimit),
           summary: options.failureSummary,
@@ -68,8 +114,9 @@ export async function runScopedProcess(options: ScopedProcessOptions): Promise<T
         content: capToolOutput(parts.join('\n') || '(no output)', options.outputLimit),
         summary: options.successSummary,
       });
-    });
-    options.signal?.addEventListener('abort', () => child.kill(), { once: true });
+    };
+    child.once('error', error => finish(null, `Command could not start: ${error.message}`));
+    child.once('close', code => finish(code));
   });
 }
 

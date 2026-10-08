@@ -91,16 +91,26 @@ export class ReadFileTool implements AgentTool {
       };
     }
     let content: string;
+    let size: number;
     try {
-      const stat = fs.statSync(target);
-      if (stat.isDirectory()) {
-        const entries = fs.readdirSync(target).sort((a, b) => a.localeCompare(b));
-        return {
-          content: entries.join('\n'),
-          summary: `listed ${entries.length} entries in ${target}`,
-        };
+      // Non-blocking open: a FIFO would otherwise block the service's event
+      // loop until a writer appears. Type checks use the opened descriptor.
+      const fd = fs.openSync(target, fs.constants.O_RDONLY | fs.constants.O_NONBLOCK);
+      try {
+        const stat = fs.fstatSync(fd);
+        if (stat.isDirectory()) {
+          const entries = fs.readdirSync(target).sort((a, b) => a.localeCompare(b));
+          return {
+            content: entries.join('\n'),
+            summary: `listed ${entries.length} entries in ${target}`,
+          };
+        }
+        if (!stat.isFile()) throw new Error('not a regular file or directory');
+        size = stat.size;
+        content = readBounded(fd, size, ctx.outputLimit);
+      } finally {
+        fs.closeSync(fd);
       }
-      content = fs.readFileSync(target, 'utf-8');
     } catch (error) {
       return {
         content: `Could not read ${target}: ${error instanceof Error ? error.message : String(error)}`,
@@ -110,9 +120,28 @@ export class ReadFileTool implements AgentTool {
     }
     return {
       content: capToolOutput(content, ctx.outputLimit),
-      summary: `read ${formatBytes(Buffer.byteLength(content, 'utf-8'))} from ${target}`,
+      summary: `read ${formatBytes(size)} from ${target}`,
     };
   }
+}
+
+/** Read a whole file only when it is small enough to matter; for larger files
+ * read just the head and tail that `capToolOutput` keeps (4 bytes per kept
+ * character covers any UTF-8), so a huge file never loads into memory. */
+function readBounded(fd: number, size: number, outputLimit: number | undefined): string {
+  const window = Math.max(64 * 1024, (outputLimit && outputLimit > 0 ? outputLimit : 64 * 1024) * 4);
+  const read = (position: number, length: number): string => {
+    const buffer = Buffer.alloc(length);
+    let offset = 0;
+    while (offset < length) {
+      const count = fs.readSync(fd, buffer, offset, length - offset, position + offset);
+      if (count === 0) break;
+      offset += count;
+    }
+    return buffer.subarray(0, offset).toString('utf-8');
+  };
+  if (size <= window * 2) return read(0, size);
+  return `${read(0, window)}\n[file truncated — ${formatBytes(size - window * 2)} in the middle not read]\n${read(size - window, window)}`;
 }
 
 export function formatBytes(bytes: number): string {

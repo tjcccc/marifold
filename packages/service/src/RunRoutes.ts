@@ -66,8 +66,15 @@ export function registerRunRoutes(server: FastifyInstance, registry: RunRegistry
   const sendArtifact = async (runId: string, artifactId: string, reply: FastifyReply, inline = false) => {
     if (await options.artifact?.(runId, artifactId, reply, inline)) return reply;
     const artifact = registry.requireArtifact(runId, artifactId);
+    let fd: number;
+    try {
+      fd = fs.openSync(artifact.path, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
+    } catch {
+      // Removed or replaced since it was listed.
+      throw MarifoldError.artifactNotFound(runId, artifactId);
+    }
     artifactHeaders(reply, artifact, inline);
-    return reply.send(fs.createReadStream(artifact.path, { fd: fs.openSync(artifact.path, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW), autoClose: true }));
+    return reply.send(fs.createReadStream(artifact.path, { fd, autoClose: true }));
   };
   server.get<{ Params: { id: string; artifactId: string } }>(
     '/v1/runs/:id/artifacts/:artifactId',

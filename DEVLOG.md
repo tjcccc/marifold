@@ -2,6 +2,54 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## Unreleased — Robustness and workspace edge cases
+
+- Service errors keep their meaning: malformed, oversized, or unsupported
+  request bodies return their 4xx status instead of 500; host file paths in
+  system errors are shown only to clients on the same device. Bridge policy
+  refusals arrive as 403 (`HOST_ONLY_SETTING`, `WORKSPACE_FORBIDDEN`) and
+  workspace join refusals as 400/409, and a vanished artifact file is a 404.
+- `read_file` opens files non-blocking and refuses FIFOs, sockets, and devices,
+  so a named pipe can no longer hang the service; files over a few hundred KB
+  are read only for the head and tail the tool keeps.
+- One unreadable schedule file or invalid cron no longer stops every schedule;
+  invalid files are reported once and skipped, and a schedule removed during a
+  tick no longer aborts the others.
+- `config.toml` is replaced atomically (temp file plus rename, keeping its mode
+  and any symlink), so a service re-reading it never sees a truncated file.
+- An OAuth refresh that rotates tokens is kept when the same provider was
+  edited meanwhile (for example its proxy); only a concurrent sign-in wins.
+  The deliberate v0.53.1 transport retry of xAI refresh is unchanged.
+- Workspace edge cases: removing a hosted workspace keeps downloads of runs that
+  executed on this device; a fresh invitation replaces a saved pairing only
+  after the bridge refused it (revoked or removed), never during an offline
+  host, reconnect, or version mismatch; a revoked guest cancels the host's work
+  on it at once instead of when its lease expires; forwarded bridge responses
+  carry `nosniff` and a sandbox CSP.
+- TUI: `[image #n]` numbers only the images dropped into the prompt; `/image`
+  attachments no longer shift them or get dropped from the turn.
+- Device execution: on Linux, `sudo_exec` jobs enforce the 10-minute limit as
+  root through coreutils `timeout` (an unprivileged worker cannot stop a root
+  command, and sudo does not relay signals here); timed-out jobs report the
+  limit instead of hanging as running. Scoped `shell_exec` runs in its own
+  process group: background processes it leaves are stopped two seconds after
+  it exits (previously they ran on and the call waited for its full timeout),
+  and a timeout or cancellation stops the whole group. Durable job records
+  older than a week and expired session-lease rows are pruned.
+- Not changed, by design: deleting a typed `[image #N]` tag in the Web composer
+  removes that attachment (v0.79.0 behavior); generated run outputs are kept
+  for downloads; the sudo key exchange is not target-signed, because a host
+  that issues membership certificates could also forge a target identity.
+- Fix intermittent TUI picker tests: they pressed Enter after the picker was
+  drawn but before it subscribed to input. They now wait for the frame, yield
+  once, then select; 12 of 12 suite runs pass under three-way concurrent load
+  (previously 3 of 9 failed).
+- Validation: full gate passes (1,081 tests, one existing skip); each new test
+  fails on the previous code except the FIFO case, which blocks the old test
+  worker outright. Live OrbStack: a root `sleep 120` stops at a 3-second test
+  limit with exit 124; an offline host keeps a valid pairing and a revoked
+  guest rejoins with a fresh invitation (~10 s); 55 delegations complete.
+
 ## 2026-10-08 — v0.79.2 — Security and workspace hardening
 
 - Release a guest executor's capacity slot when a run finishes. Each finished

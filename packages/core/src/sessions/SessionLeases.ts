@@ -21,6 +21,8 @@ export class SessionLeases {
     const db = this.open();
     try {
       const now = this.now();
+      // Expired rows mean nothing; drop them so the table stays small.
+      db.prepare('DELETE FROM leases WHERE expires_at <= ? AND session_id != ?').run(now, sessionId);
       const result = db.prepare(`INSERT INTO leases VALUES (?, ?, ?)
         ON CONFLICT(session_id) DO UPDATE SET owner = excluded.owner, expires_at = excluded.expires_at
         WHERE leases.owner = excluded.owner OR leases.expires_at <= ?`).run(sessionId, owner, now + 60_000, now);

@@ -31,10 +31,17 @@ async function main(directory: string): Promise<void> {
       for (const part of chunks) part.fill(0);
       try { validateSudoPassword(password); } catch (error) { password.fill(0); throw error; }
     }
+    // The limit is overridable only so tests can exercise it quickly.
+    const limitMs = Number(process.env.MARIFOLD_TEST_DEVICE_JOB_LIMIT_MS) || JOB_LIMIT_MS;
+    // This unprivileged worker cannot signal a root command, and sudo does not
+    // relay signals to it. Where coreutils `timeout` exists (Linux), it enforces
+    // the limit as root and stops the command's whole process group.
+    const rootTimeout = password && fs.existsSync('/usr/bin/timeout')
+      ? ['/usr/bin/timeout', '-k', '5', String(Math.ceil(limitMs / 1000))] : [];
     // -k ignores cached authentication for this invocation. Root command stdin
     // is /dev/null, even when a NOPASSWD rule means sudo does not consume input.
     const child = password
-      ? spawn('/usr/bin/sudo', ['-k', '-S', '-p', '', '--', '/bin/sh', '-c', 'exec /bin/sh -c "$1" </dev/null', 'marifold', request.command], { cwd: request.cwd, stdio: ['pipe', 'pipe', 'pipe'], detached: true })
+      ? spawn('/usr/bin/sudo', ['-k', '-S', '-p', '', '--', ...rootTimeout, '/bin/sh', '-c', 'exec /bin/sh -c "$1" </dev/null', 'marifold', request.command], { cwd: request.cwd, stdio: ['pipe', 'pipe', 'pipe'], detached: true })
       : spawn('/bin/sh', ['-c', request.command], { cwd: request.cwd, stdio: ['ignore', 'pipe', 'pipe'], detached: true });
     if (password) {
       const bytes = password;
@@ -51,24 +58,46 @@ async function main(directory: string): Promise<void> {
     };
     child.stdout!.on('data', append);
     child.stderr!.on('data', append);
-    // No bridge/run signal reaches this worker. Bound abandoned jobs locally.
+    // No bridge/run signal reaches this worker. Bound abandoned jobs locally:
+    // ask the process group to stop, then kill it, then stop waiting for output
+    // pipes that a surviving privileged process may still hold.
     let timedOut = false;
-    const timer = setTimeout(() => {
+    let abandoned = false;
+    const signalGroup = (signal: NodeJS.Signals) => {
+      if (child.pid) { try { process.kill(-child.pid, signal); } catch { /* Already exited. */ } }
+    };
+    let settle!: (result: { code: number | null; error?: string }) => void;
+    const finished = new Promise<{ code: number | null; error?: string }>(resolve => { settle = resolve; });
+    child.once('error', error => settle({ code: null, error: error.message }));
+    child.once('close', code => settle({ code }));
+    const timers = [setTimeout(() => {
       timedOut = true;
-      if (child.pid) { try { process.kill(-child.pid, 'SIGKILL'); } catch { /* Already exited. */ } }
-    }, 10 * 60_000);
-    const result = await new Promise<{ code: number | null; error?: string }>(resolve => {
-      child.once('error', error => resolve({ code: null, error: error.message }));
-      child.once('close', code => resolve({ code }));
-    });
-    clearTimeout(timer);
+      signalGroup('SIGTERM');
+      timers.push(setTimeout(() => signalGroup('SIGKILL'), 5000));
+      timers.push(setTimeout(() => { abandoned = true; settle({ code: null }); }, 10_000));
+    }, limitMs + (rootTimeout.length ? 10_000 : 0))];
+    const result = await finished;
+    for (const timer of timers) clearTimeout(timer);
+    child.stdout!.destroy();
+    child.stderr!.destroy();
+    // GNU timeout reports 124 when it stopped the command, 137 when it had to kill it.
+    if (rootTimeout.length && (result.code === 124 || result.code === 137)) timedOut = true;
+    const limitNote = abandoned
+      ? `\nJob exceeded the ${formatLimit(limitMs)} limit. Its processes were signalled, but a privileged command may still be running. Check device state before retrying.`
+      : timedOut ? `\nJob exceeded the ${formatLimit(limitMs)} limit and was stopped. Check device state before retrying.` : '';
     writePrivateJson(file, { ...job, state: result.code === 0 && !timedOut ? 'succeeded' : 'failed',
       finishedAt: new Date().toISOString(), exitCode: result.code,
-      output: `${truncated ? '[Earlier output truncated]\n' : ''}${output}${result.error ?? ''}${timedOut ? '\nJob exceeded the 10-minute limit; process group killed. Check device state before retrying.' : ''}` });
+      output: `${truncated ? '[Earlier output truncated]\n' : ''}${output}${result.error ?? ''}${limitNote}` });
   } catch (error) {
     fs.rmSync(path.join(directory, 'request.json'), { force: true });
     writePrivateJson(file, { ...job, state: 'failed', finishedAt: new Date().toISOString(), output: String(error) });
   }
+}
+
+const JOB_LIMIT_MS = 10 * 60_000;
+
+function formatLimit(ms: number): string {
+  return ms >= 60_000 && ms % 60_000 === 0 ? `${ms / 60_000}-minute` : `${Math.round(ms / 1000)}-second`;
 }
 
 if (require.main === module) void main(process.argv[2]!).catch(() => { process.exitCode = 1; });

@@ -958,11 +958,13 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
         return;
       }
       if (sendsMessage) {
-        const selected = referencedPromptImages(raw, [...pendingImagesRef.current, ...attachedImages]);
+        // `[image #n]` numbers the images dropped into this prompt. `/image`
+        // attachments carry no label, so they follow the labeled ones.
+        const selected = referencedPromptImages(raw, attachedImages);
         raw = selected.text;
         trimmed = raw.trim();
         parsed = parseInput(raw);
-        attachedImages = selected.images;
+        attachedImages = [...selected.images, ...pendingImagesRef.current];
         pendingImagesRef.current = [];
       }
       if (parsed.kind !== 'empty') setHistory(entries => [...entries, { text: trimmed, images: [...attachedImages] }]);
