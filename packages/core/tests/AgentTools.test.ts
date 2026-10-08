@@ -668,7 +668,7 @@ describe('WriteFileTool', () => {
     const elsewhere = tempDir();
     const risk = tool.assessRisk({ path: path.join(elsewhere, 'x.md'), content: 'x' }, ctx);
     expect(risk.escalate).toBe(true);
-    expect(risk.targetPath).toBe(path.join(elsewhere, 'x.md'));
+    expect(risk.targetPath).toBe(path.join(fs.realpathSync(elsewhere), 'x.md'));
   });
 
   it('expands ~ in read and write paths', async () => {

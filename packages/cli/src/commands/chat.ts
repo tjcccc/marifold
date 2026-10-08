@@ -2,7 +2,7 @@ import { randomUUID } from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import { Command } from 'commander';
-import { expandHome } from '@marifold/core';
+import { expandHome, stripTerminalControls } from '@marifold/core';
 import type { ImageInput, MemoryKind } from '@marifold/core';
 import { InteractivePrompt } from '../input/InteractivePrompt';
 import { ConsolePrinter } from '../output/ConsolePrinter';
@@ -105,14 +105,14 @@ export function registerChatCommand(program: Command, printer: ConsolePrinter): 
               process.stdout.write(`\n${style.dim('reasoning >')}\n`);
               reasoningStarted = true;
             }
-            process.stdout.write(style.dim(summary));
+            process.stdout.write(style.dim(stripTerminalControls(summary)));
           })) {
             if (!responseStarted) {
               if (reasoningStarted) process.stdout.write('\n');
               process.stdout.write(`\n${style.bold(`${settings.profile} >`)}\n`);
               responseStarted = true;
             }
-            process.stdout.write(chunk);
+            process.stdout.write(stripTerminalControls(chunk));
           }
           if (!responseStarted) process.stdout.write(`\n${style.bold(`${settings.profile} >`)}\n`);
           process.stdout.write('\n\n');

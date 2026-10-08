@@ -27,6 +27,10 @@ export interface ToolExecutionContext {
   /** Per-run filesystem/process capability set. Shell execution fails closed
    * when this is absent instead of falling back to unrestricted host access. */
   workspace?: RunWorkspace;
+  /** Workspace whose bridged request runs on this device. Durable device jobs
+   * started under a scope are visible only to that scope; the device's own
+   * runs (no scope) see every job. */
+  jobScope?: string;
   signal?: AbortSignal;
   /** Cap applied to tool output before it is returned to the model. */
   outputLimit: number;

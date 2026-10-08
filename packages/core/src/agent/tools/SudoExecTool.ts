@@ -27,7 +27,7 @@ export class SudoExecTool implements AgentTool {
       const job = await this.device.start(command, ctx.cwd, {
         ...process.env,
         ...(ctx.workspace ? { MARIFOLD_OUTPUT_DIR: ctx.workspace.outputDir, MARIFOLD_WORK_DIR: ctx.workspace.workDir, MARIFOLD_INPUT_DIR: ctx.workspace.inputDir } : {}),
-      }, password);
+      }, password, ctx.jobScope);
       return { content: JSON.stringify(job), summary: `started administrator job ${job.id}; retrieve shell_job_status` };
     } finally { password.fill(0); }
   }

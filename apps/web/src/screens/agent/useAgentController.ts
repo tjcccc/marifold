@@ -507,7 +507,10 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
     const renew = async () => {
       try { await client.request('POST', `/v1/sessions/${encodeURIComponent(id)}/lease`); }
       catch (error) {
-        if (stopped) return;
+        // Only losing the session to another client ends this view. A network
+        // blip or service restart retries on the next renewal; the service
+        // keeps a running task's session reserved meanwhile.
+        if (stopped || !(error instanceof MarifoldApiError && error.code === 'SESSION_BUSY')) return;
         stopped = true;
         setSessionBlocked(true);
         resetThread(id);
@@ -516,11 +519,19 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
     };
     const timer = setInterval(() => { if (!stopped) void renew(); }, 15_000);
     const release = () => { void client.request('DELETE', `/v1/sessions/${encodeURIComponent(id)}/lease`).catch(() => undefined); };
+    // Background tabs throttle timers below the renewal rate, and a page
+    // restored from the back/forward cache released its lease on pagehide.
+    // Renew as soon as the page is visible again.
+    const resume = () => { if (!stopped && document.visibilityState === 'visible') void renew(); };
     window.addEventListener('pagehide', release);
+    window.addEventListener('pageshow', resume);
+    document.addEventListener('visibilitychange', resume);
     return () => {
       stopped = true;
       clearInterval(timer);
       window.removeEventListener('pagehide', release);
+      window.removeEventListener('pageshow', resume);
+      document.removeEventListener('visibilitychange', resume);
       release();
     };
   }, [client, sessionId, handleError, resetThread]);

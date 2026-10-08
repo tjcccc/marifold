@@ -8,6 +8,8 @@ import {
   resolveToolPath,
 } from '../src/agent/RunWorkspace';
 import { macSandboxProfile } from '../src/agent/ScopedProcess';
+import { ReadFileTool } from '../src/agent/tools/ReadFileTool';
+import { WriteFileTool } from '../src/agent/tools/WriteFileTool';
 
 const tempDirs: string[] = [];
 
@@ -88,6 +90,40 @@ describe('RunWorkspace', () => {
     });
     expect(fs.readFileSync(workspace.attachments[0].path!)).toEqual(Buffer.from('image-bytes'));
     expect(fs.statSync(workspace.attachments[0].path!).mode & 0o222).toBe(0);
+  });
+
+  it('assesses and reports file tool paths at their symlink destinations', () => {
+    const home = tempDir();
+    const cwd = path.join(home, 'repo');
+    const outside = path.join(home, 'Library', 'LaunchAgents');
+    fs.mkdirSync(cwd);
+    fs.mkdirSync(outside, { recursive: true });
+    fs.writeFileSync(path.join(home, 'notes.txt'), 'private');
+    const workspace = createRunWorkspace({ id: 'run_symlink', cwd, runsDir: path.join(home, '.marifold', 'runs'), userHome: home });
+    const context = { cwd: workspace.cwd, workspace, trustedFolders: [] };
+    const write = new WriteFileTool();
+    fs.symlinkSync(path.join(outside, 'agent.plist'), path.join(cwd, 'escape'));
+    fs.symlinkSync(path.join(home, '.ssh'), path.join(cwd, 'keys'));
+    fs.symlinkSync(path.join(home, 'notes.txt'), path.join(cwd, 'notes'));
+    fs.symlinkSync('loop', path.join(cwd, 'loop'));
+    fs.symlinkSync('missing-inside.txt', path.join(cwd, 'inside'));
+
+    // The destination, not the link inside cwd, is what an approval or a
+    // "trust folder" decision must apply to.
+    expect(write.assessRisk({ path: 'escape', content: '' }, context)).toMatchObject({
+      escalate: true,
+      persistable: true,
+      targetPath: path.join(fs.realpathSync(outside), 'agent.plist'),
+    });
+    expect(write.assessRisk({ path: 'keys/authorized_keys', content: '' }, context)).toMatchObject({ escalate: true, persistable: false });
+    expect(new ReadFileTool().assessRisk({ path: 'notes' }, context)).toMatchObject({
+      escalate: true,
+      targetPath: fs.realpathSync(path.join(home, 'notes.txt')),
+    });
+    expect(write.assessRisk({ path: 'inside', content: '' }, context)).toEqual({ escalate: false });
+    // A link loop stays unresolved here because opening it fails with ELOOP.
+    expect(write.assessRisk({ path: 'loop', content: '' }, context)).toEqual({ escalate: false });
+    expect(() => fs.writeFileSync(path.join(cwd, 'loop'), 'x')).toThrow(/ELOOP/);
   });
 
   it('does not grant a broad home cwd and marks external roots', () => {

@@ -14,6 +14,8 @@ export interface DeviceJob {
   pid?: number;
   output?: string;
   exitCode?: number | null;
+  /** Workspace that started the job through its bridge; absent for local runs. */
+  scope?: string;
 }
 
 /** Local-only policy: intentionally absent from config APIs and workspace RPC. */
@@ -40,7 +42,7 @@ export class DeviceExecution {
     writePrivateJson(path.join(this.directory, 'policy.json'), { mode });
   }
 
-  async start(command: string, cwd: string, environment: NodeJS.ProcessEnv, password?: Buffer): Promise<DeviceJob> {
+  async start(command: string, cwd: string, environment: NodeJS.ProcessEnv, password?: Buffer, scope?: string): Promise<DeviceJob> {
     if (this.mode() !== 'full') throw new Error('Full access is disabled on this device. Enable it locally with marifold execution mode full.');
     if (process.platform !== 'darwin' && process.platform !== 'linux') throw new Error('Full access currently supports macOS and Linux.');
     const worker = path.join(__dirname, 'DeviceExecutionWorker.js');
@@ -53,7 +55,7 @@ export class DeviceExecution {
     const directory = path.join(this.directory, id);
     fs.mkdirSync(directory, { mode: 0o700 });
     const job: DeviceJob = { id, state: 'queued', createdAt: new Date().toISOString(),
-      commandHash: createHash('sha256').update(command).digest('hex') };
+      commandHash: createHash('sha256').update(command).digest('hex'), ...(scope ? { scope } : {}) };
     writePrivateJson(path.join(directory, 'result.json'), job);
     // Environment remains in memory; credentials are never serialized into the job.
     writePrivateJson(path.join(directory, 'request.json'), { command, cwd, sudo: password !== undefined });
@@ -75,12 +77,16 @@ export class DeviceExecution {
     return job;
   }
 
-  status(id: string): DeviceJob {
+  /** A scoped caller (a workspace's bridged request) sees only the jobs that
+   * workspace started; the device's own runs see every job. */
+  status(id: string, scope?: string): DeviceJob {
     if (!/^[a-f0-9-]{36}$/.test(id)) throw new Error('Invalid shell job ID.');
     this.checkDirectory();
     const directory = path.join(this.directory, id);
+    if (!fs.existsSync(directory)) throw new Error('Unknown shell job ID.');
     assertPrivateDirectory(directory);
     const job = readPrivateJson(path.join(directory, 'result.json')) as unknown as DeviceJob;
+    if (scope !== undefined && job.scope !== scope) throw new Error('Unknown shell job ID.');
     if (job.state === 'running' && Date.now() - Date.parse(job.createdAt) > 11 * 60_000) {
       return { ...job, state: 'unknown', output: 'Job exceeded its reporting deadline. Inspect the device before retrying.' };
     }
@@ -94,11 +100,11 @@ export class DeviceExecution {
     return job;
   }
 
-  recent(): DeviceJob[] {
+  recent(scope?: string): DeviceJob[] {
     if (!fs.existsSync(this.directory)) return [];
     this.checkDirectory();
     return fs.readdirSync(this.directory).filter(id => /^[a-f0-9-]{36}$/.test(id))
-      .map(id => this.status(id)).sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 20)
+      .map(id => this.status(id)).filter(job => scope === undefined || job.scope === scope).sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 20)
       .map(({ output: _output, ...job }) => job);
   }
 

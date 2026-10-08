@@ -22,13 +22,13 @@ export class ShellJobStatusTool implements AgentTool {
     if (typeof wait !== 'number' || !Number.isInteger(wait) || wait < 0 || wait > 10) throw new Error('Invalid wait_seconds.');
     if (!this.device) return { content: JSON.stringify({ mode: 'scoped', jobs: [] }) };
     const until = Date.now() + wait * 1000;
-    let job = input.job_id ? this.device.status(input.job_id) : undefined;
+    let job = input.job_id ? this.device.status(input.job_id, ctx.jobScope) : undefined;
     while (job && ['queued', 'running'].includes(job.state) && Date.now() < until && !ctx.signal?.aborted) {
       await new Promise(resolve => setTimeout(resolve, 100));
-      job = this.device.status(job.id);
+      job = this.device.status(job.id, ctx.jobScope);
     }
     if (job?.output) job = { ...job, output: capToolOutput(job.output, ctx.outputLimit) };
-    return { content: JSON.stringify({ mode: this.device.mode(), ...(job ? { job } : { jobs: this.device.recent() }) }),
+    return { content: JSON.stringify({ mode: this.device.mode(), ...(job ? { job } : { jobs: this.device.recent(ctx.jobScope) }) }),
       summary: job ? `shell job ${job.id}: ${job.state}` : `device execution: ${this.device.mode()}` };
   }
 }

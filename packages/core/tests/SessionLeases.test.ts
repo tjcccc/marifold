@@ -2,7 +2,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { expect, it } from 'vitest';
+import { expect, it, vi } from 'vitest';
 import { SessionLeases } from '../src/sessions/SessionLeases';
 
 it('excludes independent clients, renews, releases only for the owner, and expires crashed clients', () => {
@@ -36,4 +36,40 @@ it('excludes independent clients, renews, releases only for the owner, and expir
     a.close();
     b.acquire('session', 'second');
   } finally { a.close(); b.close(); fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+it('holds a session for running work through a client release and renews it until the work ends', () => {
+  vi.useFakeTimers();
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'marifold-leases-'));
+  let now = 0;
+  const service = new SessionLeases(path.join(dir, 'leases.db'), () => now);
+  const other = new SessionLeases(path.join(dir, 'leases.db'), () => now);
+  try {
+    service.acquire('web', 'tab');
+    const endRun = service.hold('web', 'tab');
+    service.release('web', 'tab'); // The tab closes while its run continues.
+    expect(() => other.acquire('web', 'terminal')).toThrow('in use');
+    now = 50_000;
+    vi.advanceTimersByTime(45_000); // Renewals outlive the 60s lease.
+    now = 100_000;
+    expect(() => other.acquire('web', 'terminal')).toThrow('in use');
+    endRun();
+    endRun(); // Idempotent.
+    // The tab's lease existed before the run, so it is left to expire.
+    expect(() => other.acquire('web', 'terminal')).toThrow('in use');
+    now = 200_000;
+    other.acquire('web', 'terminal');
+
+    // Work without a client lease (Telegram, schedules) releases what it created.
+    const endChannelRun = service.hold('channel', 'service');
+    expect(() => other.acquire('channel', 'terminal')).toThrow('in use');
+    endChannelRun();
+    other.acquire('channel', 'terminal');
+    expect(() => service.hold('channel', 'service')).toThrow('in use');
+  } finally {
+    vi.useRealTimers();
+    service.close();
+    other.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });

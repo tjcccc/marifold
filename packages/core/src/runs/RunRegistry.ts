@@ -357,13 +357,11 @@ export class RunRegistry {
         if (!escalatedPath) {
           throw MarifoldError.agentRunInvalid('This approval has no escalated path to trust; use "once", "always", or "deny".');
         }
-        const folder = dirname(escalatedPath);
+        // Persist before trusting in memory: the profile layer refuses broad or
+        // sensitive folders (such as the home directory), and a refused folder
+        // must not silence later prompts. The client can still answer once/deny.
+        const folder = this.runtime.addProfileTrustedFolder(run.profile, dirname(escalatedPath));
         if (!run.trustedFolders.includes(folder)) run.trustedFolders.push(folder);
-        try {
-          this.runtime.addProfileTrustedFolder(run.profile, folder);
-        } catch (error) {
-          this.log?.(`Could not persist trusted folder: ${String(error)}`);
-        }
         entry.settle({ approved: true });
         return { requestId, approved: true };
       }

@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import { JSONValue } from '@priest-ai/core';
 import {
+  canonicalPath,
   isDeniedRunPath,
   isInsideAnyRoot,
   isExactPath,
@@ -49,7 +50,7 @@ export class ReadFileTool implements AgentTool {
 
   assessRisk(input: Record<string, JSONValue>, ctx: ToolExecutionContext): ToolRiskAssessment {
     if (typeof input.path !== 'string' || !ctx.workspace) return { escalate: false };
-    const target = resolveToolPath(input.path, ctx.workspace, ctx.cwd);
+    const target = canonicalPath(resolveToolPath(input.path, ctx.workspace, ctx.cwd));
     if (ctx.workspace && isDeniedRunPath(target, ctx.workspace)) return { escalate: false, blocked: true, persistable: false, reason: 'This path contains device-local or other-workspace state.' };
     if (isInsideAnyRoot(target, ctx.workspace.readRoots) || isExactPath(target, ctx.workspace.readOnlyFiles)) {
       return this.options.strictWorkspace ? { escalate: false, trusted: true } : { escalate: false };

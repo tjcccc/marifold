@@ -2,6 +2,62 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-10-08 — v0.79.2 — Security and workspace hardening
+
+- Release a guest executor's capacity slot when a run finishes. Each finished
+  run previously held one of 50 slots for 24 hours, so a guest refused every
+  delegation after 50 runs a day ("Execution capacity reached") until restart.
+  Reproduced live on the OrbStack guest (run 51 failed); after the fix, 55
+  consecutive delegations complete.
+- Assess file tool paths at their real destination. A dangling symlink inside
+  the working folder no longer passes as a new in-folder file while the write
+  creates its target elsewhere. Approvals report the destination, so trusting
+  a folder never applies to a link's location.
+- Persist a trusted folder before trusting it for the run or Telegram bridge.
+  The profile layer's refusal of broad folders (now compared by real path, so
+  a symlink to home counts as home) can no longer leave home trusted in memory.
+  A refused Web/TUI trust keeps the approval open; Telegram allows the call once.
+- Keep provider endpoints and credential references on the host. Paired
+  devices can no longer add, reconfigure, or remove providers, or set a model's
+  server URL or key variable. A query string no longer bypasses the host-only
+  `PATCH /v1/config` key filter (previously any key could be set this way).
+- Make session reservation tolerate real networks. A running task now holds
+  its session until it ends, so closing the starting tab no longer lets another
+  client take the session and lose the finished turn. Web and TUI clients end a
+  session only on `SESSION_BUSY`; a network drop or service restart retries
+  instead of cancelling the remote run or clearing the Web thread. Web renews
+  when a tab becomes visible again. The remote TUI now waits up to 1.5 seconds
+  for in-flight lease releases before exiting; against a local service the
+  release already completed in a real-terminal check, so this only guards
+  slower connections.
+- Real-terminal (pty) checks with an isolated HOME: fullscreen and inline TUI
+  launch, resize redraw, Ctrl+C and SIGTERM exits restore terminal modes; a
+  service-connected TUI holds its session while open (409 for another client)
+  and frees it immediately on quit.
+- Keep terminal control sequences in model, tool, and remote output inert. The
+  CLI (`agent`, `ask`, `chat`, errors, approval prompts) strips every escape and
+  control character except tab and newline, so output cannot move the cursor
+  over an approval prompt, retitle the window, or write the clipboard. Ink 8
+  already drops cursor movement and most OSC from TUI text but keeps OSC 8
+  hyperlinks (visible text that opens another URL); the TUI now filters
+  device-control strings from every frame.
+- Refuse SkillApp read permissions on sensitive account data (`~/.ssh`,
+  `~/.gnupg`, `~/Library/Keychains`) and folders containing it. SkillApp reads
+  are auto-approved, while ordinary runs approve these paths one access at a
+  time. An existing App declaring such a path now fails to load with that reason.
+- Scope durable device jobs to the workspace that started them. A device that
+  joined several workspaces no longer lists or returns one workspace's
+  full-access or `sudo_exec` job output to another; its own runs still see all.
+- Validation: full workspace typecheck and build; 1,067 tests pass with the one
+  existing skip, each new regression test failing on the previous code. Live
+  OrbStack: 55 consecutive delegations through the bridge complete on the
+  updated guest. The full-access OrbStack harness was not rerun (its test
+  Tailscale service is stopped); the job-scope change is covered by the built
+  device worker in unit tests.
+- Synchronize versions to 0.79.2; rebuild from clean output, and verify every
+  packed package version and the packed CLI version. Paired devices must both
+  run 0.79.2.
+
 ## 2026-10-06 — v0.79.1 — Connected workspace sessions and rejoining
 
 - Preserve the client session owner through workspace API forwarding and host

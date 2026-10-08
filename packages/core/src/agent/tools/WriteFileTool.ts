@@ -3,6 +3,7 @@ import * as path from 'path';
 import { JSONValue } from '@priest-ai/core';
 import { expandHome } from '../../workspace/WorkspacePaths';
 import {
+  canonicalPath,
   isDeniedRunPath,
   isInsideAnyRoot,
   isOutsideUserHome,
@@ -40,7 +41,7 @@ export class WriteFileTool implements AgentTool {
 
   assessRisk(input: Record<string, JSONValue>, ctx: ToolExecutionContext): ToolRiskAssessment {
     if (typeof input.path !== 'string') return { escalate: false };
-    const target = resolveToolPath(input.path, ctx.workspace, ctx.cwd);
+    const target = canonicalPath(resolveToolPath(input.path, ctx.workspace, ctx.cwd));
     if (ctx.workspace && isDeniedRunPath(target, ctx.workspace)) return { escalate: false, blocked: true, persistable: false, reason: 'This path contains device-local or other-workspace state.' };
     if (ctx.workspace) {
       if (isProtectedSystemWrite(target, ctx.workspace)) {
@@ -121,7 +122,9 @@ export class WriteFileTool implements AgentTool {
 }
 
 export function isInsideWorkspace(target: string, cwd: string): boolean {
-  const relative = path.relative(path.resolve(cwd), target);
+  // Compare real locations so a symlink inside a trusted folder cannot carry
+  // its approval to a destination outside it.
+  const relative = path.relative(canonicalPath(cwd), canonicalPath(target));
   return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
 }
 

@@ -2,9 +2,11 @@ import { sessionPromptHistory, type InputHistoryEntry } from './core/promptHisto
 import type { ApiClientOptions } from '@marifold/client';
 import type { ReactNode } from 'react';
 import { TerminalInput, MOUSE_ENABLE, MOUSE_DISABLE } from './core/TerminalInput.js';
+import { inertTerminalOutput } from './core/TerminalOutput.js';
 import { MouseContext } from './ui/Mouse.js';
 import { resolveFullscreen } from './core/tuiSettings.js';
 import { WorkspaceShell } from './ui/WorkspaceShell.js';
+import { RemoteRuntime } from './core/RemoteRuntime.js';
 import { readFileSync } from 'fs';
 import { Box, render, Text, type Instance } from 'ink';
 import { MarifoldRuntime } from '@marifold/core';
@@ -59,6 +61,7 @@ export async function runTui(options: RunTuiOptions): Promise<void> {
     try {
       await renderSession(<WorkspaceShell local={local} loadedConfig={options.loadedConfig} service={options.service} profile={options.profile} resume={options.resume} version={readVersion()} fullscreen={fullscreen} />, fullscreen);
     } finally { local.close(); }
+    await RemoteRuntime.settleReleases(1500);
     process.exit(process.exitCode ?? 0);
   }
 
@@ -193,7 +196,7 @@ async function renderSession(tree: ReactNode, fullscreen: boolean): Promise<void
   process.once('exit', restoreModes);
   try {
     app = render(<MouseContext.Provider value={fullscreen ? input : undefined}>{tree}</MouseContext.Provider>, {
-      stdin: input, exitOnCtrlC: false, alternateScreen: fullscreen, incrementalRendering: true,
+      stdin: input, stdout: inertTerminalOutput(process.stdout), exitOnCtrlC: false, alternateScreen: fullscreen, incrementalRendering: true,
     });
     await app.waitUntilExit();
   } finally {

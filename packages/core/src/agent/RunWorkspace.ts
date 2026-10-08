@@ -267,16 +267,21 @@ export function isDeniedRunPath(target: string, workspace: RunWorkspace): boolea
   return !isInsideAnyRoot(target, [workspace.rootDir]) && isInsideAnyRoot(target, workspace.deniedRoots ?? []);
 }
 
+/** Account data that is never granted persistently: runs approve each access
+ * once, and SkillApps cannot declare it. */
+export function sensitiveHostRoots(userHome: string): string[] {
+  return [
+    path.join(userHome, '.ssh'),
+    path.join(userHome, '.gnupg'),
+    path.join(userHome, '.marifold'),
+    path.join(userHome, 'Library', 'Keychains'),
+  ];
+}
+
 export function isSensitiveHostPath(target: string, workspace: RunWorkspace): boolean {
   const resolved = canonicalPath(target);
   if (isInside(resolved, workspace.rootDir)) return false;
-  const sensitive = [
-    path.join(workspace.userHome, '.ssh'),
-    path.join(workspace.userHome, '.gnupg'),
-    path.join(workspace.userHome, '.marifold'),
-    path.join(workspace.userHome, 'Library', 'Keychains'),
-  ];
-  return sensitive.some(root => isInside(resolved, root));
+  return sensitiveHostRoots(workspace.userHome).some(root => isInside(resolved, root));
 }
 
 export function isProtectedSystemWrite(target: string, workspace: RunWorkspace): boolean {
@@ -304,17 +309,40 @@ function canonicalExistingPath(value: string): string {
   }
 }
 
-function canonicalPath(value: string): string {
+/** Above the kernel symlink limits (macOS 32, Linux 40): any chain this gives
+ * up on also fails with ELOOP when a tool opens it. */
+const MAX_SYMLINK_HOPS = 64;
+
+/** The real location a path reaches: symlinks are followed (dangling ones
+ * included) and missing trailing components are kept. Tools assess and report
+ * this path so approvals and trusted folders never apply to a link's location
+ * instead of its destination. */
+export function canonicalPath(value: string, hops = 0): string {
   const resolved = path.resolve(value);
   const suffix: string[] = [];
   let cursor = resolved;
   while (!fs.existsSync(cursor)) {
+    // `existsSync` follows links, so a dangling symlink looks missing. Writing
+    // through it creates the link target, so resolve where the link points.
+    const target = symlinkTarget(cursor);
+    if (target !== undefined && hops < MAX_SYMLINK_HOPS) {
+      return canonicalPath(path.join(target, ...suffix), hops + 1);
+    }
     const parent = path.dirname(cursor);
     if (parent === cursor) return resolved;
     suffix.unshift(path.basename(cursor));
     cursor = parent;
   }
   return path.join(fs.realpathSync(cursor), ...suffix);
+}
+
+function symlinkTarget(value: string): string | undefined {
+  try {
+    if (!fs.lstatSync(value).isSymbolicLink()) return undefined;
+    return path.resolve(path.dirname(value), fs.readlinkSync(value));
+  } catch {
+    return undefined;
+  }
 }
 
 function uniqueExistingDirectories(values: string[]): string[] {

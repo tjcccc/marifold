@@ -222,7 +222,10 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
     const renew = async () => {
       try { await runtime.acquireSession!(id); }
       catch (error) {
-        if (disposed) return;
+        // Only losing the session to another client ends it here. A network
+        // blip or service restart retries on the next renewal; the service
+        // keeps a running task's session reserved meanwhile.
+        if (disposed || (error as { code?: unknown } | undefined)?.code !== 'SESSION_BUSY') return;
         disposed = true;
         if (stateRef.current.sessionId === id) {
           abortRef.current?.abort();

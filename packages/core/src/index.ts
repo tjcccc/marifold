@@ -243,6 +243,7 @@ export { proxyDispatcher } from './util/proxy';
 export { fetchWithTransientRetry, isTransientFetchError } from './util/fetchRetry';
 export type { TransientFetchRetryOptions } from './util/fetchRetry';
 export { accountIdFromIdToken } from './util/idToken';
+export { stripTerminalControls, stripTerminalStrings } from './util/terminalText';
 export type {
   MarifoldAskResponse,
   MarifoldResolvedSettings,

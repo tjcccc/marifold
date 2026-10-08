@@ -118,6 +118,19 @@ describe('device-local full execution', () => {
       const readGrant = await executor.handle('executor.assess', read, remote) as { grant: string };
       const status = await executor.handle('executor.execute', { ...read, grant: readGrant.grant }, remote) as ToolExecutionResult;
       expect(JSON.parse(status.content).job.state).toBe('succeeded');
+      // Another workspace this device joined cannot list or read the job; the
+      // device's own runs can.
+      const other = { ...remote, workspaceId: 'other-workspace' };
+      await executor.handle('executor.prepare', { runId: 'third', cwd: directory }, other);
+      const statusAs = async (input: Record<string, string>) => {
+        const call = { runId: 'third', tool: 'shell_job_status', input };
+        const grant = await executor.handle('executor.assess', call, other) as { grant: string };
+        return executor.handle('executor.execute', { ...call, grant: grant.grant }, other) as Promise<ToolExecutionResult>;
+      };
+      expect(JSON.parse((await statusAs({})).content).jobs).toEqual([]);
+      await expect(statusAs({ job_id: job.id })).rejects.toThrow('Unknown shell job ID');
+      const local = await new ShellJobStatusTool(device).execute({}, { cwd: directory });
+      expect(JSON.parse(local.content).jobs.map((item: DeviceJob) => item.id)).toContain(job.id);
       const revoked = await executor.handle('executor.assess', { ...call, runId: 'second' }, remote) as { grant: string };
       device.setMode('scoped');
       await expect(executor.handle('executor.execute', { ...call, runId: 'second', grant: revoked.grant }, remote)).rejects.toThrow('invalid');

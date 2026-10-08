@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { MarifoldError } from '../errors/MarifoldError';
+import { sensitiveHostRoots } from '../agent/RunWorkspace';
 import { parseSkill } from '../skill/SkillValidator';
 import type { MarifoldSkill } from '../skill/SkillSchema';
 import { compileSkillApp } from './SkillAppCompiler';
@@ -221,6 +222,12 @@ function resolvePermissions(
     }
     if (isInside(resolved, privateAppHome) && !isInside(resolved, bundleRoot)) {
       throw MarifoldError.appInvalid(`Declared permission '${permission.path}' cannot expose Marifold private state.`, source);
+    }
+    // SkillApp reads are auto-approved, so they never reach account secrets
+    // that ordinary runs must approve one access at a time.
+    const sensitive = sensitiveHostRoots(userHome).filter(root => root !== privateAppHome);
+    if (sensitive.some(root => isInside(resolved, root) || isInside(root, resolved))) {
+      throw MarifoldError.appInvalid(`Declared permission '${permission.path}' would expose sensitive account data.`, source);
     }
     return { ...permission, path: resolved };
   });

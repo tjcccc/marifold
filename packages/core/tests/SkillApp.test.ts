@@ -299,6 +299,39 @@ describe('SkillApp', () => {
     expect(definition.permissions?.[0]?.path).not.toBe(fs.realpathSync(sharedDir));
   });
 
+  it('refuses SkillApp permissions on sensitive account data and folders containing it', () => {
+    const home = temporaryDirectory();
+    vi.stubEnv('HOME', home);
+    try {
+      fs.mkdirSync(path.join(home, '.ssh'));
+      fs.writeFileSync(path.join(home, '.ssh', 'id_ed25519'), 'private key');
+      fs.mkdirSync(path.join(home, 'Library', 'Keychains'), { recursive: true });
+      fs.mkdirSync(path.join(home, 'Library', 'Mobile Documents'), { recursive: true });
+      const appsDir = temporaryDirectory();
+      const profilesDir = temporaryDirectory();
+      const resolveProfileSkill = (profile: string, skillName: string) => {
+        const skillDir = path.join(profilesDir, profile, 'skills', skillName);
+        fs.mkdirSync(skillDir, { recursive: true });
+        const source = path.join(skillDir, 'SKILL.md');
+        fs.writeFileSync(source, `---\nname: ${skillName}\n---\nCreate a prompt.\n`);
+        return { ...parseSkill(fs.readFileSync(source, 'utf-8'), source), scope: 'profile' as const };
+      };
+      const load = (permission: string) => {
+        const bundle = path.join(appsDir, 'painers-room');
+        fs.mkdirSync(bundle, { recursive: true });
+        fs.writeFileSync(path.join(bundle, 'skillapp.ts'), painersRoomSource()
+          .replace('  Column,', '  Column,\n  FileAccess,\n  FolderAccess,')
+          .replace('  ui: App([', `  permissions: [${permission}],\n  ui: App([`));
+        return () => new AppStore(appsDir, { resolveProfileSkill }).require('painers-room');
+      };
+      expect(load(`FileAccess(${JSON.stringify('~/.ssh/id_ed25519')}, { access: 'read' })`)).toThrow(/sensitive account data/);
+      expect(load(`FolderAccess(${JSON.stringify('~/Library')}, { access: 'read' })`)).toThrow(/sensitive account data/);
+      expect(load(`FolderAccess(${JSON.stringify('~/Library/Mobile Documents')}, { access: 'read' })`)().permissions).toHaveLength(1);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   it('keeps attachment bytes server-side and passes only the declared slot to its operation', async () => {
     const definition = compileSkillApp(painersRoomSource(), 'painers-room/skillapp.ts');
     definition.operations[0].requiredInputs = ['idea'];

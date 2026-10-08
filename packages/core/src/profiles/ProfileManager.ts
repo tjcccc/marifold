@@ -552,15 +552,26 @@ function upsertTrustedFolder(text: string, folder: string): string {
 }
 
 /** Refuse trusting roots that would grant the agent far too much. */
-function assertSafeTrustedFolder(resolved: string): void {
-  const home = os.homedir();
+function assertSafeTrustedFolder(folder: string): void {
+  // Compare real locations so a symlinked home or folder cannot pass for a
+  // narrower one.
+  const resolved = realPathOrSelf(folder);
+  const home = realPathOrSelf(os.homedir());
   const sensitive = [path.join(home, '.ssh'), path.join(home, '.marifold')];
   const tooBroad = resolved === path.parse(resolved).root // filesystem root
     || resolved === home
     // an ancestor of (or equal to) a sensitive dir.
     || sensitive.some(s => s === resolved || !path.relative(resolved, s).startsWith('..'));
   if (tooBroad) {
-    throw MarifoldError.profileInvalid(`Refusing to trust '${resolved}' — too broad or sensitive a folder.`, resolved);
+    throw MarifoldError.profileInvalid(`Refusing to trust '${folder}' — too broad or sensitive a folder.`, folder);
+  }
+}
+
+function realPathOrSelf(value: string): string {
+  try {
+    return fs.realpathSync(value);
+  } catch {
+    return value;
   }
 }
 

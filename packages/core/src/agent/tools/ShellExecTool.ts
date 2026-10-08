@@ -76,7 +76,7 @@ export class ShellExecTool implements AgentTool {
         ...process.env,
         ...(ctx.workspace ? { MARIFOLD_OUTPUT_DIR: ctx.workspace.outputDir, MARIFOLD_WORK_DIR: ctx.workspace.workDir,
           MARIFOLD_INPUT_DIR: ctx.workspace.inputDir, MARIFOLD_RUN_DIR: ctx.workspace.rootDir } : {}),
-      });
+      }, undefined, ctx.jobScope);
       return { content: JSON.stringify(job), summary: `started full-access job ${job.id}; retrieve result with shell_job_status` };
     }
     if (!ctx.workspace) {

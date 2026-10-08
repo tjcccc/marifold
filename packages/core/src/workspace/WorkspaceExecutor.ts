@@ -39,8 +39,9 @@ interface Execution {
   abort: AbortController;
   lease: number;
   grants: Map<string, { hash: string; expires: number; sudoId?: string }>;
-  completed: boolean;
 }
+/** Concurrent executions a device accepts across all joined workspaces. */
+const MAX_ACTIVE_EXECUTIONS = 50;
 /** A device owns its own capability construction. Host paths, trusted folders,
  * shell environments, and credentials are never accepted as grants over RPC. */
 export class WorkspaceExecutor {
@@ -109,7 +110,7 @@ export class WorkspaceExecutor {
     }
     if (operation === 'executor.prepare') {
       if (this.runs.has(key)) throw new Error('Execution already prepared.');
-      if (this.runs.size >= 50) throw new Error('Execution capacity reached.');
+      if (this.runs.size >= MAX_ACTIVE_EXECUTIONS) throw new Error('Execution capacity reached.');
       if (Array.isArray(b.images) && b.images.some((image) => !image || typeof image !== 'object' || 'path' in image))
         throw new Error('Remote image inputs must carry bytes or URLs, never device paths.');
       const config = this.config();
@@ -127,7 +128,6 @@ export class WorkspaceExecutor {
         abort: new AbortController(),
         lease: Date.now() + 45000,
         grants: new Map(),
-        completed: false,
       });
       return workspace;
     }
@@ -138,15 +138,21 @@ export class WorkspaceExecutor {
       return { cancelled: true };
     }
     if (operation === 'executor.lease') {
-      if (!run.completed && !run.abort.signal.aborted) run.lease = Date.now() + 45000;
+      if (!run.abort.signal.aborted) run.lease = Date.now() + 45000;
       return { active: !run.abort.signal.aborted };
     }
     if (operation === 'executor.artifacts') {
-      run.completed = true;
-      run.lease = Date.now() + 24 * 60 * 60 * 1000;
-      return listRunArtifacts(run.workspace);
+      // Listing artifacts finishes the run. Completed output stays readable from
+      // disk through `executor.artifact`, so the run releases its capability and
+      // capacity slot now instead of holding them until a lease expires.
+      try {
+        return listRunArtifacts(run.workspace);
+      } finally {
+        run.abort.abort();
+        this.runs.delete(key);
+      }
     }
-    if (run.completed || run.abort.signal.aborted) throw new Error('Execution has ended.');
+    if (run.abort.signal.aborted) throw new Error('Execution has ended.');
     const tool = this.registry.get(String(b.tool));
     if (!tool || tool.kind === 'interaction') throw new Error('Unsupported execution tool.');
     const input = record(b.input) as Record<string, JSONValue>;
@@ -155,6 +161,7 @@ export class WorkspaceExecutor {
       cwd: run.workspace.cwd,
       trustedFolders: this.config().trustedFolders,
       outputLimit: this.config().toolOutputLimit,
+      jobScope: context.workspaceId,
       signal: run.abort.signal,
       ...(operation === 'executor.execute' && b.sudoResponse !== undefined ? { sudoResponse: parseSudoResponse(b.sudoResponse) } : {}),
     };

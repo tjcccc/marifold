@@ -26,6 +26,20 @@ export function workspaceApiPath(method: string, raw: string): boolean {
     !(pathname === '/v1/config' && !['GET', 'PATCH'].includes(method))
   );
 }
+/** Shared configuration a paired device may change on the host. */
+const SHARED_CONFIG_KEY = /^(default\.|memory\.|agent\.|web_search\.(enabled|max_results|provider|api_key_env|scrape)$)/;
+
+/** Host-device settings that stay with the host even though their routes are
+ * shared: provider endpoints, credential references and service settings.
+ * Paths are compared without their query string, exactly as Fastify routes them. */
+export function workspaceHostOnlyRequest(method: string, raw: string, body: unknown): boolean {
+  const pathname = raw.split('?')[0];
+  const input = body !== null && typeof body === 'object' && !Array.isArray(body) ? (body as Record<string, unknown>) : {};
+  if (pathname === '/v1/config') return method === 'PATCH' && (typeof input.key !== 'string' || !SHARED_CONFIG_KEY.test(input.key));
+  if (pathname === '/v1/providers' || pathname.startsWith('/v1/providers/')) return method !== 'GET';
+  if (pathname === '/v1/models' && method === 'POST') return ['type', 'baseUrl', 'apiKeyEnv'].some((key) => input[key] !== undefined);
+  return false;
+}
 export function registerWorkspaceRoutes(
   server: FastifyInstance,
   manager: WorkspaceManager,
@@ -105,12 +119,8 @@ export function registerWorkspaceRoutes(
     const method = requiredString(body.method, 'method');
     const url = requiredString(body.path, 'path');
     if (!workspaceApiPath(method, url)) throw new Error('This operation is not available through a workspace bridge.');
-    if (url === '/v1/config' && method === 'PATCH') {
-      const patch = objectBody(body.body);
-      const key = requiredString(patch.key, 'key');
-      if (!/^(default\.|memory\.|agent\.|web_search\.(enabled|max_results|provider|api_key_env|scrape)$)/.test(key))
-        throw new Error('This setting belongs to the host device and must be edited locally.');
-    }
+    if (workspaceHostOnlyRequest(method, url, body.body))
+      throw new Error('This setting belongs to the host device and must be edited locally.');
     const response = await contextStore.inject({ ...context, remoteRequest: body.remoteRequest === true }, (provenance) =>
       server.inject({
         method: method as 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE',

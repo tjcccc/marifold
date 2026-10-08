@@ -1,23 +1,24 @@
 import {
   MarifoldAskResponse,
-  MarifoldError,
   ProfileSummary,
   SessionSummary,
+  stripTerminalControls,
   WorkspaceInitResult,
 } from '@marifold/core';
 
 export class ConsolePrinter {
   printAskResponse(response: MarifoldAskResponse): void {
     if (response.ok) {
-      process.stdout.write(response.text);
-      if (!response.text.endsWith('\n')) process.stdout.write('\n');
+      const text = stripTerminalControls(response.text);
+      process.stdout.write(text);
+      if (!text.endsWith('\n')) process.stdout.write('\n');
       process.stderr.write(
         `(${response.latencyMs ?? 0}ms · ${response.settings.provider}/${response.settings.model} · ${response.settings.profile})\n`,
       );
       return;
     }
 
-    const message = response.error?.message ?? 'Unknown provider error.';
+    const message = stripTerminalControls(response.error?.message ?? 'Unknown provider error.');
     process.stderr.write(`Error: ${message}\n`);
   }
 
@@ -69,14 +70,8 @@ export class ConsolePrinter {
   }
 
   printError(error: unknown): void {
-    if (error instanceof MarifoldError) {
-      process.stderr.write(`Error: ${error.message}\n`);
-      return;
-    }
-    if (error instanceof Error) {
-      process.stderr.write(`Error: ${error.message}\n`);
-      return;
-    }
-    process.stderr.write(`Error: ${String(error)}\n`);
+    // Provider and tool errors can echo remote content.
+    const message = error instanceof Error ? error.message : String(error);
+    process.stderr.write(`Error: ${stripTerminalControls(message)}\n`);
   }
 }

@@ -211,6 +211,28 @@ describe('workspace recovery and device boundaries', () => {
       second.close();
     }
   });
+  it('releases execution capacity when runs finish while still capping concurrent runs', async () => {
+    const d = directory();
+    const executor = new WorkspaceExecutor(() => resolveAgentConfig({}), path.join(d, 'runs'));
+    const context = { workspaceId: 'home', senderDeviceId: 'host', hostDeviceId: 'host' };
+    try {
+      for (let i = 0; i < 60; i++) {
+        await executor.handle('executor.prepare', { runId: `finished_${i}`, cwd: d }, context);
+        await executor.handle('executor.artifacts', { runId: `finished_${i}` }, context);
+      }
+      await expect(
+        executor.handle('executor.execute', { runId: 'finished_0', tool: 'write_file', input: {} }, context),
+      ).rejects.toThrow('unavailable');
+      for (let i = 0; i < 50; i++) {
+        await executor.handle('executor.prepare', { runId: `active_${i}`, cwd: d }, context);
+      }
+      await expect(executor.handle('executor.prepare', { runId: 'overflow', cwd: d }, context)).rejects.toThrow('capacity');
+      await executor.handle('executor.artifacts', { runId: 'active_0' }, context);
+      await expect(executor.handle('executor.prepare', { runId: 'overflow', cwd: d }, context)).resolves.toBeDefined();
+    } finally {
+      executor.close();
+    }
+  });
   it.runIf(process.platform === 'darwin')(
     'denies other workspace state in real sandboxed processes even under a broad project root',
     async () => {

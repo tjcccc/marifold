@@ -910,6 +910,9 @@ export class MarifoldRuntime {
   ): AgentRunner {
     return new AgentRunner({
       checkSession: options => { if (options.sessionId) this.assertSessionAvailable(options.sessionId, options.sessionOwner); },
+      holdSession: options => options.sessionId
+        ? this.sessionLeases.hold(options.sessionId, options.sessionOwner ?? this.sessionOwner)
+        : undefined,
       environment: this.options.environment,
       deniedRoots: [path.join(path.dirname(this.options.loadedConfig.configPath), 'workspaces')],
       contextInstructions: runtimeOptions.contextInstructions,

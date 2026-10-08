@@ -138,6 +138,8 @@ export interface AgentEngineContext {
 
 export interface AgentRunnerDeps {
   checkSession?: (options: AgentRunOptions) => void;
+  /** Reserve the run's session until it ends; returns the release function. */
+  holdSession?: (options: AgentRunOptions) => (() => void) | undefined;
   environment?: RuntimeEnvironment;
   createWorkspace?: (options: CreateRunWorkspaceOptions) => Promise<RunWorkspace>;
   listArtifacts?: (workspace: RunWorkspace) => Promise<RunArtifact[]>;
@@ -222,6 +224,18 @@ export class AgentRunner {
   constructor(private readonly deps: AgentRunnerDeps) {}
 
   async *run(options: AgentRunOptions): AsyncGenerator<AgentEvent, void, unknown> {
+    // The session stays reserved for the run's owner while it runs, so a client
+    // that leaves mid-run cannot let another client take the session and turn
+    // the finished run's transcript write into SESSION_BUSY.
+    const release = this.deps.holdSession?.(options);
+    try {
+      yield* this.runReserved(options);
+    } finally {
+      release?.();
+    }
+  }
+
+  private async *runReserved(options: AgentRunOptions): AsyncGenerator<AgentEvent, void, unknown> {
     this.deps.checkSession?.(options);
     const startedAtMs = Date.now();
     const startedAt = new Date(startedAtMs).toISOString();

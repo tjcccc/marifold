@@ -3,6 +3,7 @@ import { AgentEvent, ApprovalDecision, ApprovalRequest, encryptSudoPassword } fr
 import { Command } from 'commander';
 import { InteractivePrompt } from '../input/InteractivePrompt';
 import { ConsolePrinter } from '../output/ConsolePrinter';
+import { inert } from '../output/inert';
 import { TerminalStyle } from '../output/TerminalStyle';
 import { createRuntime } from './RuntimeFactory';
 
@@ -64,7 +65,7 @@ export function registerAgentCommand(program: Command, printer: ConsolePrinter):
 
         let failed = false;
         for await (const event of events) {
-          renderAgentEvent(event, style);
+          renderAgentEvent(inert(event), style);
           if (event.type === 'done' && event.status !== 'completed') failed = true;
         }
         if (failed) process.exitCode = 1;
@@ -84,14 +85,16 @@ async function promptForApproval(
   style: TerminalStyle,
   request: ApprovalRequest,
 ): Promise<ApprovalDecision> {
-  const escalation = request.escalated && request.escalationReason
-    ? `\n${style.yellow(`! ${request.escalationReason}`)}`
+  // Display a sanitized copy; the original request keeps the sudo key material.
+  const shown = inert(request);
+  const escalation = shown.escalated && shown.escalationReason
+    ? `\n${style.yellow(`! ${shown.escalationReason}`)}`
     : '';
-  process.stdout.write(`${style.yellow('approve?')} [${request.kind}] ${request.summary}${escalation}\n`);
+  process.stdout.write(`${style.yellow('approve?')} [${shown.kind}] ${shown.summary}${escalation}\n`);
   if (request.sudo) {
     let password = '';
     try {
-      password = await prompt.readPassword(`Password for ${request.sudo.account}@${request.sudo.device} (not saved; Ctrl+C cancels): `);
+      password = await prompt.readPassword(`Password for ${shown.sudo!.account}@${shown.sudo!.device} (not saved; Ctrl+C cancels): `);
       return { approved: true, sudoResponse: encryptSudoPassword(request.sudo, password) };
     } catch { return { approved: false, reason: 'Secure sudo authorization cancelled or unavailable.' }; }
     finally { password = ''; }

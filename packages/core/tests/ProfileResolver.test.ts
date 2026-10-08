@@ -213,6 +213,10 @@ describe('ProfileResolver', () => {
     expect(() => pm.addTrustedFolder('blogger', os.homedir())).toThrow(/too broad|sensitive/i);
     expect(() => pm.addTrustedFolder('blogger', '/')).toThrow(/too broad|sensitive/i);
     expect(() => pm.addTrustedFolder('blogger', path.join(os.homedir(), '.ssh'))).toThrow(/too broad|sensitive/i);
+    // A symlink to home is home.
+    const alias = path.join(root, 'home-alias');
+    fs.symlinkSync(os.homedir(), alias);
+    expect(() => pm.addTrustedFolder('blogger', alias)).toThrow(/too broad|sensitive/i);
   });
 
   it('persists approval for a profile with no pre-existing directory (e.g. default)', () => {

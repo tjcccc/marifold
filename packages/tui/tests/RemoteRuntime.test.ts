@@ -67,3 +67,23 @@ it('restores session image bytes through the authenticated workspace attachment 
   expect(fetchImage.mock.calls[0][0]).toBe('http://localhost:32140/v1/workspaces/home/api/v1/sessions/saved/attachments/1/0');
   expect(fetchImage.mock.calls[0][1]).toMatchObject({ headers: { authorization: 'Bearer test-token' } });
 });
+it('lets the exit path wait for an in-flight lease release', async () => {
+  let finish!: () => void;
+  const released = vi.fn();
+  vi.stubGlobal('fetch', vi.fn(async (_url: string, init?: RequestInit) => {
+    if (init?.method !== 'DELETE') return Response.json({ ok: true });
+    await new Promise<void>(resolve => { finish = resolve; });
+    released();
+    return Response.json({ ok: true });
+  }));
+  const runtime = new RemoteRuntime({ baseUrl: 'http://localhost:32140', workspaceId: 'home' });
+  // Unmount fires the release without awaiting it, then the process exits.
+  void runtime.releaseSession('session');
+  const settled = RemoteRuntime.settleReleases(1000);
+  await vi.waitFor(() => expect(finish).toBeTypeOf('function'));
+  expect(released).not.toHaveBeenCalled();
+  finish();
+  await settled;
+  expect(released).toHaveBeenCalledTimes(1);
+  await RemoteRuntime.settleReleases(10); // Nothing pending: returns at once.
+});

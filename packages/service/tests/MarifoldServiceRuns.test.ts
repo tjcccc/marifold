@@ -616,6 +616,36 @@ Transform {{text}} into the final prompt.
     }
   });
 
+  it('keeps a running task\'s session reserved after its client releases the lease', async () => {
+    stubProvider([toolCall('write_file', { path: 'held.txt', content: 'held' }), 'Saved the file.']);
+    const { server, base } = await startServer();
+    const tab = { 'x-marifold-session-owner': `tab-${'a'.repeat(24)}` };
+    const terminal = { 'x-marifold-session-owner': `terminal-${'b'.repeat(24)}` };
+    try {
+      expect((await postJson(base, '/v1/sessions/held/lease', {}, tab)).status).toBe(200);
+      const created = await postJson(base, '/v1/runs', { objective: 'Write held.txt.', cwd: tempDir(), sessionId: 'held' }, tab);
+      expect(created.status).toBe(201);
+      const { run } = await created.json();
+      const frames = sseFrames(await fetch(`${base}/v1/runs/${run.id}/events`));
+      const { matched } = await pullFrames(frames, frame => frame.event === 'approval_request');
+      const request = (matched!.data as { request: { id: string } }).request;
+
+      // The tab closes mid-run; another client cannot take the running session.
+      await fetch(`${base}/v1/sessions/held/lease`, { method: 'DELETE', headers: tab });
+      const taken = await postJson(base, '/v1/sessions/held/lease', {}, terminal);
+      expect(taken.status).toBe(409);
+      expect((await taken.json()).error.code).toBe('SESSION_BUSY');
+
+      await postJson(base, `/v1/runs/${run.id}/approvals/${request.id}`, { action: 'once' }, tab);
+      const { seen } = await pullFrames(frames, frame => frame.event === 'done');
+      expect(seen.at(-1)!.data).toMatchObject({ status: 'completed' });
+      const session = await (await fetch(`${base}/v1/sessions/held`, { headers: tab })).json();
+      expect(JSON.stringify(session)).toContain('Saved the file.');
+    } finally {
+      await server.close();
+    }
+  });
+
   it('accepts ?access_token= on the events stream when auth is on', async () => {
     stubProvider(['All done.']);
     const { server, base } = await startServer({}, { auth: { token: 'sekret' } });

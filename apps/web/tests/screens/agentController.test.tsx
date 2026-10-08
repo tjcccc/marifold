@@ -52,6 +52,45 @@ describe('useAgentController session lifecycle', () => {
     expect(JSON.stringify(result.current.thread)).toContain('in use');
   });
 
+  it('keeps an open session through transient renewal failures and blocks only when another client takes it', async () => {
+    let renewal: 'ok' | 'offline' | 'busy' = 'ok';
+    const request = vi.fn(async (method: string, path: string) => {
+      if (path.endsWith('/lease')) {
+        if (method === 'DELETE' || renewal === 'ok') return { ok: true };
+        if (renewal === 'offline') throw new TypeError('Failed to fetch');
+        throw new MarifoldApiError(409, { code: 'SESSION_BUSY', message: 'This session is in use in another page or terminal.' });
+      }
+      if (path === '/v1/profiles') return { profiles: [profile] };
+      if (path === '/v1/models') return { default: {}, options: [] };
+      if (path === '/v1/profiles/prompt-maker') return { profile };
+      if (path.startsWith('/v1/skills?')) return { skills: [] };
+      if (path.startsWith('/v1/sessions?')) return { sessions: [] };
+      if (path === '/v1/runs' || path.startsWith('/v1/runs?')) return { runs: [] };
+      if (path === '/v1/sessions/held') return { session: { turns: [{ role: 'user', content: 'Hello' }, { role: 'assistant', content: 'Kept answer' }] } };
+      throw new Error(`Unexpected request: ${path}`);
+    });
+    const client = { request } as unknown as ApiClient;
+    const navigate = vi.fn();
+    const onUnauthorized = vi.fn();
+    // Fake the renewal interval from the start; real time still advances for waitFor.
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const { result } = renderHook(() => useAgentController({ client,
+        route: { view: 'agent', profile: 'prompt-maker', session: 'held' }, navigate, onUnauthorized }));
+      await waitFor(() => expect(result.current.thread.items).toHaveLength(2));
+      renewal = 'offline'; // A network drop or service restart.
+      await act(async () => { await vi.advanceTimersByTimeAsync(31_000); });
+      expect(request.mock.calls.filter(([method, path]) => method === 'POST' && path.endsWith('/lease')).length).toBeGreaterThanOrEqual(2);
+      expect(result.current.sessionBlocked).toBe(false);
+      expect(result.current.thread.items).toHaveLength(2);
+      renewal = 'busy'; // Another client took the expired lease.
+      await act(async () => { await vi.advanceTimersByTimeAsync(15_000); });
+      expect(result.current.sessionBlocked).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it.each(['success', 'failure'] as const)('shows list loading until requests finish with %s', async outcome => {
     let finishProfiles!: (value: unknown) => void;
     let failProfiles!: (error: Error) => void;

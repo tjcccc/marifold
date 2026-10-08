@@ -95,7 +95,12 @@ function makeRegistry(
         });
       },
       setProfileAgentApproval: (profile, kind, mode) => { grants.push({ profile, kind, mode }); },
-      addProfileTrustedFolder: (profile, folder) => { folders.push({ profile, folder }); return folder; },
+      addProfileTrustedFolder: (profile, folder) => {
+        // Mirrors the profile layer, which refuses broad folders such as home.
+        if (folder === os.homedir()) throw MarifoldError.profileInvalid(`Refusing to trust '${folder}'.`, folder);
+        folders.push({ profile, folder });
+        return folder;
+      },
       defaultProfile: () => 'default',
     },
     ...options,
@@ -342,7 +347,8 @@ describe('RunRegistry', () => {
     const { matched } = await pullUntil(stream, e => e.type === 'approval_request');
     const request = (matched!.event as Extract<AgentEvent, { type: 'approval_request' }>).request;
     expect(request.escalated).toBe(true);
-    expect(request.escalatedPath).toBe(path.join(outside, 'a.txt'));
+    // Approvals report the real destination (macOS temp dirs live under /private).
+    expect(request.escalatedPath).toBe(path.join(fs.realpathSync(outside), 'a.txt'));
     expect(request.persistable).toBe(false);
 
     expect(() => registry.answerApproval(record.id, request.id, 'trust')).toThrow(/one call at a time/);
@@ -359,6 +365,36 @@ describe('RunRegistry', () => {
     expect(done!.event).toMatchObject({ type: 'done', status: 'completed' });
     expect(fs.readFileSync(path.join(outside, 'a.txt'), 'utf-8')).toBe('A');
     expect(fs.readFileSync(path.join(outside, 'b.txt'), 'utf-8')).toBe('B');
+  });
+
+  it('a refused trusted folder neither approves the call nor silences later prompts', async () => {
+    const homeFile = path.join(os.homedir(), 'notes.txt');
+    const escalating = fakeTool({
+      name: 'write_note',
+      kind: 'write',
+      assessRisk: () => ({ escalate: true, persistable: true, reason: 'outside', targetPath: homeFile }),
+    });
+    const { registry, folders } = makeRegistry([
+      response({ toolCalls: [{ id: 'call_0', name: 'write_note', arguments: {} }] }),
+      response({ toolCalls: [{ id: 'call_1', name: 'write_note', arguments: {} }] }),
+      response({ text: 'Done.' }),
+    ], [escalating]);
+
+    const record = registry.start({ objective: 'Write notes.', cwd: tempDir() });
+    const stream = registry.events(record.id, 0);
+    const first = await pullUntil(stream, e => e.type === 'approval_request');
+    const request = (first.matched!.event as Extract<AgentEvent, { type: 'approval_request' }>).request;
+    expect(() => registry.answerApproval(record.id, request.id, 'trust')).toThrow(/Refusing to trust/);
+    expect(folders).toEqual([]);
+    registry.answerApproval(record.id, request.id, 'once');
+
+    // Home was not trusted in memory either, so the next call still prompts.
+    const second = await pullUntil(stream, e => e.type === 'approval_request');
+    const next = (second.matched!.event as Extract<AgentEvent, { type: 'approval_request' }>).request;
+    expect(next.id).toBe('call_1');
+    registry.answerApproval(record.id, next.id, 'once');
+    const { matched: done } = await pullUntil(stream, doneEvent);
+    expect(done!.event).toMatchObject({ type: 'done', status: 'completed' });
   });
 
   it('"trust" without an escalated path is rejected', async () => {

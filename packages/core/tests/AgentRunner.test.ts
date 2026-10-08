@@ -89,6 +89,23 @@ async function collect(events: AsyncGenerator<AgentEvent>): Promise<AgentEvent[]
 const planResponse = response({ text: '{"title": "Test plan", "steps": ["Read the file", "Summarize"]}' });
 
 describe('AgentRunner', () => {
+  it('reserves the session from start to finish, including when the consumer stops early', async () => {
+    const order: string[] = [];
+    const holdSession = vi.fn(() => { order.push('hold'); return () => { order.push('release'); }; });
+    const persistTurn = vi.fn(async () => { order.push('persist'); });
+    const finished = makeRunner(new ScriptedEngine([response({ text: 'Done.' })]), [], {}, { holdSession, persistTurn });
+    await collect(finished.runner.run({ objective: 'Answer.', cwd: tempDir(), sessionId: 'held' }));
+    expect(holdSession).toHaveBeenCalledWith(expect.objectContaining({ sessionId: 'held' }));
+    expect(order).toEqual(['hold', 'persist', 'release']);
+
+    order.length = 0;
+    const stopped = makeRunner(new ScriptedEngine([response({ text: 'Done.' })]), [], {}, { holdSession });
+    const events = stopped.runner.run({ objective: 'Answer.', cwd: tempDir(), sessionId: 'held' });
+    await events.next();
+    await events.return(undefined);
+    expect(order).toEqual(['hold', 'release']);
+  });
+
   it.each(['terminal', 'web'] as const)('keeps %s environment separate across planning, tools, and persisted history', async interfaceName => {
     const engine = new ScriptedEngine([
       planResponse,

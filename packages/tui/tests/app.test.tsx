@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { render } from 'ink-testing-library';
 import { ConfigLoader, MarifoldRuntime, SessionResolver, WorkspaceInitializer } from '@marifold/core';
 import { App } from '../src/ui/App.js';
+import { inertTerminalOutput } from '../src/core/TerminalOutput.js';
 
 const tempDirs: string[] = [];
 const delay = () => new Promise(resolve => setTimeout(resolve, 30));
@@ -49,6 +50,22 @@ describe('App', () => {
       expect(lastFrame()).not.toContain('other client conversation');
       expect(() => owner.acquireSession('occupied')).not.toThrow();
     } finally { unmount(); second.close(); owner.close(); }
+  });
+
+  it('keeps a resumed session when a lease renewal fails transiently', async () => {
+    const { runtime, loadedConfig } = workspace();
+    const acquire = vi.spyOn(runtime, 'acquireSession').mockImplementationOnce(() => { throw new Error('fetch failed'); });
+    const { lastFrame, unmount } = render(<App runtime={runtime} loadedConfig={loadedConfig} initial={{
+      profile: 'default', provider: 'ollama', model: 'test-model', think: false,
+      cwd: '/tmp/work', version: 'test', sessionId: 'mine',
+      transcript: [{ kind: 'assistant', text: 'kept conversation' }],
+    }} />);
+    try {
+      await vi.waitFor(() => expect(acquire).toHaveBeenCalled());
+      await delay();
+      expect(lastFrame()).toContain('kept conversation');
+      expect(lastFrame()).not.toContain('fetch failed');
+    } finally { unmount(); acquire.mockRestore(); runtime.close(); }
   });
 
   it('sends only image #3 from a recalled prompt with two unused missing paths', async () => {
@@ -178,6 +195,29 @@ describe('App', () => {
       await vi.waitFor(() => expect(lastFrame()).toContain('without a matching attachment'));
       expect(run).not.toHaveBeenCalled();
     } finally { unmount(); run.mockRestore(); createRunner.mockRestore(); runtime.close(); }
+  });
+
+  it.each([false, true])('renders model output without terminal hyperlinks when filtered=%s', async filtered => {
+    const { runtime, loadedConfig } = workspace();
+    const raw = Object.assign(new PassThrough(), { isTTY: true, columns: 100, rows: 24 });
+    const stdin = Object.assign(new PassThrough(), { isTTY: true, setRawMode: vi.fn(), ref: vi.fn(), unref: vi.fn() });
+    let output = '';
+    raw.on('data', chunk => { output += chunk.toString(); });
+    const hostile = 'before\x1b]52;c;cGF5bG9hZA==\x07 \x1b]0;spoofed title\x1b\\ \x1b]8;;https://evil.example\x07docs\x1b]8;;\x07 after';
+    const app = renderTerminal(<App runtime={runtime} loadedConfig={loadedConfig} initial={{
+      profile: 'default', provider: 'ollama', model: 'test-model',
+      think: false, cwd: '/tmp/work', version: '0.0.0-test',
+      transcript: [{ kind: 'assistant', text: hostile }],
+    }} />, { stdin, stdout: filtered ? inertTerminalOutput(raw as unknown as NodeJS.WriteStream) : raw, stderr: new PassThrough(), exitOnCtrlC: false, patchConsole: false });
+    try {
+      await vi.waitFor(() => expect(output).toContain('after'));
+      // Ink drops most OSC itself but keeps OSC 8 hyperlinks, whose visible
+      // text can hide another target. The TUI's output filter removes them.
+      expect(output.includes('evil.example')).toBe(!filtered);
+      expect(output).not.toContain(']52;');
+      expect(output).not.toContain('spoofed title\x1b');
+      expect(output).toContain('docs');
+    } finally { app.unmount(); runtime.close(); }
   });
 
   it('redraws the alternate screen after width and height changes without losing the draft', async () => {

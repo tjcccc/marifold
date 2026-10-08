@@ -181,6 +181,40 @@ describe('TelegramBridge.handleUpdate', () => {
     expect(sent[sent.length - 1].text).toBe('Found the score.');
   });
 
+  it('allows once without trusting a folder the profile refuses', async () => {
+    const decisions: boolean[] = [];
+    const runtime = {
+      addProfileTrustedFolder: (_profile: string, folder: string) => { throw new Error(`Refusing to trust '${folder}'`); },
+      createAgentRunner: () => ({
+        run: async function* (options: { approvalHandler?: (r: unknown) => Promise<{ approved: boolean }> }) {
+          for (const id of ['w1', 'w2']) {
+            const decision = await options.approvalHandler!({
+              id, tool: 'write_file', kind: 'write', summary: 'write ~/notes.txt', input: {},
+              escalated: true, persistable: true, escalatedPath: '/Users/someone/notes.txt',
+            });
+            decisions.push(decision.approved);
+          }
+          yield { type: 'text', text: 'Done.' };
+          yield { type: 'done', status: 'completed' };
+        },
+      }),
+    } as unknown as MarifoldRuntime;
+
+    const { bridge, sent } = makeBridge({ defaultMode: 'agent', runtime });
+    const turn = bridge.handleUpdate(msg('save my notes'));
+    await waitFor(() => sent.some(s => s.replyMarkup !== undefined));
+    const trustData = sent.find(s => s.replyMarkup)!.replyMarkup!.inline_keyboard[1][0].callback_data;
+    expect(trustData).toMatch(/:trust$/);
+    await bridge.handleUpdate(callback(trustData));
+
+    // The refused folder was not trusted in memory, so the second write prompts again.
+    await waitFor(() => sent.filter(s => s.replyMarkup).length === 2);
+    const onceData = sent.filter(s => s.replyMarkup)[1].replyMarkup!.inline_keyboard[0][0].callback_data;
+    await bridge.handleUpdate(callback(onceData));
+    await turn;
+    expect(decisions).toEqual([true, true]);
+  });
+
   it('denies (and reports) when the user taps Deny', async () => {
     const runtime = {
       createAgentRunner: () => ({

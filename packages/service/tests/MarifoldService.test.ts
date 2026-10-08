@@ -894,9 +894,11 @@ describe('MarifoldService', () => {
     sessions.close();
     const server = createMarifoldService({ loadedConfig: loaded, scheduler: false });
     try {
+      const owner = { 'x-marifold-session-owner': `owner-${'a'.repeat(24)}` };
       const started = await server.inject({
         method: 'POST',
         url: '/v1/runs',
+        headers: owner,
         payload: {
           objective: 'Keep working.',
           profile: 'default',
@@ -904,9 +906,13 @@ describe('MarifoldService', () => {
         },
       });
       const runId = started.json().run.id as string;
-      const blocked = await server.inject({ method: 'DELETE', url: '/v1/sessions/session_running' });
+      const blocked = await server.inject({ method: 'DELETE', url: '/v1/sessions/session_running', headers: owner });
       expect(blocked.statusCode).toBe(400);
       expect(blocked.json().error.code).toBe('AGENT_RUN_INVALID');
+      // The running task reserves its session against every other client.
+      const elsewhere = await server.inject({ method: 'DELETE', url: '/v1/sessions/session_running' });
+      expect(elsewhere.statusCode).toBe(409);
+      expect(elsewhere.json().error.code).toBe('SESSION_BUSY');
 
       await server.inject({ method: 'POST', url: `/v1/runs/${runId}/cancel`, payload: {} });
       await vi.waitFor(async () => {

@@ -405,24 +405,29 @@ export class TelegramBridge {
     const messageId = await this.sendMessage(chatId, promptText, keyboard);
 
     const action = await approval;
-    await this.finalizeApprovalMessage(chatId, messageId, promptText, action);
+    // Persist a trusted folder before announcing it. The profile layer refuses
+    // broad or sensitive folders; the user still approved this call, so a
+    // refused folder falls back to allowing it once.
+    let trustRefused: string | undefined;
+    if (action === 'trust' && request.persistable !== false) {
+      try {
+        const folder = this.runtime.addProfileTrustedFolder(this.profile, dirname(request.escalatedPath as string));
+        if (!this.trustedFolders.includes(folder)) this.trustedFolders.push(folder);
+      } catch (error) {
+        trustRefused = errorMessage(error);
+        this.log?.(`Could not trust folder: ${trustRefused}`);
+      }
+    }
+    await this.finalizeApprovalMessage(chatId, messageId, promptText, trustRefused ? 'once' : action, trustRefused);
 
     switch (action) {
       case 'deny':
         return { approved: false, reason: 'denied via Telegram' };
       case 'timeout':
         return { approved: false, reason: 'no response to the approval prompt' };
-      case 'trust': {
+      case 'trust':
         if (request.persistable === false) return { approved: false, reason: 'this capability cannot be trusted persistently' };
-        const folder = dirname(request.escalatedPath as string);
-        if (!this.trustedFolders.includes(folder)) this.trustedFolders.push(folder);
-        try {
-          this.runtime.addProfileTrustedFolder(this.profile, folder);
-        } catch (error) {
-          this.log?.(`Could not persist trusted folder: ${errorMessage(error)}`);
-        }
         return { approved: true };
-      }
       case 'always':
         if (request.persistable === false) return { approved: false, reason: 'this capability cannot be allowed persistently' };
         this.grantedKinds.add(request.kind);
@@ -474,6 +479,7 @@ export class TelegramBridge {
     messageId: number | undefined,
     promptText: string,
     action: ApprovalAction,
+    note?: string,
   ): Promise<void> {
     if (messageId === undefined) return;
     const label =
@@ -486,7 +492,7 @@ export class TelegramBridge {
     await this.call('editMessageText', {
       chat_id: chatId,
       message_id: messageId,
-      text: `${promptText}\n\n→ ${label}`,
+      text: `${promptText}\n\n→ ${label}${note ? ` (folder not trusted: ${note})` : ''}`,
     }, SEND_TIMEOUT_MS).catch(() => undefined);
   }
 

@@ -10,7 +10,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ArtifactWebRtc, DeviceExecution, encryptSudoPassword, resolveAgentConfig } from '@marifold/core';
 import { createBridge, MemoryRelayStore } from '../../../apps/bridge/src';
 import { createMarifoldService } from '../src';
-import { workspaceApiPath } from '../src/WorkspaceRoutes';
+import { workspaceApiPath, workspaceHostOnlyRequest } from '../src/WorkspaceRoutes';
 import { cleanupTempDirs, fixtureLoadedConfig, tempDir } from './helpers';
 
 const servers: FastifyInstance[] = [];
@@ -221,6 +221,29 @@ describe('device-hosted workspaces', () => {
     expect((await guest.inject(`${p.prefix}/v1/runs?sessionId=download-session`)).json().runs[0].artifacts).toHaveLength(2);
     expect((await guest.inject(`${p.prefix}/v1/runs?sessionId=another-session`)).json().runs).toEqual([]);
   }, 40000);
+  it('keeps provider endpoints and credential references with the host', async () => {
+    const p = await paired();
+    const refused = [
+      { method: 'POST', url: `${p.prefix}/v1/models`, payload: { provider: 'ollama', model: 'x', baseUrl: 'https://attacker.example' } },
+      { method: 'POST', url: `${p.prefix}/v1/providers`, payload: { name: 'openai', baseUrl: 'https://attacker.example', apiKeyEnv: 'MARIFOLD_TOKEN' } },
+      { method: 'DELETE', url: `${p.prefix}/v1/providers/ollama` },
+      // The query string must not bypass the shared-key filter.
+      { method: 'PATCH', url: `${p.prefix}/v1/config?bypass=1`, payload: { key: 'providers.ollama.base_url', value: 'https://attacker.example' } },
+    ] as const;
+    for (const request of refused) {
+      const response = await p.guest.inject(request);
+      expect(response.statusCode, request.url).toBeGreaterThanOrEqual(400);
+      expect(response.body, request.url).toContain('must be edited locally');
+    }
+    const added = await p.guest.inject({ method: 'POST', url: `${p.prefix}/v1/models`, payload: { provider: 'ollama', model: 'qwen3:8b' } });
+    expect(added.statusCode, added.body).toBe(201);
+    const host = (await p.host.inject('/v1/config')).json().config;
+    expect(host.models.options).toContain('ollama/qwen3:8b');
+    expect(JSON.stringify(host)).not.toContain('attacker.example');
+    expect(workspaceHostOnlyRequest('PATCH', '/v1/config', { key: 'memory.context_limit' })).toBe(false);
+    expect(workspaceHostOnlyRequest('PATCH', '/v1/config', { key: 'service.web_dir' })).toBe(true);
+    expect(workspaceHostOnlyRequest('GET', '/v1/providers/ollama/models', undefined)).toBe(false);
+  });
   it('shares the host surface without credentials or nested workspace access', async () => {
     const p = await paired();
     const config = await p.guest.inject(`${p.prefix}/v1/config`);
@@ -510,7 +533,7 @@ describe('device-hosted workspaces', () => {
     expect(fs.existsSync(path.join(cwd, 'result.txt'))).toBe(false);
     const conflict = await p.host.inject({ method: 'POST', url: '/v1/runs', payload });
     expect(conflict.statusCode).toBe(409);
-    expect(conflict.json().error.details.runId).toBe(run.id);
+    expect(conflict.json().error.code).toBe('SESSION_BUSY');
     const always = await p.guest.inject({
       method: 'POST',
       url: `${p.prefix}/v1/runs/${run.id}/approvals/${approval.id}`,

@@ -76,8 +76,22 @@ export class RemoteRuntime implements TuiRuntime {
   acquireSession = async (id: string): Promise<void> => {
     await this.api.request('POST', `/v1/sessions/${encodeURIComponent(id)}/lease`);
   };
+  /** Lease releases still in flight, awaited before the process exits so a
+   * closed TUI does not keep its session reserved until the lease expires. */
+  private static releases = new Set<Promise<unknown>>();
+  static async settleReleases(timeoutMs: number): Promise<void> {
+    if (!RemoteRuntime.releases.size) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    await Promise.race([
+      Promise.allSettled([...RemoteRuntime.releases]),
+      new Promise((resolve) => { timer = setTimeout(resolve, timeoutMs); }),
+    ]);
+    clearTimeout(timer);
+  }
   releaseSession = async (id: string): Promise<void> => {
-    await this.api.request('DELETE', `/v1/sessions/${encodeURIComponent(id)}/lease`);
+    const request = this.api.request('DELETE', `/v1/sessions/${encodeURIComponent(id)}/lease`);
+    RemoteRuntime.releases.add(request);
+    try { await request; } finally { RemoteRuntime.releases.delete(request); }
   };
   getSession: TuiRuntime['getSession'] = async (id) =>
     (
