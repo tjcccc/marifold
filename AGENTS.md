@@ -71,6 +71,8 @@ The service defaults to loopback. Explicit non-loopback binds accept only direct
 
 - Every control-flow body has braces, including single statements: `if (done) { return; }`, never `if (done) return;`. The same applies to `else`, loops, and arrow-function bodies containing them. `pnpm lint` (Biome `useBlockStatements`, configured in `biome.json`) enforces it; `pnpm exec biome lint --write --unsafe .` applies the fix.
 
+- Markdown prose is not hard-wrapped: one paragraph or list item per source line. `pnpm lint` runs `scripts/markdown-wrap.mjs`; `node scripts/markdown-wrap.mjs --fix` joins wrapped lines. Code blocks, tables, and explicit hard breaks are kept.
+
 ## Validation
 
 Enable the pre-commit hook once per clone with `git config core.hooksPath .githooks`; it runs `pnpm lint` (after any global pre-commit) before each commit. `git commit --no-verify` and clones without the setting bypass it.
