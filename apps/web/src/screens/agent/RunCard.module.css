@@ -40,6 +40,10 @@
   }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .spinner { animation: none; }
+}
+
 .statusText {
   flex: 1;
   min-width: 0;

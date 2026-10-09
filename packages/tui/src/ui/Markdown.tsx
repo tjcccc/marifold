@@ -1,8 +1,6 @@
 import type React from 'react';
 import { Box, Text } from 'ink';
-import { DIM } from './theme.js';
-
-const CODE_COLOR = '#56B6C2';
+import { CODE, DIM } from './theme.js';
 
 /**
  * Pragmatic markdown renderer for assistant output — covers the constructs the
@@ -14,7 +12,7 @@ export function Markdown({ text, muted = false }: { text: string; muted?: boolea
   const lines = text.split('\n');
   const blocks: React.ReactNode[] = [];
   const defaultColor = muted ? DIM : undefined;
-  const codeColor = muted ? DIM : CODE_COLOR;
+  const codeColor = muted ? DIM : CODE;
   let i = 0;
   let key = 0;
 
@@ -88,7 +86,7 @@ function renderInline(input: string, muted = false): React.ReactNode {
     if (match.index > last) { parts.push(text.slice(last, match.index)); }
     const token = match[0];
     if (token.startsWith('`')) {
-      parts.push(<Text key={key++} color={muted ? DIM : CODE_COLOR}>{token.slice(1, -1)}</Text>);
+      parts.push(<Text key={key++} color={muted ? DIM : CODE}>{token.slice(1, -1)}</Text>);
     } else if (token.startsWith('**')) {
       parts.push(<Text key={key++} bold>{token.slice(2, -2)}</Text>);
     } else {

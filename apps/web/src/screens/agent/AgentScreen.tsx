@@ -10,7 +10,7 @@ import { ResizableSidebar } from '../../components/ResizableSidebar';
 import { SidebarSystemFooter } from '../../components/SidebarChrome';
 import type { WorkspaceView } from '../../components/WorkspaceTabs';
 import type { Route } from '../../lib/route';
-import { useMediaQuery } from '../../lib/useMediaQuery';
+import { MOBILE_QUERY, useMediaQuery } from '../../lib/useMediaQuery';
 import type { ThemePreference } from '../../theme/theme';
 import { AppsScreen } from '../apps/AppsScreen';
 import { AppsSidebarContent } from '../apps/AppsSidebar';
@@ -27,7 +27,6 @@ import { WorkspaceSidebar } from './WorkspaceSidebar';
 import styles from './AgentScreen.module.css';
 
 const SIDEBARS_KEY = 'marifold.sidebars';
-const MOBILE_QUERY = '(max-width: 899px)';
 
 export interface AgentScreenProps {
   client: ApiClient;

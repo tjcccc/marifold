@@ -1,7 +1,7 @@
 {
   "version": 1,
   "projnaviVersion": "0.5.0",
-  "generatedAt": "2026-10-09T14:14:35.099Z",
+  "generatedAt": "2026-10-09T14:15:50.531Z",
   "root": ".",
   "files": {
     ".claude/skills/projnavi/SKILL.md": {
@@ -305,8 +305,8 @@
       "category": "source"
     },
     "apps/web/src/lib/useMediaQuery.ts": {
-      "hash": "1660d21c719655c75dce34a9f442c817e69740e6b4aaccdb91113323c7f6a54e",
-      "size": 911,
+      "hash": "f36ca508611c38189833c531456c4ab57b67058c4609da6a9f9590adfbe6aefb",
+      "size": 1046,
       "category": "source"
     },
     "apps/web/src/lib/visualViewport.ts": {
@@ -320,8 +320,8 @@
       "category": "source"
     },
     "apps/web/src/screens/agent/AgentScreen.tsx": {
-      "hash": "bf1b1f8f9bf0fbe2dc13ec4bcacab1af0cfb9ef7c3a928206462fa5f8ce99d97",
-      "size": 15003,
+      "hash": "f3e1cfc449262e0f71bd6125f62f65acbe6dd6f7b31a5cff69a4db48eca6e2f0",
+      "size": 14974,
       "category": "source"
     },
     "apps/web/src/screens/agent/ApprovalSheet.tsx": {
@@ -435,8 +435,8 @@
       "category": "source"
     },
     "apps/web/src/screens/config/ConfigScreen.tsx": {
-      "hash": "9a9314387adc9851a5c0947f2a4d46c4ce0207023efb172bea3452614f07903e",
-      "size": 25614,
+      "hash": "3356d57f2a2ef31916185b6fe37cc18dac6caecc80d0a424d9f3cdb1f65df75a",
+      "size": 25585,
       "category": "source"
     },
     "apps/web/src/screens/config/ModelsPage.tsx": {
@@ -2230,8 +2230,8 @@
       "category": "source"
     },
     "packages/tui/src/ui/Markdown.tsx": {
-      "hash": "5eca5d23c74334fc4fae7c8c63e9bf902b7f2dfbd573aa61d58af387ab32f242",
-      "size": 4309,
+      "hash": "3dd9ad1c5594dab3b9e0b2564c91dfdbe1c4f72bbe11c7a750c7c34116a00760",
+      "size": 4272,
       "category": "source"
     },
     "packages/tui/src/ui/Mouse.tsx": {
@@ -2280,8 +2280,8 @@
       "category": "source"
     },
     "packages/tui/src/ui/theme.ts": {
-      "hash": "5c31845be640861280a0803165d711470f78aa6803995d78c06226bdfcb12f3a",
-      "size": 484,
+      "hash": "6a35c93f26ceb9b97a990336e80fec4b5810ce44d6e687bbed3fb8faea4d7996",
+      "size": 590,
       "category": "source"
     },
     "packages/tui/src/ui/Transcript.tsx": {
@@ -2485,8 +2485,8 @@
       "category": "source"
     },
     "spec/ui.md": {
-      "hash": "c18b58acddf82b46466f085a94be695f20a702b1835bb8b5871003b674976f8e",
-      "size": 12059,
+      "hash": "1feaec805b4b95904acb625b3557eb44dde88e9705e3e661c97622c4a1d4c3ce",
+      "size": 11667,
       "category": "docs"
     },
     "TODO.md": {

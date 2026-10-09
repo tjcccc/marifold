@@ -40,7 +40,7 @@ import { ResizableSidebar } from '../../components/ResizableSidebar';
 import { SidebarBrand, SidebarSystemFooter } from '../../components/SidebarChrome';
 import { fileToBase64 } from '../../lib/attachments';
 import type { ConfigSection, Route } from '../../lib/route';
-import { useMediaQuery } from '../../lib/useMediaQuery';
+import { MOBILE_QUERY, useMediaQuery } from '../../lib/useMediaQuery';
 import type { ThemePreference } from '../../theme/theme';
 import { ModelsPage } from './ModelsPage';
 import { AgentDefaultsPage } from './AgentDefaultsPage';
@@ -61,7 +61,6 @@ const SECTIONS: Array<{ id: ConfigSection; label: string }> = [
   { id: 'service', label: 'Service' },
 ];
 
-const MOBILE_QUERY = '(max-width: 899px)';
 type MobileConfigLevel = 'sections' | 'items' | 'detail';
 
 export interface ConfigScreenProps {

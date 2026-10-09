@@ -158,7 +158,7 @@
 
 .staleHint {
   overflow: hidden;
-  color: #d99b20;
+  color: var(--warning);
   font-size: 11px;
   font-weight: 550;
   text-overflow: ellipsis;
@@ -701,7 +701,7 @@
 }
 
 .activity_success .activityDot { background: var(--ok); }
-.activity_warning .activityDot { background: #d99b20; }
+.activity_warning .activityDot { background: var(--warning); }
 .activity_error .activityDot { background: var(--danger); }
 
 .activityBody {

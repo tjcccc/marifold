@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react';
 
+/** The mobile layout breakpoint; CSS modules repeat it as `(max-width: 899px)`. */
+export const MOBILE_QUERY = '(max-width: 899px)';
+
 /** Reactive browser media query with a safe non-browser/test fallback. */
 export function useMediaQuery(query: string): boolean {
   const [matches, setMatches] = useState(() => readMatch(query));

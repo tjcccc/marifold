@@ -9,3 +9,5 @@ export const ATTACHMENT = '#3FB950';
 export const COMMAND = '#A371F7';
 /** Submitted `$skill` echoes in the transcript. */
 export const SKILL = '#56B6C2';
+/** Inline and fenced code in assistant Markdown; matches SKILL on purpose. */
+export const CODE = SKILL;

@@ -35,6 +35,10 @@
   /* Semantic */
   --ok: light-dark(#28a745, #34c759);
   --danger: light-dark(#d2402e, #ff6b5e);
+  --warning: #d99b20;
+
+  /* Modal backdrop behind sheets and confirmation dialogs. */
+  --scrim: color-mix(in srgb, #000 36%, transparent);
 
   /* Elevation */
   --shadow-card: 0 1px 3px light-dark(rgba(0, 0, 0, 0.08), rgba(0, 0, 0, 0.5));

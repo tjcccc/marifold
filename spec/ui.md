@@ -35,7 +35,8 @@ All color, elevation, type-family, and radius values come from custom properties
 | Surfaces | `--canvas`, `--content`, `--surface`, `--surface-2`, `--surface-3` | Chrome (navigation and sidebars) sits on `--canvas`; the working pane (thread, config detail, apps) sits on `--content`; cards, inputs, and sheets use `--surface`; `--surface-2`/`-3` are recessed fills. |
 | Text | `--text`, `--text-2`, `--text-3` | Primary, secondary, and tertiary text. |
 | Lines | `--separator`, `--separator-soft` | Hairline borders and dividers. |
-| Semantic | `--ok`, `--danger` | Success and destructive or error states. There is no warning token yet. |
+| Semantic | `--ok`, `--warning`, `--danger` | Success, warning, and destructive or error states. |
+| Backdrop | `--scrim` | The darkening layer behind modal sheets and confirmation dialogs. |
 | Elevation | `--shadow-card`, `--shadow-sheet` | Selected segments and cards; floating sheets and popovers. |
 | Type | `--font-ui`, `--font-mono` | System UI stack; system monospace stack for code. |
 | Shape | `--radius-sm` 6px, `--radius-md` 10px, `--radius-lg` 14px | Small controls; buttons, inputs, and rows; sheets and cards. |
@@ -57,12 +58,12 @@ Rules:
 
 - App shell (`App.tsx`): status notices (`role="status"`) above one `<main>` that hosts the Agent, Apps, or Config screen; connection and workspace popovers float above it.
 - Desktop (900px and wider): a resizable primary sidebar (`ResizableSidebar`, 256px default, 200px minimum, at most 40% of the window, width persisted per sidebar, pointer and keyboard resizing) beside the working pane. Sidebars share `SidebarChrome` for the brand header, rows, and footer.
-- Mobile (899px and narrower): a separate touch layout, not compressed columns. It uses list-to-detail drill-down, a bottom tab bar, bottom sheets, safe-area padding, and visual-viewport sizing for the on-screen keyboard; see the README's "Mobile layout". The breakpoint is `(max-width: 899px)` in CSS and in the `MOBILE_QUERY` constant used with `useMediaQuery`.
+- Mobile (899px and narrower): a separate touch layout, not compressed columns. It uses list-to-detail drill-down, a bottom tab bar, bottom sheets, safe-area padding, and visual-viewport sizing for the on-screen keyboard; see the README's "Mobile layout". The breakpoint is `(max-width: 899px)` in CSS and the shared `MOBILE_QUERY` in `lib/useMediaQuery.ts` (CSS media queries cannot read custom properties, so modules repeat the value).
 - Secondary breakpoints (560, 640, 720, 760, 360px) only adjust individual components.
 
 ### Components and patterns
 
-- **Sheets** (`*Sheet.tsx`) are modal or inline panels on `--surface` with `--radius-lg` and `--shadow-sheet`. Modal sheets and confirmation dialogs sit over a darkening backdrop and become bottom sheets on mobile. The in-thread Approval and Question sheets are framed with a `--brand-tint` border and outline so they read as requests for the owner.
+- **Sheets** (`*Sheet.tsx`) are modal or inline panels on `--surface` with `--radius-lg` and `--shadow-sheet`. Modal sheets and confirmation dialogs sit over `--scrim` and become bottom sheets on mobile; the connection popover uses a lighter blurred tint instead. The in-thread Approval and Question sheets are framed with a `--brand-tint` border and outline so they read as requests for the owner.
 - **Banners** (`CatchUpBanner`, `SessionBlockedBanner`) sit at the top of the thread for state the owner must notice, with one primary action and an optional dismiss.
 - **Controls:** `SegmentedControl` for small exclusive choices, native `<select>` with the chevron from `base.css`, and circular Send/Stop in the composer. Primary actions fill with `--brand-fill` and label with `--on-brand`.
 - **Icons** are inline SVG components or small inline `<svg>` elements. `MarigoldLogo` is the brand mark and is colored with `--brand-fill`.
@@ -72,7 +73,7 @@ Rules:
 ### Motion
 
 - Transitions are short (100–160ms, `ease` or `ease-out`) and limited to color, background, opacity, and small push-in or pop-in moves for sidebars and sheets.
-- Animated components switch their animation off under `@media (prefers-reduced-motion: reduce)` (one exception is listed in Open questions); do the same for new animations.
+- Animated components switch their animation off under `@media (prefers-reduced-motion: reduce)`; do the same for new animations.
 
 ### Accessibility
 
@@ -94,6 +95,7 @@ Rules:
 | `ATTACHMENT` | `#3FB950` | Inline attachment tokens such as `[image #1]`. |
 | `COMMAND` | `#A371F7` | Submitted `/command` echoes. |
 | `SKILL` | `#56B6C2` | The `$skill` head of submitted skill invocations. |
+| `CODE` | same as `SKILL` | Inline and fenced code in assistant Markdown. |
 
 Status colors use named ANSI colors so they follow the terminal theme: `red` for errors and deny, `yellow` for warnings and approval prompts, `green` for verified results, and `gray` for tool lines and info notices. Text attributes: `bold` for titles and selected items, `DIM` or `dimColor` for secondary text, `italic` only for Markdown emphasis, and no underline.
 
@@ -121,16 +123,10 @@ Status colors use named ANSI colors so they follow the terminal theme: `red` for
 
 ## Open questions and known drift
 
-Recorded so later work can decide deliberately; none of these is a redesign request.
+Recorded so later work can decide deliberately; none of these is a redesign request. Resolved on 2026-10-09: warning and scrim tokens, the shared breakpoint constant, the RunCard spinner's reduced motion, and the TUI code color.
 
 1. **Type scale:** there are no font-size tokens, and Web CSS uses 20 distinct sizes. Decide whether to tokenize a scale before normalizing sizes.
 2. **Radius literals:** these sit beside the radius tokens: `8px` (12 uses), `7px` (9), `6px` (8), `10px` (6), `9px` (3), `12px` (3). Map them to tokens or add a token only when touching a component.
-3. **Raw colors in modules:**
-   - `#d99b20` warning amber in `AppsScreen.module.css`, because there is no warning token.
-   - `var(--danger, #c33)` fallback in `ProfileSettingsPage.module.css`.
-   - Modal backdrops use three treatments: `color-mix(in srgb, #000 36%, transparent)` in four modules, `rgba(0, 0, 0, 0.32)` in `CreateProfileSheet` and `AvatarCropper`, and a `--text` 12% tint with `blur(2px)` in `ConnectionPopover`. A `--scrim` token is a candidate.
-   - Image preview and cropper overlays use raw black/white alphas, which is likely intentional for media.
-4. **Warning color:** the Web UI has no warning token, while the TUI uses `yellow`. Decide the Web value (likely a dedicated token rather than the brand color).
-5. **Breakpoints:** `MOBILE_QUERY` is declared separately in `AgentScreen.tsx` and `ConfigScreen.tsx`, and `899px` is repeated across CSS modules; there is no shared breakpoint constant.
-6. **Reduced motion:** the `RunCard.module.css` spinner has no `prefers-reduced-motion` rule.
-7. **TUI palette:** `Markdown.tsx` keeps a local `CODE_COLOR` with the same value as `SKILL`, and status colors are named ANSI while brand colors are hex. Decide whether code color belongs in `theme.ts`.
+3. **Warning contrast:** `--warning` keeps the original `#d99b20` in both modes; as text on white it is below 4.5:1, so a darker light-mode value may be worth choosing.
+4. **Media overlays:** image preview and cropper overlays use raw black/white alphas, which is likely intentional for media.
+5. **TUI status colors** are named ANSI while brand colors are hex, so status follows the terminal theme; keep this split unless a reason appears.

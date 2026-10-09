@@ -301,7 +301,7 @@
   display: grid;
   place-items: center;
   padding: 24px;
-  background: color-mix(in srgb, #000 36%, transparent);
+  background: var(--scrim);
   backdrop-filter: blur(1px);
 }
 
