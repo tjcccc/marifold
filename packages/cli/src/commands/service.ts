@@ -110,7 +110,7 @@ function addServiceOptions(command: Command, allowDaemon = false): Command {
     )
     .option('--web-dir <dir>', 'Host the built Web UI from this directory (overrides [service].web_dir).');
   command.option('--verbose', 'Show technical service details.');
-  if (allowDaemon) command.option('--daemon', 'Run the service in the background.');
+  if (allowDaemon) { command.option('--daemon', 'Run the service in the background.'); }
   return command;
 }
 
@@ -122,14 +122,14 @@ async function runService(
 ): Promise<void> {
   let owner: ReturnType<typeof claimServiceProcess> | undefined;
   try {
-    if (options.cwd) process.chdir(options.cwd);
+    if (options.cwd) { process.chdir(options.cwd); }
     const loadedConfig = loadServiceConfig(program, configPath);
     const daemonChild = process.env[DAEMON_CHILD_ENV] === '1';
     const rawToken = Boolean(options.token || (daemonChild && options.tokenEnv === DAEMON_TOKEN_ENV));
     const token = resolveTokenFlags(options);
     if (daemonChild) {
       delete process.env[DAEMON_CHILD_ENV];
-      if (options.tokenEnv === DAEMON_TOKEN_ENV) delete process.env[DAEMON_TOKEN_ENV];
+      if (options.tokenEnv === DAEMON_TOKEN_ENV) { delete process.env[DAEMON_TOKEN_ENV]; }
     }
     const corsOrigins = options.corsOrigin && options.corsOrigin.length > 0 ? options.corsOrigin : undefined;
     const webDir = options.webDir ? path.resolve(options.webDir) : undefined;
@@ -167,7 +167,7 @@ async function runService(
       requestLogging: Boolean(options.log),
       verbose: Boolean(options.verbose),
     });
-    if (mode === 'foreground') process.stdout.write('Press Ctrl+C to stop.\n');
+    if (mode === 'foreground') { process.stdout.write('Press Ctrl+C to stop.\n'); }
     await waitForShutdown({
       close: result.server.close.bind(result.server),
       forceClose: () => {
@@ -175,14 +175,14 @@ async function runService(
         result.server.server.closeAllConnections?.();
       },
       onFinish: () => {
-        if (owner) releaseServiceProcess(owner);
+        if (owner) { releaseServiceProcess(owner); }
       },
     });
   } catch (error) {
     printer.printError(error);
     process.exitCode = 1;
   } finally {
-    if (owner) releaseServiceProcess(owner);
+    if (owner) { releaseServiceProcess(owner); }
   }
 }
 
@@ -198,7 +198,7 @@ async function startDaemon(
     parsePort(options.port);
 
     const existing = getActiveServiceProcess();
-    if (existing) throw new Error(`Marifold service is already running (PID ${existing.pid}, ${existing.mode}).`);
+    if (existing) { throw new Error(`Marifold service is already running (PID ${existing.pid}, ${existing.mode}).`); }
 
     const paths = serviceProcessPaths();
     ensureServiceProcessDir(paths);
@@ -218,7 +218,7 @@ async function startDaemon(
 
     const state = await waitForDaemonStart(daemon, DAEMON_START_TIMEOUT_MS);
     daemon.unref();
-    if (state.address) printServiceAvailability(state.address, state.launch?.host);
+    if (state.address) { printServiceAvailability(state.address, state.launch?.host); }
     process.stdout.write(`Marifold service started in background (PID ${state.pid}).\n`);
     if (state.address && state.startup) {
       printServiceDetails({
@@ -243,15 +243,15 @@ function buildDaemonArgs(configPath: string, options: ServiceOptions): string[] 
   args.push('service', 'start');
   args.push('--host', options.host ?? '127.0.0.1');
   args.push('--port', options.port ?? '32140');
-  if (options.log) args.push('--log');
-  if (options.verbose) args.push('--verbose');
+  if (options.log) { args.push('--log'); }
+  if (options.verbose) { args.push('--verbose'); }
   if (options.token) {
     args.push('--token-env', DAEMON_TOKEN_ENV);
   } else if (options.tokenEnv) {
     args.push('--token-env', options.tokenEnv);
   }
-  for (const origin of options.corsOrigin ?? []) args.push('--cors-origin', origin);
-  if (options.webDir) args.push('--web-dir', path.resolve(options.webDir));
+  for (const origin of options.corsOrigin ?? []) { args.push('--cors-origin', origin); }
+  if (options.webDir) { args.push('--web-dir', path.resolve(options.webDir)); }
   return args;
 }
 
@@ -262,7 +262,7 @@ async function restartService(
 ): Promise<void> {
   try {
     const active = getActiveServiceProcess();
-    if (!active) throw new Error('Marifold service is not running.');
+    if (!active) { throw new Error('Marifold service is not running.'); }
     if (!active.launch) {
       throw new Error(
         'The running service has no saved restart options. Stop it and start it once with this Marifold version.',
@@ -278,7 +278,7 @@ async function restartService(
     parsePort(options.port);
 
     const stopped = await stopActiveServiceProcess();
-    if (!stopped) throw new Error('Marifold service stopped before restart could claim it.');
+    if (!stopped) { throw new Error('Marifold service stopped before restart could claim it.'); }
     process.stdout.write(`Marifold service stopped (PID ${stopped.pid}). Restarting...\n`);
 
     if (active.mode === 'daemon') {
@@ -348,10 +348,10 @@ function printServiceDetails(options: ServiceDetailsOptions): void {
   if (!isLoopbackServiceHost(options.host)) {
     process.stdout.write('Access: private networks only (LAN, link-local, and Tailscale).\n');
   }
-  if (!options.verbose) return;
+  if (!options.verbose) { return; }
 
   process.stdout.write(`Bind: ${serviceBindUrl(options.address, options.host)}\n`);
-  if (options.startup.webDir) process.stdout.write(`Web UI: serving ${options.startup.webDir}\n`);
+  if (options.startup.webDir) { process.stdout.write(`Web UI: serving ${options.startup.webDir}\n`); }
   if (options.startup.corsOrigins.length > 0) {
     process.stdout.write(`CORS: allowing ${options.startup.corsOrigins.join(', ')}\n`);
   }
@@ -376,15 +376,15 @@ function waitForDaemonStart(child: ChildProcess, timeoutMs: number): Promise<Ser
     const deadline = Date.now() + timeoutMs;
     let settled = false;
     const finish = (error?: Error): void => {
-      if (settled) return;
+      if (settled) { return; }
       settled = true;
       clearInterval(timer);
       child.off('error', onError);
       child.off('exit', onExit);
-      if (error) reject(error);
+      if (error) { reject(error); }
     };
     const check = (): void => {
-      if (settled) return;
+      if (settled) { return; }
       try {
         const state = getActiveServiceProcess();
         if (state && state.pid === child.pid && state.status === 'running') {
@@ -411,10 +411,10 @@ function waitForDaemonStart(child: ChildProcess, timeoutMs: number): Promise<Ser
 }
 
 function resolveTokenFlags(options: ServiceOptions): string | undefined {
-  if (options.token) return options.token;
+  if (options.token) { return options.token; }
   if (options.tokenEnv) {
     const token = process.env[options.tokenEnv];
-    if (!token) throw MarifoldError.configInvalid(`--token-env ${options.tokenEnv} is not set in the environment.`);
+    if (!token) { throw MarifoldError.configInvalid(`--token-env ${options.tokenEnv} is not set in the environment.`); }
     return token;
   }
   return undefined;
@@ -447,10 +447,10 @@ export function waitForShutdown(options: ShutdownOptions): Promise<void> {
     const cleanup = (): void => {
       process.off('SIGINT', onSigint);
       process.off('SIGTERM', onSigterm);
-      if (forceTimer) clearTimeout(forceTimer);
+      if (forceTimer) { clearTimeout(forceTimer); }
     };
     const finish = (code: number): void => {
-      if (finished) return;
+      if (finished) { return; }
       finished = true;
       cleanup();
       try {
@@ -462,7 +462,7 @@ export function waitForShutdown(options: ShutdownOptions): Promise<void> {
       terminate(code);
     };
     const force = (message: string, code: number): void => {
-      if (finished) return;
+      if (finished) { return; }
       process.stderr.write(`${message}\n`);
       try {
         options.forceClose?.();

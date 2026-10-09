@@ -81,7 +81,7 @@ it('prunes expired lease rows as clients acquire sessions', () => {
   let now = 0;
   const leases = new SessionLeases(file, () => now);
   try {
-    for (const id of ['a', 'b', 'c']) leases.acquire(id, 'tab');
+    for (const id of ['a', 'b', 'c']) { leases.acquire(id, 'tab'); }
     now = 70_000;
     leases.acquire('d', 'tab');
     const db = new Database(file, { readonly: true });

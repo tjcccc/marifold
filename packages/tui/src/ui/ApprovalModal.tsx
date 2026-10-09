@@ -33,7 +33,7 @@ function previewLines(input: Record<string, PriestJSONValue>): string[] {
         for (const line of body.slice(0, PREVIEW_MAX_BODY_LINES)) {
           lines.push(`  ${line.length > PREVIEW_MAX_LINE_CHARS ? `${line.slice(0, PREVIEW_MAX_LINE_CHARS)}…` : line}`);
         }
-        if (body.length > PREVIEW_MAX_BODY_LINES) lines.push('  …');
+        if (body.length > PREVIEW_MAX_BODY_LINES) { lines.push('  …'); }
       } else {
         lines.push(`${key}: ${raw}`);
       }
@@ -76,16 +76,16 @@ export function ApprovalModal({
         } catch (error) { password.current = ''; setLength(0); setError(error instanceof Error ? error.message : 'Authorization failed.'); }
         return;
       }
-      if (key.backspace || key.delete) password.current = [...password.current].slice(0, -1).join('');
-      else if (!key.ctrl && !key.meta && !/[\x00-\x1f\x7f]/.test(input)) password.current += input;
+      if (key.backspace || key.delete) { password.current = [...password.current].slice(0, -1).join(''); }
+      else if (!key.ctrl && !key.meta && !/[\x00-\x1f\x7f]/.test(input)) { password.current += input; }
       setLength(password.current.length);
       return;
     }
     const ch = input.toLowerCase();
     // Enter = allow once (safe default) — never persists/trusts on a stray keypress.
-    if (key.escape || ch === 'd') onResolve('no');
-    else if (key.return || ch === 'a' || ch === 'y') onResolve('once');
-    else if (ch === 't' && request.persistable !== false) onResolve('always');
+    if (key.escape || ch === 'd') { onResolve('no'); }
+    else if (key.return || ch === 'a' || ch === 'y') { onResolve('once'); }
+    else if (ch === 't' && request.persistable !== false) { onResolve('always'); }
   });
 
   // The "always" action: trust this folder (escalated write), else allow this kind.

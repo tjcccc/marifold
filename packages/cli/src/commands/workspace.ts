@@ -12,16 +12,18 @@ import type { ConsolePrinter } from '../output/ConsolePrinter';
 
 export function localServiceSettings(config: LoadedMarifoldConfig): { baseUrl: string; token?: string } {
   const state = getActiveServiceProcess();
-  if (!state?.address || path.resolve(state.configPath) !== path.resolve(config.configPath))
+  if (!state?.address || path.resolve(state.configPath) !== path.resolve(config.configPath)) {
     throw new Error('Start this configuration’s service first: marifold service start --daemon');
+  }
   const url = new URL(state.address);
-  if (url.hostname === '0.0.0.0') url.hostname = '127.0.0.1';
-  if (url.hostname === '[::]') url.hostname = '[::1]';
+  if (url.hostname === '0.0.0.0') { url.hostname = '127.0.0.1'; }
+  if (url.hostname === '[::]') { url.hostname = '[::1]'; }
   const configToken = config.config.service?.token;
   const env = state.launch?.tokenEnv ?? config.config.service?.tokenEnv;
   const token = env ? process.env[env] : configToken;
-  if (state.startup?.authRequired && !token)
+  if (state.startup?.authRequired && !token) {
     throw new Error('The local service requires a token. Configure service.token_env for CLI access.');
+  }
   return { baseUrl: url.origin, ...(token ? { token } : {}) };
 }
 export function registerWorkspaceCommand(program: Command, printer: ConsolePrinter): void {
@@ -33,17 +35,17 @@ export function registerWorkspaceCommand(program: Command, printer: ConsolePrint
     const command = bridge.command(mode).description(mode === 'install'
       ? 'Install and start a persistent bridge on this Linux server with Docker Compose.'
       : 'Update the installed Linux bridge, preserving configuration and retaining a rollback image.');
-    if (mode === 'install') command.option('--start', 'Start an existing installer-managed deployment without replacing configuration.');
+    if (mode === 'install') { command.option('--start', 'Start an existing installer-managed deployment without replacing configuration.'); }
     command.action((options: { start?: boolean }) => {
       try {
-        if (process.platform !== 'linux') throw new Error('Run this command on your Linux bridge server. Use bridge prepare to create a transferable package on this device.');
+        if (process.platform !== 'linux') { throw new Error('Run this command on your Linux bridge server. Use bridge prepare to create a transferable package on this device.'); }
         const script = path.join(__dirname, '..', 'bridge-template', 'setup.sh');
-        if (!fs.existsSync(script)) throw new Error('Bridge installer is missing. Rebuild or reinstall Marifold.');
+        if (!fs.existsSync(script)) { throw new Error('Bridge installer is missing. Rebuild or reinstall Marifold.'); }
         const args = ['bash', script, ...(mode === 'update' ? ['--update'] : options.start ? ['--start'] : [])];
         const result = process.getuid?.() === 0
           ? spawnSync(args[0]!, args.slice(1), { stdio: 'inherit' })
           : spawnSync('sudo', args, { stdio: 'inherit' });
-        if (result.error) throw new Error('Could not launch the installer. Check that sudo and bash are installed.');
+        if (result.error) { throw new Error('Could not launch the installer. Check that sudo and bash are installed.'); }
         process.exitCode = result.status ?? 1;
       } catch (error) {
         printer.printError(error);
@@ -57,7 +59,7 @@ export function registerWorkspaceCommand(program: Command, printer: ConsolePrint
     .action((directory: string) => {
       try {
         const source = path.join(__dirname, '..', 'bridge-template');
-        if (!fs.existsSync(source)) throw new Error('Bridge template is missing. Rebuild or reinstall Marifold.');
+        if (!fs.existsSync(source)) { throw new Error('Bridge template is missing. Rebuild or reinstall Marifold.'); }
         const target = path.resolve(directory);
         fs.mkdirSync(path.dirname(target), { recursive: true, mode: 0o700 });
         fs.mkdirSync(target, { mode: 0o700 });
@@ -85,8 +87,9 @@ export function registerWorkspaceCommand(program: Command, printer: ConsolePrint
   const resolve = async (api: ApiClient, name: string) => {
     const { workspaces } = await api.request<{ workspaces: WorkspaceSummary[] }>('GET', '/v1/workspaces');
     const matches = workspaces.filter((w) => w.id === name || w.name === name);
-    if (matches.length !== 1)
+    if (matches.length !== 1) {
       throw new Error(matches.length ? 'Workspace name is ambiguous; use its ID.' : 'Workspace not found.');
+    }
     return matches[0]!;
   };
   const secret = async (label: string) => {
@@ -113,7 +116,7 @@ export function registerWorkspaceCommand(program: Command, printer: ConsolePrint
             prompt.close();
           }
         }
-        if (!bridgeUrl) throw new Error('Bridge URL is required.');
+        if (!bridgeUrl) { throw new Error('Bridge URL is required.'); }
         const registrationToken = await secret('Bridge registration token: ');
         const result = await api.request<{ workspace: WorkspaceSummary; invitation: string }>(
           'POST',
@@ -146,7 +149,7 @@ export function registerWorkspaceCommand(program: Command, printer: ConsolePrint
     .description('Enable or disable this device’s executor for a paired workspace.')
     .action(
       action(async (name: string, mode: string) => {
-        if (mode !== 'on' && mode !== 'off') throw new Error('Use on or off.');
+        if (mode !== 'on' && mode !== 'off') { throw new Error('Use on or off.'); }
         const api = client();
         const workspace = await resolve(api, name);
         show(await api.request('PUT', `/v1/workspaces/${workspace.id}/executor`, { enabled: mode === 'on' }));
@@ -171,7 +174,7 @@ export function registerWorkspaceCommand(program: Command, printer: ConsolePrint
         const api = client();
         const w = await resolve(api, options.id ?? name ?? '');
         const nextName = options.id ? name : newName;
-        if (!nextName) throw new Error('New workspace name is required.');
+        if (!nextName) { throw new Error('New workspace name is required.'); }
         show(await api.request('POST', `/v1/workspaces/${w.id}/manage/rename`, { name: nextName }));
       }),
     );
@@ -182,7 +185,7 @@ export function registerWorkspaceCommand(program: Command, printer: ConsolePrint
       show(await api.request('PUT', '/v1/workspaces/default', { id }));
     }),
   );
-  for (const operation of ['invite', 'devices'])
+  for (const operation of ['invite', 'devices']) {
     group.command(`${operation} <nameOrId>`).action(
       action(async (name: string) => {
         const api = client();
@@ -190,6 +193,7 @@ export function registerWorkspaceCommand(program: Command, printer: ConsolePrint
         show(await api.request('POST', `/v1/workspaces/${w.id}/manage/${operation}`, {}));
       }),
     );
+  }
   group.command('revoke <nameOrId> <deviceId>').action(
     action(async (name: string, deviceId: string) => {
       const api = client();

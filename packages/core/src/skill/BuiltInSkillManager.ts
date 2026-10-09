@@ -58,7 +58,7 @@ function containsKeyword(text: string, keyword: string): boolean {
   while (offset !== -1) {
     const before = text[offset - 1];
     const after = text[offset + keyword.length];
-    if (!isWordCharacter(before) && !isWordCharacter(after)) return true;
+    if (!isWordCharacter(before) && !isWordCharacter(after)) { return true; }
     offset = text.indexOf(keyword, offset + keyword.length);
   }
   return false;

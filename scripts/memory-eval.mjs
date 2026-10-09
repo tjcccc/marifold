@@ -83,9 +83,9 @@ try {
       });
       const afterRows = memoryRows(memoriesDir);
       const failures = [];
-      if (!response.ok) failures.push(`model request failed: ${response.error?.message ?? 'unknown error'}`);
-      if (response.ok && !response.text.trim()) failures.push('visible reply was empty');
-      if (step.reply) failures.push(...checkReply(step.reply, response.text ?? ''));
+      if (!response.ok) { failures.push(`model request failed: ${response.error?.message ?? 'unknown error'}`); }
+      if (response.ok && !response.text.trim()) { failures.push('visible reply was empty'); }
+      if (step.reply) { failures.push(...checkReply(step.reply, response.text ?? '')); }
       failures.push(...checkMemory(afterRows, step.memory ?? []));
       failures.push(...checkForbiddenMemory(afterRows, step.forbiddenMemory ?? []));
 
@@ -101,7 +101,7 @@ try {
       };
       results.push(result);
       printStep(result);
-      if (stopOnFail && failures.length > 0) break;
+      if (stopOnFail && failures.length > 0) { break; }
     }
   } finally {
     runtime.close();
@@ -120,14 +120,14 @@ try {
     }, null, 2));
   }
   process.stdout.write(`\n${passed ? 'PASS' : 'FAIL'} ${results.filter(result => result.passed).length}/${results.length} memory eval steps\n`);
-  if (keep) process.stdout.write(`Kept eval workspace: ${root}\n`);
-  if (!passed) process.exitCode = 1;
+  if (keep) { process.stdout.write(`Kept eval workspace: ${root}\n`); }
+  if (!passed) { process.exitCode = 1; }
 } catch (error) {
   process.stderr.write(`\nFAIL: ${error instanceof Error ? error.message : String(error)}\n`);
   process.stderr.write(`Eval workspace: ${root}\n`);
   process.exitCode = 1;
 } finally {
-  if (!keep && !args.workdir) fs.rmSync(root, { recursive: true, force: true });
+  if (!keep && !args.workdir) { fs.rmSync(root, { recursive: true, force: true }); }
 }
 
 function smokeCases() {
@@ -228,8 +228,8 @@ function professionalCases() {
 }
 
 function cases(name) {
-  if (name === 'smoke') return smokeCases();
-  if (name === 'professional') return professionalCases();
+  if (name === 'smoke') { return smokeCases(); }
+  if (name === 'professional') { return professionalCases(); }
   throw new Error(`Unknown suite ${name}. Use --suite smoke or --suite professional.`);
 }
 
@@ -262,10 +262,10 @@ function checkReply(check, response) {
     failures.push(`reply did not match any expected phrase for ${check.description}: ${check.anyOf.join(', ')}`);
   }
   for (const pattern of check.allOf ?? []) {
-    if (!text.includes(pattern.toLowerCase())) failures.push(`reply missing expected phrase for ${check.description}: ${pattern}`);
+    if (!text.includes(pattern.toLowerCase())) { failures.push(`reply missing expected phrase for ${check.description}: ${pattern}`); }
   }
   for (const pattern of check.noneOf ?? []) {
-    if (text.includes(pattern.toLowerCase())) failures.push(`reply included forbidden phrase for ${check.description}: ${pattern}`);
+    if (text.includes(pattern.toLowerCase())) { failures.push(`reply included forbidden phrase for ${check.description}: ${pattern}`); }
   }
   return failures;
 }
@@ -274,16 +274,16 @@ function checkMemory(rows, checks) {
   const failures = [];
   for (const check of checks) {
     const matches = rows.filter(row => {
-      if (check.kind && row.kind !== check.kind) return false;
-      if (check.status && (row.status ?? 'active') !== check.status) return false;
-      if (check.conflictKey !== undefined && row.conflict_key !== check.conflictKey) return false;
+      if (check.kind && row.kind !== check.kind) { return false; }
+      if (check.status && (row.status ?? 'active') !== check.status) { return false; }
+      if (check.conflictKey !== undefined && row.conflict_key !== check.conflictKey) { return false; }
       const text = String(row.text ?? '').toLowerCase();
-      if (!check.allOf.every(pattern => text.includes(pattern.toLowerCase()))) return false;
-      if (check.maxPriority !== undefined && Number(row.priority ?? 99) > check.maxPriority) return false;
-      if (check.minConfidence !== undefined && Number(row.confidence ?? 0) < check.minConfidence) return false;
+      if (!check.allOf.every(pattern => text.includes(pattern.toLowerCase()))) { return false; }
+      if (check.maxPriority !== undefined && Number(row.priority ?? 99) > check.maxPriority) { return false; }
+      if (check.minConfidence !== undefined && Number(row.confidence ?? 0) < check.minConfidence) { return false; }
       return true;
     });
-    if (matches.length === 0) failures.push(`memory missing: ${check.description}`);
+    if (matches.length === 0) { failures.push(`memory missing: ${check.description}`); }
   }
   return failures;
 }
@@ -292,8 +292,8 @@ function checkForbiddenMemory(rows, checks) {
   const failures = [];
   for (const check of checks) {
     for (const row of rows) {
-      if (check.kind && row.kind !== check.kind) continue;
-      if (check.status && (row.status ?? 'active') !== check.status) continue;
+      if (check.kind && row.kind !== check.kind) { continue; }
+      if (check.status && (row.status ?? 'active') !== check.status) { continue; }
       const text = String(row.text ?? '').toLowerCase();
       const pattern = check.pattern.toLowerCase();
       const unless = check.unless?.toLowerCase();
@@ -308,7 +308,7 @@ function checkForbiddenMemory(rows, checks) {
 function printStep(result) {
   process.stdout.write(`${result.passed ? 'PASS' : 'FAIL'} ${result.name}\n`);
   if (!result.passed) {
-    for (const failure of result.failures) process.stdout.write(`  - ${failure}\n`);
+    for (const failure of result.failures) { process.stdout.write(`  - ${failure}\n`); }
     process.stdout.write(`  response: ${result.response.trim()}\n`);
   }
 }
@@ -336,11 +336,11 @@ function buildConfig(options) {
   const providerConfig = {
     type: options.providerType,
   };
-  if (options.baseUrl) providerConfig.baseUrl = options.baseUrl.replace(/\/+$/, '');
-  else if (options.providerType === 'ollama') providerConfig.baseUrl = 'http://localhost:11434';
-  else if (options.provider === 'openai') providerConfig.baseUrl = 'https://api.openai.com';
-  if (options.apiKeyEnv) providerConfig.apiKeyEnv = options.apiKeyEnv;
-  if (options.apiKey) providerConfig.apiKey = options.apiKey;
+  if (options.baseUrl) { providerConfig.baseUrl = options.baseUrl.replace(/\/+$/, ''); }
+  else if (options.providerType === 'ollama') { providerConfig.baseUrl = 'http://localhost:11434'; }
+  else if (options.provider === 'openai') { providerConfig.baseUrl = 'https://api.openai.com'; }
+  if (options.apiKeyEnv) { providerConfig.apiKeyEnv = options.apiKeyEnv; }
+  if (options.apiKey) { providerConfig.apiKey = options.apiKey; }
 
   return {
     default: {
@@ -373,9 +373,9 @@ function memoryRows(memoriesDir) {
   const rows = [];
   for (const filename of ['user.jsonl', 'preferences.jsonl', 'auto_short.jsonl']) {
     const filePath = path.join(memoriesDir, filename);
-    if (!fs.existsSync(filePath)) continue;
+    if (!fs.existsSync(filePath)) { continue; }
     for (const line of fs.readFileSync(filePath, 'utf-8').split(/\r?\n/)) {
-      if (!line.trim()) continue;
+      if (!line.trim()) { continue; }
       try {
         rows.push({ ...JSON.parse(line), _file: filename });
       } catch {
@@ -390,15 +390,15 @@ function parseArgs(argv) {
   const result = {};
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
-    if (arg === '--') continue;
-    if (!arg.startsWith('--')) throw new Error(`Unexpected positional argument: ${arg}`);
+    if (arg === '--') { continue; }
+    if (!arg.startsWith('--')) { throw new Error(`Unexpected positional argument: ${arg}`); }
     const key = toCamel(arg.slice(2));
     if (key === 'keep' || key === 'thinking' || key === 'stopOnFail') {
       result[key] = true;
       continue;
     }
     const value = argv[index + 1];
-    if (value === undefined || value.startsWith('--')) throw new Error(`Missing value for ${arg}`);
+    if (value === undefined || value.startsWith('--')) { throw new Error(`Missing value for ${arg}`); }
     result[key] = value;
     index += 1;
   }
@@ -410,15 +410,15 @@ function toCamel(value) {
 }
 
 function numberArg(value, fallback) {
-  if (value === undefined) return fallback;
+  if (value === undefined) { return fallback; }
   const number = Number(value);
-  if (!Number.isFinite(number)) throw new Error(`Expected a number, got ${value}`);
+  if (!Number.isFinite(number)) { throw new Error(`Expected a number, got ${value}`); }
   return number;
 }
 
 function expandHome(value) {
-  if (value === '~') return os.homedir();
-  if (value.startsWith('~/')) return path.join(os.homedir(), value.slice(2));
+  if (value === '~') { return os.homedir(); }
+  if (value.startsWith('~/')) { return path.join(os.homedir(), value.slice(2)); }
   return value;
 }
 

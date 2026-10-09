@@ -61,7 +61,7 @@ function stubProvider(script: Array<string | string[]>): void {
   let call = 0;
   vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
-    if (!url.includes('localhost:11434')) return realFetch(input, init);
+    if (!url.includes('localhost:11434')) { return realFetch(input, init); }
     const entry = script[Math.min(call, script.length - 1)];
     call += 1;
     if (Array.isArray(entry)) {
@@ -101,8 +101,8 @@ describe('web client ↔ real service', () => {
         images: [{ data: TINY_PNG, mediaType: 'image/png' }],
         originalImages: true,
       })) {
-        if (event.type === 'chunk') chunks.push(event.text);
-        if (event.type === 'done') done = true;
+        if (event.type === 'chunk') { chunks.push(event.text); }
+        if (event.type === 'done') { done = true; }
         expect(event.type).not.toBe('error');
       }
       expect(chunks.join('')).toBe('Hello from marifold');

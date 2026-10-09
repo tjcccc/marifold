@@ -23,9 +23,9 @@ export class WorkspaceRequestContext {
   }
   resolve(headers: Record<string, string | string[] | undefined>): WorkspaceRequestProvenance | undefined {
     const ticket = headers[WORKSPACE_CONTEXT_HEADER];
-    if (ticket === undefined) return undefined;
+    if (ticket === undefined) { return undefined; }
     const context = typeof ticket === 'string' ? this.tickets.get(ticket) : undefined;
-    if (!context) throw new Error('Invalid workspace request provenance.');
+    if (!context) { throw new Error('Invalid workspace request provenance.'); }
     return context;
   }
 }

@@ -122,7 +122,7 @@ export function registerScheduleCommand(program: Command, printer: ConsolePrinte
         process.stdout.write(style.dim(`Running schedule ${id} unattended...\n`));
         const result = await runtime.runScheduleUnattended(id);
         process.stdout.write(`Run finished: ${result.status}${result.taskId ? ` (task ${result.taskId})` : ''}\n`);
-        if (result.status !== 'completed') process.exitCode = 1;
+        if (result.status !== 'completed') { process.exitCode = 1; }
       });
     });
 }
@@ -162,9 +162,9 @@ function printSchedule(item: ScheduleState): void {
   process.stdout.write(`Objective:  ${item.objective}\n`);
   process.stdout.write(`Cron:       ${item.cron}\n`);
   process.stdout.write(`Enabled:    ${item.enabled ? 'yes' : 'no'}\n`);
-  if (item.profile) process.stdout.write(`Profile:    ${item.profile}\n`);
+  if (item.profile) { process.stdout.write(`Profile:    ${item.profile}\n`); }
   process.stdout.write(`Last run:   ${item.lastRunAt ?? '-'}\n`);
-  if (item.lastTaskId) process.stdout.write(`Last task:  ${item.lastTaskId}\n`);
-  if (item.lastResultSeen !== undefined) process.stdout.write(`Result seen: ${item.lastResultSeen ? 'yes' : 'no'}\n`);
+  if (item.lastTaskId) { process.stdout.write(`Last task:  ${item.lastTaskId}\n`); }
+  if (item.lastResultSeen !== undefined) { process.stdout.write(`Result seen: ${item.lastResultSeen ? 'yes' : 'no'}\n`); }
   process.stdout.write(`Created:    ${item.createdAt}\n`);
 }

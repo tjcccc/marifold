@@ -75,8 +75,8 @@ const COMMANDS: CommandSpec[] = [
     summary: 'Send attached images unchanged for this message: /attach-original <prompt>.',
     run: (ctx, args) => {
       const text = args.trim();
-      if (!text) ctx.notify('Usage: /attach-original <prompt>', 'warn');
-      else return ctx.sendOriginal(text);
+      if (!text) { ctx.notify('Usage: /attach-original <prompt>', 'warn'); }
+      else { return ctx.sendOriginal(text); }
     },
   },
   { name: 'exit', aliases: ['quit'], summary: 'Leave the TUI.', run: ctx => ctx.exit() },
@@ -89,8 +89,8 @@ const COMMANDS: CommandSpec[] = [
     summary: 'Steer the running task without cancelling it: /btw <text>.',
     run: (ctx, args) => {
       const text = args.trim();
-      if (!text) ctx.notify('Usage: /btw <text>', 'warn');
-      else return ctx.steer(text);
+      if (!text) { ctx.notify('Usage: /btw <text>', 'warn'); }
+      else { return ctx.steer(text); }
     },
   },
   { name: 'model', summary: 'Pick the active model.', run: ctx => ctx.openModelPicker() },
@@ -99,8 +99,8 @@ const COMMANDS: CommandSpec[] = [
     summary: 'Switch profile: /profile [name] (omit name for a picker).',
     run: (ctx, args) => {
       const name = args.trim();
-      if (name) return ctx.selectProfile(name);
-      else return ctx.openProfilePicker();
+      if (name) { return ctx.selectProfile(name); }
+      else { return ctx.openProfilePicker(); }
     },
   },
   {
@@ -114,9 +114,9 @@ const COMMANDS: CommandSpec[] = [
     summary: 'Toggle thinking: /think on|off.',
     run: (ctx, args) => {
       const value = args.trim().toLowerCase();
-      if (value === 'on') ctx.setThink(true);
-      else if (value === 'off') ctx.setThink(false);
-      else return ctx.notify('Usage: /think on|off', 'warn');
+      if (value === 'on') { ctx.setThink(true); }
+      else if (value === 'off') { ctx.setThink(false); }
+      else { return ctx.notify('Usage: /think on|off', 'warn'); }
     },
   },
   { name: 'permissions', summary: 'Show approval modes and active session grants.', run: ctx => ctx.showPermissions() },
@@ -125,8 +125,8 @@ const COMMANDS: CommandSpec[] = [
     summary: 'Trust a folder for this profile: /trust-folder <path> (writes there stop asking).',
     run: (ctx, args) => {
       const target = args.trim();
-      if (!target) ctx.notify('Usage: /trust-folder <path>', 'warn');
-      else return ctx.trustFolder(target);
+      if (!target) { ctx.notify('Usage: /trust-folder <path>', 'warn'); }
+      else { return ctx.trustFolder(target); }
     },
   },
   {
@@ -139,8 +139,8 @@ const COMMANDS: CommandSpec[] = [
         return;
       }
       const match = /^--profile\s+([A-Za-z0-9_-]+)$/.exec(value);
-      if (match) ctx.openSkills('profile', match[1]);
-      else return ctx.notify('Usage: /skills [--profile <name>]', 'warn');
+      if (match) { ctx.openSkills('profile', match[1]); }
+      else { return ctx.notify('Usage: /skills [--profile <name>]', 'warn'); }
     },
   },
   {
@@ -148,8 +148,8 @@ const COMMANDS: CommandSpec[] = [
     summary: 'Install globally, or use /install-skill --profile <name> <path|url>.',
     run: (ctx, args) => {
       const arg = args.trim();
-      if (!arg) ctx.notify('Usage: /install-skill [--profile <name>] <path|url>', 'warn');
-      else return ctx.installSkill(arg);
+      if (!arg) { ctx.notify('Usage: /install-skill [--profile <name>] <path|url>', 'warn'); }
+      else { return ctx.installSkill(arg); }
     },
   },
   {
@@ -157,9 +157,9 @@ const COMMANDS: CommandSpec[] = [
     summary: 'Check health; /doctor --fix migrates this profile\'s legacy instructions.',
     run: (ctx, args) => {
       const value = args.trim();
-      if (!value) return ctx.runDoctor(false);
-      else if (value === '--fix') return ctx.runDoctor(true);
-      else return ctx.notify('Usage: /doctor [--fix]', 'warn');
+      if (!value) { return ctx.runDoctor(false); }
+      else if (value === '--fix') { return ctx.runDoctor(true); }
+      else { return ctx.notify('Usage: /doctor [--fix]', 'warn'); }
     },
   },
   {
@@ -167,8 +167,8 @@ const COMMANDS: CommandSpec[] = [
     summary: 'Read a file into context: /read <path>.',
     run: (ctx, args) => {
       const file = args.trim();
-      if (!file) ctx.notify('Usage: /read <path>', 'warn');
-      else return ctx.readFile(file);
+      if (!file) { ctx.notify('Usage: /read <path>', 'warn'); }
+      else { return ctx.readFile(file); }
     },
   },
   {
@@ -181,8 +181,8 @@ const COMMANDS: CommandSpec[] = [
     summary: 'Save a memory: /remember <text>.',
     run: (ctx, args) => {
       const text = args.trim();
-      if (!text) ctx.notify('Usage: /remember <text>', 'warn');
-      else return ctx.remember(text);
+      if (!text) { ctx.notify('Usage: /remember <text>', 'warn'); }
+      else { return ctx.remember(text); }
     },
   },
   {
@@ -190,8 +190,8 @@ const COMMANDS: CommandSpec[] = [
     summary: 'Forget matching memories: /forget <query>.',
     run: (ctx, args) => {
       const query = args.trim();
-      if (!query) ctx.notify('Usage: /forget <query>', 'warn');
-      else return ctx.forget(query);
+      if (!query) { ctx.notify('Usage: /forget <query>', 'warn'); }
+      else { return ctx.forget(query); }
     },
   },
   {
@@ -199,8 +199,8 @@ const COMMANDS: CommandSpec[] = [
     summary: 'Delete matching memories: /delete-memory <query>.',
     run: (ctx, args) => {
       const query = args.trim();
-      if (!query) ctx.notify('Usage: /delete-memory <query>', 'warn');
-      else return ctx.deleteMemory(query);
+      if (!query) { ctx.notify('Usage: /delete-memory <query>', 'warn'); }
+      else { return ctx.deleteMemory(query); }
     },
   },
   {
@@ -217,7 +217,7 @@ const COMMANDS: CommandSpec[] = [
       const toDefault = parts[2]?.toLowerCase() === 'default';
       const raw = (parts[1] ?? '').toLowerCase();
       if (raw === 'off') {
-        if (toDefault) ctx.setDefaultContextWindow(undefined); else return ctx.setContextWindow(undefined);
+        if (toDefault) { ctx.setDefaultContextWindow(undefined); } else { return ctx.setContextWindow(undefined); }
         return;
       }
       const tokens = parseTokens(raw);
@@ -225,7 +225,7 @@ const COMMANDS: CommandSpec[] = [
         ctx.notify('Usage: /context-window set <tokens|off> [default] (e.g. 16000 or 16k)', 'warn');
         return;
       }
-      if (toDefault) ctx.setDefaultContextWindow(tokens); else return ctx.setContextWindow(tokens);
+      if (toDefault) { ctx.setDefaultContextWindow(tokens); } else { return ctx.setContextWindow(tokens); }
     },
   },
   { name: 'compact', summary: 'Compact the current session now (summarize older turns).', run: ctx => ctx.compactNow() },
@@ -234,7 +234,7 @@ const COMMANDS: CommandSpec[] = [
 /** Parse a token count: "16000" or "16k"/"16K" → 16000. Returns undefined when invalid. */
 function parseTokens(raw: string): number | undefined {
   const match = /^(\d+(?:\.\d+)?)(k)?$/i.exec(raw);
-  if (!match) return undefined;
+  if (!match) { return undefined; }
   const value = Number(match[1]) * (match[2] ? 1000 : 1);
   return Number.isFinite(value) && value > 0 ? Math.round(value) : undefined;
 }
@@ -242,7 +242,7 @@ function parseTokens(raw: string): number | undefined {
 const REGISTRY = new Map<string, CommandSpec>();
 for (const spec of COMMANDS) {
   REGISTRY.set(spec.name, spec);
-  for (const alias of spec.aliases ?? []) REGISTRY.set(alias, spec);
+  for (const alias of spec.aliases ?? []) { REGISTRY.set(alias, spec); }
 }
 
 export function listCommands(): CommandSpec[] {
@@ -268,7 +268,7 @@ export function findCommand(name: string): CommandSpec | undefined {
  * can surface a hint. */
 export function runCommand(ctx: CommandContext, name: string, args: string): boolean {
   const spec = findCommand(name);
-  if (!spec) return false;
+  if (!spec) { return false; }
   try { void Promise.resolve(spec.run(ctx, args)).catch(error => ctx.notify(error instanceof Error ? error.message : String(error), 'error')); }
   catch (error) { ctx.notify(error instanceof Error ? error.message : String(error), 'error'); }
   return true;

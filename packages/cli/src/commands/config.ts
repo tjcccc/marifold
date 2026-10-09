@@ -178,10 +178,10 @@ export function searchUpdateFromFlags(options: ConfigSearchOptions): Partial<Mar
   } else if (provider !== undefined) {
     throw MarifoldError.configInvalid('Expected --provider to be "builtin", "duckduckgo", "firecrawl", "ollama", or "off".');
   }
-  if (options.apiKeyEnv) update.apiKeyEnv = options.apiKeyEnv;
-  if (options.scrape) update.scrape = true;
-  if (options.enable) update.enabled = true;
-  if (options.disable) update.enabled = false;
+  if (options.apiKeyEnv) { update.apiKeyEnv = options.apiKeyEnv; }
+  if (options.scrape) { update.scrape = true; }
+  if (options.enable) { update.enabled = true; }
+  if (options.disable) { update.enabled = false; }
   return update;
 }
 
@@ -196,9 +196,9 @@ async function searchUpdateInteractive(
     { label: 'Ollama Cloud — account-backed search (needs an API key)', value: 'ollama' as const },
     { label: 'Off — disable all web search', value: 'off' as const },
   ]);
-  if (provider === 'off') return { enabled: false };
-  if (provider === 'builtin') return { provider: 'builtin', enabled: true };
-  if (provider === 'duckduckgo') return { provider: 'duckduckgo', enabled: true };
+  if (provider === 'off') { return { enabled: false }; }
+  if (provider === 'builtin') { return { provider: 'builtin', enabled: true }; }
+  if (provider === 'duckduckgo') { return { provider: 'duckduckgo', enabled: true }; }
 
   if (provider === 'ollama') {
     const update: Partial<MarifoldWebSearchConfig> = { provider: 'ollama', enabled: true };
@@ -229,7 +229,7 @@ async function searchUpdateInteractive(
     update.apiKeyEnv = name || 'FIRECRAWL_API_KEY';
   } else if (keySource === 'paste') {
     const key = await readSecretLine(style.bold('Firecrawl API key: '), getPrompt);
-    if (key) update.apiKey = key;
+    if (key) { update.apiKey = key; }
   }
   const scrape = await pickOption(getPrompt, style, 'Scrape results into markdown (costs more)?', [
     { label: 'No — titles + snippets (cheaper)', value: 'no' as const },
@@ -246,26 +246,26 @@ async function pickOption<T extends string>(
   options: Array<{ label: string; value: T }>,
 ): Promise<T> {
   const selected = await selectTerminalOption(message, options);
-  if (selected !== undefined) return selected;
+  if (selected !== undefined) { return selected; }
   // Non-interactive fallback: numbered prompt.
   process.stdout.write(`${message}\n`);
   options.forEach((option, index) => process.stdout.write(`  ${index + 1}. ${option.label}\n`));
   const answer = await getPrompt().readUserMessage(style.bold('Choice [1]: '));
-  if (answer === undefined) throw new PromptAbortError();
+  if (answer === undefined) { throw new PromptAbortError(); }
   const raw = answer.trim();
   const index = raw ? Number(raw) : 1;
-  if (Number.isInteger(index) && index >= 1 && index <= options.length) return options[index - 1].value;
+  if (Number.isInteger(index) && index >= 1 && index <= options.length) { return options[index - 1].value; }
   throw MarifoldError.configInvalid('Invalid selection.');
 }
 
 async function readLine(prompt: InteractivePrompt, style: TerminalStyle, label: string): Promise<string> {
   const answer = await prompt.readUserMessage(style.bold(label));
-  if (answer === undefined) throw new PromptAbortError();
+  if (answer === undefined) { throw new PromptAbortError(); }
   return answer.trim();
 }
 
 function printSearchSummary(config: MarifoldWebSearchConfig | undefined): void {
-  if (!config) return;
+  if (!config) { return; }
   process.stdout.write(`Fallback web search: ${config.provider}${config.enabled ? '' : ' (all web search off)'}\n`);
   if (config.provider === 'firecrawl') {
     const key = config.apiKeyEnv ? `env ${config.apiKeyEnv}` : config.apiKey ? 'stored in config' : 'keyless (rate-limited)';

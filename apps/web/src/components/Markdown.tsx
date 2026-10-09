@@ -128,7 +128,7 @@ const CODE_LANGUAGE_LABELS: Record<string, string> = {
 };
 
 function codeLanguageLabel(language?: string): string {
-  if (!language) return 'Code';
+  if (!language) { return 'Code'; }
   return CODE_LANGUAGE_LABELS[language.toLowerCase()] ?? language;
 }
 
@@ -160,7 +160,7 @@ function Inline({ nodes, resolveSandboxLink }: { nodes: InlineNode[]; resolveSan
               </em>
             );
           case 'link':
-            if (node.citation) return <SourceCitation key={index} href={node.href} title={inlineText(node.children)} />;
+            if (node.citation) { return <SourceCitation key={index} href={node.href} title={inlineText(node.children)} />; }
             if (node.href.startsWith('sandbox:')) {
               const link = resolveSandboxLink?.(node.href);
               const unavailable = typeof link === 'object' && link.unavailable;

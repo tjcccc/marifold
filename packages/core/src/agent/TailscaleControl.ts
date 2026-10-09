@@ -5,8 +5,8 @@ const CLI = `${APP}/Contents/MacOS/Tailscale`;
 type Command = (file: string, args: string[]) => Promise<string>;
 const execute: Command = (file, args) => new Promise((resolve, reject) => {
   execFile(file, args, { timeout: 20_000, maxBuffer: 1024 * 1024 }, (error, stdout) => {
-    if (error) reject(new Error(`${file} ${args[0] ?? ''} failed or timed out.`));
-    else resolve(stdout);
+    if (error) { reject(new Error(`${file} ${args[0] ?? ''} failed or timed out.`)); }
+    else { resolve(stdout); }
   });
 });
 
@@ -16,10 +16,10 @@ export class TailscaleControl {
   constructor(private readonly command: Command = execute, private readonly platform = process.platform) {}
 
   async check(): Promise<{ canRestart: boolean; reason?: string }> {
-    if (this.platform !== 'darwin') return { canRestart: false, reason: 'This workflow supports the standalone macOS app from tailscale.com only.' };
+    if (this.platform !== 'darwin') { return { canRestart: false, reason: 'This workflow supports the standalone macOS app from tailscale.com only.' }; }
     try {
       const bundle = await this.command('/usr/libexec/PlistBuddy', ['-c', 'Print :CFBundleIdentifier', `${APP}/Contents/Info.plist`]);
-      if (bundle.trim() !== 'io.tailscale.ipn.macsys') throw new Error('The installed app is not the standalone Tailscale variant.');
+      if (bundle.trim() !== 'io.tailscale.ipn.macsys') { throw new Error('The installed app is not the standalone Tailscale variant.'); }
       await this.command('/usr/bin/codesign', ['--verify', '--deep', '--strict', '-R', '=anchor apple generic and certificate leaf[subject.OU] = "W5364U7YZB"', APP]);
       await this.command('/usr/bin/sudo', ['-n', '-l', '--', CLI, 'down-for-update']);
       return { canRestart: true };
@@ -30,7 +30,7 @@ export class TailscaleControl {
 
   async restart(): Promise<{ restarted: boolean; vpnReady: boolean; recoveryAttempted: boolean; errors: string[] }> {
     const preflight = await this.check();
-    if (!preflight.canRestart) throw new Error(preflight.reason);
+    if (!preflight.canRestart) { throw new Error(preflight.reason); }
     const errors: string[] = [];
     let stopped = false;
     try {

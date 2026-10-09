@@ -12,16 +12,16 @@ import { DIM } from './theme.js';
  */
 /** Compact token count: 16000 → "16K", 9900 → "9.9K", 940 → "940". */
 function shortTokens(n: number): string {
-  if (n < 1000) return String(n);
+  if (n < 1000) { return String(n); }
   const k = n / 1000;
   return `${k >= 10 ? Math.round(k) : k.toFixed(1)}K`;
 }
 
 /** `ctx 62% · 9.9K/16K` once a budget is set; `ctx –/16K` before the first measured turn. */
 function contextGauge(state: AppState): string | undefined {
-  if (state.maxContextTokens == null || state.maxContextTokens <= 0) return undefined;
+  if (state.maxContextTokens == null || state.maxContextTokens <= 0) { return undefined; }
   const budget = shortTokens(state.maxContextTokens);
-  if (state.contextTokens == null) return `ctx –/${budget}`;
+  if (state.contextTokens == null) { return `ctx –/${budget}`; }
   const pct = Math.round((state.contextTokens / state.maxContextTokens) * 100);
   return `ctx ${pct}% · ${shortTokens(state.contextTokens)}/${budget}`;
 }

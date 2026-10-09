@@ -15,7 +15,7 @@ function tempConfig(body: string): string {
 }
 
 afterEach(() => {
-  for (const dir of tempDirs.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
+  for (const dir of tempDirs.splice(0)) { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
 describe('per-provider proxy', () => {

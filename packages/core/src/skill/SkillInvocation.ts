@@ -26,9 +26,9 @@ export interface ResolvedSkillInvocation {
 /** Parse a submitted `$name [args]` turn. Returns undefined for ordinary text. */
 export function parseSkillInvocation(raw: string): ParsedSkillInvocation | undefined {
   const displayText = raw.trim();
-  if (!displayText.startsWith('$')) return undefined;
+  if (!displayText.startsWith('$')) { return undefined; }
   const match = displayText.slice(1).match(/^([a-z0-9][a-z0-9_-]*)\s*([\s\S]*)$/i);
-  if (!match) throw MarifoldError.skillInvalid('Expected a skill invocation such as $skill-name [args].');
+  if (!match) { throw MarifoldError.skillInvalid('Expected a skill invocation such as $skill-name [args].'); }
   return {
     name: match[1].toLowerCase(),
     args: match[2],
@@ -54,10 +54,10 @@ export function bindSkillArgs(skill: MarifoldSkill, argv: string[]): Record<stri
   for (let index = 0; index < skill.variables.length; index += 1) {
     const variable = skill.variables[index];
     if (index < skill.variables.length - 1) {
-      if (argv[index] !== undefined) values[variable.name] = argv[index];
+      if (argv[index] !== undefined) { values[variable.name] = argv[index]; }
     } else {
       const rest = argv.slice(index).join(' ');
-      if (rest.length > 0) values[variable.name] = rest;
+      if (rest.length > 0) { values[variable.name] = rest; }
     }
   }
   return values;
@@ -110,7 +110,7 @@ export function resolveSkillValuesInvocation(
 
 function bundledFilesInstruction(skill: MarifoldSkill): string | undefined {
   const source = skill.source;
-  if (!source) return undefined;
+  if (!source) { return undefined; }
   const bundledDir = path.dirname(source);
   let entries: string[];
   try {
@@ -120,6 +120,6 @@ function bundledFilesInstruction(skill: MarifoldSkill): string | undefined {
   } catch {
     return undefined;
   }
-  if (entries.length === 0) return undefined;
+  if (entries.length === 0) { return undefined; }
   return `This skill's bundled files are in ${bundledDir}: ${entries.join(', ')}. Read a bundled file with read_file only when the skill instructions require it.`;
 }

@@ -13,20 +13,20 @@ export function useArtifactDownloads(client?: ApiClient, runId?: string, artifac
 
   useEffect(() => {
     setUnavailable(new Set(artifacts.filter(artifact => artifact.available === false).map(artifact => artifact.id)));
-    if (!client || !runId || artifacts.length === 0) return;
+    if (!client || !runId || artifacts.length === 0) { return; }
     let cancelled = false;
     void client.request<{ artifacts: RunArtifact[] }>('GET', `/v1/runs/${encodeURIComponent(runId)}/artifacts`)
       .then(result => {
-        if (!cancelled) setUnavailable(current => new Set([
+        if (!cancelled) { setUnavailable(current => new Set([
           ...current,
           ...result.artifacts.filter(artifact => artifact.available === false).map(artifact => artifact.id),
-        ]));
+        ])); }
       }).catch(() => { /* Offline devices and older services remain retryable. */ });
     return () => { cancelled = true; };
   }, [client, runId, artifacts]);
 
   async function download(artifact: RunArtifact): Promise<void> {
-    if (!client || !runId || unavailable.has(artifact.id)) return;
+    if (!client || !runId || unavailable.has(artifact.id)) { return; }
     setDownloading(artifact.id);
     setStarted(undefined);
     setError(undefined);
@@ -34,8 +34,8 @@ export function useArtifactDownloads(client?: ApiClient, runId?: string, artifac
       await downloadRunArtifact(client, runId, artifact);
       setStarted(artifact.id);
     } catch (error) {
-      if (error instanceof ArtifactUnavailableError) setUnavailable(current => new Set([...current, artifact.id]));
-      else setError(error instanceof Error ? error.message : String(error));
+      if (error instanceof ArtifactUnavailableError) { setUnavailable(current => new Set([...current, artifact.id])); }
+      else { setError(error instanceof Error ? error.message : String(error)); }
     } finally {
       setDownloading(undefined);
     }

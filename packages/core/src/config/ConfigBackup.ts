@@ -129,13 +129,13 @@ export function importConfigBackup(
 }
 
 function collectProfileFiles(profilesDir: string): BackupProfileFile[] {
-  if (!fs.existsSync(profilesDir)) return [];
+  if (!fs.existsSync(profilesDir)) { return []; }
 
   const files: BackupProfileFile[] = [];
   const stack = [profilesDir];
   while (stack.length > 0) {
     const current = stack.pop();
-    if (!current) continue;
+    if (!current) { continue; }
 
     for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
       const absolutePath = path.join(current, entry.name);
@@ -143,10 +143,10 @@ function collectProfileFiles(profilesDir: string): BackupProfileFile[] {
         stack.push(absolutePath);
         continue;
       }
-      if (!entry.isFile()) continue;
+      if (!entry.isFile()) { continue; }
 
       const relativePath = path.relative(profilesDir, absolutePath);
-      if (!relativePath || relativePath.startsWith('..') || path.isAbsolute(relativePath)) continue;
+      if (!relativePath || relativePath.startsWith('..') || path.isAbsolute(relativePath)) { continue; }
       files.push({
         path: relativePath,
         encoding: 'base64',

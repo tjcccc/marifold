@@ -17,17 +17,17 @@ export class ShellJobStatusTool implements AgentTool {
     return input.job_id ? `read shell job ${input.job_id}` : 'read device execution mode and recent shell jobs';
   }
   async execute(input: Record<string, JSONValue>, ctx: ToolExecutionContext): Promise<ToolExecutionResult> {
-    if (input.job_id !== undefined && typeof input.job_id !== 'string') throw new Error('Invalid shell job ID.');
+    if (input.job_id !== undefined && typeof input.job_id !== 'string') { throw new Error('Invalid shell job ID.'); }
     const wait = input.wait_seconds ?? 0;
-    if (typeof wait !== 'number' || !Number.isInteger(wait) || wait < 0 || wait > 10) throw new Error('Invalid wait_seconds.');
-    if (!this.device) return { content: JSON.stringify({ mode: 'scoped', jobs: [] }) };
+    if (typeof wait !== 'number' || !Number.isInteger(wait) || wait < 0 || wait > 10) { throw new Error('Invalid wait_seconds.'); }
+    if (!this.device) { return { content: JSON.stringify({ mode: 'scoped', jobs: [] }) }; }
     const until = Date.now() + wait * 1000;
     let job = input.job_id ? this.device.status(input.job_id, ctx.jobScope) : undefined;
     while (job && ['queued', 'running'].includes(job.state) && Date.now() < until && !ctx.signal?.aborted) {
       await new Promise(resolve => setTimeout(resolve, 100));
       job = this.device.status(job.id, ctx.jobScope);
     }
-    if (job?.output) job = { ...job, output: capToolOutput(job.output, ctx.outputLimit) };
+    if (job?.output) { job = { ...job, output: capToolOutput(job.output, ctx.outputLimit) }; }
     return { content: JSON.stringify({ mode: this.device.mode(), ...(job ? { job } : { jobs: this.device.recent(ctx.jobScope) }) }),
       summary: job ? `shell job ${job.id}: ${job.state}` : `device execution: ${this.device.mode()}` };
   }

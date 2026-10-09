@@ -10,13 +10,13 @@
  */
 export function accountIdFromIdToken(idToken: string): string | undefined {
   const parts = idToken.split('.');
-  if (parts.length !== 3) return undefined;
+  if (parts.length !== 3) { return undefined; }
   try {
     const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8')) as Record<string, unknown>;
     const auth = payload['https://api.openai.com/auth'];
     if (auth && typeof auth === 'object') {
       const id = (auth as Record<string, unknown>).chatgpt_account_id;
-      if (typeof id === 'string' && id) return id;
+      if (typeof id === 'string' && id) { return id; }
     }
   } catch {
     // Malformed token — treat as no account id.

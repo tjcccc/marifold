@@ -23,7 +23,7 @@ export function AgentDefaultsPage({ agent, busy, onSave }: AgentDefaultsPageProp
   const [iterations, setIterations] = useState<string>();
   const [outputLimit, setOutputLimit] = useState<string>();
 
-  if (!agent) return <div className={styles.empty}>Loading agent defaults…</div>;
+  if (!agent) { return <div className={styles.empty}>Loading agent defaults…</div>; }
 
   return (
     <div className={styles.page}>

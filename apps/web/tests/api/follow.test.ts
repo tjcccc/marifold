@@ -30,8 +30,8 @@ function scriptedClient(script: Array<Response | MarifoldApiError>): {
     stream: async (_path, init = {}) => {
       inits.push(init);
       const next = script.shift();
-      if (!next) throw new TypeError('network gone');
-      if (next instanceof MarifoldApiError) throw next;
+      if (!next) { throw new TypeError('network gone'); }
+      if (next instanceof MarifoldApiError) { throw next; }
       return next;
     },
   };
@@ -50,7 +50,7 @@ describe('followRun', () => {
     const seen: number[] = [];
     for await (const { seq, event } of followRun(client, 'run_1')) {
       seen.push(seq);
-      if (seq === 3) expect(event.type).toBe('done');
+      if (seq === 3) { expect(event.type).toBe('done'); }
     }
     expect(seen).toEqual([1, 2, 3]);
   });
@@ -74,7 +74,7 @@ describe('followRun', () => {
       sseBody([{ id: 3, event: done }]),
     ]);
     const seen: number[] = [];
-    for await (const { seq } of followRun(client, 'run_1', { afterSeq: 2 })) seen.push(seq);
+    for await (const { seq } of followRun(client, 'run_1', { afterSeq: 2 })) { seen.push(seq); }
     expect(seen).toEqual([3]);
     expect(inits[0].lastEventId).toBe('2');
   });

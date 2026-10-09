@@ -34,7 +34,7 @@ export function menuQuery(
     const start = match.index! + match[1].length;
     const token = match[2];
     const end = start + token.length;
-    if (caret <= start || caret > end) continue;
+    if (caret <= start || caret > end) { continue; }
     return { sigil: token[0] as Sigil, query: token.slice(1).replace(/^"|"$/g, ''), start, end };
   }
   return undefined;

@@ -63,7 +63,7 @@ export function registerDoctorCommand(program: Command, printer: ConsolePrinter)
               detail = runtime.getProfile(target.name);
               const action = result.status === 'migrated' ? 'migrated' : 'cleaned';
               out.write(`  ${target.name}: ✓ ${action} to INSTRUCTIONS.md\n`);
-              if (result.backupPath) out.write(`    Backup: ${result.backupPath}\n`);
+              if (result.backupPath) { out.write(`    Backup: ${result.backupPath}\n`); }
               continue;
             }
 

@@ -68,7 +68,7 @@ function makeRunner(
 ) {
   const taskStore = new TaskStore(tempDir());
   const registry = new ToolRegistry();
-  for (const tool of tools) registry.register(tool);
+  for (const tool of tools) { registry.register(tool); }
   const runner = new AgentRunner({
     taskStore,
     registry,
@@ -82,7 +82,7 @@ function makeRunner(
 
 async function collect(events: AsyncGenerator<AgentEvent>): Promise<AgentEvent[]> {
   const all: AgentEvent[] = [];
-  for await (const event of events) all.push(event);
+  for await (const event of events) { all.push(event); }
   return all;
 }
 
@@ -240,7 +240,7 @@ describe('AgentRunner', () => {
     }));
     expect(engine.requests).toHaveLength(3);
     expect(readExecution).toHaveBeenCalledTimes(approved ? 1 : 0);
-    if (approved) expect(events).toContainEqual({ type: 'text', phase: 'final', text: 'Verified [source](https://public.org "source").' });
+    if (approved) { expect(events).toContainEqual({ type: 'text', phase: 'final', text: 'Verified [source](https://public.org "source").' }); }
     const requests = events.filter(event => event.type === 'tool_request');
     expect(requests).toHaveLength(2);
     expect(requests[1]).toMatchObject({ call: { tool: 'read_web_page', input: { url: 'https://public.org' } } });
@@ -1332,7 +1332,7 @@ describe('AgentRunner', () => {
       objective: 'Do work.',
       cwd: tempDir(), forcePlan: true,
       steering: () => {
-        if (drained) return [];
+        if (drained) { return []; }
         drained = true;
         return ['prioritize the summary'];
       },

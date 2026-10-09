@@ -110,7 +110,7 @@ export class AttachmentResource {
 
   read(start: number, maxChars: number): AttachmentReadResult | undefined {
     const source = this.readableText();
-    if (source === undefined) return undefined;
+    if (source === undefined) { return undefined; }
     const safeStart = Math.min(Math.max(0, start), source.length);
     const safeLimit = Math.max(1, Math.min(maxChars, MAX_ATTACHMENT_READ_CHARS));
     const content = source.slice(safeStart, safeStart + safeLimit);
@@ -125,13 +125,13 @@ export class AttachmentResource {
 
   search(query: string, maxResults: number): AttachmentSearchResult | undefined {
     const source = this.readableText();
-    if (source === undefined) return undefined;
+    if (source === undefined) { return undefined; }
     const needle = query.toLocaleLowerCase();
     const limit = Math.max(1, Math.min(maxResults, MAX_ATTACHMENT_SEARCH_RESULTS));
     const matches: AttachmentSearchMatch[] = [];
     let totalMatches = 0;
     for (const [index, line] of source.split(/\r?\n/).entries()) {
-      if (!line.toLocaleLowerCase().includes(needle)) continue;
+      if (!line.toLocaleLowerCase().includes(needle)) { continue; }
       totalMatches += 1;
       if (matches.length < limit) {
         matches.push({ line: index + 1, text: line.slice(0, 1_000) });
@@ -141,8 +141,8 @@ export class AttachmentResource {
   }
 
   private readableText(): string | undefined {
-    if (this.attachment.inspectionText !== undefined) return this.attachment.inspectionText;
-    if (!this.attachment.path || !isTextAttachment(this.attachment)) return undefined;
+    if (this.attachment.inspectionText !== undefined) { return this.attachment.inspectionText; }
+    if (!this.attachment.path || !isTextAttachment(this.attachment)) { return undefined; }
     try {
       return fs.readFileSync(this.attachment.path, 'utf8');
     } catch {
@@ -157,7 +157,7 @@ export function isTextAttachment(attachment: Pick<StagedRunAttachment, 'name' | 
 }
 
 export function formatAttachmentSearch(result: AttachmentSearchResult, query: string): string {
-  if (result.matches.length === 0) return `No matches for ${JSON.stringify(query)}.`;
+  if (result.matches.length === 0) { return `No matches for ${JSON.stringify(query)}.`; }
   return [
     ...result.matches.map(match => `Line ${match.line}: ${match.text}`),
     ...(result.truncated ? ['[additional matches omitted; narrow the query to inspect them]'] : []),
@@ -165,13 +165,13 @@ export function formatAttachmentSearch(result: AttachmentSearchResult, query: st
 }
 
 function formatLabel(attachment: StagedRunAttachment): string {
-  if (attachment.image) return 'image';
+  if (attachment.image) { return 'image'; }
   const extension = path.extname(attachment.name).toLowerCase();
   return FORMAT_LABELS.get(extension) ?? (isTextAttachment(attachment) ? 'text document' : 'binary file');
 }
 
 function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KiB`;
+  if (bytes < 1024) { return `${bytes} B`; }
+  if (bytes < 1024 * 1024) { return `${(bytes / 1024).toFixed(1)} KiB`; }
   return `${(bytes / (1024 * 1024)).toFixed(1)} MiB`;
 }

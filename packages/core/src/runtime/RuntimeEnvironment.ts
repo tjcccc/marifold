@@ -12,16 +12,16 @@ export interface RuntimeEnvironment extends ClientEnvironment {
 
 /** Client values are presentation hints, never device-routing authority. */
 export function parseClientEnvironment(value: unknown): ClientEnvironment {
-  if (value === undefined) return {};
-  if (!value || typeof value !== 'object' || Array.isArray(value)) throw MarifoldError.configInvalid('environment must be an object.');
+  if (value === undefined) { return {}; }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) { throw MarifoldError.configInvalid('environment must be an object.'); }
   const input = value as Record<string, unknown>;
   const result: ClientEnvironment = {};
   if (input.interface !== undefined) {
-    if (typeof input.interface !== 'string' || !['terminal', 'web', 'desktop', 'mobile'].includes(input.interface)) throw MarifoldError.configInvalid('Invalid environment interface.');
+    if (typeof input.interface !== 'string' || !['terminal', 'web', 'desktop', 'mobile'].includes(input.interface)) { throw MarifoldError.configInvalid('Invalid environment interface.'); }
     result.interface = input.interface as ClientInterface;
   }
   if (input.timezone !== undefined) {
-    if (typeof input.timezone !== 'string' || input.timezone.length > 100) throw MarifoldError.configInvalid('Invalid environment timezone.');
+    if (typeof input.timezone !== 'string' || input.timezone.length > 100) { throw MarifoldError.configInvalid('Invalid environment timezone.'); }
     try { result.timezone = new Intl.DateTimeFormat('en', { timeZone: input.timezone }).resolvedOptions().timeZone; }
     catch { throw MarifoldError.configInvalid('Invalid environment timezone.'); }
   }
@@ -62,9 +62,11 @@ function environmentValue(value: string): string {
 }
 
 export function artifactPresentation(environment?: RuntimeEnvironment): string {
-  if (environment?.interface === 'terminal')
+  if (environment?.interface === 'terminal') {
     return 'For generated files and images, report their absolute saved paths on the execution device. Terminal output has no Download controls or inline image previews. Never claim a remote path is on the requesting device.';
-  if (environment?.interface)
+  }
+  if (environment?.interface) {
     return 'Generated files and image previews are attached below the answer by the client. Mention filenames naturally; do not invent download URLs or claim the browser has saved a file.';
+  }
   return 'Mention generated filenames naturally; do not assume the client has Download controls or image previews.';
 }

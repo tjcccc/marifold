@@ -27,7 +27,7 @@ export class TerminalInput extends Transform {
   unref(): this { this.source.unref(); return this; }
 
   override _transform(chunk: Buffer, _encoding: BufferEncoding, callback: TransformCallback): void {
-    if (this.timer) clearTimeout(this.timer);
+    if (this.timer) { clearTimeout(this.timer); }
     this.pending += this.decoder.write(chunk);
     this.drain();
     // Preserve a standalone Escape; don't wait indefinitely for another byte.
@@ -62,7 +62,7 @@ export class TerminalInput extends Transform {
             action: code & 64 ? 'wheel' : match[4] === 'm' ? 'release' : code & 32 ? 'move' : 'press',
           };
           flush();
-          if (this.mouse) this.emit('mouse', event);
+          if (this.mouse) { this.emit('mouse', event); }
           this.pending = this.pending.slice(match[0].length);
           continue;
         }
@@ -85,7 +85,7 @@ export class TerminalInput extends Transform {
   }
 
   override _destroy(error: Error | null, callback: (error?: Error | null) => void): void {
-    if (this.timer) clearTimeout(this.timer);
+    if (this.timer) { clearTimeout(this.timer); }
     this.source.unpipe(this);
     callback(error);
   }

@@ -18,7 +18,7 @@ describe('workspace artifact downloads', () => {
         data: original.subarray(offset, offset + (legacy ? Math.min(length, 32768) : length)).toString('base64'),
         size: original.length,
       };
-    })) chunks.push(bytes);
+    })) { chunks.push(bytes); }
     expect(Buffer.concat(chunks)).toEqual(original);
     expect(peak).toBe(4);
     expect(calls).toBe(Math.ceil(original.length / (legacy ? 32768 : 131072)));
@@ -28,7 +28,7 @@ describe('workspace artifact downloads', () => {
     let calls = 0;
     const stream = workspaceArtifactStream(2 * 1024 * 1024, async offset => {
       calls++;
-      if (offset > 131072) throw new Error('Disconnected');
+      if (offset > 131072) { throw new Error('Disconnected'); }
       return { data: Buffer.alloc(131072).toString('base64'), size: 2 * 1024 * 1024 };
     });
     await stream.next();
@@ -47,6 +47,6 @@ describe('workspace artifact downloads', () => {
       .rejects.toThrow('changed');
     expect(artifactReadLength(undefined)).toBe(32768);
     expect(artifactReadLength(131072)).toBe(131072);
-    for (const length of [0, -1, 131073, 1.5, '100']) expect(() => artifactReadLength(length)).toThrow();
+    for (const length of [0, -1, 131073, 1.5, '100']) { expect(() => artifactReadLength(length)).toThrow(); }
   });
 });

@@ -29,7 +29,7 @@ export class Scheduler {
   constructor(private readonly deps: SchedulerDeps) {}
 
   start(): void {
-    if (this.timer) return;
+    if (this.timer) { return; }
     const tickMs = this.deps.tickMs ?? DEFAULT_TICK_MS;
     this.timer = setInterval(() => {
       void this.tick().catch(error => {
@@ -48,14 +48,14 @@ export class Scheduler {
 
   /** Run all due schedules sequentially. Returns the number fired. */
   async tick(now: Date = new Date()): Promise<number> {
-    if (this.ticking) return 0;
+    if (this.ticking) { return 0; }
     this.ticking = true;
     try {
       const invalid = new Set<string>();
       const due = this.deps.store.due(now, (file, error) => {
         const message = `Skipping invalid schedule ${file}: ${error instanceof Error ? error.message : String(error)}`;
         invalid.add(message);
-        if (!this.reported.has(message)) this.deps.log?.(message);
+        if (!this.reported.has(message)) { this.deps.log?.(message); }
       });
       this.reported = invalid;
       for (const schedule of due) {

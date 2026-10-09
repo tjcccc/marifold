@@ -8,7 +8,7 @@ import { ArtifactWebRtc } from '../src/workspace/ArtifactWebRtc';
 import { listRunArtifacts } from '../src/agent/RunArtifacts';
 
 const resources: Array<() => void | Promise<void>> = [];
-afterEach(async () => { for (const close of resources.splice(0).reverse()) await close(); });
+afterEach(async () => { for (const close of resources.splice(0).reverse()) { await close(); } });
 async function pair(timeoutMs = 5000) {
   const stun = await localStun();
   resources.push(stun.close);
@@ -33,7 +33,7 @@ it('transfers a 6 MB file directly, verifies bytes, and removes temporary storag
   const stream = await receiver.receive(bytes.length, offer => { offers++; return source.offerFile(artifact, offer, 'home'); }, 'home');
   const file = (stream as fs.ReadStream).path;
   const chunks: Buffer[] = [];
-  for await (const chunk of stream) chunks.push(chunk);
+  for await (const chunk of stream) { chunks.push(chunk); }
   expect(Buffer.concat(chunks)).toEqual(bytes);
   expect(offers).toBe(1);
   expect(fs.existsSync(file)).toBe(false);

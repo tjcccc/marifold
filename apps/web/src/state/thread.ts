@@ -182,7 +182,7 @@ export function isTrivialRun(run: RunCardState): boolean {
 export function activeRun(state: ThreadState): RunCardState | undefined {
   for (let i = state.items.length - 1; i >= 0; i -= 1) {
     const item = state.items[i];
-    if (item.kind === 'run' && item.run.status === 'running') return item.run;
+    if (item.kind === 'run' && item.run.status === 'running') { return item.run; }
   }
   return undefined;
 }
@@ -224,7 +224,7 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
 
     case 'edit_user_message': {
       const index = state.items.findIndex(item => item.id === action.itemId && item.kind === 'user');
-      if (index === -1) return state;
+      if (index === -1) { return state; }
       const target = state.items[index] as Extract<ThreadItem, { kind: 'user' }>;
       const nextUserOffset = state.items.slice(index + 1).findIndex(item => item.kind === 'user');
       const suffixIndex = nextUserOffset === -1 ? state.items.length : index + 1 + nextUserOffset;
@@ -288,7 +288,7 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
     }
 
     case 'run_created': {
-      if (findRunItem(state, action.run.id)) return state;
+      if (findRunItem(state, action.run.id)) { return state; }
       return insertRunCard(state, { kind: 'run', run: cardFromRecord(action.run) });
     }
 
@@ -341,7 +341,7 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
       for (const run of action.runs) {
         if (findRunItem(next, run.id)
           || next.discardedRunIds.includes(run.id)
-          || next.catchUp.some(existing => existing.id === run.id)) continue;
+          || next.catchUp.some(existing => existing.id === run.id)) { continue; }
         const durableResponseIndex = matchingDurableResponseIndex(next, run);
         if (durableResponseIndex !== -1) {
           // The persisted assistant turn is the timeline authority after a
@@ -377,7 +377,7 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
 
     case 'discard_from': {
       const index = state.items.findIndex(item => item.id === action.itemId);
-      if (index === -1) return state;
+      if (index === -1) { return state; }
       const discardedRunIds = state.items
         .slice(index)
         .flatMap(item => item.kind === 'run' ? [item.run.runId] : []);
@@ -406,7 +406,7 @@ function applyRunEvent(state: ThreadState, runId: string, seq: number, event: Ag
     : insertRunCard(state, { kind: 'run', run: emptyCard(runId) });
 
   const card = findRunItem(next, runId)!.run;
-  if (seq <= card.lastSeq) return state; // replay overlap — drop
+  if (seq <= card.lastSeq) { return state; } // replay overlap — drop
 
   switch (event.type) {
     case 'status':
@@ -572,7 +572,7 @@ function applyRunEvent(state: ThreadState, runId: string, seq: number, event: Ag
         collapsed: true,
       }));
       next = updateStreamingRunText(next, runId);
-      if (event.status === 'completed') next = markRunUserPersisted(next, runId);
+      if (event.status === 'completed') { next = markRunUserPersisted(next, runId); }
       break;
 
     default:
@@ -604,7 +604,7 @@ function updateChatReasoning(state: ThreadState, text: string): ThreadState {
   const answerIndex = state.items.findLastIndex(
     item => item.kind === 'assistant' && item.streaming && item.runId === undefined,
   );
-  if (answerIndex === -1) return state;
+  if (answerIndex === -1) { return state; }
   const reasoningIndex = answerIndex - 1;
   const previous = state.items[reasoningIndex];
   if (previous?.kind === 'assistant' && previous.runPhase === 'reasoning') {
@@ -639,10 +639,10 @@ function updateStreamingRunText(state: ThreadState, runId: string): ThreadState 
 
 function markRunUserPersisted(state: ThreadState, runId: string): ThreadState {
   const runIndex = state.items.findIndex(item => item.kind === 'run' && item.run.runId === runId);
-  if (runIndex === -1) return state;
+  if (runIndex === -1) { return state; }
   for (let index = runIndex - 1; index >= 0; index -= 1) {
     const item = state.items[index];
-    if (item.kind === 'user') return markUserPersisted(state, item.id);
+    if (item.kind === 'user') { return markUserPersisted(state, item.id); }
   }
   return state;
 }
@@ -659,9 +659,9 @@ function markLatestPendingUserPersisted(state: ThreadState): ThreadState {
 
 function markUserPersisted(state: ThreadState, itemId: string): ThreadState {
   const item = state.items.find(candidate => candidate.id === itemId);
-  if (!item || item.kind !== 'user') return state;
+  if (!item || item.kind !== 'user') { return state; }
   if (item.sessionUserTurnIndex !== undefined) {
-    if (!item.replacing) return state;
+    if (!item.replacing) { return state; }
     return {
       ...state,
       items: state.items.map(candidate => candidate.id === itemId
@@ -726,25 +726,25 @@ const RUN_RESPONSE_MATCH_TOLERANCE_MS = 1_000;
 function matchingDurableResponseIndex(state: ThreadState, run: RunRecord): number {
   const runStartedAt = Date.parse(run.createdAt);
   const runFinishedAt = run.finishedAt ? Date.parse(run.finishedAt) : undefined;
-  if (!Number.isFinite(runStartedAt)) return -1;
+  if (!Number.isFinite(runStartedAt)) { return -1; }
 
   let bestIndex = -1;
   let bestDistance = Number.POSITIVE_INFINITY;
   for (let index = 0; index < state.items.length; index += 1) {
     const item = state.items[index];
-    if (item.kind !== 'assistant' || !item.responseMeta || item.responseMeta.mode === 'chat') continue;
+    if (item.kind !== 'assistant' || !item.responseMeta || item.responseMeta.mode === 'chat') { continue; }
     const responseStartedAt = Date.parse(item.responseMeta.startedAt);
-    if (!Number.isFinite(responseStartedAt)) continue;
+    if (!Number.isFinite(responseStartedAt)) { continue; }
     const startDistance = Math.abs(responseStartedAt - runStartedAt);
-    if (startDistance > RUN_RESPONSE_MATCH_TOLERANCE_MS) continue;
+    if (startDistance > RUN_RESPONSE_MATCH_TOLERANCE_MS) { continue; }
 
     let finishDistance = 0;
     if (runFinishedAt !== undefined && Number.isFinite(runFinishedAt)) {
-      if (!item.responseMeta.finishedAt) continue;
+      if (!item.responseMeta.finishedAt) { continue; }
       const responseFinishedAt = Date.parse(item.responseMeta.finishedAt);
-      if (!Number.isFinite(responseFinishedAt)) continue;
+      if (!Number.isFinite(responseFinishedAt)) { continue; }
       finishDistance = Math.abs(responseFinishedAt - runFinishedAt);
-      if (finishDistance > RUN_RESPONSE_MATCH_TOLERANCE_MS) continue;
+      if (finishDistance > RUN_RESPONSE_MATCH_TOLERANCE_MS) { continue; }
     }
 
     const distance = startDistance + finishDistance;
@@ -814,6 +814,6 @@ function updateStreamingAssistant(
     (item): item is Extract<ThreadItem, { kind: 'assistant' }> =>
       item.kind === 'assistant' && item.streaming === true && item.runId === undefined,
   );
-  if (!target) return state;
+  if (!target) { return state; }
   return { ...state, items: state.items.map(item => (item === target ? update(target) : item)) };
 }

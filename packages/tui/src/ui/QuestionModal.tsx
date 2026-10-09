@@ -61,23 +61,23 @@ export function QuestionModal({ request, onSubmit, onCancel }: QuestionModalProp
     const nextUnanswered = request.questions.findIndex(
       (question, index) => index > questionIndex && !isComplete(question, drafts[question.id]),
     );
-    if (nextUnanswered !== -1) moveTo(nextUnanswered);
+    if (nextUnanswered !== -1) { moveTo(nextUnanswered); }
   }
 
   function submit(): void {
-    if (!complete) return;
+    if (!complete) { return; }
     onSubmit({
       answers: request.questions.map((question): UserInputSubmissionAnswer => {
         const answer = drafts[question.id]!;
         if (question.multiple) {
-          if (answer.kind !== 'multiple') throw new Error('Incomplete multi-select answer.');
+          if (answer.kind !== 'multiple') { throw new Error('Incomplete multi-select answer.'); }
           return {
             questionId: question.id,
             optionIds: answer.optionIds,
             ...(answer.customText !== undefined ? { customText: answer.customText.trim() } : {}),
           };
         }
-        if (answer.kind === 'option') return { questionId: question.id, optionId: answer.optionId };
+        if (answer.kind === 'option') { return { questionId: question.id, optionId: answer.optionId }; }
         if (answer.kind === 'custom') {
           return { questionId: question.id, customText: answer.text.trim() };
         }
@@ -120,11 +120,11 @@ export function QuestionModal({ request, onSubmit, onCancel }: QuestionModalProp
       return;
     }
 
-    if (key.escape) onCancel();
-    else if (key.upArrow) setCursor(value => (value - 1 + customIndex + 1) % (customIndex + 1));
-    else if (key.downArrow) setCursor(value => (value + 1) % (customIndex + 1));
-    else if (key.leftArrow) moveTo(questionIndex - 1);
-    else if (key.rightArrow || key.tab) moveTo(questionIndex + 1);
+    if (key.escape) { onCancel(); }
+    else if (key.upArrow) { setCursor(value => (value - 1 + customIndex + 1) % (customIndex + 1)); }
+    else if (key.downArrow) { setCursor(value => (value + 1) % (customIndex + 1)); }
+    else if (key.leftArrow) { moveTo(questionIndex - 1); }
+    else if (key.rightArrow || key.tab) { moveTo(questionIndex + 1); }
     else if (question.multiple && input === ' ') {
       if (cursor === customIndex) {
         setDrafts(value => {
@@ -169,7 +169,7 @@ export function QuestionModal({ request, onSubmit, onCancel }: QuestionModalProp
         }));
         advance();
       }
-    } else if (input.toLowerCase() === 's') submit();
+    } else if (input.toLowerCase() === 's') { submit(); }
   });
 
   return (
@@ -248,8 +248,8 @@ function toggleMultipleOption(
 
 function isComplete(question: UserInputQuestion, answer: DraftAnswer | undefined): boolean {
   if (question.multiple) {
-    if (answer?.kind !== 'multiple') return false;
-    if (answer.customText !== undefined && !answer.customText.trim()) return false;
+    if (answer?.kind !== 'multiple') { return false; }
+    if (answer.customText !== undefined && !answer.customText.trim()) { return false; }
     return answer.optionIds.length > 0 || answer.customText !== undefined;
   }
   return answer?.kind === 'option' || (answer?.kind === 'custom' && answer.text.trim().length > 0);

@@ -49,7 +49,7 @@ export function registerStatusCommand(program: Command, printer: ConsolePrinter)
         }
         process.stdout.write(`Log:     ${paths.log}\n`);
 
-        if (options.logs) printLogs(paths.log);
+        if (options.logs) { printLogs(paths.log); }
       } catch (error) {
         printer.printError(error);
         process.exitCode = 1;

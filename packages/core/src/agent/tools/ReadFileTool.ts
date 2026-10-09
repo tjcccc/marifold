@@ -49,9 +49,9 @@ export class ReadFileTool implements AgentTool {
   }
 
   assessRisk(input: Record<string, JSONValue>, ctx: ToolExecutionContext): ToolRiskAssessment {
-    if (typeof input.path !== 'string' || !ctx.workspace) return { escalate: false };
+    if (typeof input.path !== 'string' || !ctx.workspace) { return { escalate: false }; }
     const target = canonicalPath(resolveToolPath(input.path, ctx.workspace, ctx.cwd));
-    if (ctx.workspace && isDeniedRunPath(target, ctx.workspace)) return { escalate: false, blocked: true, persistable: false, reason: 'This path contains device-local or other-workspace state.' };
+    if (ctx.workspace && isDeniedRunPath(target, ctx.workspace)) { return { escalate: false, blocked: true, persistable: false, reason: 'This path contains device-local or other-workspace state.' }; }
     if (isInsideAnyRoot(target, ctx.workspace.readRoots) || isExactPath(target, ctx.workspace.readOnlyFiles)) {
       return this.options.strictWorkspace ? { escalate: false, trusted: true } : { escalate: false };
     }
@@ -80,7 +80,7 @@ export class ReadFileTool implements AgentTool {
       ctx.workspace,
       ctx.cwd,
     );
-    if (ctx.workspace && isDeniedRunPath(target, ctx.workspace)) return { content: 'Path is isolated from this workspace.', summary: 'blocked workspace state access', isError: true };
+    if (ctx.workspace && isDeniedRunPath(target, ctx.workspace)) { return { content: 'Path is isolated from this workspace.', summary: 'blocked workspace state access', isError: true }; }
     if (this.options.strictWorkspace && ctx.workspace
       && !isInsideAnyRoot(target, ctx.workspace.readRoots)
       && !isExactPath(target, ctx.workspace.readOnlyFiles)) {
@@ -105,7 +105,7 @@ export class ReadFileTool implements AgentTool {
             summary: `listed ${entries.length} entries in ${target}`,
           };
         }
-        if (!stat.isFile()) throw new Error('not a regular file or directory');
+        if (!stat.isFile()) { throw new Error('not a regular file or directory'); }
         size = stat.size;
         content = readBounded(fd, size, ctx.outputLimit);
       } finally {
@@ -135,17 +135,17 @@ function readBounded(fd: number, size: number, outputLimit: number | undefined):
     let offset = 0;
     while (offset < length) {
       const count = fs.readSync(fd, buffer, offset, length - offset, position + offset);
-      if (count === 0) break;
+      if (count === 0) { break; }
       offset += count;
     }
     return buffer.subarray(0, offset).toString('utf-8');
   };
-  if (size <= window * 2) return read(0, size);
+  if (size <= window * 2) { return read(0, size); }
   return `${read(0, window)}\n[file truncated — ${formatBytes(size - window * 2)} in the middle not read]\n${read(size - window, window)}`;
 }
 
 export function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes}B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`;
+  if (bytes < 1024) { return `${bytes}B`; }
+  if (bytes < 1024 * 1024) { return `${(bytes / 1024).toFixed(1)}KB`; }
   return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
 }

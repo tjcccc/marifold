@@ -33,11 +33,11 @@ export function MobileWorkspaceNavigation({
   const sheet = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!configOpen) return;
+    if (!configOpen) { return; }
     const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : undefined;
     sheet.current?.querySelector<HTMLButtonElement>('button')?.focus();
     function onKeyDown(event: KeyboardEvent): void {
-      if (event.key !== 'Escape') return;
+      if (event.key !== 'Escape') { return; }
       setConfigOpen(false);
       configButton.current?.focus();
     }

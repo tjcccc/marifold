@@ -24,7 +24,7 @@ describe('inputGrammar', () => {
   it('lowercases the head token and tokenizes quoted args', () => {
     const cmd = parseInput('/MODEL');
     expect(cmd.kind).toBe('command');
-    if (cmd.kind === 'command') expect(cmd.name).toBe('model');
+    if (cmd.kind === 'command') { expect(cmd.name).toBe('model'); }
     expect(tokenizeArgs('"good morning" ja')).toEqual(['good morning', 'ja']);
   });
 });

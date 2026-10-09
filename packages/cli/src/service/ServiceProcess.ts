@@ -89,7 +89,7 @@ export function claimServiceProcess(
     if (existing && isProcessRunning(existing.pid)) {
       throw new Error(`Marifold service is already running (PID ${existing.pid}, ${existing.mode}).`);
     }
-    if (fs.existsSync(paths.state)) fs.unlinkSync(paths.state);
+    if (fs.existsSync(paths.state)) { fs.unlinkSync(paths.state); }
 
     const state: ServiceProcessState = {
       version: 1,
@@ -133,15 +133,15 @@ export function releaseServiceProcess(
 ): void {
   withStateLock(paths, () => {
     const current = readStateFile(paths.state);
-    if (current?.instanceId === owner.instanceId) fs.unlinkSync(paths.state);
+    if (current?.instanceId === owner.instanceId) { fs.unlinkSync(paths.state); }
   });
 }
 
 export function getActiveServiceProcess(paths = serviceProcessPaths()): ServiceProcessState | undefined {
   return withStateLock(paths, () => {
     const state = readStateFile(paths.state);
-    if (state && isProcessRunning(state.pid)) return state;
-    if (fs.existsSync(paths.state)) fs.unlinkSync(paths.state);
+    if (state && isProcessRunning(state.pid)) { return state; }
+    if (fs.existsSync(paths.state)) { fs.unlinkSync(paths.state); }
     return undefined;
   });
 }
@@ -151,12 +151,12 @@ export async function stopActiveServiceProcess(
   paths = serviceProcessPaths(),
 ): Promise<ServiceProcessState | undefined> {
   const state = getActiveServiceProcess(paths);
-  if (!state) return undefined;
+  if (!state) { return undefined; }
 
   try {
     process.kill(state.pid, 'SIGTERM');
   } catch (error) {
-    if (!isNoSuchProcessError(error)) throw error;
+    if (!isNoSuchProcessError(error)) { throw error; }
   }
 
   const deadline = Date.now() + timeoutMs;
@@ -174,9 +174,9 @@ export function readRecentServiceLog(
   lineCount = 100,
   paths = serviceProcessPaths(),
 ): string | undefined {
-  if (!fs.existsSync(paths.log)) return undefined;
+  if (!fs.existsSync(paths.log)) { return undefined; }
   const stat = fs.statSync(paths.log);
-  if (stat.size === 0) return '';
+  if (stat.size === 0) { return ''; }
 
   const bytes = Math.min(stat.size, LOG_READ_BYTES);
   const buffer = Buffer.alloc(bytes);
@@ -203,7 +203,7 @@ function withStateLock<T>(paths: ServiceProcessPaths, action: () => T): T {
       fs.mkdirSync(paths.lock, { mode: 0o700 });
       break;
     } catch (error) {
-      if (!isAlreadyExistsError(error)) throw error;
+      if (!isAlreadyExistsError(error)) { throw error; }
       const stat = safeStat(paths.lock);
       if (stat && Date.now() - stat.mtimeMs > STALE_LOCK_MS) {
         try {
@@ -213,7 +213,7 @@ function withStateLock<T>(paths: ServiceProcessPaths, action: () => T): T {
         }
         continue;
       }
-      if (Date.now() >= deadline) throw new Error('Timed out waiting for the Marifold service state lock.');
+      if (Date.now() >= deadline) { throw new Error('Timed out waiting for the Marifold service state lock.'); }
       sleepSync(LOCK_RETRY_MS);
     }
   }
@@ -230,10 +230,10 @@ function withStateLock<T>(paths: ServiceProcessPaths, action: () => T): T {
 }
 
 function readStateFile(filePath: string): ServiceProcessState | undefined {
-  if (!fs.existsSync(filePath)) return undefined;
+  if (!fs.existsSync(filePath)) { return undefined; }
   try {
     const raw: unknown = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-    if (!isServiceProcessState(raw)) return undefined;
+    if (!isServiceProcessState(raw)) { return undefined; }
     return raw;
   } catch {
     return undefined;
@@ -246,12 +246,12 @@ function writeStateFile(filePath: string, state: ServiceProcessState): void {
     fs.writeFileSync(tempPath, `${JSON.stringify(state, null, 2)}\n`, { mode: 0o600 });
     fs.renameSync(tempPath, filePath);
   } finally {
-    if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+    if (fs.existsSync(tempPath)) { fs.unlinkSync(tempPath); }
   }
 }
 
 function isServiceProcessState(value: unknown): value is ServiceProcessState {
-  if (!value || typeof value !== 'object') return false;
+  if (!value || typeof value !== 'object') { return false; }
   const state = value as Record<string, unknown>;
   return state.version === 1
     && typeof state.instanceId === 'string'
@@ -267,7 +267,7 @@ function isServiceProcessState(value: unknown): value is ServiceProcessState {
 }
 
 function isServiceStartupDetails(value: unknown): value is ServiceStartupDetails {
-  if (!value || typeof value !== 'object') return false;
+  if (!value || typeof value !== 'object') { return false; }
   const startup = value as Record<string, unknown>;
   return (startup.telegramProfile === undefined || typeof startup.telegramProfile === 'string')
     && (startup.webDir === undefined || typeof startup.webDir === 'string')
@@ -277,7 +277,7 @@ function isServiceStartupDetails(value: unknown): value is ServiceStartupDetails
 }
 
 function isServiceLaunchOptions(value: unknown): value is ServiceLaunchOptions {
-  if (!value || typeof value !== 'object') return false;
+  if (!value || typeof value !== 'object') { return false; }
   const launch = value as Record<string, unknown>;
   return typeof launch.host === 'string'
     && typeof launch.port === 'string'

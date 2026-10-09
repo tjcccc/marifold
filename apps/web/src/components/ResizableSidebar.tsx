@@ -35,7 +35,7 @@ export function ResizableSidebar({
   function updateWidth(next: number, persist: boolean): void {
     const clamped = Math.min(maximumWidth(), Math.max(MIN_SIDEBAR_WIDTH, Math.round(next)));
     setWidth(clamped);
-    if (!persist) return;
+    if (!persist) { return; }
     try {
       window.localStorage.setItem(storageKey, String(clamped));
     } catch {
@@ -50,12 +50,12 @@ export function ResizableSidebar({
   }
 
   function onPointerMove(event: PointerEvent<HTMLDivElement>): void {
-    if (!dragRef.current) return;
+    if (!dragRef.current) { return; }
     updateWidth(dragRef.current.width + event.clientX - dragRef.current.x, false);
   }
 
   function finishResize(event: PointerEvent<HTMLDivElement>): void {
-    if (!dragRef.current) return;
+    if (!dragRef.current) { return; }
     dragRef.current = undefined;
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
@@ -66,11 +66,11 @@ export function ResizableSidebar({
 
   function onKeyDown(event: KeyboardEvent<HTMLDivElement>): void {
     let next: number | undefined;
-    if (event.key === 'ArrowLeft') next = width - KEYBOARD_STEP;
-    else if (event.key === 'ArrowRight') next = width + KEYBOARD_STEP;
-    else if (event.key === 'Home') next = MIN_SIDEBAR_WIDTH;
-    else if (event.key === 'End') next = maximumWidth();
-    if (next === undefined) return;
+    if (event.key === 'ArrowLeft') { next = width - KEYBOARD_STEP; }
+    else if (event.key === 'ArrowRight') { next = width + KEYBOARD_STEP; }
+    else if (event.key === 'Home') { next = MIN_SIDEBAR_WIDTH; }
+    else if (event.key === 'End') { next = maximumWidth(); }
+    if (next === undefined) { return; }
     event.preventDefault();
     updateWidth(next, true);
   }

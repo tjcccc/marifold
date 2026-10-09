@@ -10,19 +10,19 @@ const tempDirs: string[] = [];
 afterEach(() => {
   for (const dir of tempDirs) {
     const statePath = path.join(dir, 'service-state', 'state.json');
-    if (!fs.existsSync(statePath)) continue;
+    if (!fs.existsSync(statePath)) { continue; }
     try {
       const state = JSON.parse(fs.readFileSync(statePath, 'utf8')) as { pid?: number };
-      if (state.pid) process.kill(state.pid, 'SIGKILL');
+      if (state.pid) { process.kill(state.pid, 'SIGKILL'); }
     } catch {
       // Best-effort cleanup for a failed daemon lifecycle assertion.
     }
   }
   for (const child of children) {
-    if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
+    if (child.exitCode === null && child.signalCode === null) { child.kill('SIGKILL'); }
   }
   children.clear();
-  for (const dir of tempDirs.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
+  for (const dir of tempDirs.splice(0)) { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
 describe('marifold service lifecycle', () => {
@@ -272,8 +272,8 @@ async function waitForFileOutput(filePath: string, pattern: RegExp, timeoutMs = 
   const deadline = Date.now() + timeoutMs;
   let output = '';
   while (Date.now() < deadline) {
-    if (fs.existsSync(filePath)) output = fs.readFileSync(filePath, 'utf8');
-    if (pattern.test(output)) return output;
+    if (fs.existsSync(filePath)) { output = fs.readFileSync(filePath, 'utf8'); }
+    if (pattern.test(output)) { return output; }
     await new Promise(resolve => setTimeout(resolve, 25));
   }
   throw new Error(`Timed out waiting for ${pattern} in ${filePath}. Output:\n${output}`);

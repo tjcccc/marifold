@@ -18,7 +18,7 @@ export function useMouse(handler: (event: MouseEvent) => void): boolean {
   const latest = useRef(handler);
   latest.current = handler;
   useEffect(() => {
-    if (!source) return;
+    if (!source) { return; }
     const listener = (event: MouseEvent) => latest.current(event);
     source.on('mouse', listener);
     return () => { source.off('mouse', listener); };

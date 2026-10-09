@@ -53,7 +53,7 @@ export class FirecrawlBackend implements SearchBackend {
       ...(this.scrape ? { scrapeOptions: { formats: ['markdown'] } } : {}),
     };
     const headers: Record<string, string> = { 'content-type': 'application/json' };
-    if (this.apiKey) headers.authorization = `Bearer ${this.apiKey}`;
+    if (this.apiKey) { headers.authorization = `Bearer ${this.apiKey}`; }
 
     const init: Record<string, unknown> = {
       method: 'POST',
@@ -61,7 +61,7 @@ export class FirecrawlBackend implements SearchBackend {
       body: JSON.stringify(body),
     };
     const dispatcher = proxyDispatcher(this.proxy);
-    if (dispatcher) init.dispatcher = dispatcher;
+    if (dispatcher) { init.dispatcher = dispatcher; }
 
     const response = await fetch(FIRECRAWL_SEARCH_URL, init as RequestInit);
     if (!response.ok) {
@@ -84,7 +84,7 @@ export class FirecrawlBackend implements SearchBackend {
 /** Firecrawl v2 groups results under `data.web`; v1 returned a flat `data[]`.
  * Accept either so the backend survives an API version bump. */
 function extractResults(data: FirecrawlResult[] | { web?: FirecrawlResult[] } | undefined): FirecrawlResult[] {
-  if (Array.isArray(data)) return data;
+  if (Array.isArray(data)) { return data; }
   return data?.web ?? [];
 }
 

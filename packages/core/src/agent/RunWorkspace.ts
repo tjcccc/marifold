@@ -215,7 +215,7 @@ export function stageRunImages(workspace: RunWorkspace, images: ImageInput[]): S
     try {
       bytes = image.path ? fs.readFileSync(image.path) : decodeBase64(image.data ?? '', `images[${index}].data`);
     } catch (error) {
-      if (error instanceof MarifoldError) throw error;
+      if (error instanceof MarifoldError) { throw error; }
       throw MarifoldError.agentRunInvalid(
         `Could not stage image #${index + 1}: ${error instanceof Error ? error.message : String(error)}`,
       );
@@ -242,10 +242,10 @@ export function stageRunImages(workspace: RunWorkspace, images: ImageInput[]): S
 }
 
 export function resolveToolPath(input: string, workspace: RunWorkspace | undefined, cwd: string): string {
-  if (input === '~' && workspace) return workspace.userHome;
-  if (input.startsWith('~/') && workspace) return path.join(workspace.userHome, input.slice(2));
-  if (input === '~') return os.homedir();
-  if (input.startsWith('~/')) return path.join(os.homedir(), input.slice(2));
+  if (input === '~' && workspace) { return workspace.userHome; }
+  if (input.startsWith('~/') && workspace) { return path.join(workspace.userHome, input.slice(2)); }
+  if (input === '~') { return os.homedir(); }
+  if (input.startsWith('~/')) { return path.join(os.homedir(), input.slice(2)); }
   return path.resolve(cwd, input);
 }
 
@@ -280,13 +280,13 @@ export function sensitiveHostRoots(userHome: string): string[] {
 
 export function isSensitiveHostPath(target: string, workspace: RunWorkspace): boolean {
   const resolved = canonicalPath(target);
-  if (isInside(resolved, workspace.rootDir)) return false;
+  if (isInside(resolved, workspace.rootDir)) { return false; }
   return sensitiveHostRoots(workspace.userHome).some(root => isInside(resolved, root));
 }
 
 export function isProtectedSystemWrite(target: string, workspace: RunWorkspace): boolean {
   const resolved = canonicalPath(target);
-  if (isInsideAnyRoot(resolved, workspace.writeRoots)) return false;
+  if (isInsideAnyRoot(resolved, workspace.writeRoots)) { return false; }
   const roots = process.platform === 'win32'
     ? [process.env.SystemRoot, process.env.ProgramFiles, process.env['ProgramFiles(x86)']].filter(
       (value): value is string => Boolean(value),
@@ -329,7 +329,7 @@ export function canonicalPath(value: string, hops = 0): string {
       return canonicalPath(path.join(target, ...suffix), hops + 1);
     }
     const parent = path.dirname(cursor);
-    if (parent === cursor) return resolved;
+    if (parent === cursor) { return resolved; }
     suffix.unshift(path.basename(cursor));
     cursor = parent;
   }
@@ -338,7 +338,7 @@ export function canonicalPath(value: string, hops = 0): string {
 
 function symlinkTarget(value: string): string | undefined {
   try {
-    if (!fs.lstatSync(value).isSymbolicLink()) return undefined;
+    if (!fs.lstatSync(value).isSymbolicLink()) { return undefined; }
     return path.resolve(path.dirname(value), fs.readlinkSync(value));
   } catch {
     return undefined;
@@ -414,9 +414,9 @@ function uniqueFileName(value: string, used: Set<string>): string {
 }
 
 function imageExtension(mediaType: string): string {
-  if (mediaType === 'image/png') return 'png';
-  if (mediaType === 'image/webp') return 'webp';
-  if (mediaType === 'image/gif') return 'gif';
+  if (mediaType === 'image/png') { return 'png'; }
+  if (mediaType === 'image/webp') { return 'webp'; }
+  if (mediaType === 'image/gif') { return 'gif'; }
   return 'jpg';
 }
 
@@ -425,21 +425,21 @@ function decodeBase64(value: string, label: string): Buffer {
     throw MarifoldError.agentRunInvalid(`${label} must be non-empty base64.`);
   }
   const bytes = Buffer.from(value, 'base64');
-  if (bytes.length === 0) throw MarifoldError.agentRunInvalid(`${label} must be non-empty base64.`);
+  if (bytes.length === 0) { throw MarifoldError.agentRunInvalid(`${label} must be non-empty base64.`); }
   return bytes;
 }
 
 function pruneRunWorkspaces(runsDir: string): void {
   const cutoff = Date.now() - RUN_WORKSPACE_RETENTION_MS;
   for (const entry of fs.readdirSync(runsDir, { withFileTypes: true })) {
-    if (!entry.isDirectory() || !/^(run|task|tool)_[A-Za-z0-9_-]+$/.test(entry.name)) continue;
+    if (!entry.isDirectory() || !/^(run|task|tool)_[A-Za-z0-9_-]+$/.test(entry.name)) { continue; }
     const target = path.join(runsDir, entry.name);
     try {
-      if (fs.statSync(target).mtimeMs >= cutoff) continue;
+      if (fs.statSync(target).mtimeMs >= cutoff) { continue; }
       if (listRunArtifacts({ outputDir: path.join(target, 'output') }).length > 0) {
         // Downloads outlive disposable inputs, environments, and execution state.
         for (const child of fs.readdirSync(target)) {
-          if (child !== 'output') fs.rmSync(path.join(target, child), { recursive: true, force: true });
+          if (child !== 'output') { fs.rmSync(path.join(target, child), { recursive: true, force: true }); }
         }
       } else {
         fs.rmSync(target, { recursive: true, force: true });

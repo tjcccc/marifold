@@ -13,11 +13,12 @@ import { objectBody, requiredString } from './Validation';
 /** Only application resources can traverse the bridge. Device-local configuration
  * and workspace connection management are never forwarded to another workspace. */
 export function workspaceApiPath(method: string, raw: string): boolean {
-  if (!['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].includes(method) || raw.length > 2048 || /[\\\x00-\x1f#]/.test(raw))
+  if (!['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].includes(method) || raw.length > 2048 || /[\\\x00-\x1f#]/.test(raw)) {
     return false;
+  }
   const pathname = raw.split('?')[0];
-  if (/%2f|%5c|%2e/i.test(pathname) || pathname.split('/').some((p) => p === '.' || p === '..')) return false;
-  if (pathname === '/v1/execution-devices') return method === 'GET';
+  if (/%2f|%5c|%2e/i.test(pathname) || pathname.split('/').some((p) => p === '.' || p === '..')) { return false; }
+  if (pathname === '/v1/execution-devices') { return method === 'GET'; }
   return (
     /^\/v1\/(status|changes|ask|config|providers|models|profiles|sessions|skills|apps|app-instances|runs|tasks|schedules|terminal)(?:\/[A-Za-z0-9_%.-]+)*$/.test(
       pathname,
@@ -35,9 +36,9 @@ const SHARED_CONFIG_KEY = /^(default\.|memory\.|agent\.|web_search\.(enabled|max
 export function workspaceHostOnlyRequest(method: string, raw: string, body: unknown): boolean {
   const pathname = raw.split('?')[0];
   const input = body !== null && typeof body === 'object' && !Array.isArray(body) ? (body as Record<string, unknown>) : {};
-  if (pathname === '/v1/config') return method === 'PATCH' && (typeof input.key !== 'string' || !SHARED_CONFIG_KEY.test(input.key));
-  if (pathname === '/v1/providers' || pathname.startsWith('/v1/providers/')) return method !== 'GET';
-  if (pathname === '/v1/models' && method === 'POST') return ['type', 'baseUrl', 'apiKeyEnv'].some((key) => input[key] !== undefined);
+  if (pathname === '/v1/config') { return method === 'PATCH' && (typeof input.key !== 'string' || !SHARED_CONFIG_KEY.test(input.key)); }
+  if (pathname === '/v1/providers' || pathname.startsWith('/v1/providers/')) { return method !== 'GET'; }
+  if (pathname === '/v1/models' && method === 'POST') { return ['type', 'baseUrl', 'apiKeyEnv'].some((key) => input[key] !== undefined); }
   return false;
 }
 /** The workspace execution that produced a run's artifacts, or undefined when
@@ -45,7 +46,7 @@ export function workspaceHostOnlyRequest(method: string, raw: string, body: unkn
  * workspace is removed; a removed workspace's other devices are unreachable,
  * so their artifacts then resolve as missing locally. */
 export function remoteExecution(manager: WorkspaceManager, execution: RunRecord['execution']): RunRecord['execution'] {
-  if (!execution) return undefined;
+  if (!execution) { return undefined; }
   let hostDeviceId: string;
   try {
     hostDeviceId = manager.store.get(execution.workspaceId).hostDeviceId;
@@ -89,7 +90,7 @@ export function registerWorkspaceRoutes(
       try {
         for await (const event of registry.events(runId, after, stop.signal)) {
           events.push(event);
-          if (events.length >= 128) break;
+          if (events.length >= 128) { break; }
         }
       } finally {
         clearTimeout(timer);
@@ -102,29 +103,31 @@ export function registerWorkspaceRoutes(
       const run = registry.require(runId);
       const origin = registry.artifactOrigin(runId, artifactId);
       const e = remoteExecution(manager, origin.run.execution);
-      if (!run.artifacts?.some((a) => a.id === artifactId)) throw new Error('Artifact not found.');
+      if (!run.artifacts?.some((a) => a.id === artifactId)) { throw new Error('Artifact not found.'); }
       if (body.offer !== undefined) {
-        if (!transfers?.enabled) throw new Error('Direct downloads unavailable.');
-        if (e) return manager.execute(e.workspaceId, e.executionDeviceId, 'executor.artifact', { runId: origin.run.id, artifactId: origin.artifactId, offer: body.offer });
+        if (!transfers?.enabled) { throw new Error('Direct downloads unavailable.'); }
+        if (e) { return manager.execute(e.workspaceId, e.executionDeviceId, 'executor.artifact', { runId: origin.run.id, artifactId: origin.artifactId, offer: body.offer }); }
         return transfers.offerFile(registry.requireArtifact(runId, artifactId), body.offer, context.workspaceId);
       }
       if (body.preview === true) {
-        if (e) return manager.execute(e.workspaceId, e.executionDeviceId, 'executor.artifact', { runId: origin.run.id, artifactId: origin.artifactId, preview: true, variant: artifactPreviewVariant(body.variant) });
+        if (e) { return manager.execute(e.workspaceId, e.executionDeviceId, 'executor.artifact', { runId: origin.run.id, artifactId: origin.artifactId, preview: true, variant: artifactPreviewVariant(body.variant) }); }
         return { data: (await createArtifactPreview(registry.requireArtifact(runId, artifactId), artifactPreviewVariant(body.variant))).toString('base64') };
       }
       const offset = body.offset;
-      if (typeof offset !== 'number' || !Number.isSafeInteger(offset) || offset < 0)
+      if (typeof offset !== 'number' || !Number.isSafeInteger(offset) || offset < 0) {
         throw new Error('Invalid artifact offset.');
+      }
       const length = artifactReadLength(body.length);
-      if (e)
+      if (e) {
         return manager.execute(e.workspaceId, e.executionDeviceId, 'executor.artifact', {
           runId: origin.run.id,
           artifactId: origin.artifactId,
           offset,
           length,
         });
+      }
       const artifact = registry.requireArtifact(runId, artifactId);
-      if (offset > artifact.size) throw new Error('Invalid artifact offset.');
+      if (offset > artifact.size) { throw new Error('Invalid artifact offset.'); }
       const fd = fs.openSync(artifact.path, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
       try {
         const bytes = Buffer.alloc(Math.min(length, artifact.size - offset));
@@ -134,15 +137,17 @@ export function registerWorkspaceRoutes(
         fs.closeSync(fd);
       }
     }
-    if (operation !== 'api') throw new Error('Unsupported workspace operation.');
+    if (operation !== 'api') { throw new Error('Unsupported workspace operation.'); }
     const method = requiredString(body.method, 'method');
     const url = requiredString(body.path, 'path');
     // Policy refusals travel back as ordinary API responses, so the requesting
     // device can show a 403 instead of a bridge failure.
-    if (!workspaceApiPath(method, url))
+    if (!workspaceApiPath(method, url)) {
       return forbidden('WORKSPACE_FORBIDDEN', 'This operation is not available through a workspace bridge.');
-    if (workspaceHostOnlyRequest(method, url, body.body))
+    }
+    if (workspaceHostOnlyRequest(method, url, body.body)) {
       return forbidden('HOST_ONLY_SETTING', 'This setting belongs to the host device and must be edited locally.');
+    }
     const response = await contextStore.inject({ ...context, remoteRequest: body.remoteRequest === true }, (provenance) =>
       server.inject({
         method: method as 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE',
@@ -200,9 +205,9 @@ export function registerWorkspaceRoutes(
   });
   server.put<{ Params: { id: string } }>('/v1/workspaces/:id/executor', async (request) => {
     const body = objectBody(request.body);
-    if (typeof body.enabled !== 'boolean') throw new Error('enabled must be a boolean.');
+    if (typeof body.enabled !== 'boolean') { throw new Error('enabled must be a boolean.'); }
     const id = manager.store.get(request.params.id).id;
-    if (!body.enabled) cancelExecution?.(id);
+    if (!body.enabled) { cancelExecution?.(id); }
     await manager.setExecutor(id, body.enabled);
     return { ok: true, enabled: body.enabled };
   });
@@ -215,8 +220,9 @@ export function registerWorkspaceRoutes(
   server.post<{ Params: { id: string; operation: string } }>(
     '/v1/workspaces/:id/manage/:operation',
     async (request) => {
-      if (!['rename', 'invite', 'devices', 'revoke'].includes(request.params.operation))
+      if (!['rename', 'invite', 'devices', 'revoke'].includes(request.params.operation)) {
         throw new Error('Unknown workspace operation.');
+      }
       return {
         ok: true,
         ...((await manager.request(request.params.id, request.params.operation, request.body ?? {})) as object),
@@ -237,7 +243,7 @@ export function registerWorkspaceRoutes(
     '/v1/workspaces/:id/api/v1/runs/:runId/events',
     async (request, reply) => {
       let after = Number(request.headers['last-event-id'] ?? request.query.after ?? 0);
-      if (!Number.isSafeInteger(after) || after < 0) throw new Error('Invalid event cursor.');
+      if (!Number.isSafeInteger(after) || after < 0) { throw new Error('Invalid event cursor.'); }
       const poll = () =>
         manager.request(request.params.id, 'run.events', { runId: request.params.runId, after }) as Promise<{
           run: RunRecord;
@@ -254,18 +260,18 @@ export function registerWorkspaceRoutes(
       try {
         while (!closed) {
           for (const { seq, event } of batch.events) {
-            if (seq <= after) continue;
+            if (seq <= after) { continue; }
             writeSse(reply, event.type, event, seq);
             after = seq;
           }
-          if (batch.run.finishedAt && after >= batch.run.eventCount) break;
+          if (batch.run.finishedAt && after >= batch.run.eventCount) { break; }
           batch = await poll();
         }
       } catch {
         /* Closing preserves the client's last sequence for reconnect. */
       } finally {
         stop();
-        if (!closed) reply.raw.end();
+        if (!closed) { reply.raw.end(); }
       }
     },
   );
@@ -273,10 +279,10 @@ export function registerWorkspaceRoutes(
     const response = await manager.request(workspaceId, 'api', {
       method: 'GET', path: `/v1/runs/${runId}/artifacts`,
     }) as { status: number; body: string };
-    if (response.status !== 200) throw new Error('Could not check the file on its source device.');
+    if (response.status !== 200) { throw new Error('Could not check the file on its source device.'); }
     const result = JSON.parse(Buffer.from(response.body, 'base64').toString('utf8'));
     const item = result.artifacts?.find((a: RunArtifact) => a.id === artifactId) as RunArtifact | undefined;
-    if (!item || item.available === false) throw MarifoldError.artifactNotFound(runId, artifactId);
+    if (!item || item.available === false) { throw MarifoldError.artifactNotFound(runId, artifactId); }
     return item;
   };
   const sendRemoteArtifact = async (workspaceId: string, runId: string, artifactId: string, reply: FastifyReply, inline = false) => {
@@ -287,24 +293,24 @@ export function registerWorkspaceRoutes(
   };
   server.all<{ Params: { id: string; '*': string } }>('/v1/workspaces/:id/api/*', async (request, reply) => {
     const suffix = request.url.slice(request.url.indexOf('/api/') + 4);
-    if (!workspaceApiPath(request.method, suffix)) throw new Error('Unsupported workspace application route.');
+    if (!workspaceApiPath(request.method, suffix)) { throw new Error('Unsupported workspace application route.'); }
     const artifact = /^\/v1\/runs\/([^/]+)\/artifacts\/([^/?]+)(?:\/(access|preview))?$/.exec(suffix.split('?')[0]);
     if (artifact) {
       const [, runId, artifactId, action] = artifact;
       const workspaceId = request.params.id;
-      if (request.method === 'GET' && !action) return sendRemoteArtifact(workspaceId, runId, artifactId, reply);
+      if (request.method === 'GET' && !action) { return sendRemoteArtifact(workspaceId, runId, artifactId, reply); }
       if (request.method === 'GET' && action === 'preview') {
         const result = await manager.request(workspaceId, 'artifact.read', { runId, artifactId, preview: true, variant: artifactPreviewVariant(new URLSearchParams(suffix.split('?')[1]).get('variant') ?? undefined) }) as { data: string };
         return reply.type('image/webp').header('cache-control', 'no-store').header('x-content-type-options', 'nosniff').send(Buffer.from(result.data, 'base64'));
       }
       if (request.method === 'POST' && action === 'access' && tickets) {
         const purpose = objectBody(request.body).purpose;
-        if (purpose !== 'download' && purpose !== 'image') throw MarifoldError.configInvalid('Invalid file access purpose.');
+        if (purpose !== 'download' && purpose !== 'image') { throw MarifoldError.configInvalid('Invalid file access purpose.'); }
         const item = await remoteArtifact(workspaceId, runId, artifactId);
-        if (purpose === 'image' && !isPreviewableArtifact(item.mediaType)) throw MarifoldError.configInvalid('This file is not a previewable image.');
+        if (purpose === 'image' && !isPreviewableArtifact(item.mediaType)) { throw MarifoldError.configInvalid('This file is not a previewable image.'); }
         reply.header('cache-control', 'no-store');
         return { ok: true, ...tickets.issue(async response => {
-          if (purpose === 'download') return sendRemoteArtifact(workspaceId, runId, artifactId, response);
+          if (purpose === 'download') { return sendRemoteArtifact(workspaceId, runId, artifactId, response); }
           const result = await manager.request(workspaceId, 'artifact.read', { runId, artifactId, preview: true, variant: 'viewer' }) as { data: string };
           return response.type('image/webp').header('x-content-type-options', 'nosniff').send(Buffer.from(result.data, 'base64'));
         }) };
@@ -320,8 +326,8 @@ export function registerWorkspaceRoutes(
       typeof request.headers['idempotency-key'] === 'string' ? request.headers['idempotency-key'] : undefined,
     )) as { status: number; contentType?: string; disposition?: string; body: string };
     reply.code(result.status);
-    if (result.disposition) reply.header('content-disposition', result.disposition);
-    if (result.contentType) reply.type(result.contentType);
+    if (result.disposition) { reply.header('content-disposition', result.disposition); }
+    if (result.contentType) { reply.type(result.contentType); }
     // The host chooses these bytes and their type. Never let a browser render
     // them as a document on this service's origin.
     reply.header('x-content-type-options', 'nosniff');

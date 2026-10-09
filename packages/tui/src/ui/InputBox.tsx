@@ -98,16 +98,16 @@ export function InputBox({
   const [selection, setSelection] = useState<{ anchor: number; focus: number }>();
   const drag = useRef<{ anchor: number; focus: number; text: string; visual: VisualLine[]; start: number } | undefined>(undefined);
   const mouseEnabled = useMouse(event => {
-    if (event.button !== 0 || event.action === 'wheel' || resizing || !inputRef.current) return;
+    if (event.button !== 0 || event.action === 'wheel' || resizing || !inputRef.current) { return; }
     const bounds = measureElement(inputRef.current);
     const inside = event.y >= bounds.y && event.y < bounds.y + bounds.height && event.x >= bounds.x && event.x < bounds.x + bounds.width;
     if (event.action === 'press') {
-      if (!inside) return;
+      if (!inside) { return; }
       const visual = wrapToVisualLines(value, Math.max(1, columns - PROMPT.length - 1));
       const caret = locateVisualCursor(visual, cursorRef.current);
       const start = inputWindowStart(visual.length, caret.line, maxInputRows);
       const line = visual[start + event.y - bounds.y];
-      if (!line) return;
+      if (!line) { return; }
       const anchor = line.start + offsetAtColumn(line.text, Math.max(0, event.x - bounds.x - PROMPT.length));
       drag.current = { anchor, focus: anchor, text: value, visual, start };
       setSelection(undefined);
@@ -115,10 +115,10 @@ export function InputBox({
       return;
     }
     const snapshot = drag.current;
-    if (!snapshot) return;
+    if (!snapshot) { return; }
     const row = Math.max(0, Math.min(bounds.height - 1, event.y - bounds.y));
     const line = snapshot.visual[snapshot.start + row];
-    if (!line) return;
+    if (!line) { return; }
     const focus = line.start + offsetAtColumn(line.text, Math.max(0, event.x - bounds.x - PROMPT.length));
     snapshot.focus = focus;
     setSelection({ anchor: snapshot.anchor, focus });
@@ -127,9 +127,9 @@ export function InputBox({
       setCursor(focus);
       const text = snapshot.text.slice(Math.min(snapshot.anchor, focus), Math.max(snapshot.anchor, focus));
       if (text) {
-        if (copySelection) copySelection(text);
-        else void copyTerminalSelection(text).catch(() => {});
-      } else setSelection(undefined);
+        if (copySelection) { copySelection(text); }
+        else { void copyTerminalSelection(text).catch(() => {}); }
+      } else { setSelection(undefined); }
     }
   });
   useEffect(() => {
@@ -168,7 +168,7 @@ export function InputBox({
 
   const insertNewline = () => set(`${value.slice(0, cursor)}\n${value.slice(cursor)}`, cursor + 1);
   const acceptSuggestion = (name: string) => {
-    if (!activeToken) return;
+    if (!activeToken) { return; }
     const prefix = value.slice(0, activeToken.start);
     const token = `${sigil}${name}`;
     const suffix = value.slice(activeToken.end);
@@ -186,20 +186,20 @@ export function InputBox({
 
   useInput((input, key) => {
     const cursor = cursorRef.current;
-    if (key.eventType === 'release') return;
-    if (key.pageUp || key.pageDown || (mouseEnabled && key.ctrl && key.end)) return;
+    if (key.eventType === 'release') { return; }
+    if (key.pageUp || key.pageDown || (mouseEnabled && key.ctrl && key.end)) { return; }
     drag.current = undefined;
     setSelection(undefined);
-    if (key.ctrl && input === 'c') return onInterrupt('ctrl-c');
-    if (resizing) return; // ignore typing mid-resize (the box is collapsed)
+    if (key.ctrl && input === 'c') { return onInterrupt('ctrl-c'); }
+    if (resizing) { return; } // ignore typing mid-resize (the box is collapsed)
 
     // The completion menu intercepts navigation/accept/dismiss before history,
     // submit, and Esc-to-cancel.
     if (showMenu) {
-      if (menuNavigable && key.upArrow) return setMenuIndex(i => (i <= 0 ? suggestions.length - 1 : i - 1));
-      if (menuNavigable && key.downArrow) return setMenuIndex(i => (i >= suggestions.length - 1 ? 0 : i + 1));
-      if (key.tab) return acceptSuggestion(suggestions[menuIdx].name);
-      if (key.escape) return setMenuOpen(false);
+      if (menuNavigable && key.upArrow) { return setMenuIndex(i => (i <= 0 ? suggestions.length - 1 : i - 1)); }
+      if (menuNavigable && key.downArrow) { return setMenuIndex(i => (i >= suggestions.length - 1 ? 0 : i + 1)); }
+      if (key.tab) { return acceptSuggestion(suggestions[menuIdx].name); }
+      if (key.escape) { return setMenuOpen(false); }
       // Enter accepts the highlighted item unless it is already fully typed,
       // in which case it falls through and submits.
       if (key.return && !key.shift && !key.meta && !key.ctrl && partial !== suggestions[menuIdx].name) {
@@ -207,8 +207,8 @@ export function InputBox({
       }
     }
 
-    if (key.escape) return onInterrupt('escape');
-    if (key.tab) return; // no menu: nothing to complete
+    if (key.escape) { return onInterrupt('escape'); }
+    if (key.tab) { return; } // no menu: nothing to complete
 
     // Ctrl+J (LF) is the cross-terminal newline; some terminals also deliver it
     // as a bare '\n' or as a modifyOtherKeys/CSI-u escape for modified Enter.
@@ -216,8 +216,8 @@ export function InputBox({
       return insertNewline();
     }
     if (key.return) {
-      if (key.shift || key.meta || key.ctrl) return insertNewline();
-      if (value.endsWith('\\')) return set(`${value.slice(0, -1)}\n`);
+      if (key.shift || key.meta || key.ctrl) { return insertNewline(); }
+      if (value.endsWith('\\')) { return set(`${value.slice(0, -1)}\n`); }
       const submitted = value;
       const attached = images;
       setValue('');
@@ -228,41 +228,41 @@ export function InputBox({
       return;
     }
 
-    if ((key.ctrl && input === 'a') || key.home) return setCursor(0);
-    if ((key.ctrl && input === 'e') || key.end) return setCursor(value.length);
-    if (key.ctrl && input === 'u') return set(value.slice(cursor), 0);
-    if (key.ctrl && input === 'k') return set(value.slice(0, cursor), cursor);
+    if ((key.ctrl && input === 'a') || key.home) { return setCursor(0); }
+    if ((key.ctrl && input === 'e') || key.end) { return setCursor(value.length); }
+    if (key.ctrl && input === 'u') { return set(value.slice(cursor), 0); }
+    if (key.ctrl && input === 'k') { return set(value.slice(0, cursor), cursor); }
     const wordLeft = (key.leftArrow && (key.meta || key.ctrl)) || (key.meta && input === 'b');
     const wordRight = (key.rightArrow && (key.meta || key.ctrl)) || (key.meta && input === 'f');
-    if (wordLeft) return setCursor(previousWord(value, cursor));
-    if (wordRight) return setCursor(nextWord(value, cursor));
+    if (wordLeft) { return setCursor(previousWord(value, cursor)); }
+    if (wordRight) { return setCursor(nextWord(value, cursor)); }
     if ((key.ctrl && input === 'w') || (key.meta && key.backspace)) {
       const start = key.meta ? previousWord(value, cursor) : wordStart(value, cursor);
       set(value.slice(0, start) + value.slice(cursor), start);
       return;
     }
 
-    if (key.leftArrow) return setCursor(c => previousBoundary(value, c));
-    if (key.rightArrow) return setCursor(c => nextBoundary(value, c));
+    if (key.leftArrow) { return setCursor(c => previousBoundary(value, c)); }
+    if (key.rightArrow) { return setCursor(c => nextBoundary(value, c)); }
     // Edge-triggered history (Claude Code style): ↑ recalls history only on the
     // first visual line, ↓ advances it only on the last; otherwise they move the
     // cursor between lines of a multi-line draft. Single-line input has one line
     // that is both first and last, so ↑/↓ keep their plain history behavior.
     if (key.upArrow) {
       const { line, column, visual } = cursorVisual();
-      if (line === 0) return historyPrev();
+      if (line === 0) { return historyPrev(); }
       const target = visual[line - 1];
       return setCursor(target.start + offsetAtColumn(target.text, column));
     }
     if (key.downArrow) {
       const { line, column, visual } = cursorVisual();
-      if (line >= visual.length - 1) return historyNext();
+      if (line >= visual.length - 1) { return historyNext(); }
       const target = visual[line + 1];
       return setCursor(target.start + offsetAtColumn(target.text, column));
     }
 
     if (key.backspace || input === '\x7f' || input === '\b') {
-      if (cursor === 0) return;
+      if (cursor === 0) { return; }
       const token = composerTokenBefore(value, cursor);
       const start = token?.start ?? previousBoundary(value, cursor);
       let next = value.slice(0, start) + value.slice(cursor);
@@ -278,20 +278,20 @@ export function InputBox({
     // send ESC[3~ for Del, which Ink exposes as key.delete; remove the
     // character under the cursor and leave the cursor in place.
     if (key.delete) {
-      if (cursor >= value.length) return;
+      if (cursor >= value.length) { return; }
       set(value.slice(0, cursor) + value.slice(nextBoundary(value, cursor)), cursor);
       return;
     }
 
-    if (key.ctrl || key.meta || !input) return;
-    if (input.charCodeAt(0) === 0x1b) return; // drop unhandled escape sequences
+    if (key.ctrl || key.meta || !input) { return; }
+    if (input.charCodeAt(0) === 0x1b) { return; } // drop unhandled escape sequences
     // Keep printable characters and newlines (so multi-line pastes survive),
     // dropping other control bytes.
     const printable = [...input.replace(/\r\n?/g, '\n')].filter(ch => {
       const code = ch.codePointAt(0) ?? 0;
       return code === 10 || (code >= 32 && code !== 127);
     }).join('');
-    if (!printable) return;
+    if (!printable) { return; }
 
     // A dropped/pasted image path collapses into a green `[image #n]` token.
     const imageFile = detectImagePath(printable);
@@ -312,15 +312,15 @@ export function InputBox({
   }
 
   function historyPrev(): void {
-    if (history.length === 0) return;
+    if (history.length === 0) { return; }
     const index = histIndex === null ? history.length - 1 : Math.max(0, histIndex - 1);
-    if (histIndex === null) setHistDraft({ text: value, images: [...images] });
+    if (histIndex === null) { setHistDraft({ text: value, images: [...images] }); }
     restoreHistoryEntry(history[index]);
     setHistIndex(index);
   }
 
   function historyNext(): void {
-    if (histIndex === null) return;
+    if (histIndex === null) { return; }
     if (histIndex < history.length - 1) {
       const index = histIndex + 1;
       restoreHistoryEntry(history[index]);
@@ -429,8 +429,8 @@ export function InputBox({
     }
     const colorAt = (i: number): string | undefined => {
       const token = tokens.find(token => lineStart + i >= token.start && lineStart + i < token.end);
-      if (token) return token.sigil === '$' ? SKILL : COMMAND;
-      for (const [s, e] of tokenRanges) if (i >= s && i < e) return ATTACHMENT;
+      if (token) { return token.sigil === '$' ? SKILL : COMMAND; }
+      for (const [s, e] of tokenRanges) { if (i >= s && i < e) { return ATTACHMENT; } }
       return undefined;
     };
 
@@ -454,7 +454,7 @@ function detectImagePath(chunk: string): string | null {
     p = p.slice(1, -1);
   }
   p = p.replace(/\\ /g, ' '); // drag-and-drop escapes spaces
-  if (!IMAGE_EXT.test(p)) return null;
+  if (!IMAGE_EXT.test(p)) { return null; }
   try {
     const resolved = path.resolve(expandHome(p));
     return fs.existsSync(resolved) ? resolved : null;
@@ -465,8 +465,8 @@ function detectImagePath(chunk: string): string | null {
 
 function wordStart(value: string, cursor: number): number {
   let i = cursor;
-  while (i > 0 && value[i - 1] === ' ') i -= 1;
-  while (i > 0 && value[i - 1] !== ' ') i -= 1;
+  while (i > 0 && value[i - 1] === ' ') { i -= 1; }
+  while (i > 0 && value[i - 1] !== ' ') { i -= 1; }
   return i;
 }
 
@@ -474,8 +474,8 @@ function wordStart(value: string, cursor: number): number {
 function previousWord(value: string, cursor: number): number {
   let start = 0;
   for (const word of WORDS.segment(value)) {
-    if (word.index >= cursor) break;
-    if (word.isWordLike) start = word.index;
+    if (word.index >= cursor) { break; }
+    if (word.isWordLike) { start = word.index; }
   }
   return start;
 }
@@ -483,7 +483,7 @@ function previousWord(value: string, cursor: number): number {
 function nextWord(value: string, cursor: number): number {
   for (const word of WORDS.segment(value)) {
     const end = word.index + word.segment.length;
-    if (word.isWordLike && end > cursor) return end;
+    if (word.isWordLike && end > cursor) { return end; }
   }
   return value.length;
 }

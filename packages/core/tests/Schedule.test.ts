@@ -88,7 +88,7 @@ describe('Scheduler', () => {
       log: message => logs.push(message),
       runSchedule: async schedule => {
         // The first schedule to run removes the other before its turn.
-        if (fired.length === 0) store.delete(schedule.id === first.id ? second.id : first.id);
+        if (fired.length === 0) { store.delete(schedule.id === first.id ? second.id : first.id); }
         fired.push(schedule.id);
         return { status: 'completed' };
       },

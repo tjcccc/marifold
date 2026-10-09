@@ -31,7 +31,7 @@ const record: RunRecord = {
 
 function card(state: ThreadState, runId = 'run_1') {
   const item = state.items.find(i => i.kind === 'run' && i.run.runId === runId);
-  if (!item || item.kind !== 'run') throw new Error(`no run card for ${runId}`);
+  if (!item || item.kind !== 'run') { throw new Error(`no run card for ${runId}`); }
   return item.run;
 }
 
@@ -122,7 +122,7 @@ describe('threadReducer', () => {
       ],
     });
     const target = state.items.find(item => item.kind === 'user' && item.text === 'Conversation 2');
-    if (!target) throw new Error('missing editable turn');
+    if (!target) { throw new Error('missing editable turn'); }
 
     state = reduce(
       state,
@@ -135,8 +135,8 @@ describe('threadReducer', () => {
     );
 
     expect(state.items.flatMap(item => {
-      if (item.kind === 'user') return [`user:${item.text}`];
-      if (item.kind === 'assistant') return [`assistant:${item.markdown}`];
+      if (item.kind === 'user') { return [`user:${item.text}`]; }
+      if (item.kind === 'assistant') { return [`assistant:${item.markdown}`]; }
       return [];
     })).toEqual([
       'user:Conversation 1',
@@ -474,7 +474,7 @@ describe('threadReducer', () => {
       { type: 'notice', tone: 'info', text: 'cancelled' },
     );
     const editedItem = state.items.find(item => item.kind === 'user' && item.text === 'Mistyped prompt');
-    if (!editedItem) throw new Error('missing edited user item');
+    if (!editedItem) { throw new Error('missing edited user item'); }
 
     const discarded = reduce(state, { type: 'discard_from', itemId: editedItem.id });
 

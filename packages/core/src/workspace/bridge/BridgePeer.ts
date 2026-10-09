@@ -68,7 +68,7 @@ export class BridgePeer {
     return this.connected;
   }
   get hostId(): string {
-    if (!this.hostDeviceId) throw new Error('Bridge is not connected.');
+    if (!this.hostDeviceId) { throw new Error('Bridge is not connected.'); }
     return this.hostDeviceId;
   }
   start(): void {
@@ -87,13 +87,13 @@ export class BridgePeer {
     }
     this.pending.clear();
     this.transfers.reset();
-    for (const control of this.controls.values()) control.reject();
+    for (const control of this.controls.values()) { control.reject(); }
     this.controls.clear();
   }
   async ready(timeoutMs = 10000): Promise<void> {
     const end = Date.now() + timeoutMs;
-    while (!this.connected && !this.stopped && Date.now() < end) await new Promise((r) => setTimeout(r, 25));
-    if (!this.connected) throw new Error('Workspace bridge is unavailable.');
+    while (!this.connected && !this.stopped && Date.now() < end) { await new Promise((r) => setTimeout(r, 25)); }
+    if (!this.connected) { throw new Error('Workspace bridge is unavailable.'); }
   }
   request(
     operation: string,
@@ -103,11 +103,12 @@ export class BridgePeer {
     id = randomId(),
     timeoutMs = 120000,
   ): Promise<unknown> {
-    if (this.pending.has(id)) return Promise.reject(new Error('Request is already awaiting a response.'));
-    if (!this.connected) return Promise.reject(new Error('Workspace is offline.'));
-    if (this.pending.size >= 32) return Promise.reject(new Error('Too many pending workspace operations.'));
-    if (Buffer.byteLength(JSON.stringify(input ?? null)) > 29 * 1024 * 1024)
+    if (this.pending.has(id)) { return Promise.reject(new Error('Request is already awaiting a response.')); }
+    if (!this.connected) { return Promise.reject(new Error('Workspace is offline.')); }
+    if (this.pending.size >= 32) { return Promise.reject(new Error('Too many pending workspace operations.')); }
+    if (Buffer.byteLength(JSON.stringify(input ?? null)) > 29 * 1024 * 1024) {
       return Promise.reject(new Error('Workspace request exceeds the transfer limit.'));
+    }
     return new Promise((resolve, reject) => {
       const request: WorkspaceRequest = { type: 'request', id, operation, input, appVersion: this.options.appVersion };
       const timer = setTimeout(() => {
@@ -129,16 +130,18 @@ export class BridgePeer {
   /** Ask the bridge whether it still accepts this membership. It checks every
    * frame, so a ping either returns a pong or closes with a policy error. */
   async probe(timeoutMs = 3000): Promise<void> {
-    if (!this.connected || this.socket?.readyState !== WebSocket.OPEN) return;
+    if (!this.connected || this.socket?.readyState !== WebSocket.OPEN) { return; }
     const since = this.lastPong;
     this.socket.send('{"type":"ping"}');
     const deadline = Date.now() + timeoutMs;
-    while (Date.now() < deadline && this.lastPong === since && this.connected && !this.refusedByBridge)
+    while (Date.now() < deadline && this.lastPong === since && this.connected && !this.refusedByBridge) {
       await new Promise((resolve) => setTimeout(resolve, 50));
+    }
   }
   revoke(deviceId: string): Promise<void> {
-    if (!this.connected)
+    if (!this.connected) {
       return Promise.reject(new Error('Bridge unavailable; revocation will be sent after reconnect.'));
+    }
     const id = randomId();
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
@@ -160,7 +163,7 @@ export class BridgePeer {
     });
   }
   private connect(): void {
-    if (this.stopped) return;
+    if (this.stopped) { return; }
     const url = new URL('/v1/connect', this.options.bridgeUrl);
     url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
     const socket = new WebSocket(url, { maxPayload: 512 * 1024, perMessageDeflate: false });
@@ -178,10 +181,10 @@ export class BridgePeer {
     });
     socket.on('error', () => undefined);
     socket.on('close', (code) => {
-      if (this.socket !== socket) return;
+      if (this.socket !== socket) { return; }
       // The bridge closes with a policy error when it refuses this membership
       // (revoked, removed, or invalid); network loss never does.
-      if (code === 1008 && !closedLocally) this.refusedByBridge = true;
+      if (code === 1008 && !closedLocally) { this.refusedByBridge = true; }
       this.connected = false;
       this.transfers.reset();
       this.options.onStatus?.(false);
@@ -224,10 +227,11 @@ export class BridgePeer {
           this.socket?.terminate();
           return;
         }
-        if (this.socket?.readyState === WebSocket.OPEN) this.socket.send('{"type":"ping"}');
+        if (this.socket?.readyState === WebSocket.OPEN) { this.socket.send('{"type":"ping"}'); }
       }, 15000);
-      for (const p of this.pending.values())
+      for (const p of this.pending.values()) {
         void this.transmit(p.recipient, p.identity, p.request).catch(() => undefined);
+      }
       return;
     }
     if (frame.type === 'revoked') {
@@ -238,7 +242,7 @@ export class BridgePeer {
       this.lastPong = Date.now();
       return;
     }
-    if (frame.type !== 'delivery') return;
+    if (frame.type !== 'delivery') { return; }
     // Acknowledging transport receipt does not assert successful execution. The
     // sender retains stable request IDs until it receives an application reply.
     this.socket?.send(JSON.stringify({ type: 'ack', deliveryId: frame.deliveryId }));
@@ -247,19 +251,21 @@ export class BridgePeer {
     const sender = message.header.sender;
     const certificate = packet.certificate as SignedMembership | undefined;
     let identity: PublicIdentity;
-    if (sender === this.hostDeviceId) identity = this.options.host;
+    if (sender === this.hostDeviceId) { identity = this.options.host; }
     else if (certificate) {
       if (
         !validMembership(certificate, this.options.host) ||
         certificate.membership.workspaceId !== this.options.workspaceId ||
         certificate.membership.deviceId !== sender ||
         this.options.accept?.(certificate) === false
-      )
+      ) {
         throw new Error('Invalid or revoked sender.');
+      }
       identity = certificate.membership.identity;
     } else {
-      if (this.options.deviceId !== this.hostDeviceId || !sender.startsWith('pending_'))
+      if (this.options.deviceId !== this.hostDeviceId || !sender.startsWith('pending_')) {
         throw new Error('Unpaired sender.');
+      }
       identity = packet.identity as PublicIdentity;
     }
     const decoded = record(
@@ -272,10 +278,11 @@ export class BridgePeer {
       !certificate &&
       sender !== this.hostDeviceId &&
       (decoded.type !== 'request' || decoded.operation !== 'join' || JSON.stringify(decoded).length > 4096)
-    )
+    ) {
       throw new Error('Invalid pairing message.');
-    for (const [id, expiry] of this.seen) if (expiry < Date.now()) this.seen.delete(id);
-    if (this.seen.has(message.header.id)) return;
+    }
+    for (const [id, expiry] of this.seen) { if (expiry < Date.now()) { this.seen.delete(id); } }
+    if (this.seen.has(message.header.id)) { return; }
     this.seen.set(message.header.id, message.header.expiresAt);
 
     if (decoded.type === 'chunk_ack') {
@@ -285,7 +292,7 @@ export class BridgePeer {
     if (decoded.type === 'chunk') {
       const { ack, text } = this.transfers.receive(sender, decoded);
       await this.send(sender, identity, { ...ack, window: this.transferWindow });
-      if (text !== undefined) await this.dispatch(record(JSON.parse(text)), sender, identity, certificate);
+      if (text !== undefined) { await this.dispatch(record(JSON.parse(text)), sender, identity, certificate); }
       return;
     }
     await this.dispatch(decoded, sender, identity, certificate);
@@ -298,22 +305,22 @@ export class BridgePeer {
   ): Promise<void> {
     if (data.type === 'response') {
       const pending = this.pending.get(String(data.id));
-      if (!pending || pending.recipient !== sender) return;
+      if (!pending || pending.recipient !== sender) { return; }
       this.pending.delete(String(data.id));
       clearTimeout(pending.timer);
-      if (data.ok === true) pending.resolve(data.value);
-      else pending.reject(new Error(typeof data.error === 'string' ? data.error : 'Workspace operation failed.'));
+      if (data.ok === true) { pending.resolve(data.value); }
+      else { pending.reject(new Error(typeof data.error === 'string' ? data.error : 'Workspace operation failed.')); }
       return;
     }
-    if (data.type !== 'request' || typeof data.id !== 'string' || typeof data.operation !== 'string') return;
-    if (!certificate && sender !== this.hostDeviceId && data.operation !== 'join') throw new Error('Pairing required.');
+    if (data.type !== 'request' || typeof data.id !== 'string' || typeof data.operation !== 'string') { return; }
+    if (!certificate && sender !== this.hostDeviceId && data.operation !== 'join') { throw new Error('Pairing required.'); }
     const request = data as unknown as WorkspaceRequest;
     const key = `${sender}:${request.id}`;
     const hash = digest(JSON.stringify(request));
     let entry = this.inflight.get(key);
-    if (entry && entry.hash !== hash) throw new Error('Request ID was reused with different input.');
+    if (entry && entry.hash !== hash) { throw new Error('Request ID was reused with different input.'); }
     if (!entry) {
-      if (this.inflight.size >= 64) throw new Error('Too many in-flight requests.');
+      if (this.inflight.size >= 64) { throw new Error('Too many in-flight requests.'); }
       const job = this.options.onRequest(request, { id: sender, identity, certificate });
       entry = { hash, job };
       this.inflight.set(key, entry);
@@ -341,7 +348,7 @@ export class BridgePeer {
     await this.transfers.transmit(recipient, text, chunk => this.send(recipient, identity, chunk), this.transferWindow);
   }
   private async send(recipient: string, identity: PublicIdentity, value: unknown): Promise<void> {
-    if (!this.connected || this.socket?.readyState !== WebSocket.OPEN) throw new Error('Workspace disconnected.');
+    if (!this.connected || this.socket?.readyState !== WebSocket.OPEN) { throw new Error('Workspace disconnected.'); }
     const socket = this.socket;
     const message = await encryptMessage(
       this.options.identity,
@@ -356,7 +363,7 @@ export class BridgePeer {
       },
       value,
     );
-    if (this.socket !== socket || socket.readyState !== WebSocket.OPEN) throw new Error('Workspace disconnected.');
+    if (this.socket !== socket || socket.readyState !== WebSocket.OPEN) { throw new Error('Workspace disconnected.'); }
     socket.send(JSON.stringify({ type: 'send', message }));
   }
 }

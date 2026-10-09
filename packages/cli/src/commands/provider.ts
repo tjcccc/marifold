@@ -29,7 +29,7 @@ export function registerProviderCommand(program: Command, printer: ConsolePrinte
             process.stdout.write(`${result.message}\n`);
             return;
           }
-          for (const model of result.models) process.stdout.write(`${model}\n`);
+          for (const model of result.models) { process.stdout.write(`${model}\n`); }
           return;
         }
         if (name) {
@@ -44,8 +44,8 @@ export function registerProviderCommand(program: Command, printer: ConsolePrinte
           return;
         }
         process.stdout.write(`Current provider: ${current.name} (${current.type})\n`);
-        if (current.baseUrl) process.stdout.write(`Base URL: ${current.baseUrl}\n`);
-        if (current.apiKeyEnv) process.stdout.write(`API key env: ${current.apiKeyEnv}\n`);
+        if (current.baseUrl) { process.stdout.write(`Base URL: ${current.baseUrl}\n`); }
+        if (current.apiKeyEnv) { process.stdout.write(`API key env: ${current.apiKeyEnv}\n`); }
       } catch (error) {
         printer.printError(error);
         process.exitCode = 1;
@@ -120,7 +120,7 @@ export function registerProviderCommand(program: Command, printer: ConsolePrinte
             // Esc stepped back. If the name came from an argument there is no
             // picker to return to, so treat it as a cancel.
             if (isPromptBackError(error)) {
-              if (nameArg !== undefined) throw new PromptAbortError();
+              if (nameArg !== undefined) { throw new PromptAbortError(); }
               // Release the readline interface so the next picker (raw-mode key
               // reader) owns stdin cleanly; getPrompt() lazily makes a fresh one.
               prompt?.close();
@@ -231,17 +231,17 @@ async function pickProvider(getPrompt: () => InteractivePrompt, style: TerminalS
     registry.map(entry => ({ label: label(entry), value: entry.name })),
     { defaultIndex: 0 },
   );
-  if (selected !== undefined) return selected;
+  if (selected !== undefined) { return selected; }
 
   process.stdout.write('Select provider to add:\n');
   registry.forEach((entry, index) => process.stdout.write(`  ${index + 1}. ${label(entry)}\n`));
   const answer = await getPrompt().readUserMessage(style.bold('Provider [1]: '), { onEscape: 'cancel' });
-  if (answer === undefined) throw new PromptAbortError();
+  if (answer === undefined) { throw new PromptAbortError(); }
   const raw = answer.trim();
-  if (!raw) return registry[0].name;
+  if (!raw) { return registry[0].name; }
   const index = Number(raw);
-  if (Number.isInteger(index) && index >= 1 && index <= registry.length) return registry[index - 1].name;
-  if (getProviderRegistryEntry(raw)) return raw;
+  if (Number.isInteger(index) && index >= 1 && index <= registry.length) { return registry[index - 1].name; }
+  if (getProviderRegistryEntry(raw)) { return raw; }
   throw MarifoldError.configInvalid(`Unknown provider: ${raw}`);
 }
 
@@ -253,9 +253,9 @@ async function readLineWithDefault(
   def?: string,
 ): Promise<string> {
   const answer = await prompt.readUserMessage(style.bold(`${label}${def ? ` [${def}]` : ''}: `), { onEscape: 'back' });
-  if (answer === undefined) throw new PromptAbortError();
+  if (answer === undefined) { throw new PromptAbortError(); }
   const value = answer.trim();
-  if (value) return value;
-  if (def) return def;
+  if (value) { return value; }
+  if (def) { return def; }
   throw MarifoldError.configInvalid(`${label} cannot be empty.`);
 }

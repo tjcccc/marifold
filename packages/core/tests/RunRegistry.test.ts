@@ -24,7 +24,7 @@ function tempDir(): string {
 }
 
 afterEach(() => {
-  for (const registry of registries.splice(0)) registry.close();
+  for (const registry of registries.splice(0)) { registry.close(); }
   for (const dir of tempDirs.splice(0)) {
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -85,7 +85,7 @@ function makeRegistry(
         const engine = new ScriptedEngine(script);
         engines.push(engine);
         const toolRegistry = new ToolRegistry();
-        for (const tool of tools) toolRegistry.register(tool);
+        for (const tool of tools) { toolRegistry.register(tool); }
         return new AgentRunner({
           taskStore: new TaskStore(tempDir()),
           registry: toolRegistry,
@@ -97,7 +97,7 @@ function makeRegistry(
       setProfileAgentApproval: (profile, kind, mode) => { grants.push({ profile, kind, mode }); },
       addProfileTrustedFolder: (profile, folder) => {
         // Mirrors the profile layer, which refuses broad folders such as home.
-        if (folder === os.homedir()) throw MarifoldError.profileInvalid(`Refusing to trust '${folder}'.`, folder);
+        if (folder === os.homedir()) { throw MarifoldError.profileInvalid(`Refusing to trust '${folder}'.`, folder); }
         folders.push({ profile, folder });
         return folder;
       },
@@ -118,9 +118,9 @@ async function pullUntil(
   const seen: SequencedEvent[] = [];
   while (true) {
     const result = await gen.next();
-    if (result.done) return { seen };
+    if (result.done) { return { seen }; }
     seen.push(result.value);
-    if (predicate(result.value.event)) return { matched: result.value, seen };
+    if (predicate(result.value.event)) { return { matched: result.value, seen }; }
   }
 }
 

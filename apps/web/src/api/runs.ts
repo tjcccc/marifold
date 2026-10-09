@@ -98,21 +98,21 @@ export async function* followRun(
         signal,
       });
       for await (const frame of parseSse(response.body!)) {
-        if (frame.retryMs !== undefined) retryMs = Math.min(frame.retryMs, maxRetryMs);
-        if (frame.id === undefined || frame.data === undefined) continue;
-        if (frame.id <= lastSeq) continue; // replay overlap after reconnect
+        if (frame.retryMs !== undefined) { retryMs = Math.min(frame.retryMs, maxRetryMs); }
+        if (frame.id === undefined || frame.data === undefined) { continue; }
+        if (frame.id <= lastSeq) { continue; } // replay overlap after reconnect
         lastSeq = frame.id;
         const event = frame.data as AgentEvent;
         yield { seq: frame.id, event };
-        if (event.type === 'done') return;
+        if (event.type === 'done') { return; }
       }
       // Stream ended without `done` — the connection dropped; reconnect.
     } catch (error) {
-      if (signal?.aborted) return;
-      if (error instanceof MarifoldApiError && ![502, 503, 504].includes(error.status)) throw error;
+      if (signal?.aborted) { return; }
+      if (error instanceof MarifoldApiError && ![502, 503, 504].includes(error.status)) { throw error; }
       // Network-level failure — fall through to the retry delay.
     }
-    if (signal?.aborted) return;
+    if (signal?.aborted) { return; }
     await sleep(withJitter(retryMs, maxRetryMs), signal);
   }
 }

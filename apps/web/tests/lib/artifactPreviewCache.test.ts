@@ -37,7 +37,7 @@ it('allows retry after missing, failed or invalid responses and ignores known-un
   const fetch = vi.spyOn(client, 'blob').mockRejectedValueOnce(new Error('offline'))
     .mockResolvedValueOnce(undefined).mockResolvedValueOnce(new Blob(['bad'], { type: 'text/html' }))
     .mockResolvedValue(preview());
-  for (let attempt = 0; attempt < 3; attempt++) await expect(artifactPreviewBlob(client, 'run', artifact, 'viewer')).rejects.toThrow();
+  for (let attempt = 0; attempt < 3; attempt++) { await expect(artifactPreviewBlob(client, 'run', artifact, 'viewer')).rejects.toThrow(); }
   await artifactPreviewBlob(client, 'run', artifact, 'viewer');
   await expect(artifactPreviewBlob(client, 'run', { ...artifact, available: false }, 'viewer')).rejects.toThrow('no longer available');
   await artifactPreviewBlob(client, 'run', artifact, 'viewer');
@@ -48,7 +48,7 @@ it.each([7, 1_000_000])('evicts old entries to bound count and memory with %i-by
   const client = createApiClient();
   const fetch = vi.spyOn(client, 'blob').mockResolvedValue(new Blob([new Uint8Array(size)], { type: 'image/webp' }));
   const count = size === 7 ? 32 : 16;
-  for (let index = 0; index < count; index++) await artifactPreviewBlob(client, `run-${index}`, artifact, 'viewer');
+  for (let index = 0; index < count; index++) { await artifactPreviewBlob(client, `run-${index}`, artifact, 'viewer'); }
   // Refresh run-0, then ensure the oldest other entry is evicted.
   await artifactPreviewBlob(client, 'run-0', artifact, 'viewer');
   await artifactPreviewBlob(client, 'new-run', artifact, 'viewer');

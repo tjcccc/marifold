@@ -34,10 +34,10 @@ export async function* streamChat(
     for await (const frame of parseSse(response.body!)) {
       if (frame.event === 'chunk') {
         const text = (frame.data as { text?: string } | undefined)?.text;
-        if (typeof text === 'string') yield { type: 'chunk', text };
+        if (typeof text === 'string') { yield { type: 'chunk', text }; }
       } else if (frame.event === 'reasoning') {
         const text = (frame.data as { text?: string } | undefined)?.text;
-        if (typeof text === 'string') yield { type: 'reasoning', text };
+        if (typeof text === 'string') { yield { type: 'reasoning', text }; }
       } else if (frame.event === 'error') {
         const body = frame.data as { code?: string; message?: string } | undefined;
         yield { type: 'error', code: body?.code ?? 'STREAM_ERROR', message: body?.message ?? 'Stream failed.' };
@@ -56,7 +56,7 @@ export async function* streamChat(
       }
     }
   } catch (error) {
-    if (signal?.aborted) return;
+    if (signal?.aborted) { return; }
     throw error;
   }
   if (!finished && !signal?.aborted) {
@@ -66,7 +66,7 @@ export async function* streamChat(
 }
 
 function parseUsage(value: unknown): AgentUsage | undefined {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined;
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) { return undefined; }
   const source = value as Record<string, unknown>;
   const usage: AgentUsage = {};
   for (const key of [
@@ -78,7 +78,7 @@ function parseUsage(value: unknown): AgentUsage | undefined {
     'estimatedCostUSD',
   ] as const) {
     const field = source[key];
-    if (typeof field === 'number' && Number.isFinite(field) && field >= 0) usage[key] = field;
+    if (typeof field === 'number' && Number.isFinite(field) && field >= 0) { usage[key] = field; }
   }
   return Object.keys(usage).length > 0 ? usage : undefined;
 }

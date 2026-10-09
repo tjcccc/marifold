@@ -55,7 +55,7 @@ export function AvatarCropper({ file, busy, onCancel, onConfirm }: AvatarCropper
     drag.current = { x: event.clientX, y: event.clientY, ox: offset.x, oy: offset.y };
   }
   function onPointerMove(event: React.PointerEvent): void {
-    if (!drag.current) return;
+    if (!drag.current) { return; }
     setOffset(clamp({
       x: drag.current.ox + (event.clientX - drag.current.x),
       y: drag.current.oy + (event.clientY - drag.current.y),
@@ -67,18 +67,18 @@ export function AvatarCropper({ file, busy, onCancel, onConfirm }: AvatarCropper
 
   function save(): void {
     const img = imgRef.current;
-    if (!img || !nat) return;
+    if (!img || !nat) { return; }
     const canvas = document.createElement('canvas');
     canvas.width = OUTPUT;
     canvas.height = OUTPUT;
     const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    if (!ctx) { return; }
     ctx.imageSmoothingQuality = 'high';
     // The original-image region visible in the viewport square → the 512² output.
     const source = VIEWPORT / scale;
     ctx.drawImage(img, -offset.x / scale, -offset.y / scale, source, source, 0, 0, OUTPUT, OUTPUT);
     canvas.toBlob(blob => {
-      if (blob) onConfirm(new File([blob], blob.type === 'image/webp' ? 'avatar.webp' : 'avatar.png', { type: blob.type }));
+      if (blob) { onConfirm(new File([blob], blob.type === 'image/webp' ? 'avatar.webp' : 'avatar.png', { type: blob.type })); }
     }, 'image/webp', 0.85);
   }
 

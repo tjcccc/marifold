@@ -45,7 +45,7 @@ it('resumes an interrupted event stream without replaying a start request', asyn
   vi.stubGlobal('fetch', fetch);
   const events: unknown[] = [];
   const pending = (async () => {
-    for await (const event of followRunEvents(createApiClient(), 'run')) events.push(event);
+    for await (const event of followRunEvents(createApiClient(), 'run')) { events.push(event); }
   })();
   await vi.advanceTimersByTimeAsync(2000);
   await pending;

@@ -73,7 +73,7 @@ function renderPage(overrides: Partial<ProfileSettingsPageProps> = {}, expandAdv
       {...overrides}
     />,
   );
-  if (expandAdvanced) fireEvent.click(screen.getByRole('button', { name: /Advanced settings/ }));
+  if (expandAdvanced) { fireEvent.click(screen.getByRole('button', { name: /Advanced settings/ })); }
   return handlers;
 }
 
@@ -507,7 +507,7 @@ describe('ConfigScreen provider creation', () => {
   it('places the add action in the Providers list header and opens the shared catalog', async () => {
     const { ConfigScreen } = await import('../../src/screens/config/ConfigScreen');
     const request = vi.fn(async (_method: string, path: string) => {
-      if (path === '/v1/profiles') return { profiles: [] };
+      if (path === '/v1/profiles') { return { profiles: [] }; }
       if (path === '/v1/config') {
         return {
           config: {
@@ -520,7 +520,7 @@ describe('ConfigScreen provider creation', () => {
       if (path === '/v1/models') {
         return { default: { provider: 'ollama', model: 'gemma4:e4b' }, options: ['ollama/gemma4:e4b'] };
       }
-      if (path === '/v1/providers/status') return { providers: [] };
+      if (path === '/v1/providers/status') { return { providers: [] }; }
       if (path === '/v1/providers/catalog') {
         return {
           providers: [{
@@ -581,7 +581,7 @@ describe('ConfigScreen mobile navigation', () => {
     })));
     const { ConfigScreen } = await import('../../src/screens/config/ConfigScreen');
     const request = vi.fn(async (_method: string, path: string) => {
-      if (path === '/v1/profiles') return { profiles: [] };
+      if (path === '/v1/profiles') { return { profiles: [] }; }
       if (path === '/v1/config') {
         return {
           config: {
@@ -613,7 +613,7 @@ describe('ConfigScreen mobile navigation', () => {
           client={client as never}
           route={route}
           navigate={next => {
-            if (next.view === 'config') setRoute(next);
+            if (next.view === 'config') { setRoute(next); }
           }}
           onUnauthorized={() => {}}
           theme="auto"

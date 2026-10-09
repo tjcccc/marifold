@@ -33,7 +33,7 @@ export function parsePath(pathname: string): Route {
         return { view: 'config', section, ...(parts[2] ? { item: parts[2] } : {}) };
       }
       // Preserve the old /config/<profile> deep-link shape.
-      if (parts[1]) return { view: 'config', section: 'profiles', item: parts[1] };
+      if (parts[1]) { return { view: 'config', section: 'profiles', item: parts[1] }; }
       return { view: 'config', section: 'profiles' };
     }
     case 'agent':
@@ -52,14 +52,14 @@ export function formatPath(route: Route): string {
       return route.app ? `/apps/${encodeURIComponent(route.app)}` : '/apps';
     case 'config': {
       const parts = ['/config', route.section];
-      if (route.item) parts.push(encodeURIComponent(route.item));
+      if (route.item) { parts.push(encodeURIComponent(route.item)); }
       return parts.join('/');
     }
     case 'agent': {
       const parts = ['/agent'];
       if (route.profile) {
         parts.push(encodeURIComponent(route.profile));
-        if (route.session) parts.push(encodeURIComponent(route.session));
+        if (route.session) { parts.push(encodeURIComponent(route.session)); }
       }
       return parts.join('/');
     }
@@ -68,6 +68,6 @@ export function formatPath(route: Route): string {
 
 /** Recognize bookmarks made before clean History API routes were introduced. */
 export function parseLegacyHash(hash: string): Route | undefined {
-  if (!LEGACY_HASH_ROUTE.test(hash)) return undefined;
+  if (!LEGACY_HASH_ROUTE.test(hash)) { return undefined; }
   return parsePath(hash.slice(1));
 }

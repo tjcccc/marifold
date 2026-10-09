@@ -14,7 +14,7 @@ const HEARTBEAT_INTERVAL_MS = 15_000;
 /** Write one SSE frame. `id` (when given) becomes the frame's `id:` field so
  * EventSource reconnects report it back via the Last-Event-ID header. */
 export function writeSse(reply: FastifyReply, event: string, data: unknown, id?: number): void {
-  if (id !== undefined) reply.raw.write(`id: ${id}\n`);
+  if (id !== undefined) { reply.raw.write(`id: ${id}\n`); }
   reply.raw.write(`event: ${event}\n`);
   reply.raw.write(`data: ${JSON.stringify(data)}\n\n`);
 }

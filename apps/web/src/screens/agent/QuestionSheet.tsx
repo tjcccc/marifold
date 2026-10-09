@@ -31,19 +31,19 @@ export function QuestionSheet({ request, busy, onSubmit }: QuestionSheetProps) {
   );
 
   function submit(): void {
-    if (!complete || busy) return;
+    if (!complete || busy) { return; }
     onSubmit({
       answers: request.questions.map((question): UserInputSubmissionAnswer => {
         const answer = drafts[question.id]!;
         if (question.multiple) {
-          if (answer.kind !== 'multiple') throw new Error('Incomplete multi-select answer.');
+          if (answer.kind !== 'multiple') { throw new Error('Incomplete multi-select answer.'); }
           return {
             questionId: question.id,
             optionIds: answer.optionIds,
             ...(answer.customText !== undefined ? { customText: answer.customText.trim() } : {}),
           };
         }
-        if (answer.kind === 'option') return { questionId: question.id, optionId: answer.optionId };
+        if (answer.kind === 'option') { return { questionId: question.id, optionId: answer.optionId }; }
         if (answer.kind === 'custom') {
           return { questionId: question.id, customText: answer.text.trim() };
         }
@@ -208,8 +208,8 @@ function asMultiple(answer: DraftAnswer | undefined): Extract<DraftAnswer, { kin
 
 function isComplete(question: UserInputQuestion, answer: DraftAnswer | undefined): boolean {
   if (question.multiple) {
-    if (answer?.kind !== 'multiple') return false;
-    if (answer.customText !== undefined && !answer.customText.trim()) return false;
+    if (answer?.kind !== 'multiple') { return false; }
+    if (answer.customText !== undefined && !answer.customText.trim()) { return false; }
     return answer.optionIds.length > 0 || answer.customText !== undefined;
   }
   return answer?.kind === 'option' || (answer?.kind === 'custom' && answer.text.trim().length > 0);

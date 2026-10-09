@@ -20,7 +20,7 @@ import { SearchBackend } from './SearchBackend';
  * while that native path is active.
  */
 export function createSearchBackend(config: MarifoldWebSearchConfig): SearchBackend {
-  if (config.provider === 'builtin') return new BuiltInSearchBackend({ proxy: config.proxy });
+  if (config.provider === 'builtin') { return new BuiltInSearchBackend({ proxy: config.proxy }); }
   if (config.provider === 'firecrawl') {
     return new FirecrawlBackend({
       apiKey: config.apiKey,

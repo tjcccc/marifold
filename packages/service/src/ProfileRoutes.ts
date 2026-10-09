@@ -79,8 +79,9 @@ export function registerProfileRoutes(
   // Raw image bytes (not the JSON envelope): <img>-friendly apart from auth —
   // token-bearing clients fetch with headers and render a blob URL.
   server.get<{ Params: { name: string }; Querystring: { thumbnail?: string } }>('/v1/profiles/:name/avatar', async (request, reply) => {
-    if (request.query.thumbnail !== undefined && request.query.thumbnail !== '1')
+    if (request.query.thumbnail !== undefined && request.query.thumbnail !== '1') {
       throw new MarifoldError('PROFILE_INVALID', 'thumbnail must be 1 when supplied.');
+    }
     runtime.getProfile(request.params.name);
     const avatar = runtime.getProfileAvatar(request.params.name);
     if (!avatar) {
@@ -110,7 +111,7 @@ export function registerProfileRoutes(
     const data = requiredString(body.data, 'data');
     const mediaType = requiredString(body.mediaType, 'mediaType');
     const image = Buffer.from(data, 'base64');
-    if (image.length === 0) throw MarifoldError.configInvalid('data must be non-empty base64.');
+    if (image.length === 0) { throw MarifoldError.configInvalid('data must be non-empty base64.'); }
     runtime.setProfileAvatar(name, image, mediaType);
     return { ok: true, profile: runtime.getProfile(name) };
   });
@@ -127,14 +128,14 @@ export function registerProfileRoutes(
     runtime.getProfile(name); // throws PROFILE_INVALID (400) for unknown names
     const patch = parseProfilePatch(request.body);
 
-    if (patch.displayName !== undefined) runtime.setProfileDisplayName(name, patch.displayName ?? undefined);
-    if (patch.mode !== undefined) runtime.setProfileMode(name, patch.mode);
+    if (patch.displayName !== undefined) { runtime.setProfileDisplayName(name, patch.displayName ?? undefined); }
+    if (patch.mode !== undefined) { runtime.setProfileMode(name, patch.mode); }
     if (patch.model !== undefined) {
-      if (patch.model === null) runtime.setProfileModelOverride(name, undefined, undefined);
-      else runtime.setProfileModelOverride(name, patch.model.provider, patch.model.model);
+      if (patch.model === null) { runtime.setProfileModelOverride(name, undefined, undefined); }
+      else { runtime.setProfileModelOverride(name, patch.model.provider, patch.model.model); }
     }
-    if (patch.memories !== undefined) runtime.setProfileMemories(name, patch.memories ?? undefined);
-    if (patch.think !== undefined) runtime.setProfileThink(name, patch.think ?? undefined);
+    if (patch.memories !== undefined) { runtime.setProfileMemories(name, patch.memories ?? undefined); }
+    if (patch.think !== undefined) { runtime.setProfileThink(name, patch.think ?? undefined); }
     if (patch.maxContextTokens !== undefined) {
       runtime.setProfileMaxContextTokens(name, patch.maxContextTokens ?? undefined);
     }
@@ -205,7 +206,7 @@ export function registerProfileRoutes(
     const name = request.params.name;
     runtime.getProfile(name); // avoid MemoryStore scaffolding a phantom profile
     const text = stringValue(objectBody(request.body).text, 'text').trim();
-    if (!text) throw MarifoldError.configInvalid('Memory text cannot be empty.');
+    if (!text) { throw MarifoldError.configInvalid('Memory text cannot be empty.'); }
     runtime.rememberMemory(name, 'auto_short', text);
     return {
       ok: true,
@@ -252,7 +253,7 @@ function parseProfilePatch(value: unknown): ProfilePatch {
   patch.think = nullableBoolean(body.think, 'think');
 
   if (body.maxContextTokens !== undefined) {
-    if (body.maxContextTokens === null) patch.maxContextTokens = null;
+    if (body.maxContextTokens === null) { patch.maxContextTokens = null; }
     else if (typeof body.maxContextTokens === 'number' && Number.isInteger(body.maxContextTokens) && body.maxContextTokens > 0) {
       patch.maxContextTokens = body.maxContextTokens;
     } else {
@@ -262,9 +263,9 @@ function parseProfilePatch(value: unknown): ProfilePatch {
 
   if (body.sessionContextTurns !== undefined) {
     const turns = body.sessionContextTurns;
-    if (turns === null || turns === 'all') patch.sessionContextTurns = turns === null ? null : 'all';
-    else if (typeof turns === 'number' && Number.isInteger(turns) && turns >= 0) patch.sessionContextTurns = turns;
-    else throw MarifoldError.configInvalid('sessionContextTurns must be a non-negative integer, "all", or null.');
+    if (turns === null || turns === 'all') { patch.sessionContextTurns = turns === null ? null : 'all'; }
+    else if (typeof turns === 'number' && Number.isInteger(turns) && turns >= 0) { patch.sessionContextTurns = turns; }
+    else { throw MarifoldError.configInvalid('sessionContextTurns must be a non-negative integer, "all", or null.'); }
   }
 
   if (body.approval !== undefined) {
@@ -282,14 +283,14 @@ function parseProfilePatch(value: unknown): ProfilePatch {
   }
 
   // Drop the undefined placeholders so "absent" and "clear" stay distinct.
-  if (patch.memories === undefined) delete patch.memories;
-  if (patch.think === undefined) delete patch.think;
+  if (patch.memories === undefined) { delete patch.memories; }
+  if (patch.think === undefined) { delete patch.think; }
   return patch;
 }
 
 function nullableBoolean(value: unknown, label: string): boolean | null | undefined {
-  if (value === undefined) return undefined;
-  if (value === null) return null;
-  if (typeof value === 'boolean') return value;
+  if (value === undefined) { return undefined; }
+  if (value === null) { return null; }
+  if (typeof value === 'boolean') { return value; }
   throw MarifoldError.configInvalid(`${label} must be a boolean or null.`);
 }

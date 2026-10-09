@@ -24,7 +24,7 @@ export function encryptSudoPassword(challenge: SudoChallenge, password: string):
   const bytes = Buffer.from(password, 'utf8');
   try {
     validateSudoPassword(bytes);
-    if (challenge.expiresAt <= Date.now()) throw new Error('Sudo authorization expired.');
+    if (challenge.expiresAt <= Date.now()) { throw new Error('Sudo authorization expired.'); }
     return { id: challenge.id, ciphertext: publicEncrypt({
       key: createPublicKey({ key: Buffer.from(challenge.publicKey, 'base64'), format: 'der', type: 'spki' }),
       padding: constants.RSA_PKCS1_OAEP_PADDING, oaepHash: 'sha256', oaepLabel: Buffer.from(challenge.id),
@@ -43,7 +43,7 @@ export function validateSudoPassword(password: Buffer): void {
 export class SudoCredentials {
   private entries = new Map<string, { key: KeyObject; hash: string; expiresAt: number; timer: NodeJS.Timeout }>();
   create(command: string): SudoChallenge {
-    if (this.entries.size >= 128) throw new Error('Too many pending sudo authorizations.');
+    if (this.entries.size >= 128) { throw new Error('Too many pending sudo authorizations.'); }
     const { publicKey, privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
     const id = randomUUID();
     const expiresAt = Date.now() + 5 * 60_000;
@@ -57,8 +57,8 @@ export class SudoCredentials {
     const input = parseSudoResponse(response);
     const entry = this.entries.get(input.id);
     this.entries.delete(input.id);
-    if (entry) clearTimeout(entry.timer);
-    if (!entry || entry.expiresAt <= Date.now() || entry.hash !== this.hash(command)) throw new Error('Sudo authorization expired, was consumed, or belongs to another command.');
+    if (entry) { clearTimeout(entry.timer); }
+    if (!entry || entry.expiresAt <= Date.now() || entry.hash !== this.hash(command)) { throw new Error('Sudo authorization expired, was consumed, or belongs to another command.'); }
     let password: Buffer;
     try {
       password = privateDecrypt({ key: entry.key, padding: constants.RSA_PKCS1_OAEP_PADDING,

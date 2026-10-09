@@ -75,7 +75,7 @@ export async function encryptMessage(
   value: unknown,
 ): Promise<EncryptedMessage> {
   const plaintext = encoder.encode(JSON.stringify(value));
-  if (plaintext.length > MAX_FRAME_BYTES / 2) throw new Error('Message exceeds frame limit; use bounded transfers.');
+  if (plaintext.length > MAX_FRAME_BYTES / 2) { throw new Error('Message exceeds frame limit; use bounded transfers.'); }
   const key = await suite.kem.importKey('jwk', recipient.encryptionKey, true);
   const context = await suite.createSenderContext({
     recipientPublicKey: key,
@@ -96,20 +96,23 @@ export async function decryptMessage(
   message: EncryptedMessage,
   expected: { workspaceId: string; recipient: string },
 ): Promise<unknown> {
-  if (Buffer.byteLength(JSON.stringify(message)) > MAX_FRAME_BYTES) throw new Error('Frame too large.');
+  if (Buffer.byteLength(JSON.stringify(message)) > MAX_FRAME_BYTES) { throw new Error('Frame too large.'); }
   const header = parseHeader(message.header);
-  if (header.workspaceId !== expected.workspaceId || header.recipient !== expected.recipient)
+  if (header.workspaceId !== expected.workspaceId || header.recipient !== expected.recipient) {
     throw new Error('Message belongs to a different workspace or device.');
-  if (header.expiresAt < Date.now() || header.expiresAt > Date.now() + MESSAGE_TTL_MS + 5000)
+  }
+  if (header.expiresAt < Date.now() || header.expiresAt > Date.now() + MESSAGE_TTL_MS + 5000) {
     throw new Error('Message expired or has an invalid lifetime.');
+  }
   if (
     !verifyText(
       sender,
       JSON.stringify([message.header, message.encapsulatedKey, message.ciphertext]),
       message.signature,
     )
-  )
+  ) {
     throw new Error('Invalid message signature.');
+  }
   const key = await suite.kem.importKey('jwk', identity.encryptionPrivateKey, false);
   const context = await suite.createRecipientContext({
     recipientKey: key,

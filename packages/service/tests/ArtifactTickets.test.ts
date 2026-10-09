@@ -5,7 +5,7 @@ import { ArtifactTickets, artifactHeaders } from '../src/ArtifactTickets';
 import { registerSecurity } from '../src/Security';
 
 const servers: ReturnType<typeof fastify>[] = [];
-afterEach(async () => { vi.restoreAllMocks(); for (const server of servers.splice(0)) await server.close(); });
+afterEach(async () => { vi.restoreAllMocks(); for (const server of servers.splice(0)) { await server.close(); } });
 
 function fixture() {
   const server = fastify(); servers.push(server);
@@ -38,7 +38,7 @@ it('requires authentication to issue, scopes navigation to a single file, and pr
     { method: 'GET' as const, url: path, headers: { host: 'untrusted.example' } },
     { method: 'POST' as const, url: path },
     { method: 'GET' as const, url: path.replace(/.$/, path.endsWith('0') ? '1' : '0') },
-  ]) expect((await server.inject(request)).statusCode).toBeGreaterThanOrEqual(400);
+  ]) { expect((await server.inject(request)).statusCode).toBeGreaterThanOrEqual(400); }
   expect((await server.inject({ method: 'HEAD', url: path })).statusCode).toBe(200);
   vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 6 * 60 * 1000);
   expect((await server.inject({ url: path, headers: { authorization: 'Bearer service-secret' } })).statusCode).toBe(410);

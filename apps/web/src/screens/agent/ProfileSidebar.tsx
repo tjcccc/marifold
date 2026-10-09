@@ -64,7 +64,7 @@ export function ProfileSidebarContent({
   const menuRef = useRef<HTMLDivElement>(null);
   const filteredProfiles = useMemo(() => {
     const terms = normalizeSearch(search).split(' ').filter(Boolean);
-    if (terms.length === 0) return profiles;
+    if (terms.length === 0) { return profiles; }
     return profiles.filter(profile => {
       const identity = normalizeSearch(`${profile.displayName} ${profile.name}`);
       return terms.every(term => identity.includes(term));
@@ -72,12 +72,12 @@ export function ProfileSidebarContent({
   }, [profiles, search]);
 
   useEffect(() => {
-    if (!menu) return;
+    if (!menu) { return; }
     menuRef.current?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus();
     function onPointerDown(event: PointerEvent): void {
       const target = event.target;
-      if (!(target instanceof Node)) return;
-      if (menuRef.current?.contains(target) || menu?.trigger.contains(target)) return;
+      if (!(target instanceof Node)) { return; }
+      if (menuRef.current?.contains(target) || menu?.trigger.contains(target)) { return; }
       setMenu(undefined);
     }
     function onKeyDown(event: globalThis.KeyboardEvent): void {
@@ -86,9 +86,9 @@ export function ProfileSidebarContent({
         menu?.trigger.focus();
         return;
       }
-      if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+      if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) { return; }
       const items = [...(menuRef.current?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)') ?? [])];
-      if (items.length === 0) return;
+      if (items.length === 0) { return; }
       event.preventDefault();
       const current = items.indexOf(document.activeElement as HTMLButtonElement);
       const next = event.key === 'Home'
@@ -119,9 +119,9 @@ export function ProfileSidebarContent({
       setSearch('');
       return;
     }
-    if (event.key !== 'ArrowDown') return;
+    if (event.key !== 'ArrowDown') { return; }
     const firstProfile = listRef.current?.querySelector<HTMLButtonElement>('[data-profile-row]');
-    if (!firstProfile) return;
+    if (!firstProfile) { return; }
     event.preventDefault();
     firstProfile.focus();
   }
@@ -138,11 +138,11 @@ export function ProfileSidebarContent({
   }
 
   async function togglePinned(profile: ProfileSummary): Promise<void> {
-    if (!onSetPinned || busy) return;
+    if (!onSetPinned || busy) { return; }
     setBusy(true);
     const saved = await onSetPinned(profile.name, !profile.pinned);
     setBusy(false);
-    if (saved) setMenu(undefined);
+    if (saved) { setMenu(undefined); }
   }
 
   return (

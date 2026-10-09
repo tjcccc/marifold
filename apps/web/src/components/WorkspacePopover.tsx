@@ -27,10 +27,10 @@ export function WorkspacePopover(props: Props) {
   const [invitation, setInvitation] = useState('');
   const [devices, setDevices] = useState<Array<WorkspaceDevice & { host: boolean }>>([]);
   const sortedDevices = useMemo(() => [...devices].sort((a, b) => {
-    if (a.host !== b.host) return a.host ? -1 : 1;
+    if (a.host !== b.host) { return a.host ? -1 : 1; }
     const aJoined = Number.isFinite(a.joinedAt) ? a.joinedAt! : Infinity;
     const bJoined = Number.isFinite(b.joinedAt) ? b.joinedAt! : Infinity;
-    if (aJoined !== bJoined) return aJoined < bJoined ? -1 : 1;
+    if (aJoined !== bJoined) { return aJoined < bJoined ? -1 : 1; }
     return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }) || a.id.localeCompare(b.id);
   }), [devices]);
   const [error, setError] = useState(props.problem);
@@ -40,14 +40,14 @@ export function WorkspacePopover(props: Props) {
   const workspace = workspaces.find((w) => w.id === selected);
   useLayoutEffect(() => {
     const node = editor.current;
-    if (!node) return;
+    if (!node) { return; }
     const measure = () => setEditorOverflows(node.scrollHeight > node.clientHeight);
     measure();
-    if (typeof ResizeObserver === 'undefined') return;
+    if (typeof ResizeObserver === 'undefined') { return; }
     const observer = new ResizeObserver(measure);
     observer.observe(node);
     // Both viewport changes and asynchronously loaded content affect overflow.
-    for (const child of node.children) observer.observe(child);
+    for (const child of node.children) { observer.observe(child); }
     return () => observer.disconnect();
   });
   useEffect(() => {
@@ -64,7 +64,7 @@ export function WorkspacePopover(props: Props) {
     let active = true;
     const update = () =>
       refresh().catch((e) => {
-        if (active) setError(String(e.message));
+        if (active) { setError(String(e.message)); }
       });
     void update();
     const timer = setInterval(() => {
@@ -79,7 +79,7 @@ export function WorkspacePopover(props: Props) {
     setDevices([]);
     setName(workspace?.name ?? '');
     setConfirmRemove(false);
-    if (!workspace?.online) return;
+    if (!workspace?.online) { return; }
     let stopped = false;
     const update = () =>
       api
@@ -89,7 +89,7 @@ export function WorkspacePopover(props: Props) {
           {},
         )
         .then((r) => {
-          if (!stopped) setDevices(r.devices);
+          if (!stopped) { setDevices(r.devices); }
         })
         .catch(() => undefined);
     void update();
@@ -103,13 +103,13 @@ export function WorkspacePopover(props: Props) {
   }, [workspace?.id, workspace?.online, api]);
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !busy) props.onClose();
+      if (e.key === 'Escape' && !busy) { props.onClose(); }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [busy, props.onClose]);
   async function perform(fn: () => Promise<void>) {
-    if (busy) return;
+    if (busy) { return; }
     setBusy(true);
     setError(undefined);
     try {
@@ -135,11 +135,11 @@ export function WorkspacePopover(props: Props) {
       ? { id: `workspace-${workspace.id}`, name: workspace.name, workspaceId: workspace.id, token: local.token }
       : local;
     const problem = await props.onConnect(connection);
-    if (problem) throw new Error(problem);
+    if (problem) { throw new Error(problem); }
     props.onExecutionDevice(deviceChoice);
     props.onClose();
   }
-  if (mode === 'direct')
+  if (mode === 'direct') {
     return (
       <ConnectionPopover
         {...props}
@@ -147,13 +147,14 @@ export function WorkspacePopover(props: Props) {
         onClose={props.onClose}
       />
     );
+  }
   return (
     <div className={styles.backdrop} onClick={busy ? undefined : props.onClose}>
       <div
         ref={dialog}
         className={styles.popover}
         onKeyDown={(event) => {
-          if (event.key !== 'Tab') return;
+          if (event.key !== 'Tab') { return; }
           const controls = Array.from(
             dialog.current?.querySelectorAll<HTMLElement>(
               'button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled)',

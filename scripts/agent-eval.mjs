@@ -45,8 +45,8 @@ const cases = [
     objective: 'Reply with exactly MARIGOLD.',
     check: ({ events, finalSummary }) => {
       const usedTool = events.some(event => event.type === 'tool_request');
-      if (usedTool) return 'expected a direct answer without tool use';
-      if ((finalSummary ?? '').trim() !== 'MARIGOLD') return `expected exactly MARIGOLD, got: ${finalSummary}`;
+      if (usedTool) { return 'expected a direct answer without tool use'; }
+      if ((finalSummary ?? '').trim() !== 'MARIGOLD') { return `expected exactly MARIGOLD, got: ${finalSummary}`; }
       return undefined;
     },
   },
@@ -59,9 +59,9 @@ const cases = [
         .filter(event => event.type === 'tool_request')
         .map(event => event.call.tool);
       const mentioned = /marigold/i.test(finalSummary ?? '');
-      if (!requestedTools.includes('read_file')) return `expected read_file, got: ${requestedTools.join(', ') || '(none)'}`;
-      if (requestedTools.includes('shell_exec')) return 'expected the dedicated read_file tool instead of shell_exec';
-      if (!mentioned) return `expected the summary to mention MARIGOLD, got: ${finalSummary}`;
+      if (!requestedTools.includes('read_file')) { return `expected read_file, got: ${requestedTools.join(', ') || '(none)'}`; }
+      if (requestedTools.includes('shell_exec')) { return 'expected the dedicated read_file tool instead of shell_exec'; }
+      if (!mentioned) { return `expected the summary to mention MARIGOLD, got: ${finalSummary}`; }
       return undefined;
     },
   },
@@ -71,14 +71,14 @@ const cases = [
     objective: 'Create a file named greeting.txt containing exactly the text "hello agent".',
     check: ({ dir, events }) => {
       const target = path.join(dir, 'greeting.txt');
-      if (!fs.existsSync(target)) return 'greeting.txt was not created';
+      if (!fs.existsSync(target)) { return 'greeting.txt was not created'; }
       const requestedTools = events
         .filter(event => event.type === 'tool_request')
         .map(event => event.call.tool);
-      if (!requestedTools.includes('write_file')) return `expected write_file, got: ${requestedTools.join(', ') || '(none)'}`;
-      if (requestedTools.includes('shell_exec')) return 'expected the dedicated write_file tool instead of shell_exec';
+      if (!requestedTools.includes('write_file')) { return `expected write_file, got: ${requestedTools.join(', ') || '(none)'}`; }
+      if (requestedTools.includes('shell_exec')) { return 'expected the dedicated write_file tool instead of shell_exec'; }
       const content = fs.readFileSync(target, 'utf-8').trim();
-      if (!/hello agent/i.test(content)) return `unexpected content: ${content}`;
+      if (!/hello agent/i.test(content)) { return `unexpected content: ${content}`; }
       return undefined;
     },
   },
@@ -182,11 +182,11 @@ function renderConfig() {
     `[providers.${provider}]`,
     `type = "${providerType}"`,
   ];
-  if (args.baseUrl) lines.push(`base_url = "${args.baseUrl.replace(/\/+$/, '')}"`);
-  else if (providerType === 'ollama') lines.push('base_url = "http://localhost:11434"');
-  else if (provider === 'openai') lines.push('base_url = "https://api.openai.com"');
-  if (args.apiKeyEnv) lines.push(`api_key_env = "${args.apiKeyEnv}"`);
-  if (args.apiKey) lines.push(`api_key = "${args.apiKey}"`);
+  if (args.baseUrl) { lines.push(`base_url = "${args.baseUrl.replace(/\/+$/, '')}"`); }
+  else if (providerType === 'ollama') { lines.push('base_url = "http://localhost:11434"'); }
+  else if (provider === 'openai') { lines.push('base_url = "https://api.openai.com"'); }
+  if (args.apiKeyEnv) { lines.push(`api_key_env = "${args.apiKeyEnv}"`); }
+  if (args.apiKey) { lines.push(`api_key = "${args.apiKey}"`); }
   return `${lines.join('\n')}\n`;
 }
 
@@ -194,15 +194,15 @@ function parseArgs(argv) {
   const result = {};
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
-    if (arg === '--') continue;
-    if (!arg.startsWith('--')) throw new Error(`Unexpected positional argument: ${arg}`);
+    if (arg === '--') { continue; }
+    if (!arg.startsWith('--')) { throw new Error(`Unexpected positional argument: ${arg}`); }
     const key = toCamel(arg.slice(2));
     if (key === 'keep') {
       result[key] = true;
       continue;
     }
     const value = argv[index + 1];
-    if (value === undefined || value.startsWith('--')) throw new Error(`Missing value for ${arg}`);
+    if (value === undefined || value.startsWith('--')) { throw new Error(`Missing value for ${arg}`); }
     result[key] = value;
     index += 1;
   }
@@ -214,15 +214,15 @@ function toCamel(value) {
 }
 
 function numberArg(value, fallback) {
-  if (value === undefined) return fallback;
+  if (value === undefined) { return fallback; }
   const number = Number(value);
-  if (!Number.isFinite(number)) throw new Error(`Expected a number, got ${value}`);
+  if (!Number.isFinite(number)) { throw new Error(`Expected a number, got ${value}`); }
   return number;
 }
 
 function expandHome(value) {
-  if (value === '~') return os.homedir();
-  if (value.startsWith('~/')) return path.join(os.homedir(), value.slice(2));
+  if (value === '~') { return os.homedir(); }
+  if (value.startsWith('~/')) { return path.join(os.homedir(), value.slice(2)); }
   return value;
 }
 

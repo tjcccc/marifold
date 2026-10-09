@@ -24,8 +24,9 @@ export interface ArtifactWebRtcOptions {
 function description(value: unknown, type: Description['type']): Description {
   const d = value as Partial<Description> | undefined;
   if (!d || d.type !== type || typeof d.sdp !== 'string' || d.sdp.length > 64 * 1024 ||
-      !d.sdp.includes('m=application ') || /^m=(audio|video) /m.test(d.sdp))
+      !d.sdp.includes('m=application ') || /^m=(audio|video) /m.test(d.sdp)) {
     throw new Error('Invalid artifact connection description.');
+  }
   return { type, sdp: d.sdp };
 }
 
@@ -46,7 +47,7 @@ export class ArtifactWebRtc {
   }
   async close(): Promise<void> {
     this.closed = true;
-    for (const session of [...this.sessions]) session.stop();
+    for (const session of [...this.sessions]) { session.stop(); }
     const streams = [...this.downloads.keys()].map(stream => new Promise<void>(resolve => {
       stream.once('close', resolve);
       stream.destroy();
@@ -58,18 +59,19 @@ export class ArtifactWebRtc {
     this.closing.add(closing);
   }
   cancelWorkspace(scope: string): void {
-    for (const s of [...this.sessions]) if (s.scope === scope) s.stop();
-    for (const [stream, workspace] of this.downloads) if (workspace === scope) stream.destroy();
+    for (const s of [...this.sessions]) { if (s.scope === scope) { s.stop(); } }
+    for (const [stream, workspace] of this.downloads) { if (workspace === scope) { stream.destroy(); } }
   }
   private async peer(): Promise<RTCPeerConnection> {
-    if (!this.enabled || this.closed || this.activePeers + this.downloads.size >= MAX_SESSIONS) throw new Error('Direct downloads unavailable.');
+    if (!this.enabled || this.closed || this.activePeers + this.downloads.size >= MAX_SESSIONS) { throw new Error('Direct downloads unavailable.'); }
     const stun = this.options.stunUrl ?? process.env.MARIFOLD_WEBRTC_STUN_URL ?? 'stun:stun.l.google.com:19302';
-    if (!/^stun:[a-zA-Z0-9.-]+:[0-9]{1,5}$/.test(stun) || (Number(stun.split(':')[2]) < 1 || Number(stun.split(':')[2]) > 65535))
+    if (!/^stun:[a-zA-Z0-9.-]+:[0-9]{1,5}$/.test(stun) || (Number(stun.split(':')[2]) < 1 || Number(stun.split(':')[2]) > 65535)) {
       throw new Error('Invalid local WebRTC STUN URL.');
+    }
     this.activePeers++;
     try {
       const { RTCPeerConnection } = await import('werift');
-      if (this.closed) throw new Error('Direct downloads unavailable.');
+      if (this.closed) { throw new Error('Direct downloads unavailable.'); }
       const pc = new RTCPeerConnection({ iceServers: [{ urls: stun }], ...this.options.peerConfig });
       let released = false;
       pc.connectionStateChange.subscribe(state => {
@@ -81,7 +83,7 @@ export class ArtifactWebRtc {
 
   async offerFile(artifact: ResolvedRunArtifact, offer: unknown, scope: string): Promise<Description> {
     const remote = description(offer, 'offer');
-    if (artifact.size > MAX_FILE) throw new Error('File exceeds experimental direct download limit.');
+    if (artifact.size > MAX_FILE) { throw new Error('File exceeds experimental direct download limit.'); }
     const pc = await this.peer();
     let fd: number | undefined;
     let stopped = false;
@@ -90,7 +92,7 @@ export class ArtifactWebRtc {
     // A rejected lifecycle is observed even after signaling has finished.
     void stoppedPromise.catch(() => undefined);
     const stop = () => {
-      if (stopped) return;
+      if (stopped) { return; }
       stopped = true;
       clearTimeout(timer);
       clearTimeout(idle);
@@ -104,11 +106,11 @@ export class ArtifactWebRtc {
     let idle = setTimeout(stop, this.timeout); idle.unref();
     const timer = setTimeout(stop, 120_000);
     timer.unref();
-    pc.connectionStateChange.subscribe(state => { if (state === 'failed' || state === 'closed') stop(); });
+    pc.connectionStateChange.subscribe(state => { if (state === 'failed' || state === 'closed') { stop(); } });
     try {
       fd = fs.openSync(artifact.path, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
       const before = fs.fstatSync(fd);
-      if (!before.isFile() || before.size !== artifact.size) throw new Error('Artifact changed.');
+      if (!before.isFile() || before.size !== artifact.size) { throw new Error('Artifact changed.'); }
       let attached = false;
       pc.onDataChannel.subscribe(channel => {
         if (attached || channel.label !== LABEL || !channel.ordered || channel.maxRetransmits !== null || channel.maxPacketLifeTime !== null) { stop(); return; }
@@ -122,24 +124,25 @@ export class ArtifactWebRtc {
         channel.onerror = stop;
         channel.onmessage = ({ data }) => {
           try {
-            if (stopped || typeof data !== 'string' || data.length > 128) throw new Error('Invalid transfer credit.');
+            if (stopped || typeof data !== 'string' || data.length > 128) { throw new Error('Invalid transfer credit.'); }
             const message = JSON.parse(data);
-            if (message.type !== 'credit' || !Number.isSafeInteger(message.offset) || message.offset < acknowledged || message.offset > sent || (started && message.offset === acknowledged))
+            if (message.type !== 'credit' || !Number.isSafeInteger(message.offset) || message.offset < acknowledged || message.offset > sent || (started && message.offset === acknowledged)) {
               throw new Error('Invalid transfer credit.');
+            }
             clearTimeout(idle);
             idle = setTimeout(stop, this.timeout); idle.unref();
             started = true;
             acknowledged = message.offset;
             while (!stopped && sent < artifact.size && sent - acknowledged < WINDOW) {
               const bytes = Buffer.alloc(Math.min(BLOCK, artifact.size - sent));
-              if (fs.readSync(fd!, bytes, 0, bytes.length, sent) !== bytes.length) throw new Error('Artifact changed.');
+              if (fs.readSync(fd!, bytes, 0, bytes.length, sent) !== bytes.length) { throw new Error('Artifact changed.'); }
               hash.update(bytes);
               channel.send(bytes);
               sent += bytes.length;
             }
             if (sent === artifact.size && !ended) {
               const after = fs.fstatSync(fd!);
-              if (before.size !== after.size || before.mtimeMs !== after.mtimeMs || before.ctimeMs !== after.ctimeMs) throw new Error('Artifact changed.');
+              if (before.size !== after.size || before.mtimeMs !== after.mtimeMs || before.ctimeMs !== after.ctimeMs) { throw new Error('Artifact changed.'); }
               ended = true;
               channel.send(JSON.stringify({ type: 'end', size: sent, sha256: hash.digest('hex') }));
             }
@@ -148,9 +151,9 @@ export class ArtifactWebRtc {
       });
       const negotiate = async () => {
         await pc.setRemoteDescription(remote);
-        if (stopped) throw new Error('Direct transfer ended.');
+        if (stopped) { throw new Error('Direct transfer ended.'); }
         await pc.setLocalDescription(await pc.createAnswer());
-        if (stopped) throw new Error('Direct transfer ended.');
+        if (stopped) { throw new Error('Direct transfer ended.'); }
         return description(pc.localDescription, 'answer');
       };
       return await Promise.race([negotiate(), stoppedPromise]);
@@ -163,7 +166,7 @@ export class ArtifactWebRtc {
     scope: string,
     signal?: AbortSignal,
   ): Promise<Readable> {
-    if (!Number.isSafeInteger(size) || size < 0 || size > MAX_FILE) throw new Error('File exceeds experimental direct download limit.');
+    if (!Number.isSafeInteger(size) || size < 0 || size > MAX_FILE) { throw new Error('File exceeds experimental direct download limit.'); }
     const pc = await this.peer();
     let directory: string | undefined;
     let fd: number | undefined;
@@ -174,7 +177,7 @@ export class ArtifactWebRtc {
     const done = new Promise<void>((resolve, reject) => { resolveDone = resolve; rejectDone = reject; });
     void done.catch(() => undefined);
     const stop = () => {
-      if (stopped) return;
+      if (stopped) { return; }
       stopped = true;
       clearTimeout(idle);
       clearTimeout(lifetime);
@@ -182,8 +185,8 @@ export class ArtifactWebRtc {
       this.sessions.delete(session);
       this.closePeer(pc);
       if (fd !== undefined) { fs.closeSync(fd); fd = undefined; }
-      if (!succeeded && directory) fs.rmSync(directory, { recursive: true, force: true });
-      if (!succeeded) rejectDone(new Error('Direct download unavailable or interrupted.'));
+      if (!succeeded && directory) { fs.rmSync(directory, { recursive: true, force: true }); }
+      if (!succeeded) { rejectDone(new Error('Direct download unavailable or interrupted.')); }
     };
     const session = { scope, stop };
     this.sessions.add(session);
@@ -192,7 +195,7 @@ export class ArtifactWebRtc {
     idle.unref(); lifetime.unref();
     signal?.addEventListener('abort', stop, { once: true });
     try {
-      if (signal?.aborted) throw new Error('Download cancelled.');
+      if (signal?.aborted) { throw new Error('Download cancelled.'); }
       directory = fs.mkdtempSync(path.join(os.tmpdir(), 'marifold-download-'));
       fs.chmodSync(directory, 0o700);
       const filename = path.join(directory, 'artifact');
@@ -202,23 +205,23 @@ export class ArtifactWebRtc {
       let credited = 0;
       const hash = createHash('sha256');
       channel.onopen = () => {
-        try { if (!stopped) channel.send(JSON.stringify({ type: 'credit', offset: 0 })); }
+        try { if (!stopped) { channel.send(JSON.stringify({ type: 'credit', offset: 0 })); } }
         catch { stop(); }
       };
       channel.onclose = stop;
       channel.onerror = stop;
-      pc.connectionStateChange.subscribe(state => { if (state === 'failed' || state === 'closed') stop(); });
+      pc.connectionStateChange.subscribe(state => { if (state === 'failed' || state === 'closed') { stop(); } });
       channel.onmessage = ({ data }) => {
-        if (stopped) return;
+        if (stopped) { return; }
         try {
           clearTimeout(idle);
           idle = setTimeout(stop, this.timeout); idle.unref();
           if (Buffer.isBuffer(data)) {
-            if (!data.length || data.length > BLOCK || received + data.length > size) throw new Error('Invalid file bytes.');
+            if (!data.length || data.length > BLOCK || received + data.length > size) { throw new Error('Invalid file bytes.'); }
             let offset = 0;
             while (offset < data.length) {
               const written = fs.writeSync(fd!, data, offset, data.length - offset);
-              if (!written) throw new Error('Could not save direct download.');
+              if (!written) { throw new Error('Could not save direct download.'); }
               offset += written;
             }
             hash.update(data);
@@ -228,10 +231,11 @@ export class ArtifactWebRtc {
               channel.send(JSON.stringify({ type: 'credit', offset: received }));
             }
           } else {
-            if (data.length > 256) throw new Error('Invalid transfer result.');
+            if (data.length > 256) { throw new Error('Invalid transfer result.'); }
             const message = JSON.parse(data);
-            if (message.type !== 'end' || received !== size || message.size !== size || message.sha256 !== hash.digest('hex'))
+            if (message.type !== 'end' || received !== size || message.size !== size || message.sha256 !== hash.digest('hex')) {
               throw new Error('Incomplete or corrupt direct download.');
+            }
             succeeded = true;
             resolveDone();
             stop();
@@ -240,14 +244,14 @@ export class ArtifactWebRtc {
       };
       const negotiate = async () => {
         await pc.setLocalDescription(await pc.createOffer());
-        if (stopped) throw new Error('Download cancelled.');
+        if (stopped) { throw new Error('Download cancelled.'); }
         const answer = await signalOffer(description(pc.localDescription, 'offer'));
-        if (stopped) throw new Error('Download cancelled.');
+        if (stopped) { throw new Error('Download cancelled.'); }
         await pc.setRemoteDescription(description(answer, 'answer'));
         await done;
       };
       await Promise.race([negotiate(), done]);
-      if (!succeeded) throw new Error('Direct download incomplete.');
+      if (!succeeded) { throw new Error('Direct download incomplete.'); }
       const stream = fs.createReadStream(filename);
       const completedDirectory = directory;
       this.downloads.set(stream, scope);

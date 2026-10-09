@@ -57,7 +57,7 @@ export async function runScopedProcess(options: ScopedProcessOptions): Promise<T
     const stop = (reason: 'timeout' | 'cancel' | 'overflow' | 'background') => {
       stopped ??= reason;
       try {
-        if (child.pid) process.kill(-child.pid, 'SIGKILL');
+        if (child.pid) { process.kill(-child.pid, 'SIGKILL'); }
       } catch {
         child.kill('SIGKILL');
       }
@@ -65,7 +65,7 @@ export async function runScopedProcess(options: ScopedProcessOptions): Promise<T
     const output = { stdout: [] as Buffer[], stderr: [] as Buffer[], bytes: 0 };
     const collect = (stream: 'stdout' | 'stderr') => (chunk: Buffer) => {
       output.bytes += chunk.length;
-      if (output.bytes > MAX_BUFFER_BYTES) return stop('overflow');
+      if (output.bytes > MAX_BUFFER_BYTES) { return stop('overflow'); }
       output[stream].push(chunk);
     };
     child.stdout!.on('data', collect('stdout'));
@@ -83,18 +83,18 @@ export async function runScopedProcess(options: ScopedProcessOptions): Promise<T
     options.signal?.addEventListener('abort', cancel, { once: true });
     let finished = false;
     const finish = (code: number | null, failure?: string) => {
-      if (finished) return;
+      if (finished) { return; }
       finished = true;
       clearTimeout(timer);
       clearTimeout(lingering);
-      if (stopped === 'background') code = exitCode;
+      if (stopped === 'background') { code = exitCode; }
       options.signal?.removeEventListener('abort', cancel);
       const stdout = Buffer.concat(output.stdout).toString('utf8');
       const stderr = Buffer.concat(output.stderr).toString('utf8');
       const parts: string[] = [];
-      if (stdout) parts.push(stdout);
-      if (stderr) parts.push(`[stderr]\n${stderr}`);
-      if (stopped === 'background') parts.push('Background processes the command left running were stopped.');
+      if (stdout) { parts.push(stdout); }
+      if (stderr) { parts.push(`[stderr]\n${stderr}`); }
+      if (stopped === 'background') { parts.push('Background processes the command left running were stopped.'); }
       if ((stopped && stopped !== 'background') || failure || code !== 0) {
         parts.push(stopped === 'timeout'
           ? `Command timed out after ${timeoutMs / 1000}s.`
@@ -123,7 +123,7 @@ export async function runScopedProcess(options: ScopedProcessOptions): Promise<T
 export function findExecutable(name: string): string | undefined {
   const pathValue = process.env.PATH ?? '';
   for (const directory of pathValue.split(path.delimiter)) {
-    if (!directory) continue;
+    if (!directory) { continue; }
     const candidate = path.join(directory, name);
     try {
       fs.accessSync(candidate, fs.constants.X_OK);
@@ -141,7 +141,7 @@ export async function ensurePythonEnvironment(
   signal?: AbortSignal,
 ): Promise<ToolExecutionResult | undefined> {
   const python = pythonInVenv(workspace);
-  if (fs.existsSync(python)) return undefined;
+  if (fs.existsSync(python)) { return undefined; }
   const uv = findExecutable(process.platform === 'win32' ? 'uv.exe' : 'uv');
   if (!uv) {
     return {
@@ -283,11 +283,11 @@ function pathDirectories(workspace: RunWorkspace, includeUserDirectories: boolea
     .map(canonicalExisting)
     .filter(directory => {
       try {
-        if (!fs.statSync(directory).isDirectory()) return false;
-        if (!includeUserDirectories && isInside(directory, workspace.userHome)) return false;
+        if (!fs.statSync(directory).isDirectory()) { return false; }
+        if (!includeUserDirectories && isInside(directory, workspace.userHome)) { return false; }
         // A malformed PATH must not accidentally reopen the entire account or
         // Marifold state after the broad home deny.
-        if (directory === workspace.userHome || isInside(workspace.userHome, directory)) return false;
+        if (directory === workspace.userHome || isInside(workspace.userHome, directory)) { return false; }
         const appHome = path.join(workspace.userHome, '.marifold');
         if (directory === appHome || isInside(appHome, directory)) {
           return isInside(directory, workspace.rootDir);

@@ -10,20 +10,22 @@ export function useWorkspaceChangePublisher(client: ApiClient, onAvailability?: 
     let revision: string | undefined;
     let interrupted = false;
     const poll = async () => {
-      if (busy || document.visibilityState === 'hidden') return;
+      if (busy || document.visibilityState === 'hidden') { return; }
       busy = true;
       try {
         const result = await client.request<{ revision: string }>('GET', '/v1/changes');
-        if (!live || typeof result.revision !== 'string') return;
+        if (!live || typeof result.revision !== 'string') { return; }
         availability.current?.(true);
-        if (interrupted || (revision !== undefined && revision !== result.revision))
+        if (interrupted || (revision !== undefined && revision !== result.revision)) {
           window.dispatchEvent(new CustomEvent(EVENT, { detail: client.baseUrl }));
+        }
         interrupted = false;
         revision = result.revision;
       } catch (error) {
         interrupted = true;
-        if (live && (!(error instanceof MarifoldApiError) || error.code === 'WORKSPACE_OFFLINE'))
+        if (live && (!(error instanceof MarifoldApiError) || error.code === 'WORKSPACE_OFFLINE')) {
           availability.current?.(false);
+        }
       } finally {
         busy = false;
       }
@@ -43,7 +45,7 @@ export function useWorkspaceChanges(client: ApiClient, changed: () => void): voi
   callback.current = changed;
   useEffect(() => {
     const handle = (event: Event) => {
-      if ((event as CustomEvent).detail === client.baseUrl) callback.current();
+      if ((event as CustomEvent).detail === client.baseUrl) { callback.current(); }
     };
     window.addEventListener(EVENT, handle);
     return () => window.removeEventListener(EVENT, handle);

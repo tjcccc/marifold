@@ -14,7 +14,7 @@ export function registerExecutionCommand(program: Command, printer: ConsolePrint
     .action(action((mode?: string) => {
       const execution = device();
       if (mode !== undefined) {
-        if (mode !== 'scoped' && mode !== 'full') throw new Error('Expected scoped or full.');
+        if (mode !== 'scoped' && mode !== 'full') { throw new Error('Expected scoped or full.'); }
         execution.setMode(mode);
       }
       return { mode: execution.mode(), note: 'Applies only to this config on this device. Already-started full-access jobs continue when disabled.' };
@@ -25,11 +25,11 @@ export function registerExecutionCommand(program: Command, printer: ConsolePrint
     .action(async (action: string) => {
       try {
         const tailscale = new TailscaleControl();
-        if (action !== 'check' && action !== 'restart') throw new Error('Expected check or restart.');
-        if (action === 'restart' && device().mode() !== 'full') throw new Error('Enable full execution locally before using this restart workflow.');
+        if (action !== 'check' && action !== 'restart') { throw new Error('Expected check or restart.'); }
+        if (action === 'restart' && device().mode() !== 'full') { throw new Error('Enable full execution locally before using this restart workflow.'); }
         const result = action === 'check' ? await tailscale.check() : await tailscale.restart();
         process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
-        if ('canRestart' in result ? !result.canRestart : !result.restarted || !result.vpnReady) process.exitCode = 1;
+        if ('canRestart' in result ? !result.canRestart : !result.restarted || !result.vpnReady) { process.exitCode = 1; }
       } catch (error) { printer.printError(error); process.exitCode = 1; }
     });
 }

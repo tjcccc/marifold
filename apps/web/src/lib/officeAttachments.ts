@@ -21,7 +21,7 @@ export async function extractOfficeText(
   let expandedLimitExceeded = false;
   const archive = unzipSync(bytes, {
     filter(entry) {
-      if (!isRelevantOfficeEntry(kind, entry.name)) return false;
+      if (!isRelevantOfficeEntry(kind, entry.name)) { return false; }
       if (
         !Number.isFinite(entry.originalSize)
         || entry.originalSize < 0
@@ -46,7 +46,7 @@ export async function extractOfficeText(
         ? extractSpreadsheetText(archive)
         : extractPresentationText(archive),
   );
-  if (!extracted) throw new Error('no readable text was found');
+  if (!extracted) { throw new Error('no readable text was found'); }
 
   return truncateUtf8(extracted, maxTextBytes);
 }
@@ -56,7 +56,7 @@ function isRelevantOfficeEntry(kind: OfficeFileKind, rawName: string): boolean {
   if (kind === 'word') {
     return /^word\/(?:document|footnotes|endnotes|comments|header\d+|footer\d+)\.xml$/.test(name);
   }
-  if (kind === 'presentation') return /^ppt\/slides\/slide\d+\.xml$/.test(name);
+  if (kind === 'presentation') { return /^ppt\/slides\/slide\d+\.xml$/.test(name); }
   return name === 'xl/workbook.xml'
     || name === 'xl/_rels/workbook.xml.rels'
     || name === 'xl/sharedStrings.xml'
@@ -65,7 +65,7 @@ function isRelevantOfficeEntry(kind: OfficeFileKind, rawName: string): boolean {
 
 function extractWordText(archive: Record<string, Uint8Array>): string {
   const document = archive['word/document.xml'];
-  if (!document) throw new Error('DOCX is missing word/document.xml');
+  if (!document) { throw new Error('DOCX is missing word/document.xml'); }
   const paths = Object.keys(archive)
     .filter(path => path.startsWith('word/') && path.endsWith('.xml'))
     .sort((a, b) => wordPartOrder(a) - wordPartOrder(b) || a.localeCompare(b));
@@ -76,11 +76,11 @@ function extractWordText(archive: Record<string, Uint8Array>): string {
 }
 
 function wordPartOrder(path: string): number {
-  if (path === 'word/document.xml') return 0;
-  if (/word\/header\d+\.xml/.test(path)) return 1;
-  if (/word\/footer\d+\.xml/.test(path)) return 2;
-  if (path === 'word/footnotes.xml') return 3;
-  if (path === 'word/endnotes.xml') return 4;
+  if (path === 'word/document.xml') { return 0; }
+  if (/word\/header\d+\.xml/.test(path)) { return 1; }
+  if (/word\/footer\d+\.xml/.test(path)) { return 2; }
+  if (path === 'word/footnotes.xml') { return 3; }
+  if (path === 'word/endnotes.xml') { return 4; }
   return 5;
 }
 
@@ -91,7 +91,7 @@ function extractPresentationText(archive: Record<string, Uint8Array>): string {
       return match ? [{ path, number: Number(match[1]) }] : [];
     })
     .sort((a, b) => a.number - b.number);
-  if (slides.length === 0) throw new Error('PPTX contains no readable slides');
+  if (slides.length === 0) { throw new Error('PPTX contains no readable slides'); }
   return slides.map(slide => {
     const text = paragraphText(parseXml(archive[slide.path], slide.path));
     return `Slide ${slide.number}\n${text || '(no text)'}`;
@@ -102,7 +102,7 @@ function extractSpreadsheetText(archive: Record<string, Uint8Array>): string {
   const worksheetPaths = Object.keys(archive)
     .filter(path => /^xl\/worksheets\/sheet\d+\.xml$/.test(path))
     .sort(numberedPathOrder);
-  if (worksheetPaths.length === 0) throw new Error('XLSX contains no readable worksheets');
+  if (worksheetPaths.length === 0) { throw new Error('XLSX contains no readable worksheets'); }
 
   const sharedStrings = parseSharedStrings(archive['xl/sharedStrings.xml']);
   const namedSheets = spreadsheetSheetOrder(archive);
@@ -111,14 +111,14 @@ function extractSpreadsheetText(archive: Record<string, Uint8Array>): string {
     : worksheetPaths.map((path, index) => ({ name: `Sheet ${index + 1}`, path }));
   const included = new Set(sheets.map(sheet => sheet.path));
   for (const [index, path] of worksheetPaths.entries()) {
-    if (!included.has(path)) sheets.push({ name: `Sheet ${index + 1}`, path });
+    if (!included.has(path)) { sheets.push({ name: `Sheet ${index + 1}`, path }); }
   }
 
   return sheets.map(sheet => {
     const document = parseXml(archive[sheet.path], sheet.path);
     const cells = elementsByLocalName(document, 'c').flatMap(cell => {
       const value = spreadsheetCellValue(cell, sharedStrings);
-      if (!value) return [];
+      if (!value) { return []; }
       return [`${cell.getAttribute('r') || '?'}: ${value}`];
     });
     return `Sheet: ${sheet.name}\n${cells.length > 0 ? cells.join('\n') : '(no populated cells)'}`;
@@ -126,7 +126,7 @@ function extractSpreadsheetText(archive: Record<string, Uint8Array>): string {
 }
 
 function parseSharedStrings(bytes: Uint8Array | undefined): string[] {
-  if (!bytes) return [];
+  if (!bytes) { return []; }
   const document = parseXml(bytes, 'xl/sharedStrings.xml');
   return elementsByLocalName(document, 'si').map(item =>
     elementsByLocalName(item, 't').map(node => node.textContent ?? '').join(''),
@@ -138,7 +138,7 @@ function spreadsheetSheetOrder(
 ): Array<{ name: string; path: string }> {
   const workbookBytes = archive['xl/workbook.xml'];
   const relationshipsBytes = archive['xl/_rels/workbook.xml.rels'];
-  if (!workbookBytes || !relationshipsBytes) return [];
+  if (!workbookBytes || !relationshipsBytes) { return []; }
 
   const relationships = new Map(
     elementsByLocalName(parseXml(relationshipsBytes, 'xl/_rels/workbook.xml.rels'), 'Relationship')
@@ -160,9 +160,9 @@ function resolveWorkbookTarget(target: string): string {
   const parts = (raw.startsWith('/') ? raw.slice(1) : `xl/${raw}`).split('/');
   const normalized: string[] = [];
   for (const part of parts) {
-    if (!part || part === '.') continue;
-    if (part === '..') normalized.pop();
-    else normalized.push(part);
+    if (!part || part === '.') { continue; }
+    if (part === '..') { normalized.pop(); }
+    else { normalized.push(part); }
   }
   return normalized.join('/');
 }
@@ -172,13 +172,13 @@ function spreadsheetCellValue(cell: Element, sharedStrings: string[]): string {
   const rawValue = firstElementByLocalName(cell, 'v')?.textContent ?? '';
   const formula = firstElementByLocalName(cell, 'f')?.textContent?.trim();
   let value = rawValue;
-  if (type === 's') value = sharedStrings[Number(rawValue)] ?? rawValue;
+  if (type === 's') { value = sharedStrings[Number(rawValue)] ?? rawValue; }
   else if (type === 'inlineStr') {
     value = elementsByLocalName(cell, 't').map(node => node.textContent ?? '').join('');
-  } else if (type === 'b') value = rawValue === '1' ? 'TRUE' : 'FALSE';
+  } else if (type === 'b') { value = rawValue === '1' ? 'TRUE' : 'FALSE'; }
 
   value = value.trim().replace(/\s*\n+\s*/g, ' / ');
-  if (!formula) return value;
+  if (!formula) { return value; }
   return value ? `=${formula} (value: ${value})` : `=${formula}`;
 }
 
@@ -193,12 +193,12 @@ function paragraphText(document: Document): string {
 function inlineParagraphText(element: Element): string {
   let output = '';
   for (const child of Array.from(element.childNodes)) {
-    if (child.nodeType !== 1) continue;
+    if (child.nodeType !== 1) { continue; }
     const childElement = child as Element;
-    if (childElement.localName === 't') output += childElement.textContent ?? '';
-    else if (childElement.localName === 'tab') output += '\t';
-    else if (childElement.localName === 'br' || childElement.localName === 'cr') output += '\n';
-    else output += inlineParagraphText(childElement);
+    if (childElement.localName === 't') { output += childElement.textContent ?? ''; }
+    else if (childElement.localName === 'tab') { output += '\t'; }
+    else if (childElement.localName === 'br' || childElement.localName === 'cr') { output += '\n'; }
+    else { output += inlineParagraphText(childElement); }
   }
   return output;
 }

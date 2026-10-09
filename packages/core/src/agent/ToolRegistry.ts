@@ -120,7 +120,7 @@ export class ToolRegistry {
  * end of an output (often where the result/error lives) survives — more useful
  * to the agent than head-only when a large read/shell output is capped. */
 export function capToolOutput(content: string, limit: number): string {
-  if (limit <= 0 || content.length <= limit) return content;
+  if (limit <= 0 || content.length <= limit) { return content; }
   const head = Math.ceil(limit * 0.7);
   const tail = limit - head;
   const omitted = content.length - limit;

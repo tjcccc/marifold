@@ -51,7 +51,7 @@ async function startGitHubCopilotDeviceFlow(): Promise<{
     throw new Error(`Could not start GitHub device flow: ${stringifyError(error)}`);
   });
 
-  if (!response.ok) throw new Error(`GitHub device flow failed: HTTP ${response.status}: ${await response.text()}`);
+  if (!response.ok) { throw new Error(`GitHub device flow failed: HTTP ${response.status}: ${await response.text()}`); }
   const data = await response.json() as Record<string, unknown>;
   const deviceCode = requiredString(data.device_code, 'device_code');
   const userCode = requiredString(data.user_code, 'user_code');
@@ -89,19 +89,19 @@ async function pollGitHubCopilotDeviceFlow(deviceCode: string, interval: number,
       throw new Error(`Could not poll GitHub device flow: ${stringifyError(error)}`);
     });
 
-    if (!response.ok) throw new Error(`GitHub device polling failed: HTTP ${response.status}: ${await response.text()}`);
+    if (!response.ok) { throw new Error(`GitHub device polling failed: HTTP ${response.status}: ${await response.text()}`); }
     const data = await response.json() as Record<string, unknown>;
     const token = stringField(data.access_token);
-    if (token) return token;
+    if (token) { return token; }
 
     const error = stringField(data.error);
-    if (error === 'authorization_pending') continue;
+    if (error === 'authorization_pending') { continue; }
     if (error === 'slow_down') {
       pollInterval += 5;
       continue;
     }
-    if (error === 'expired_token') throw new Error('The device code expired. Start again.');
-    if (error === 'access_denied') throw new Error('Authorization was denied.');
+    if (error === 'expired_token') { throw new Error('The device code expired. Start again.'); }
+    if (error === 'access_denied') { throw new Error('Authorization was denied.'); }
     throw new Error(stringField(data.error_description) ?? error ?? 'Authorization failed.');
   }
 
@@ -110,7 +110,7 @@ async function pollGitHubCopilotDeviceFlow(deviceCode: string, interval: number,
 
 function requiredString(value: unknown, label: string): string {
   const parsed = stringField(value);
-  if (!parsed) throw new Error(`GitHub device flow response missing '${label}'.`);
+  if (!parsed) { throw new Error(`GitHub device flow response missing '${label}'.`); }
   return parsed;
 }
 

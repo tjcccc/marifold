@@ -12,7 +12,7 @@ const tempDirs: string[] = [];
 afterEach(() => {
   vi.restoreAllMocks();
   process.exitCode = undefined;
-  for (const dir of tempDirs.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
+  for (const dir of tempDirs.splice(0)) { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
 describe('doctor profile migration', () => {

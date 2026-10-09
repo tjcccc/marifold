@@ -19,12 +19,12 @@ export async function withOAuthCredentials(
       ? new ConfigLoader().load({ configPath: loaded.configPath }) : loaded;
     const adopt = (saved: LoadedMarifoldConfig): MarifoldProviderConfig | undefined => {
       const provider = saved.config.providers[name];
-      if (provider) loaded.config.providers[name] = { ...provider };
-      else delete loaded.config.providers[name];
+      if (provider) { loaded.config.providers[name] = { ...provider }; }
+      else { delete loaded.config.providers[name]; }
       return provider;
     };
     const provider = adopt(read());
-    if (!provider) return;
+    if (!provider) { return; }
     const original = JSON.stringify(provider);
     let update: Partial<MarifoldProviderConfig> | void;
     try {
@@ -33,20 +33,20 @@ export async function withOAuthCredentials(
       // A sign-in completed while the old token request was in flight.
       const current = adopt(read());
       if (current && JSON.stringify(current) !== original
-        && current.apiKey && current.apiKey !== provider.apiKey) return;
+        && current.apiKey && current.apiKey !== provider.apiKey) { return; }
       throw error;
     }
-    if (!update) return;
+    if (!update) { return; }
     const latest = read();
     const current = adopt(latest);
     // Never overwrite a concurrent reauth (a changed credential field) or a
     // provider removal. Other edits to the provider, such as its proxy, keep
     // the rotated credentials: the previous refresh token is already consumed.
-    if (!current) return;
+    if (!current) { return; }
     const before = JSON.parse(original) as MarifoldProviderConfig;
     const reauthenticated = (Object.keys(update) as (keyof MarifoldProviderConfig)[])
       .some(key => JSON.stringify(current[key]) !== JSON.stringify(before[key]));
-    if (reauthenticated) return;
+    if (reauthenticated) { return; }
     latest.config.providers[name] = { ...current, ...update };
     new ConfigManager(latest).save();
     adopt(latest);
@@ -55,6 +55,6 @@ export async function withOAuthCredentials(
   try {
     await operation;
   } finally {
-    if (pending.get(key) === operation) pending.delete(key);
+    if (pending.get(key) === operation) { pending.delete(key); }
   }
 }

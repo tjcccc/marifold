@@ -67,17 +67,17 @@ export function AgentScreen(props: AgentScreenProps) {
   }, [appsCatalog.refresh]);
 
   useEffect(() => {
-    if (appsView) setAppsMounted(true);
+    if (appsView) { setAppsMounted(true); }
   }, [appsView]);
 
   useEffect(() => {
-    if (!appsView || !appsCatalog.selectedName || props.appName === appsCatalog.selectedName) return;
+    if (!appsView || !appsCatalog.selectedName || props.appName === appsCatalog.selectedName) { return; }
     props.navigate({ view: 'apps', app: appsCatalog.selectedName });
   }, [appsCatalog.selectedName, appsView, props.appName, props.navigate]);
 
   useEffect(() => {
-    if (!props.route.profile) setMobileConversationOpen(false);
-    else if (props.route.session) setMobileConversationOpen(true);
+    if (!props.route.profile) { setMobileConversationOpen(false); }
+    else if (props.route.session) { setMobileConversationOpen(true); }
   }, [props.route.profile, props.route.session]);
 
   async function submitCreateProfile(input: CreateProfileInput): Promise<void> {
@@ -106,22 +106,22 @@ export function AgentScreen(props: AgentScreenProps) {
   }
 
   function onDragOver(event: React.DragEvent): void {
-    if (![...event.dataTransfer.types].includes('Files')) return;
+    if (![...event.dataTransfer.types].includes('Files')) { return; }
     event.preventDefault();
     setDropActive(true);
   }
 
   function onDrop(event: React.DragEvent): void {
-    if (![...event.dataTransfer.types].includes('Files')) return;
+    if (![...event.dataTransfer.types].includes('Files')) { return; }
     event.preventDefault();
     setDropActive(false);
     const files = [...event.dataTransfer.files];
-    if (files.length > 0) void controller.addFiles(files);
+    if (files.length > 0) { void controller.addFiles(files); }
   }
 
   const workingProfiles = useMemo(() => {
     const names = new Set<string>();
-    if (controller.steeringRun && controller.profileName) names.add(controller.profileName);
+    if (controller.steeringRun && controller.profileName) { names.add(controller.profileName); }
     return names;
   }, [controller.steeringRun, controller.profileName]);
 
@@ -135,11 +135,11 @@ export function AgentScreen(props: AgentScreenProps) {
       theme={props.theme}
       connectionName={props.connectionName}
       onAgent={() => {
-        if (appsView) props.onWorkspaceViewChange('agent');
+        if (appsView) { props.onWorkspaceViewChange('agent'); }
       }}
       onApps={() => {
         setMobileAppOpen(false);
-        if (!appsView) props.onWorkspaceViewChange('apps');
+        if (!appsView) { props.onWorkspaceViewChange('apps'); }
       }}
       onOpenConnection={props.onOpenConnection}
       onThemeChange={props.onThemeChange}
@@ -267,7 +267,7 @@ export function AgentScreen(props: AgentScreenProps) {
               : currentSession ? sessionTitle(currentSession) : 'New session'}
             backLabel={appsView ? 'Apps' : 'Sessions'}
             onBack={() => {
-              if (appsView) setMobileAppOpen(false);
+              if (appsView) { setMobileAppOpen(false); }
               else {
                 setMobileConversationOpen(false);
                 if (controller.profileName && props.route.session) {

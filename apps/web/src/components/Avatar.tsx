@@ -31,7 +31,7 @@ export function Avatar({ client, name, label = name, hasAvatar, size = 32, versi
     (async () => {
       try {
         const blob = await fetchAvatarBlob(client, name);
-        if (cancelled || !blob) return;
+        if (cancelled || !blob) { return; }
         objectUrl = URL.createObjectURL(blob);
         setUrl(objectUrl);
       } catch {
@@ -40,7 +40,7 @@ export function Avatar({ client, name, label = name, hasAvatar, size = 32, versi
     })();
     return () => {
       cancelled = true;
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      if (objectUrl) { URL.revokeObjectURL(objectUrl); }
     };
   }, [client, name, hasAvatar, version]);
 

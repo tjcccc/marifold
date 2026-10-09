@@ -15,7 +15,7 @@ export function writeFileAtomic(file: string, content: string): void {
   const temp = path.join(path.dirname(target), `.${path.basename(target)}.${randomBytes(6).toString('hex')}.tmp`);
   try {
     fs.writeFileSync(temp, content, { flag: 'wx', ...(mode !== undefined ? { mode } : {}) });
-    if (mode !== undefined) fs.chmodSync(temp, mode);
+    if (mode !== undefined) { fs.chmodSync(temp, mode); }
     fs.renameSync(temp, target);
   } catch (error) {
     fs.rmSync(temp, { force: true });

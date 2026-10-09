@@ -39,7 +39,7 @@ export function CreateProfileSheet(props: CreateProfileSheetProps) {
   const canSubmit = trimmed.length > 0 && !nameProblem && !props.busy;
 
   async function pickAvatar(file: File | undefined): Promise<void> {
-    if (!file) return;
+    if (!file) { return; }
     if (!AVATAR_TYPES.has(file.type)) {
       setLocalProblem('Avatars must be PNG, JPEG, or WebP.');
       return;
@@ -53,7 +53,7 @@ export function CreateProfileSheet(props: CreateProfileSheetProps) {
   }
 
   function submit(): void {
-    if (!canSubmit) return;
+    if (!canSubmit) { return; }
     const slash = modelChoice.indexOf('/');
     props.onSubmit({
       name: trimmed,
@@ -112,8 +112,8 @@ export function CreateProfileSheet(props: CreateProfileSheetProps) {
               autoFocus
               onChange={event => setName(event.target.value)}
               onKeyDown={event => {
-                if (event.key === 'Enter') submit();
-                if (event.key === 'Escape') props.onClose();
+                if (event.key === 'Enter') { submit(); }
+                if (event.key === 'Escape') { props.onClose(); }
               }}
             />
             <div id="new-profile-name-rules" className={styles.nameRules}>

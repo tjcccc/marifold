@@ -967,7 +967,7 @@ function ollamaStreamingResponse(chunks: string[]): Response {
   const body = new ReadableStream<Uint8Array>({
     start(controller) {
       const encoder = new TextEncoder();
-      for (const line of lines) controller.enqueue(encoder.encode(line + '\n'));
+      for (const line of lines) { controller.enqueue(encoder.encode(line + '\n')); }
       controller.close();
     },
   });

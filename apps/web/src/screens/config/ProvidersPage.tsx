@@ -54,13 +54,13 @@ export function ProvidersPage(props: ProvidersPageProps) {
   }
 
   useEffect(() => {
-    if (!removeOpen && !reauthOpen) return;
+    if (!removeOpen && !reauthOpen) { return; }
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     const dialog = removeOpen ? removeDialogRef.current : reauthDialogRef.current;
     const returnFocus = removeOpen ? removeTriggerRef.current : reauthTriggerRef.current;
-    if (removeOpen) removeInputRef.current?.focus();
-    else reauthCloseRef.current?.focus();
+    if (removeOpen) { removeInputRef.current?.focus(); }
+    else { reauthCloseRef.current?.focus(); }
 
     function onKeyDown(event: KeyboardEvent): void {
       if (event.key === 'Escape' && !busyRef.current) {
@@ -69,11 +69,11 @@ export function ProvidersPage(props: ProvidersPageProps) {
         setRemoveName('');
         return;
       }
-      if (event.key !== 'Tab') return;
+      if (event.key !== 'Tab') { return; }
       const controls = [...(dialog?.querySelectorAll<HTMLElement>(
         'button:not(:disabled), input:not(:disabled)',
       ) ?? [])];
-      if (controls.length === 0) return;
+      if (controls.length === 0) { return; }
       const current = controls.indexOf(document.activeElement as HTMLElement);
       const next = event.shiftKey
         ? (current - 1 + controls.length) % controls.length
@@ -102,7 +102,7 @@ export function ProvidersPage(props: ProvidersPageProps) {
   const reauthCommand = `marifold provider reauth ${props.selected}`;
 
   function closeRemoveDialog(): void {
-    if (props.busy) return;
+    if (props.busy) { return; }
     setRemoveOpen(false);
     setRemoveName('');
   }
@@ -357,7 +357,7 @@ export function ProvidersPage(props: ProvidersPageProps) {
             onClick={event => event.stopPropagation()}
             onSubmit={event => {
               event.preventDefault();
-              if (removeConfirmed && !props.busy) props.onRemoveProvider();
+              if (removeConfirmed && !props.busy) { props.onRemoveProvider(); }
             }}
           >
             <div id="remove-provider-title" className={styles.removeDialogTitle}>

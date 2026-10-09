@@ -30,7 +30,7 @@ export async function exchangeGitHubTokenForCopilotToken(githubToken: string): P
     expires_at?: unknown;
   };
   const token = stringField(data.token) ?? stringField(data.copilot_token);
-  if (!token) throw new Error('GitHub Copilot token exchange did not return a token.');
+  if (!token) { throw new Error('GitHub Copilot token exchange did not return a token.'); }
 
   return {
     token,

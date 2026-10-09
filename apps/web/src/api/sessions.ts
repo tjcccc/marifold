@@ -6,10 +6,10 @@ export async function listSessions(
   options: { limit?: number; profile?: string; archived?: boolean; search?: string } = {},
 ): Promise<SessionSummary[]> {
   const query = new URLSearchParams();
-  if (options.limit !== undefined) query.set('limit', String(options.limit));
-  if (options.profile !== undefined) query.set('profile', options.profile);
-  if (options.archived !== undefined) query.set('archived', String(options.archived));
-  if (options.search?.trim()) query.set('q', options.search.trim());
+  if (options.limit !== undefined) { query.set('limit', String(options.limit)); }
+  if (options.profile !== undefined) { query.set('profile', options.profile); }
+  if (options.archived !== undefined) { query.set('archived', String(options.archived)); }
+  if (options.search?.trim()) { query.set('q', options.search.trim()); }
   const suffix = query.size > 0 ? `?${query.toString()}` : '';
   const body = await client.request<{ sessions: SessionSummary[] }>('GET', `/v1/sessions${suffix}`);
   return body.sessions;

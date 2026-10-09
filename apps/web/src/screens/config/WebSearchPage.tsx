@@ -13,7 +13,7 @@ export function WebSearchPage({ search, busy, onSave }: WebSearchPageProps) {
   const [apiKeyEnv, setApiKeyEnv] = useState<string>();
   const [proxy, setProxy] = useState<string>();
 
-  if (!search) return <div className={styles.empty}>Loading web search settings…</div>;
+  if (!search) { return <div className={styles.empty}>Loading web search settings…</div>; }
   const keyEnvValue = apiKeyEnv ?? search.apiKeyEnv ?? '';
   const proxyValue = proxy ?? search.proxy ?? '';
 

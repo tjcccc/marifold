@@ -38,7 +38,7 @@ it.skipIf(!process.env.MARIFOLD_TEST_REDIS_BIN)(
         redis.once('error', reject);
         redis.once('exit', (code) => {
           clearTimeout(timer);
-          if (code) reject(new Error('Disposable Redis exited.'));
+          if (code) { reject(new Error('Disposable Redis exited.')); }
         });
       });
       a = new RedisRelayStore(`redis://127.0.0.1:${port}`);
@@ -62,7 +62,7 @@ it.skipIf(!process.env.MARIFOLD_TEST_REDIS_BIN)(
       await b.ack(workspaceId, 'guest', received[0].id);
       received.length = 0;
       await a.publish(workspaceId, 'guest', 'encrypted-live');
-      for (let i = 0; i < 100 && received.length === 0; i++) await new Promise((r) => setTimeout(r, 10));
+      for (let i = 0; i < 100 && received.length === 0; i++) { await new Promise((r) => setTimeout(r, 10)); }
       expect(received.some((r) => r.packet === 'encrypted-live')).toBe(true);
       await b.revoke(workspaceId, 'guest');
       expect(await a.revoked(workspaceId, 'guest')).toBe(true);
@@ -107,7 +107,7 @@ it.skipIf(!process.env.MARIFOLD_TEST_REDIS_BIN)(
         const pending = guestDevice.request(joined.id, 'slow', { written: true }, 'stable_mutation');
         await expect.poll(() => effects).toBe(1);
         rotating = true;
-        for (const socket of sockets) socket.destroy();
+        for (const socket of sockets) { socket.destroy(); }
         release();
         expect(await pending).toEqual({ written: true });
         expect(effects).toBe(1);
@@ -115,18 +115,18 @@ it.skipIf(!process.env.MARIFOLD_TEST_REDIS_BIN)(
       } finally {
         hostDevice.close();
         guestDevice.close();
-        for (const socket of sockets) socket.destroy();
+        for (const socket of sockets) { socket.destroy(); }
         await new Promise<void>((resolve) => front.close(() => resolve()));
-        for (const relay of relays) relay.emit('close');
+        for (const relay of relays) { relay.emit('close'); }
       }
     } finally {
-      for (const stop of stops) stop();
+      for (const stop of stops) { stop(); }
       await a?.close();
       await b?.close();
       redis.kill('SIGTERM');
       await new Promise<void>((r) => {
-        if (redis.exitCode !== null) r();
-        else redis.once('exit', () => r());
+        if (redis.exitCode !== null) { r(); }
+        else { redis.once('exit', () => r()); }
       });
       rmSync(directory, { recursive: true, force: true });
     }

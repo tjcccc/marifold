@@ -8,9 +8,9 @@ const { MarifoldRuntime } = require('../packages/core/dist/index.js');
 const args = process.argv.slice(2);
 const arg = (name, fallback) => args.includes(name) ? args[args.indexOf(name) + 1] : fallback;
 const model = arg('--model', 'gemma4:e4b-mlx');
-if (/cloud/i.test(model)) throw new Error('This smoke test is for a local model.');
+if (/cloud/i.test(model)) { throw new Error('This smoke test is for a local model.'); }
 const providers = arg('--providers', 'builtin,duckduckgo').split(',');
-if (providers.some(p => !['builtin', 'duckduckgo'].includes(p))) throw new Error('Choose builtin or duckduckgo.');
+if (providers.some(p => !['builtin', 'duckduckgo'].includes(p))) { throw new Error('Choose builtin or duckduckgo.'); }
 const cases = [
   'Use web_search to find the official Node.js 24.0.0 release announcement. Return its URL and one fact from the search results. If search fails, say so.',
   '请使用 web_search 查找 Python pathlib 官方文档。给出官方链接和一条搜索结果支持的信息。搜索失败时请明确说明。',
@@ -35,7 +35,7 @@ for (const provider of providers) {
     try {
       for await (const event of runtime.createAgentRunner().run({ objective, cwd: root, maxIterations: 3,
         signal: AbortSignal.timeout(90_000), approvalHandler: async call => ({ approved: call.kind === 'network' }),
-      })) events.push(event);
+      })) { events.push(event); }
       rows.push({ model, provider, objective, ms: Math.round(performance.now() - start), events });
     } catch (error) { rows.push({ model, provider, objective, ms: Math.round(performance.now() - start), error: error.message, events }); }
     finally { runtime.close(); rmSync(root, { recursive: true, force: true }); }

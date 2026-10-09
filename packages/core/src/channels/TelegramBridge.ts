@@ -133,7 +133,7 @@ export class TelegramBridge {
   }
 
   start(): void {
-    if (this.running) return;
+    if (this.running) { return; }
     this.running = true;
     this.abort = new AbortController();
     this.log?.(`Telegram bridge started (profile ${this.profile}, agent mode, ${this.config.allowlist.length} allowed user(s)).`);
@@ -149,14 +149,14 @@ export class TelegramBridge {
     while (this.running) {
       try {
         for (const update of await this.getUpdates()) {
-          if (!this.running) break;
+          if (!this.running) { break; }
           this.offset = update.update_id + 1;
           // Detached: a turn may block on an approval whose callback_query only
           // arrives via a later getUpdates — awaiting here would deadlock.
           void this.handleUpdate(update).catch(error => this.log?.(`Telegram update error: ${errorMessage(error)}`));
         }
       } catch (error) {
-        if (!this.running) break; // aborted by stop()
+        if (!this.running) { break; } // aborted by stop()
         this.log?.(`Telegram poll error: ${errorMessage(error)}`);
         await this.sleep(ERROR_BACKOFF_MS);
       }
@@ -174,7 +174,7 @@ export class TelegramBridge {
     const message = update.message;
     const chatId = message?.chat?.id;
     const fromId = message?.from?.id;
-    if (chatId === undefined || !message) return;
+    if (chatId === undefined || !message) { return; }
     if (fromId === undefined || !this.config.allowlist.includes(fromId)) {
       this.log?.(`Ignored message from non-allowlisted user ${fromId ?? '?'}`);
       return;
@@ -188,7 +188,7 @@ export class TelegramBridge {
     }
 
     const text = typeof message.text === 'string' ? message.text.trim() : '';
-    if (!text) return;
+    if (!text) { return; }
 
     if (text.startsWith('/')) {
       await this.handleCommand(chatId, text);
@@ -267,7 +267,7 @@ export class TelegramBridge {
         instructions: OUTBOX_INSTRUCTIONS,
       });
       let text = result.text;
-      if (result.denied.length > 0) text += `${text ? '\n\n' : ''}(Couldn't run: ${result.denied.join(', ')} — denied.)`;
+      if (result.denied.length > 0) { text += `${text ? '\n\n' : ''}(Couldn't run: ${result.denied.join(', ')} — denied.)`; }
       if (result.ok) {
         reply = text || '(no response)';
       } else if (text) {
@@ -311,7 +311,7 @@ export class TelegramBridge {
     } catch {
       return; // no outbox yet
     }
-    if (entries.length === 0) return;
+    if (entries.length === 0) { return; }
 
     const sentDir = join(outbox, OUTBOX_SENT_DIR);
     await mkdir(sentDir, { recursive: true }).catch(() => undefined);
@@ -328,7 +328,7 @@ export class TelegramBridge {
 
   private async downloadFile(fileId: string): Promise<Buffer> {
     const info = await this.call<{ file_path?: string }>('getFile', { file_id: fileId }, SEND_TIMEOUT_MS);
-    if (!info.file_path) throw new Error('Telegram getFile returned no file_path');
+    if (!info.file_path) { throw new Error('Telegram getFile returned no file_path'); }
     const url = `${TELEGRAM_FILE_BASE}/bot${this.token}/${info.file_path}`;
 
     // Downloads through a proxy can transiently "fetch failed" — retry a few times.
@@ -337,14 +337,14 @@ export class TelegramBridge {
       const link = createLinkedAbort(FILE_TIMEOUT_MS, this.abort?.signal);
       const init: Record<string, unknown> = { signal: link.signal };
       const dispatcher = proxyDispatcher();
-      if (dispatcher) init.dispatcher = dispatcher;
+      if (dispatcher) { init.dispatcher = dispatcher; }
       try {
         const response = await this.fetchImpl(url, init as RequestInit);
-        if (!response.ok) throw new Error(`download HTTP ${response.status}`);
+        if (!response.ok) { throw new Error(`download HTTP ${response.status}`); }
         return Buffer.from(await response.arrayBuffer());
       } catch (error) {
         lastError = error;
-        if (attempt < DOWNLOAD_ATTEMPTS) await this.sleep(ERROR_BACKOFF_MS);
+        if (attempt < DOWNLOAD_ATTEMPTS) { await this.sleep(ERROR_BACKOFF_MS); }
       } finally {
         link.dispose();
       }
@@ -363,11 +363,11 @@ export class TelegramBridge {
     const link = createLinkedAbort(FILE_TIMEOUT_MS, this.abort?.signal);
     const init: Record<string, unknown> = { method: 'POST', body: form, signal: link.signal };
     const dispatcher = proxyDispatcher();
-    if (dispatcher) init.dispatcher = dispatcher;
+    if (dispatcher) { init.dispatcher = dispatcher; }
     try {
       const response = await this.fetchImpl(`${TELEGRAM_API_BASE}/bot${this.token}/${method}`, init as RequestInit);
       const data = await response.json() as TelegramResponse<unknown>;
-      if (!data.ok) throw new Error(`Telegram ${method} failed: ${data.description ?? `HTTP ${response.status}`}`);
+      if (!data.ok) { throw new Error(`Telegram ${method} failed: ${data.description ?? `HTTP ${response.status}`}`); }
     } finally {
       link.dispose();
     }
@@ -379,7 +379,7 @@ export class TelegramBridge {
    * "Always"/"Trust" also persist to the profile (future runs) and to the
    * session (no re-prompt this run). */
   private async requestApproval(chatId: number, request: ApprovalRequest): Promise<ApprovalDecision> {
-    if (!request.escalated && this.grantedKinds.has(request.kind)) return { approved: true };
+    if (!request.escalated && this.grantedKinds.has(request.kind)) { return { approved: true }; }
     if (request.persistable !== false
         && request.escalated
         && request.escalatedPath
@@ -412,7 +412,7 @@ export class TelegramBridge {
     if (action === 'trust' && request.persistable !== false) {
       try {
         const folder = this.runtime.addProfileTrustedFolder(this.profile, dirname(request.escalatedPath as string));
-        if (!this.trustedFolders.includes(folder)) this.trustedFolders.push(folder);
+        if (!this.trustedFolders.includes(folder)) { this.trustedFolders.push(folder); }
       } catch (error) {
         trustRefused = errorMessage(error);
         this.log?.(`Could not trust folder: ${trustRefused}`);
@@ -426,10 +426,10 @@ export class TelegramBridge {
       case 'timeout':
         return { approved: false, reason: 'no response to the approval prompt' };
       case 'trust':
-        if (request.persistable === false) return { approved: false, reason: 'this capability cannot be trusted persistently' };
+        if (request.persistable === false) { return { approved: false, reason: 'this capability cannot be trusted persistently' }; }
         return { approved: true };
       case 'always':
-        if (request.persistable === false) return { approved: false, reason: 'this capability cannot be allowed persistently' };
+        if (request.persistable === false) { return { approved: false, reason: 'this capability cannot be allowed persistently' }; }
         this.grantedKinds.add(request.kind);
         try {
           this.runtime.setProfileAgentApproval(this.profile, request.kind, 'allow');
@@ -464,7 +464,7 @@ export class TelegramBridge {
     const fromId = callback.from?.id;
     // Ack the tap so Telegram clears the button's spinner (best-effort).
     void this.call('answerCallbackQuery', { callback_query_id: callback.id }, SEND_TIMEOUT_MS).catch(() => undefined);
-    if (fromId === undefined || !this.config.allowlist.includes(fromId)) return;
+    if (fromId === undefined || !this.config.allowlist.includes(fromId)) { return; }
 
     const [, token, action] = (callback.data ?? '').split(':');
     const pending = this.pendingApproval;
@@ -481,7 +481,7 @@ export class TelegramBridge {
     action: ApprovalAction,
     note?: string,
   ): Promise<void> {
-    if (messageId === undefined) return;
+    if (messageId === undefined) { return; }
     const label =
       action === 'deny' ? '❌ Denied'
       : action === 'timeout' ? '⌛ No response — denied'
@@ -515,9 +515,9 @@ export class TelegramBridge {
     for (let i = 0; i < chunks.length; i++) {
       const params: Record<string, unknown> = { chat_id: chatId, text: chunks[i] };
       const isLast = i === chunks.length - 1;
-      if (replyMarkup && isLast) params.reply_markup = replyMarkup;
+      if (replyMarkup && isLast) { params.reply_markup = replyMarkup; }
       const sent = await this.call<{ message_id?: number }>('sendMessage', params, SEND_TIMEOUT_MS);
-      if (replyMarkup && isLast) keyboardMessageId = sent?.message_id;
+      if (replyMarkup && isLast) { keyboardMessageId = sent?.message_id; }
     }
     return keyboardMessageId;
   }
@@ -531,11 +531,11 @@ export class TelegramBridge {
       signal: link.signal,
     };
     const dispatcher = proxyDispatcher();
-    if (dispatcher) init.dispatcher = dispatcher;
+    if (dispatcher) { init.dispatcher = dispatcher; }
     try {
       const response = await this.fetchImpl(`${TELEGRAM_API_BASE}/bot${this.token}/${method}`, init as RequestInit);
       const data = await response.json() as TelegramResponse<T>;
-      if (!data.ok) throw new Error(`Telegram ${method} failed: ${data.description ?? `HTTP ${response.status}`}`);
+      if (!data.ok) { throw new Error(`Telegram ${method} failed: ${data.description ?? `HTTP ${response.status}`}`); }
       return data.result as T;
     } finally {
       link.dispose();
@@ -570,7 +570,7 @@ async function uniquePath(desired: string): Promise<string> {
   const ext = extname(desired);
   const stem = join(dirname(desired), basename(desired, ext));
   let candidate = desired;
-  for (let n = 1; await pathExists(candidate); n++) candidate = `${stem}-${n}${ext}`;
+  for (let n = 1; await pathExists(candidate); n++) { candidate = `${stem}-${n}${ext}`; }
   return candidate;
 }
 
@@ -598,16 +598,16 @@ function isInsideAny(target: string, folders: string[]): boolean {
 
 /** Split into Telegram-sized chunks, preferring newline boundaries. */
 function chunkText(text: string, max: number): string[] {
-  if (text.length <= max) return [text];
+  if (text.length <= max) { return [text]; }
   const chunks: string[] = [];
   let rest = text;
   while (rest.length > max) {
     let cut = rest.lastIndexOf('\n', max);
-    if (cut <= 0) cut = max;
+    if (cut <= 0) { cut = max; }
     chunks.push(rest.slice(0, cut));
     rest = rest.slice(cut).replace(/^\n/, '');
   }
-  if (rest.length > 0) chunks.push(rest);
+  if (rest.length > 0) { chunks.push(rest); }
   return chunks;
 }
 

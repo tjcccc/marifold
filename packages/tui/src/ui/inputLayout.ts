@@ -20,7 +20,7 @@ export function nextBoundary(text: string, cursor: number): number {
 export function offsetAtColumn(text: string, column: number): number {
   let x = 0;
   for (const g of graphemes(text)) {
-    if (column < x + g.width) return g.offset;
+    if (column < x + g.width) { return g.offset; }
     x += g.width;
   }
   return text.length;
@@ -49,7 +49,7 @@ export function wrapToVisualLines(value: string, width: number): VisualLine[] {
       text += g.text;
       columns += g.width;
     }
-    if (text || !line) visual.push({ text, start: offset + start });
+    if (text || !line) { visual.push({ text, start: offset + start }); }
     offset += line.length + 1;
   }
   return visual.length ? visual : [{ text: '', start: 0 }];
@@ -61,10 +61,10 @@ export function locateVisualCursor(visual: VisualLine[], cursor: number): { line
     const end = start + text.length;
     const nextStart = visual[i + 1]?.start;
     if (cursor >= start && cursor <= end) {
-      if (cursor === end && nextStart === end) continue;
+      if (cursor === end && nextStart === end) { continue; }
       return { line: i, column: stringWidth(text.slice(0, cursor - start)) };
     }
-    if (nextStart !== undefined && cursor > end && cursor < nextStart) return { line: i + 1, column: 0 };
+    if (nextStart !== undefined && cursor > end && cursor < nextStart) { return { line: i + 1, column: 0 }; }
   }
   const last = visual.length - 1;
   return { line: last, column: stringWidth(visual[last].text) };

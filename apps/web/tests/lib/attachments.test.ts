@@ -45,13 +45,13 @@ describe('classifyFile', () => {
   it('rejects oversized text files with the size limit in the reason', () => {
     const result = classifyFile('big.log', 'text/plain', MAX_TEXT_FILE_BYTES + 1);
     expect(result.kind).toBe('rejected');
-    if (result.kind === 'rejected') expect(result.reason).toContain('KB');
+    if (result.kind === 'rejected') { expect(result.reason).toContain('KB'); }
   });
 
   it('rejects Office files beyond the local extraction limit', () => {
     const result = classifyFile('huge.pptx', '', MAX_OFFICE_FILE_BYTES + 1);
     expect(result.kind).toBe('rejected');
-    if (result.kind === 'rejected') expect(result.reason).toContain('16 MiB');
+    if (result.kind === 'rejected') { expect(result.reason).toContain('16 MiB'); }
   });
 
   it('accepts a generic binary for turn-local agent inspection', async () => {

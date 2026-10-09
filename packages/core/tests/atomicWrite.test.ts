@@ -5,7 +5,7 @@ import { afterEach, expect, it } from 'vitest';
 import { writeFileAtomic } from '../src/util/atomicWrite';
 
 const dirs: string[] = [];
-afterEach(() => { for (const dir of dirs.splice(0)) fs.rmSync(dir, { recursive: true, force: true }); });
+afterEach(() => { for (const dir of dirs.splice(0)) { fs.rmSync(dir, { recursive: true, force: true }); } });
 
 it('replaces a file in one step, keeping its mode and a symlinked location', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'marifold-atomic-'));

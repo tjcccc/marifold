@@ -140,7 +140,7 @@ export class TaskStore {
   list(options: TaskListOptions = {}): TaskSummary[] {
     const limit = normalizeLimit(options.limit);
     const status = options.status ? normalizeTaskStatus(options.status) : undefined;
-    if (!fs.existsSync(this.tasksDir)) return [];
+    if (!fs.existsSync(this.tasksDir)) { return []; }
 
     const tasks = fs.readdirSync(this.tasksDir, { withFileTypes: true })
       .filter(entry => entry.isFile() && entry.name.endsWith('.json'))
@@ -154,13 +154,13 @@ export class TaskStore {
   get(taskId: string): TaskState | undefined {
     this.assertSafeTaskId(taskId);
     const taskPath = this.taskPath(taskId);
-    if (!fs.existsSync(taskPath)) return undefined;
+    if (!fs.existsSync(taskPath)) { return undefined; }
     return this.readFile(taskPath);
   }
 
   require(taskId: string): TaskState {
     const task = this.get(taskId);
-    if (!task) throw MarifoldError.taskNotFound(taskId);
+    if (!task) { throw MarifoldError.taskNotFound(taskId); }
     return task;
   }
 
@@ -168,19 +168,19 @@ export class TaskStore {
     const task = this.require(taskId);
     const now = new Date().toISOString();
 
-    if (input.title !== undefined) task.title = requiredText(input.title, 'title');
-    if (input.objective !== undefined) task.objective = requiredText(input.objective, 'objective');
+    if (input.title !== undefined) { task.title = requiredText(input.title, 'title'); }
+    if (input.objective !== undefined) { task.objective = requiredText(input.objective, 'objective'); }
     if (input.status !== undefined) {
       task.status = normalizeTaskStatus(input.status);
-      if (TERMINAL_STATUSES.has(task.status)) task.completedAt = now;
-      else delete task.completedAt;
+      if (TERMINAL_STATUSES.has(task.status)) { task.completedAt = now; }
+      else { delete task.completedAt; }
     }
-    if (input.plan !== undefined) task.plan = normalizePlan(input.plan, now);
+    if (input.plan !== undefined) { task.plan = normalizePlan(input.plan, now); }
     assignOptional(task, 'profile', input.profile);
     assignOptional(task, 'sessionId', input.sessionId);
     assignOptional(task, 'summary', input.summary);
     assignOptional(task, 'nextAction', input.nextAction);
-    if (input.tags !== undefined) task.tags = normalizeTags(input.tags);
+    if (input.tags !== undefined) { task.tags = normalizeTags(input.tags); }
 
     task.updatedAt = now;
     assertPlanInvariant(task.plan);
@@ -211,7 +211,7 @@ export class TaskStore {
   delete(taskId: string): boolean {
     this.assertSafeTaskId(taskId);
     const taskPath = this.taskPath(taskId);
-    if (!fs.existsSync(taskPath)) return false;
+    if (!fs.existsSync(taskPath)) { return false; }
     fs.rmSync(taskPath);
     return true;
   }
@@ -239,7 +239,7 @@ export class TaskStore {
     for (let attempt = 0; attempt < 10; attempt += 1) {
       const stamp = new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14);
       const id = `task_${stamp}_${crypto.randomBytes(4).toString('hex')}`;
-      if (!fs.existsSync(this.taskPath(id))) return id;
+      if (!fs.existsSync(this.taskPath(id))) { return id; }
     }
     throw MarifoldError.taskInvalid('Could not create a unique task id.');
   }
@@ -264,7 +264,7 @@ export class TaskStore {
       const parsed = JSON.parse(fs.readFileSync(taskPath, 'utf-8')) as Partial<TaskState>;
       return normalizeTaskState(parsed, taskPath);
     } catch (error) {
-      if (error instanceof MarifoldError) throw error;
+      if (error instanceof MarifoldError) { throw error; }
       throw MarifoldError.taskInvalid(`Could not read task ${taskPath}: ${String(error)}`);
     }
   }
@@ -305,11 +305,11 @@ function normalizeTaskState(value: Partial<TaskState>, taskPath: string): TaskSt
 }
 
 function normalizePlan(items: TaskPlanInput[], timestamp: string): TaskPlanItem[] {
-  if (!Array.isArray(items)) throw MarifoldError.taskInvalid('Task plan must be an array.');
+  if (!Array.isArray(items)) { throw MarifoldError.taskInvalid('Task plan must be an array.'); }
   return items.map((item, index) => {
     const id = optionalText(item.id) ?? `step_${index + 1}`;
     const stored = item as Partial<TaskPlanItem>;
-    if (!SAFE_TASK_ID.test(id)) throw MarifoldError.taskInvalid(`Invalid plan step id '${id}'.`);
+    if (!SAFE_TASK_ID.test(id)) { throw MarifoldError.taskInvalid(`Invalid plan step id '${id}'.`); }
     return {
       id,
       text: requiredText(item.text, `plan[${index}].text`),
@@ -321,7 +321,7 @@ function normalizePlan(items: TaskPlanInput[], timestamp: string): TaskPlanItem[
 }
 
 function normalizeEvents(events: TaskEvent[]): TaskEvent[] {
-  if (!Array.isArray(events)) throw MarifoldError.taskInvalid('Task events must be an array.');
+  if (!Array.isArray(events)) { throw MarifoldError.taskInvalid('Task events must be an array.'); }
   return events.map((event, index) => ({
     id: requiredText(event.id, `events[${index}].id`),
     kind: normalizeEventKind(event.kind),
@@ -336,9 +336,9 @@ function assertPlanInvariant(plan: TaskPlanItem[]): void {
   const ids = new Set<string>();
   let activeCount = 0;
   for (const item of plan) {
-    if (ids.has(item.id)) throw MarifoldError.taskInvalid(`Duplicate plan step id '${item.id}'.`);
+    if (ids.has(item.id)) { throw MarifoldError.taskInvalid(`Duplicate plan step id '${item.id}'.`); }
     ids.add(item.id);
-    if (item.status === 'in_progress') activeCount += 1;
+    if (item.status === 'in_progress') { activeCount += 1; }
   }
   if (activeCount > 1) {
     throw MarifoldError.taskInvalid('Task plan can have at most one in-progress step.');
@@ -353,7 +353,7 @@ function countPlan(plan: TaskPlanItem[]): Record<TaskStepStatus, number> {
     skipped: 0,
     cancelled: 0,
   };
-  for (const item of plan) counts[item.status] += 1;
+  for (const item of plan) { counts[item.status] += 1; }
   return counts;
 }
 
@@ -364,13 +364,13 @@ function titleFromObjective(objective: string): string {
 
 function requiredText(value: unknown, label: string): string {
   const text = optionalText(value);
-  if (text === undefined) throw MarifoldError.taskInvalid(`Task ${label} cannot be empty.`);
+  if (text === undefined) { throw MarifoldError.taskInvalid(`Task ${label} cannot be empty.`); }
   return text;
 }
 
 function optionalText(value: unknown): string | undefined {
-  if (value === undefined) return undefined;
-  if (typeof value !== 'string') throw MarifoldError.taskInvalid('Expected task text fields to be strings.');
+  if (value === undefined) { return undefined; }
+  if (typeof value !== 'string') { throw MarifoldError.taskInvalid('Expected task text fields to be strings.'); }
   const trimmed = value.trim();
   return trimmed ? trimmed : undefined;
 }
@@ -385,15 +385,15 @@ function assignOptional<Key extends 'profile' | 'sessionId' | 'summary' | 'nextA
   key: Key,
   value: unknown,
 ): void {
-  if (value === undefined) return;
+  if (value === undefined) { return; }
   const text = optionalText(value);
-  if (text === undefined) delete task[key];
-  else task[key] = text;
+  if (text === undefined) { delete task[key]; }
+  else { task[key] = text; }
 }
 
 function normalizeTags(value: unknown): string[] {
-  if (value === undefined) return [];
-  if (!Array.isArray(value)) throw MarifoldError.taskInvalid('Task tags must be an array of strings.');
+  if (value === undefined) { return []; }
+  if (!Array.isArray(value)) { throw MarifoldError.taskInvalid('Task tags must be an array of strings.'); }
   return [...new Set(value.map(tag => requiredText(tag, 'tag')))].sort((a, b) => a.localeCompare(b));
 }
 
@@ -403,8 +403,8 @@ function normalizeMetadata(value: Record<string, string>): Record<string, string
   }
   const normalized: Record<string, string> = {};
   for (const [key, item] of Object.entries(value)) {
-    if (!key.trim()) throw MarifoldError.taskInvalid('Task event metadata keys cannot be empty.');
-    if (typeof item !== 'string') throw MarifoldError.taskInvalid('Task event metadata values must be strings.');
+    if (!key.trim()) { throw MarifoldError.taskInvalid('Task event metadata keys cannot be empty.'); }
+    if (typeof item !== 'string') { throw MarifoldError.taskInvalid('Task event metadata values must be strings.'); }
     normalized[key] = item;
   }
   return normalized;
@@ -432,7 +432,7 @@ function normalizeEventKind(value: unknown): TaskEventKind {
 }
 
 function normalizeLimit(value: unknown): number {
-  if (value === undefined) return 50;
+  if (value === undefined) { return 50; }
   if (typeof value !== 'number' || !Number.isInteger(value) || value < 1) {
     throw MarifoldError.taskInvalid('Task list limit must be a positive integer.');
   }

@@ -38,8 +38,8 @@ it('opens a fresh invitation form after revoking this device and rejoins the sav
   const devices = [{ id: 'host', name: 'Home Mac', host: true, online: true },
     { id: 'fedora', name: 'Fedora', host: false, online: true }];
   request.mockImplementation(async (_method, path) => {
-    if (path === '/v1/workspaces') return { workspaces: [workspace], defaultId: 'home' };
-    if (path.endsWith('/manage/devices')) return { devices };
+    if (path === '/v1/workspaces') { return { workspaces: [workspace], defaultId: 'home' }; }
+    if (path.endsWith('/manage/devices')) { return { devices }; }
     if (path.endsWith('/manage/revoke')) { workspace.online = false; return { revoked: true }; }
     if (path === '/v1/workspaces/join') { workspace.online = true; return { workspace }; }
     throw new Error(`Unexpected request: ${path}`);

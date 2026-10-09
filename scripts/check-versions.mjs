@@ -11,11 +11,11 @@ const manifests = globSync(['packages/*/package.json', 'apps/*/package.json'], {
 
 for (const manifest of manifests) {
   const { version } = JSON.parse(read(manifest));
-  if (version !== expected) mismatches.push(`${manifest}: ${version ?? '(missing version)'}`);
+  if (version !== expected) { mismatches.push(`${manifest}: ${version ?? '(missing version)'}`); }
 }
 
 const cliVersion = read('packages/cli/src/index.ts').match(/\.version\(['"]([^'"]+)['"]\)/)?.[1];
-if (cliVersion !== expected) mismatches.push(`packages/cli/src/index.ts: ${cliVersion ?? '(missing version)'}`);
+if (cliVersion !== expected) { mismatches.push(`packages/cli/src/index.ts: ${cliVersion ?? '(missing version)'}`); }
 
 if (mismatches.length) {
   console.error(`Version mismatch: all workspace packages and the CLI must match ${expected}.\n${mismatches.join('\n')}`);

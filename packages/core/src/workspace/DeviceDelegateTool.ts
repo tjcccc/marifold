@@ -34,14 +34,14 @@ export class DeviceDelegateTool implements AgentTool {
     return { escalate: true, persistable: false, reason: 'This starts agent work on another device.' };
   }
   async execute(input: Record<string, JSONValue>, context: ToolExecutionContext) {
-    if (context.signal?.aborted) throw new Error('Run cancelled.');
+    if (context.signal?.aborted) { throw new Error('Run cancelled.'); }
     const child = await this.start(
       requireStringInput(input, 'device', this.definition.name),
       requireStringInput(input, 'objective', this.definition.name),
     );
     const cancel = () => child.cancel();
     context.signal?.addEventListener('abort', cancel, { once: true });
-    if (context.signal?.aborted) cancel();
+    if (context.signal?.aborted) { cancel(); }
     let status = 'failed';
     let summary = '';
     let error = '';
@@ -52,14 +52,14 @@ export class DeviceDelegateTool implements AgentTool {
           summary = event.summary ?? summary;
           continue;
         }
-        if (event.type === 'status' || event.type === 'plan' || event.type === 'step') continue;
-        if (event.type === 'error') error = event.message;
+        if (event.type === 'status' || event.type === 'plan' || event.type === 'step') { continue; }
+        if (event.type === 'error') { error = event.message; }
         let forwarded: AgentEvent = event;
         if (event.type === 'text') {
           summary = event.text;
           forwarded = { ...event, phase: 'progress' };
         }
-        if (event.type === 'artifact')
+        if (event.type === 'artifact') {
           forwarded = {
             type: 'artifact',
             artifact: {
@@ -68,12 +68,14 @@ export class DeviceDelegateTool implements AgentTool {
               source: { runId: child.runId, artifactId: event.artifact.id },
             },
           };
+        }
         context.emitEvent?.(forwarded);
       }
-      if (status !== 'completed')
+      if (status !== 'completed') {
         throw new UncertainToolOutcomeError(
           `Device run ${child.runId} ended ${status}. Inspect its results before retrying any effects. ${error}`,
         );
+      }
       return {
         content: `Device run ${child.runId} completed.\n${summary}`,
         summary: `device run ${child.runId} completed`,

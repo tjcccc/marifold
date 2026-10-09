@@ -76,7 +76,7 @@ export function registerChatCommand(program: Command, printer: ConsolePrinter): 
         }
 
         const memoryOn = runtime.memoryEnabled(settings.profile, options.memories);
-        if (memoryOn) runtime.ensureProfileMemoryFiles(settings.profile);
+        if (memoryOn) { runtime.ensureProfileMemoryFiles(settings.profile); }
 
         process.stdout.write(style.dim(`Model:    ${settings.provider}/${settings.model}\n`));
         process.stdout.write(style.dim(`Profile:  ${settings.profile}\n`));
@@ -108,23 +108,23 @@ export function registerChatCommand(program: Command, printer: ConsolePrinter): 
             process.stdout.write(style.dim(stripTerminalControls(summary)));
           })) {
             if (!responseStarted) {
-              if (reasoningStarted) process.stdout.write('\n');
+              if (reasoningStarted) { process.stdout.write('\n'); }
               process.stdout.write(`\n${style.bold(`${settings.profile} >`)}\n`);
               responseStarted = true;
             }
             process.stdout.write(stripTerminalControls(chunk));
           }
-          if (!responseStarted) process.stdout.write(`\n${style.bold(`${settings.profile} >`)}\n`);
+          if (!responseStarted) { process.stdout.write(`\n${style.bold(`${settings.profile} >`)}\n`); }
           process.stdout.write('\n\n');
         };
 
         while (true) {
           const raw = await prompt.readMultilineMessage(style.bold('user > '), style.dim('... > '));
-          if (raw === undefined) break;
+          if (raw === undefined) { break; }
 
           const message = raw.trim();
-          if (!message) continue;
-          if (EXIT_COMMANDS.has(message.toLowerCase())) break;
+          if (!message) { continue; }
+          if (EXIT_COMMANDS.has(message.toLowerCase())) { break; }
           if (message === '/help') {
             process.stdout.write(`${CHAT_HELP}\n`);
             continue;
@@ -151,7 +151,7 @@ export function registerChatCommand(program: Command, printer: ConsolePrinter): 
               continue;
             }
             const attached = readFileForChat(filePath);
-            if (!attached) continue;
+            if (!attached) { continue; }
             pendingContext.push(attached.block);
             process.stdout.write(style.dim(`Attached ${attached.path} (${attached.chars} chars) to your next message.\n\n`));
             continue;
@@ -225,17 +225,17 @@ export function registerChatCommand(program: Command, printer: ConsolePrinter): 
 }
 
 function parseOptionalBoolean(value?: string): boolean {
-  if (value === undefined) return true;
+  if (value === undefined) { return true; }
   const normalized = value.trim().toLowerCase();
-  if (normalized === 'true' || normalized === 'on' || normalized === '1') return true;
-  if (normalized === 'false' || normalized === 'off' || normalized === '0') return false;
+  if (normalized === 'true' || normalized === 'on' || normalized === '1') { return true; }
+  if (normalized === 'false' || normalized === 'off' || normalized === '0') { return false; }
   throw new Error('Expected --think to be true or false.');
 }
 
 function parseThinkCommand(message: string): boolean | undefined {
   const payload = commandPayload(message, '/think').toLowerCase();
-  if (payload === 'on' || payload === 'true' || payload === '1') return true;
-  if (payload === 'off' || payload === 'false' || payload === '0') return false;
+  if (payload === 'on' || payload === 'true' || payload === '1') { return true; }
+  if (payload === 'off' || payload === 'false' || payload === '0') { return false; }
   return undefined;
 }
 
@@ -274,7 +274,7 @@ async function resolveResumeSession(
 
 function parseRememberCommand(message: string): { kind: MemoryKind; text: string } | undefined {
   const payload = commandPayload(message, '/remember');
-  if (!payload) return undefined;
+  if (!payload) { return undefined; }
 
   const firstSpace = payload.search(/\s/);
   const first = firstSpace === -1 ? payload : payload.slice(0, firstSpace);
@@ -312,7 +312,7 @@ function readFileForChat(filePath: string): { path: string; block: string; chars
 }
 
 function commandPayload(message: string, command: string): string {
-  if (message === command) return '';
+  if (message === command) { return ''; }
   return message.startsWith(`${command} `) ? message.slice(command.length + 1).trim() : '';
 }
 
@@ -334,6 +334,6 @@ function memoryKindLabel(kind: MemoryKind): string {
 }
 
 function formatMutationResult(verb: string, count: number): string {
-  if (count === 0) return 'No matching memory records found.\n\n';
+  if (count === 0) { return 'No matching memory records found.\n\n'; }
   return `${verb} ${count} memory record${count === 1 ? '' : 's'}.\n\n`;
 }

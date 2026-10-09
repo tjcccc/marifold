@@ -6,7 +6,7 @@ import * as path from 'path';
  * inside the home directory. */
 export function tildify(p: string): string {
   const home = os.homedir();
-  if (p === home) return '~';
-  if (p.startsWith(home + path.sep)) return `~${p.slice(home.length)}`;
+  if (p === home) { return '~'; }
+  if (p.startsWith(home + path.sep)) { return `~${p.slice(home.length)}`; }
   return p;
 }

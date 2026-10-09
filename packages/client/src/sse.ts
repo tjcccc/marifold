@@ -20,7 +20,7 @@ export async function* parseSse(stream: ReadableStream<Uint8Array>): AsyncGenera
   try {
     while (true) {
       const { done, value } = await reader.read();
-      if (done) break;
+      if (done) { break; }
       buffer += decoder.decode(value, { stream: true });
       // Normalize CRLF; hold back a trailing CR that may be half of one.
       buffer = buffer.replace(/\r\n/g, '\n');
@@ -33,7 +33,7 @@ export async function* parseSse(stream: ReadableStream<Uint8Array>): AsyncGenera
       while ((boundary = buffer.indexOf('\n\n')) !== -1) {
         const frame = parseBlock(buffer.slice(0, boundary));
         buffer = buffer.slice(boundary + 2);
-        if (frame) yield frame;
+        if (frame) { yield frame; }
       }
       buffer += holdback;
     }
@@ -49,22 +49,22 @@ function parseBlock(block: string): SseFrame | undefined {
   const dataLines: string[] = [];
 
   for (const line of block.split('\n')) {
-    if (line.startsWith(':')) continue; // comment / heartbeat
+    if (line.startsWith(':')) { continue; } // comment / heartbeat
     const colon = line.indexOf(':');
-    if (colon === -1) continue;
+    if (colon === -1) { continue; }
     const field = line.slice(0, colon);
     // Per the SSE spec a single space after the colon is stripped.
     const value = line.slice(colon + 1).replace(/^ /, '');
     if (field === 'id') {
       const parsed = Number.parseInt(value, 10);
-      if (Number.isInteger(parsed)) id = parsed;
+      if (Number.isInteger(parsed)) { id = parsed; }
     } else if (field === 'event') {
       event = value;
     } else if (field === 'data') {
       dataLines.push(value);
     } else if (field === 'retry') {
       const parsed = Number.parseInt(value, 10);
-      if (Number.isInteger(parsed) && parsed >= 0) retryMs = parsed;
+      if (Number.isInteger(parsed) && parsed >= 0) { retryMs = parsed; }
     }
   }
 

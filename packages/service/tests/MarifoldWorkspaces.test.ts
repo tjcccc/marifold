@@ -18,16 +18,16 @@ const generatedRuns: string[] = [];
 const stopStun: Array<() => void> = [];
 const bridges: ReturnType<typeof createBridge>[] = [];
 afterEach(async () => {
-  for (const s of servers.splice(0)) await s.close();
+  for (const s of servers.splice(0)) { await s.close(); }
   for (const b of bridges.splice(0)) {
     b.closeAllConnections();
     b.close();
   }
-  for (const stop of stopStun.splice(0)) stop();
+  for (const stop of stopStun.splice(0)) { stop(); }
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
-  for (const dir of generatedRuns.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
+  for (const dir of generatedRuns.splice(0)) { fs.rmSync(dir, { recursive: true, force: true }); }
   cleanupTempDirs();
 });
 function service(dir: string, guest = false) {
@@ -53,7 +53,7 @@ async function bridge() {
 }
 async function post(s: FastifyInstance, url: string, payload: object) {
   const r = await s.inject({ method: 'POST', url, payload });
-  if (r.statusCode >= 400) throw new Error(r.body);
+  if (r.statusCode >= 400) { throw new Error(r.body); }
   return r.json();
 }
 async function paired(executor = false) {
@@ -86,7 +86,7 @@ describe('device-hosted workspaces', () => {
     const facade = p[device];
     const realFetch = globalThis.fetch;
     vi.stubGlobal('fetch', vi.fn(async (input, init) => {
-      if (!String(input).includes('localhost:11434')) return realFetch(input, init);
+      if (!String(input).includes('localhost:11434')) { return realFetch(input, init); }
       return new Response(JSON.stringify({ message: { content: 'Hello.' }, done: true, done_reason: 'stop' }),
         { headers: { 'content-type': 'application/json' } });
     }));
@@ -130,7 +130,7 @@ describe('device-hosted workspaces', () => {
     const prompts: string[] = [];
     const realFetch = globalThis.fetch;
     vi.stubGlobal('fetch', vi.fn(async (input, init) => {
-      if (!String(input).includes('localhost:11434')) return realFetch(input, init);
+      if (!String(input).includes('localhost:11434')) { return realFetch(input, init); }
       const request = JSON.parse(String(init?.body));
       prompts.push(request.messages.map((message: { content: string }) => message.content).join('\n'));
       return new Response(JSON.stringify({ message: { content: 'Hello.' }, done: true, done_reason: 'stop' }), { headers: { 'content-type': 'application/json' } });
@@ -150,18 +150,18 @@ describe('device-hosted workspaces', () => {
       const stun = await localStun(); stopStun.push(stun.close);
       vi.stubEnv('MARIFOLD_EXPERIMENTAL_WEBRTC', '1');
       vi.stubEnv('MARIFOLD_WEBRTC_STUN_URL', stun.url);
-      if (transport === 'fallback') vi.spyOn(ArtifactWebRtc.prototype, 'offerFile').mockRejectedValue(new Error('Old peer'));
+      if (transport === 'fallback') { vi.spyOn(ArtifactWebRtc.prototype, 'offerFile').mockRejectedValue(new Error('Old peer')); }
     }
     const p = await paired();
     const original = randomBytes(1024 * 1024 + 17);
     const image = await sharp({ create: { width: 3000, height: 2000, channels: 3, background: '#407080' } }).png().toBuffer();
     const realFetch = globalThis.fetch;
     vi.stubGlobal('fetch', vi.fn(async (input, init) => {
-      if (!String(input).includes('localhost:11434')) return realFetch(input, init);
+      if (!String(input).includes('localhost:11434')) { return realFetch(input, init); }
       const request = JSON.parse(String(init?.body));
       const context = request.messages.map((m: { content: string }) => m.content).join('\n');
       const output = /otherwise write generated deliverables to (.+?)\. Regular output files/.exec(context)?.[1];
-      if (!output) throw new Error('No fixture output directory.');
+      if (!output) { throw new Error('No fixture output directory.'); }
       generatedRuns.push(path.dirname(output));
       fs.writeFileSync(path.join(output, 'transfer.bin'), original);
       fs.writeFileSync(path.join(output, 'image.png'), image);
@@ -223,7 +223,7 @@ describe('device-hosted workspaces', () => {
   }, 40000);
   it('serves artifacts of runs that executed here after their workspace is removed', () => {
     const manager = { store: { get: (id: string) => {
-      if (id !== 'home') throw new Error('Workspace not found.');
+      if (id !== 'home') { throw new Error('Workspace not found.'); }
       return { hostDeviceId: 'host-device' };
     } } } as never;
     const execution = (workspaceId: string, executionDeviceId: string) => ({ workspaceId, executionDeviceId, originDeviceId: 'host-device' });
@@ -323,19 +323,20 @@ describe('device-hosted workspaces', () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async (input, init) => {
-        if (!String(input).includes('localhost:11434')) return realFetch(input, init);
+        if (!String(input).includes('localhost:11434')) { return realFetch(input, init); }
         const request = JSON.parse(String(init?.body));
         const context = request.messages.map((m: { content: string }) => m.content).join('\n');
         prompts.push(context);
         const step = count++;
         let text = 'The device task is complete.';
-        if (step === 0) text = '<tool_call name="list_devices">{}</tool_call>';
-        if (step === 1)
+        if (step === 0) { text = '<tool_call name="list_devices">{}</tool_call>'; }
+        if (step === 1) {
           text =
             `<tool_call name="delegate_device">${JSON.stringify({ device: localHost ? p.device : 'host', objective: 'Create a small report file.' })}</tool_call>`;
+        }
         if (step === 2) {
           const output = /otherwise write generated deliverables to (.+?)\. Regular output files/.exec(context)?.[1];
-          if (!output) throw new Error('No output directory in child context.');
+          if (!output) { throw new Error('No output directory in child context.'); }
           generatedRuns.push(path.dirname(output));
           text = `<tool_call name="write_file">${JSON.stringify({ path: path.join(output, 'report.txt'), content: 'child artifact' })}</tool_call>`;
         }
@@ -354,12 +355,13 @@ describe('device-hosted workspaces', () => {
     let current = run;
     for (let i = 0; i < 200; i++) {
       current = (await p.host.inject(`/v1/runs/${run.id}`)).json().run;
-      for (const approval of current.pendingApprovals)
+      for (const approval of current.pendingApprovals) {
         if (!answered.has(approval.id)) {
           answered.add(approval.id);
           await post(requester, `${api}/v1/runs/${run.id}/approvals/${approval.id}`, { action: 'once' });
         }
-      if (current.finishedAt) break;
+      }
+      if (current.finishedAt) { break; }
       await new Promise((r) => setTimeout(r, 20));
     }
     expect(current.status).toBe('completed');
@@ -404,15 +406,15 @@ describe('device-hosted workspaces', () => {
     let count = 0;
     const realFetch = globalThis.fetch;
     vi.stubGlobal('fetch', vi.fn(async (input, init) => {
-      if (!String(input).includes('localhost:11434')) return realFetch(input, init);
+      if (!String(input).includes('localhost:11434')) { return realFetch(input, init); }
       const request = JSON.parse(String(init?.body));
       const context = request.messages.map((m: { content: string }) => m.content).join('\n');
       const output = /otherwise write generated deliverables to (.+?)\. Regular output files/.exec(context)?.[1];
-      if (output) generatedRuns.push(path.dirname(output));
+      if (output) { generatedRuns.push(path.dirname(output)); }
       const step = count++;
       let text = 'The device task completed.';
-      if (step === 0) text = `<tool_call name="delegate_device">${JSON.stringify({ device: localHost ? p.device : 'host', objective: 'Run the approved full-access job and retrieve its result.' })}</tool_call>`;
-      if (step === 1) text = `<tool_call name="shell_exec">${JSON.stringify({ command: `printf full-access > '${marker}'`, access: 'full' })}</tool_call>`;
+      if (step === 0) { text = `<tool_call name="delegate_device">${JSON.stringify({ device: localHost ? p.device : 'host', objective: 'Run the approved full-access job and retrieve its result.' })}</tool_call>`; }
+      if (step === 1) { text = `<tool_call name="shell_exec">${JSON.stringify({ command: `printf full-access > '${marker}'`, access: 'full' })}</tool_call>`; }
       if (step === 2) {
         const [job] = device.recent();
         expect(job).toBeDefined();
@@ -427,7 +429,7 @@ describe('device-hosted workspaces', () => {
     for (let i = 0; i < 300; i++) {
       current = (await p.host.inject(`/v1/runs/${run.id}`)).json().run;
       for (const approval of current.pendingApprovals) {
-        if (answered.has(approval.id)) continue;
+        if (answered.has(approval.id)) { continue; }
         answered.add(approval.id);
         if (approval.tool === 'shell_exec') {
           expect(fs.existsSync(marker)).toBe(false);
@@ -436,7 +438,7 @@ describe('device-hosted workspaces', () => {
         }
         await post(requester, `${api}/v1/runs/${run.id}/approvals/${approval.id}`, { action: 'once' });
       }
-      if (current.finishedAt) break;
+      if (current.finishedAt) { break; }
       await new Promise(resolve => setTimeout(resolve, 20));
     }
     expect(shellApproved).toBe(true);
@@ -472,11 +474,11 @@ describe('device-hosted workspaces', () => {
     const prompts: string[] = [];
     const realFetch = globalThis.fetch;
     vi.stubGlobal('fetch', vi.fn(async (input, init) => {
-      if (!String(input).includes('localhost:11434')) return realFetch(input, init);
+      if (!String(input).includes('localhost:11434')) { return realFetch(input, init); }
       const context = JSON.parse(String(init?.body)).messages.map((m: { content: string }) => m.content).join('\n');
       prompts.push(context);
       const output = /otherwise write generated deliverables to (.+?)\. Regular output files/.exec(context)?.[1];
-      if (output) generatedRuns.push(path.dirname(output));
+      if (output) { generatedRuns.push(path.dirname(output)); }
       const step = count++;
       const text = step === 0
         ? `<tool_call name="delegate_device">${JSON.stringify({ device: target, objective: 'Run id -u with administrator authorization.' })}</tool_call>`
@@ -490,7 +492,7 @@ describe('device-hosted workspaces', () => {
     for (let i = 0; i < 300; i++) {
       current = (await p.host.inject(`/v1/runs/${run.id}`)).json().run;
       for (const approval of current.pendingApprovals) {
-        if (answered.has(approval.id)) continue;
+        if (answered.has(approval.id)) { continue; }
         answered.add(approval.id);
         const sudoResponse = approval.sudo ? encryptSudoPassword(approval.sudo, 'bridge-password-canary') : undefined;
         if (sudoResponse) {
@@ -501,7 +503,7 @@ describe('device-hosted workspaces', () => {
         }
         await post(requester, `${prefix}/v1/runs/${run.id}/approvals/${approval.id}`, { action: 'once', ...(sudoResponse ? { sudoResponse } : {}) });
       }
-      if (current.finishedAt) break;
+      if (current.finishedAt) { break; }
       await new Promise(resolve => setTimeout(resolve, 20));
     }
     expect(current.status).toBe('completed');
@@ -520,7 +522,7 @@ describe('device-hosted workspaces', () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async (input, init) => {
-        if (!String(input).includes('localhost:11434')) return realFetch(input, init);
+        if (!String(input).includes('localhost:11434')) { return realFetch(input, init); }
         const text =
           count++ === 0
             ? '<tool_call name="write_file">{"path":"result.txt","content":"guest output"}</tool_call>'
@@ -553,8 +555,8 @@ describe('device-hosted workspaces', () => {
     for (let i = 0; i < 50; i++) {
       const current = (await p.host.inject(`/v1/runs/${run.id}`)).json().run;
       approval = current.pendingApprovals[0];
-      if (approval) break;
-      if (current.finishedAt) throw new Error(JSON.stringify(current));
+      if (approval) { break; }
+      if (current.finishedAt) { throw new Error(JSON.stringify(current)); }
       await new Promise((r) => setTimeout(r, 20));
     }
     expect(approval).toBeDefined();
@@ -599,7 +601,7 @@ describe('device-hosted workspaces', () => {
     ];
     const realFetch = globalThis.fetch;
     vi.stubGlobal('fetch', vi.fn(async (input, init) => {
-      if (!String(input).includes('localhost:11434')) return realFetch(input, init);
+      if (!String(input).includes('localhost:11434')) { return realFetch(input, init); }
       const request = JSON.parse(String(init?.body));
       received.push(request.messages.flatMap((message: { images?: string[] }) => message.images ?? []));
       return new Response(JSON.stringify({ message: { content: replies[received.length - 1] }, done: true, done_reason: 'stop' }), {

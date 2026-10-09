@@ -9,8 +9,8 @@ function elements(root: Node): Element[] {
   const pending = [root];
   while (pending.length) {
     const node = pending.pop()!;
-    if ('tagName' in node) result.push(node);
-    if ('childNodes' in node) pending.push(...[...node.childNodes].reverse());
+    if ('tagName' in node) { result.push(node); }
+    if ('childNodes' in node) { pending.push(...[...node.childNodes].reverse()); }
   }
   return result;
 }
@@ -25,9 +25,9 @@ function text(root: Node): string {
   const pending = [root];
   while (pending.length) {
     const node = pending.pop()!;
-    if ('tagName' in node && ['script', 'style'].includes(node.tagName)) continue;
-    if ('value' in node && node.nodeName === '#text') parts.push(node.value);
-    if ('childNodes' in node) pending.push(...[...node.childNodes].reverse());
+    if ('tagName' in node && ['script', 'style'].includes(node.tagName)) { continue; }
+    if ('value' in node && node.nodeName === '#text') { parts.push(node.value); }
+    if ('childNodes' in node) { pending.push(...[...node.childNodes].reverse()); }
   }
   return parts.join(' ').replace(/\s+/g, ' ').trim();
 }
@@ -40,19 +40,19 @@ export function normalizeSearchResults(results: SearchResultItem[], limit: numbe
       if (url.hostname === 'duckduckgo.com' && url.pathname === '/l/') {
         url = new URL(url.searchParams.get('uddg') ?? '');
       }
-      if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) continue;
-      if (['duckduckgo.com', 'html.duckduckgo.com', 'search.brave.com'].includes(url.hostname)) continue;
+      if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) { continue; }
+      if (['duckduckgo.com', 'html.duckduckgo.com', 'search.brave.com'].includes(url.hostname)) { continue; }
       url.hash = '';
       for (const key of [...url.searchParams.keys()]) {
-        if (/^utm_/i.test(key) || ['gclid', 'fbclid'].includes(key)) url.searchParams.delete(key);
+        if (/^utm_/i.test(key) || ['gclid', 'fbclid'].includes(key)) { url.searchParams.delete(key); }
       }
       const canonical = url.href;
-      if (canonical.length > 4096) continue;
+      if (canonical.length > 4096) { continue; }
       const title = result.title.trim().slice(0, 200);
-      if (!title || seen.has(canonical)) continue;
+      if (!title || seen.has(canonical)) { continue; }
       seen.add(canonical);
       normalized.push({ title, url: canonical, snippet: result.snippet.trim().slice(0, 600) });
-      if (normalized.length >= limit) break;
+      if (normalized.length >= limit) { break; }
     } catch { /* Ignore malformed result links; they are untrusted external data. */ }
   }
   return normalized;
@@ -64,7 +64,7 @@ export function parseDuckDuckGoHtml(html: string): SearchResultItem[] {
     throw new Error('DuckDuckGo blocked automated search.');
   }
   const results = nodes.filter(node => hasClass(node, 'result')).flatMap(node => {
-    if (hasClass(node, 'result--ad')) return [];
+    if (hasClass(node, 'result--ad')) { return []; }
     const children = elements(node);
     const anchor = children.find(child => child.tagName === 'a' && hasClass(child, 'result__a'));
     const snippet = children.find(child => hasClass(child, 'result__snippet'));
@@ -89,6 +89,6 @@ export function parseBraveHtml(html: string): SearchResultItem[] {
     const snippet = children.find(child => hasClass(child, 'generic-snippet'));
     return anchor && title ? [{ title: text(title), url: attr(anchor, 'href'), snippet: snippet ? text(snippet) : '' }] : [];
   });
-  if (!results.length) throw new Error('Brave returned a blocked or unrecognized search page.');
+  if (!results.length) { throw new Error('Brave returned a blocked or unrecognized search page.'); }
   return results;
 }

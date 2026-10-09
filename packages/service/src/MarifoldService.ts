@@ -142,7 +142,7 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
   const runRegistry = runtime.createRunRegistry(message => server.log.info(message), input => workspaceRuns.createRunner(input), workspaceManager.store.runJournal);
   workspaceManager.onMembershipRemoved = (workspaceId, deviceId) => {
     artifactTransfers.cancelWorkspace(workspaceId);
-    for (const run of runRegistry.list()) { const execution = run.execution; if (!run.finishedAt && execution?.workspaceId === workspaceId && (!deviceId || execution.originDeviceId === deviceId || execution.executionDeviceId === deviceId)) runRegistry.cancel(run.id); }
+    for (const run of runRegistry.list()) { const execution = run.execution; if (!run.finishedAt && execution?.workspaceId === workspaceId && (!deviceId || execution.originDeviceId === deviceId || execution.executionDeviceId === deviceId)) { runRegistry.cancel(run.id); } }
   };
   // A revoked guest stops executing the host's work at once instead of when
   // its execution lease expires; the host can no longer reach it to cancel.
@@ -161,20 +161,20 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
   const beginSessionRequest = (sessionId?: string, profile?: string): (() => void) => {
     if (sessionId) {
       const owner = runRegistry.list().find(run => run.sessionId === sessionId && !run.finishedAt);
-      if (owner || activeSessionRequests.has(sessionId)) throw new MarifoldError('SESSION_BUSY', 'Session already has an active request.', { sessionId, ...(owner ? { runId: owner.id } : {}) });
+      if (owner || activeSessionRequests.has(sessionId)) { throw new MarifoldError('SESSION_BUSY', 'Session already has an active request.', { sessionId, ...(owner ? { runId: owner.id } : {}) }); }
     }
-    if (sessionId) activeSessionRequests.set(sessionId, (activeSessionRequests.get(sessionId) ?? 0) + 1);
-    if (profile) activeProfileRequests.set(profile, (activeProfileRequests.get(profile) ?? 0) + 1);
+    if (sessionId) { activeSessionRequests.set(sessionId, (activeSessionRequests.get(sessionId) ?? 0) + 1); }
+    if (profile) { activeProfileRequests.set(profile, (activeProfileRequests.get(profile) ?? 0) + 1); }
     return () => {
       if (sessionId) {
         const remaining = (activeSessionRequests.get(sessionId) ?? 1) - 1;
-        if (remaining > 0) activeSessionRequests.set(sessionId, remaining);
-        else activeSessionRequests.delete(sessionId);
+        if (remaining > 0) { activeSessionRequests.set(sessionId, remaining); }
+        else { activeSessionRequests.delete(sessionId); }
       }
       if (profile) {
         const remaining = (activeProfileRequests.get(profile) ?? 1) - 1;
-        if (remaining > 0) activeProfileRequests.set(profile, remaining);
-        else activeProfileRequests.delete(profile);
+        if (remaining > 0) { activeProfileRequests.set(profile, remaining); }
+        else { activeProfileRequests.delete(profile); }
       }
     };
   };
@@ -188,12 +188,12 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
     preview: async (runId, artifactId, variant) => {
       const origin = runRegistry.artifactOrigin(runId, artifactId);
       const e = remoteExecution(workspaceManager, origin.run.execution);
-      if (!e) return undefined;
+      if (!e) { return undefined; }
       const result = await workspaceManager.execute(e.workspaceId, e.executionDeviceId, 'executor.artifact', { runId: origin.run.id, artifactId: origin.artifactId, preview: true, variant }) as { data: string };
       return Buffer.from(result.data, 'base64');
     },
     resolve: (input, body, request) => {
-      if (input.sessionId && activeSessionRequests.has(input.sessionId)) throw new MarifoldError('SESSION_BUSY', 'Session already has an active request.', { sessionId: input.sessionId });
+      if (input.sessionId && activeSessionRequests.has(input.sessionId)) { throw new MarifoldError('SESSION_BUSY', 'Session already has an active request.', { sessionId: input.sessionId }); }
       return workspaceRuns.resolve({ ...input, sessionOwner: typeof request.headers['x-marifold-session-owner'] === 'string' ? request.headers['x-marifold-session-owner'] : undefined, environment: requestEnvironment(request, workspaceContext.resolve(request.headers)) }, {
       workspaceId: typeof body.workspaceId === 'string' ? body.workspaceId : undefined,
       executionDeviceId: typeof body.executionDeviceId === 'string' ? body.executionDeviceId : undefined,
@@ -212,9 +212,9 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
     },
     artifact: async (runId, artifactId, reply, inline) => {
       const run = runRegistry.require(runId); const origin = runRegistry.artifactOrigin(runId, artifactId); const e = remoteExecution(workspaceManager, origin.run.execution);
-      if (!e) return false;
+      if (!e) { return false; }
       const artifact = run.artifacts?.find(a => a.id === artifactId);
-      if (!artifact) throw MarifoldError.artifactNotFound(runId, artifactId);
+      if (!artifact) { throw MarifoldError.artifactNotFound(runId, artifactId); }
       artifactHeaders(reply, artifact, inline);
       await remoteArtifactDownload(reply, artifactTransfers, artifact.size, e.workspaceId, input =>
         workspaceManager.execute(e.workspaceId, e.executionDeviceId, 'executor.artifact', {
@@ -233,7 +233,7 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
   server.addHook('onClose', async () => workspaceExecutor.close());
 
   const webDir = resolveServiceWebDir(options);
-  if (webDir) registerStaticRoutes(server, webDir);
+  if (webDir) { registerStaticRoutes(server, webDir); }
 
   server.addHook('onClose', async () => {
     telegramBridge?.stop();
@@ -245,7 +245,7 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
 
   server.setErrorHandler((error, request, reply) => {
     const normalized = normalizeError(error, requestOrigin(request, workspaceContext.resolve(request.headers)) === 'local');
-    if (normalized.statusCode >= 500) request.log.error(error);
+    if (normalized.statusCode >= 500) { request.log.error(error); }
     reply.status(normalized.statusCode).send({
       ok: false,
       error: normalized.error,
@@ -275,7 +275,7 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
   server.get('/v1/changes', async () => ({ ok: true, revision: `${generation}:${revision}` }));
   server.addHook('onResponse', async (request, reply) => {
     if (reply.statusCode < 400 && request.method !== 'GET' && request.method !== 'HEAD'
-      && !request.url.startsWith('/v1/workspaces') && !['/v1/skills/resolve', '/v1/terminal/snapshot'].includes(request.url)) revision++;
+      && !request.url.startsWith('/v1/workspaces') && !['/v1/skills/resolve', '/v1/terminal/snapshot'].includes(request.url)) { revision++; }
   });
   server.addHook('onClose', async () => unsubscribeChanges());
 
@@ -596,13 +596,13 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
 
   server.post<{ Params: { id: string } }>('/v1/sessions/:id/lease', async request => {
     const owner = request.headers['x-marifold-session-owner'];
-    if (typeof owner !== 'string' || !/^[a-zA-Z0-9-]{20,100}$/.test(owner)) throw MarifoldError.configInvalid('A session owner identifier is required.');
+    if (typeof owner !== 'string' || !/^[a-zA-Z0-9-]{20,100}$/.test(owner)) { throw MarifoldError.configInvalid('A session owner identifier is required.'); }
     runtime.acquireSession(request.params.id, owner);
     return { ok: true };
   });
   server.delete<{ Params: { id: string } }>('/v1/sessions/:id/lease', async request => {
     const owner = request.headers['x-marifold-session-owner'];
-    if (typeof owner === 'string') runtime.releaseSession(request.params.id, owner);
+    if (typeof owner === 'string') { runtime.releaseSession(request.params.id, owner); }
     return { ok: true };
   });
   server.addHook('preHandler', async request => {
@@ -621,8 +621,9 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
     Params: { id: string; userTurnIndex: string; attachmentIndex: string };
     Querystring: { thumbnail?: string };
   }>('/v1/sessions/:id/attachments/:userTurnIndex/:attachmentIndex', async (request, reply) => {
-    if (request.query.thumbnail !== undefined && request.query.thumbnail !== '1')
+    if (request.query.thumbnail !== undefined && request.query.thumbnail !== '1') {
       throw MarifoldError.configInvalid('thumbnail must be 1 when supplied.');
+    }
     const userTurnIndex = nonNegativeIntegerPath(request.params.userTurnIndex, 'userTurnIndex');
     const attachmentIndex = nonNegativeIntegerPath(request.params.attachmentIndex, 'attachmentIndex');
     let attachment = runtime.getSessionAttachment(request.params.id, userTurnIndex, attachmentIndex);
@@ -906,10 +907,10 @@ async function streamChat(reply: FastifyReply, runtime: MarifoldRuntime, request
         completion = summary;
       },
       text => {
-        if (!closed) writeSse(reply, 'reasoning', { text });
+        if (!closed) { writeSse(reply, 'reasoning', { text }); }
       },
     )) {
-      if (closed) break;
+      if (closed) { break; }
       writeSse(reply, 'chunk', { text: chunk });
     }
     if (!closed) {
@@ -925,7 +926,7 @@ async function streamChat(reply: FastifyReply, runtime: MarifoldRuntime, request
     }
   } finally {
     stopHeartbeat();
-    if (!closed) reply.raw.end();
+    if (!closed) { reply.raw.end(); }
   }
 }
 
@@ -973,9 +974,9 @@ function parseTaskUpdateInput(value: unknown): TaskUpdateInput {
   assignStringIfPresent(input, body, 'sessionId');
   assignStringIfPresent(input, body, 'summary');
   assignStringIfPresent(input, body, 'nextAction');
-  if (Object.prototype.hasOwnProperty.call(body, 'status')) input.status = taskStatus(body.status);
-  if (Object.prototype.hasOwnProperty.call(body, 'tags')) input.tags = stringArray(body.tags, 'tags');
-  if (Object.prototype.hasOwnProperty.call(body, 'plan')) input.plan = planArray(body.plan);
+  if (Object.prototype.hasOwnProperty.call(body, 'status')) { input.status = taskStatus(body.status); }
+  if (Object.prototype.hasOwnProperty.call(body, 'tags')) { input.tags = stringArray(body.tags, 'tags'); }
+  if (Object.prototype.hasOwnProperty.call(body, 'plan')) { input.plan = planArray(body.plan); }
   return input;
 }
 
@@ -1001,7 +1002,7 @@ const PROVIDER_TYPES = ['ollama', 'openai-compatible', 'anthropic'] as const;
 function parseProviderTypeField(value: unknown): (typeof PROVIDER_TYPES)[number] {
   const type = stringValue(value, 'type');
   const known = PROVIDER_TYPES.find(candidate => candidate === type);
-  if (!known) throw MarifoldError.configInvalid(`type must be one of ${PROVIDER_TYPES.join(', ')}.`);
+  if (!known) { throw MarifoldError.configInvalid(`type must be one of ${PROVIDER_TYPES.join(', ')}.`); }
   return known;
 }
 
@@ -1147,37 +1148,37 @@ function statusCodeForError(error: MarifoldError): number {
   ) {
     return 400;
   }
-  if (error.code === 'CONFIG_FILE_NOT_FOUND') return 404;
-  if (error.code === 'UNAUTHORIZED') return 401;
-  if (error.code === 'NETWORK_FORBIDDEN' || error.code === 'ORIGIN_FORBIDDEN') return 403;
-  if (error.code === 'RUN_LIMIT_EXCEEDED') return 429;
-  if (error.code === 'SESSION_BUSY' || error.code === 'WORKSPACE_CONFLICT') return 409;
-  if (error.code === 'WORKSPACE_INVALID') return 400;
-  if (error.code === 'WORKSPACE_OFFLINE') return 503;
-  if (error.code === 'WORKSPACE_TIMEOUT') return 504;
-  if (error.code === 'PROVIDER_ERROR') return 502;
+  if (error.code === 'CONFIG_FILE_NOT_FOUND') { return 404; }
+  if (error.code === 'UNAUTHORIZED') { return 401; }
+  if (error.code === 'NETWORK_FORBIDDEN' || error.code === 'ORIGIN_FORBIDDEN') { return 403; }
+  if (error.code === 'RUN_LIMIT_EXCEEDED') { return 429; }
+  if (error.code === 'SESSION_BUSY' || error.code === 'WORKSPACE_CONFLICT') { return 409; }
+  if (error.code === 'WORKSPACE_INVALID') { return 400; }
+  if (error.code === 'WORKSPACE_OFFLINE') { return 503; }
+  if (error.code === 'WORKSPACE_TIMEOUT') { return 504; }
+  if (error.code === 'PROVIDER_ERROR') { return 502; }
   return 500;
 }
 
 function optionalTaskStatusField<Key extends string>(key: Key, value: unknown): Record<Key, TaskStatus> | Record<string, never> {
-  if (value === undefined) return {};
+  if (value === undefined) { return {}; }
   return { [key]: taskStatus(value) } as Record<Key, TaskStatus>;
 }
 
 function optionalTagsField(value: unknown): Pick<TaskCreateInput, 'tags'> {
-  if (value === undefined) return {};
+  if (value === undefined) { return {}; }
   return { tags: stringArray(value, 'tags') };
 }
 
 function optionalPlanField(value: unknown): Pick<TaskCreateInput, 'plan'> {
-  if (value === undefined) return {};
+  if (value === undefined) { return {}; }
   return { plan: planArray(value) };
 }
 
 function assignStringIfPresent(input: TaskUpdateInput, body: JsonObject, key: keyof TaskUpdateInput): void {
-  if (!Object.prototype.hasOwnProperty.call(body, key)) return;
+  if (!Object.prototype.hasOwnProperty.call(body, key)) { return; }
   const value = body[key];
-  if (value === undefined) return;
+  if (value === undefined) { return; }
   if (value === null) {
     input[key] = '' as never;
     return;
@@ -1186,7 +1187,7 @@ function assignStringIfPresent(input: TaskUpdateInput, body: JsonObject, key: ke
 }
 
 function planArray(value: unknown): TaskPlanInput[] {
-  if (!Array.isArray(value)) throw MarifoldError.configInvalid('plan must be an array.');
+  if (!Array.isArray(value)) { throw MarifoldError.configInvalid('plan must be an array.'); }
   return value.map((item, index) => {
     if (typeof item !== 'object' || item === null || Array.isArray(item)) {
       throw MarifoldError.configInvalid(`plan[${index}] must be an object.`);
@@ -1212,7 +1213,7 @@ function metadataObject(value: unknown): Record<string, string> {
 }
 
 function parseLimitQuery(value: string | undefined): number | undefined {
-  if (value === undefined) return undefined;
+  if (value === undefined) { return undefined; }
   const parsed = Number.parseInt(value, 10);
   if (!Number.isInteger(parsed) || parsed < 1) {
     throw MarifoldError.configInvalid('limit must be a positive integer.');
@@ -1229,24 +1230,24 @@ function nonNegativeIntegerPath(value: string, name: string): number {
 }
 
 function parseBooleanQuery(value: string | undefined): boolean {
-  if (value === undefined) return false;
+  if (value === undefined) { return false; }
   const normalized = value.trim().toLowerCase();
-  if (normalized === 'true' || normalized === '1' || normalized === 'yes') return true;
-  if (normalized === 'false' || normalized === '0' || normalized === 'no') return false;
+  if (normalized === 'true' || normalized === '1' || normalized === 'yes') { return true; }
+  if (normalized === 'false' || normalized === '0' || normalized === 'no') { return false; }
   throw MarifoldError.configInvalid('Boolean query values must be true or false.');
 }
 
 function taskStatus(value: unknown): TaskStatus {
-  if (value === 'running' || value === 'blocked' || value === 'completed' || value === 'failed' || value === 'cancelled') return value;
+  if (value === 'running' || value === 'blocked' || value === 'completed' || value === 'failed' || value === 'cancelled') { return value; }
   throw MarifoldError.configInvalid(`Invalid task status '${String(value)}'.`);
 }
 
 function stepStatus(value: unknown): 'pending' | 'in_progress' | 'completed' | 'skipped' | 'cancelled' {
-  if (value === 'pending' || value === 'in_progress' || value === 'completed' || value === 'skipped' || value === 'cancelled') return value;
+  if (value === 'pending' || value === 'in_progress' || value === 'completed' || value === 'skipped' || value === 'cancelled') { return value; }
   throw MarifoldError.configInvalid(`Invalid task step status '${String(value)}'.`);
 }
 
 function taskEventKind(value: unknown): TaskEventKind {
-  if (value === 'progress' || value === 'decision' || value === 'observation' || value === 'blocker' || value === 'verification' || value === 'note') return value;
+  if (value === 'progress' || value === 'decision' || value === 'observation' || value === 'blocker' || value === 'verification' || value === 'note') { return value; }
   throw MarifoldError.configInvalid(`Invalid task event kind '${String(value)}'.`);
 }

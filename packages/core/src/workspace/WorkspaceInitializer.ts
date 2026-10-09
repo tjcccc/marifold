@@ -159,8 +159,8 @@ function renderConfig(options: RenderConfigOptions): string {
     `[providers.${options.provider}]`,
     `type = ${tomlString(options.providerType)}`,
   ];
-  if (options.baseUrl) providerLines.push(`base_url = ${tomlString(options.baseUrl)}`);
-  if (options.apiKeyEnv) providerLines.push(`api_key_env = ${tomlString(options.apiKeyEnv)}`);
+  if (options.baseUrl) { providerLines.push(`base_url = ${tomlString(options.baseUrl)}`); }
+  if (options.apiKeyEnv) { providerLines.push(`api_key_env = ${tomlString(options.apiKeyEnv)}`); }
 
   return `[default]
 provider = ${tomlString(options.provider)}
@@ -199,21 +199,21 @@ ${providerLines.join('\n')}
 }
 
 function inferProviderType(provider: string): ProviderType {
-  if (provider === 'ollama') return 'ollama';
-  if (provider === 'anthropic') return 'anthropic';
+  if (provider === 'ollama') { return 'ollama'; }
+  if (provider === 'anthropic') { return 'anthropic'; }
   return 'openai-compatible';
 }
 
 function resolveModel(provider: string, model?: string): string {
-  if (model) return model;
-  if (provider === 'ollama') return 'gemma4:e4b';
+  if (model) { return model; }
+  if (provider === 'ollama') { return 'gemma4:e4b'; }
   throw MarifoldError.configInvalid(`Provider '${provider}' requires --model during init.`);
 }
 
 function resolveBaseUrl(provider: string, providerType: ProviderType, baseUrl?: string): string | undefined {
-  if (baseUrl) return baseUrl.replace(/\/+$/, '');
-  if (providerType === 'ollama') return 'http://localhost:11434';
-  if (provider === 'openai') return 'https://api.openai.com';
+  if (baseUrl) { return baseUrl.replace(/\/+$/, ''); }
+  if (providerType === 'ollama') { return 'http://localhost:11434'; }
+  if (provider === 'openai') { return 'https://api.openai.com'; }
   if (providerType === 'openai-compatible') {
     throw MarifoldError.configInvalid(
       `Provider '${provider}' requires --base-url during init because it is OpenAI-compatible.`,
@@ -224,8 +224,8 @@ function resolveBaseUrl(provider: string, providerType: ProviderType, baseUrl?: 
 }
 
 function resolveApiKeyEnv(provider: string, providerType: ProviderType, apiKeyEnv?: string): string | undefined {
-  if (apiKeyEnv) return apiKeyEnv;
-  if (providerType === 'ollama') return undefined;
+  if (apiKeyEnv) { return apiKeyEnv; }
+  if (providerType === 'ollama') { return undefined; }
   return `${provider.replace(/[^A-Za-z0-9]+/g, '_').toUpperCase()}_API_KEY`;
 }
 
@@ -239,7 +239,7 @@ function assertSafeProfileName(profile: string): void {
 }
 
 function writeIfMissing(filePath: string, content: string): WorkspaceInitFile {
-  if (fs.existsSync(filePath)) return { path: filePath, status: 'kept' };
+  if (fs.existsSync(filePath)) { return { path: filePath, status: 'kept' }; }
   fs.writeFileSync(filePath, content);
   return { path: filePath, status: 'created' };
 }

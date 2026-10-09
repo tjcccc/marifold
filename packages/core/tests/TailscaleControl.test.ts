@@ -3,8 +3,8 @@ import { TailscaleControl } from '../src/agent/TailscaleControl';
 
 function commands() {
   return vi.fn(async (file: string, args: string[]): Promise<string> => {
-    if (file.endsWith('PlistBuddy')) return 'io.tailscale.ipn.macsys\n';
-    if (args[0] === 'status') return '{"BackendState":"Running"}';
+    if (file.endsWith('PlistBuddy')) { return 'io.tailscale.ipn.macsys\n'; }
+    if (args[0] === 'status') { return '{"BackendState":"Running"}'; }
     return '';
   });
 }
@@ -19,8 +19,8 @@ describe('standalone macOS Tailscale restart', () => {
   });
   it('refuses before stopping when administrator permission is unavailable', async () => {
     const run = commands().mockImplementation(async file => {
-      if (file.endsWith('PlistBuddy')) return 'io.tailscale.ipn.macsys';
-      if (file.endsWith('sudo')) throw new Error('password required');
+      if (file.endsWith('PlistBuddy')) { return 'io.tailscale.ipn.macsys'; }
+      if (file.endsWith('sudo')) { throw new Error('password required'); }
       return '';
     });
     await expect(new TailscaleControl(run, 'darwin').restart()).rejects.toThrow('password required');
@@ -36,10 +36,10 @@ describe('standalone macOS Tailscale restart', () => {
   it('restores after an uncertain stop, retries only startup, and separates VPN readiness from restart success', async () => {
     let starts = 0;
     const run = commands().mockImplementation(async (file, args) => {
-      if (file.endsWith('PlistBuddy')) return 'io.tailscale.ipn.macsys';
-      if (file.endsWith('sudo') && !args.includes('-l')) throw new Error('stop timeout');
-      if (args[0] === 'rungui' && ++starts === 1) throw new Error('startup failed');
-      if (args[0] === 'status') return '{"BackendState":"Running"}';
+      if (file.endsWith('PlistBuddy')) { return 'io.tailscale.ipn.macsys'; }
+      if (file.endsWith('sudo') && !args.includes('-l')) { throw new Error('stop timeout'); }
+      if (args[0] === 'rungui' && ++starts === 1) { throw new Error('startup failed'); }
+      if (args[0] === 'status') { return '{"BackendState":"Running"}'; }
       return '';
     });
     expect(await new TailscaleControl(run, 'darwin').restart()).toMatchObject({ restarted: false, vpnReady: true, recoveryAttempted: true });
@@ -48,8 +48,8 @@ describe('standalone macOS Tailscale restart', () => {
   });
   it('reports successful command restart separately from a disconnected VPN', async () => {
     const run = commands().mockImplementation(async (file, args) => {
-      if (file.endsWith('PlistBuddy')) return 'io.tailscale.ipn.macsys';
-      if (args[0] === 'status') return '{"BackendState":"NeedsLogin"}';
+      if (file.endsWith('PlistBuddy')) { return 'io.tailscale.ipn.macsys'; }
+      if (args[0] === 'status') { return '{"BackendState":"NeedsLogin"}'; }
       return '';
     });
     expect(await new TailscaleControl(run, 'darwin').restart()).toEqual({ restarted: true, vpnReady: false, recoveryAttempted: true, errors: [] });

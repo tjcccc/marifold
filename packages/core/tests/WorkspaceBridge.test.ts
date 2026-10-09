@@ -9,7 +9,7 @@ import { MARIFOLD_VERSION } from '../src/workspace/MarifoldVersion';
 
 const cleanup: Array<() => void> = [];
 afterEach(() => {
-  for (const fn of cleanup.splice(0).reverse()) fn();
+  for (const fn of cleanup.splice(0).reverse()) { fn(); }
 });
 function manager() {
   const dir = mkdtempSync(join(tmpdir(), 'marifold-bridge-'));
@@ -175,7 +175,7 @@ describe('workspace bridge', () => {
     });
     await new Promise<void>((resolve) => bridge.listen(0, '127.0.0.1', resolve));
     cleanup.push(() => {
-      for (const socket of sockets) socket.destroy();
+      for (const socket of sockets) { socket.destroy(); }
       bridge.close();
     });
     const url = `http://127.0.0.1:${(bridge.address() as { port: number }).port}`;
@@ -206,7 +206,7 @@ describe('workspace bridge', () => {
     expect(await guest.request(joined.id, 'large', large)).toEqual(large);
     const pending = guest.request(joined.id, 'effect', { value: 'once' }, 'stable_effect');
     await expect.poll(() => effects).toBe(1);
-    for (const socket of sockets) socket.destroy();
+    for (const socket of sockets) { socket.destroy(); }
     release();
     expect(await pending).toEqual({ value: 'once' });
     expect(effects).toBe(1);

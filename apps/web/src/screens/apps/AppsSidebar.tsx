@@ -42,7 +42,7 @@ export function AppsSidebarContent({
   const listRef = useRef<HTMLDivElement>(null);
   const filteredApps = useMemo(() => {
     const terms = normalizeSearch(search).split(' ').filter(Boolean);
-    if (terms.length === 0) return apps;
+    if (terms.length === 0) { return apps; }
     return apps.filter(app => {
       const haystack = normalizeSearch([
         app.app.name,
@@ -59,9 +59,9 @@ export function AppsSidebarContent({
       setSearch('');
       return;
     }
-    if (event.key !== 'ArrowDown') return;
+    if (event.key !== 'ArrowDown') { return; }
     const firstApp = listRef.current?.querySelector<HTMLButtonElement>('[data-app-row]');
-    if (!firstApp) return;
+    if (!firstApp) { return; }
     event.preventDefault();
     firstApp.focus();
   }

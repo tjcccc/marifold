@@ -148,11 +148,11 @@ function Elapsed({ startedAt }: { startedAt: string }) {
 
 function activity(run: RunCardState): string {
   const runningRow = run.rows.findLast(row => row.phase === 'running');
-  if (runningRow) return runningRow.summary;
+  if (runningRow) { return runningRow.summary; }
   const step = run.plan?.find(item => item.status === 'in_progress');
-  if (step) return step.text.toLowerCase();
+  if (step) { return step.text.toLowerCase(); }
   const lastRow = run.rows.at(-1);
-  if (lastRow) return lastRow.summary;
+  if (lastRow) { return lastRow.summary; }
   return 'thinking…';
 }
 

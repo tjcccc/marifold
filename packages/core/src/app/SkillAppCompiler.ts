@@ -100,7 +100,7 @@ export function compileSkillApp(source: string, sourcePath = 'skillapp.ts'): Ski
       }
       evaluateCall(expression, state, sourcePath);
     } else if (ts.isExportAssignment(statement) && !statement.isExportEquals) {
-      if (state.template) throw invalidAt(sourceFile, statement.pos, 'Only one default export is allowed.', sourcePath);
+      if (state.template) { throw invalidAt(sourceFile, statement.pos, 'Only one default export is allowed.', sourcePath); }
       const value = evaluateExpression(statement.expression, state, sourcePath);
       const tagged = requireTagged(value, 'skillapp', statement.expression, state, sourcePath);
       state.template = {
@@ -114,7 +114,7 @@ export function compileSkillApp(source: string, sourcePath = 'skillapp.ts'): Ski
     }
   }
 
-  if (!state.template) throw MarifoldError.appInvalid('SkillApp must export default defineSkillApp({...}).', sourcePath);
+  if (!state.template) { throw MarifoldError.appInvalid('SkillApp must export default defineSkillApp({...}).', sourcePath); }
   const app = normalizeAppInfo(state.template.app, state, sourcePath);
   const permissions = normalizePermissions(state.template.permissions, state, sourcePath);
   const layoutRoot = normalizeComponent(state.template.ui, state, sourcePath);
@@ -167,7 +167,7 @@ function parseVariables(node: ts.VariableStatement, state: CompilationState, sou
       throw invalidAt(state.sourceFile, declaration.pos, `Invalid or duplicate declaration '${name}'.`, sourcePath);
     }
     const value = evaluateExpression(declaration.initializer, state, sourcePath, name);
-    if (isTagged(value)) value.name = name;
+    if (isTagged(value)) { value.name = name; }
     state.values.set(name, value);
     registerDeclaration(name, value, declaration, state, sourcePath);
   }
@@ -180,7 +180,7 @@ function registerDeclaration(
   state: CompilationState,
   sourcePath: string,
 ): void {
-  if (!isTagged(value)) return;
+  if (!isTagged(value)) { return; }
   if (value.__kind === 'state') {
     state.states.push({ name, initial: requireString(value.initial, 'State initial value', node, state, sourcePath) });
   } else if (value.__kind === 'attachment_state') {
@@ -296,22 +296,22 @@ function evaluateExpression(
   declarationName?: string,
 ): Evaluated {
   const node = unwrap(rawNode);
-  if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) return node.text;
-  if (ts.isNumericLiteral(node)) return Number(node.text);
-  if (node.kind === ts.SyntaxKind.TrueKeyword) return true;
-  if (node.kind === ts.SyntaxKind.FalseKeyword) return false;
-  if (node.kind === ts.SyntaxKind.NullKeyword) return null;
+  if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) { return node.text; }
+  if (ts.isNumericLiteral(node)) { return Number(node.text); }
+  if (node.kind === ts.SyntaxKind.TrueKeyword) { return true; }
+  if (node.kind === ts.SyntaxKind.FalseKeyword) { return false; }
+  if (node.kind === ts.SyntaxKind.NullKeyword) { return null; }
   if (ts.isPrefixUnaryExpression(node) && node.operator === ts.SyntaxKind.MinusToken && ts.isNumericLiteral(node.operand)) {
     return -Number(node.operand.text);
   }
   if (ts.isIdentifier(node)) {
     const value = state.values.get(node.text);
-    if (value === undefined) throw invalidAt(state.sourceFile, node.pos, `Unknown declaration '${node.text}'.`, sourcePath);
+    if (value === undefined) { throw invalidAt(state.sourceFile, node.pos, `Unknown declaration '${node.text}'.`, sourcePath); }
     return value;
   }
   if (ts.isArrayLiteralExpression(node)) {
     return node.elements.map(element => {
-      if (ts.isSpreadElement(element)) throw invalidAt(state.sourceFile, element.pos, 'Array spreads are not allowed.', sourcePath);
+      if (ts.isSpreadElement(element)) { throw invalidAt(state.sourceFile, element.pos, 'Array spreads are not allowed.', sourcePath); }
       return evaluateExpression(element, state, sourcePath);
     });
   }
@@ -329,7 +329,7 @@ function evaluateExpression(
           throw invalidAt(state.sourceFile, property.pos, `Duplicate object property '${property.name.text}'.`, sourcePath);
         }
         const value = state.values.get(property.name.text);
-        if (value === undefined) throw invalidAt(state.sourceFile, property.pos, `Unknown declaration '${property.name.text}'.`, sourcePath);
+        if (value === undefined) { throw invalidAt(state.sourceFile, property.pos, `Unknown declaration '${property.name.text}'.`, sourcePath); }
         result[property.name.text] = value;
       } else {
         throw invalidAt(state.sourceFile, property.pos, 'Object methods, accessors, and spreads are not allowed.', sourcePath);
@@ -337,7 +337,7 @@ function evaluateExpression(
     }
     return result;
   }
-  if (ts.isCallExpression(node)) return evaluateCall(node, state, sourcePath, declarationName);
+  if (ts.isCallExpression(node)) { return evaluateCall(node, state, sourcePath, declarationName); }
   throw invalidAt(state.sourceFile, node.pos, `Unsupported expression '${ts.SyntaxKind[node.kind]}'.`, sourcePath);
 }
 
@@ -348,7 +348,7 @@ function evaluateCall(
   _declarationName?: string,
 ): TaggedValue {
   const name = builderName(node.expression, state);
-  if (!name) throw invalidAt(state.sourceFile, node.pos, 'Only imported SkillApp builders may be called.', sourcePath);
+  if (!name) { throw invalidAt(state.sourceFile, node.pos, 'Only imported SkillApp builders may be called.', sourcePath); }
   const args = node.arguments.map(argument => evaluateExpression(argument, state, sourcePath));
   switch (name) {
     case 'State':
@@ -424,7 +424,7 @@ function evaluateCall(
       const options = requireObject(args[2], 'useSkill options', node, state, sourcePath);
       rejectUnknown(options, ['parameters', 'output', 'memory', 'history', 'profileContext'], name, node, state, sourcePath);
       for (const key of ['memory', 'history', 'profileContext'] as const) {
-        if (options[key] !== false) throw invalidAt(state.sourceFile, node.pos, `useSkill.${key} must be false in v1.`, sourcePath);
+        if (options[key] !== false) { throw invalidAt(state.sourceFile, node.pos, `useSkill.${key} must be false in v1.`, sourcePath); }
       }
       return {
         __kind: 'operation',
@@ -492,13 +492,13 @@ function evaluateCall(
       rejectUnknown(options, ['onChange', 'debounce', 'concurrency'], name, node, state, sourcePath);
       const onChange = requireArray(options.onChange, 'trigger onChange', node, state, sourcePath)
         .map(value => requireNamedReference(value, 'state', node, state, sourcePath));
-      if (onChange.length === 0) throw invalidAt(state.sourceFile, node.pos, 'trigger.onChange cannot be empty.', sourcePath);
+      if (onChange.length === 0) { throw invalidAt(state.sourceFile, node.pos, 'trigger.onChange cannot be empty.', sourcePath); }
       const debounce = options.debounce === undefined ? 0 : requireNonNegativeInteger(options.debounce, 'debounce', node, state, sourcePath);
-      if (debounce > 60_000) throw invalidAt(state.sourceFile, node.pos, 'trigger.debounce cannot exceed 60000 ms.', sourcePath);
+      if (debounce > 60_000) { throw invalidAt(state.sourceFile, node.pos, 'trigger.debounce cannot exceed 60000 ms.', sourcePath); }
       const concurrency = options.concurrency === undefined
         ? 'latest'
         : requireString(options.concurrency, 'concurrency', node, state, sourcePath);
-      if (concurrency !== 'latest') throw invalidAt(state.sourceFile, node.pos, 'trigger.concurrency must be "latest" in v1.', sourcePath);
+      if (concurrency !== 'latest') { throw invalidAt(state.sourceFile, node.pos, 'trigger.concurrency must be "latest" in v1.', sourcePath); }
       state.triggers.push({
         operation: requireName(operation, 'operation', node, state, sourcePath),
         onChange,
@@ -583,7 +583,7 @@ function evaluateCall(
       rejectUnknown(options, ['options', 'showLabel', 'grow'], name, node, state, sourcePath);
       const choices = requireArray(options.options, 'Select options.options', node, state, sourcePath)
         .map(value => requireSelectOption(value, node, state, sourcePath));
-      if (choices.length === 0) throw invalidAt(state.sourceFile, node.pos, 'Select options cannot be empty.', sourcePath);
+      if (choices.length === 0) { throw invalidAt(state.sourceFile, node.pos, 'Select options cannot be empty.', sourcePath); }
       return {
         __kind: 'component', component: 'select', label: requireNonEmptyString(args[0], 'Select label', node, state, sourcePath),
         bind: requireTagged(args[1], 'state', node, state, sourcePath),
@@ -618,7 +618,7 @@ function normalizeComponent(
   sourcePath: string,
   depth = 0,
 ): SkillAppLayoutItem {
-  if (depth > 4) throw MarifoldError.appInvalid('SkillApp layout depth cannot exceed four.', sourcePath);
+  if (depth > 4) { throw MarifoldError.appInvalid('SkillApp layout depth cannot exceed four.', sourcePath); }
   const component = requireString(value.component, 'component name', state.sourceFile, state, sourcePath) as SkillAppLayoutItem['component'];
   const options = requireObject(value.options ?? {}, `${component} options`, state.sourceFile, state, sourcePath);
   const item: SkillAppLayoutItem = { component };
@@ -626,15 +626,15 @@ function normalizeComponent(
     item.children = requireArray(value.children, `${component} children`, state.sourceFile, state, sourcePath)
       .map(child => normalizeComponent(requireTagged(child, 'component', state.sourceFile, state, sourcePath), state, sourcePath, depth + 1));
   }
-  if (value.label !== undefined) item.label = requireString(value.label, `${component} label`, state.sourceFile, state, sourcePath);
-  if (value.bind !== undefined) item.bind = requireNamedReference(
+  if (value.label !== undefined) { item.label = requireString(value.label, `${component} label`, state.sourceFile, state, sourcePath); }
+  if (value.bind !== undefined) { item.bind = requireNamedReference(
     value.bind,
     component === 'attachments' ? 'attachment_state' : 'state',
     state.sourceFile,
     state,
     sourcePath,
-  );
-  if (value.operation !== undefined) item.trigger = requireName(requireTagged(value.operation, 'operation', state.sourceFile, state, sourcePath), 'operation', state.sourceFile, state, sourcePath);
+  ); }
+  if (value.operation !== undefined) { item.trigger = requireName(requireTagged(value.operation, 'operation', state.sourceFile, state, sourcePath), 'operation', state.sourceFile, state, sourcePath); }
   copyBoolean(options, 'showLabel', item, state, sourcePath);
   copyBoolean(options, 'grow', item, state, sourcePath);
   copyBoolean(options, 'editable', item, state, sourcePath);
@@ -659,8 +659,8 @@ function normalizeComponent(
     item.options = requireArray(options.options, 'Select options', state.sourceFile, state, sourcePath)
       .map(choice => requireSelectOption(choice, state.sourceFile, state, sourcePath));
   }
-  if (item.component === 'textarea' && item.editable === undefined) item.editable = true;
-  if (item.component === 'button' && item.emphasis === undefined) item.emphasis = 'primary';
+  if (item.component === 'textarea' && item.editable === undefined) { item.editable = true; }
+  if (item.component === 'button' && item.emphasis === undefined) { item.emphasis = 'primary'; }
   if (item.gap !== undefined && !['none', 'small', 'medium', 'large'].includes(item.gap)) {
     throw MarifoldError.appInvalid(`Invalid layout gap '${item.gap}'.`, sourcePath);
   }
@@ -688,8 +688,8 @@ function validateReferences(state: CompilationState, layout: SkillAppLayoutItem[
   assertUnique(state.skills.map(item => item.name), 'registered Skills', sourcePath);
   assertUnique(state.operations.map(item => item.name), 'operations', sourcePath);
   assertUnique(state.attachmentStates.map(item => item.name), 'attachment state declarations', sourcePath);
-  if (state.states.length === 0) throw MarifoldError.appInvalid('SkillApp must declare at least one State.', sourcePath);
-  if (state.operations.length === 0) throw MarifoldError.appInvalid('SkillApp must declare at least one useSkill or useProfileSkill operation.', sourcePath);
+  if (state.states.length === 0) { throw MarifoldError.appInvalid('SkillApp must declare at least one State.', sourcePath); }
+  if (state.operations.length === 0) { throw MarifoldError.appInvalid('SkillApp must declare at least one useSkill or useProfileSkill operation.', sourcePath); }
   for (const operation of state.operations) {
     if (operation.interactive && (!operation.profile || !operation.skill || operation.skillState)) {
       throw MarifoldError.appInvalid(
@@ -698,36 +698,36 @@ function validateReferences(state: CompilationState, layout: SkillAppLayoutItem[
       );
     }
     if (operation.profile) {
-      if (!profileNames.has(operation.profile)) throw MarifoldError.appInvalid(`Operation '${operation.name}' references missing profile '${operation.profile}'.`, sourcePath);
-      if (operation.model) throw MarifoldError.appInvalid(`Operation '${operation.name}' cannot reference both a profile and model.`, sourcePath);
+      if (!profileNames.has(operation.profile)) { throw MarifoldError.appInvalid(`Operation '${operation.name}' references missing profile '${operation.profile}'.`, sourcePath); }
+      if (operation.model) { throw MarifoldError.appInvalid(`Operation '${operation.name}' cannot reference both a profile and model.`, sourcePath); }
       const fixedSkill = operation.skill !== undefined;
       const selectedSkill = operation.skillState !== undefined;
       if (fixedSkill === selectedSkill) {
         throw MarifoldError.appInvalid(`Operation '${operation.name}' must reference exactly one fixed or state-selected profile Skill.`, sourcePath);
       }
       if (selectedSkill) {
-        if (!stateNames.has(operation.skillState!)) throw MarifoldError.appInvalid(`Operation '${operation.name}' references missing Skill state '${operation.skillState}'.`, sourcePath);
-        if (!operation.skillOptions?.length) throw MarifoldError.appInvalid(`Operation '${operation.name}' requires a non-empty Skill allowlist.`, sourcePath);
+        if (!stateNames.has(operation.skillState!)) { throw MarifoldError.appInvalid(`Operation '${operation.name}' references missing Skill state '${operation.skillState}'.`, sourcePath); }
+        if (!operation.skillOptions?.length) { throw MarifoldError.appInvalid(`Operation '${operation.name}' requires a non-empty Skill allowlist.`, sourcePath); }
         const initial = state.states.find(candidate => candidate.name === operation.skillState)?.initial;
         if (initial !== undefined && !operation.skillOptions.includes(initial)) {
           throw MarifoldError.appInvalid(`Operation '${operation.name}' initial Skill '${initial}' is not allowlisted.`, sourcePath);
         }
       }
     } else {
-      if (!operation.model || !modelNames.has(operation.model)) throw MarifoldError.appInvalid(`Operation '${operation.name}' references missing model '${operation.model ?? ''}'.`, sourcePath);
-      if (!operation.skill || !skillNames.has(operation.skill)) throw MarifoldError.appInvalid(`Operation '${operation.name}' references missing skill '${operation.skill ?? ''}'.`, sourcePath);
+      if (!operation.model || !modelNames.has(operation.model)) { throw MarifoldError.appInvalid(`Operation '${operation.name}' references missing model '${operation.model ?? ''}'.`, sourcePath); }
+      if (!operation.skill || !skillNames.has(operation.skill)) { throw MarifoldError.appInvalid(`Operation '${operation.name}' references missing skill '${operation.skill ?? ''}'.`, sourcePath); }
     }
-    if (!stateNames.has(operation.output)) throw MarifoldError.appInvalid(`Operation '${operation.name}' references missing output state '${operation.output}'.`, sourcePath);
-    if (operation.input && !stateNames.has(operation.input)) throw MarifoldError.appInvalid(`Operation '${operation.name}' references missing input state '${operation.input}'.`, sourcePath);
+    if (!stateNames.has(operation.output)) { throw MarifoldError.appInvalid(`Operation '${operation.name}' references missing output state '${operation.output}'.`, sourcePath); }
+    if (operation.input && !stateNames.has(operation.input)) { throw MarifoldError.appInvalid(`Operation '${operation.name}' references missing input state '${operation.input}'.`, sourcePath); }
     if (operation.attachments && !attachmentStateNames.has(operation.attachments)) {
       throw MarifoldError.appInvalid(`Operation '${operation.name}' references missing attachment state '${operation.attachments}'.`, sourcePath);
     }
     for (const name of Object.values(operation.parameters)) {
-      if (!stateNames.has(name)) throw MarifoldError.appInvalid(`Operation '${operation.name}' references missing state '${name}'.`, sourcePath);
+      if (!stateNames.has(name)) { throw MarifoldError.appInvalid(`Operation '${operation.name}' references missing state '${name}'.`, sourcePath); }
     }
   }
   const layoutItems = flatten(layout);
-  if (layoutItems.length > 100) throw MarifoldError.appInvalid('SkillApp layout cannot exceed 100 components.', sourcePath);
+  if (layoutItems.length > 100) { throw MarifoldError.appInvalid('SkillApp layout cannot exceed 100 components.', sourcePath); }
   for (const operation of state.operations.filter(candidate => candidate.skillState)) {
     const selectors = layoutItems.filter(item => item.component === 'select' && item.bind === operation.skillState);
     if (selectors.length === 0) {
@@ -740,14 +740,14 @@ function validateReferences(state: CompilationState, layout: SkillAppLayoutItem[
     }
   }
   for (const item of layoutItems) {
-    if (item.component === 'app') throw MarifoldError.appInvalid('App(...) can only be the root UI component.', sourcePath);
+    if (item.component === 'app') { throw MarifoldError.appInvalid('App(...) can only be the root UI component.', sourcePath); }
     if (item.bind && item.component === 'attachments' && !attachmentStateNames.has(item.bind)) {
       throw MarifoldError.appInvalid(`Layout references missing attachment state '${item.bind}'.`, sourcePath);
     }
     if (item.bind && item.component !== 'attachments' && !stateNames.has(item.bind)) {
       throw MarifoldError.appInvalid(`Layout references missing state '${item.bind}'.`, sourcePath);
     }
-    if (item.trigger && !operationNames.has(item.trigger)) throw MarifoldError.appInvalid(`Button references missing operation '${item.trigger}'.`, sourcePath);
+    if (item.trigger && !operationNames.has(item.trigger)) { throw MarifoldError.appInvalid(`Button references missing operation '${item.trigger}'.`, sourcePath); }
     if (item.component === 'select' && item.bind) {
       const initial = state.states.find(candidate => candidate.name === item.bind)?.initial;
       if (initial !== undefined && !(item.options ?? []).map(selectOptionValue).includes(initial)) {
@@ -756,23 +756,23 @@ function validateReferences(state: CompilationState, layout: SkillAppLayoutItem[
     }
   }
   for (const triggerDefinition of state.triggers) {
-    if (!operationNames.has(triggerDefinition.operation)) throw MarifoldError.appInvalid(`Trigger references missing operation '${triggerDefinition.operation}'.`, sourcePath);
+    if (!operationNames.has(triggerDefinition.operation)) { throw MarifoldError.appInvalid(`Trigger references missing operation '${triggerDefinition.operation}'.`, sourcePath); }
     if (state.operations.find(operation => operation.name === triggerDefinition.operation)?.interactive) {
       throw MarifoldError.appInvalid(`Interactive operation '${triggerDefinition.operation}' cannot use an automatic trigger.`, sourcePath);
     }
     for (const name of triggerDefinition.onChange) {
-      if (!stateNames.has(name)) throw MarifoldError.appInvalid(`Trigger references missing state '${name}'.`, sourcePath);
+      if (!stateNames.has(name)) { throw MarifoldError.appInvalid(`Trigger references missing state '${name}'.`, sourcePath); }
     }
   }
   const outputStates = new Set(state.operations.map(operation => operation.output));
   for (const operation of state.operations) {
     for (const input of [operation.input, operation.skillState, ...Object.values(operation.parameters)]) {
-      if (!input) continue;
-      if (outputStates.has(input)) throw MarifoldError.appInvalid(`Operation '${operation.name}' cannot use output state '${input}' as an input.`, sourcePath);
+      if (!input) { continue; }
+      if (outputStates.has(input)) { throw MarifoldError.appInvalid(`Operation '${operation.name}' cannot use output state '${input}' as an input.`, sourcePath); }
     }
   }
   for (const item of layoutItems) {
-    if (!item.bind || !outputStates.has(item.bind)) continue;
+    if (!item.bind || !outputStates.has(item.bind)) { continue; }
     if (item.component === 'select') {
       throw MarifoldError.appInvalid(`Output state '${item.bind}' cannot bind to Select.`, sourcePath);
     }
@@ -801,7 +801,7 @@ function normalizePermissions(
   const duplicate = permissions.find((permission, index) => permissions.findIndex(candidate => (
     candidate.kind === permission.kind && candidate.path === permission.path
   )) !== index);
-  if (duplicate) throw MarifoldError.appInvalid(`Duplicate ${duplicate.kind} permission '${duplicate.path}'.`, sourcePath);
+  if (duplicate) { throw MarifoldError.appInvalid(`Duplicate ${duplicate.kind} permission '${duplicate.path}'.`, sourcePath); }
   return permissions;
 }
 
@@ -829,7 +829,7 @@ function parseModelId(
 function assertUnique(values: string[], label: string, sourcePath: string): void {
   const seen = new Set<string>();
   for (const value of values) {
-    if (seen.has(value)) throw MarifoldError.appInvalid(`Duplicate ${label}: '${value}'.`, sourcePath);
+    if (seen.has(value)) { throw MarifoldError.appInvalid(`Duplicate ${label}: '${value}'.`, sourcePath); }
     seen.add(value);
   }
 }
@@ -837,7 +837,7 @@ function assertUnique(values: string[], label: string, sourcePath: string): void
 function normalizeAppInfo(raw: Record<string, Evaluated>, state: CompilationState, sourcePath: string) {
   rejectUnknown(raw, ['name', 'title', 'version', 'description'], 'app metadata', state.sourceFile, state, sourcePath);
   const name = requireNonEmptyString(raw.name, 'app.name', state.sourceFile, state, sourcePath);
-  if (!SAFE_APP_NAME.test(name)) throw MarifoldError.appInvalid(`Invalid App name '${name}'. Use kebab-case.`, sourcePath);
+  if (!SAFE_APP_NAME.test(name)) { throw MarifoldError.appInvalid(`Invalid App name '${name}'. Use kebab-case.`, sourcePath); }
   return {
     name,
     title: requireNonEmptyString(raw.title, 'app.title', state.sourceFile, state, sourcePath),
@@ -863,7 +863,7 @@ function builderName(expression: ts.LeftHandSideExpression, state: CompilationSt
 }
 
 function propertyName(name: ts.PropertyName, state: CompilationState, sourcePath: string): string {
-  if (ts.isIdentifier(name) || ts.isStringLiteral(name) || ts.isNumericLiteral(name)) return name.text;
+  if (ts.isIdentifier(name) || ts.isStringLiteral(name) || ts.isNumericLiteral(name)) { return name.text; }
   throw invalidAt(state.sourceFile, name.pos, 'Computed property names are not allowed.', sourcePath);
 }
 
@@ -872,17 +872,17 @@ function isTagged(value: Evaluated | undefined): value is TaggedValue {
 }
 
 function requireTagged(value: Evaluated | undefined, kind: string, node: ts.Node, state: CompilationState, sourcePath: string): TaggedValue {
-  if (isTagged(value) && value.__kind === kind) return value;
+  if (isTagged(value) && value.__kind === kind) { return value; }
   throw invalidAt(state.sourceFile, node.pos, `Expected ${kind} reference.`, sourcePath);
 }
 
 function requireObject(value: Evaluated | undefined, label: string, node: ts.Node, state: CompilationState, sourcePath: string): Record<string, Evaluated> {
-  if (typeof value === 'object' && value !== null && !Array.isArray(value) && !isTagged(value)) return value;
+  if (typeof value === 'object' && value !== null && !Array.isArray(value) && !isTagged(value)) { return value; }
   throw invalidAt(state.sourceFile, node.pos, `Expected ${label} to be an object.`, sourcePath);
 }
 
 function requireArray(value: Evaluated | undefined, label: string, node: ts.Node, state: CompilationState, sourcePath: string): Evaluated[] {
-  if (Array.isArray(value)) return value;
+  if (Array.isArray(value)) { return value; }
   throw invalidAt(state.sourceFile, node.pos, `Expected ${label} to be an array.`, sourcePath);
 }
 
@@ -930,28 +930,28 @@ function selectOptionValue(option: string | SkillAppSelectOption): string {
 }
 
 function requireString(value: Evaluated | string | undefined, label: string, node: ts.Node, state: CompilationState, sourcePath: string): string {
-  if (typeof value === 'string') return value;
+  if (typeof value === 'string') { return value; }
   throw invalidAt(state.sourceFile, node.pos, `Expected ${label} to be a string.`, sourcePath);
 }
 
 function requireNonEmptyString(value: Evaluated | undefined, label: string, node: ts.Node, state: CompilationState, sourcePath: string): string {
   const text = requireString(value, label, node, state, sourcePath).trim();
-  if (!text) throw invalidAt(state.sourceFile, node.pos, `${label} cannot be empty.`, sourcePath);
+  if (!text) { throw invalidAt(state.sourceFile, node.pos, `${label} cannot be empty.`, sourcePath); }
   return text;
 }
 
 function requireBoolean(value: Evaluated | string | undefined, label: string, node: ts.Node, state: CompilationState, sourcePath: string): boolean {
-  if (typeof value === 'boolean') return value;
+  if (typeof value === 'boolean') { return value; }
   throw invalidAt(state.sourceFile, node.pos, `Expected ${label} to be a boolean.`, sourcePath);
 }
 
 function requireNonNegativeInteger(value: Evaluated | undefined, label: string, node: ts.Node, state: CompilationState, sourcePath: string): number {
-  if (typeof value === 'number' && Number.isInteger(value) && value >= 0) return value;
+  if (typeof value === 'number' && Number.isInteger(value) && value >= 0) { return value; }
   throw invalidAt(state.sourceFile, node.pos, `Expected ${label} to be a non-negative integer.`, sourcePath);
 }
 
 function requireName(value: TaggedValue, kind: string, node: ts.Node, state: CompilationState, sourcePath: string): string {
-  if (value.name) return value.name;
+  if (value.name) { return value.name; }
   throw invalidAt(state.sourceFile, node.pos, `The ${kind} reference must first be assigned to a const.`, sourcePath);
 }
 
@@ -964,7 +964,7 @@ function requireNamedReference(
   skillUsesRegisteredName = false,
 ): string {
   const tagged = requireTagged(value as Evaluated, kind, node, state, sourcePath);
-  if (skillUsesRegisteredName) return requireString(tagged.skillName, 'registered skill name', node, state, sourcePath);
+  if (skillUsesRegisteredName) { return requireString(tagged.skillName, 'registered skill name', node, state, sourcePath); }
   return requireName(tagged, kind, node, state, sourcePath);
 }
 
@@ -987,7 +987,7 @@ function rejectUnknown(
   sourcePath: string,
 ): void {
   const unknown = Object.keys(object).filter(key => !allowed.includes(key));
-  if (unknown.length > 0) throw invalidAt(state.sourceFile, node.pos, `${label} does not support: ${unknown.join(', ')}.`, sourcePath);
+  if (unknown.length > 0) { throw invalidAt(state.sourceFile, node.pos, `${label} does not support: ${unknown.join(', ')}.`, sourcePath); }
 }
 
 function copyBoolean(
@@ -997,7 +997,7 @@ function copyBoolean(
   state: CompilationState,
   sourcePath: string,
 ): void {
-  if (source[key] !== undefined) target[key] = requireBoolean(source[key], key, state.sourceFile, state, sourcePath);
+  if (source[key] !== undefined) { target[key] = requireBoolean(source[key], key, state.sourceFile, state, sourcePath); }
 }
 
 function copyString(
@@ -1007,7 +1007,7 @@ function copyString(
   state: CompilationState,
   sourcePath: string,
 ): void {
-  if (source[key] !== undefined) (target as unknown as Record<string, unknown>)[key] = requireString(source[key], key, state.sourceFile, state, sourcePath);
+  if (source[key] !== undefined) { (target as unknown as Record<string, unknown>)[key] = requireString(source[key], key, state.sourceFile, state, sourcePath); }
 }
 
 function invalidAt(sourceFile: ts.SourceFile, position: number | undefined, message: string, sourcePath: string): MarifoldError {

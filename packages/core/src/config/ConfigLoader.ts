@@ -43,7 +43,7 @@ export class ConfigLoader {
     const explicitPath = Boolean(options.configPath || process.env.MARIFOLD_CONFIG);
 
     if (!fs.existsSync(configPath)) {
-      if (explicitPath) throw MarifoldError.configFileNotFound(configPath);
+      if (explicitPath) { throw MarifoldError.configFileNotFound(configPath); }
       return { config: this.normalize({}), configPath, foundConfig: false };
     }
 
@@ -60,7 +60,7 @@ export class ConfigLoader {
       const text = fs.readFileSync(configPath, 'utf-8');
       return asObject(parse(text), configPath);
     } catch (error) {
-      if (error instanceof MarifoldError) throw error;
+      if (error instanceof MarifoldError) { throw error; }
       throw MarifoldError.configInvalid(`Could not read config file ${configPath}: ${String(error)}`, {
         configPath,
       });
@@ -226,66 +226,66 @@ function asObject(value: unknown, label: string): TomlObject {
 }
 
 function optionalObject(value: unknown, label: string): TomlObject {
-  if (value === undefined) return {};
+  if (value === undefined) { return {}; }
   return asObject(value, label);
 }
 
 function optionalString(value: unknown, label: string): string | undefined {
-  if (value === undefined) return undefined;
-  if (typeof value === 'string') return value;
+  if (value === undefined) { return undefined; }
+  if (typeof value === 'string') { return value; }
   throw MarifoldError.configInvalid(`Expected ${label} to be a string.`);
 }
 
 function optionalNumber(value: unknown, label: string): number | undefined {
-  if (value === undefined) return undefined;
-  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (value === undefined) { return undefined; }
+  if (typeof value === 'number' && Number.isFinite(value)) { return value; }
   throw MarifoldError.configInvalid(`Expected ${label} to be a number.`);
 }
 
 function optionalNonNegativeNumber(value: unknown, label: string): number | undefined {
   const number = optionalNumber(value, label);
-  if (number === undefined) return undefined;
-  if (number >= 0) return number;
+  if (number === undefined) { return undefined; }
+  if (number >= 0) { return number; }
   throw MarifoldError.configInvalid(`Expected ${label} to be a non-negative number.`);
 }
 
 /** `"all"` (or unset) → undefined (no cap); a non-negative integer → that turn count. */
 function optionalTurnWindow(value: unknown, label: string): number | undefined {
-  if (value === undefined) return undefined;
-  if (typeof value === 'string' && value.trim().toLowerCase() === 'all') return undefined;
-  if (typeof value === 'number' && Number.isInteger(value) && value >= 0) return value;
+  if (value === undefined) { return undefined; }
+  if (typeof value === 'string' && value.trim().toLowerCase() === 'all') { return undefined; }
+  if (typeof value === 'number' && Number.isInteger(value) && value >= 0) { return value; }
   throw MarifoldError.configInvalid(`Expected ${label} to be a non-negative integer or "all".`);
 }
 
 function optionalStringArray(value: unknown, label: string): string[] {
-  if (value === undefined) return [];
-  if (Array.isArray(value) && value.every(item => typeof item === 'string')) return [...value];
+  if (value === undefined) { return []; }
+  if (Array.isArray(value) && value.every(item => typeof item === 'string')) { return [...value]; }
   throw MarifoldError.configInvalid(`Expected ${label} to be an array of strings.`);
 }
 
 function optionalNumberArray(value: unknown, label: string): number[] {
-  if (value === undefined) return [];
-  if (Array.isArray(value) && value.every(item => typeof item === 'number' && Number.isFinite(item))) return [...value];
+  if (value === undefined) { return []; }
+  if (Array.isArray(value) && value.every(item => typeof item === 'number' && Number.isFinite(item))) { return [...value]; }
   throw MarifoldError.configInvalid(`Expected ${label} to be an array of numbers.`);
 }
 
 function optionalBoolean(value: unknown, label: string): boolean | undefined {
-  if (value === undefined) return undefined;
-  if (typeof value === 'boolean') return value;
+  if (value === undefined) { return undefined; }
+  if (typeof value === 'boolean') { return value; }
   throw MarifoldError.configInvalid(`Expected ${label} to be a boolean.`);
 }
 
 function optionalApprovalMode(value: unknown, label: string): ApprovalMode | undefined {
   const mode = optionalString(value, label);
-  if (mode === undefined) return undefined;
-  if (mode === 'allow' || mode === 'ask' || mode === 'deny') return mode;
+  if (mode === undefined) { return undefined; }
+  if (mode === 'allow' || mode === 'ask' || mode === 'deny') { return mode; }
   throw MarifoldError.configInvalid(`Expected ${label} to be "allow", "ask", or "deny".`);
 }
 
 function optionalToolMode(value: unknown, label: string): AgentToolMode | undefined {
   const mode = optionalString(value, label);
-  if (mode === undefined) return undefined;
-  if (mode === 'auto' || mode === 'native' || mode === 'control-block') return mode;
+  if (mode === undefined) { return undefined; }
+  if (mode === 'auto' || mode === 'native' || mode === 'control-block') { return mode; }
   throw MarifoldError.configInvalid(`Expected ${label} to be "auto", "native", or "control-block".`);
 }
 
@@ -293,7 +293,7 @@ function normalizeApprovalModes(raw: TomlObject, label: string): Partial<AgentAp
   const modes: Partial<AgentApprovalConfig> = {};
   for (const kind of ['read', 'write', 'shell', 'network', 'delegate'] as const) {
     const mode = optionalApprovalMode(raw[kind], `${label}.${kind}`);
-    if (mode !== undefined) modes[kind] = mode;
+    if (mode !== undefined) { modes[kind] = mode; }
   }
   return modes;
 }
@@ -332,15 +332,15 @@ function optionalWebSearchProvider(value: unknown, label: string): WebSearchProv
 
 function optionalPositiveInteger(value: unknown, label: string): number | undefined {
   const number = optionalNumber(value, label);
-  if (number === undefined) return undefined;
-  if (Number.isInteger(number) && number >= 1) return number;
+  if (number === undefined) { return undefined; }
+  if (Number.isInteger(number) && number >= 1) { return number; }
   throw MarifoldError.configInvalid(`Expected ${label} to be a positive integer.`);
 }
 
 function optionalProviderType(value: unknown, label: string): ProviderType | undefined {
   const type = optionalString(value, label);
-  if (type === undefined) return undefined;
-  if (type === 'ollama' || type === 'openai-compatible' || type === 'anthropic') return type;
+  if (type === undefined) { return undefined; }
+  if (type === 'ollama' || type === 'openai-compatible' || type === 'anthropic') { return type; }
   throw MarifoldError.configInvalid(`Expected ${label} to be "ollama", "openai-compatible", or "anthropic".`);
 }
 

@@ -76,7 +76,7 @@ describe('selectTerminalOption viewport', () => {
     await Promise.resolve();
 
     // Page well past the first window.
-    for (let i = 0; i < 30; i += 1) input.send(DOWN);
+    for (let i = 0; i < 30; i += 1) { input.send(DOWN); }
     output.writes.length = 0; // isolate the next render
     input.send(DOWN); // selectedIndex = 31, triggers a fresh render
     const frame = lastFrameLines(output);

@@ -5,7 +5,7 @@ import { PromptAbortError } from './PromptAbort';
 export async function readSecretLine(label: string, getFallbackPrompt: () => InteractivePrompt, trim = true): Promise<string> {
   if (!input.isTTY || !output.isTTY || typeof input.setRawMode !== 'function') {
     const answer = await getFallbackPrompt().readUserMessage(label);
-    if (answer === undefined) throw new PromptAbortError();
+    if (answer === undefined) { throw new PromptAbortError(); }
     return answer.trim();
   }
 
@@ -24,7 +24,7 @@ export async function readSecretLine(label: string, getFallbackPrompt: () => Int
     };
 
     const finish = (): void => {
-      if (settled) return;
+      if (settled) { return; }
       settled = true;
       cleanup();
       output.write('\n');
@@ -32,7 +32,7 @@ export async function readSecretLine(label: string, getFallbackPrompt: () => Int
     };
 
     const abort = (): void => {
-      if (settled) return;
+      if (settled) { return; }
       settled = true;
       cleanup();
       output.write('\n');

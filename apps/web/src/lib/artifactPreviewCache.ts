@@ -33,14 +33,15 @@ export function artifactPreviewBlob(client: ApiClient, runId: string, artifact: 
     return Promise.resolve(hit);
   }
   const pending = cache.pending.get(key);
-  if (pending) return pending;
-  if (cache.pending.size >= MAX_ENTRIES) return Promise.reject(new Error('Image previews are busy. Try again.'));
+  if (pending) { return pending; }
+  if (cache.pending.size >= MAX_ENTRIES) { return Promise.reject(new Error('Image previews are busy. Try again.')); }
   const state = cache;
   const request = client.blob(`${artifactPath(runId, artifact.id)}/preview${variant === 'viewer' ? '?variant=viewer' : ''}`)
     .then(blob => {
-      if (!blob) throw new ArtifactUnavailableError();
-      if (blob.type.split(';')[0] !== 'image/webp' || blob.size > 1_000_000 || blob.size === 0)
+      if (!blob) { throw new ArtifactUnavailableError(); }
+      if (blob.type.split(';')[0] !== 'image/webp' || blob.size > 1_000_000 || blob.size === 0) {
         throw new Error('Invalid image preview.');
+      }
       while (state.entries.size >= MAX_ENTRIES || state.bytes + blob.size > MAX_BYTES) {
         const oldest = state.entries.keys().next().value!;
         state.bytes -= state.entries.get(oldest)!.size;

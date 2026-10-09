@@ -180,7 +180,7 @@ export function ensureProfileMemoryFiles(profileDir: string): MemoryScaffoldFile
   fs.mkdirSync(memoriesDir, { recursive: true });
   return KIND_ORDER.map(kind => {
     const filePath = path.join(memoriesDir, JSONL_FILES[kind]);
-    if (fs.existsSync(filePath)) return { path: filePath, status: 'kept' };
+    if (fs.existsSync(filePath)) { return { path: filePath, status: 'kept' }; }
     fs.writeFileSync(filePath, '');
     return { path: filePath, status: 'created' };
   });
@@ -202,7 +202,7 @@ export class MemoryStore {
   ): MemoryRememberResult {
     this.assertSafeProfileName(profile);
     const trimmed = text.trim();
-    if (!trimmed) throw MarifoldError.memoryInvalid('Memory text cannot be empty.', profile);
+    if (!trimmed) { throw MarifoldError.memoryInvalid('Memory text cannot be empty.', profile); }
 
     const result = this.saveEntry(profile, entryFromRecord({
       kind,
@@ -247,7 +247,7 @@ export class MemoryStore {
 
     for (const input of inputs) {
       const text = typeof input.text === 'string' ? input.text.trim() : '';
-      if (!text) continue;
+      if (!text) { continue; }
       const entry = entryFromRecord({
         kind: input.kind,
         text,
@@ -272,10 +272,10 @@ export class MemoryStore {
         confidence: 0.6,
         scope: input.scope ?? 'profile',
       }, profile);
-      if (!entry) continue;
+      if (!entry) { continue; }
       const result = this.saveEntry(profile, entry);
-      if (result.created) created += 1;
-      else skipped += 1;
+      if (result.created) { created += 1; }
+      else { skipped += 1; }
       entries.push(result.entry);
       paths.add(result.path);
     }
@@ -297,7 +297,7 @@ export class MemoryStore {
       const result = this.forget(profile, query.query, query.kind);
       queries.push(result.query);
       count += result.count;
-      for (const filePath of result.paths) paths.add(filePath);
+      for (const filePath of result.paths) { paths.add(filePath); }
     }
 
     return { profile, query: queries.join(', '), count, paths: [...paths] };
@@ -320,9 +320,9 @@ export class MemoryStore {
     const paths: string[] = [];
 
     for (const memoryKind of KIND_ORDER) {
-      if (normalizedKind && normalizedKind !== memoryKind) continue;
+      if (normalizedKind && normalizedKind !== memoryKind) { continue; }
       const filePath = this.jsonlPath(profile, memoryKind);
-      if (!fs.existsSync(filePath)) continue;
+      if (!fs.existsSync(filePath)) { continue; }
 
       const lines = readJsonlLines(filePath, memoryKind);
       const next = lines.filter(line => {
@@ -370,11 +370,11 @@ export class MemoryStore {
 
     for (const memoryKind of KIND_ORDER) {
       const filePath = this.jsonlPath(profile, memoryKind);
-      if (!fs.existsSync(filePath)) continue;
+      if (!fs.existsSync(filePath)) { continue; }
 
       let changed = false;
       const lines = readJsonlLines(filePath, memoryKind).flatMap(line => {
-        if (line.entry?.id !== id) return [line];
+        if (line.entry?.id !== id) { return [line]; }
         count += 1;
         changed = true;
         const updated = update(line.entry);
@@ -425,7 +425,7 @@ export class MemoryStore {
       const selected: MemoryEntry[] = [];
       for (const entry of candidates) {
         const trial = [...selected, entry];
-        if (renderPromptMemory(trial).join('\n\n').length <= contextLimit) selected.push(entry);
+        if (renderPromptMemory(trial).join('\n\n').length <= contextLimit) { selected.push(entry); }
       }
       candidates = selected;
     }
@@ -435,14 +435,14 @@ export class MemoryStore {
 
   trimShortTerm(profile: string, sizeLimit: number): void {
     this.assertSafeProfileName(profile);
-    if (sizeLimit <= 0) return;
+    if (sizeLimit <= 0) { return; }
     this.ensureProfile(profile);
     const filePath = this.jsonlPath(profile, 'auto_short');
     const lines = readJsonlLines(filePath, 'auto_short');
     const entries = lines
       .map(line => line.entry)
       .filter((entry): entry is MemoryEntry => entry !== undefined);
-    if (serializedJsonlLength(entries) <= sizeLimit) return;
+    if (serializedJsonlLength(entries) <= sizeLimit) { return; }
 
     let keep = entries.filter(entry => !isExpired(entry));
     if (keep.length === 0 && entries.length > 0) {
@@ -451,14 +451,14 @@ export class MemoryStore {
 
     while (keep.length > 1 && serializedJsonlLength(keep) > sizeLimit) {
       const removable = keep.filter(entry => entry.priority !== 0);
-      if (removable.length === 0) break;
+      if (removable.length === 0) { break; }
       const victim = removable.reduce((worst, entry) => compareTrimRank(entry, worst) > 0 ? entry : worst, removable[0]);
       keep = keep.filter(entry => entry.id !== victim.id);
     }
 
     if (serializedJsonlLength(keep) > sizeLimit) {
       keep = keep.filter(entry => entry.priority === 0);
-      if (keep.length === 0 && entries.length > 0) keep = [entries[entries.length - 1]];
+      if (keep.length === 0 && entries.length > 0) { keep = [entries[entries.length - 1]]; }
     }
 
     const keepIds = new Set(keep.map(entry => entry.id));
@@ -466,7 +466,7 @@ export class MemoryStore {
   }
 
   private saveEntry(profile: string, entry: MemoryEntry | undefined): SaveEntryResult {
-    if (!entry) throw MarifoldError.memoryInvalid('Memory entry is invalid.', profile);
+    if (!entry) { throw MarifoldError.memoryInvalid('Memory entry is invalid.', profile); }
     this.ensureProfile(profile);
     const filePath = this.jsonlPath(profile, entry.kind);
     const lines = readJsonlLines(filePath, entry.kind);
@@ -489,9 +489,9 @@ export class MemoryStore {
     const paths: string[] = [];
 
     for (const memoryKind of KIND_ORDER) {
-      if (normalizedKind && normalizedKind !== memoryKind) continue;
+      if (normalizedKind && normalizedKind !== memoryKind) { continue; }
       const filePath = this.jsonlPath(profile, memoryKind);
-      if (!fs.existsSync(filePath)) continue;
+      if (!fs.existsSync(filePath)) { continue; }
 
       let changed = false;
       const lines = readJsonlLines(filePath, memoryKind).map(line => {
@@ -523,18 +523,18 @@ export class MemoryStore {
     const entries: MemoryEntry[] = [];
     for (const legacy of LEGACY_FILES) {
       const filePath = path.join(memoriesDir, legacy.fileName);
-      if (!fs.existsSync(filePath)) continue;
+      if (!fs.existsSync(filePath)) { continue; }
       const now = utcNow();
       let currentDate = '';
       for (const rawLine of fs.readFileSync(filePath, 'utf-8').split(/\r?\n/)) {
         const trimmed = rawLine.trim();
-        if (!trimmed) continue;
+        if (!trimmed) { continue; }
         const dateMatch = /^##\s+(\d{4}-\d{2}-\d{2})/.exec(trimmed);
         if (dateMatch) {
           currentDate = dateMatch[1];
           continue;
         }
-        if (trimmed.startsWith('#')) continue;
+        if (trimmed.startsWith('#')) { continue; }
         entries.push({
           id: `legacy-${randomUUID()}`,
           kind: legacy.kind,
@@ -567,7 +567,7 @@ export class MemoryStore {
 
   private normalizeQuery(profile: string, query: string): string {
     const needle = normalizeText(query);
-    if (!needle) throw MarifoldError.memoryInvalid('Memory query cannot be empty.', profile);
+    if (!needle) { throw MarifoldError.memoryInvalid('Memory query cannot be empty.', profile); }
     return needle;
   }
 
@@ -582,7 +582,7 @@ export class MemoryStore {
 }
 
 function readJsonlLines(filePath: string, fallbackKind: MemoryKind): JsonLine[] {
-  if (!fs.existsSync(filePath)) return [];
+  if (!fs.existsSync(filePath)) { return []; }
   return fs.readFileSync(filePath, 'utf-8')
     .split(/\r?\n/)
     .filter(line => line.trim().length > 0)
@@ -616,7 +616,7 @@ function entryFromRecord(
 ): MemoryEntry | undefined {
   let kind = normalizeKind(raw.kind ?? raw.target) ?? fallbackKind;
   const text = stringValue(raw.text ?? raw.content);
-  if (!text) return undefined;
+  if (!text) { return undefined; }
 
   if ((kind === 'user' || kind === 'preferences') && looksTimeSensitive(text)) {
     kind = 'auto_short';
@@ -635,7 +635,7 @@ function entryFromRecord(
   const rawConflictValue = raw.conflict_key ?? raw.conflicts_with;
   const rawConflictProvided = Boolean(stringValue(rawConflictValue));
   let conflictKey = normalizeConflictKey(rawConflictValue);
-  if (conflictKey && !conflictKey.startsWith(`${kind}.`)) conflictKey = undefined;
+  if (conflictKey && !conflictKey.startsWith(`${kind}.`)) { conflictKey = undefined; }
   if (!conflictKey && !rawConflictProvided && kind === 'preferences' && looksResponsePreference(text)) {
     conflictKey = 'preferences.reply_style';
   }
@@ -695,9 +695,9 @@ function normalizePriority(
     && (conflictKey === 'user.name' || looksIdentityNameFact(text))
   );
   if (priority === 0 && !priorityZeroAllowed) {
-    if (kind === 'preferences') priority = 2;
-    else if (kind === 'auto_short') priority = 3;
-    else priority = 1;
+    if (kind === 'preferences') { priority = 2; }
+    else if (kind === 'auto_short') { priority = 3; }
+    else { priority = 1; }
   }
   return priority;
 }
@@ -713,7 +713,7 @@ function parseSavePayload(payload: string): MemorySaveInput[] {
 }
 
 function memoryInputsFromValue(value: unknown): MemorySaveInput[] {
-  if (!isRecord(value)) return [];
+  if (!isRecord(value)) { return []; }
   const memories = value.memories;
   if (Array.isArray(memories)) {
     return memories
@@ -722,7 +722,7 @@ function memoryInputsFromValue(value: unknown): MemorySaveInput[] {
   }
 
   const direct = memoryInputFromRecord(value);
-  if (direct) return [direct];
+  if (direct) { return [direct]; }
 
   const legacy: MemorySaveInput[] = [];
   for (const [key, kind] of [
@@ -734,16 +734,16 @@ function memoryInputsFromValue(value: unknown): MemorySaveInput[] {
     ['short', 'auto_short'],
   ] as Array<[string, MemoryKind]>) {
     const text = stringValue(value[key]);
-    if (text) legacy.push({ kind, text, source: 'model_inferred' });
+    if (text) { legacy.push({ kind, text, source: 'model_inferred' }); }
   }
   return legacy;
 }
 
 function memoryInputFromRecord(value: unknown): MemorySaveInput | undefined {
-  if (!isRecord(value)) return undefined;
+  if (!isRecord(value)) { return undefined; }
   const kind = normalizeKind(value.kind ?? value.target);
   const text = stringValue(value.text ?? value.content);
-  if (!kind || !text) return undefined;
+  if (!kind || !text) { return undefined; }
   return {
     kind,
     text,
@@ -773,11 +773,11 @@ function parseForgetPayload(payload: string): Array<{ query: string; kind?: Memo
 }
 
 function forgetQueriesFromValue(value: unknown): Array<{ query: string; kind?: MemoryKind }> {
-  if (typeof value === 'string') return value.trim() ? [{ query: value.trim() }] : [];
-  if (!isRecord(value)) return [];
+  if (typeof value === 'string') { return value.trim() ? [{ query: value.trim() }] : []; }
+  if (!isRecord(value)) { return []; }
 
   const rawItems = value.forget ?? value.queries ?? value.items;
-  if (Array.isArray(rawItems)) return rawItems.flatMap(forgetQueriesFromValue);
+  if (Array.isArray(rawItems)) { return rawItems.flatMap(forgetQueriesFromValue); }
 
   const query = stringValue(value.query ?? value.conflict_key ?? value.text);
   const kind = normalizeKind(value.kind);
@@ -791,7 +791,7 @@ function mergeEntry(lines: JsonLine[], incoming: MemoryEntry): { lines: JsonLine
   const incomingKey = entryKey(incoming);
 
   for (const line of lines) {
-    if (!line.entry || entryKey(line.entry) !== incomingKey) continue;
+    if (!line.entry || entryKey(line.entry) !== incomingKey) { continue; }
     line.entry = mergeDuplicate(line.entry, incoming, now);
     return { lines, created: false, entry: line.entry };
   }
@@ -810,7 +810,7 @@ function mergeEntry(lines: JsonLine[], incoming: MemoryEntry): { lines: JsonLine
         superseded.push(entry.id);
       }
     }
-    if (superseded.length > 0) incoming.supersedes = sortedUnique([...(incoming.supersedes ?? []), ...superseded]);
+    if (superseded.length > 0) { incoming.supersedes = sortedUnique([...(incoming.supersedes ?? []), ...superseded]); }
   }
 
   return {
@@ -880,7 +880,7 @@ function renderPromptMemory(entries: MemoryEntry[]): string[] {
 
 function formatMemoryEntry(entry: MemoryEntry): string {
   let line = formatBullet(entry.text);
-  if (!line || entry.kind !== 'auto_short') return line;
+  if (!line || entry.kind !== 'auto_short') { return line; }
   const dateText = meetingDate(entry.text);
   if (dateText) {
     line += ` (When answering about this, include the date word exactly: ${dateText}.)`;
@@ -890,8 +890,8 @@ function formatMemoryEntry(entry: MemoryEntry): string {
 
 function formatBullet(text: string): string {
   const stripped = text.trim();
-  if (!stripped) return '';
-  if (stripped.includes('\n') || stripped.startsWith('- ') || stripped.startsWith('* ')) return stripped;
+  if (!stripped) { return ''; }
+  if (stripped.includes('\n') || stripped.startsWith('- ') || stripped.startsWith('* ')) { return stripped; }
   return `- ${stripped}`;
 }
 
@@ -899,7 +899,7 @@ function compareMemoryRank(a: MemoryEntry, b: MemoryEntry, promptTokens: Set<str
   const ar = memoryRank(a, promptTokens);
   const br = memoryRank(b, promptTokens);
   for (let index = 0; index < ar.length; index += 1) {
-    if (ar[index] !== br[index]) return ar[index] - br[index];
+    if (ar[index] !== br[index]) { return ar[index] - br[index]; }
   }
   return 0;
 }
@@ -918,7 +918,7 @@ function compareTrimRank(a: MemoryEntry, b: MemoryEntry): number {
   const ar = trimRank(a);
   const br = trimRank(b);
   for (let index = 0; index < ar.length; index += 1) {
-    if (ar[index] !== br[index]) return ar[index] - br[index];
+    if (ar[index] !== br[index]) { return ar[index] - br[index]; }
   }
   return 0;
 }
@@ -933,7 +933,7 @@ function trimRank(entry: MemoryEntry): [number, number, number, number] {
 }
 
 function entryMatchesQuery(entry: MemoryEntry, query: string, kind?: MemoryKind): boolean {
-  if (kind && entry.kind !== kind) return false;
+  if (kind && entry.kind !== kind) { return false; }
   const conflictKey = normalizeConflictKey(query);
   const queryText = normalizeText(query);
   const queryTokens = tokens(queryText);
@@ -953,8 +953,8 @@ function conflictGroups(entry: MemoryEntry): Set<string> {
   const conflictKey = normalizeConflictKey(entry.conflict_key);
   if (conflictKey) {
     groups.add(conflictKey);
-    if (conflictKey.endsWith('project_meeting_time')) groups.add(`${entry.kind}:meeting:project`);
-    else if (conflictKey.endsWith('meeting_time')) groups.add(`${entry.kind}:meeting:general`);
+    if (conflictKey.endsWith('project_meeting_time')) { groups.add(`${entry.kind}:meeting:project`); }
+    else if (conflictKey.endsWith('meeting_time')) { groups.add(`${entry.kind}:meeting:general`); }
   }
 
   const inferred = inferredConflictGroup(entry);
@@ -962,7 +962,7 @@ function conflictGroups(entry: MemoryEntry): Set<string> {
     groups.add(inferred);
     if (inferred.includes(':meeting:')) {
       const parts = inferred.split(':');
-      if (parts.length >= 4) groups.add(`${entry.kind}:meeting:${parts[parts.length - 1]}`);
+      if (parts.length >= 4) { groups.add(`${entry.kind}:meeting:${parts[parts.length - 1]}`); }
     }
   }
   return groups;
@@ -971,11 +971,11 @@ function conflictGroups(entry: MemoryEntry): Set<string> {
 function inferredConflictGroup(entry: MemoryEntry): string | undefined {
   const normalized = normalizeText(entry.text);
   if (entry.kind === 'user') {
-    if (looksIdentityNameFact(entry.text)) return 'user.name';
+    if (looksIdentityNameFact(entry.text)) { return 'user.name'; }
     const favoriteKey = favoriteConflictKeyFromText(normalized);
-    if (favoriteKey) return favoriteKey;
+    if (favoriteKey) { return favoriteKey; }
   }
-  if (entry.kind === 'preferences' && looksResponsePreference(entry.text)) return 'preferences.reply_style';
+  if (entry.kind === 'preferences' && looksResponsePreference(entry.text)) { return 'preferences.reply_style'; }
   if (normalized.includes('meeting') && /\b\d{1,2}(?::\d{2})?\s*(?:a\.?m\.?|p\.?m\.?|am|pm)\b/.test(normalized)) {
     const date = meetingDate(entry.text) || 'unspecified';
     const topic = normalized.includes('project meeting') ? 'project' : 'general';
@@ -991,20 +991,20 @@ function favoriteConflictKeyFromText(text: string): string | undefined {
   ];
   for (const pattern of patterns) {
     const match = pattern.exec(text);
-    if (!match) continue;
+    if (!match) { continue; }
     const slot = slotKey(match[1]);
-    if (slot) return normalizeConflictKey(`user.favorite_${slot}`);
+    if (slot) { return normalizeConflictKey(`user.favorite_${slot}`); }
   }
   return undefined;
 }
 
 function preserveMeetingDate(incoming: MemoryEntry, conflicts: MemoryEntry[]): void {
-  if (incoming.kind !== 'auto_short') return;
+  if (incoming.kind !== 'auto_short') { return; }
   const incomingText = normalizeText(incoming.text);
-  if (!incomingText.includes('meeting') || meetingDate(incoming.text)) return;
+  if (!incomingText.includes('meeting') || meetingDate(incoming.text)) { return; }
   for (const entry of conflicts) {
     const dateText = meetingDate(entry.text);
-    if (!dateText) continue;
+    if (!dateText) { continue; }
     incoming.text = incoming.text.replace(/\b(meeting)(\s+at\s+)/i, `$1 ${dateText}$2`);
     return;
   }
@@ -1012,7 +1012,7 @@ function preserveMeetingDate(incoming: MemoryEntry, conflicts: MemoryEntry[]): v
 
 function normalizeConflictKey(value: unknown): string | undefined {
   const raw = stringValue(value);
-  if (!raw) return undefined;
+  if (!raw) { return undefined; }
   let key = raw
     .toLowerCase()
     .replace(/-/g, '_')
@@ -1024,19 +1024,19 @@ function normalizeConflictKey(value: unknown): string | undefined {
   if (key.startsWith('user.preferred_') && key !== 'user.preferred_name') {
     key = `user.favorite_${key.slice('user.preferred_'.length)}`;
   }
-  if (key.startsWith('user.fav_')) key = `user.favorite_${key.slice('user.fav_'.length)}`;
+  if (key.startsWith('user.fav_')) { key = `user.favorite_${key.slice('user.fav_'.length)}`; }
   key = key.replace(/favourite/g, 'favorite').replace(/colour/g, 'color');
   key = CONFLICT_KEY_ALIASES[key] ?? key;
-  if (GENERIC_CONFLICT_KEYS.has(key)) return undefined;
+  if (GENERIC_CONFLICT_KEYS.has(key)) { return undefined; }
   return CONFLICT_KEY_RE.test(key) ? key : undefined;
 }
 
 function normalizeKind(value: unknown): MemoryKind | undefined {
-  if (typeof value !== 'string') return undefined;
+  if (typeof value !== 'string') { return undefined; }
   const normalized = value.trim().toLowerCase().replace(/-/g, '_');
-  if (normalized === 'user' || normalized === 'preferences' || normalized === 'auto_short') return normalized;
-  if (normalized === 'pref' || normalized === 'prefs' || normalized === 'preference' || normalized === 'notes') return 'preferences';
-  if (normalized === 'note' || normalized === 'short' || normalized === 'short_term' || normalized === 'session' || normalized === 'current' || normalized === 'auto') return 'auto_short';
+  if (normalized === 'user' || normalized === 'preferences' || normalized === 'auto_short') { return normalized; }
+  if (normalized === 'pref' || normalized === 'prefs' || normalized === 'preference' || normalized === 'notes') { return 'preferences'; }
+  if (normalized === 'note' || normalized === 'short' || normalized === 'short_term' || normalized === 'session' || normalized === 'current' || normalized === 'auto') { return 'auto_short'; }
   return undefined;
 }
 
@@ -1083,12 +1083,12 @@ function normalizeScope(value: unknown, fallback: MemoryScope): MemoryScope {
 }
 
 function sourceTypeFromSource(source: string): MemorySourceType {
-  if (source === 'user_direct' || source === 'manual') return 'user';
-  if (source === 'system') return 'system';
-  if (source.startsWith('tool')) return 'tool';
-  if (source.startsWith('file')) return 'file';
-  if (source.startsWith('browser')) return 'browser';
-  if (source.startsWith('external_agent')) return 'external_agent';
+  if (source === 'user_direct' || source === 'manual') { return 'user'; }
+  if (source === 'system') { return 'system'; }
+  if (source.startsWith('tool')) { return 'tool'; }
+  if (source.startsWith('file')) { return 'file'; }
+  if (source.startsWith('browser')) { return 'browser'; }
+  if (source.startsWith('external_agent')) { return 'external_agent'; }
   return 'model';
 }
 
@@ -1101,8 +1101,8 @@ function defaultPriority(kind: MemoryKind, explicitDefault: number): number {
 }
 
 function manualPriority(kind: MemoryKind): number {
-  if (kind === 'user') return 1;
-  if (kind === 'preferences') return 2;
+  if (kind === 'user') { return 1; }
+  if (kind === 'preferences') { return 2; }
   return 3;
 }
 
@@ -1111,14 +1111,14 @@ function manualStability(kind: MemoryKind): MemoryStability {
 }
 
 function manualReason(kind: MemoryKind): string {
-  if (kind === 'user') return 'Manual durable user memory command.';
-  if (kind === 'preferences') return 'Manual durable preference memory command.';
+  if (kind === 'user') { return 'Manual durable user memory command.'; }
+  if (kind === 'preferences') { return 'Manual durable preference memory command.'; }
   return 'Manual short-term memory command.';
 }
 
 function looksTimeSensitive(text: string): boolean {
   const normalized = normalizeText(text);
-  if (!/\b(today|tomorrow|tonight|meeting|deadline|appointment|reminder|schedule)\b/.test(normalized)) return false;
+  if (!/\b(today|tomorrow|tonight|meeting|deadline|appointment|reminder|schedule)\b/.test(normalized)) { return false; }
   return Boolean(
     /\b\d{1,2}(?::\d{2})?\s*(?:a\.?m\.?|p\.?m\.?|am|pm)\b/.test(normalized)
     || /\b\d{4}-\d{2}-\d{2}\b/.test(normalized),
@@ -1127,7 +1127,7 @@ function looksTimeSensitive(text: string): boolean {
 
 function looksResponsePreference(text: string): boolean {
   const normalized = normalizeText(text);
-  if (!/\b(prefer|prefers|preference|like|likes)\b/.test(normalized)) return false;
+  if (!/\b(prefer|prefers|preference|like|likes)\b/.test(normalized)) { return false; }
   return Boolean(
     /\b(reply|replies|answer|answers|response|responses|conversation|tone|style)\b/.test(normalized)
     || /\b(short|brief|concise|detailed|normal|casual|formal)\b/.test(normalized),
@@ -1147,7 +1147,7 @@ function looksIdentityNameFact(text: string): boolean {
 
 function isSimpleMemoryPrompt(prompt: string): boolean {
   const normalized = normalizeText(prompt);
-  if (!normalized || normalized.length > 80) return false;
+  if (!normalized || normalized.length > 80) { return false; }
   return [
     /^(?:hi|hello|hey|yo|sup|hiya|howdy)[!. ]*$/i,
     /^(?:thanks|thank you|thx|ty|ok|okay|k|cool|nice|great|got it|sounds good)[!. ]*$/i,
@@ -1170,7 +1170,7 @@ function dedupeEntries(entries: MemoryEntry[]): MemoryEntry[] {
   for (const entry of entries) {
     const key = entryKey(entry);
     const existing = deduped.get(key);
-    if (!existing || compareMemoryRank(entry, existing, new Set()) < 0) deduped.set(key, entry);
+    if (!existing || compareMemoryRank(entry, existing, new Set()) < 0) { deduped.set(key, entry); }
   }
   return [...deduped.values()];
 }
@@ -1186,7 +1186,7 @@ function normalizeText(value: string): string {
 function slotKey(value: string): string {
   let key = value.trim().toLowerCase().replace(/colour/g, 'color');
   key = key.replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').replace(/_+/g, '_');
-  if (key.startsWith('fav_')) key = `favorite_${key.slice(4)}`;
+  if (key.startsWith('fav_')) { key = `favorite_${key.slice(4)}`; }
   return key.slice(0, 40).replace(/^_+|_+$/g, '');
 }
 
@@ -1195,18 +1195,18 @@ function tokens(value: string): Set<string> {
 }
 
 function intersects<T>(a: Set<T>, b: Set<T>): boolean {
-  for (const item of a) if (b.has(item)) return true;
+  for (const item of a) { if (b.has(item)) { return true; } }
   return false;
 }
 
 function isSubset<T>(a: Set<T>, b: Set<T>): boolean {
-  for (const item of a) if (!b.has(item)) return false;
+  for (const item of a) { if (!b.has(item)) { return false; } }
   return true;
 }
 
 function intersectionSize<T>(a: Set<T>, b: Set<T>): number {
   let count = 0;
-  for (const item of a) if (b.has(item)) count += 1;
+  for (const item of a) { if (b.has(item)) { count += 1; } }
   return count;
 }
 
@@ -1216,7 +1216,7 @@ function timestamp(value: string): number {
 }
 
 function isExpired(entry: MemoryEntry, nowTs = Date.now() / 1000): boolean {
-  if (!entry.expires_at) return false;
+  if (!entry.expires_at) { return false; }
   const expires = timestamp(entry.expires_at);
   return expires > 0 && expires <= nowTs;
 }

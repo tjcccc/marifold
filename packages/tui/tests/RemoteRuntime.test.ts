@@ -14,7 +14,7 @@ it('uses the host snapshot and the workspace run contract without local model cr
       const path = new URL(url).pathname;
       const body = init?.body ? JSON.parse(String(init.body)) : undefined;
       calls.push({ path, body });
-      if (path.endsWith('/terminal/snapshot'))
+      if (path.endsWith('/terminal/snapshot')) {
         return Response.json({
           result: [
             {
@@ -26,12 +26,14 @@ it('uses the host snapshot and the workspace run contract without local model cr
             },
           ],
         });
-      if (path.endsWith('/config')) return Response.json({ config });
-      if (path.endsWith('/runs')) return Response.json({ run: { id: 'run' } });
-      if (path.endsWith('/events'))
+      }
+      if (path.endsWith('/config')) { return Response.json({ config }); }
+      if (path.endsWith('/runs')) { return Response.json({ run: { id: 'run' } }); }
+      if (path.endsWith('/events')) {
         return new Response(
           'id: 1\nevent: approval_request\ndata: {"type":"approval_request","request":{"id":"call","tool":"write_file","kind":"write","input":{},"summary":"write","escalated":true,"persistable":false}}\n\nid: 2\nevent: done\ndata: {"type":"done","taskId":"task","status":"completed"}\n\n',
         );
+      }
       return Response.json({ ok: true });
     }),
   );
@@ -43,8 +45,9 @@ it('uses the host snapshot and the workspace run contract without local model cr
   const events = [];
   for await (const event of runtime
     .createAgentRunner()
-    .run({ objective: 'work', profile: 'host-profile', approvalHandler: approval }))
+    .run({ objective: 'work', profile: 'host-profile', approvalHandler: approval })) {
     events.push(event);
+  }
   await vi.waitFor(() =>
     expect(calls.some((call) => call.path.endsWith('/approvals/call') && call.body.action === 'once')).toBe(true),
   );
@@ -54,8 +57,9 @@ it('uses the host snapshot and the workspace run contract without local model cr
   const abort = new AbortController();
   abort.abort();
   const count = calls.length;
-  for await (const _ of runtime.createAgentRunner().run({ objective: 'cancelled', signal: abort.signal }))
+  for await (const _ of runtime.createAgentRunner().run({ objective: 'cancelled', signal: abort.signal })) {
     throw new Error('No cancelled run should start.');
+  }
   expect(calls).toHaveLength(count);
 });
 
@@ -71,7 +75,7 @@ it('lets the exit path wait for an in-flight lease release', async () => {
   let finish!: () => void;
   const released = vi.fn();
   vi.stubGlobal('fetch', vi.fn(async (_url: string, init?: RequestInit) => {
-    if (init?.method !== 'DELETE') return Response.json({ ok: true });
+    if (init?.method !== 'DELETE') { return Response.json({ ok: true }); }
     await new Promise<void>(resolve => { finish = resolve; });
     released();
     return Response.json({ ok: true });

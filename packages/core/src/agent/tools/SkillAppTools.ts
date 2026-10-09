@@ -331,7 +331,7 @@ export class SkillAppManagementTool implements AgentTool {
         isError: true,
       };
     } finally {
-      if (stageRoot) fs.rmSync(stageRoot, { recursive: true, force: true });
+      if (stageRoot) { fs.rmSync(stageRoot, { recursive: true, force: true }); }
     }
   }
 }
@@ -348,7 +348,7 @@ function bundleFiles(value: JSONValue | undefined): BundleTextFile[] {
     }
     const file = entry as Record<string, JSONValue>;
     const relative = safeBundlePath(requireStringInput(file, 'path', 'manage_skill_app'));
-    if (seen.has(relative)) throw MarifoldError.appInvalid(`Duplicate App file '${relative}'.`);
+    if (seen.has(relative)) { throw MarifoldError.appInvalid(`Duplicate App file '${relative}'.`); }
     seen.add(relative);
     if (typeof file.content !== 'string') {
       throw MarifoldError.agentToolInvalid(`manage_skill_app.files[${index}].content must be text.`, 'manage_skill_app');
@@ -362,7 +362,7 @@ function bundleFiles(value: JSONValue | undefined): BundleTextFile[] {
 }
 
 function safeBundlePath(value: string): string {
-  if (value.includes('\0')) throw MarifoldError.appInvalid('App file paths cannot contain null bytes.');
+  if (value.includes('\0')) { throw MarifoldError.appInvalid('App file paths cannot contain null bytes.'); }
   const portable = value.replace(/\\/g, '/');
   const parts = portable.split('/');
   if (portable.startsWith('/') || /^[a-z]:\//i.test(portable)
@@ -377,8 +377,8 @@ function listRegularFiles(root: string): string[] {
   const visit = (directory: string): void => {
     for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
       const source = path.join(directory, entry.name);
-      if (entry.isDirectory()) visit(source);
-      else if (entry.isFile()) files.push(path.relative(root, source).split(path.sep).join('/'));
+      if (entry.isDirectory()) { visit(source); }
+      else if (entry.isFile()) { files.push(path.relative(root, source).split(path.sep).join('/')); }
     }
   };
   visit(root);
@@ -395,7 +395,7 @@ function installAtomically(stagedBundle: string, target: string, action: 'create
   try {
     fs.renameSync(stagedBundle, target);
   } catch (error) {
-    if (!fs.existsSync(target) && fs.existsSync(backup)) fs.renameSync(backup, target);
+    if (!fs.existsSync(target) && fs.existsSync(backup)) { fs.renameSync(backup, target); }
     throw error;
   }
   try {

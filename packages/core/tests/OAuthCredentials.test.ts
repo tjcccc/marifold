@@ -10,7 +10,7 @@ import { MarifoldRuntime } from '../src/runtime/MarifoldRuntime';
 const dirs: string[] = [];
 afterEach(() => {
   vi.unstubAllGlobals();
-  for (const dir of dirs.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
+  for (const dir of dirs.splice(0)) { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
 function setup() {
@@ -66,7 +66,7 @@ describe('live OAuth credentials', () => {
     const other = read(loaded);
     let calls = 0;
     const refresh = async (provider: typeof loaded.config.providers.xai) => {
-      if (provider.apiKey === 'fresh') return;
+      if (provider.apiKey === 'fresh') { return; }
       calls++;
       await new Promise(resolve => setTimeout(resolve, 10));
       return { apiKey: 'fresh', oauthToken: 'rotated' };
@@ -83,7 +83,7 @@ describe('live OAuth credentials', () => {
     const loaded = setup();
     await withOAuthCredentials(loaded, 'xai', async () => {
       reauth(loaded);
-      if (fail) throw new Error('invalid_grant');
+      if (fail) { throw new Error('invalid_grant'); }
       return { apiKey: 'obsolete', oauthToken: 'obsolete' };
     });
     expect(loaded.config.providers.xai!.apiKey).toBe('signed-in');

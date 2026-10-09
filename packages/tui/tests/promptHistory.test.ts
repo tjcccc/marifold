@@ -25,7 +25,7 @@ it('restores a local source path instead of materializing saved image bytes', as
 it('loads only the referenced image instead of failing on unused saved attachments', async () => {
   const images = [0, 1, 2].map(attachmentIndex => ({ sessionId: 'saved', userTurnIndex: 0, attachmentIndex }));
   const runtime = { getSessionAttachment: vi.fn(async (_id: string, _turn: number, index: number) => {
-    if (index !== 2) throw new Error('missing unused image');
+    if (index !== 2) { throw new Error('missing unused image'); }
     return { path: '/tmp/current.png' };
   }) };
   const selected = referencedPromptImages('describe [image #3]', images);

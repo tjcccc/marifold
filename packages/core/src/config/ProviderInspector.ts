@@ -47,9 +47,9 @@ export class ProviderInspector {
 
   current(): ProviderSummary | undefined {
     const provider = this.loadedConfig.config.default.provider;
-    if (!provider) return undefined;
+    if (!provider) { return undefined; }
     const config = this.loadedConfig.config.providers[provider];
-    if (!config) return undefined;
+    if (!config) { return undefined; }
     return this.toSummary(provider, config);
   }
 
@@ -274,7 +274,7 @@ export class ProviderInspector {
       const response = await fetch(`${baseUrl.replace(/\/+$/, '')}/api/tags`, {
         signal: AbortSignal.timeout(2000),
       });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      if (!response.ok) { throw new Error(`HTTP ${response.status}`); }
       const body = await response.json() as { models?: Array<{ name?: unknown }> };
       const models = (body.models ?? [])
         .map(model => model.name)
@@ -301,7 +301,7 @@ export class ProviderInspector {
     options: { accountId?: string; proxy?: string } = {},
   ): Promise<Omit<ProviderModelList, 'provider'>> {
     const headers: Record<string, string> = {};
-    if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
+    if (apiKey) { headers.Authorization = `Bearer ${apiKey}`; }
     if (providerName === 'github_copilot') {
       headers['Editor-Version'] = 'marifold/0';
       headers['Editor-Plugin-Version'] = 'marifold/0';
@@ -311,7 +311,7 @@ export class ProviderInspector {
     if (providerName === 'chatgpt') {
       headers.originator = 'codex_cli_rs';
       headers['User-Agent'] = 'marifold';
-      if (options.accountId) headers['chatgpt-account-id'] = options.accountId;
+      if (options.accountId) { headers['chatgpt-account-id'] = options.accountId; }
     }
     const baseModelsUrl = openAIModelsUrl(baseUrl, { providerName });
     const url = providerName === 'chatgpt'
@@ -324,7 +324,7 @@ export class ProviderInspector {
         signal: AbortSignal.timeout(5000),
       };
       const response = await fetch(url, dispatcher ? { ...init, dispatcher } as RequestInit : init);
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      if (!response.ok) { throw new Error(`HTTP ${response.status}`); }
       const body = await response.json() as OpenAICompatibleModelsResponse;
       const records = providerName === 'chatgpt'
         ? body.models ?? body.data ?? []
@@ -362,7 +362,7 @@ export class ProviderInspector {
   }
 
   private readApiKey(provider: MarifoldProviderConfig): string | undefined {
-    if (provider.apiKeyEnv && process.env[provider.apiKeyEnv]) return process.env[provider.apiKeyEnv];
+    if (provider.apiKeyEnv && process.env[provider.apiKeyEnv]) { return process.env[provider.apiKeyEnv]; }
     return provider.apiKey;
   }
 }
@@ -387,18 +387,18 @@ interface OpenAICompatibleModelsResponse {
 function filterOpenAICompatibleModels(providerName: string, models: OpenAICompatibleModelRecord[]): OpenAICompatibleModelRecord[] {
   if (providerName === 'chatgpt') {
     return models.filter(model => {
-      if (model.supported_in_api === false) return false;
-      if (typeof model.visibility === 'string' && model.visibility !== 'list') return false;
+      if (model.supported_in_api === false) { return false; }
+      if (typeof model.visibility === 'string' && model.visibility !== 'list') { return false; }
       return typeof model.slug === 'string' || typeof model.id === 'string';
     });
   }
-  if (providerName !== 'github_copilot') return models;
+  if (providerName !== 'github_copilot') { return models; }
 
   return models.filter(model => {
-    if (typeof model.id === 'string' && isKnownGitHubCopilotUnsupportedModelId(model.id)) return false;
-    if (model.capabilities?.type !== 'chat') return false;
-    if (model.model_picker_enabled === false) return false;
-    if (!Array.isArray(model.supported_endpoints)) return true;
+    if (typeof model.id === 'string' && isKnownGitHubCopilotUnsupportedModelId(model.id)) { return false; }
+    if (model.capabilities?.type !== 'chat') { return false; }
+    if (model.model_picker_enabled === false) { return false; }
+    if (!Array.isArray(model.supported_endpoints)) { return true; }
     return model.supported_endpoints.includes('/chat/completions')
       || model.supported_endpoints.includes('/responses');
   });
@@ -413,7 +413,7 @@ function shouldShowRegistryModelFallback(
   providerName: string,
   result: Omit<ProviderModelList, 'provider'>,
 ): boolean {
-  if (result.models.length > 0) return false;
-  if ((providerName === 'github_copilot' || providerName === 'chatgpt') && result.reachable === true) return false;
+  if (result.models.length > 0) { return false; }
+  if ((providerName === 'github_copilot' || providerName === 'chatgpt') && result.reachable === true) { return false; }
   return true;
 }

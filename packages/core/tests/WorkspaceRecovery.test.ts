@@ -16,8 +16,8 @@ const dirs: string[] = [];
 const stores: WorkspaceStore[] = [];
 afterEach(() => {
   vi.restoreAllMocks();
-  for (const s of stores.splice(0)) s.close();
-  for (const d of dirs.splice(0)) fs.rmSync(d, { recursive: true, force: true });
+  for (const s of stores.splice(0)) { s.close(); }
+  for (const d of dirs.splice(0)) { fs.rmSync(d, { recursive: true, force: true }); }
 });
 function directory() {
   const d = fs.mkdtempSync(path.join(os.tmpdir(), 'workspace-recovery-'));
@@ -89,7 +89,7 @@ describe('workspace recovery and device boundaries', () => {
     ] };
     first.runJournal.save(child);
     first.runJournal.save(parent);
-    for (let i = 0; i < 60; i++) first.runJournal.save({ ...record(`other-${i}`), sessionId: 'other-session', artifacts: [] });
+    for (let i = 0; i < 60; i++) { first.runJournal.save({ ...record(`other-${i}`), sessionId: 'other-session', artifacts: [] }); }
     first.close();
     clock.mockReturnValue(now + 2 * 86400000);
     const restarted = store(config);
@@ -108,10 +108,10 @@ describe('workspace recovery and device boundaries', () => {
       expect(() => registry.artifactOrigin('parent', 'b'.repeat(24))).toThrow();
       expect(registry.require('parent').pendingApprovals).toEqual([]);
       const events = [];
-      for await (const event of registry.events('parent')) events.push(event);
+      for await (const event of registry.events('parent')) { events.push(event); }
       expect(events).toEqual([{ seq: 2, event: { type: 'done', taskId: '', status: 'completed' } }]);
       const caughtUp = [];
-      for await (const event of registry.events('parent', 2)) caughtUp.push(event);
+      for await (const event of registry.events('parent', 2)) { caughtUp.push(event); }
       expect(caughtUp).toEqual([]);
       expect(() => registry.steer('parent', 'capture again')).toThrow();
     } finally { registry.close(); }
@@ -309,7 +309,7 @@ describe('workspace recovery and device boundaries', () => {
       expect(record.status).toBe('failed');
       expect(record.summary).toContain('Interrupted');
       const events = [];
-      for await (const e of registry.events(record.id, 1)) events.push(e);
+      for await (const e of registry.events(record.id, 1)) { events.push(e); }
       expect(events).toHaveLength(1);
       expect(events[0].event.type).toBe('done');
     } finally {

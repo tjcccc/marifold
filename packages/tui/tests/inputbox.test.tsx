@@ -43,7 +43,7 @@ describe('InputBox', () => {
     try {
       stdin.write('\x1b[A');
       await delay();
-      for (let i = 0; i < ' [image #2]'.length; i++) stdin.write('\x1b[D');
+      for (let i = 0; i < ' [image #2]'.length; i++) { stdin.write('\x1b[D'); }
       await delay();
       stdin.write('\x7f');
       await delay();

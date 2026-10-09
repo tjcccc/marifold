@@ -73,7 +73,7 @@ export class PythonPackageTool implements AgentTool {
       };
     }
     const environmentError = await ensurePythonEnvironment(ctx.workspace, ctx.outputLimit, ctx.signal);
-    if (environmentError) return environmentError;
+    if (environmentError) { return environmentError; }
     const uv = findExecutable(process.platform === 'win32' ? 'uv.exe' : 'uv');
     if (!uv) {
       return {
@@ -111,6 +111,6 @@ export class PythonPackageTool implements AgentTool {
 
 function packageInputs(input: Record<string, JSONValue>): string[] {
   const value = input.packages;
-  if (!Array.isArray(value)) return [];
+  if (!Array.isArray(value)) { return []; }
   return value.flatMap(item => typeof item === 'string' && item.trim() ? [item.trim()] : []);
 }

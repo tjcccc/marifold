@@ -112,7 +112,7 @@ export function registerSessionCommand(program: Command, printer: ConsolePrinter
             keepLast > 0 ? `keeping ${keepLast} newest matching session(s)` : undefined,
           ].filter(Boolean).join(', ');
           const answer = await prompt.readUserMessage(`Clear sessions for ${summary}? Type CLEAR to confirm: `);
-          if (answer === undefined) throw new PromptAbortError();
+          if (answer === undefined) { throw new PromptAbortError(); }
           if (answer.trim() !== 'CLEAR') {
             process.stdout.write('Aborted.\n');
             process.exitCode = 1;

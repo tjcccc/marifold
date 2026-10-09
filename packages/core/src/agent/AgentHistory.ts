@@ -28,13 +28,13 @@ const HISTORY_HEADER = '## Earlier in this conversation\n\n';
  * the single most recent turn). Returns undefined when there's nothing to add.
  */
 export function buildHistoryContext(turns: HistoryTurn[], budgetChars: number): string | undefined {
-  if (turns.length === 0 || budgetChars <= 0) return undefined;
+  if (turns.length === 0 || budgetChars <= 0) { return undefined; }
   const kept: HistoryTurn[] = [];
   let used = 0;
   for (let i = turns.length - 1; i >= 0; i -= 1) {
     const turn = turns[i];
     const cost = turn.content.length + turn.role.length + 4;
-    if (used + cost > budgetChars && kept.length > 0) break;
+    if (used + cost > budgetChars && kept.length > 0) { break; }
     kept.unshift(turn);
     used += cost;
   }

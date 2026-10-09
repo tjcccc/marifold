@@ -7,8 +7,8 @@ export async function workspaceTerminal(runtime: MarifoldRuntime, operation: str
   const b = record(value);
   const text = (key: string, optional = false): string => {
     const v = b[key];
-    if (optional && v === undefined) return '';
-    if (typeof v !== 'string' || v.length > 1024 * 1024) throw new Error(`Invalid ${key}.`);
+    if (optional && v === undefined) { return ''; }
+    if (typeof v !== 'string' || v.length > 1024 * 1024) { throw new Error(`Invalid ${key}.`); }
     return v;
   };
   const profile = () => {
@@ -17,7 +17,7 @@ export async function workspaceTerminal(runtime: MarifoldRuntime, operation: str
     return name;
   };
   const scope = () => {
-    if (b.scope !== 'global' && b.scope !== 'profile') throw new Error('Invalid skill scope.');
+    if (b.scope !== 'global' && b.scope !== 'profile') { throw new Error('Invalid skill scope.'); }
     return b.scope;
   };
   switch (operation) {
@@ -50,8 +50,9 @@ export async function workspaceTerminal(runtime: MarifoldRuntime, operation: str
     case 'profile.approval': {
       const kind = text('kind');
       const mode = text('mode');
-      if (!['read', 'write', 'shell', 'network', 'delegate'].includes(kind) || !['allow', 'ask', 'deny'].includes(mode))
+      if (!['read', 'write', 'shell', 'network', 'delegate'].includes(kind) || !['allow', 'ask', 'deny'].includes(mode)) {
         throw new Error('Invalid approval policy.');
+      }
       return runtime.setProfileAgentApproval(profile(), kind as ToolKind, mode as ApprovalMode);
     }
     case 'profile.trust':
@@ -61,8 +62,9 @@ export async function workspaceTerminal(runtime: MarifoldRuntime, operation: str
         b.tokens !== undefined &&
         b.tokens !== null &&
         (typeof b.tokens !== 'number' || !Number.isSafeInteger(b.tokens) || b.tokens <= 0)
-      )
+      ) {
         throw new Error('Invalid context budget.');
+      }
       return runtime.setProfileMaxContextTokens(profile(), typeof b.tokens === 'number' ? b.tokens : undefined);
     }
     case 'memory.remember':

@@ -48,11 +48,11 @@ export function SelectList({
       onCancel();
       return;
     }
-    if (items.length === 0) return;
-    if (key.upArrow) setIndex(i => (i <= 0 ? items.length - 1 : i - 1));
-    else if (key.downArrow) setIndex(i => (i >= items.length - 1 ? 0 : i + 1));
-    else if (key.return) onSelect(items[clamped].value);
-    else if (onDelete && (key.delete || key.backspace)) onDelete(items[clamped].value);
+    if (items.length === 0) { return; }
+    if (key.upArrow) { setIndex(i => (i <= 0 ? items.length - 1 : i - 1)); }
+    else if (key.downArrow) { setIndex(i => (i >= items.length - 1 ? 0 : i + 1)); }
+    else if (key.return) { onSelect(items[clamped].value); }
+    else if (onDelete && (key.delete || key.backspace)) { onDelete(items[clamped].value); }
   });
 
   return (

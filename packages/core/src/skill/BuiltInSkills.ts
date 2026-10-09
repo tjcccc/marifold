@@ -118,7 +118,7 @@ export function listBuiltInSkills(): MarifoldSkill[] {
 
 export function getBuiltInSkill(name: string): MarifoldSkill | undefined {
   const skill = BY_NAME.get(name);
-  if (!skill) return undefined;
+  if (!skill) { return undefined; }
   return { ...skill, variables: skill.variables.map(variable => ({ ...variable })) };
 }
 

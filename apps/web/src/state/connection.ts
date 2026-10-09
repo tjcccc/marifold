@@ -35,7 +35,7 @@ export function defaultConnectionStore(): ConnectionStore {
 export function loadConnections(): ConnectionStore {
   try {
     const current = window.localStorage.getItem(STORAGE_KEY);
-    if (current) return normalizeStore(JSON.parse(current) as unknown);
+    if (current) { return normalizeStore(JSON.parse(current) as unknown); }
 
     const migrated = migrateLegacyConnection(window.localStorage.getItem(LEGACY_STORAGE_KEY));
     saveConnections(migrated);
@@ -79,7 +79,7 @@ export function upsertAndActivateConnection(
 }
 
 export function removeConnection(store: ConnectionStore, id: string): ConnectionStore {
-  if (id === THIS_SERVER_ID) return normalizeStore(store);
+  if (id === THIS_SERVER_ID) { return normalizeStore(store); }
   return normalizeStore({
     activeId: store.activeId === id ? THIS_SERVER_ID : store.activeId,
     servers: store.servers.filter(server => server.id !== id),
@@ -92,14 +92,14 @@ export function newConnectionId(): string {
 
 export function normalizeServerName(value: string): string {
   const name = value.trim();
-  if (!name) throw new Error('Server name is required.');
-  if (name.length > 80) throw new Error('Server name must be 80 characters or fewer.');
+  if (!name) { throw new Error('Server name is required.'); }
+  if (name.length > 80) { throw new Error('Server name must be 80 characters or fewer.'); }
   return name;
 }
 
 export function normalizeServerUrl(value: string): string {
   const raw = value.trim();
-  if (!raw) throw new Error('Service URL is required.');
+  if (!raw) { throw new Error('Service URL is required.'); }
   let url: URL;
   try {
     url = new URL(raw);
@@ -109,7 +109,7 @@ export function normalizeServerUrl(value: string): string {
   if (url.protocol !== 'http:' && url.protocol !== 'https:') {
     throw new Error('Service URL must use HTTP or HTTPS.');
   }
-  if (url.username || url.password) throw new Error('Service URL must not contain credentials.');
+  if (url.username || url.password) { throw new Error('Service URL must not contain credentials.'); }
   if (url.search || url.hash || (url.pathname !== '/' && url.pathname !== '')) {
     throw new Error('Service URL must point to the server root without a path, query, or fragment.');
   }
@@ -118,14 +118,14 @@ export function normalizeServerUrl(value: string): string {
 
 function normalizeStore(value: unknown): ConnectionStore {
   const fallback = defaultConnectionStore();
-  if (!value || typeof value !== 'object') return fallback;
+  if (!value || typeof value !== 'object') { return fallback; }
   const candidate = value as { activeId?: unknown; servers?: unknown };
   const storedServers = Array.isArray(candidate.servers) ? candidate.servers : [];
   const servers: ServerConnection[] = [];
   for (const entry of storedServers) {
     try {
       const normalized = normalizeStoredConnection(entry);
-      if (normalized && !servers.some(server => server.id === normalized.id)) servers.push(normalized);
+      if (normalized && !servers.some(server => server.id === normalized.id)) { servers.push(normalized); }
     } catch {
       // Ignore an invalid saved endpoint without discarding the other ones.
     }
@@ -146,15 +146,15 @@ function normalizeStore(value: unknown): ConnectionStore {
 }
 
 function normalizeStoredConnection(value: unknown): ServerConnection | undefined {
-  if (!value || typeof value !== 'object') return undefined;
+  if (!value || typeof value !== 'object') { return undefined; }
   const candidate = value as { id?: unknown; name?: unknown; baseUrl?: unknown; token?: unknown; workspaceId?: unknown };
-  if (typeof candidate.id !== 'string' || !candidate.id) return undefined;
+  if (typeof candidate.id !== 'string' || !candidate.id) { return undefined; }
   const token = typeof candidate.token === 'string' && candidate.token ? candidate.token : undefined;
   if (candidate.id === THIS_SERVER_ID) {
     return { id: THIS_SERVER_ID, name: 'This server', ...(token ? { token } : {}) };
   }
-  if (typeof candidate.workspaceId === 'string' && /^[A-Za-z0-9_-]{1,100}$/.test(candidate.workspaceId) && typeof candidate.name === 'string') return { id: candidate.id, name: normalizeServerName(candidate.name), workspaceId: candidate.workspaceId, ...(token ? { token } : {}) };
-  if (typeof candidate.name !== 'string' || typeof candidate.baseUrl !== 'string') return undefined;
+  if (typeof candidate.workspaceId === 'string' && /^[A-Za-z0-9_-]{1,100}$/.test(candidate.workspaceId) && typeof candidate.name === 'string') { return { id: candidate.id, name: normalizeServerName(candidate.name), workspaceId: candidate.workspaceId, ...(token ? { token } : {}) }; }
+  if (typeof candidate.name !== 'string' || typeof candidate.baseUrl !== 'string') { return undefined; }
   return {
     id: candidate.id,
     name: normalizeServerName(candidate.name),
@@ -165,7 +165,7 @@ function normalizeStoredConnection(value: unknown): ServerConnection | undefined
 
 function normalizeConnection(connection: ServerConnection): ServerConnection {
   const token = connection.token?.trim();
-  if (connection.workspaceId && /^[A-Za-z0-9_-]{1,100}$/.test(connection.workspaceId)) return { id: connection.id, name: normalizeServerName(connection.name), workspaceId: connection.workspaceId, ...(token ? { token } : {}) };
+  if (connection.workspaceId && /^[A-Za-z0-9_-]{1,100}$/.test(connection.workspaceId)) { return { id: connection.id, name: normalizeServerName(connection.name), workspaceId: connection.workspaceId, ...(token ? { token } : {}) }; }
   if (connection.id === THIS_SERVER_ID) {
     return { id: THIS_SERVER_ID, name: 'This server', ...(token ? { token } : {}) };
   }
@@ -178,7 +178,7 @@ function normalizeConnection(connection: ServerConnection): ServerConnection {
 }
 
 function migrateLegacyConnection(raw: string | null): ConnectionStore {
-  if (!raw) return defaultConnectionStore();
+  if (!raw) { return defaultConnectionStore(); }
   try {
     const legacy = JSON.parse(raw) as { baseUrl?: unknown; token?: unknown; workspaceId?: unknown };
     const token = typeof legacy.token === 'string' && legacy.token ? legacy.token : undefined;

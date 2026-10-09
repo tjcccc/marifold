@@ -21,7 +21,7 @@ export class RunFollowers {
 
   /** Idempotent: attaching an already-followed run is a no-op. */
   attach(runId: string, afterSeq = 0): void {
-    if (this.loops.has(runId)) return;
+    if (this.loops.has(runId)) { return; }
     const controller = new AbortController();
     this.loops.set(runId, controller);
     void this.pump(runId, afterSeq, controller.signal).finally(() => {
@@ -39,7 +39,7 @@ export class RunFollowers {
   }
 
   stopAll(): void {
-    for (const controller of this.loops.values()) controller.abort();
+    for (const controller of this.loops.values()) { controller.abort(); }
     this.loops.clear();
   }
 
@@ -47,10 +47,10 @@ export class RunFollowers {
     try {
       for await (const { seq, event } of followRun(this.client, runId, { afterSeq, signal })) {
         this.dispatch({ type: 'run_event', runId, seq, event });
-        if (event.type === 'done') this.onDone?.(runId);
+        if (event.type === 'done') { this.onDone?.(runId); }
       }
     } catch (error) {
-      if (signal.aborted) return;
+      if (signal.aborted) { return; }
       if (error instanceof MarifoldApiError && error.code === 'RUN_NOT_FOUND') {
         this.dispatch({ type: 'run_lost', runId });
         return;

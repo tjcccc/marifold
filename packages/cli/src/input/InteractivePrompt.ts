@@ -11,7 +11,7 @@ export class InteractivePrompt {
   });
 
   async readPassword(label: string): Promise<string> {
-    if (!input.isTTY || !output.isTTY) throw new Error('Sudo authorization requires a secure interactive terminal or the Web UI.');
+    if (!input.isTTY || !output.isTTY) { throw new Error('Sudo authorization requires a secure interactive terminal or the Web UI.'); }
     // Close readline so it cannot echo the secret or retain it in history.
     this.interface.close();
     try { return await readSecretLine(label, () => { throw new Error('Secure terminal required.'); }, false); }
@@ -29,9 +29,9 @@ export class InteractivePrompt {
     // so only a bare Esc matches 'escape'.)
     const controller = options.onEscape && input.isTTY ? new AbortController() : undefined;
     const onKeypress = (_str: string, key: { name?: string } | undefined): void => {
-      if (key?.name === 'escape') controller?.abort();
+      if (key?.name === 'escape') { controller?.abort(); }
     };
-    if (controller) input.on('keypress', onKeypress);
+    if (controller) { input.on('keypress', onKeypress); }
     try {
       return await (controller
         ? this.interface.question(label, { signal: controller.signal })
@@ -39,14 +39,14 @@ export class InteractivePrompt {
     } catch (error) {
       // Esc fired our controller → distinguish "step back" from a hard cancel.
       if (error instanceof Error && error.name === 'AbortError') {
-        if (options.onEscape === 'back') throw new PromptBackError();
+        if (options.onEscape === 'back') { throw new PromptBackError(); }
         return undefined;
       }
       // Ctrl+C / Ctrl+D close the interface → always a cancel.
-      if (error instanceof Error && error.message === 'readline was closed') return undefined;
+      if (error instanceof Error && error.message === 'readline was closed') { return undefined; }
       throw error;
     } finally {
-      if (controller) input.off('keypress', onKeypress);
+      if (controller) { input.off('keypress', onKeypress); }
     }
   }
 
@@ -56,7 +56,7 @@ export class InteractivePrompt {
 
     while (true) {
       const line = await this.readUserMessage(prompt);
-      if (line === undefined) return lines.length > 0 ? lines.join('\n') : undefined;
+      if (line === undefined) { return lines.length > 0 ? lines.join('\n') : undefined; }
 
       if (!line.endsWith('\\')) {
         lines.push(line);

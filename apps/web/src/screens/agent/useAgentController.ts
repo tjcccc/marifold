@@ -134,13 +134,13 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
     const refresh = async () => {
       try {
         const result = await client.request<{ devices: WorkspaceDevice[] }>('GET', '/v1/execution-devices');
-        if (stopped) return;
+        if (stopped) { return; }
         setDevices(result.devices.filter(d => d.online && d.executor).map(d => {
           const duplicate = result.devices.filter(other => other.name.toLowerCase() === d.name.toLowerCase()).length > 1;
           const name = duplicate || /["\r\n]/.test(d.name) ? d.id : /\s/.test(d.name) ? `"${d.name}"` : d.name;
           return { name, usage: `@${name}`, description: `${d.name} · ${d.platform}${duplicate ? ` · ${d.id}` : ''}` };
         }));
-      } catch { if (!stopped) setDevices([]); }
+      } catch { if (!stopped) { setDevices([]); } }
     };
     void refresh();
     const timer = setInterval(() => void refresh(), 10_000);
@@ -187,7 +187,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
   const seenRuns = useMemo(() => new SeenRuns(client.baseUrl), [client]);
   const activeChatRef = useRef<{ sessionId: string; controller: AbortController } | undefined>(undefined);
   const abortActiveChat = useCallback((): boolean => {
-    if (!activeChatRef.current) return false;
+    if (!activeChatRef.current) { return false; }
     activeChatRef.current.controller.abort();
     activeChatRef.current = undefined;
     setChatResponding(false);
@@ -226,7 +226,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
     setPersistedSessionIds(current => {
       let next: Set<string> | undefined;
       for (const id of ids) {
-        if (current.has(id)) continue;
+        if (current.has(id)) { continue; }
         next ??= new Set(current);
         next.add(id);
       }
@@ -236,7 +236,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
 
   const forgetPersistedSessionId = useCallback((id: string) => {
     setPersistedSessionIds(current => {
-      if (!current.has(id)) return current;
+      if (!current.has(id)) { return current; }
       const next = new Set(current);
       next.delete(id);
       return next;
@@ -248,19 +248,19 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
   const catchUpRuns = useCallback(
     async (forSession: string, loadId: number) => {
       const [runs, sessionRuns] = await Promise.all([listRuns(client), listRuns(client, forSession)]);
-      if (loadId !== sessionLoadRef.current) return;
+      if (loadId !== sessionLoadRef.current) { return; }
       setRuns(runs);
       const mine = sessionRuns.filter(
         run => run.sessionId === forSession && !seenRuns.has(run.id),
       );
       const finished: RunRecord[] = [];
       for (const run of mine) {
-        if (run.status === 'running') followers.attach(run.id);
+        if (run.status === 'running') { followers.attach(run.id); }
         else if (!threadRef.current.items.some(item => item.kind === 'run' && item.run.runId === run.id)) {
           finished.push(run);
         }
       }
-      if (finished.length > 0) dispatch({ type: 'catch_up', runs: finished });
+      if (finished.length > 0) { dispatch({ type: 'catch_up', runs: finished }); }
     },
     [client, followers, seenRuns],
   );
@@ -270,13 +270,13 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
       followers.stopAll();
       const loadId = resetThread(id);
       setSessionBlocked(false);
-      if (!id) return;
+      if (!id) { return; }
       setSessionLoading(true);
       try {
         await client.request('POST', `/v1/sessions/${encodeURIComponent(id)}/lease`);
         setSessionBlocked(false);
         const detail = await getSession(client, id);
-        if (loadId !== sessionLoadRef.current) return;
+        if (loadId !== sessionLoadRef.current) { return; }
         rememberPersistedSessionIds([id]);
         dispatch({
           type: 'session_loaded',
@@ -320,8 +320,8 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
           }),
         });
       } catch (error) {
-        if (loadId !== sessionLoadRef.current) return;
-        if (error instanceof MarifoldApiError && error.code === 'SESSION_BUSY') setSessionBlocked(true);
+        if (loadId !== sessionLoadRef.current) { return; }
+        if (error instanceof MarifoldApiError && error.code === 'SESSION_BUSY') { setSessionBlocked(true); }
         // A freshly minted id has no server session yet — that's expected.
         if (!(error instanceof MarifoldApiError && error.status === 404)) {
           handleError(error);
@@ -329,12 +329,12 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
         }
         forgetPersistedSessionId(id);
       } finally {
-        if (loadId === sessionLoadRef.current) setSessionLoading(false);
+        if (loadId === sessionLoadRef.current) { setSessionLoading(false); }
       }
       try {
         await catchUpRuns(id, loadId);
       } catch (error) {
-        if (loadId === sessionLoadRef.current) handleError(error);
+        if (loadId === sessionLoadRef.current) { handleError(error); }
       }
     },
     [client, followers, catchUpRuns, forgetPersistedSessionId, handleError, rememberPersistedSessionIds, resetThread],
@@ -355,13 +355,13 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
           listProfiles(client),
           getModels(client),
         ]);
-        if (cancelled) return;
+        if (cancelled) { return; }
         setProfiles(profileList);
         setModelOptions(models.options);
       } catch (error) {
-        if (!cancelled) handleError(error);
+        if (!cancelled) { handleError(error); }
       } finally {
-        if (!cancelled) setProfilesLoading(false);
+        if (!cancelled) { setProfilesLoading(false); }
       }
     })();
     return () => {
@@ -371,7 +371,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
 
   // Profile selection → detail + think default.
   useEffect(() => {
-    if (!profileName) return;
+    if (!profileName) { return; }
     let cancelled = false;
     (async () => {
       try {
@@ -379,12 +379,12 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
           getProfile(client, profileName),
           getSkills(client, profileName).catch(() => [] as SkillHint[]),
         ]);
-        if (cancelled) return;
+        if (cancelled) { return; }
         setProfileDetail(detail);
         setSkills(skillList);
         setThink(detail.settings.think ?? false);
       } catch (error) {
-        if (!cancelled) handleError(error);
+        if (!cancelled) { handleError(error); }
       }
     })();
     return () => {
@@ -410,9 +410,9 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
           setSessions(result);
         }
       }).catch(error => {
-        if (!cancelled) handleError(error);
+        if (!cancelled) { handleError(error); }
       }).finally(() => {
-        if (!cancelled) setSessionsLoading(false);
+        if (!cancelled) { setSessionsLoading(false); }
       });
     }, sessionSearch ? 180 : 0);
     return () => {
@@ -434,7 +434,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
 
   // Initial session load (deep link straight into a session).
   useEffect(() => {
-    if (sessionId) void loadSession(sessionId);
+    if (sessionId) { void loadSession(sessionId); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -457,7 +457,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
   }, [client, handleError]);
 
   const refreshSessions = useCallback(async (forSession = sessionId) => {
-    if (!profileName) return;
+    if (!profileName) { return; }
     try {
       const result = await listSessions(client, {
         profile: profileName,
@@ -490,18 +490,18 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
     }
   }, [client]);
   refreshRunsRef.current = () => { void refreshRuns(); };
-  reloadSessionRef.current = () => { if (sessionId) void loadSession(sessionId); };
+  reloadSessionRef.current = () => { if (sessionId) { void loadSession(sessionId); } };
 
   useWorkspaceChanges(client, () => {
     void refreshProfiles(); void refreshSessions(); void refreshRuns();
     void getModels(client).then(models => setModelOptions(models.options)).catch(() => undefined);
-    if (profileName) void getSkills(client, profileName).then(setSkills).catch(() => undefined);
+    if (profileName) { void getSkills(client, profileName).then(setSkills).catch(() => undefined); }
     // An open transcript belongs to this view. Remote changes are adopted only
     // when the user reloads or reopens the session.
   });
 
   useEffect(() => {
-    if (!sessionId) return;
+    if (!sessionId) { return; }
     let stopped = false;
     const id = sessionId;
     const renew = async () => {
@@ -510,19 +510,19 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
         // Only losing the session to another client ends this view. A network
         // blip or service restart retries on the next renewal; the service
         // keeps a running task's session reserved meanwhile.
-        if (stopped || !(error instanceof MarifoldApiError && error.code === 'SESSION_BUSY')) return;
+        if (stopped || !(error instanceof MarifoldApiError && error.code === 'SESSION_BUSY')) { return; }
         stopped = true;
         setSessionBlocked(true);
         resetThread(id);
         handleError(error);
       }
     };
-    const timer = setInterval(() => { if (!stopped) void renew(); }, 15_000);
+    const timer = setInterval(() => { if (!stopped) { void renew(); } }, 15_000);
     const release = () => { void client.request('DELETE', `/v1/sessions/${encodeURIComponent(id)}/lease`).catch(() => undefined); };
     // Background tabs throttle timers below the renewal rate, and a page
     // restored from the back/forward cache released its lease on pagehide.
     // Renew as soon as the page is visible again.
-    const resume = () => { if (!stopped && document.visibilityState === 'visible') void renew(); };
+    const resume = () => { if (!stopped && document.visibilityState === 'visible') { void renew(); } };
     window.addEventListener('pagehide', release);
     window.addEventListener('pageshow', resume);
     document.addEventListener('visibilitychange', resume);
@@ -563,7 +563,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
 
   const selectSession = useCallback(
     (id: string) => {
-      if (!profileName || id === sessionId) return;
+      if (!profileName || id === sessionId) { return; }
       abortActiveChat();
       setSessionId(id);
       navigate({ view: 'agent', profile: profileName, session: id });
@@ -573,7 +573,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
   );
 
   const newSession = useCallback(() => {
-    if (!profileName || (sessionId && !persistedSessionIds.has(sessionId))) return;
+    if (!profileName || (sessionId && !persistedSessionIds.has(sessionId))) { return; }
     const id = createClientId();
     abortActiveChat();
     followers.stopAll();
@@ -632,11 +632,11 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
   const deleteSession = useCallback(async (id: string): Promise<boolean> => {
     try {
       const active = (await listRuns(client)).filter(run => run.sessionId === id && run.status === 'running');
-      for (const run of active) await cancelRun(client, run.id);
-      if (active.length > 0) await waitForSessionRunsToSettle(client, id);
-      if (activeChatRef.current?.sessionId === id) abortActiveChat();
+      for (const run of active) { await cancelRun(client, run.id); }
+      if (active.length > 0) { await waitForSessionRunsToSettle(client, id); }
+      if (activeChatRef.current?.sessionId === id) { abortActiveChat(); }
       const pending = sessions.some(session => session.id === id && session.pending);
-      if (!await deleteSessionWhenIdle(client, id) && !pending) return false;
+      if (!await deleteSessionWhenIdle(client, id) && !pending) { return false; }
       forgetPersistedSessionId(id);
       setSessions(current => current.filter(session => session.id !== id));
       setRuns(current => current.filter(run => run.sessionId !== id));
@@ -693,7 +693,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
         replaceItemId?: string;
       } = {},
     ): Promise<boolean> => {
-      if (!profileName) return false;
+      if (!profileName) { return false; }
 
       const running = activeRun(threadRef.current);
       if (running) {
@@ -816,7 +816,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
         if (item.kind === 'image') {
           return { kind: 'image', name: item.name, previewUrl: `data:${item.mediaType};base64,${item.data}` };
         }
-        if (item.kind === 'file') return { kind: 'file', name: item.name };
+        if (item.kind === 'file') { return { kind: 'file', name: item.name }; }
         return {
               kind: 'text',
               name: item.name,
@@ -866,19 +866,19 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
             ...(images.length > 0 ? { images } : {}),
             ...(options.originalImages ? { originalImages: true } : {}),
           }, controller.signal)) {
-            if (event.type === 'chunk') dispatch({ type: 'chat_chunk', text: event.text });
-            else if (event.type === 'reasoning') dispatch({ type: 'chat_reasoning', text: event.text });
+            if (event.type === 'chunk') { dispatch({ type: 'chat_chunk', text: event.text }); }
+            else if (event.type === 'reasoning') { dispatch({ type: 'chat_reasoning', text: event.text }); }
             else if (event.type === 'error') {
               completed = false;
               dispatch({ type: 'chat_error', message: event.message });
             }
-            else dispatch({
+            else { dispatch({
               type: 'chat_done',
               usage: event.usage,
               latencyMs: event.latencyMs,
-            });
+            }); }
           }
-          if (controller.signal.aborted) completed = false;
+          if (controller.signal.aborted) { completed = false; }
           return completed;
         } catch (error) {
           if (!controller.signal.aborted) {
@@ -893,7 +893,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
           }
           setSending(false);
           void refreshSessions(sid);
-          if (options.replaceUserTurnIndex !== undefined) void loadSession(sid);
+          if (options.replaceUserTurnIndex !== undefined) { void loadSession(sid); }
         }
       }
 
@@ -918,13 +918,13 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
         });
         dispatch({ type: 'run_created', run });
         setRuns(current => [run, ...current.filter(item => item.id !== run.id)]);
-        if (options.replaceUserTurnIndex !== undefined) editedRunIdsRef.current.add(run.id);
+        if (options.replaceUserTurnIndex !== undefined) { editedRunIdsRef.current.add(run.id); }
         followers.attach(run.id);
         return true;
       } catch (error) {
         handleError(error);
         void refreshSessions(sid);
-        if (options.replaceUserTurnIndex !== undefined) void loadSession(sid);
+        if (options.replaceUserTurnIndex !== undefined) { void loadSession(sid); }
         return false;
       } finally {
         setSending(false);
@@ -939,7 +939,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
       return true;
     }
     const running = activeRun(threadRef.current);
-    if (!running) return false;
+    if (!running) { return false; }
     try {
       await cancelRun(client, running.runId);
       return true;
@@ -985,9 +985,9 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
           break;
         }
         case 'attach-original':
-          if (!args) notify('Usage: /attach-original <prompt>', 'warn');
-          else if (activeRun(threadRef.current)) notify('A task is running. Stop it before sending attached images.', 'warn');
-          else await sendMessage(args, { originalImages: true });
+          if (!args) { notify('Usage: /attach-original <prompt>', 'warn'); }
+          else if (activeRun(threadRef.current)) { notify('A task is running. Stop it before sending attached images.', 'warn'); }
+          else { await sendMessage(args, { originalImages: true }); }
           break;
         case 'new':
           newSession();
@@ -1007,12 +1007,12 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
         case 'btw': {
           if (!args) { notify('Usage: /btw <text>', 'warn'); break; }
           const active = activeRun(threadRef.current);
-          if (active) await steerRun(client, active.runId, args).catch(handleError);
-          else notify('No task is running to steer.');
+          if (active) { await steerRun(client, active.runId, args).catch(handleError); }
+          else { notify('No task is running to steer.'); }
           break;
         }
         case 'stop': {
-          if (!await stop()) notify('No task is running.');
+          if (!await stop()) { notify('No task is running.'); }
           break;
         }
         case 'remember': {
@@ -1032,7 +1032,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
             const query = args.toLowerCase();
             const matches = memories.filter(memory => memory.text.toLowerCase().includes(query));
             if (matches.length === 0) { notify(`No memories match "${args}".`); break; }
-            for (const memory of matches) await deleteMemory(client, profileName, memory.id, 'forget');
+            for (const memory of matches) { await deleteMemory(client, profileName, memory.id, 'forget'); }
             notify(`Forgot ${matches.length} ${matches.length === 1 ? 'memory' : 'memories'}.`);
           } catch (error) {
             handleError(error);
@@ -1078,7 +1078,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
   const send = useCallback(
     async (text: string) => {
       const trimmed = text.trim();
-      if (!trimmed || !profileName) return;
+      if (!trimmed || !profileName) { return; }
       const command = parseCommand(trimmed);
       if (command) {
         await runCommand(command);
@@ -1092,7 +1092,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
   const resendEdited = useCallback(
     async (userItemId: string, text: string) => {
       const trimmed = text.trim();
-      if (!trimmed) return false;
+      if (!trimmed) { return false; }
       const items = threadRef.current.items;
       const itemIndex = items.findIndex(item => item.id === userItemId);
       const target = items[itemIndex];
@@ -1110,7 +1110,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
 
       setSending(true);
       try {
-        if (durable && !sessionId) throw new Error('Cannot edit durable history without a session.');
+        if (durable && !sessionId) { throw new Error('Cannot edit durable history without a session.'); }
         if ((target.attachments?.length ?? 0) > restoredAttachments.length) {
           dispatch({
             type: 'notice',
@@ -1118,12 +1118,12 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
             text: 'Only retained image attachments could be included with the edited message.',
           });
         }
-        if (!durable) dispatch({ type: 'discard_from', itemId: userItemId });
+        if (!durable) { dispatch({ type: 'discard_from', itemId: userItemId }); }
         const sent = await sendMessage(trimmed, {
           attachments: restoredAttachments,
           ...(durable ? { replaceUserTurnIndex: fromUserTurnIndex, replaceItemId: userItemId } : {}),
         });
-        if (!sent && durable && sessionId) await loadSession(sessionId);
+        if (!sent && durable && sessionId) { await loadSession(sessionId); }
         return sent;
       } catch (error) {
         handleError(error);
@@ -1277,7 +1277,7 @@ async function waitForSessionRunsToSettle(client: ApiClient, sessionId: string):
     const active = (await listRuns(client)).some(
       run => run.sessionId === sessionId && run.status === 'running',
     );
-    if (!active) return;
+    if (!active) { return; }
     await new Promise(resolve => window.setTimeout(resolve, RUN_SETTLE_POLL_MS));
   }
   throw new Error('The active run did not stop in time. The session was not deleted.');
@@ -1289,7 +1289,7 @@ async function deleteSessionWhenIdle(client: ApiClient, sessionId: string): Prom
     try {
       return await deleteSessionRequest(client, sessionId);
     } catch (error) {
-      if (!(error instanceof MarifoldApiError && error.code === 'AGENT_RUN_INVALID')) throw error;
+      if (!(error instanceof MarifoldApiError && error.code === 'AGENT_RUN_INVALID')) { throw error; }
       await new Promise(resolve => window.setTimeout(resolve, RUN_SETTLE_POLL_MS));
     }
   }
@@ -1309,9 +1309,9 @@ async function preparedAttachmentsFromUser(
   for (const attachment of items ?? []) {
     // Generic binaries are intentionally scoped to their original agent run;
     // historical resend cannot recover bytes that were never persisted.
-    if (attachment.kind === 'file') continue;
+    if (attachment.kind === 'file') { continue; }
     if (attachment.kind === 'text') {
-      if (attachment.content === undefined) continue;
+      if (attachment.content === undefined) { continue; }
       prepared.push({
         kind: 'text',
         name: attachment.name,
@@ -1325,9 +1325,9 @@ async function preparedAttachmentsFromUser(
     let parsed = attachment.previewUrl ? parseImageDataUrl(attachment.previewUrl) : undefined;
     if (!parsed && attachment.sourcePath) {
       const blob = await client.blob(attachment.sourcePath);
-      if (blob) parsed = { mediaType: blob.type || 'image/jpeg', data: await blobToBase64(blob) };
+      if (blob) { parsed = { mediaType: blob.type || 'image/jpeg', data: await blobToBase64(blob) }; }
     }
-    if (!parsed) continue;
+    if (!parsed) { continue; }
     const size = base64ByteLength(parsed.data);
     prepared.push({
       kind: 'image' as const,
@@ -1372,8 +1372,8 @@ async function blobToBase64(blob: Blob): Promise<string> {
 }
 
 function splitModelChoice(choice?: string): [string | undefined, string | undefined] {
-  if (!choice) return [undefined, undefined];
+  if (!choice) { return [undefined, undefined]; }
   const slash = choice.indexOf('/');
-  if (slash === -1) return [undefined, choice];
+  if (slash === -1) { return [undefined, choice]; }
   return [choice.slice(0, slash), choice.slice(slash + 1)];
 }

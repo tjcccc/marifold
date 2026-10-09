@@ -24,18 +24,18 @@ export function SourceCitation({ href, title }: { href: string; title: string })
   }
   useEffect(() => () => clearTimeout(timer.current), []);
   useLayoutEffect(() => {
-    if (!open) return;
+    if (!open) { return; }
     function place() {
       const a = anchor.current?.getBoundingClientRect();
       const p = popup.current?.getBoundingClientRect();
-      if (!a || !p) return;
+      if (!a || !p) { return; }
       setPosition({
         left: Math.max(12, Math.min(a.left, window.innerWidth - p.width - 12)),
         top: a.bottom + p.height + 8 < window.innerHeight
           ? a.bottom + 8 : Math.max(12, a.top - p.height - 8),
       });
     }
-    function dismiss(event: KeyboardEvent) { if (event.key === 'Escape') setOpen(false); }
+    function dismiss(event: KeyboardEvent) { if (event.key === 'Escape') { setOpen(false); } }
     place();
     window.addEventListener('resize', place);
     window.addEventListener('scroll', place, true);

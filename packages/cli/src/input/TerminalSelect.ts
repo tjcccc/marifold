@@ -31,8 +31,8 @@ export async function selectTerminalOption<T>(
 ): Promise<T | undefined> {
   const input = config.input ?? defaultInput;
   const output = config.output ?? defaultOutput;
-  if (!canUseTerminalSelect(input, output)) return undefined;
-  if (options.length === 0) throw new PromptAbortError();
+  if (!canUseTerminalSelect(input, output)) { return undefined; }
+  if (options.length === 0) { throw new PromptAbortError(); }
 
   const defaultIndex = clampIndex(config.defaultIndex ?? 0, options.length);
   const rawMode = Boolean(input.isRaw);
@@ -68,7 +68,7 @@ export async function selectTerminalOption<T>(
     };
 
     const finish = (value: T): void => {
-      if (settled) return;
+      if (settled) { return; }
       settled = true;
       renderFinal();
       cleanup();
@@ -76,7 +76,7 @@ export async function selectTerminalOption<T>(
     };
 
     const abort = (): void => {
-      if (settled) return;
+      if (settled) { return; }
       settled = true;
       cleanup();
       output.write('\n');
@@ -86,7 +86,7 @@ export async function selectTerminalOption<T>(
     const onData = (data: Buffer | string): void => {
       const keys = parseKeys(data.toString('utf8'));
       for (const key of keys) {
-        if (settled) return;
+        if (settled) { return; }
         handleKey(key);
       }
     };
@@ -116,7 +116,7 @@ export async function selectTerminalOption<T>(
       const start = windowed
         ? Math.min(Math.max(0, selectedIndex - Math.floor(visible / 2)), options.length - visible)
         : 0;
-      if (rendered) output.write(`\x1b[${lineCount}F`);
+      if (rendered) { output.write(`\x1b[${lineCount}F`); }
       output.write(`\x1b[2K${clip(`? ${message} (Use arrow keys)`)}\n`);
       for (let i = 0; i < visible; i += 1) {
         const index = start + i;
@@ -136,11 +136,11 @@ export async function selectTerminalOption<T>(
     };
 
     const renderFinal = (): void => {
-      if (!rendered) return;
+      if (!rendered) { return; }
       output.write(`\x1b[${lineCount}F`);
       output.write(`\x1b[2K${clip(`? ${message} ${options[selectedIndex].label}`)}\n`);
       const rest = lineCount - 1;
-      for (let i = 0; i < rest; i += 1) output.write('\x1b[2K\n');
+      for (let i = 0; i < rest; i += 1) { output.write('\x1b[2K\n'); }
       output.write(`\x1b[${rest}F`);
     };
 
@@ -150,8 +150,8 @@ export async function selectTerminalOption<T>(
 }
 
 function clampIndex(index: number, length: number): number {
-  if (index < 0) return 0;
-  if (index >= length) return length - 1;
+  if (index < 0) { return 0; }
+  if (index >= length) { return length - 1; }
   return index;
 }
 

@@ -241,7 +241,7 @@ try {
     capture: true,
   });
   const scheduleId = /Created schedule (sched_[a-f0-9]+)/.exec(scheduleCreate.stdout)?.[1];
-  if (!scheduleId) throw new Error('schedule add did not print a schedule id');
+  if (!scheduleId) { throw new Error('schedule add did not print a schedule id'); }
   runCase('schedule list', [...configArgs, 'schedule', 'list'], {
     env: commandEnv,
     contains: ['weekday-digest', scheduleId],
@@ -357,14 +357,14 @@ try {
   });
 
   process.stdout.write(`\nPASS ${checkCount} command checks\n`);
-  if (keepTemp) process.stdout.write(`Kept temp workspace: ${tempRoot}\n`);
+  if (keepTemp) { process.stdout.write(`Kept temp workspace: ${tempRoot}\n`); }
 } catch (error) {
   process.stderr.write(`\nFAIL: ${error instanceof Error ? error.message : String(error)}\n`);
-  if (tempRoot) process.stderr.write(`Temp workspace: ${tempRoot}\n`);
+  if (tempRoot) { process.stderr.write(`Temp workspace: ${tempRoot}\n`); }
   process.exitCode = 1;
 } finally {
-  if (mockServer) await new Promise(resolve => mockServer.server.close(resolve));
-  if (tempRoot && !keepTemp) fs.rmSync(tempRoot, { recursive: true, force: true });
+  if (mockServer) { await new Promise(resolve => mockServer.server.close(resolve)); }
+  if (tempRoot && !keepTemp) { fs.rmSync(tempRoot, { recursive: true, force: true }); }
 }
 
 function runConfigSetMatrix(configArgs, env, profilesDir, sessionsDb, tasksDir, mockBaseUrl) {
@@ -405,7 +405,7 @@ function runHelpDiscovery(env) {
   while (queue.length > 0) {
     const commandPath = queue.shift();
     const key = commandPath.join(' ') || '<root>';
-    if (seen.has(key)) continue;
+    if (seen.has(key)) { continue; }
     seen.add(key);
 
     const helpArgs = [...commandPath, '--help'];
@@ -430,12 +430,12 @@ function parseSubcommands(helpText) {
       inCommands = true;
       continue;
     }
-    if (!inCommands) continue;
-    if (!line.trim()) break;
+    if (!inCommands) { continue; }
+    if (!line.trim()) { break; }
     const match = line.match(/^  (\S+)/);
-    if (!match) continue;
+    if (!match) { continue; }
     const command = match[1].split('|')[0];
-    if (command === 'help') continue;
+    if (command === 'help') { continue; }
     commands.push(command);
   }
 
@@ -498,13 +498,13 @@ function runCase(name, cliArgs, options = {}) {
   }
 
   checkCount += 1;
-  if (verbose) process.stdout.write(`ok ${checkCount} ${name}\n`);
-  else process.stdout.write('.');
+  if (verbose) { process.stdout.write(`ok ${checkCount} ${name}\n`); }
+  else { process.stdout.write('.'); }
   return options.capture ? { stdout, stderr, combined } : undefined;
 }
 
 function asArray(value) {
-  if (value === undefined) return [];
+  if (value === undefined) { return []; }
   return Array.isArray(value) ? value : [value];
 }
 
@@ -540,7 +540,7 @@ function readMockServerPort(child) {
     child.stdout.on('data', chunk => {
       buffer += chunk.toString('utf-8');
       const lineEnd = buffer.indexOf('\n');
-      if (lineEnd === -1) return;
+      if (lineEnd === -1) { return; }
       clearTimeout(timer);
       const line = buffer.slice(0, lineEnd).trim();
       const port = Number.parseInt(line, 10);

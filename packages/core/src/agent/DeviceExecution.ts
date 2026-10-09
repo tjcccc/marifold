@@ -38,16 +38,16 @@ export class DeviceExecution {
   }
 
   setMode(mode: DeviceExecutionMode): void {
-    if (mode !== 'scoped' && mode !== 'full') throw new Error('Expected scoped or full execution mode.');
+    if (mode !== 'scoped' && mode !== 'full') { throw new Error('Expected scoped or full execution mode.'); }
     this.prepare();
     writePrivateJson(path.join(this.directory, 'policy.json'), { mode });
   }
 
   async start(command: string, cwd: string, environment: NodeJS.ProcessEnv, password?: Buffer, scope?: string): Promise<DeviceJob> {
-    if (this.mode() !== 'full') throw new Error('Full access is disabled on this device. Enable it locally with marifold execution mode full.');
-    if (process.platform !== 'darwin' && process.platform !== 'linux') throw new Error('Full access currently supports macOS and Linux.');
+    if (this.mode() !== 'full') { throw new Error('Full access is disabled on this device. Enable it locally with marifold execution mode full.'); }
+    if (process.platform !== 'darwin' && process.platform !== 'linux') { throw new Error('Full access currently supports macOS and Linux.'); }
     const worker = path.join(__dirname, 'DeviceExecutionWorker.js');
-    if (!fs.existsSync(worker)) throw new Error('Device worker is missing. Build or reinstall Marifold.');
+    if (!fs.existsSync(worker)) { throw new Error('Device worker is missing. Build or reinstall Marifold.'); }
     this.prepare();
     this.prune();
     if (this.recent().filter(job => job.state === 'queued' || job.state === 'running').length >= 8) {
@@ -82,13 +82,13 @@ export class DeviceExecution {
   /** A scoped caller (a workspace's bridged request) sees only the jobs that
    * workspace started; the device's own runs see every job. */
   status(id: string, scope?: string): DeviceJob {
-    if (!/^[a-f0-9-]{36}$/.test(id)) throw new Error('Invalid shell job ID.');
+    if (!/^[a-f0-9-]{36}$/.test(id)) { throw new Error('Invalid shell job ID.'); }
     this.checkDirectory();
     const directory = path.join(this.directory, id);
-    if (!fs.existsSync(directory)) throw new Error('Unknown shell job ID.');
+    if (!fs.existsSync(directory)) { throw new Error('Unknown shell job ID.'); }
     assertPrivateDirectory(directory);
     const job = readPrivateJson(path.join(directory, 'result.json')) as unknown as DeviceJob;
-    if (scope !== undefined && job.scope !== scope) throw new Error('Unknown shell job ID.');
+    if (scope !== undefined && job.scope !== scope) { throw new Error('Unknown shell job ID.'); }
     if (job.state === 'running' && Date.now() - Date.parse(job.createdAt) > 11 * 60_000) {
       return { ...job, state: 'unknown', output: 'Job exceeded its reporting deadline. Inspect the device before retrying.' };
     }
@@ -97,13 +97,14 @@ export class DeviceExecution {
         return { ...job, state: 'unknown', output: 'Worker is unavailable; outcome is unknown. Inspect the device before retrying.' };
       }
     }
-    if (job.state === 'queued' && Date.now() - Date.parse(job.createdAt) > 30_000)
+    if (job.state === 'queued' && Date.now() - Date.parse(job.createdAt) > 30_000) {
       return { ...job, state: 'unknown', output: 'Worker did not report startup. Inspect the device before retrying.' };
+    }
     return job;
   }
 
   recent(scope?: string): DeviceJob[] {
-    if (!fs.existsSync(this.directory)) return [];
+    if (!fs.existsSync(this.directory)) { return []; }
     this.checkDirectory();
     return fs.readdirSync(this.directory).filter(id => /^[a-f0-9-]{36}$/.test(id))
       .map(id => this.status(id)).filter(job => scope === undefined || job.scope === scope).sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 20)
@@ -132,7 +133,7 @@ export class DeviceExecution {
     // Do not follow a replaced policy directory out of the sandbox-denied tree.
     for (const directory of [path.dirname(path.dirname(this.directory)), path.dirname(this.directory), this.directory]) {
       try { fs.mkdirSync(directory, { mode: 0o700 }); } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+        if ((error as NodeJS.ErrnoException).code !== 'EEXIST') { throw error; }
       }
       assertPrivateDirectory(directory);
     }
@@ -142,7 +143,7 @@ export class DeviceExecution {
 export function assertPrivateDirectory(directory: string): void {
   const stat = fs.lstatSync(directory);
   if (!stat.isDirectory() || stat.isSymbolicLink() || (stat.mode & 0o022) !== 0 ||
-      (process.getuid && stat.uid !== process.getuid())) throw new Error('Unsafe device execution directory.');
+      (process.getuid && stat.uid !== process.getuid())) { throw new Error('Unsafe device execution directory.'); }
 }
 
 export function readPrivateJson(file: string): Record<string, unknown> {
@@ -150,7 +151,7 @@ export function readPrivateJson(file: string): Record<string, unknown> {
   try {
     const stat = fs.fstatSync(fd);
     if (!stat.isFile() || stat.size > 2 * 1024 * 1024 || (stat.mode & 0o077) !== 0 ||
-        (process.getuid && stat.uid !== process.getuid())) throw new Error('Unsafe device execution file.');
+        (process.getuid && stat.uid !== process.getuid())) { throw new Error('Unsafe device execution file.'); }
     return JSON.parse(fs.readFileSync(fd, 'utf8'));
   } finally { fs.closeSync(fd); }
 }

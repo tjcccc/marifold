@@ -56,14 +56,14 @@ export function ThreadView({
 
   useLayoutEffect(() => {
     const node = scrollRef.current;
-    if (scrollRequestRef.current !== scrollToBottomRequest) pinnedRef.current = true;
-    if (node && pinnedRef.current) node.scrollTop = node.scrollHeight;
+    if (scrollRequestRef.current !== scrollToBottomRequest) { pinnedRef.current = true; }
+    if (node && pinnedRef.current) { node.scrollTop = node.scrollHeight; }
     scrollRequestRef.current = scrollToBottomRequest;
   }, [items, scrollToBottomRequest]);
 
   function onScroll(): void {
     const node = scrollRef.current;
-    if (!node) return;
+    if (!node) { return; }
     pinnedRef.current = node.scrollHeight - node.scrollTop - node.clientHeight < 60;
   }
 
@@ -74,12 +74,12 @@ export function ThreadView({
   const finalItems = new Map<string, string>();
   const workItems = new Map<string, ThreadItem[]>();
   for (const item of items) {
-    if (item.kind === 'run') runs.set(item.run.runId, item.run);
+    if (item.kind === 'run') { runs.set(item.run.runId, item.run); }
     else if (item.kind === 'assistant' && item.runId) {
       proseRuns.add(item.runId);
       if (item.runPhase === 'progress' || item.runPhase === 'reasoning') {
         workItems.set(item.runId, [...(workItems.get(item.runId) ?? []), item]);
-      } else finalItems.set(item.runId, item.id);
+      } else { finalItems.set(item.runId, item.id); }
     }
   }
 
@@ -211,7 +211,7 @@ function ThreadItemView({
               onCancel={onCancelEditing}
               onSubmit={async text => {
                 const replaced = await onEditUserMessage(item.id, text);
-                if (replaced) onCancelEditing();
+                if (replaced) { onCancelEditing(); }
                 return replaced;
               }}
             />
@@ -244,7 +244,7 @@ function ThreadItemView({
     case 'assistant': {
       const run = item.runId ? runs.get(item.runId) : undefined;
       const secondary = item.runPhase === 'progress' || item.runPhase === 'reasoning';
-      if (secondary && run) return null;
+      if (secondary && run) { return null; }
       const meta = !secondary && !item.streaming
         ? run && run.status !== 'running'
           ? runMetaText(run)
@@ -292,9 +292,9 @@ function ThreadItemView({
         // No tools/plan/approval: nothing card-worthy. While the model is
         // still silent, show an inline thinking line; once prose streams (or
         // the run completes) the response itself carries the state.
-        if (isTrivialRun(run)) return null;
+        if (isTrivialRun(run)) { return null; }
         if (run.status === 'running') {
-          if (proseRuns.has(run.runId)) return null;
+          if (proseRuns.has(run.runId)) { return null; }
           return (
             <div className={styles.thinking}>
               <span className={styles.thinkingLabel}>Thinking…</span>
@@ -342,9 +342,9 @@ function AssistantMarkdown({
 }) {
   const { unavailable, error: downloadError, download } = useArtifactDownloads(client, run?.runId, source.includes('sandbox:') ? run?.artifacts : undefined);
   const resolveSandboxLink: SandboxLinkResolver = href => {
-    if (!run || !client) return undefined;
+    if (!run || !client) { return undefined; }
     const artifact = artifactForSandboxHref(href, run.runId, run.artifacts);
-    if (!artifact) return undefined;
+    if (!artifact) { return undefined; }
     return { onClick: () => { void download(artifact); }, unavailable: unavailable.has(artifact.id) };
   };
   return (
@@ -357,9 +357,9 @@ function AssistantMarkdown({
 }
 
 function officeAttachmentGlyph(kind: UserAttachment['officeKind']): string {
-  if (kind === 'word') return 'W';
-  if (kind === 'spreadsheet') return 'X';
-  if (kind === 'presentation') return 'P';
+  if (kind === 'word') { return 'W'; }
+  if (kind === 'spreadsheet') { return 'X'; }
+  if (kind === 'presentation') { return 'P'; }
   return '📄';
 }
 
@@ -379,13 +379,13 @@ function LazyTranscriptImage({
 
   useEffect(() => {
     setSrc(previewUrl);
-    if (previewUrl || !sourcePath || !client) return;
+    if (previewUrl || !sourcePath || !client) { return; }
     const host = hostRef.current;
     let cancelled = false;
     let objectUrl: string | undefined;
     const load = () => {
       client.blob(`${sourcePath}${sourcePath.includes('?') ? '&' : '?'}thumbnail=1`).then(blob => {
-        if (cancelled || !blob) return;
+        if (cancelled || !blob) { return; }
         objectUrl = URL.createObjectURL(blob);
         setSrc(objectUrl);
       }).catch(() => undefined);
@@ -394,7 +394,7 @@ function LazyTranscriptImage({
       load();
     } else {
       const observer = new IntersectionObserver(entries => {
-        if (!entries.some(entry => entry.isIntersecting)) return;
+        if (!entries.some(entry => entry.isIntersecting)) { return; }
         observer.disconnect();
         load();
       }, { rootMargin: '240px' });
@@ -402,12 +402,12 @@ function LazyTranscriptImage({
       return () => {
         cancelled = true;
         observer.disconnect();
-        if (objectUrl) URL.revokeObjectURL(objectUrl);
+        if (objectUrl) { URL.revokeObjectURL(objectUrl); }
       };
     }
     return () => {
       cancelled = true;
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      if (objectUrl) { URL.revokeObjectURL(objectUrl); }
     };
   }, [client, previewUrl, sourcePath]);
 
@@ -436,7 +436,7 @@ function UserMessageEditor({
 
   useLayoutEffect(() => {
     const node = textareaRef.current;
-    if (!node) return;
+    if (!node) { return; }
     node.focus();
     node.setSelectionRange(node.value.length, node.value.length);
     autosizeEditor(node);
@@ -444,10 +444,10 @@ function UserMessageEditor({
 
   async function submit(): Promise<void> {
     const value = text.trim();
-    if (!value || busy) return;
+    if (!value || busy) { return; }
     setBusy(true);
     const replaced = await onSubmit(value);
-    if (!replaced) setBusy(false);
+    if (!replaced) { setBusy(false); }
   }
 
   return (
@@ -466,7 +466,7 @@ function UserMessageEditor({
         onCompositionStart={() => { composingRef.current = true; }}
         onCompositionEnd={() => { composingRef.current = false; }}
         onKeyDown={event => {
-          if (composingRef.current || event.nativeEvent.isComposing || event.keyCode === 229) return;
+          if (composingRef.current || event.nativeEvent.isComposing || event.keyCode === 229) { return; }
           if (event.key === 'Escape') {
             event.preventDefault();
             onCancel();
@@ -524,9 +524,9 @@ function responseMetaText(meta: ResponseMetaState): string {
 
 function formatResponseMeta(duration: string, usage?: ResponseMetaState['usage']): string {
   const parts = [duration];
-  if (usage?.totalTokens !== undefined) parts.push(`${formatTokens(usage.totalTokens)} tokens`);
-  if (usage?.reasoningTokens !== undefined) parts.push(`${formatTokens(usage.reasoningTokens)} reasoning`);
-  if (usage?.estimatedCostUSD !== undefined) parts.push(formatCostUSD(usage.estimatedCostUSD));
+  if (usage?.totalTokens !== undefined) { parts.push(`${formatTokens(usage.totalTokens)} tokens`); }
+  if (usage?.reasoningTokens !== undefined) { parts.push(`${formatTokens(usage.reasoningTokens)} reasoning`); }
+  if (usage?.estimatedCostUSD !== undefined) { parts.push(formatCostUSD(usage.estimatedCostUSD)); }
   return parts.join(' · ');
 }
 
@@ -534,7 +534,7 @@ function formatResponseMeta(duration: string, usage?: ResponseMetaState['usage']
  * composer). Non-skill messages render as plain text. */
 function renderUserText(text: string): ReactNode {
   const { token, rest } = splitLeading(text);
-  if (!token) return text;
+  if (!token) { return text; }
   return (
     <>
       <span className={styles.skillToken}>{token}</span>

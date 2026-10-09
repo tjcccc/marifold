@@ -5,7 +5,7 @@ export function useMediaQuery(query: string): boolean {
   const [matches, setMatches] = useState(() => readMatch(query));
 
   useEffect(() => {
-    if (typeof window.matchMedia !== 'function') return;
+    if (typeof window.matchMedia !== 'function') { return; }
     const media = window.matchMedia(query);
     const update = (): void => setMatches(media.matches);
     update();

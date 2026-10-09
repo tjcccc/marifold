@@ -4,15 +4,15 @@
 export function createClientId(): string {
   const cryptoApi = globalThis.crypto;
   try {
-    if (typeof cryptoApi?.randomUUID === 'function') return cryptoApi.randomUUID();
+    if (typeof cryptoApi?.randomUUID === 'function') { return cryptoApi.randomUUID(); }
   } catch {
     // Continue when the browser exposes randomUUID but rejects this origin.
   }
 
   const bytes = new Uint8Array(16);
   try {
-    if (typeof cryptoApi?.getRandomValues === 'function') cryptoApi.getRandomValues(bytes);
-    else fillPseudoRandom(bytes);
+    if (typeof cryptoApi?.getRandomValues === 'function') { cryptoApi.getRandomValues(bytes); }
+    else { fillPseudoRandom(bytes); }
   } catch {
     fillPseudoRandom(bytes);
   }

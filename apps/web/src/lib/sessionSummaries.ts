@@ -9,7 +9,7 @@ export function withPendingSession(
   sessions: SessionSummary[],
   input: { id: string; profileName: string; prompt: string; now?: string },
 ): SessionSummary[] {
-  if (sessions.some(session => session.id === input.id)) return sessions;
+  if (sessions.some(session => session.id === input.id)) { return sessions; }
   const now = input.now ?? new Date().toISOString();
   return [{
     id: input.id,
@@ -24,6 +24,6 @@ export function withPendingSession(
 
 function sessionPreview(content: string): string {
   const flat = content.replace(/\s+/g, ' ').trim();
-  if (flat.length <= PREVIEW_MAX_CHARS) return flat;
+  if (flat.length <= PREVIEW_MAX_CHARS) { return flat; }
   return `${flat.slice(0, PREVIEW_MAX_CHARS - 1).trimEnd()}…`;
 }

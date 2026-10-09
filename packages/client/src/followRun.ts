@@ -14,15 +14,15 @@ export async function* followRunEvents<T extends { type: string }>(
         lastEventId: String(after),
       });
       for await (const frame of parseSse(response.body!)) {
-        if (!frame.id || frame.id <= after || !frame.data) continue;
+        if (!frame.id || frame.id <= after || !frame.data) { continue; }
         after = frame.id;
         const event = frame.data as T;
         yield event;
-        if (event.type === 'done') return;
+        if (event.type === 'done') { return; }
       }
     } catch (error) {
-      if (signal?.aborted) return;
-      if (error instanceof MarifoldApiError && ![502, 503, 504].includes(error.status)) throw error;
+      if (signal?.aborted) { return; }
+      if (error instanceof MarifoldApiError && ![502, 503, 504].includes(error.status)) { throw error; }
     }
     await new Promise<void>((resolve) => {
       const done = () => {

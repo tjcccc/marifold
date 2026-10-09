@@ -14,7 +14,7 @@ export function artifactForSandboxHref(
   runId: string,
   artifacts: RunArtifact[],
 ): RunArtifact | undefined {
-  if (!href.startsWith('sandbox:')) return undefined;
+  if (!href.startsWith('sandbox:')) { return undefined; }
   let normalized: string;
   try {
     normalized = decodeURIComponent(href.slice('sandbox:'.length)).replaceAll('\\', '/');
@@ -23,9 +23,9 @@ export function artifactForSandboxHref(
   }
   const marker = `/runs/${runId}/output/`;
   const markerIndex = normalized.lastIndexOf(marker);
-  if (markerIndex < 0) return undefined;
+  if (markerIndex < 0) { return undefined; }
   const name = normalized.slice(markerIndex + marker.length);
-  if (!safeArtifactName(name)) return undefined;
+  if (!safeArtifactName(name)) { return undefined; }
   return artifacts.find(artifact => artifact.name === name);
 }
 
@@ -41,10 +41,10 @@ export function isImageArtifact(artifact: RunArtifact): boolean {
 export async function artifactAccessUrl(client: ApiClient, runId: string, artifact: RunArtifact, purpose: 'download' | 'image'): Promise<string> {
   try {
     const result = await client.request<{ path: string }>('POST', `${artifactPath(runId, artifact.id)}/access`, { purpose });
-    if (!/^\/v1\/downloads\/[a-f0-9]{48}$/.test(result.path)) throw new Error('Invalid file download URL.');
+    if (!/^\/v1\/downloads\/[a-f0-9]{48}$/.test(result.path)) { throw new Error('Invalid file download URL.'); }
     return `${client.serverUrl ?? client.baseUrl}${result.path}`;
   } catch (error) {
-    if (error instanceof MarifoldApiError && error.code === 'ARTIFACT_NOT_FOUND') throw new ArtifactUnavailableError();
+    if (error instanceof MarifoldApiError && error.code === 'ARTIFACT_NOT_FOUND') { throw new ArtifactUnavailableError(); }
     throw error;
   }
 }
@@ -65,6 +65,6 @@ export async function downloadRunArtifact(client: ApiClient, runId: string, arti
 }
 
 function safeArtifactName(name: string): boolean {
-  if (!name || name.startsWith('/')) return false;
+  if (!name || name.startsWith('/')) { return false; }
   return name.split('/').every(segment => segment !== '' && segment !== '.' && segment !== '..');
 }

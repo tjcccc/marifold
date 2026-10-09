@@ -46,7 +46,7 @@ export function ImagePreviewDialog({ images, initialIndex, loadImage, onClose }:
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onCloseRef.current();
+      if (event.key === 'Escape') { onCloseRef.current(); }
       else if (event.key === 'ArrowLeft' && multiple) {
         event.preventDefault();
         setIndex(current => wrapIndex(current - 1, images.length));
@@ -59,7 +59,7 @@ export function ImagePreviewDialog({ images, initialIndex, loadImage, onClose }:
           downloadRef.current,
           ...document.querySelectorAll<HTMLButtonElement>(`.${styles.arrow}, .${styles.zoom}`),
         ].filter((item): item is HTMLButtonElement => Boolean(item) && !item!.disabled);
-        if (controls.length === 0) return;
+        if (controls.length === 0) { return; }
         const current = controls.indexOf(document.activeElement as HTMLButtonElement);
         const next = event.shiftKey
           ? (current - 1 + controls.length) % controls.length
@@ -89,11 +89,11 @@ export function ImagePreviewDialog({ images, initialIndex, loadImage, onClose }:
       let objectUrl: string | undefined;
       const source = current.loadBlob ? current.loadBlob() : current.loadSrc!();
       source.then(async value => {
-        if (cancelled) return;
+        if (cancelled) { return; }
         const src = typeof value === 'string' ? value : (objectUrl = URL.createObjectURL(value));
         image.src = src;
         await image.decode();
-        if (cancelled) return;
+        if (cancelled) { return; }
         setFitRatio(current.aspectRatio ?? image.naturalWidth / image.naturalHeight);
         setResolvedSrc(src);
         setLoadingPreview(false);
@@ -103,23 +103,23 @@ export function ImagePreviewDialog({ images, initialIndex, loadImage, onClose }:
           setError(error instanceof Error ? error.message : 'Could not load the image.');
         }
       });
-      return () => { cancelled = true; image.src = ''; if (objectUrl) URL.revokeObjectURL(objectUrl); };
+      return () => { cancelled = true; image.src = ''; if (objectUrl) { URL.revokeObjectURL(objectUrl); } };
     }
-    if (current?.src || !current?.sourcePath || !loadImage) return;
+    if (current?.src || !current?.sourcePath || !loadImage) { return; }
     let cancelled = false;
     let objectUrl: string | undefined;
     loadImage(current.sourcePath).then(blob => {
-      if (cancelled) return;
+      if (cancelled) { return; }
       if (!blob) { setError('This image is no longer available.'); return; }
       objectUrl = URL.createObjectURL(blob);
       setResolvedSrc(objectUrl);
-    }).catch(() => { if (!cancelled) setError('Could not load the image. Close the preview and try again.'); });
+    }).catch(() => { if (!cancelled) { setError('Could not load the image. Close the preview and try again.'); } });
     return () => {
       cancelled = true;
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      if (objectUrl) { URL.revokeObjectURL(objectUrl); }
     };
   }, [current?.sourcePath, current?.src, current?.aspectRatio, current?.loadSrc, current?.loadBlob, loadImage]);
-  if (!current) return null;
+  if (!current) { return null; }
 
   function move(delta: number): void {
     setIndex(currentIndex => wrapIndex(currentIndex + delta, images.length));
@@ -202,7 +202,7 @@ export function ImagePreviewDialog({ images, initialIndex, loadImage, onClose }:
 }
 
 function clampIndex(index: number, length: number): number {
-  if (length === 0) return 0;
+  if (length === 0) { return 0; }
   return Math.max(0, Math.min(index, length - 1));
 }
 

@@ -352,7 +352,7 @@ export class ProfileManager {
   rename(from: string, to: string): ProfileRenameResult {
     assertSafeName(from);
     assertSafeName(to);
-    if (from === to) throw MarifoldError.profileInvalid('New profile name must be different from the current name.', from);
+    if (from === to) { throw MarifoldError.profileInvalid('New profile name must be different from the current name.', from); }
     if (from === 'default' || to === 'default') {
       throw MarifoldError.profileInvalid('Profile rename does not support the built-in default profile.', from);
     }
@@ -425,7 +425,7 @@ export class ProfileManager {
   deleteAvatar(name: string): { name: string; removed: boolean } {
     assertSafeName(name);
     const profileDir = path.join(this.profilesDir, name);
-    if (!fs.existsSync(profileDir)) return { name, removed: false };
+    if (!fs.existsSync(profileDir)) { return { name, removed: false }; }
     return { name, removed: this.removeAvatarFiles(profileDir) };
   }
 
@@ -471,7 +471,7 @@ export function findProfileAvatar(profilesDir: string, name: string): { path: st
   const assetsDir = path.join(profilesDir, name, ASSETS_DIR);
   for (const [mediaType, ext] of Object.entries(AVATAR_MEDIA_TYPES)) {
     const filePath = path.join(assetsDir, `avatar.${ext}`);
-    if (fs.existsSync(filePath)) return { path: filePath, mediaType };
+    if (fs.existsSync(filePath)) { return { path: filePath, mediaType }; }
   }
   return undefined;
 }
@@ -498,7 +498,7 @@ function atomicWriteFile(filePath: string, content: string): void {
     fs.writeFileSync(tempPath, content, { flag: 'wx' });
     fs.renameSync(tempPath, filePath);
   } finally {
-    if (fs.existsSync(tempPath)) fs.rmSync(tempPath, { force: true });
+    if (fs.existsSync(tempPath)) { fs.rmSync(tempPath, { force: true }); }
   }
 }
 
@@ -521,7 +521,7 @@ function upsertMode(text: string, mode: ProfileMode): string {
 function upsertFlatLine(text: string, key: string, rendered: string | undefined): string {
   const lines = text.split(/\r?\n/).filter(line => !line.trimStart().startsWith(`${key} =`));
   const cleaned = lines.join('\n').trimEnd();
-  if (rendered === undefined) return cleaned ? `${cleaned}\n` : PROFILE_TOML_STUB;
+  if (rendered === undefined) { return cleaned ? `${cleaned}\n` : PROFILE_TOML_STUB; }
   const prefix = cleaned ? `${cleaned}\n\n` : '';
   return `${prefix}${key} = ${rendered}\n`;
 }
@@ -531,7 +531,7 @@ function parseTrustedFolders(text: string): string[] {
   try {
     const parsed = parse(text) as { agent?: { trusted_folders?: unknown } };
     const existing = parsed.agent?.trusted_folders;
-    if (Array.isArray(existing)) return existing.filter((v): v is string => typeof v === 'string');
+    if (Array.isArray(existing)) { return existing.filter((v): v is string => typeof v === 'string'); }
   } catch { /* unparseable — start fresh */ }
   return [];
 }
@@ -547,7 +547,7 @@ function renderTrustedFolders(text: string, folders: string[]): string {
 
 function upsertTrustedFolder(text: string, folder: string): string {
   const folders = parseTrustedFolders(text);
-  if (!folders.includes(folder)) folders.push(folder);
+  if (!folders.includes(folder)) { folders.push(folder); }
   return renderTrustedFolders(text, folders);
 }
 
@@ -578,7 +578,7 @@ function realPathOrSelf(value: string): string {
 function upsertMaxContextTokens(text: string, tokens: number | undefined): string {
   const lines = text.split(/\r?\n/).filter(line => !line.trimStart().startsWith('max_context_tokens ='));
   const cleaned = lines.join('\n').trimEnd();
-  if (tokens == null || tokens <= 0) return cleaned ? `${cleaned}\n` : PROFILE_TOML_STUB;
+  if (tokens == null || tokens <= 0) { return cleaned ? `${cleaned}\n` : PROFILE_TOML_STUB; }
   const prefix = cleaned ? `${cleaned}\n\n` : '';
   return `${prefix}max_context_tokens = ${Math.round(tokens)}\n`;
 }
@@ -603,7 +603,7 @@ function assertSafeName(name: string): void {
 
 export function normalizeProfileDisplayName(value: string | undefined, profileName: string): string | undefined {
   const normalized = value?.trim();
-  if (!normalized) return undefined;
+  if (!normalized) { return undefined; }
   if (/\r|\n/.test(normalized)) {
     throw MarifoldError.profileInvalid('Profile display name must be a single line.', profileName);
   }

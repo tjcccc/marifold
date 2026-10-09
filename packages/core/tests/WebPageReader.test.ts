@@ -12,9 +12,9 @@ vi.mock('undici', () => ({
 }));
 afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); vi.clearAllMocks(); });
 function setup(...responses: Response[]) {
-  for (const key of ['HTTPS_PROXY', 'https_proxy', 'HTTP_PROXY', 'http_proxy']) vi.stubEnv(key, '');
+  for (const key of ['HTTPS_PROXY', 'https_proxy', 'HTTP_PROXY', 'http_proxy']) { vi.stubEnv(key, ''); }
   const fetcher = vi.fn();
-  for (const response of responses) fetcher.mockResolvedValueOnce(response);
+  for (const response of responses) { fetcher.mockResolvedValueOnce(response); }
   vi.stubGlobal('fetch', fetcher);
   return fetcher;
 }
@@ -25,7 +25,7 @@ describe('public page reading', () => {
     for (const url of ['http://127.1', 'http://[::1]', 'http://[::ffff:127.0.0.1]', 'http://10.0.0.1', 'http://169.254.169.254', 'http://localhost.', 'file:///etc/passwd', 'http://user:pass@public.org', 'https://public.org:8080']) {
       expect(() => publicWebUrl(url), url).toThrow();
     }
-    for (const address of ['0.0.0.0', '100.64.1.1', '192.168.1.1', '198.18.0.1', '224.0.0.1', 'fd00::1', 'fe80::1', '2001:db8::1', '2002:7f00:1::']) expect(isPublicAddress(address)).toBe(false);
+    for (const address of ['0.0.0.0', '100.64.1.1', '192.168.1.1', '198.18.0.1', '224.0.0.1', 'fd00::1', 'fe80::1', '2001:db8::1', '2002:7f00:1::']) { expect(isPublicAddress(address)).toBe(false); }
     expect(isPublicAddress('2606:4700:4700::1111')).toBe(true);
     expect(publicWebUrl('https://public.org:443/page#anchor').href).toBe('https://public.org/page');
   });

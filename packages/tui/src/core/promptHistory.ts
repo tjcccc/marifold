@@ -16,10 +16,10 @@ export function sessionPromptHistory(session: SessionDetail): InputHistoryEntry[
 
 export async function resolvePromptImages(runtime: Pick<TuiRuntime, 'getSessionAttachment'>, images: PromptImage[]): Promise<ImageInput[]> {
   return Promise.all(images.map(async image => {
-    if (typeof image === 'string') return { path: image };
-    if (!('sessionId' in image)) return image;
+    if (typeof image === 'string') { return { path: image }; }
+    if (!('sessionId' in image)) { return image; }
     const retained = await runtime.getSessionAttachment(image.sessionId, image.userTurnIndex, image.attachmentIndex);
-    if (!retained?.data && !retained?.url && !retained?.path) throw new Error('A saved image is no longer available. Reattach it before resubmitting this prompt.');
+    if (!retained?.data && !retained?.url && !retained?.path) { throw new Error('A saved image is no longer available. Reattach it before resubmitting this prompt.'); }
     return retained;
   }));
 }
@@ -37,7 +37,7 @@ export function referencedPromptImages(text: string, images: PromptImage[]): { t
   validatePromptImageReferences(text, images.length);
   const referenced = new Set(Array.from(text.matchAll(/\[image #(\d+)\]/g), match => Number(match[1]) - 1));
   // Older saved turns and /attach can carry images without inline labels.
-  if (!referenced.size) return { text, images };
+  if (!referenced.size) { return { text, images }; }
   const indices = images.flatMap((_, index) => referenced.has(index) ? [index] : []);
   return {
     text: text.replace(/\[image #(\d+)\]/g, (_, number: string) => `[image #${indices.indexOf(Number(number) - 1) + 1}]`),

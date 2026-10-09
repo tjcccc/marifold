@@ -39,8 +39,8 @@ export async function listMemories(
   options: { all?: boolean; limit?: number } = {},
 ): Promise<MemoryEntry[]> {
   const query = new URLSearchParams();
-  if (options.all) query.set('all', 'true');
-  if (options.limit !== undefined) query.set('limit', String(options.limit));
+  if (options.all) { query.set('all', 'true'); }
+  if (options.limit !== undefined) { query.set('limit', String(options.limit)); }
   const suffix = query.size > 0 ? `?${query.toString()}` : '';
   const body = await client.request<{ memories: MemoryEntry[] }>(
     'GET',
@@ -160,8 +160,8 @@ export async function createProfileWithSetup(client: ApiClient, input: CreatePro
   const patch: ProfilePatchInput = {
     ...(input.provider && input.model ? { provider: input.provider, model: input.model } : {}),
   };
-  if (Object.keys(patch).length > 0) detail = await updateProfile(client, input.name, patch);
-  if (input.avatar) detail = await putAvatar(client, input.name, input.avatar.data, input.avatar.mediaType);
+  if (Object.keys(patch).length > 0) { detail = await updateProfile(client, input.name, patch); }
+  if (input.avatar) { detail = await putAvatar(client, input.name, input.avatar.data, input.avatar.mediaType); }
   return detail;
 }
 

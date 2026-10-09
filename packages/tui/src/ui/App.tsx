@@ -141,7 +141,7 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
     setStaticEpoch(epoch => epoch + 1);
   }, [stdout, fullscreen, suspendTerminal]);
   useEffect(() => {
-    if (wasResizing.current && !resizing) repaint();
+    if (wasResizing.current && !resizing) { repaint(); }
     wasResizing.current = resizing;
   }, [resizing, repaint, fullscreen]);
   // Anchor the run clock here so it survives RunStatus unmounting during a
@@ -149,15 +149,15 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
   // start time, remounting after the resize settled would restart it at 0.
   const runStartedAt = useRef(0);
   if (state.running) {
-    if (runStartedAt.current === 0) runStartedAt.current = Date.now();
+    if (runStartedAt.current === 0) { runStartedAt.current = Date.now(); }
   } else {
     runStartedAt.current = 0;
   }
   // Ctrl+L forces a clean repaint. Inactive while an overlay/modal owns input,
   // so it never competes with the picker's or approval modal's key handling.
   useInput((input, key) => {
-    if (key.ctrl && input === 'l') repaint();
-    if (key.ctrl && input === 'o') setShowRunDetails(show => !show);
+    if (key.ctrl && input === 'l') { repaint(); }
+    if (key.ctrl && input === 'o') { setShowRunDetails(show => !show); }
   }, { isActive: !overlay && !state.approval && !state.userInput });
 
   // The committed transcript lives in Ink's <Static>, which is append-only and
@@ -169,7 +169,7 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
     const ids = transcript.map(item => item.id);
     const appendedOnly = prevItemIds.current.every((id, index) => ids[index] === id);
     prevItemIds.current = ids;
-    if (!fullscreen && !appendedOnly) repaint();
+    if (!fullscreen && !appendedOnly) { repaint(); }
   }, [transcript, repaint, fullscreen]);
 
   // Mutable run plumbing (does not drive rendering directly).
@@ -208,7 +208,7 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
   // boundary between prior history and the current session is clear.
   const resumeNoticeShown = useRef(false);
   useEffect(() => {
-    if (resumeNoticeShown.current) return;
+    if (resumeNoticeShown.current) { return; }
     resumeNoticeShown.current = true;
     if (initial.sessionId) {
       notify(`Resumed session ${initial.sessionId.slice(0, 8)} — your next message continues it.`, 'info');
@@ -217,7 +217,7 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
 
   useEffect(() => {
     const id = state.sessionId;
-    if (!id || !runtime.acquireSession) return;
+    if (!id || !runtime.acquireSession) { return; }
     let disposed = false;
     const renew = async () => {
       try { await runtime.acquireSession!(id); }
@@ -225,7 +225,7 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
         // Only losing the session to another client ends it here. A network
         // blip or service restart retries on the next renewal; the service
         // keeps a running task's session reserved meanwhile.
-        if (disposed || (error as { code?: unknown } | undefined)?.code !== 'SESSION_BUSY') return;
+        if (disposed || (error as { code?: unknown } | undefined)?.code !== 'SESSION_BUSY') { return; }
         disposed = true;
         if (stateRef.current.sessionId === id) {
           abortRef.current?.abort();
@@ -275,15 +275,15 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
     const resolve = approvalResolverRef.current;
     approvalResolverRef.current = null;
     dispatch({ type: 'set_approval', request: undefined });
-    if (!request || !resolve) return;
+    if (!request || !resolve) { return; }
     if (choice === 'no') {
       resolve({ approved: false, reason: 'denied by user' });
       return;
     }
     if (choice === 'always' && request.persistable !== false) {
       const folder = trustTargetFolder(request);
-      if (folder) trustFolderForProfile(folder);   // escalated write → trust the folder
-      else persistApprovalKind(request.kind);       // ordinary call → allow this kind
+      if (folder) { trustFolderForProfile(folder); }   // escalated write → trust the folder
+      else { persistApprovalKind(request.kind); }       // ordinary call → allow this kind
     }
     resolve({ approved: true, ...(sudoResponse ? { sudoResponse } : {}) });
   }, []);
@@ -342,7 +342,7 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
     // not persisted) rather than isolating, so context-aware skills still see
     // the conversation.
     const sessionId = current.sessionId ?? randomUUID();
-    if (!current.sessionId) dispatch({ type: 'set_session', sessionId });
+    if (!current.sessionId) { dispatch({ type: 'set_session', sessionId }); }
     dispatch({ type: 'set_running', running: true });
     const startedAt = Date.now();
     let usage: AgentUsage | undefined;
@@ -380,11 +380,11 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
         dispatch({ type: 'agent_event', event });
       }
     } catch (error) {
-      if (!controller.signal.aborted) notify(errorText(error), 'error');
+      if (!controller.signal.aborted) { notify(errorText(error), 'error'); }
     } finally {
       dispatch({ type: 'set_running', running: false });
       abortRef.current = null;
-      if (usage?.inputTokens != null) dispatch({ type: 'set_context_usage', tokens: usage.inputTokens });
+      if (usage?.inputTokens != null) { dispatch({ type: 'set_context_usage', tokens: usage.inputTokens }); }
       if (controller.signal.aborted) {
         notify('Cancelled.', 'warn');
       } else {
@@ -408,7 +408,7 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
     abortRef.current = controller;
     const current = stateRef.current;
     const sessionId = current.sessionId ?? randomUUID();
-    if (!current.sessionId) dispatch({ type: 'set_session', sessionId });
+    if (!current.sessionId) { dispatch({ type: 'set_session', sessionId }); }
     const userContext = [...extraContext, ...pendingContextRef.current];
     pendingContextRef.current = [];
     const images = pendingImagesRef.current;
@@ -439,18 +439,18 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
         summary => { usage = summary.usage; },
         text => { dispatch({ type: 'reasoning_delta', text }); },
       )) {
-        if (controller.signal.aborted) break;
+        if (controller.signal.aborted) { break; }
         dispatch({ type: 'assistant_delta', text: chunk });
       }
     } catch (error) {
-      if (!controller.signal.aborted) notify(errorText(error), 'error');
+      if (!controller.signal.aborted) { notify(errorText(error), 'error'); }
     } finally {
       dispatch({ type: 'end_assistant' });
       dispatch({ type: 'set_running', running: false });
       abortRef.current = null;
-      if (usage?.inputTokens != null) dispatch({ type: 'set_context_usage', tokens: usage.inputTokens });
-      if (controller.signal.aborted) notify('Cancelled.', 'warn');
-      else notify(runSummary(Date.now() - startedAt, usage), 'info');
+      if (usage?.inputTokens != null) { dispatch({ type: 'set_context_usage', tokens: usage.inputTokens }); }
+      if (controller.signal.aborted) { notify('Cancelled.', 'warn'); }
+      else { notify(runSummary(Date.now() - startedAt, usage), 'info'); }
     }
   }, [runtime, notify]);
 
@@ -467,8 +467,8 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
       void runAgent(text, { ...options, forcePlan: true });
       return;
     }
-    if (stateRef.current.mode === 'chat') void runChat(text, [], options);
-    else void runAgent(text, options);
+    if (stateRef.current.mode === 'chat') { void runChat(text, [], options); }
+    else { void runAgent(text, options); }
   }, [runAgent, runChat]);
 
   // Re-run the last plain-text message through the current profile/model/mode —
@@ -495,8 +495,8 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
       dispatch({ type: 'set_approval', request: undefined });
       resolve({ approved: false, reason: 'cancelled' });
     }
-    if (userInputResolverRef.current) resolveUserInput(undefined);
-    if (stateRef.current.running) notify('Cancelling…', 'warn');
+    if (userInputResolverRef.current) { resolveUserInput(undefined); }
+    if (stateRef.current.running) { notify('Cancelling…', 'warn'); }
   }, [notify, resolveUserInput]);
 
   // --- Skills --------------------------------------------------------------
@@ -509,7 +509,7 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
     const prompt = userInput.trim() || 'Follow the skill instructions above and produce the output.';
     // `/steps` armed: force a planned agent run for this skill (then disarm).
     const forcePlan = planNextRef.current;
-    if (forcePlan) setPlanNext(false);
+    if (forcePlan) { setPlanNext(false); }
     // An undeclared mode follows the session: a skill invoked in an agent session
     // runs agentically (with tools), so it can read its own bundled files. A
     // forced plan always runs as an agent (planning needs the agent loop).
@@ -560,7 +560,7 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
 
   const fillSkillVariable = useCallback((value: string) => {
     setPendingSkill(current => {
-      if (!current) return null;
+      if (!current) { return null; }
       const supplied = { ...current.supplied, [current.missing[current.index]]: value };
       const nextIndex = current.index + 1;
       if (nextIndex < current.missing.length) {
@@ -614,7 +614,7 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
     const emptyHint = scope === 'global'
       ? ['/install-skill <path>  installs a global skill (all profiles)']
       : [`/install-skill --profile ${profile} <path>  installs only for this profile`];
-    if (otherCount) emptyHint.push(`${otherCount} ${other} skill(s) — ${otherCmd}`);
+    if (otherCount) { emptyHint.push(`${otherCount} ${other} skill(s) — ${otherCmd}`); }
     setOverlay({ type: 'skills', scope, ...(scope === 'profile' ? { profile } : {}), items, title, emptyHint });
   }, [runtime, notify]);
 
@@ -697,7 +697,7 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
         const migration = await runtime.migrateProfileInstructions(current.profile);
         detail = runtime.getProfile(current.profile);
         instructionLines.push(`Instructions: ✓ ${migration.status === 'migrated' ? 'migrated' : 'cleaned'} to INSTRUCTIONS.md`);
-        if (migration.backupPath) instructionLines.push(`Backup: ${migration.backupPath}`);
+        if (migration.backupPath) { instructionLines.push(`Backup: ${migration.backupPath}`); }
       } else if (detail.instructionFormat === 'unified' && detail.legacyInstructionFiles.length === 0) {
         instructionLines.push('Instructions: ✓ INSTRUCTIONS.md');
       } else if (detail.instructionFormat === 'legacy') {
@@ -741,11 +741,11 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
           notify(parsed.error ?? 'Usage: /install-skill [--profile <name>] <path|url>', 'warn');
           return;
         }
-        if (parsed.profile) runtime.getProfile(parsed.profile);
+        if (parsed.profile) { runtime.getProfile(parsed.profile); }
         let installed;
         if (/^https?:\/\//i.test(parsed.target)) {
           const response = await fetch(parsed.target);
-          if (!response.ok) throw new Error(`HTTP ${response.status} fetching ${parsed.target}`);
+          if (!response.ok) { throw new Error(`HTTP ${response.status} fetching ${parsed.target}`); }
           installed = await runtime.installSkillFromText(await response.text(), parsed.scope, parsed.profile);
         } else {
           installed = await runtime.installSkillFromFile(
@@ -947,7 +947,7 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
     try {
       let trimmed = raw.trim();
       if (pendingSkill) {
-        if (trimmed.length === 0) return;
+        if (trimmed.length === 0) { return; }
         fillSkillVariable(trimmed);
         return;
       }
@@ -967,7 +967,7 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
         attachedImages = [...selected.images, ...pendingImagesRef.current];
         pendingImagesRef.current = [];
       }
-      if (parsed.kind !== 'empty') setHistory(entries => [...entries, { text: trimmed, images: [...attachedImages] }]);
+      if (parsed.kind !== 'empty') { setHistory(entries => [...entries, { text: trimmed, images: [...attachedImages] }]); }
       // Dropped images (`[image #n]` tokens) attach to the message about to run.
       // Both the chat path (runChat) and the agent path (runAgent) consume
       // pendingImagesRef, so this works in either mode for a text/skill turn.
@@ -1059,7 +1059,7 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
         />
       );
     }
-    if (!overlay) return null;
+    if (!overlay) { return null; }
     // Cap overlay height so it fits between the banner and status line.
     const overlayMaxRows = Math.max(4, rows - 9);
     if (overlay.type === 'model') {
@@ -1265,14 +1265,14 @@ function sessionItem(currentSessionId: string | undefined, session: SessionSumma
 
 function relativeTime(value: string, now = Date.now()): string {
   const timestamp = Date.parse(value);
-  if (!Number.isFinite(timestamp)) return value;
+  if (!Number.isFinite(timestamp)) { return value; }
   const seconds = Math.max(0, Math.floor((now - timestamp) / 1000));
-  if (seconds < 60) return 'just now';
+  if (seconds < 60) { return 'just now'; }
   const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
+  if (minutes < 60) { return `${minutes}m ago`; }
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
+  if (hours < 24) { return `${hours}h ago`; }
   const days = Math.floor(hours / 24);
-  if (days < 30) return `${days}d ago`;
+  if (days < 30) { return `${days}d ago`; }
   return new Date(timestamp).toLocaleDateString();
 }

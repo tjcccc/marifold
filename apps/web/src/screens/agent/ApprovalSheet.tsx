@@ -30,25 +30,25 @@ export function ApprovalSheet({ request, busy, onAnswer }: ApprovalSheetProps) {
   activeRequest.current = request.id;
   useEffect(() => {
     activeRequest.current = request.id;
-    if (password.current) password.current.value = '';
+    if (password.current) { password.current.value = ''; }
     setError('');
-    return () => { activeRequest.current = ''; if (password.current) password.current.value = ''; };
+    return () => { activeRequest.current = ''; if (password.current) { password.current.value = ''; } };
   }, [request.id]);
   async function answer(action: RunApprovalAction): Promise<void> {
-    if (busy || encrypting) return;
+    if (busy || encrypting) { return; }
     if (!request.sudo || action === 'deny') {
-      if (password.current) password.current.value = '';
+      if (password.current) { password.current.value = ''; }
       onAnswer(action);
       return;
     }
-    if (action !== 'once') return;
+    if (action !== 'once') { return; }
     setEncrypting(true);
     setError('');
     try {
       const pending = encryptSudoPassword(request.sudo, password.current?.value ?? '');
-      if (password.current) password.current.value = '';
+      if (password.current) { password.current.value = ''; }
       const encrypted = await pending;
-      if (activeRequest.current === request.id) onAnswer('once', encrypted);
+      if (activeRequest.current === request.id) { onAnswer('once', encrypted); }
     } catch (error) { setError(error instanceof Error ? error.message : 'Could not encrypt authorization.'); }
     finally { setEncrypting(false); }
   }

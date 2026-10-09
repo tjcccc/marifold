@@ -37,10 +37,10 @@ export class WebSearchTool implements AgentTool {
     const scope = ctx.workspace ?? ctx;
     const attempts = this.attempts.get(scope) ?? { count: 0, queries: new Set<string>() };
     const key = query.trim().toLowerCase();
-    if (attempts.count >= 3 || attempts.queries.has(key)) return {
+    if (attempts.count >= 3 || attempts.queries.has(key)) { return {
       content: 'Search attempt limit reached or query already attempted. Read a returned page, use a different query if budget remains, or answer with the evidence and remaining gaps.',
       summary: 'search budget exhausted or duplicate query', isError: true,
-    };
+    }; }
     attempts.count++;
     attempts.queries.add(key);
     this.attempts.set(scope, attempts);

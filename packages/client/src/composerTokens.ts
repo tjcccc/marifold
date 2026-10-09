@@ -9,7 +9,7 @@ export function composerTokenBefore(text: string, cursor: number): ComposerToken
   for (const match of text.matchAll(/(^|\s)([$/][\w-]+|\[image #(\d+)\])(?=\s|$)/g)) {
     const start = match.index! + match[1].length;
     const end = start + match[2].length;
-    if (end === cursor) return { start, end, ...(match[3] ? { imageNumber: Number(match[3]) } : {}) };
+    if (end === cursor) { return { start, end, ...(match[3] ? { imageNumber: Number(match[3]) } : {}) }; }
   }
   return undefined;
 }

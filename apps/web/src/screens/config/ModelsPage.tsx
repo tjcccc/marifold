@@ -25,7 +25,7 @@ export function ModelsPage(props: ModelsPageProps) {
   const [suggestionsReachable, setSuggestionsReachable] = useState<boolean | null>(null);
   const suggestionsRequest = useRef(0);
 
-  if (!props.models) return <div className={styles.empty}>Loading…</div>;
+  if (!props.models) { return <div className={styles.empty}>Loading…</div>; }
 
   const currentDefault =
     props.models.default.provider && props.models.default.model
@@ -41,7 +41,7 @@ export function ModelsPage(props: ModelsPageProps) {
       setSuggestionsReachable(null);
       return;
     }
-    if (provider === suggestionsFor) return;
+    if (provider === suggestionsFor) { return; }
     const request = ++suggestionsRequest.current;
     setSuggestionsFor(provider);
     setSuggestions([]);
@@ -49,12 +49,12 @@ export function ModelsPage(props: ModelsPageProps) {
     setSuggestionsReachable(null);
     try {
       const live = await getProviderModels(props.client, provider);
-      if (request !== suggestionsRequest.current) return;
+      if (request !== suggestionsRequest.current) { return; }
       setSuggestions(live.models);
       setSuggestionsMessage(live.message);
       setSuggestionsReachable(live.reachable);
     } catch (error) {
-      if (request !== suggestionsRequest.current) return;
+      if (request !== suggestionsRequest.current) { return; }
       setSuggestions([]);
       setSuggestionsMessage(error instanceof Error ? error.message : 'Could not load model suggestions.');
       setSuggestionsReachable(false);

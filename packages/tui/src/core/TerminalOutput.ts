@@ -13,7 +13,7 @@ export function inertTerminalOutput(stream: NodeJS.WriteStream): NodeJS.WriteStr
   };
   return new Proxy(stream, {
     get(target, property) {
-      if (property === 'write') return write;
+      if (property === 'write') { return write; }
       const value = Reflect.get(target, property, target);
       return typeof value === 'function' ? value.bind(target) : value;
     },

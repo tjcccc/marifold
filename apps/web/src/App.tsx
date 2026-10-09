@@ -52,7 +52,7 @@ export function App() {
   );
 
   useEffect(() => {
-    if (route.view !== 'agent') return;
+    if (route.view !== 'agent') { return; }
     lastAgentRoute.current = route;
     try {
       window.sessionStorage.setItem(lastAgentRouteKey(currentConnection.id), JSON.stringify(route));
@@ -62,7 +62,7 @@ export function App() {
   }, [currentConnection.id, route]);
 
   useEffect(() => {
-    if (route.view !== 'apps') return;
+    if (route.view !== 'apps') { return; }
     lastAppsRoute.current = route;
     try {
       window.sessionStorage.setItem(lastAppsRouteKey(currentConnection.id), JSON.stringify(route));
@@ -87,8 +87,8 @@ export function App() {
     // WebKit may dispatch its viewport event before the keyboard animation has
     // committed the final offset. Re-read after two paints as well as now.
     const updateAfterPaint = (): void => {
-      if (firstFrame !== undefined) window.cancelAnimationFrame(firstFrame);
-      if (secondFrame !== undefined) window.cancelAnimationFrame(secondFrame);
+      if (firstFrame !== undefined) { window.cancelAnimationFrame(firstFrame); }
+      if (secondFrame !== undefined) { window.cancelAnimationFrame(secondFrame); }
       firstFrame = window.requestAnimationFrame(() => {
         firstFrame = undefined;
         secondFrame = window.requestAnimationFrame(() => {
@@ -105,9 +105,9 @@ export function App() {
 
     const onEditableFocusChange = (event: FocusEvent): void => {
       const target = event.target;
-      if (!(target instanceof HTMLElement) || !target.matches('input, textarea, [contenteditable="true"]')) return;
+      if (!(target instanceof HTMLElement) || !target.matches('input, textarea, [contenteditable="true"]')) { return; }
       onViewportChange();
-      if (settleTimer !== undefined) window.clearTimeout(settleTimer);
+      if (settleTimer !== undefined) { window.clearTimeout(settleTimer); }
       settleTimer = window.setTimeout(onViewportChange, 400);
     };
 
@@ -123,9 +123,9 @@ export function App() {
       window.removeEventListener('resize', onViewportChange);
       document.removeEventListener('focusin', onEditableFocusChange);
       document.removeEventListener('focusout', onEditableFocusChange);
-      if (firstFrame !== undefined) window.cancelAnimationFrame(firstFrame);
-      if (secondFrame !== undefined) window.cancelAnimationFrame(secondFrame);
-      if (settleTimer !== undefined) window.clearTimeout(settleTimer);
+      if (firstFrame !== undefined) { window.cancelAnimationFrame(firstFrame); }
+      if (secondFrame !== undefined) { window.cancelAnimationFrame(secondFrame); }
+      if (settleTimer !== undefined) { window.clearTimeout(settleTimer); }
       root.style.removeProperty('--marifold-viewport-height');
       root.style.removeProperty('--marifold-viewport-offset-top');
     };
@@ -140,22 +140,22 @@ export function App() {
     let cancelled = false;
     const local = connections.servers.find(c => c.id === THIS_SERVER_ID)!;
     void startupWorkspaces<WorkspaceSummary>(createApiClient(apiSettings(local))).then(result => {
-      if (cancelled) return;
+      if (cancelled) { return; }
       const preferred = result.workspaces.find(w => w.id === result.defaultId);
-      if (!preferred && !currentConnection.workspaceId) return;
+      if (!preferred && !currentConnection.workspaceId) { return; }
       const target: ServerConnection = preferred?.online
         ? { id: `workspace-${preferred.id}`, name: preferred.name, workspaceId: preferred.id, token: local.token }
         : local;
       const next = upsertAndActivateConnection(connections, target);
       saveConnections(next); setConnections(next); setConnectionEpoch(epoch => epoch + 1);
       navigate(loadLastAgentRoute(target.id));
-      if (preferred && !preferred.online) setWorkspaceNotice(preferred.versionError ?? `${preferred.name} is offline. Opened Local for this launch.`);
+      if (preferred && !preferred.online) { setWorkspaceNotice(preferred.versionError ?? `${preferred.name} is offline. Opened Local for this launch.`); }
     }).catch(() => {
       if (!cancelled && currentConnection.workspaceId) {
         const next = upsertAndActivateConnection(connections, local); saveConnections(next); setConnections(next);
         setWorkspaceNotice('Workspace unavailable. Opened Local for this launch.'); navigate(loadLastAgentRoute(local.id));
       }
-    }).finally(() => { if (!cancelled) setOpeningWorkspace(false); });
+    }).finally(() => { if (!cancelled) { setOpeningWorkspace(false); } });
     return () => { cancelled = true; };
   }, []);
 
@@ -204,7 +204,7 @@ export function App() {
     saveConnections(next);
     setConnections(next);
     setConnectionProblem(undefined);
-    if (!removingActive) return;
+    if (!removingActive) { return; }
     setConnectionEpoch(epoch => epoch + 1);
     const nextConnection = activeConnection(next);
     const nextRoute = loadLastAgentRoute(nextConnection.id);
@@ -215,12 +215,12 @@ export function App() {
   }, [connections, navigate]);
 
   const onWorkspaceViewChange = useCallback((view: WorkspaceView) => {
-    if (view === 'agent') navigate(lastAgentRoute.current);
-    else navigate(lastAppsRoute.current);
+    if (view === 'agent') { navigate(lastAgentRoute.current); }
+    else { navigate(lastAppsRoute.current); }
   }, [navigate]);
 
   const onOpenSettings = useCallback(() => {
-    if (route.view === 'agent' || route.view === 'apps') settingsReturnRoute.current = route;
+    if (route.view === 'agent' || route.view === 'apps') { settingsReturnRoute.current = route; }
     navigate({ view: 'config', section: 'profiles' });
   }, [navigate, route]);
 

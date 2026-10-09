@@ -29,7 +29,7 @@ export class MemoryRelayStore implements RelayStore {
   }
   async register(host: HostRegistration) {
     const old = this.hosts.get(host.workspaceId);
-    if (old && JSON.stringify(old) !== JSON.stringify(host)) throw new Error('Workspace already registered.');
+    if (old && JSON.stringify(old) !== JSON.stringify(host)) { throw new Error('Workspace already registered.'); }
     this.hosts.set(host.workspaceId, host);
   }
   async revoked(w: string, d: string) {
@@ -47,19 +47,19 @@ export class MemoryRelayStore implements RelayStore {
   async publish(w: string, d: string, packet: string) {
     const key = `${w}:${d}`;
     const queue = this.messages.get(key) ?? new Map();
-    for (const [id, m] of queue) if (m.expires < Date.now()) queue.delete(id);
-    if (queue.size >= 128) throw new Error('Recipient inbox is full.');
+    for (const [id, m] of queue) { if (m.expires < Date.now()) { queue.delete(id); } }
+    if (queue.size >= 128) { throw new Error('Recipient inbox is full.'); }
     const id = randomId();
     queue.set(id, { text: packet, expires: Date.now() + RELAY_RETENTION_MS });
     this.messages.set(key, queue);
-    for (const listener of this.listeners.get(key) ?? []) listener(id, packet);
+    for (const listener of this.listeners.get(key) ?? []) { listener(id, packet); }
   }
   async receive(w: string, d: string, deliver: (id: string, packet: string) => void) {
     const key = `${w}:${d}`;
     const listeners = this.listeners.get(key) ?? new Set();
     listeners.add(deliver);
     this.listeners.set(key, listeners);
-    for (const [id, m] of this.messages.get(key) ?? []) if (m.expires > Date.now()) deliver(id, m.text);
+    for (const [id, m] of this.messages.get(key) ?? []) { if (m.expires > Date.now()) { deliver(id, m.text); } }
     return () => {
       listeners.delete(deliver);
     };
@@ -88,7 +88,7 @@ export class RedisRelayStore implements RelayStore {
     const key = this.key(host.workspaceId, 'host');
     const text = JSON.stringify(host);
     const accepted = await this.redis.set(key, text, 'NX');
-    if (!accepted && (await this.redis.get(key)) !== text) throw new Error('Workspace already registered.');
+    if (!accepted && (await this.redis.get(key)) !== text) { throw new Error('Workspace already registered.'); }
   }
   async revoked(w: string, d: string) {
     return Boolean(await this.redis.sismember(this.key(w, 'revoked'), d));
@@ -112,7 +112,7 @@ export class RedisRelayStore implements RelayStore {
       RELAY_RETENTION_MS,
       `${Date.now() - RELAY_RETENTION_MS}-0`,
     );
-    if (!result) throw new Error('Recipient inbox is full.');
+    if (!result) { throw new Error('Recipient inbox is full.'); }
   }
   async receive(w: string, d: string, deliver: (id: string, packet: string) => void) {
     const key = this.key(w, `${d}:inbox`);
@@ -122,7 +122,7 @@ export class RedisRelayStore implements RelayStore {
     let again = false;
     let deliveredThrough: string | undefined;
     const read = async () => {
-      if (closed) return;
+      if (closed) { return; }
       if (reading) {
         again = true;
         return;
@@ -136,8 +136,8 @@ export class RedisRelayStore implements RelayStore {
           // every unacknowledged row on each publish amplifies bulk traffic.
           // A new receiver starts without a cursor and replays retained rows.
           for (const [id, fields] of rows) {
-            if (closed) break;
-            if (id === deliveredThrough) continue;
+            if (closed) { break; }
+            if (id === deliveredThrough) { continue; }
             deliver(id, fields[1]);
             deliveredThrough = id;
           }

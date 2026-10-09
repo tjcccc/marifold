@@ -26,7 +26,7 @@ export function tokenizeArgs(args: string): string[] {
 
 export function parseInput(raw: string): ParsedInput {
   const trimmed = raw.trim();
-  if (trimmed.length === 0) return { kind: 'empty' };
+  if (trimmed.length === 0) { return { kind: 'empty' }; }
 
   const prefix = trimmed[0];
   if (prefix === '/' || prefix === '$') {
@@ -35,7 +35,7 @@ export function parseInput(raw: string): ParsedInput {
     const headMatch = body.match(/^(\S+)\s*([\s\S]*)$/);
     const name = (headMatch?.[1] ?? '').toLowerCase();
     const args = headMatch?.[2] ?? '';
-    if (name.length === 0) return { kind: 'text', text: trimmed };
+    if (name.length === 0) { return { kind: 'text', text: trimmed }; }
     const kind = prefix === '/' ? 'command' : 'skill';
     return { kind, name, args, argv: tokenizeArgs(args) };
   }

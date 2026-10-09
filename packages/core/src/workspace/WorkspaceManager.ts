@@ -45,14 +45,14 @@ export class WorkspaceManager {
     this.remoteHandler = handler;
     this.executorHandler = executor;
     this.store.interruptRequests();
-    for (const c of this.store.list()) this.connect(c);
+    for (const c of this.store.list()) { this.connect(c); }
     this.heartbeat = setInterval(() => {
-      for (const c of this.store.list()) if (c.role === 'guest') void this.checkHost(c);
+      for (const c of this.store.list()) { if (c.role === 'guest') { void this.checkHost(c); } }
     }, 15000);
   }
   close(): void {
     clearInterval(this.heartbeat);
-    for (const peer of this.peers.values()) peer.close();
+    for (const peer of this.peers.values()) { peer.close(); }
     this.store.close();
   }
   list(): WorkspaceSummary[] {
@@ -84,7 +84,7 @@ export class WorkspaceManager {
         signal: AbortSignal.timeout(10000),
         redirect: 'error',
       });
-      if (!response.ok) throw new Error(`Bridge registration failed (HTTP ${response.status}).`);
+      if (!response.ok) { throw new Error(`Bridge registration failed (HTTP ${response.status}).`); }
       const peer = this.connect(c);
       await peer.ready();
       return { workspace: this.list().find((w) => w.id === c.id)!, invitation: this.store.invite(c.id) };
@@ -96,32 +96,35 @@ export class WorkspaceManager {
     }
   }
   async add(url: string, token: string, executor = false): Promise<WorkspaceSummary> {
-    if (token.length > 16384) throw new MarifoldError('WORKSPACE_INVALID', 'Invalid invitation.');
+    if (token.length > 16384) { throw new MarifoldError('WORKSPACE_INVALID', 'Invalid invitation.'); }
     const invitation = record(JSON.parse(Buffer.from(token, 'base64url').toString('utf8'))) as unknown as Invitation;
     if (
       invitation.version !== 1 ||
       invitation.expiresAt < Date.now() ||
       bridgeOrigin(url) !== invitation.bridgeUrl ||
       typeof invitation.secret !== 'string'
-    )
+    ) {
       throw new MarifoldError('WORKSPACE_INVALID', 'Invitation expired or belongs to a different bridge.');
+    }
     const versionError = workspaceVersionError(invitation.appVersion);
-    if (versionError) throw new MarifoldError('WORKSPACE_INVALID', versionError);
+    if (versionError) { throw new MarifoldError('WORKSPACE_INVALID', versionError); }
     const workspaceId = identifier(invitation.workspaceId);
     const existing = this.store.list().find(c => c.id === workspaceId);
     if (existing) {
-      if (existing.role === 'host') throw new MarifoldError('WORKSPACE_CONFLICT', 'Workspace is hosted on this device.');
-      if (existing.bridgeUrl !== invitation.bridgeUrl || JSON.stringify(existing.host) !== JSON.stringify(invitation.host))
+      if (existing.role === 'host') { throw new MarifoldError('WORKSPACE_CONFLICT', 'Workspace is hosted on this device.'); }
+      if (existing.bridgeUrl !== invitation.bridgeUrl || JSON.stringify(existing.host) !== JSON.stringify(invitation.host)) {
         throw new MarifoldError('WORKSPACE_INVALID', 'Invitation does not match the saved workspace host.');
+      }
       await this.checkHost(existing);
-      if (this.hostStatus.get(workspaceId)) throw new MarifoldError('WORKSPACE_CONFLICT', 'Workspace already connected.');
+      if (this.hostStatus.get(workspaceId)) { throw new MarifoldError('WORKSPACE_CONFLICT', 'Workspace already connected.'); }
       // Replace a saved pairing only after the bridge refused it (revoked or
       // removed membership). An offline host, a reconnect, or a version
       // mismatch keeps the pairing, which recovers on its own.
       const peer = this.peers.get(workspaceId);
       await peer?.probe();
-      if (!peer?.rejected)
+      if (!peer?.rejected) {
         throw new MarifoldError('WORKSPACE_CONFLICT', 'This device is still paired with the workspace; it reconnects when the host is reachable.');
+      }
     }
     const identity = await createIdentity();
     const pendingId = `pending_${randomId()}`;
@@ -145,8 +148,9 @@ export class WorkspaceManager {
         !validMembership(certificate, invitation.host) ||
         certificate.membership.workspaceId !== workspaceId ||
         JSON.stringify(certificate.membership.identity) !== JSON.stringify(publicIdentity(identity))
-      )
+      ) {
         throw new Error('Host returned invalid membership.');
+      }
       const c: WorkspaceConnection = {
         id: workspaceId,
         name: String(reply.name),
@@ -159,7 +163,7 @@ export class WorkspaceManager {
         certificate,
         executor,
       };
-      if (existing) this.onMembershipRemoved?.(c.id);
+      if (existing) { this.onMembershipRemoved?.(c.id); }
       this.store.save(c);
       this.hostStatus.delete(c.id);
       this.versionErrors.delete(c.id);
@@ -194,17 +198,19 @@ export class WorkspaceManager {
   }
   async request(id: string, operation: string, input: unknown, requestId = randomId()): Promise<unknown> {
     const c = this.store.get(id);
-    if (c.role === 'host')
+    if (c.role === 'host') {
       return this.dispatch(
         c,
         { type: 'request', operation, input, id: requestId, appVersion: MARIFOLD_VERSION },
         { id: c.deviceId, identity: c.host, certificate: c.certificate },
       );
+    }
     const peer = this.peers.get(c.id);
     const versionError = this.versionErrors.get(c.id);
-    if (versionError) throw new Error(versionError);
-    if (!peer?.online || this.hostStatus.get(c.id) !== true)
+    if (versionError) { throw new Error(versionError); }
+    if (!peer?.online || this.hostStatus.get(c.id) !== true) {
       throw new MarifoldError('WORKSPACE_OFFLINE', 'Workspace host is offline.');
+    }
     const read =
       ['devices', 'run.events', 'artifact.read'].includes(operation) ||
       (operation === 'api' && record(input).method === 'GET');
@@ -215,14 +221,17 @@ export class WorkspaceManager {
       if (
         !peer.online ||
         this.hostStatus.get(c.id) !== true
-      )
+      ) {
         throw new MarifoldError('WORKSPACE_OFFLINE', 'Workspace host is unavailable.');
-      if (read && error instanceof Error && error.message.includes('timed out'))
+      }
+      if (read && error instanceof Error && error.message.includes('timed out')) {
         throw new MarifoldError('WORKSPACE_TIMEOUT', 'Workspace request timed out while the bridge remained connected.');
+      }
       throw error;
     }
-    if (operation === 'rename' && typeof record(result).name === 'string')
+    if (operation === 'rename' && typeof record(result).name === 'string') {
       this.store.rename(c.id, String(record(result).name));
+    }
     return result;
   }
   async execute(
@@ -233,16 +242,18 @@ export class WorkspaceManager {
     requestId = randomId(),
   ): Promise<unknown> {
     const c = this.store.get(id);
-    if (c.role !== 'host') throw new Error('Only the workspace host coordinates execution.');
+    if (c.role !== 'host') { throw new Error('Only the workspace host coordinates execution.'); }
     const member = this.store.devices(c.id).find((d) => d.certificate.membership.deviceId === device && !d.revoked);
-    if (!member) throw new Error('Execution device is not a workspace member.');
-    if (this.presence.get(`${c.id}:${device}`)?.version !== MARIFOLD_VERSION)
+    if (!member) { throw new Error('Execution device is not a workspace member.'); }
+    if (this.presence.get(`${c.id}:${device}`)?.version !== MARIFOLD_VERSION) {
       throw new Error('Execution device version differs from the workspace host. Update both devices to the same version.');
+    }
     const peer = this.peers.get(c.id);
-    if (!peer?.online) throw new MarifoldError('WORKSPACE_OFFLINE', 'Execution device is unavailable.');
+    if (!peer?.online) { throw new MarifoldError('WORKSPACE_OFFLINE', 'Execution device is unavailable.'); }
     const status = record(await peer.request('status', {}, device, member.certificate.membership.identity, randomId(), 10000));
-    if (status.version !== MARIFOLD_VERSION)
+    if (status.version !== MARIFOLD_VERSION) {
       throw new Error('Execution device version differs from the workspace host. Update both devices to the same version.');
+    }
     return peer.request(
       operation,
       input,
@@ -258,8 +269,9 @@ export class WorkspaceManager {
     if (c.role === 'host') {
       const peer = this.peers.get(c.id);
       if (peer?.online) {
-        for (const d of this.store.devices(c.id))
-          if (d.certificate.membership.deviceId !== c.deviceId) await peer.revoke(d.certificate.membership.deviceId);
+        for (const d of this.store.devices(c.id)) {
+          if (d.certificate.membership.deviceId !== c.deviceId) { await peer.revoke(d.certificate.membership.deviceId); }
+        }
         await peer.revoke(c.deviceId);
       }
     } else if (this.peers.get(c.id)?.online) {
@@ -278,7 +290,7 @@ export class WorkspaceManager {
   }
   async setExecutor(id: string, enabled: boolean): Promise<void> {
     const connection = this.store.get(id);
-    if (connection.role !== 'guest') throw new Error('The workspace host always executes its local tools.');
+    if (connection.role !== 'guest') { throw new Error('The workspace host always executes its local tools.'); }
     this.store.save({ ...connection, executor: enabled });
     await this.checkHost(this.store.get(connection.id));
   }
@@ -300,18 +312,20 @@ export class WorkspaceManager {
       onStatus: (online) => {
         if (!online) {
           this.hostStatus.set(c.id, false);
-          if (c.role === 'guest' && this.peers.get(c.id)?.rejected) this.onPairingRefused?.(c.id);
+          if (c.role === 'guest' && this.peers.get(c.id)?.rejected) { this.onPairingRefused?.(c.id); }
         } else if (c.role === 'host') {
-          for (const d of this.store.devices(c.id))
-            if (d.revoked)
+          for (const d of this.store.devices(c.id)) {
+            if (d.revoked) {
               void this.peers
                 .get(c.id)
                 ?.revoke(d.certificate.membership.deviceId)
                 .catch(() => undefined);
-        } else if (c.role === 'guest')
+            }
+          }
+        } else if (c.role === 'guest') {
           queueMicrotask(() => {
             void this.checkHost(c);
-          });
+          }); }
       },
     });
     this.peers.set(c.id, peer);
@@ -321,7 +335,7 @@ export class WorkspaceManager {
   private async checkHost(c: WorkspaceConnection): Promise<void> {
     try {
       const peer = this.peers.get(c.id);
-      if (!peer?.online) throw new Error('offline');
+      if (!peer?.online) { throw new Error('offline'); }
       const status = record(
         await peer.request(
           'status',
@@ -339,7 +353,7 @@ export class WorkspaceManager {
         return;
       }
       this.versionErrors.delete(c.id);
-      if (typeof status.name === 'string' && status.name !== c.name) this.store.rename(c.id, status.name);
+      if (typeof status.name === 'string' && status.name !== c.name) { this.store.rename(c.id, status.name); }
       this.hostStatus.set(c.id, true);
     } catch {
       this.hostStatus.set(c.id, false);
@@ -351,22 +365,26 @@ export class WorkspaceManager {
     sender: { id: string; identity: PublicIdentity; certificate?: SignedMembership },
   ): Promise<unknown> {
     const context = { workspaceId: c.id, senderDeviceId: sender.id, hostDeviceId: c.hostDeviceId };
-    if (request.operation === 'status' && c.role === 'host' && request.appVersion !== MARIFOLD_VERSION)
+    if (request.operation === 'status' && c.role === 'host' && request.appVersion !== MARIFOLD_VERSION) {
       return { version: MARIFOLD_VERSION };
+    }
     const versionError = workspaceVersionError(request.appVersion, c.role === 'host' ? 'guest' : 'host');
-    if (versionError) throw new Error(versionError);
+    if (versionError) { throw new Error(versionError); }
     if (c.role === 'guest') {
-      if (request.operation === 'status' && sender.id === c.hostDeviceId)
+      if (request.operation === 'status' && sender.id === c.hostDeviceId) {
         return { version: MARIFOLD_VERSION };
-      if (sender.id !== c.hostDeviceId || !this.store.get(c.id).executor || !request.operation.startsWith('executor.'))
+      }
+      if (sender.id !== c.hostDeviceId || !this.store.get(c.id).executor || !request.operation.startsWith('executor.')) {
         throw new Error('This device has not enabled this execution capability.');
-      if (!this.executorHandler) throw new Error('Executor unavailable.');
+      }
+      if (!this.executorHandler) { throw new Error('Executor unavailable.'); }
       if (
         ['executor.lease', 'executor.assess', 'executor.artifact', 'executor.artifacts', 'executor.cancel'].includes(
           request.operation,
         )
-      )
+      ) {
         return this.executorHandler(request.operation, request.input, context);
+      }
       return this.store.once(c.id, sender.id, request.id, request, () =>
         this.executorHandler!(request.operation, request.input, context),
       );
@@ -382,15 +400,17 @@ export class WorkspaceManager {
       });
       return { name: this.store.get(c.id).name, hostDeviceId: c.hostDeviceId, version: MARIFOLD_VERSION };
     }
-    if (sender.certificate && ['run.events', 'artifact.read'].includes(request.operation))
+    if (sender.certificate && ['run.events', 'artifact.read'].includes(request.operation)) {
       return this.remoteHandler!(request.operation, request.input, context);
+    }
     if (
       sender.certificate &&
       request.operation === 'api' &&
       (record(request.input).method === 'GET' || record(request.input).path === '/v1/terminal/snapshot')
-    )
+    ) {
       return this.remoteHandler!(request.operation, request.input, context);
-    if (sender.certificate && request.operation === 'devices') return { devices: this.devices(c.id) };
+    }
+    if (sender.certificate && request.operation === 'devices') { return { devices: this.devices(c.id) }; }
     return this.store.once(
       c.id,
       sender.id,
@@ -399,40 +419,41 @@ export class WorkspaceManager {
       async () => {
         const input = record(request.input);
         if (request.operation === 'join') {
-          if (sender.certificate || typeof input.secret !== 'string') throw new Error('Invalid pairing request.');
+          if (sender.certificate || typeof input.secret !== 'string') { throw new Error('Invalid pairing request.'); }
           return {
             name: this.store.get(c.id).name,
             certificate: this.store.enroll(c.id, input.secret, randomId(), String(input.name), sender.identity),
           };
         }
-        if (!sender.certificate) throw new Error('Workspace membership required.');
-        if (request.operation === 'invite') return { invitation: this.store.invite(c.id) };
+        if (!sender.certificate) { throw new Error('Workspace membership required.'); }
+        if (request.operation === 'invite') { return { invitation: this.store.invite(c.id) }; }
         if (request.operation === 'rename') {
           this.store.rename(c.id, String(input.name));
           return { name: this.store.get(c.id).name };
         }
-        if (request.operation === 'devices') return { devices: this.devices(c.id) };
+        if (request.operation === 'devices') { return { devices: this.devices(c.id) }; }
         if (request.operation === 'revoke' || request.operation === 'leave') {
           const deviceId = request.operation === 'leave' ? sender.id : identifier(input.deviceId);
           this.store.revoke(c.id, deviceId);
           this.onMembershipRemoved?.(c.id, deviceId);
           // The host's authoritative membership check takes effect immediately.
           // Allow the departing device's final response to enter the relay first.
-          if (deviceId === sender.id)
+          if (deviceId === sender.id) {
             setTimeout(() => {
               void this.peers
                 .get(c.id)
                 ?.revoke(deviceId)
                 .catch(() => undefined);
             }, 1000).unref();
-          else await this.peers.get(c.id)?.revoke(deviceId);
+          }
+          else { await this.peers.get(c.id)?.revoke(deviceId); }
           return { revoked: true };
         }
-        if (!this.remoteHandler) throw new Error('Workspace operation unavailable.');
+        if (!this.remoteHandler) { throw new Error('Workspace operation unavailable.'); }
         return this.remoteHandler(request.operation, request.input, context);
       },
       () => {
-        if (request.operation === 'join') this.store.validateInvitation(c.id, record(request.input).secret);
+        if (request.operation === 'join') { this.store.validateInvitation(c.id, record(request.input).secret); }
       },
     );
   }

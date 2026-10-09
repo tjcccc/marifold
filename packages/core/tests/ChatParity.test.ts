@@ -76,7 +76,7 @@ function chatCompletionsSse(chunks: Array<Record<string, unknown>>): Response {
 
 async function collectStream(stream: AsyncGenerator<string>): Promise<string> {
   const parts: string[] = [];
-  for await (const chunk of stream) parts.push(chunk);
+  for await (const chunk of stream) { parts.push(chunk); }
   return parts.join('');
 }
 

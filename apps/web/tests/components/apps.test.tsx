@@ -139,10 +139,10 @@ describe('AppsScreen', () => {
       expect(await screen.findByRole('button', { name: 'Copy failed' })).toBeTruthy();
       expect(document.querySelector('textarea[readonly][style]')).toBeNull();
     } finally {
-      if (clipboard) Object.defineProperty(navigator, 'clipboard', clipboard);
-      else Reflect.deleteProperty(navigator, 'clipboard');
-      if (execCommand) Object.defineProperty(document, 'execCommand', execCommand);
-      else Reflect.deleteProperty(document, 'execCommand');
+      if (clipboard) { Object.defineProperty(navigator, 'clipboard', clipboard); }
+      else { Reflect.deleteProperty(navigator, 'clipboard'); }
+      if (execCommand) { Object.defineProperty(document, 'execCommand', execCommand); }
+      else { Reflect.deleteProperty(document, 'execCommand'); }
     }
   });
 
@@ -151,7 +151,7 @@ describe('AppsScreen', () => {
     let catalogReads = 0;
     const request = vi.fn(async (method: string, path: string) => {
       if (path === '/v1/apps') {
-        if (++catalogReads === 1) return { apps: structuredClone([skillTranslator]) };
+        if (++catalogReads === 1) { return { apps: structuredClone([skillTranslator]) }; }
         return new Promise(resolve => { finishRefresh = resolve; });
       }
       if (method === 'POST' && path === '/v1/apps/translator/instances') {
@@ -192,7 +192,7 @@ describe('AppsScreen', () => {
     let state = { source: '', targetLanguage: 'English', result: '' };
     let staleOutputs: string[] | undefined;
     const request = vi.fn(async (method: string, path: string, body?: unknown) => {
-      if (method === 'GET' && path === '/v1/apps') return { ok: true, apps: [skillTranslator] };
+      if (method === 'GET' && path === '/v1/apps') { return { ok: true, apps: [skillTranslator] }; }
       if (method === 'POST' && path === '/v1/apps/translator/instances') {
         return { ok: true, instance: { id: 'app_test', appName: 'translator', state } };
       }
@@ -239,7 +239,7 @@ describe('AppsScreen', () => {
           },
         };
       }
-      if (method === 'DELETE' && path === '/v1/app-instances/app_test') return { ok: true, deleted: true };
+      if (method === 'DELETE' && path === '/v1/app-instances/app_test') { return { ok: true, deleted: true }; }
       throw new Error(`Unexpected request: ${method} ${path}`);
     });
     const client: ApiClient = {
@@ -630,7 +630,7 @@ describe('AppsScreen', () => {
         return { ok: true, instance: snapshot() };
       }
       if (method === 'GET' && path === '/v1/app-instances/app_builder') {
-        if (allowCompletion) phase = 'completed';
+        if (allowCompletion) { phase = 'completed'; }
         return { ok: true, instance: snapshot() };
       }
       if (method === 'DELETE' && path === '/v1/app-instances/app_builder') {

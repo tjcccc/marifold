@@ -56,7 +56,7 @@ export function isGitHubCopilotResponsesModelId(modelId: string): boolean {
 }
 
 export function isKnownGitHubCopilotUnsupportedModelId(modelId: string): boolean {
-  if (modelId.startsWith('text-embedding-')) return true;
+  if (modelId.startsWith('text-embedding-')) { return true; }
   return GITHUB_COPILOT_UNSUPPORTED_MODEL_IDS.has(modelId);
 }
 

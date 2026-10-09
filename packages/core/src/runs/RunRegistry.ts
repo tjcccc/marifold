@@ -213,15 +213,15 @@ export class RunRegistry {
   }
 
   start(input: RunStartInput): RunRecord {
-    if (this.closed) throw MarifoldError.agentRunInvalid('The run registry is shutting down.');
+    if (this.closed) { throw MarifoldError.agentRunInvalid('The run registry is shutting down.'); }
     this.sweepFinished();
     const active = [...this.runs.values()].filter(run => !run.finished).length;
-    if (active >= this.maxActiveRuns) throw MarifoldError.runLimitExceeded(this.maxActiveRuns);
+    if (active >= this.maxActiveRuns) { throw MarifoldError.runLimitExceeded(this.maxActiveRuns); }
 
     const profile = input.profile ?? this.runtime.defaultProfile();
     if (input.sessionId) {
       const owner = [...this.runs.values()].find(run => !run.finished && run.sessionId === input.sessionId);
-      if (owner) throw new MarifoldError('SESSION_BUSY', `Session is already running on ${owner.id}.`, { runId: owner.id, sessionId: input.sessionId });
+      if (owner) { throw new MarifoldError('SESSION_BUSY', `Session is already running on ${owner.id}.`, { runId: owner.id, sessionId: input.sessionId }); }
     }
     const run: ActiveRun = {
       id: this.createRunId(),
@@ -256,16 +256,16 @@ export class RunRegistry {
 
   startChild(parentRunId: string, input: RunStartInput): RunRecord {
     const parent = this.runs.get(parentRunId);
-    if (!parent || parent.finished || parent.parentRunId || !parent.execution || input.execution?.workspaceId !== parent.execution.workspaceId) throw MarifoldError.agentRunInvalid('Device delegation is limited to one level within the active workspace.');
+    if (!parent || parent.finished || parent.parentRunId || !parent.execution || input.execution?.workspaceId !== parent.execution.workspaceId) { throw MarifoldError.agentRunInvalid('Device delegation is limited to one level within the active workspace.'); }
     return this.start({ ...input, sessionId: undefined, parentRunId });
   }
 
   artifactOrigin(runId: string, artifactId: string): { run: RunRecord; artifactId: string } {
     const run = this.require(runId); const artifact = run.artifacts?.find(a => a.id === artifactId);
-    if (!artifact) throw MarifoldError.artifactNotFound(runId, artifactId);
-    if (!artifact.source) return { run, artifactId };
+    if (!artifact) { throw MarifoldError.artifactNotFound(runId, artifactId); }
+    if (!artifact.source) { return { run, artifactId }; }
     const child = this.require(artifact.source.runId);
-    if (child.parentRunId !== run.id || child.execution?.workspaceId !== run.execution?.workspaceId) throw MarifoldError.artifactNotFound(runId, artifactId);
+    if (child.parentRunId !== run.id || child.execution?.workspaceId !== run.execution?.workspaceId) { throw MarifoldError.artifactNotFound(runId, artifactId); }
     return { run: child, artifactId: artifact.source.artifactId };
   }
 
@@ -276,7 +276,7 @@ export class RunRegistry {
 
   require(runId: string): RunRecord {
     const record = this.get(runId);
-    if (!record) throw MarifoldError.runNotFound(runId);
+    if (!record) { throw MarifoldError.runNotFound(runId); }
     return record;
   }
 
@@ -285,7 +285,7 @@ export class RunRegistry {
     const records = new Map((sessionId ? this.journal?.sessionArtifactRuns?.(sessionId) ?? [] : [])
       .map(run => [run.id, run]));
     for (const run of this.runs.values()) {
-      if (!sessionId || run.sessionId === sessionId) records.set(run.id, this.toRecord(run));
+      if (!sessionId || run.sessionId === sessionId) { records.set(run.id, this.toRecord(run)); }
     }
     return [...records.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
@@ -293,7 +293,7 @@ export class RunRegistry {
   requireArtifact(runId: string, artifactId: string): ResolvedRunArtifact {
     const source = this.artifactOrigin(runId, artifactId);
     const artifact = resolveRunArtifact(source.run.id, source.artifactId);
-    if (!artifact) throw MarifoldError.artifactNotFound(runId, artifactId);
+    if (!artifact) { throw MarifoldError.artifactNotFound(runId, artifactId); }
     return artifact;
   }
 
@@ -304,7 +304,7 @@ export class RunRegistry {
     const run = this.runs.get(runId);
     if (!run) {
       const archived = this.journal?.artifactRun?.(runId);
-      if (!archived) throw MarifoldError.runNotFound(runId);
+      if (!archived) { throw MarifoldError.runNotFound(runId); }
       // A reconnecting client can finish without reviving expired diagnostics
       // or any execution/approval capability.
       if (!signal?.aborted && afterSeq < archived.eventCount) {
@@ -318,21 +318,21 @@ export class RunRegistry {
     let next = Math.max(afterSeq + 1, run.firstSeq);
     while (true) {
       while (next <= run.lastSeq) {
-        if (signal?.aborted) return;
+        if (signal?.aborted) { return; }
         yield run.buffer[next - run.firstSeq];
         next += 1;
       }
-      if (run.finished || signal?.aborted) return;
+      if (run.finished || signal?.aborted) { return; }
       await this.waitForChange(run, signal);
     }
   }
 
   answerApproval(runId: string, requestId: string, action: RunApprovalAction, credential?: unknown): { requestId: string; approved: boolean } {
     let run = this.runs.get(runId);
-    if (!run) throw MarifoldError.runNotFound(runId);
+    if (!run) { throw MarifoldError.runNotFound(runId); }
     const entry = this.pending.get(this.userInputKey(runId, requestId))
       ?? [...this.pending.values()].find(p => p.request.id === requestId && this.runs.get(p.runId)?.parentRunId === runId);
-    if (!entry || (entry.runId !== runId && this.runs.get(entry.runId)?.parentRunId !== runId)) throw MarifoldError.approvalNotFound(requestId);
+    if (!entry || (entry.runId !== runId && this.runs.get(entry.runId)?.parentRunId !== runId)) { throw MarifoldError.approvalNotFound(requestId); }
     run = this.runs.get(entry.runId)!;
     let sudoResponse: import('../agent/SudoCredentials').SudoResponse | undefined;
     if (entry.request.sudo && action !== 'deny') {
@@ -361,7 +361,7 @@ export class RunRegistry {
         // sensitive folders (such as the home directory), and a refused folder
         // must not silence later prompts. The client can still answer once/deny.
         const folder = this.runtime.addProfileTrustedFolder(run.profile, dirname(escalatedPath));
-        if (!run.trustedFolders.includes(folder)) run.trustedFolders.push(folder);
+        if (!run.trustedFolders.includes(folder)) { run.trustedFolders.push(folder); }
         entry.settle({ approved: true });
         return { requestId, approved: true };
       }
@@ -389,10 +389,10 @@ export class RunRegistry {
     value: unknown,
   ): { requestId: string; accepted: true } {
     const run = this.runs.get(runId);
-    if (!run) throw MarifoldError.runNotFound(runId);
+    if (!run) { throw MarifoldError.runNotFound(runId); }
     const entry = this.pendingUserInputs.get(this.userInputKey(runId, requestId))
       ?? [...this.pendingUserInputs.values()].find(p => p.request.id === requestId && this.runs.get(p.runId)?.parentRunId === runId);
-    if (!entry) throw MarifoldError.userInputNotFound(requestId);
+    if (!entry) { throw MarifoldError.userInputNotFound(requestId); }
     if (typeof value === 'object' && value !== null && 'skipped' in value && value.skipped === true && Object.keys(value).length === 1) { entry.settle(undefined); return { requestId, accepted: true }; }
     const submission = normalizeUserInputSubmission(entry.request, value);
     entry.settle(submission);
@@ -403,8 +403,8 @@ export class RunRegistry {
    * and emits a `steering` event so attached clients see it land. */
   steer(runId: string, text: string): void {
     const run = this.runs.get(runId);
-    if (!run) throw MarifoldError.runNotFound(runId);
-    if (run.finished) throw MarifoldError.agentRunInvalid(`Run ${runId} already finished; steering only applies to a running task.`);
+    if (!run) { throw MarifoldError.runNotFound(runId); }
+    if (run.finished) { throw MarifoldError.agentRunInvalid(`Run ${runId} already finished; steering only applies to a running task.`); }
     run.steeringQueue.push(text);
   }
 
@@ -412,17 +412,17 @@ export class RunRegistry {
    * loop unblocks immediately) and reports the current status either way. */
   cancel(runId: string): TaskStatus {
     const run = this.runs.get(runId);
-    if (!run) throw MarifoldError.runNotFound(runId);
-    if (!run.finished) run.abort.abort();
-    for (const child of this.runs.values()) if (child.parentRunId === runId && !child.finished) child.abort.abort();
+    if (!run) { throw MarifoldError.runNotFound(runId); }
+    if (!run.finished) { run.abort.abort(); }
+    for (const child of this.runs.values()) { if (child.parentRunId === runId && !child.finished) { child.abort.abort(); } }
     return run.status;
   }
 
   close(): void {
     this.closed = true;
     for (const run of this.runs.values()) {
-      if (!run.finished) run.abort.abort();
-      if (run.evictTimer) clearTimeout(run.evictTimer);
+      if (!run.finished) { run.abort.abort(); }
+      if (run.evictTimer) { clearTimeout(run.evictTimer); }
     }
   }
 
@@ -460,7 +460,7 @@ export class RunRegistry {
         this.append(run, event);
       }
       // AgentRunner always terminates with a `done` event; guard anyway.
-      if (!run.finished) this.finish(run, run.status === 'running' ? 'failed' : run.status);
+      if (!run.finished) { this.finish(run, run.status === 'running' ? 'failed' : run.status); }
     } catch (error) {
       // AgentRunner catches its own errors; reaching here means the generator
       // itself blew up. Surface it on the stream and close out the run.
@@ -471,8 +471,8 @@ export class RunRegistry {
   }
 
   private append(run: ActiveRun, event: AgentEvent): void {
-    if (run.finished) return;
-    if (event.type === 'status' && !run.taskId) run.taskId = event.taskId;
+    if (run.finished) { return; }
+    if (event.type === 'status' && !run.taskId) { run.taskId = event.taskId; }
     run.lastSeq += 1;
     run.buffer.push({ seq: run.lastSeq, event });
     if (run.buffer.length > this.maxBufferedEvents) {
@@ -522,7 +522,7 @@ export class RunRegistry {
    * otherwise park the request until a client answers, the timeout fires, or
    * the run is cancelled. Mirrors TelegramBridge.requestApproval. */
   private handleApproval(run: ActiveRun, request: ApprovalRequest): Promise<ApprovalDecision> {
-    if (!request.escalated && run.grantedKinds.has(request.kind)) return Promise.resolve({ approved: true });
+    if (!request.escalated && run.grantedKinds.has(request.kind)) { return Promise.resolve({ approved: true }); }
     if (request.persistable !== false
         && request.escalated
         && request.escalatedPath
@@ -579,7 +579,7 @@ export class RunRegistry {
     return new Promise<void>(resolve => {
       const waiter = (): void => {
         signal?.removeEventListener('abort', waiter);
-        const index = run.waiters.indexOf(waiter); if (index >= 0) run.waiters.splice(index, 1);
+        const index = run.waiters.indexOf(waiter); if (index >= 0) { run.waiters.splice(index, 1); }
         resolve();
       };
       run.waiters.push(waiter);
@@ -588,8 +588,8 @@ export class RunRegistry {
   }
 
   private notify(run: ActiveRun): void {
-    for (const listener of this.listeners) listener();
-    for (const waiter of run.waiters.splice(0)) waiter();
+    for (const listener of this.listeners) { listener(); }
+    for (const waiter of run.waiters.splice(0)) { waiter(); }
   }
 
   private sweepFinished(): void {
@@ -601,7 +601,7 @@ export class RunRegistry {
       const expired = run.finishedAt !== undefined && now - Date.parse(run.finishedAt) >= this.finishedRunTtlMs;
       const overCap = finished.length - finished.indexOf(run) > MAX_RETAINED_FINISHED_RUNS;
       if (expired || overCap) {
-        if (run.evictTimer) clearTimeout(run.evictTimer);
+        if (run.evictTimer) { clearTimeout(run.evictTimer); }
         this.runs.delete(run.id);
       }
     }

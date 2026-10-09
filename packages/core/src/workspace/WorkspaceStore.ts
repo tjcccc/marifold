@@ -43,10 +43,11 @@ export class WorkspaceStore {
     );
     const parent = path.dirname(this.directory);
     fs.mkdirSync(parent, { recursive: true, mode: 0o700 });
-    if (fs.lstatSync(parent).isSymbolicLink()) throw new Error('Workspace state parent must not be a symlink.');
+    if (fs.lstatSync(parent).isSymbolicLink()) { throw new Error('Workspace state parent must not be a symlink.'); }
     fs.mkdirSync(this.directory, { recursive: true, mode: 0o700 });
-    if (fs.lstatSync(this.directory).isSymbolicLink())
+    if (fs.lstatSync(this.directory).isSymbolicLink()) {
       throw new Error('Workspace state directory must not be a symlink.');
+    }
     fs.chmodSync(this.directory, 0o700);
     this.lockPath = path.join(this.directory, 'service.lock');
     this.acquireLock();
@@ -55,11 +56,12 @@ export class WorkspaceStore {
       for (const file of [dbPath, `${dbPath}-wal`, `${dbPath}-shm`]) {
         try {
           const stat = fs.lstatSync(file);
-          if (!stat.isFile() || stat.isSymbolicLink())
+          if (!stat.isFile() || stat.isSymbolicLink()) {
             throw new Error('Workspace control files must be regular files.');
+          }
           fs.chmodSync(file, 0o600);
         } catch (error) {
-          if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+          if ((error as NodeJS.ErrnoException).code !== 'ENOENT') { throw error; }
         }
       }
       this.db = new Database(dbPath);
@@ -88,18 +90,19 @@ export class WorkspaceStore {
         fs.writeFileSync(this.lockPath, this.lockValue, { flag: 'wx', mode: 0o600 });
         return;
       } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+        if ((error as NodeJS.ErrnoException).code !== 'EEXIST') { throw error; }
       }
       const fd = fs.openSync(this.lockPath, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
       let pid: unknown;
       try {
-        if (fs.fstatSync(fd).size > 1024) throw new Error('Invalid workspace service lock.');
+        if (fs.fstatSync(fd).size > 1024) { throw new Error('Invalid workspace service lock.'); }
         pid = JSON.parse(fs.readFileSync(fd, 'utf8')).pid;
       } finally {
         fs.closeSync(fd);
       }
-      if (typeof pid !== 'number' || !Number.isSafeInteger(pid) || pid <= 0)
+      if (typeof pid !== 'number' || !Number.isSafeInteger(pid) || pid <= 0) {
         throw new Error('Invalid workspace service lock.');
+      }
       try {
         process.kill(pid, 0);
       } catch (error) {
@@ -115,7 +118,7 @@ export class WorkspaceStore {
   }
   private releaseLock(): void {
     try {
-      if (fs.readFileSync(this.lockPath, 'utf8') === this.lockValue) fs.unlinkSync(this.lockPath);
+      if (fs.readFileSync(this.lockPath, 'utf8') === this.lockValue) { fs.unlinkSync(this.lockPath); }
     } catch {
       /* Already released. */
     }
@@ -131,7 +134,7 @@ export class WorkspaceStore {
     }
   }
   private prune(): void {
-    if (Date.now() - this.lastPruned < 60000) return;
+    if (Date.now() - this.lastPruned < 60000) { return; }
     this.lastPruned = Date.now();
     this.db
       .prepare('DELETE FROM run_events WHERE run IN (SELECT id FROM run_records WHERE expires < ?)')
@@ -176,7 +179,7 @@ export class WorkspaceStore {
       record: import('../runs/RunRegistry').RunRecord,
       event?: import('../runs/RunRegistry').SequencedEvent,
     ): void => {
-      if (this.closed) return;
+      if (this.closed) { return; }
       this.prune();
       this.db.transaction(() => {
         this.db
@@ -188,10 +191,11 @@ export class WorkspaceStore {
           this.db.prepare('INSERT INTO run_artifacts VALUES (?,?,?) ON CONFLICT(id) DO UPDATE SET session=excluded.session,record=excluded.record')
             .run(record.id, record.sessionId ?? null, JSON.stringify({ ...record, pendingApprovals: [], pendingUserInputs: [] }));
         }
-        if (event)
+        if (event) {
           this.db
             .prepare('INSERT OR REPLACE INTO run_events VALUES (?,?,?)')
             .run(record.id, event.seq, JSON.stringify(event.event));
+        }
         this.db.prepare('DELETE FROM run_events WHERE run=? AND seq<=?').run(record.id, record.eventCount - 10000);
       })();
     },
@@ -213,8 +217,9 @@ export class WorkspaceStore {
   }
   get(idOrName: string): WorkspaceConnection {
     const matches = this.list().filter((c) => c.id === idOrName || c.name === idOrName);
-    if (matches.length !== 1)
+    if (matches.length !== 1) {
       throw new Error(matches.length ? 'Workspace name is ambiguous; use its ID.' : 'Workspace not found.');
+    }
     return matches[0];
   }
   save(connection: WorkspaceConnection): void {
@@ -228,7 +233,7 @@ export class WorkspaceStore {
       .run(connection.id, JSON.stringify(metadata));
   }
   async create(name: string, bridgeUrl: string, deviceName: string): Promise<WorkspaceConnection> {
-    if (this.list().some((c) => c.role === 'host')) throw new Error('This configuration already hosts a workspace.');
+    if (this.list().some((c) => c.role === 'host')) { throw new Error('This configuration already hosts a workspace.'); }
     const identity = await createIdentity();
     const id = randomId();
     const deviceId = randomId();
@@ -260,7 +265,7 @@ export class WorkspaceStore {
   }
   invite(id: string): string {
     const c = this.get(id);
-    if (c.role !== 'host') throw new Error('Invitations must be issued by the host.');
+    if (c.role !== 'host') { throw new Error('Invitations must be issued by the host.'); }
     const secret = randomBytes(32).toString('base64url');
     const expiresAt = Date.now() + INVITATION_TTL_MS;
     this.db
@@ -289,12 +294,13 @@ export class WorkspaceStore {
       !invitation ||
       invitation.expires < Date.now() ||
       !timingSafeEqual(Buffer.from(invitation.verifier), Buffer.from(digest(secret)))
-    )
+    ) {
       throw new Error('Invitation is invalid or expired.');
+    }
   }
   enroll(id: string, secret: string, deviceId: string, name: string, identity: PublicIdentity): SignedMembership {
     const c = this.get(id);
-    if (c.role !== 'host') throw new Error('Only a host may enroll a device.');
+    if (c.role !== 'host') { throw new Error('Only a host may enroll a device.'); }
     return this.db.transaction(() => {
       const invitation = this.db.prepare('SELECT verifier,expires FROM invitations WHERE workspace=?').get(c.id) as
         | { verifier: string; expires: number }
@@ -303,8 +309,9 @@ export class WorkspaceStore {
         !invitation ||
         invitation.expires < Date.now() ||
         !timingSafeEqual(Buffer.from(invitation.verifier), Buffer.from(digest(secret)))
-      )
+      ) {
         throw new Error('Invitation is invalid or expired.');
+      }
       const certificate = issueMembership(c.identity, {
         version: 1,
         workspaceId: c.id,
@@ -336,7 +343,7 @@ export class WorkspaceStore {
     ).map((r) => ({ certificate: JSON.parse(r.certificate), revoked: Boolean(r.revoked) }));
   }
   revoke(workspace: string, deviceId: string): void {
-    if (this.get(workspace).hostDeviceId === deviceId) throw new Error('Remove the hosted workspace to stop sharing.');
+    if (this.get(workspace).hostDeviceId === deviceId) { throw new Error('Remove the hosted workspace to stop sharing.'); }
     this.db.prepare('UPDATE devices SET revoked=1 WHERE workspace=? AND id=?').run(workspace, deviceId);
   }
   rename(id: string, name: string): void {
@@ -346,10 +353,11 @@ export class WorkspaceStore {
   remove(id: string): void {
     const c = this.get(id);
     this.db.transaction(() => {
-      for (const table of ['devices', 'invitations', 'requests'])
+      for (const table of ['devices', 'invitations', 'requests']) {
         this.db.prepare(`DELETE FROM ${table} WHERE workspace=?`).run(c.id);
+      }
       this.db.prepare('DELETE FROM connections WHERE id=?').run(c.id);
-      if (this.defaultId() === c.id) this.setDefault('local');
+      if (this.defaultId() === c.id) { this.setDefault('local'); }
     })();
     fs.rmSync(path.join(this.directory, `${c.id}.credentials.json`), { force: true });
   }
@@ -382,11 +390,12 @@ export class WorkspaceStore {
       .prepare('SELECT hash,state,result FROM requests WHERE workspace=? AND sender=? AND id=?')
       .get(workspace, sender, id) as { hash: string; state: string; result: string | null } | undefined;
     if (row) {
-      if (row.hash !== hash) throw new Error('Request ID was reused with different input.');
-      if (row.state === 'complete') return JSON.parse(row.result!);
-      if (row.state === 'failed') throw new Error(JSON.parse(row.result!));
-      if (row.state === 'expired')
+      if (row.hash !== hash) { throw new Error('Request ID was reused with different input.'); }
+      if (row.state === 'complete') { return JSON.parse(row.result!); }
+      if (row.state === 'failed') { throw new Error(JSON.parse(row.result!)); }
+      if (row.state === 'expired') {
         throw new Error('The previous request result has expired. The operation will not be repeated.');
+      }
       throw new Error(
         row.state === 'running'
           ? 'Request is still running; query its status.'
@@ -395,10 +404,11 @@ export class WorkspaceStore {
     }
     validate?.();
     this.prune();
-    if ((this.db.prepare('SELECT COUNT(*) AS count FROM requests').get() as { count: number }).count >= 100000)
+    if ((this.db.prepare('SELECT COUNT(*) AS count FROM requests').get() as { count: number }).count >= 100000) {
       throw new Error(
         'Workspace operation journal capacity reached. Re-pair a new workspace before accepting more operations.',
       );
+    }
     this.db
       .prepare('INSERT INTO requests VALUES (?,?,?,?,?,NULL,?)')
       .run(workspace, sender, id, hash, 'running', Date.now());
@@ -413,10 +423,11 @@ export class WorkspaceStore {
       }
       return result;
     } catch (error) {
-      if (!this.closed)
+      if (!this.closed) {
         this.db
           .prepare("UPDATE requests SET state='failed',result=? WHERE workspace=? AND sender=? AND id=?")
           .run(JSON.stringify(error instanceof Error ? error.message : 'Operation failed.'), workspace, sender, id);
+      }
       throw error;
     }
   }
@@ -425,8 +436,9 @@ export class WorkspaceStore {
     const fd = fs.openSync(file, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
     try {
       const stat = fs.fstatSync(fd);
-      if (!stat.isFile() || stat.size > 16_384 || (stat.mode & 0o077) !== 0)
+      if (!stat.isFile() || stat.size > 16_384 || (stat.mode & 0o077) !== 0) {
         throw new Error('Workspace credentials must be an owner-only regular file.');
+      }
       return JSON.parse(fs.readFileSync(fd, 'utf8'));
     } finally {
       fs.closeSync(fd);

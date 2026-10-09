@@ -57,7 +57,7 @@ export class ConfigManager {
 
   setValue(key: string, value: string): ConfigSetResult {
     const parts = key.split('.');
-    if (parts.length < 2) throw MarifoldError.configInvalid(`Unknown config key: ${key}`);
+    if (parts.length < 2) { throw MarifoldError.configInvalid(`Unknown config key: ${key}`); }
 
     if (key === 'tui.fullscreen') {
       this.config.tui = { fullscreen: parseBoolean(value, key) };
@@ -93,16 +93,16 @@ export class ConfigManager {
    */
   getValue(key: string): string | undefined {
     const parts = key.split('.');
-    if (parts.length < 2) throw MarifoldError.configInvalid(`Unknown config key: ${key}`);
+    if (parts.length < 2) { throw MarifoldError.configInvalid(`Unknown config key: ${key}`); }
     const raw = this.readValue(parts, key);
-    if (raw === undefined) return undefined;
+    if (raw === undefined) { return undefined; }
     return Array.isArray(raw) ? raw.join(', ') : String(raw);
   }
 
   private readValue(parts: string[], key: string): unknown {
-    if (key === 'tui.fullscreen') return this.config.tui?.fullscreen ?? true;
+    if (key === 'tui.fullscreen') { return this.config.tui?.fullscreen ?? true; }
     const pick = (section: string, map: Record<string, unknown>, field: string): unknown => {
-      if (!(field in map)) throw MarifoldError.configInvalid(`Unknown config key: ${section}.${field}`);
+      if (!(field in map)) { throw MarifoldError.configInvalid(`Unknown config key: ${section}.${field}`); }
       return map[field];
     };
     if (parts[0] === 'default' && parts.length === 2) {
@@ -193,8 +193,8 @@ export class ConfigManager {
   }
 
   setDefaultModel(model: string, provider?: string): ConfigSetResult {
-    if (!model) throw MarifoldError.configInvalid('Model cannot be empty.');
-    if (provider) this.config.default.provider = provider;
+    if (!model) { throw MarifoldError.configInvalid('Model cannot be empty.'); }
+    if (provider) { this.config.default.provider = provider; }
     this.config.default.model = model;
     this.registerModelOption(this.config.default.provider, model);
     this.save();
@@ -206,24 +206,24 @@ export class ConfigManager {
   }
 
   addModel(provider: string, model: string, options: Partial<MarifoldProviderConfig> = {}): ConfigSetResult {
-    if (!provider) throw MarifoldError.configInvalid('Provider cannot be empty.');
-    if (!model) throw MarifoldError.configInvalid('Model cannot be empty.');
+    if (!provider) { throw MarifoldError.configInvalid('Provider cannot be empty.'); }
+    if (!model) { throw MarifoldError.configInvalid('Model cannot be empty.'); }
 
     const providerConfig = this.config.providers[provider] ?? this.createProvider(provider);
     const registry = getProviderRegistryEntry(provider);
     if (registry) {
       const defaults = providerConfigFromRegistry(registry);
-      if (defaults.type) providerConfig.type = defaults.type;
-      if (defaults.baseUrl && !providerConfig.baseUrl) providerConfig.baseUrl = defaults.baseUrl;
-      if (defaults.apiKeyEnv && !providerConfig.apiKeyEnv) providerConfig.apiKeyEnv = defaults.apiKeyEnv;
+      if (defaults.type) { providerConfig.type = defaults.type; }
+      if (defaults.baseUrl && !providerConfig.baseUrl) { providerConfig.baseUrl = defaults.baseUrl; }
+      if (defaults.apiKeyEnv && !providerConfig.apiKeyEnv) { providerConfig.apiKeyEnv = defaults.apiKeyEnv; }
     }
-    if (options.type) providerConfig.type = options.type;
-    if (options.baseUrl) providerConfig.baseUrl = options.baseUrl.replace(/\/+$/, '');
-    if (options.apiKeyEnv) providerConfig.apiKeyEnv = options.apiKeyEnv;
-    if (options.apiKey) providerConfig.apiKey = options.apiKey;
-    if (options.oauthToken) providerConfig.oauthToken = options.oauthToken;
-    if (options.apiKeyExpiresAt !== undefined) providerConfig.apiKeyExpiresAt = options.apiKeyExpiresAt;
-    if (options.accountId) providerConfig.accountId = options.accountId;
+    if (options.type) { providerConfig.type = options.type; }
+    if (options.baseUrl) { providerConfig.baseUrl = options.baseUrl.replace(/\/+$/, ''); }
+    if (options.apiKeyEnv) { providerConfig.apiKeyEnv = options.apiKeyEnv; }
+    if (options.apiKey) { providerConfig.apiKey = options.apiKey; }
+    if (options.oauthToken) { providerConfig.oauthToken = options.oauthToken; }
+    if (options.apiKeyExpiresAt !== undefined) { providerConfig.apiKeyExpiresAt = options.apiKeyExpiresAt; }
+    if (options.accountId) { providerConfig.accountId = options.accountId; }
     this.registerModelOption(provider, model);
     this.save();
     return { configPath: this.configPath, key: 'models.options', value: `${provider}/${model}` };
@@ -233,10 +233,10 @@ export class ConfigManager {
    * CLI picker and Web catalog. Credentials remain untouched and raw secrets
    * are deliberately outside this input surface. */
   addProvider(provider: string, options: ConfigAddProviderOptions = {}): ConfigSetResult {
-    if (!provider) throw MarifoldError.configInvalid('Provider cannot be empty.');
+    if (!provider) { throw MarifoldError.configInvalid('Provider cannot be empty.'); }
     const existing = this.config.providers[provider];
     const registry = getProviderRegistryEntry(provider);
-    if (!registry && !existing) throw MarifoldError.configInvalid(`Unknown provider: ${provider}`);
+    if (!registry && !existing) { throw MarifoldError.configInvalid(`Unknown provider: ${provider}`); }
 
     const type = existing?.type ?? registry?.type ?? 'openai-compatible';
     const baseUrl = options.baseUrl === undefined
@@ -253,14 +253,14 @@ export class ConfigManager {
     }
 
     const config: MarifoldProviderConfig = { ...(existing ?? {}), type };
-    if (baseUrl) config.baseUrl = baseUrl.replace(/\/+$/, '');
-    else delete config.baseUrl;
-    if (apiKeyEnv) config.apiKeyEnv = apiKeyEnv;
-    else delete config.apiKeyEnv;
+    if (baseUrl) { config.baseUrl = baseUrl.replace(/\/+$/, ''); }
+    else { delete config.baseUrl; }
+    if (apiKeyEnv) { config.apiKeyEnv = apiKeyEnv; }
+    else { delete config.apiKeyEnv; }
     if (options.proxy !== undefined) {
       const proxy = options.proxy.trim();
-      if (proxy) config.proxy = proxy;
-      else delete config.proxy;
+      if (proxy) { config.proxy = proxy; }
+      else { delete config.proxy; }
     }
     this.config.providers[provider] = config;
     this.save();
@@ -279,8 +279,8 @@ export class ConfigManager {
   }
 
   removeModel(provider: string, model: string): ConfigRemoveModelResult {
-    if (!provider) throw MarifoldError.configInvalid('Provider cannot be empty.');
-    if (!model) throw MarifoldError.configInvalid('Model cannot be empty.');
+    if (!provider) { throw MarifoldError.configInvalid('Provider cannot be empty.'); }
+    if (!model) { throw MarifoldError.configInvalid('Model cannot be empty.'); }
 
     const option = `${provider}/${model}`;
     const index = this.config.models.options.indexOf(option);
@@ -309,7 +309,7 @@ export class ConfigManager {
   /** Remove one provider's local configuration, credentials, and saved model
    * options. Refuse the global default so the config cannot be left unusable. */
   removeProvider(provider: string): ConfigRemoveProviderResult {
-    if (!provider) throw MarifoldError.configInvalid('Provider cannot be empty.');
+    if (!provider) { throw MarifoldError.configInvalid('Provider cannot be empty.'); }
     if (this.config.default.provider === provider) {
       throw MarifoldError.configInvalid(
         `Cannot remove the current default provider '${provider}'. Choose another default model first.`,
@@ -342,7 +342,7 @@ export class ConfigManager {
   }
 
   registerModelOption(provider: string | undefined, model: string | undefined): void {
-    if (!provider || !model) return;
+    if (!provider || !model) { return; }
     const option = `${provider}/${model}`;
     if (!this.config.models.options.includes(option)) {
       this.config.models.options.push(option);
@@ -351,7 +351,7 @@ export class ConfigManager {
   }
 
   setDefaultProfile(profile: string): ConfigSetResult {
-    if (!profile) throw MarifoldError.configInvalid('Profile cannot be empty.');
+    if (!profile) { throw MarifoldError.configInvalid('Profile cannot be empty.'); }
     this.config.default.profile = profile;
     this.save();
     return { configPath: this.configPath, key: 'default.profile', value: profile };
@@ -550,8 +550,8 @@ export class ConfigManager {
         provider.accountId = value;
         return;
       case 'proxy':
-        if (value.trim()) provider.proxy = value.trim();
-        else delete provider.proxy;
+        if (value.trim()) { provider.proxy = value.trim(); }
+        else { delete provider.proxy; }
         return;
       case 'native_web_search':
         provider.nativeWebSearch = parseNativeWebSearchPreference(value, `providers.${providerName}.native_web_search`);
@@ -701,7 +701,7 @@ function optionalNumberLine(key: string, value?: number): string | undefined {
 
 function parseNumber(value: string, label: string): number {
   const parsed = Number(value);
-  if (!Number.isFinite(parsed)) throw MarifoldError.configInvalid(`Expected ${label} to be a number.`);
+  if (!Number.isFinite(parsed)) { throw MarifoldError.configInvalid(`Expected ${label} to be a number.`); }
   return parsed;
 }
 
@@ -714,7 +714,7 @@ function parseNativeWebSearchPreference(value: string, label: string): NativeWeb
 
 function parseNonNegativeNumber(value: string, label: string): number {
   const parsed = parseNumber(value, label);
-  if (parsed < 0) throw MarifoldError.configInvalid(`Expected ${label} to be a non-negative number.`);
+  if (parsed < 0) { throw MarifoldError.configInvalid(`Expected ${label} to be a non-negative number.`); }
   return parsed;
 }
 
@@ -727,12 +727,12 @@ function parsePositiveInteger(value: string, label: string): number {
 }
 
 function parseAgentToolMode(value: string): AgentToolMode {
-  if (value === 'auto' || value === 'native' || value === 'control-block') return value;
+  if (value === 'auto' || value === 'native' || value === 'control-block') { return value; }
   throw MarifoldError.configInvalid('Expected agent.tool_mode to be auto, native, or control-block.');
 }
 
 function parseApprovalMode(value: string): ApprovalMode {
-  if (value === 'allow' || value === 'ask' || value === 'deny') return value;
+  if (value === 'allow' || value === 'ask' || value === 'deny') { return value; }
   throw MarifoldError.configInvalid('Expected an approval mode of allow, ask, or deny.');
 }
 
@@ -744,14 +744,14 @@ function parseToolKind(value: string): ToolKind {
 }
 
 function parseProviderType(value: string): ProviderType {
-  if (value === 'ollama' || value === 'openai-compatible' || value === 'anthropic') return value;
+  if (value === 'ollama' || value === 'openai-compatible' || value === 'anthropic') { return value; }
   throw MarifoldError.configInvalid(`Expected provider type to be "ollama", "openai-compatible", or "anthropic".`);
 }
 
 function parseBoolean(value: string, label: string): boolean {
   const normalized = value.trim().toLowerCase();
-  if (normalized === 'true' || normalized === 'on' || normalized === '1') return true;
-  if (normalized === 'false' || normalized === 'off' || normalized === '0') return false;
+  if (normalized === 'true' || normalized === 'on' || normalized === '1') { return true; }
+  if (normalized === 'false' || normalized === 'off' || normalized === '0') { return false; }
   throw MarifoldError.configInvalid(`Expected ${label} to be true or false.`);
 }
 
@@ -760,6 +760,6 @@ function tomlString(value: string): string {
 }
 
 function tomlStringArray(values: string[]): string {
-  if (values.length === 0) return '[]';
+  if (values.length === 0) { return '[]'; }
   return `[\n${values.map(value => `  ${tomlString(value)},`).join('\n')}\n]`;
 }

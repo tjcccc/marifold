@@ -24,7 +24,7 @@ export async function remoteArtifactDownload(
       fallback = 'unavailable';
     }
   }
-  if (abort.signal.aborted) return reply;
+  if (abort.signal.aborted) { return reply; }
   reply.header('x-marifold-transfer', 'bridge').header('x-marifold-direct-fallback', fallback);
   return reply.send(Readable.from(workspaceArtifactStream(size, (offset, length) =>
     request({ offset, length }) as Promise<ArtifactChunk>)));

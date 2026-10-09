@@ -26,13 +26,13 @@ export class AppStore {
   ) {}
 
   list(): SkillAppDefinition[] {
-    if (!fs.existsSync(this.directory)) return [];
+    if (!fs.existsSync(this.directory)) { return []; }
     const apps: SkillAppDefinition[] = [];
     for (const entry of fs.readdirSync(this.directory, { withFileTypes: true })) {
-      if (!entry.isDirectory() || !SAFE_APP_NAME.test(entry.name)) continue;
+      if (!entry.isDirectory() || !SAFE_APP_NAME.test(entry.name)) { continue; }
       try {
         const app = this.get(entry.name);
-        if (app) apps.push(app);
+        if (app) { apps.push(app); }
       } catch {
         // A catalog stays usable when one local definition is malformed.
       }
@@ -44,7 +44,7 @@ export class AppStore {
     assertSafeAppName(name);
     const bundle = path.join(this.directory, name);
     const skillAppSource = path.join(bundle, SKILL_APP_DEFINITION_FILE);
-    if (!fs.existsSync(skillAppSource)) return undefined;
+    if (!fs.existsSync(skillAppSource)) { return undefined; }
     const realSource = requireConfinedFile(bundle, skillAppSource, 'SkillApp definition');
     const definition = compileSkillApp(fs.readFileSync(realSource, 'utf-8'), realSource);
     if (definition.app.name !== name) {
@@ -61,7 +61,7 @@ export class AppStore {
 
   require(name: string): SkillAppDefinition {
     const app = this.get(name);
-    if (!app) throw MarifoldError.appNotFound(name);
+    if (!app) { throw MarifoldError.appNotFound(name); }
     return app;
   }
 
@@ -73,13 +73,13 @@ export class AppStore {
     }
     const bundle = path.join(this.directory, appName);
     const source = path.join(bundle, 'skills', skillName, 'SKILL.md');
-    if (!fs.existsSync(source)) throw MarifoldError.skillNotFound(skillName);
+    if (!fs.existsSync(source)) { throw MarifoldError.skillNotFound(skillName); }
     return requireConfinedFile(bundle, source, `App-local skill '${skillName}'`);
   }
 
   requireProfileSkill(profile: string, skillName: string): MarifoldSkill {
     const skill = this.options.resolveProfileSkill?.(profile, skillName);
-    if (!skill) throw MarifoldError.skillNotFound(skillName);
+    if (!skill) { throw MarifoldError.skillNotFound(skillName); }
     return skill;
   }
 

@@ -102,16 +102,16 @@ export function registerModelCommand(program: Command, printer: ConsolePrinter):
           for (const target of targets) {
             const result = await inspector.validateModel(target.provider, target.model);
             process.stdout.write(`${result.status.toUpperCase()} ${result.provider}/${result.model} [${target.sources.join(', ')}]: ${result.message}\n`);
-            if (!result.valid) hasError = true;
+            if (!result.valid) { hasError = true; }
           }
-          if (hasError) process.exitCode = 1;
+          if (hasError) { process.exitCode = 1; }
           return;
         }
 
         const resolved = resolveModelValidationTarget(runtime, modelArg, options);
         const result = await inspector.validateModel(resolved.provider, resolved.model);
         process.stdout.write(`${result.status.toUpperCase()} ${result.provider}/${result.model}: ${result.message}\n`);
-        if (!result.valid) process.exitCode = 1;
+        if (!result.valid) { process.exitCode = 1; }
       } catch (error) {
         printer.printError(error);
         process.exitCode = 1;
@@ -180,9 +180,9 @@ export function registerModelCommand(program: Command, printer: ConsolePrinter):
           baseUrl: options.baseUrl,
           apiKeyEnv: options.apiKeyEnv,
         });
-        if (options.default) manager.setDefaultModel(modelName, provider);
+        if (options.default) { manager.setDefaultModel(modelName, provider); }
         process.stdout.write(`Added ${result.value}\n`);
-        if (options.default) process.stdout.write(`Set default model to ${provider}/${modelName}\n`);
+        if (options.default) { process.stdout.write(`Set default model to ${provider}/${modelName}\n`); }
         process.stdout.write(`Saved ${result.configPath}\n`);
       } catch (error) {
         if (isPromptAbortError(error)) {
@@ -245,7 +245,7 @@ export function registerModelCommand(program: Command, printer: ConsolePrinter):
           return;
         }
 
-        if (options.clear) throw MarifoldError.configInvalid('--clear is only valid with --profile.');
+        if (options.clear) { throw MarifoldError.configInvalid('--clear is only valid with --profile.'); }
         if (!modelName) {
           const selected = await selectGlobalDefaultModel(loadedConfig, getPrompt, style);
           const { provider, model } = await resolveSelectedDefaultModel(loadedConfig, getPrompt, style, selected);
@@ -280,12 +280,12 @@ function resolveModelValidationTarget(
   if (modelArg?.includes('/')) {
     const [provider, ...rest] = modelArg.split('/');
     const model = rest.join('/');
-    if (!provider || !model) throw MarifoldError.configInvalid('Invalid model format. Use provider/model.');
+    if (!provider || !model) { throw MarifoldError.configInvalid('Invalid model format. Use provider/model.'); }
     return { provider, model };
   }
 
   if (modelArg) {
-    if (!options.provider) throw MarifoldError.configInvalid('Use provider/model or pass --provider <name>.');
+    if (!options.provider) { throw MarifoldError.configInvalid('Use provider/model or pass --provider <name>.'); }
     return { provider: options.provider, model: modelArg };
   }
 
@@ -302,7 +302,7 @@ function collectModelValidationTargets(
 ): Array<{ provider: string; model: string; sources: string[] }> {
   const targets = new Map<string, { provider: string; model: string; sources: Set<string> }>();
   const add = (provider: string | undefined, model: string | undefined, source: string): void => {
-    if (!provider || !model) return;
+    if (!provider || !model) { return; }
     const key = `${provider}/${model}`;
     const existing = targets.get(key);
     if (existing) {
@@ -333,7 +333,7 @@ function collectModelValidationTargets(
 
 function normalizedModelOptions(options: string[], provider?: string, model?: string): string[] {
   const set = new Set(options);
-  if (provider && model) set.add(`${provider}/${model}`);
+  if (provider && model) { set.add(`${provider}/${model}`); }
   return [...set].sort();
 }
 
@@ -384,12 +384,12 @@ async function selectModelOption(
     addNewLabel: string;
   },
 ): Promise<string> {
-  if (choices.length === 0) return ADD_NEW_MODEL;
+  if (choices.length === 0) { return ADD_NEW_MODEL; }
   const selected = await selectTerminalOption(message, choices.map(choice => ({
     label: modelChoiceLabel(choice, labels),
     value: choice,
   })));
-  if (selected !== undefined) return selected;
+  if (selected !== undefined) { return selected; }
 
   process.stdout.write(`${message}\n`);
   choices.forEach((choice, index) => {
@@ -406,7 +406,7 @@ async function resolveSelectedDefaultModel(
   style: TerminalStyle,
   selected: string,
 ): Promise<{ provider: string; model: string }> {
-  if (selected !== ADD_NEW_MODEL) return parseProviderModelOption(selected);
+  if (selected !== ADD_NEW_MODEL) { return parseProviderModelOption(selected); }
 
   process.stdout.write('\n');
   const target = await resolveModelAddTarget(loadedConfig, getPrompt, style);
@@ -420,16 +420,16 @@ function resolveModelPair(
   providerArg: string | undefined,
   loadedConfig: LoadedMarifoldConfig,
 ): { provider: string; model: string } {
-  if (modelArg.includes('/')) return parseProviderModelOption(modelArg);
+  if (modelArg.includes('/')) { return parseProviderModelOption(modelArg); }
   const provider = providerArg ?? loadedConfig.config.default.provider;
-  if (!provider) throw MarifoldError.missingProviderModel(loadedConfig.configPath);
+  if (!provider) { throw MarifoldError.missingProviderModel(loadedConfig.configPath); }
   return { provider, model: modelArg };
 }
 
 function parseProviderModelOption(option: string): { provider: string; model: string } {
   const [provider, ...rest] = option.split('/');
   const model = rest.join('/');
-  if (!provider || !model) throw MarifoldError.configInvalid('Invalid model format. Use provider/model.');
+  if (!provider || !model) { throw MarifoldError.configInvalid('Invalid model format. Use provider/model.'); }
   return { provider, model };
 }
 
@@ -440,8 +440,8 @@ function modelChoiceLabel(
     addNewLabel: string;
   },
 ): string {
-  if (choice === USE_GLOBAL_DEFAULT) return labels.useDefaultLabel ?? 'Use default';
-  if (choice === ADD_NEW_MODEL) return labels.addNewLabel;
+  if (choice === USE_GLOBAL_DEFAULT) { return labels.useDefaultLabel ?? 'Use default'; }
+  if (choice === ADD_NEW_MODEL) { return labels.addNewLabel; }
   return choice;
 }
 
@@ -453,7 +453,7 @@ function globalDefaultLabel(loadedConfig: LoadedMarifoldConfig): string {
 
 function isChatCompatibleModelOption(option: string): boolean {
   const parsed = parseProviderModelOption(option);
-  if (parsed.provider !== 'github_copilot') return true;
+  if (parsed.provider !== 'github_copilot') { return true; }
   return !isKnownGitHubCopilotUnsupportedModelId(parsed.model);
 }
 
@@ -466,7 +466,7 @@ function assertCanSaveModelOption(provider: string, model: string): void {
 }
 
 function parseProviderType(value?: string): ProviderType | undefined {
-  if (value === undefined) return undefined;
-  if (value === 'ollama' || value === 'openai-compatible' || value === 'anthropic') return value;
+  if (value === undefined) { return undefined; }
+  if (value === 'ollama' || value === 'openai-compatible' || value === 'anthropic') { return value; }
   throw MarifoldError.configInvalid('Expected --provider-type to be "ollama", "openai-compatible", or "anthropic".');
 }

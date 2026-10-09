@@ -87,13 +87,13 @@ export function SessionListContent({
   busyRef.current = busy;
 
   useEffect(() => {
-    if (!menu) return;
+    if (!menu) { return; }
     const firstItem = menuRef.current?.querySelector<HTMLButtonElement>('button:not(:disabled)');
     firstItem?.focus();
     function onPointerDown(event: PointerEvent): void {
       const target = event.target;
-      if (!(target instanceof Node)) return;
-      if (menuRef.current?.contains(target) || menu?.trigger.contains(target)) return;
+      if (!(target instanceof Node)) { return; }
+      if (menuRef.current?.contains(target) || menu?.trigger.contains(target)) { return; }
       setMenu(undefined);
     }
     function onKeyDown(event: KeyboardEvent): void {
@@ -102,9 +102,9 @@ export function SessionListContent({
         menu?.trigger.focus();
         return;
       }
-      if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+      if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) { return; }
       const items = [...(menuRef.current?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)') ?? [])];
-      if (items.length === 0) return;
+      if (items.length === 0) { return; }
       event.preventDefault();
       const current = items.indexOf(document.activeElement as HTMLButtonElement);
       const next = event.key === 'Home'
@@ -130,13 +130,13 @@ export function SessionListContent({
   }, [menu]);
 
   useEffect(() => {
-    if (!renaming) return;
+    if (!renaming) { return; }
     renameInputRef.current?.focus();
     renameInputRef.current?.select();
   }, [renaming]);
 
   useEffect(() => {
-    if (!renaming && !deleting) return;
+    if (!renaming && !deleting) { return; }
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     function onKeyDown(event: KeyboardEvent): void {
@@ -145,11 +145,11 @@ export function SessionListContent({
         setDeleting(undefined);
         return;
       }
-      if (event.key !== 'Tab') return;
+      if (event.key !== 'Tab') { return; }
       const controls = [...(dialogRef.current?.querySelectorAll<HTMLElement>(
         'button:not(:disabled), input:not(:disabled), [tabindex]:not([tabindex="-1"])',
       ) ?? [])];
-      if (controls.length === 0) return;
+      if (controls.length === 0) { return; }
       const current = controls.indexOf(document.activeElement as HTMLElement);
       const next = event.shiftKey
         ? (current - 1 + controls.length) % controls.length
@@ -177,35 +177,35 @@ export function SessionListContent({
   }
 
   async function submitRename(): Promise<void> {
-    if (!renaming || !titleDraft.trim() || busy) return;
+    if (!renaming || !titleDraft.trim() || busy) { return; }
     setBusy(true);
     const saved = await onRename(renaming.id, titleDraft.trim());
     setBusy(false);
-    if (saved) setRenaming(undefined);
+    if (saved) { setRenaming(undefined); }
   }
 
   async function togglePinned(session: SessionSummary): Promise<void> {
-    if (busy) return;
+    if (busy) { return; }
     setBusy(true);
     const saved = await onSetPinned(session.id, !session.pinned);
     setBusy(false);
-    if (saved) setMenu(undefined);
+    if (saved) { setMenu(undefined); }
   }
 
   async function toggleArchived(session: SessionSummary): Promise<void> {
-    if (busy) return;
+    if (busy) { return; }
     setBusy(true);
     const saved = await onSetArchived(session.id, !session.archived);
     setBusy(false);
-    if (saved) setMenu(undefined);
+    if (saved) { setMenu(undefined); }
   }
 
   async function confirmDelete(): Promise<void> {
-    if (!deleting || busy) return;
+    if (!deleting || busy) { return; }
     setBusy(true);
     const deleted = await onDelete(deleting.id);
     setBusy(false);
-    if (deleted) setDeleting(undefined);
+    if (deleted) { setDeleting(undefined); }
   }
 
   return (
@@ -354,7 +354,7 @@ export function SessionListContent({
       ) : null}
 
       {renaming ? createPortal(
-        <div className={styles.dialogBackdrop} onClick={() => { if (!busy) setRenaming(undefined); }}>
+        <div className={styles.dialogBackdrop} onClick={() => { if (!busy) { setRenaming(undefined); } }}>
           <form
             ref={node => { dialogRef.current = node; }}
             className={styles.dialog}
@@ -390,7 +390,7 @@ export function SessionListContent({
       ) : null}
 
       {deleting ? createPortal(
-        <div className={styles.dialogBackdrop} onClick={() => { if (!busy) setDeleting(undefined); }}>
+        <div className={styles.dialogBackdrop} onClick={() => { if (!busy) { setDeleting(undefined); } }}>
           <div
             ref={node => { dialogRef.current = node; }}
             className={styles.dialog}
@@ -475,10 +475,10 @@ function ArchiveGlyph() {
 
 /** Custom title, then first-message preview, then timestamp fallback. */
 export function sessionTitle(session: SessionSummary): string {
-  if (session.title) return session.title;
-  if (session.preview) return session.preview;
+  if (session.title) { return session.title; }
+  if (session.preview) { return session.preview; }
   const created = new Date(session.createdAt);
-  if (Number.isNaN(created.getTime())) return session.id.slice(0, 8);
+  if (Number.isNaN(created.getTime())) { return session.id.slice(0, 8); }
   return created.toLocaleString(undefined, {
     month: 'short',
     day: 'numeric',

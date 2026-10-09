@@ -4,13 +4,13 @@ import type { MarifoldRuntime } from '../src';
 
 function chatRuntime(chunks: string[]): MarifoldRuntime {
   return {
-    stream: async function* () { for (const c of chunks) yield c; },
+    stream: async function* () { for (const c of chunks) { yield c; } },
   } as unknown as MarifoldRuntime;
 }
 
 function agentRuntime(events: unknown[]): MarifoldRuntime {
   return {
-    createAgentRunner: () => ({ run: async function* () { for (const e of events) yield e; } }),
+    createAgentRunner: () => ({ run: async function* () { for (const e of events) { yield e; } } }),
   } as unknown as MarifoldRuntime;
 }
 

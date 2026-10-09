@@ -14,7 +14,7 @@ export async function startupWorkspaces<T extends { id: string; online: boolean 
   while (true) {
     const catalog = await client.request<WorkspaceCatalog<T>>('GET', '/v1/workspaces');
     const preferred = catalog.workspaces.find((workspace) => workspace.id === catalog.defaultId);
-    if (!preferred || preferred.online || Date.now() >= until) return catalog;
+    if (!preferred || preferred.online || Date.now() >= until) { return catalog; }
     await new Promise((resolve) => setTimeout(resolve, 300));
   }
 }

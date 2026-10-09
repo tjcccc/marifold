@@ -77,7 +77,7 @@ export function ProfileSettingsPage(props: ProfileSettingsPageProps) {
   }, [detail.name]);
 
   useEffect(() => {
-    if (!removeOpen) return;
+    if (!removeOpen) { return; }
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     removeInputRef.current?.focus();
@@ -88,11 +88,11 @@ export function ProfileSettingsPage(props: ProfileSettingsPageProps) {
         setRemoveName('');
         return;
       }
-      if (event.key !== 'Tab') return;
+      if (event.key !== 'Tab') { return; }
       const controls = [...(removeDialogRef.current?.querySelectorAll<HTMLElement>(
         'button:not(:disabled), input:not(:disabled)',
       ) ?? [])];
-      if (controls.length === 0) return;
+      if (controls.length === 0) { return; }
       const current = controls.indexOf(document.activeElement as HTMLElement);
       const next = event.shiftKey
         ? (current - 1 + controls.length) % controls.length
@@ -110,7 +110,7 @@ export function ProfileSettingsPage(props: ProfileSettingsPageProps) {
   }, [removeOpen]);
 
   function closeRemoveDialog(): void {
-    if (busy) return;
+    if (busy) { return; }
     setRemoveOpen(false);
     setRemoveName('');
   }
@@ -159,7 +159,7 @@ export function ProfileSettingsPage(props: ProfileSettingsPageProps) {
             className={styles.avatarInput}
             onChange={event => {
               const file = event.target.files?.[0];
-              if (file) setCropFile(file);
+              if (file) { setCropFile(file); }
               event.target.value = '';
             }}
           />
@@ -197,7 +197,7 @@ export function ProfileSettingsPage(props: ProfileSettingsPageProps) {
                 disabled={busy}
                 onChange={event => setDisplayName(event.target.value)}
                 onKeyDown={event => {
-                  if (event.key === 'Escape') setDisplayName(detail.settings.displayName ?? '');
+                  if (event.key === 'Escape') { setDisplayName(detail.settings.displayName ?? ''); }
                 }}
               />
               {displayName.trim() !== (detail.settings.displayName ?? '') ? (
@@ -463,7 +463,7 @@ export function ProfileSettingsPage(props: ProfileSettingsPageProps) {
             onClick={event => event.stopPropagation()}
             onSubmit={event => {
               event.preventDefault();
-              if (removeConfirmed && !busy) props.onDelete?.();
+              if (removeConfirmed && !busy) { props.onDelete?.(); }
             }}
           >
             <div id="remove-profile-title" className={styles.removeDialogTitle}>

@@ -2,6 +2,20 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## Unreleased — Braces on every control-flow body
+
+- Require braces on every `if`/`else`/loop body, including single statements,
+  as the owner's coding standard. Biome 2.5.15 (pinned dev dependency, linter
+  only, single rule `useBlockStatements`; formatter and import sorting off)
+  enforces it through `pnpm lint`, now part of the `AGENTS.md` gate. Biome was
+  chosen over typescript-eslint because TypeScript 7 has no JavaScript parser
+  API.
+- Convert all existing bodies mechanically (282 source files; the generated `docs/design/support.js` is excluded). Biome's fix kept
+  short bodies inline (`if (done) { return; }`); spacing glitches it left on
+  42 multi-statement lines and 9 trailing-comment lines were normalized.
+- Validation: lint reports zero violations; full gate passes (1,081 tests,
+  one existing skip). Behavior is unchanged by construction.
+
 ## Unreleased — Robustness and workspace edge cases
 
 - Service errors keep their meaning: malformed, oversized, or unsupported

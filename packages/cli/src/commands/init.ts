@@ -89,7 +89,7 @@ export function registerInitCommand(program: Command, printer: ConsolePrinter): 
           const search = resolveWebSearchConfig(manager.config.webSearch);
           process.stdout.write(search.enabled ? `Web search: native first, ${search.provider} fallback.\n` : 'Web search: off.\n');
         }
-        if (interactive) await runInteractiveSetup(program, printer);
+        if (interactive) { await runInteractiveSetup(program, printer); }
       } catch (error) {
         printer.printError(error);
         process.exitCode = 1;
@@ -142,8 +142,8 @@ async function runInteractiveSetup(program: Command, printer: ConsolePrinter): P
 }
 
 function parseProviderType(value?: string): ProviderType | undefined {
-  if (value === undefined) return undefined;
-  if (value === 'ollama' || value === 'openai-compatible' || value === 'anthropic') return value;
+  if (value === undefined) { return undefined; }
+  if (value === 'ollama' || value === 'openai-compatible' || value === 'anthropic') { return value; }
   throw MarifoldError.configInvalid(
     `Expected --provider-type to be "ollama", "openai-compatible", or "anthropic".`,
   );

@@ -31,7 +31,7 @@ export class MemoryControlStripper {
   private blockContent: string[] = [];
 
   feed(chunk: string): string {
-    if (!chunk) return '';
+    if (!chunk) { return ''; }
     this.buffer += chunk;
     return this.drain(false);
   }
@@ -88,7 +88,7 @@ export class MemoryControlStripper {
       }
 
       if (open.end === -1) {
-        if (flushing) this.buffer = '';
+        if (flushing) { this.buffer = ''; }
         break;
       }
 
@@ -100,9 +100,9 @@ export class MemoryControlStripper {
   }
 
   private saveBlock(type: ControlBlockType, payload: string): void {
-    if (!payload) return;
-    if (type === 'save') this.savePayloads.push(payload);
-    else this.forgetPayloads.push(payload);
+    if (!payload) { return; }
+    if (type === 'save') { this.savePayloads.push(payload); }
+    else { this.forgetPayloads.push(payload); }
   }
 }
 
@@ -163,7 +163,7 @@ export function buildMemoryInstructions(): string {
 }
 
 export function extractPromptMemoryInputs(prompt: string): MemorySaveInput[] {
-  if (typeof prompt !== 'string' || promptRejectsMemory(prompt)) return [];
+  if (typeof prompt !== 'string' || promptRejectsMemory(prompt)) { return []; }
 
   const body = promptBody(prompt);
   const entries: MemorySaveInput[] = [];
@@ -184,9 +184,9 @@ export function extractPromptMemoryInputs(prompt: string): MemorySaveInput[] {
   }
   entries.push(...extractFavoriteInputs(prompt, body));
   const preference = extractPreferenceInput(prompt, body);
-  if (preference) entries.push(preference);
+  if (preference) { entries.push(preference); }
   const meeting = extractMeetingInput(prompt, body);
-  if (meeting) entries.push(meeting);
+  if (meeting) { entries.push(meeting); }
 
   const deduped = new Map<string, MemorySaveInput>();
   for (const entry of entries) {
@@ -196,7 +196,7 @@ export function extractPromptMemoryInputs(prompt: string): MemorySaveInput[] {
 }
 
 export function extractPromptForgetQueries(prompt: string): string[] {
-  if (typeof prompt !== 'string') return [];
+  if (typeof prompt !== 'string') { return []; }
   const body = promptBody(prompt);
   const normalized = normalizeText(body);
   if (
@@ -206,15 +206,15 @@ export function extractPromptForgetQueries(prompt: string): string[] {
   }
 
   const queries: string[] = [];
-  if (/\bname\b/.test(normalized)) queries.push('user.name');
+  if (/\bname\b/.test(normalized)) { queries.push('user.name'); }
 
   const favoriteMatch = /\bfavou?rite\s+([a-z][a-z0-9 _-]{0,40})\b/.exec(normalized);
   if (favoriteMatch) {
     const slot = slotKey(favoriteMatch[1]);
-    if (slot) queries.push(`user.favorite_${slot}`);
+    if (slot) { queries.push(`user.favorite_${slot}`); }
   }
-  if (/\b(reply|response|answer|conversation|tone|style)\b/.test(normalized)) queries.push('preferences.reply_style');
-  if (/\blanguage\b/.test(normalized)) queries.push('preferences.language');
+  if (/\b(reply|response|answer|conversation|tone|style)\b/.test(normalized)) { queries.push('preferences.reply_style'); }
+  if (/\blanguage\b/.test(normalized)) { queries.push('preferences.language'); }
   if (normalized.includes('meeting')) {
     queries.push(normalized.includes('project meeting') ? 'auto_short.project_meeting_time' : 'auto_short.meeting_time');
   }
@@ -224,7 +224,7 @@ export function extractPromptForgetQueries(prompt: string): string[] {
       /^\s*(?:please\s+)?(?:forget|delete|remove|clear|do not remember|don't remember|dont remember|do not save|don't save|dont save)\s+/i,
       '',
     ).trim();
-    if (remainder) queries.push(remainder);
+    if (remainder) { queries.push(remainder); }
   }
 
   return [...new Set(queries)];
@@ -235,8 +235,8 @@ function findOpenTag(text: string): { type: ControlBlockType; start: number; end
   let best: { type: ControlBlockType; start: number; end: number } | undefined;
   for (const tag of OPEN_TAGS) {
     const start = lower.indexOf(tag.open);
-    if (start === -1) continue;
-    if (best && start >= best.start) continue;
+    if (start === -1) { continue; }
+    if (best && start >= best.start) { continue; }
     const closeAngle = text.indexOf('>', start + tag.open.length);
     best = { type: tag.type, start, end: closeAngle === -1 ? -1 : closeAngle + 1 };
   }
@@ -248,7 +248,7 @@ function controlPrefixHold(text: string): number {
   const maxPrefix = Math.max(...OPEN_TAGS.map(tag => tag.open.length));
   for (let length = Math.min(maxPrefix, lower.length); length > 0; length -= 1) {
     const suffix = lower.slice(-length);
-    if (OPEN_TAGS.some(tag => tag.open.startsWith(suffix))) return length;
+    if (OPEN_TAGS.some(tag => tag.open.startsWith(suffix))) { return length; }
   }
   return 0;
 }
@@ -274,15 +274,15 @@ function extractName(body: string): string {
 
   for (const pattern of patterns) {
     const match = pattern.exec(body);
-    if (!match) continue;
+    if (!match) { continue; }
     const name = cleanName(match[1]);
-    if (name) return name;
+    if (name) { return name; }
   }
   let introMatch = /\bi'?m\s+([^\n.!?,;]{1,80})/.exec(body);
-  if (!introMatch) introMatch = /\bi\s+am\s+([^\n.!?,;]{1,80})/i.exec(body);
+  if (!introMatch) { introMatch = /\bi\s+am\s+([^\n.!?,;]{1,80})/i.exec(body); }
   if (introMatch) {
     const name = cleanName(introMatch[1]);
-    if (name && /^[A-Z]/.test(name) && name.split(/\s+/).length <= 6) return name;
+    if (name && /^[A-Z]/.test(name) && name.split(/\s+/).length <= 6) { return name; }
   }
   return '';
 }
@@ -293,10 +293,10 @@ function cleanName(raw: string): string {
     .replace(/\s+/g, ' ')
     .trim()
     .replace(/^['"]|['"]$/g, '');
-  if (!value || value.length > 60) return '';
+  if (!value || value.length > 60) { return ''; }
   const words = value.split(/\s+/);
-  if (words.length > 6) return '';
-  if (!/^[A-Za-z][A-Za-z .'_-]*$/.test(value)) return '';
+  if (words.length > 6) { return ''; }
+  if (!/^[A-Za-z][A-Za-z .'_-]*$/.test(value)) { return ''; }
   if (value === value.toLowerCase()) {
     return words.map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
   }
@@ -314,7 +314,7 @@ function extractFavoriteInputs(prompt: string, body: string): MemorySaveInput[] 
       const slotText = match[1].trim();
       const slot = slotKey(slotText);
       const value = cleanMemoryValue(match[2]);
-      if (!slot || !value) continue;
+      if (!slot || !value) { continue; }
       entries.push({
         kind: 'user',
         text: `The user's favorite ${slotText.toLowerCase()} is ${value}.`,
@@ -336,7 +336,7 @@ function extractFavoriteInputs(prompt: string, body: string): MemorySaveInput[] 
 function extractPreferenceInput(prompt: string, body: string): MemorySaveInput | undefined {
   const match = /\bi\s+prefer\s+([^\n.!?;]{1,160})/i.exec(body);
   const preference = match ? cleanMemoryValue(match[1]) : '';
-  if (!preference) return undefined;
+  if (!preference) { return undefined; }
   return {
     kind: 'preferences',
     text: `The user prefers ${preference}.`,
@@ -353,16 +353,16 @@ function extractPreferenceInput(prompt: string, body: string): MemorySaveInput |
 
 function extractMeetingInput(prompt: string, body: string): MemorySaveInput | undefined {
   const normalized = normalizeText(body);
-  if (!normalized.includes('meeting')) return undefined;
-  if (body.includes('?') && !/\b(correction|actually|not|instead|now)\b/.test(normalized)) return undefined;
+  if (!normalized.includes('meeting')) { return undefined; }
+  if (body.includes('?') && !/\b(correction|actually|not|instead|now)\b/.test(normalized)) { return undefined; }
   const timeMatch = /\b\d{1,2}(?::\d{2})?\s*(?:a\.?\s*m\.?|p\.?\s*m\.?|am|pm)\b/i.exec(body);
-  if (!timeMatch) return undefined;
+  if (!timeMatch) { return undefined; }
   const dateMatch = /\b\d{4}-\d{2}-\d{2}\b|\btomorrow\b|\btoday\b|\btonight\b/i.exec(body);
   const dateText = dateMatch ? dateMatch[0].toLowerCase() : '';
   const topic = normalized.includes('project meeting') ? 'project meeting' : 'meeting';
   const timeText = timeMatch[0].replace(/\s+/g, ' ').trim();
   let text = `The user has a ${topic}`;
-  if (dateText) text += ` ${dateText}`;
+  if (dateText) { text += ` ${dateText}`; }
   text += ` at ${timeText}.`;
   return {
     kind: 'auto_short',
@@ -395,13 +395,13 @@ function normalizeText(text: string): string {
 function slotKey(value: string): string {
   let key = value.trim().toLowerCase().replace(/colour/g, 'color');
   key = key.replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').replace(/_+/g, '_');
-  if (key.startsWith('fav_')) key = `favorite_${key.slice(4)}`;
+  if (key.startsWith('fav_')) { key = `favorite_${key.slice(4)}`; }
   return key.slice(0, 40).replace(/^_+|_+$/g, '');
 }
 
 function looksResponsePreference(text: string): boolean {
   const normalized = normalizeText(text);
-  if (!/\b(prefer|prefers|preference|like|likes)\b/.test(normalized)) return false;
+  if (!/\b(prefer|prefers|preference|like|likes)\b/.test(normalized)) { return false; }
   return Boolean(
     /\b(reply|replies|answer|answers|response|responses|conversation|tone|style)\b/.test(normalized)
     || /\b(short|brief|concise|detailed|normal|casual|formal)\b/.test(normalized),

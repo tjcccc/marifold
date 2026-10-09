@@ -92,14 +92,14 @@ export function validateSkill(raw: RawRecord, source?: string): MarifoldSkill {
 function normalizeMode(value: unknown, source?: string): SkillMode | undefined {
   // Undefined when not declared: the run follows the session's mode (agent →
   // agentic with tools; chat → plain turn). A skill pins a mode by declaring it.
-  if (value === undefined) return undefined;
+  if (value === undefined) { return undefined; }
   const mode = requireString(value, 'mode', source);
-  if (mode === 'agent' || mode === 'chat') return mode;
+  if (mode === 'agent' || mode === 'chat') { return mode; }
   throw MarifoldError.skillInvalid('Expected mode to be "agent" or "chat".', source);
 }
 
 function normalizeVariables(value: unknown, source?: string): SkillVariable[] {
-  if (value === undefined) return [];
+  if (value === undefined) { return []; }
   if (!Array.isArray(value)) {
     throw MarifoldError.skillInvalid('Expected "variables" to be a list.', source);
   }
@@ -133,18 +133,18 @@ function normalizeVariables(value: unknown, source?: string): SkillVariable[] {
 }
 
 function requireString(value: unknown, label: string, source?: string): string {
-  if (typeof value === 'string') return value;
+  if (typeof value === 'string') { return value; }
   throw MarifoldError.skillInvalid(`Expected ${label} to be a string.`, source);
 }
 
 function optionalString(value: unknown, label: string, source?: string): string | undefined {
-  if (value === undefined) return undefined;
-  if (typeof value === 'string') return value;
+  if (value === undefined) { return undefined; }
+  if (typeof value === 'string') { return value; }
   throw MarifoldError.skillInvalid(`Expected ${label} to be a string.`, source);
 }
 
 function optionalBoolean(value: unknown, label: string, source?: string): boolean | undefined {
-  if (value === undefined) return undefined;
-  if (typeof value === 'boolean') return value;
+  if (value === undefined) { return undefined; }
+  if (typeof value === 'boolean') { return value; }
   throw MarifoldError.skillInvalid(`Expected ${label} to be a boolean.`, source);
 }

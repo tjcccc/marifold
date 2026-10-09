@@ -49,14 +49,14 @@ export class RemoteRuntime implements TuiRuntime {
   }
   private entry(profile?: string) {
     const p = this.snapshot.find((e) => e.summary.name === (profile ?? this.loadedConfig.config.default.profile));
-    if (!p) throw new Error('Profile not found.');
+    if (!p) { throw new Error('Profile not found.'); }
     return p;
   }
   listProfiles: TuiRuntime['listProfiles'] = () => this.snapshot.map((e) => e.summary);
   getProfile: TuiRuntime['getProfile'] = (name) => this.entry(name).detail;
   resolveSettings: TuiRuntime['resolveSettings'] = (request) => {
     const s = this.entry(request.profile).settings;
-    if (!s) throw new Error('Profile has no configured model.');
+    if (!s) { throw new Error('Profile has no configured model.'); }
     return {
       ...s,
       ...(request.provider ? { provider: request.provider } : {}),
@@ -80,7 +80,7 @@ export class RemoteRuntime implements TuiRuntime {
    * closed TUI does not keep its session reserved until the lease expires. */
   private static releases = new Set<Promise<unknown>>();
   static async settleReleases(timeoutMs: number): Promise<void> {
-    if (!RemoteRuntime.releases.size) return;
+    if (!RemoteRuntime.releases.size) { return; }
     let timer: ReturnType<typeof setTimeout> | undefined;
     await Promise.race([
       Promise.allSettled([...RemoteRuntime.releases]),
@@ -102,7 +102,7 @@ export class RemoteRuntime implements TuiRuntime {
     ).session;
   getSessionAttachment: TuiRuntime['getSessionAttachment'] = async (id, userTurnIndex, attachmentIndex) => {
     const image = await this.api.blob(`/v1/sessions/${encodeURIComponent(id)}/attachments/${userTurnIndex}/${attachmentIndex}`);
-    if (!image) return undefined;
+    if (!image) { return undefined; }
     return { mediaType: image.type, data: Buffer.from(await image.arrayBuffer()).toString('base64') };
   };
   setProfileAgentApproval: TuiRuntime['setProfileAgentApproval'] = (profile, kind, mode) =>
@@ -140,35 +140,38 @@ export class RemoteRuntime implements TuiRuntime {
   }
   private async *run(options: AgentRunOptions): AsyncGenerator<AgentEvent, void, unknown> {
     const { signal, approvalHandler, userInputHandler, steering, ...input } = options;
-    if (signal?.aborted) return;
-    if (input.images?.length) input.images = (await prepareImageInputs(input.images)).images;
+    if (signal?.aborted) { return; }
+    if (input.images?.length) { input.images = (await prepareImageInputs(input.images)).images; }
     const { run } = await this.api.request<{ run: RunRecord }>('POST', '/v1/runs', input);
     const post = (suffix: string, body: unknown) => this.api.request('POST', `/v1/runs/${run.id}/${suffix}`, body);
     const cancel = () => {
       void post('cancel', {}).catch(() => undefined);
     };
     signal?.addEventListener('abort', cancel, { once: true });
-    if (signal?.aborted) cancel();
+    if (signal?.aborted) { cancel(); }
     const failures: string[] = [];
     const report = (error: unknown) => {
       failures.push(error instanceof Error ? error.message : String(error));
     };
     const timer = setInterval(() => {
-      for (const text of steering?.() ?? []) void post('steer', { text }).catch(report);
+      for (const text of steering?.() ?? []) { void post('steer', { text }).catch(report); }
     }, 500);
     try {
       for await (const event of followRunEvents<AgentEvent>(this.api, run.id, signal)) {
-        for (const message of failures.splice(0))
+        for (const message of failures.splice(0)) {
           yield { type: 'error', code: 'WORKSPACE_INTERACTION_FAILED', message };
+        }
         yield event;
-        if (event.type === 'approval_request')
+        if (event.type === 'approval_request') {
           void Promise.resolve(approvalHandler?.(event.request))
             .then((decision) => post(`approvals/${event.request.id}`, { action: decision?.approved ? 'once' : 'deny', ...(decision?.approved && decision.sudoResponse ? { sudoResponse: decision.sudoResponse } : {}) }))
             .catch(report);
-        if (event.type === 'user_input_request')
+        }
+        if (event.type === 'user_input_request') {
           void Promise.resolve(userInputHandler?.(event.request))
             .then((submission) => post(`inputs/${event.request.id}`, submission ?? { skipped: true }))
             .catch(report);
+        }
       }
     } finally {
       clearInterval(timer);
@@ -194,8 +197,8 @@ export class RemoteRuntime implements TuiRuntime {
       userTurn: request.userTurn,
       signal: request.signal,
     })) {
-      if (event.type === 'text') yield event.text;
-      if (event.type === 'reasoning') onReasoning?.(event.summary);
+      if (event.type === 'text') { yield event.text; }
+      if (event.type === 'reasoning') { onReasoning?.(event.summary); }
     }
   }.bind(this);
 }

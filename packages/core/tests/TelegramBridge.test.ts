@@ -32,10 +32,10 @@ function makeBridge(opts: {
   }) as unknown as typeof fetch;
 
   const runtime = opts.runtime ?? ({
-    stream: async function* () { for (const c of (opts.chatChunks ?? ['hello'])) yield c; },
+    stream: async function* () { for (const c of (opts.chatChunks ?? ['hello'])) { yield c; } },
     createAgentRunner: () => ({
       run: async function* () {
-        for (const e of (opts.agentEvents ?? [{ type: 'text', text: 'agent reply' }, { type: 'done', status: 'completed' }])) yield e;
+        for (const e of (opts.agentEvents ?? [{ type: 'text', text: 'agent reply' }, { type: 'done', status: 'completed' }])) { yield e; }
       },
     }),
     profileSupportsThink: () => opts.supportsThink ?? true,
@@ -59,7 +59,7 @@ function callback(data: string, fromId = 42) {
 
 async function waitFor(cond: () => boolean, ms = 500): Promise<void> {
   const start = Date.now();
-  while (!cond() && Date.now() - start < ms) await new Promise(r => setTimeout(r, 5));
+  while (!cond() && Date.now() - start < ms) { await new Promise(r => setTimeout(r, 5)); }
 }
 
 describe('TelegramBridge.handleUpdate', () => {
@@ -156,8 +156,8 @@ describe('TelegramBridge.handleUpdate', () => {
             id: 'a1', tool: 'web_search', kind: 'network',
             summary: 'search: 2026 world cup', input: {}, escalated: false,
           });
-          if (decision.approved) yield { type: 'text', text: 'Found the score.' };
-          else yield { type: 'text', text: 'Could not search.' };
+          if (decision.approved) { yield { type: 'text', text: 'Found the score.' }; }
+          else { yield { type: 'text', text: 'Could not search.' }; }
           yield { type: 'done', status: 'completed' };
         },
       }),
@@ -248,8 +248,8 @@ describe('TelegramBridge.handleUpdate', () => {
       let capturedPrompt = '';
       const fetchImpl = (async (url: string | URL, init?: { body?: string }) => {
         const u = String(url);
-        if (u.includes('/getFile')) return json({ ok: true, result: { file_path: 'documents/note.txt' } });
-        if (u.includes('/file/bot')) return new Response(Buffer.from('hello file'), { status: 200 });
+        if (u.includes('/getFile')) { return json({ ok: true, result: { file_path: 'documents/note.txt' } }); }
+        if (u.includes('/file/bot')) { return new Response(Buffer.from('hello file'), { status: 200 }); }
         if (u.includes('/sendMessage')) { sentText.push(JSON.parse(String(init?.body)).text); return json({ ok: true, result: { message_id: 1 } }); }
         return json({ ok: true, result: [] });
       }) as unknown as typeof fetch;
@@ -289,7 +289,7 @@ describe('TelegramBridge.handleUpdate', () => {
           uploads.push(u.includes('/sendPhoto') ? 'photo' : 'document');
           return json({ ok: true, result: {} });
         }
-        if (u.includes('/sendMessage')) return json({ ok: true, result: { message_id: 1 } });
+        if (u.includes('/sendMessage')) { return json({ ok: true, result: { message_id: 1 } }); }
         return json({ ok: true, result: [] });
       }) as unknown as typeof fetch;
       const runtime = {

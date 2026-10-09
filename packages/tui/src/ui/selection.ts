@@ -69,7 +69,7 @@ export function selectedText(lines: string[] | SelectionLine[], selection: Selec
     }
     const sourceFrom = line.start + Math.max(0, Math.min(line.end - line.start, from - line.padding));
     const sourceTo = line.start + Math.max(0, Math.min(line.end - line.start, to - line.padding));
-    if (index) output += previous?.source === line.source ? line.source.text.slice(previousEnd, sourceFrom) : '\n';
+    if (index) { output += previous?.source === line.source ? line.source.text.slice(previousEnd, sourceFrom) : '\n'; }
     output += line.source.text.slice(sourceFrom, sourceTo);
     previous = line;
     previousEnd = sourceTo;

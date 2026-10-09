@@ -7,7 +7,7 @@ for (const [address, prefix] of [
   ['169.254.0.0', 16], ['172.16.0.0', 12], ['192.0.0.0', 24], ['192.0.2.0', 24],
   ['192.168.0.0', 16], ['198.18.0.0', 15], ['198.51.100.0', 24], ['203.0.113.0', 24],
   ['224.0.0.0', 3],
-] as const) blocked.addSubnet(address, prefix, 'ipv4');
+] as const) { blocked.addSubnet(address, prefix, 'ipv4'); }
 const globalV6 = new BlockList();
 globalV6.addSubnet('2000::', 3, 'ipv6');
 for (const [address, prefix] of [['2001::', 23], ['2001:db8::', 32], ['2002::', 16], ['3fff::', 20]] as const) {
@@ -21,7 +21,7 @@ export function isPublicAddress(address: string): boolean {
 }
 
 export function publicWebUrl(value: string): URL {
-  if (value.length > 4096) throw new Error('Page URL exceeds 4096 characters.');
+  if (value.length > 4096) { throw new Error('Page URL exceeds 4096 characters.'); }
   const url = new URL(value);
   const host = url.hostname.replace(/^\[|\]$/g, '').toLowerCase().replace(/\.$/, '');
   if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.port

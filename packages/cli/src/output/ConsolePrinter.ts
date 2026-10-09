@@ -11,7 +11,7 @@ export class ConsolePrinter {
     if (response.ok) {
       const text = stripTerminalControls(response.text);
       process.stdout.write(text);
-      if (!text.endsWith('\n')) process.stdout.write('\n');
+      if (!text.endsWith('\n')) { process.stdout.write('\n'); }
       process.stderr.write(
         `(${response.latencyMs ?? 0}ms · ${response.settings.provider}/${response.settings.model} · ${response.settings.profile})\n`,
       );
@@ -53,7 +53,7 @@ export class ConsolePrinter {
     process.stdout.write(`Initialized Marifold at ${result.configPath}\n`);
     // The model line is suppressed during interactive init, where the chosen
     // model is printed after the picker instead of the bootstrap placeholder.
-    if (showModel) process.stdout.write(`Provider: ${result.provider}/${result.model} (${result.providerType})\n`);
+    if (showModel) { process.stdout.write(`Provider: ${result.provider}/${result.model} (${result.providerType})\n`); }
     process.stdout.write(`Profile:  ${result.profile}\n`);
     process.stdout.write(`Profiles: ${result.profilesDir}\n`);
     process.stdout.write(`Sessions: ${result.sessionsDb}\n`);

@@ -55,7 +55,7 @@ export function registerSecurity(server: FastifyInstance, options: ServiceSecuri
 
     const origin = request.headers.origin;
     if (typeof origin === 'string' && origin !== '' && !isSameAllowedOrigin(origin, request.headers.host, options)) {
-      if (!options.corsOrigins.includes(origin)) throw MarifoldError.originForbidden(origin);
+      if (!options.corsOrigins.includes(origin)) { throw MarifoldError.originForbidden(origin); }
       reply.header('Access-Control-Allow-Origin', origin);
       reply.header('Vary', 'Origin');
       if (request.method === 'OPTIONS') {
@@ -74,14 +74,14 @@ export function registerSecurity(server: FastifyInstance, options: ServiceSecuri
       throw MarifoldError.originForbidden(host);
     }
 
-    if (!options.token) return;
+    if (!options.token) { return; }
     // Only the stateful API is token-gated: the static Web UI shell (and
     // /health) must stay reachable — the shell carries no secrets, and every
     // data route is versioned under /v1. Gate on the NORMALIZED pathname (not
     // a raw-URL prefix) so variants like //v1/x or /v1/../v1/x can't slip past
     // the check regardless of how strictly the router matches them.
-    if (!isApiPath(request.url)) return;
-    if (options.authorizeArtifact?.(request)) return;
+    if (!isApiPath(request.url)) { return; }
+    if (options.authorizeArtifact?.(request)) { return; }
     const presented = extractToken(request);
     if (!presented || !timingSafeEqualString(presented, options.token)) {
       throw MarifoldError.unauthorized();
@@ -101,7 +101,7 @@ function isApiPath(url: string): boolean {
   } catch {
     return true;
   }
-  if (!pathname.startsWith('/') || pathname.includes('\0') || pathname.includes('\\')) return true;
+  if (!pathname.startsWith('/') || pathname.includes('\0') || pathname.includes('\\')) { return true; }
   // posix.normalize resolves ./.. segments; a leading `//` is preserved by
   // POSIX rules, so collapse leading slashes explicitly.
   const normalized = path.posix.normalize(pathname).replace(/^\/+/, '/');
@@ -115,15 +115,15 @@ function isSameAllowedOrigin(
   host: string | undefined,
   options: ServiceSecurityOptions,
 ): boolean {
-  if (!host || !isAllowedHost(host, options)) return false;
+  if (!host || !isAllowedHost(host, options)) { return false; }
   return origin === `http://${host}` || origin === `https://${host}`;
 }
 
 function isAllowedHost(host: string, options: ServiceSecurityOptions): boolean {
-  if (options.access === 'loopback') return LOOPBACK_HOST.test(host);
+  if (options.access === 'loopback') { return LOOPBACK_HOST.test(host); }
 
   const hostname = hostnameFromHeader(host);
-  if (!hostname) return false;
+  if (!hostname) { return false; }
   const normalized = hostname.toLowerCase();
   return normalized === options.boundHost.toLowerCase()
     || isPrivateNetworkAddress(normalized)
@@ -149,13 +149,13 @@ function hostnameFromHeader(host: string): string | undefined {
  * Fastify's direct socket peer is the security boundary. */
 function isPrivateNetworkAddress(address: string): boolean {
   const bytes = parseIpAddress(address);
-  if (!bytes) return false;
-  if (bytes.length === 4) return isPrivateIpv4(bytes);
+  if (!bytes) { return false; }
+  if (bytes.length === 4) { return isPrivateIpv4(bytes); }
 
   const mapped = bytes.slice(0, 10).every(byte => byte === 0)
     && bytes[10] === 0xff
     && bytes[11] === 0xff;
-  if (mapped) return isPrivateIpv4(bytes.slice(12));
+  if (mapped) { return isPrivateIpv4(bytes.slice(12)); }
 
   const loopback = bytes.slice(0, 15).every(byte => byte === 0) && bytes[15] === 1;
   const uniqueLocal = (bytes[0] & 0xfe) === 0xfc;
@@ -175,23 +175,23 @@ function isPrivateIpv4(bytes: number[]): boolean {
 function parseIpAddress(rawAddress: string): number[] | undefined {
   const address = rawAddress.split('%', 1)[0];
   const version = isIP(address);
-  if (version === 4) return address.split('.').map(part => Number(part));
-  if (version !== 6) return undefined;
+  if (version === 4) { return address.split('.').map(part => Number(part)); }
+  if (version !== 6) { return undefined; }
 
   let ipv6 = address.toLowerCase();
   if (ipv6.includes('.')) {
     const lastColon = ipv6.lastIndexOf(':');
     const ipv4 = parseIpAddress(ipv6.slice(lastColon + 1));
-    if (!ipv4 || ipv4.length !== 4) return undefined;
+    if (!ipv4 || ipv4.length !== 4) { return undefined; }
     ipv6 = `${ipv6.slice(0, lastColon)}:${((ipv4[0] << 8) | ipv4[1]).toString(16)}:${((ipv4[2] << 8) | ipv4[3]).toString(16)}`;
   }
 
   const halves = ipv6.split('::');
-  if (halves.length > 2) return undefined;
+  if (halves.length > 2) { return undefined; }
   const left = halves[0] ? halves[0].split(':') : [];
   const right = halves.length === 2 && halves[1] ? halves[1].split(':') : [];
   const missing = 8 - left.length - right.length;
-  if (missing < 0 || (halves.length === 1 && missing !== 0)) return undefined;
+  if (missing < 0 || (halves.length === 1 && missing !== 0)) { return undefined; }
   const words = [...left, ...Array(missing).fill('0'), ...right].map(word => Number.parseInt(word, 16));
   if (words.length !== 8 || words.some(word => !Number.isInteger(word) || word < 0 || word > 0xffff)) {
     return undefined;
@@ -203,7 +203,7 @@ function extractToken(request: FastifyRequest): string | undefined {
   const header = request.headers.authorization;
   if (typeof header === 'string' && header.startsWith('Bearer ')) {
     const token = header.slice('Bearer '.length).trim();
-    if (token) return token;
+    if (token) { return token; }
   }
   if (request.method === 'GET' && QUERY_TOKEN_PATHS.test(request.url)) {
     const url = new URL(request.url, 'http://loopback');
@@ -215,6 +215,6 @@ function extractToken(request: FastifyRequest): string | undefined {
 function timingSafeEqualString(a: string, b: string): boolean {
   const left = Buffer.from(a);
   const right = Buffer.from(b);
-  if (left.length !== right.length) return false;
+  if (left.length !== right.length) { return false; }
   return crypto.timingSafeEqual(left, right);
 }

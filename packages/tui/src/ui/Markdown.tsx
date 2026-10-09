@@ -85,7 +85,7 @@ function renderInline(input: string, muted = false): React.ReactNode {
   let match: RegExpExecArray | null;
   INLINE.lastIndex = 0;
   while ((match = INLINE.exec(text)) !== null) {
-    if (match.index > last) parts.push(text.slice(last, match.index));
+    if (match.index > last) { parts.push(text.slice(last, match.index)); }
     const token = match[0];
     if (token.startsWith('`')) {
       parts.push(<Text key={key++} color={muted ? DIM : CODE_COLOR}>{token.slice(1, -1)}</Text>);
@@ -96,7 +96,7 @@ function renderInline(input: string, muted = false): React.ReactNode {
     }
     last = match.index + token.length;
   }
-  if (last < text.length) parts.push(text.slice(last));
+  if (last < text.length) { parts.push(text.slice(last)); }
   return parts.length ? parts : text;
 }
 
@@ -107,7 +107,7 @@ function renderInline(input: string, muted = false): React.ReactNode {
 const MATH_SPAN = /\$([^$]*\\[^$]*)\$|\\\(([^)]*\\[^)]*)\\\)/g;
 
 function normalizeMath(text: string): string {
-  if (!text.includes('\\')) return text;
+  if (!text.includes('\\')) { return text; }
   return text.replace(MATH_SPAN, (_match, dollar, paren) => simplifyTex(dollar ?? paren));
 }
 

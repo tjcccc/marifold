@@ -31,7 +31,7 @@ export function runSummary(elapsedMs: number, usage?: AgentUsage): string {
     (usage?.inputTokens != null || usage?.outputTokens != null
       ? (usage.inputTokens ?? 0) + (usage.outputTokens ?? 0)
       : undefined);
-  if (total != null) parts.push(`${total.toLocaleString()} tokens`);
+  if (total != null) { parts.push(`${total.toLocaleString()} tokens`); }
   // "on server": these are prompt tokens served from the provider's server-side
   // prompt cache (not the local session store), so the label disambiguates.
   if (usage?.cachedInputTokens != null && usage.cachedInputTokens > 0) {
@@ -70,7 +70,7 @@ export async function copyTerminalSelection(text: string): Promise<void> {
   if (!process.env.SSH_TTY && !process.env.SSH_CONNECTION) {
     try { await copyToClipboard(text); return; } catch { /* Try the terminal clipboard. */ }
   }
-  if (!process.stdout.isTTY) throw new Error('Terminal clipboard is unavailable.');
+  if (!process.stdout.isTTY) { throw new Error('Terminal clipboard is unavailable.'); }
   const sequence = `\x1b]52;c;${Buffer.from(text).toString('base64')}\x07`;
   process.stdout.write(process.env.TMUX ? `\x1bPtmux;${sequence.replaceAll('\x1b', '\x1b\x1b')}\x1b\\` : sequence);
 }

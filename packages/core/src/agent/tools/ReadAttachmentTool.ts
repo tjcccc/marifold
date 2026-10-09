@@ -50,7 +50,7 @@ export class ReadAttachmentTool implements AgentTool {
   async execute(input: Record<string, JSONValue>, ctx: ToolExecutionContext): Promise<ToolExecutionResult> {
     const id = requireStringInput(input, 'attachment_id', 'read_attachment');
     const attachment = ctx.workspace?.attachments.find(candidate => candidate.id === id);
-    if (!attachment) return missingAttachment(id, ctx);
+    if (!attachment) { return missingAttachment(id, ctx); }
     const start = integerInput(input.start, 0);
     const maxChars = integerInput(input.max_chars, DEFAULT_ATTACHMENT_READ_CHARS);
     if (start < 0 || maxChars < 1 || maxChars > MAX_ATTACHMENT_READ_CHARS) {

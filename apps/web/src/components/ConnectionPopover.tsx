@@ -48,7 +48,7 @@ export function ConnectionPopover({ store, problem, onConnect, onRemove, onClose
   }
 
   async function connect(): Promise<void> {
-    if (busy) return;
+    if (busy) { return; }
     let candidate: ServerConnection;
     try {
       candidate = thisServer
@@ -81,7 +81,7 @@ export function ConnectionPopover({ store, problem, onConnect, onRemove, onClose
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent): void {
-      if (event.key === 'Escape' && !busy) onClose();
+      if (event.key === 'Escape' && !busy) { onClose(); }
     }
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);

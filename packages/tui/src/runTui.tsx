@@ -105,7 +105,7 @@ export async function runTui(options: RunTuiOptions): Promise<void> {
       const id = typeof options.resume === 'string'
         ? options.resume
         : runtime.listSessions(1, settings.profile, { order: 'recent' })[0]?.id;
-      if (id) runtime.acquireSession(id);
+      if (id) { runtime.acquireSession(id); }
       const detail = id ? runtime.getSession(id) : undefined;
       if (detail) {
         resumeSessionId = detail.id;
@@ -165,7 +165,7 @@ function selectProfile(profiles: ProfileSummary[], defaultProfile: string): Prom
       value: profile.name,
     }));
     const finish = (value: string) => {
-      if (settled) return;
+      if (settled) { return; }
       settled = true;
       instance.unmount();
       resolve(value);

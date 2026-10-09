@@ -17,7 +17,7 @@ describe('MarifoldService security', () => {
     try {
       expect(result.host).toBe('0.0.0.0');
       const address = result.server.server.address();
-      if (!address || typeof address === 'string') throw new Error('Expected an IP socket address.');
+      if (!address || typeof address === 'string') { throw new Error('Expected an IP socket address.'); }
       const health = await fetch(`http://127.0.0.1:${address.port}/health`);
       expect(health.status).toBe(200);
     } finally {

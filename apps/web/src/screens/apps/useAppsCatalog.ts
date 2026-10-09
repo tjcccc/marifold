@@ -34,7 +34,7 @@ export function useAppsCatalog(
         return previous && JSON.stringify(previous) === JSON.stringify(app) ? previous : app;
       }));
     } catch (reason) {
-      if (reason instanceof MarifoldApiError && reason.code === 'UNAUTHORIZED') onUnauthorized();
+      if (reason instanceof MarifoldApiError && reason.code === 'UNAUTHORIZED') { onUnauthorized(); }
       setError(reason instanceof Error ? reason.message : String(reason));
     }
   }, [client, onUnauthorized]);
@@ -46,16 +46,16 @@ export function useAppsCatalog(
     setLoading(true);
     void listApps(client)
       .then(next => {
-        if (!live) return;
+        if (!live) { return; }
         setApps(next);
       })
       .catch(reason => {
-        if (!live) return;
-        if (reason instanceof MarifoldApiError && reason.code === 'UNAUTHORIZED') onUnauthorized();
+        if (!live) { return; }
+        if (reason instanceof MarifoldApiError && reason.code === 'UNAUTHORIZED') { onUnauthorized(); }
         setError(reason instanceof Error ? reason.message : String(reason));
       })
       .finally(() => {
-        if (live) setLoading(false);
+        if (live) { setLoading(false); }
       });
     return () => {
       live = false;

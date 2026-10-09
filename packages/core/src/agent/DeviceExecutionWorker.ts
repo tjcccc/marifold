@@ -12,11 +12,12 @@ async function main(directory: string): Promise<void> {
   const job = readPrivateJson(file) as unknown as DeviceJob;
   try {
     assertPrivateDirectory(path.dirname(directory));
-    if (readPrivateJson(path.join(path.dirname(directory), 'policy.json')).mode !== 'full')
+    if (readPrivateJson(path.join(path.dirname(directory), 'policy.json')).mode !== 'full') {
       throw new Error('Full access was disabled before execution started.');
+    }
     const request = readPrivateJson(path.join(directory, 'request.json'));
     fs.unlinkSync(path.join(directory, 'request.json'));
-    if (typeof request.command !== 'string' || typeof request.cwd !== 'string') throw new Error('Invalid job request.');
+    if (typeof request.command !== 'string' || typeof request.cwd !== 'string') { throw new Error('Invalid job request.'); }
     writePrivateJson(file, { ...job, state: 'running', pid: process.pid });
     let password: Buffer | undefined;
     if (request.sudo === true) {
@@ -24,11 +25,11 @@ async function main(directory: string): Promise<void> {
       let size = 0;
       for await (const chunk of process.stdin) {
         size += chunk.length;
-        if (size > 128) { for (const part of chunks) part.fill(0); chunk.fill(0); throw new Error('Invalid sudo credential size.'); }
+        if (size > 128) { for (const part of chunks) { part.fill(0); } chunk.fill(0); throw new Error('Invalid sudo credential size.'); }
         chunks.push(chunk);
       }
       password = Buffer.concat(chunks);
-      for (const part of chunks) part.fill(0);
+      for (const part of chunks) { part.fill(0); }
       try { validateSudoPassword(password); } catch (error) { password.fill(0); throw error; }
     }
     // The limit is overridable only so tests can exercise it quickly.
@@ -77,11 +78,11 @@ async function main(directory: string): Promise<void> {
       timers.push(setTimeout(() => { abandoned = true; settle({ code: null }); }, 10_000));
     }, limitMs + (rootTimeout.length ? 10_000 : 0))];
     const result = await finished;
-    for (const timer of timers) clearTimeout(timer);
+    for (const timer of timers) { clearTimeout(timer); }
     child.stdout!.destroy();
     child.stderr!.destroy();
     // GNU timeout reports 124 when it stopped the command, 137 when it had to kill it.
-    if (rootTimeout.length && (result.code === 124 || result.code === 137)) timedOut = true;
+    if (rootTimeout.length && (result.code === 124 || result.code === 137)) { timedOut = true; }
     const limitNote = abandoned
       ? `\nJob exceeded the ${formatLimit(limitMs)} limit. Its processes were signalled, but a privileged command may still be running. Check device state before retrying.`
       : timedOut ? `\nJob exceeded the ${formatLimit(limitMs)} limit and was stopped. Check device state before retrying.` : '';
@@ -100,4 +101,4 @@ function formatLimit(ms: number): string {
   return ms >= 60_000 && ms % 60_000 === 0 ? `${ms / 60_000}-minute` : `${Math.round(ms / 1000)}-second`;
 }
 
-if (require.main === module) void main(process.argv[2]!).catch(() => { process.exitCode = 1; });
+if (require.main === module) { void main(process.argv[2]!).catch(() => { process.exitCode = 1; }); }

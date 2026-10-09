@@ -32,7 +32,7 @@ export function serviceEntryUrls(
 
   const host = stripIpv6Brackets(bindHost ?? parsed.hostname);
   const family = host === '0.0.0.0' ? 'IPv4' : host === '::' ? 'IPv6' : undefined;
-  if (!family) return [boundAddress];
+  if (!family) { return [boundAddress]; }
 
   const loopback = family === 'IPv4' ? '127.0.0.1' : '::1';
   const discovered = Object.values(interfaces)
@@ -47,7 +47,7 @@ export function serviceEntryUrls(
 }
 
 export function formatServiceAvailability(urls: readonly string[]): string {
-  if (urls.length === 1) return `Marifold service available at ${urls[0]}`;
+  if (urls.length === 1) { return `Marifold service available at ${urls[0]}`; }
   return ['Marifold service available at:', ...urls.map(url => `  ${url}`)].join('\n');
 }
 
@@ -60,16 +60,16 @@ export function serviceBindUrl(boundAddress: string, bindHost: string): string {
 }
 
 function normalizeFamily(family: string | number): 'IPv4' | 'IPv6' | undefined {
-  if (family === 'IPv4' || family === 4) return 'IPv4';
-  if (family === 'IPv6' || family === 6) return 'IPv6';
+  if (family === 'IPv4' || family === 4) { return 'IPv4'; }
+  if (family === 'IPv6' || family === 6) { return 'IPv6'; }
   return undefined;
 }
 
 function addressPriority(address: string): number {
   const normalized = address.toLowerCase();
-  if (normalized === '127.0.0.1' || normalized === '::1') return 0;
-  if (normalized.startsWith('100.')) return 2;
-  if (normalized.startsWith('169.254.') || normalized.startsWith('fe80:')) return 3;
+  if (normalized === '127.0.0.1' || normalized === '::1') { return 0; }
+  if (normalized.startsWith('100.')) { return 2; }
+  if (normalized.startsWith('169.254.') || normalized.startsWith('fe80:')) { return 3; }
   return 1;
 }
 
@@ -99,7 +99,7 @@ function isPermittedEntryAddress(rawAddress: string): boolean {
       || (bytes[0] === 192 && bytes[1] === 168)
       || (bytes[0] === 100 && bytes[1] >= 64 && bytes[1] <= 127);
   }
-  if (isIP(address) !== 6) return false;
+  if (isIP(address) !== 6) { return false; }
   const normalized = address.toLowerCase();
   return normalized === '::1'
     || /^f[cd][0-9a-f]{2}:/.test(normalized)

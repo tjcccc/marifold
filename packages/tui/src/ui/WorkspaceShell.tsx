@@ -40,10 +40,11 @@ export function WorkspaceShell(props: Props) {
       if (id !== 'local') {
         const result = await localApi.request<{ workspaces: WorkspaceSummary[] }>('GET', '/v1/workspaces');
         const candidates = result.workspaces.filter((w) => w.id === id || w.name === id);
-        if (candidates.length !== 1)
+        if (candidates.length !== 1) {
           throw new Error(candidates.length ? 'Workspace name is ambiguous; use its ID.' : 'Workspace not found.');
+        }
         const workspace = candidates[0]!;
-        if (!workspace.online) throw new Error('Workspace host is offline.');
+        if (!workspace.online) { throw new Error('Workspace host is offline.'); }
         id = workspace.id;
         name = workspace.name;
         const remote = new RemoteRuntime({
@@ -59,16 +60,17 @@ export function WorkspaceShell(props: Props) {
       try {
         settings = runtime.resolveSettings({ profile: props.profile });
       } catch {
-        if (id !== 'local') throw new Error('Choose a profile with a configured model on this workspace.');
+        if (id !== 'local') { throw new Error('Choose a profile with a configured model on this workspace.'); }
         settings = { profile: config.config.default.profile, provider: '', model: '(configure a model)', think: false };
       }
       let sessionId: string | undefined;
-      if (typeof resume === 'string') sessionId = resume;
-      else if (resume === true)
+      if (typeof resume === 'string') { sessionId = resume; }
+      else if (resume === true) {
         sessionId = (await runtime.listSessions(1, settings.profile, { order: 'recent' }))[0]?.id;
-      if (sessionId) await runtime.acquireSession?.(sessionId);
+      }
+      if (sessionId) { await runtime.acquireSession?.(sessionId); }
       const session = sessionId ? await runtime.getSession(sessionId) : undefined;
-      if (version !== serial.current) return;
+      if (version !== serial.current) { return; }
       selected.current = id;
       execution.current = undefined;
       let displayName: string | undefined;
@@ -103,11 +105,12 @@ export function WorkspaceShell(props: Props) {
     let alive = true;
     void startupWorkspaces<WorkspaceSummary>(localApi)
       .then(async (result) => {
-        if (!alive) return;
+        if (!alive) { return; }
         const workspace = result.workspaces.find((w) => w.id === result.defaultId && w.online);
         await load(workspace?.id ?? 'local', props.resume);
-        if (result.defaultId !== 'local' && !workspace)
+        if (result.defaultId !== 'local' && !workspace) {
           setNotice('Default workspace is offline. Opened Local for this launch.');
+        }
       })
       .catch(async () => {
         if (alive) {
@@ -121,13 +124,13 @@ export function WorkspaceShell(props: Props) {
     };
   }, []);
   useEffect(() => {
-    if (!(entry?.runtime instanceof RemoteRuntime)) return;
+    if (!(entry?.runtime instanceof RemoteRuntime)) { return; }
     const remote = entry.runtime;
     let busy = false;
     let alive = true;
     let revision: string | undefined;
     const timer = setInterval(() => {
-      if (busy) return;
+      if (busy) { return; }
       busy = true;
       void remote.api
         .request<{ revision: string }>('GET', '/v1/changes')
@@ -135,14 +138,15 @@ export function WorkspaceShell(props: Props) {
           if (revision !== result.revision) {
             await remote.refresh();
             revision = result.revision;
-            if (alive)
+            if (alive) {
               setEntry((current) =>
                 current?.runtime === remote ? { ...current, config: remote.loadedConfig } : current,
               );
+            }
           }
         })
         .catch(() => {
-          if (alive) setNotice(`${entry.name} is unavailable. This conversation stays in its workspace.`);
+          if (alive) { setNotice(`${entry.name} is unavailable. This conversation stays in its workspace.`); }
         })
         .finally(() => {
           busy = false;
@@ -173,8 +177,9 @@ export function WorkspaceShell(props: Props) {
     return 'Usage: /workspace list | join <name|id> | leave';
   };
   const deviceCommand = async (args: string) => {
-    if (selected.current === 'local')
+    if (selected.current === 'local') {
       return 'Local tools run on this device. Join a workspace to select another device.';
+    }
     const { devices } = await localApi.request<{ devices: WorkspaceDevice[] }>(
       'POST',
       `/v1/workspaces/${selected.current}/manage/devices`,
@@ -182,8 +187,9 @@ export function WorkspaceShell(props: Props) {
     );
     const [operation, value] = args.trim().split(/\s+/);
     if (operation === 'use' && value) {
-      if (!['auto', 'host'].includes(value) && !devices.some((d) => d.id === value && d.online && d.executor))
+      if (!['auto', 'host'].includes(value) && !devices.some((d) => d.id === value && d.online && d.executor)) {
         throw new Error('Device is unavailable or has not enabled execution.');
+      }
       execution.current = value === 'auto' ? undefined : value;
       setNotice(`${entry?.name} workspace · tools: ${value}`);
       return `Next run uses ${value}. Skills always use the host.`;

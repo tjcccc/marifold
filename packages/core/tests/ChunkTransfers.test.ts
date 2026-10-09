@@ -17,7 +17,7 @@ describe('bounded workspace transfers', () => {
       peak = Math.max(peak, ++active);
       await new Promise(resolve => setTimeout(resolve, 1));
       const result = receiver.receive('host', frame);
-      if (result.text) output = result.text;
+      if (result.text) { output = result.text; }
       active--;
       sender.acknowledge('guest', result.ack);
     }, 1);
@@ -38,9 +38,9 @@ describe('bounded workspace transfers', () => {
       const frame = value as Record<string, unknown>;
       peak = Math.max(peak, ++active);
       setTimeout(() => {
-        if (legacy) expect(frame.index).toBe(legacyIndex++);
+        if (legacy) { expect(frame.index).toBe(legacyIndex++); }
         const result = receiver.receive('host', frame);
-        if (result.text !== undefined) output = result.text;
+        if (result.text !== undefined) { output = result.text; }
         setTimeout(() => {
           active--;
           sender.acknowledge('guest', legacy ? { ...result.ack as object, window: undefined } : result.ack as Record<string, unknown>);
@@ -78,7 +78,7 @@ describe('bounded workspace transfers', () => {
       sender.acknowledge('wrong-device', { ...frame, window: 4 });
       setTimeout(() => {
         const { ack, text } = receiver.receive('host', frame);
-        if (text) completed++;
+        if (text) { completed++; }
         active--;
         sender.acknowledge(`guest_${i}`, ack as Record<string, unknown>);
       }, 100);

@@ -101,8 +101,8 @@ export function extractPastedCode(input: string, expectedState: string): string 
       code = value; // bare code — xAI's paste page shows no state
     }
   }
-  if (!code) throw new Error('Could not find an authorization code in the pasted value.');
-  if (state && state !== expectedState) throw new Error('OAuth state mismatch in the pasted redirect.');
+  if (!code) { throw new Error('Could not find an authorization code in the pasted value.'); }
+  if (state && state !== expectedState) { throw new Error('OAuth state mismatch in the pasted redirect.'); }
   return code;
 }
 
@@ -171,12 +171,12 @@ async function postForm(
     signal: AbortSignal.timeout(60000),
   };
   const dispatcher = proxyDispatcher(proxy);
-  if (dispatcher) init.dispatcher = dispatcher;
+  if (dispatcher) { init.dispatcher = dispatcher; }
   try {
     const response = await fetchWithTransientRetry(url, init as RequestInit).catch(error => {
       throw new Error(`${label}: ${stringifyError(error)}`);
     });
-    if (!response.ok) throw new Error(`${label}: HTTP ${response.status}: ${await response.text()}`);
+    if (!response.ok) { throw new Error(`${label}: HTTP ${response.status}: ${await response.text()}`); }
     return await response.json() as Record<string, unknown>;
   } finally {
     await dispatcher?.close();
@@ -322,7 +322,7 @@ function numberField(value: unknown): number | undefined {
 }
 
 function stringifyError(error: unknown): string {
-  if (!(error instanceof Error)) return String(error);
+  if (!(error instanceof Error)) { return String(error); }
   // undici surfaces the real transport reason (ECONNREFUSED, ECONNRESET, TLS,
   // proxy errors) on `.cause`, not the bare "fetch failed" message — include it
   // so a failed sign-in is diagnosable (e.g. a missing HTTPS_PROXY in China).

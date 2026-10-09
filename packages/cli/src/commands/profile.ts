@@ -58,7 +58,7 @@ export function registerProfileCommand(program: Command, printer: ConsolePrinter
 
         process.stdout.write(`Profile: ${detail.name}\n`);
         process.stdout.write(`Source:  ${detail.source}\n`);
-        if (detail.path) process.stdout.write(`Path:    ${detail.path}\n`);
+        if (detail.path) { process.stdout.write(`Path:    ${detail.path}\n`); }
         process.stdout.write(`Model:   ${detail.settings.provider && detail.settings.model ? `${detail.settings.provider}/${detail.settings.model}` : 'default'}\n`);
         process.stdout.write(`Memory:  ${detail.settings.memories ? 'on' : 'off'}\n`);
         printProfileSection('INSTRUCTIONS.md', detail.files.instructions);
@@ -105,11 +105,11 @@ export function registerProfileCommand(program: Command, printer: ConsolePrinter
       try {
         const loadedConfig = loadConfig(program);
         const profileName = name ?? (await prompt.readUserMessage('Profile name: '))?.trim();
-        if (!profileName) throw MarifoldError.profileInvalid('Profile name cannot be empty.', '');
+        if (!profileName) { throw MarifoldError.profileInvalid('Profile name cannot be empty.', ''); }
 
         const result = new ProfileManager(loadedConfig.config.paths.profilesDir).init(profileName);
         process.stdout.write(`Created profile '${result.name}' at ${result.path}\n`);
-        for (const filePath of result.files) process.stdout.write(`created ${filePath}\n`);
+        for (const filePath of result.files) { process.stdout.write(`created ${filePath}\n`); }
       } catch (error) {
         printer.printError(error);
         process.exitCode = 1;
@@ -154,7 +154,7 @@ export function registerProfileCommand(program: Command, printer: ConsolePrinter
         }
         if (!options.yes) {
           const answer = await prompt.readUserMessage(`Delete profile '${name}'? Type '${name}' to confirm: `);
-          if (answer === undefined) throw new PromptAbortError();
+          if (answer === undefined) { throw new PromptAbortError(); }
           if (answer.trim() !== name) {
             process.stdout.write('Aborted.\n');
             process.exitCode = 1;
@@ -205,7 +205,7 @@ export function registerProfileCommand(program: Command, printer: ConsolePrinter
 
 function printProfileSection(label: string, file: { path?: string; content: string }): void {
   process.stdout.write(`\n[${label}]`);
-  if (file.path) process.stdout.write(` ${file.path}`);
+  if (file.path) { process.stdout.write(` ${file.path}`); }
   process.stdout.write('\n');
   process.stdout.write(file.content.trim() ? `${file.content.trimEnd()}\n` : '(empty)\n');
 }
@@ -234,6 +234,6 @@ function printMemoryRecords(profile: string, memories: MemoryEntry[], limit: num
 
 function parsePositiveInteger(value: string): number {
   const parsed = Number.parseInt(value, 10);
-  if (!Number.isFinite(parsed) || parsed <= 0) throw new Error('Expected a positive integer.');
+  if (!Number.isFinite(parsed) || parsed <= 0) { throw new Error('Expected a positive integer.'); }
   return parsed;
 }

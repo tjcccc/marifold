@@ -32,7 +32,7 @@ function workspace(): { runtime: MarifoldRuntime; loadedConfig: ReturnType<Confi
 }
 
 afterEach(() => {
-  for (const dir of tempDirs.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
+  for (const dir of tempDirs.splice(0)) { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
 describe('App', () => {

@@ -98,7 +98,7 @@ export class SessionResolver {
    * throws: failures are returned as `{ ok: false }`. Opens read/write like the
    * app does, so a pass means the app can actually read the DB. */
   checkIntegrity(): SessionDbHealth {
-    if (!fs.existsSync(this.sessionsDb)) return { ok: true, exists: false };
+    if (!fs.existsSync(this.sessionsDb)) { return { ok: true, exists: false }; }
     let db: Database.Database;
     try {
       db = new Database(this.sessionsDb, { fileMustExist: true });
@@ -131,7 +131,7 @@ export class SessionResolver {
   }
 
   list(limit = 50, profileName?: string, options: SessionListOptions = {}): SessionSummary[] {
-    if (!fs.existsSync(this.sessionsDb)) return [];
+    if (!fs.existsSync(this.sessionsDb)) { return []; }
 
     const db = this.open();
     try {
@@ -221,7 +221,7 @@ export class SessionResolver {
   /** Contact-list metadata for every profile represented either by a session
    * or a pinned display row. The latest session determines activity/preview. */
   profileActivity(): ProfileActivitySummary[] {
-    if (!fs.existsSync(this.sessionsDb)) return [];
+    if (!fs.existsSync(this.sessionsDb)) { return []; }
 
     const db = this.open();
     try {
@@ -294,7 +294,7 @@ export class SessionResolver {
   }
 
   setProfilePinned(profileName: string, pinned: boolean): void {
-    if (!fs.existsSync(this.sessionsDb)) this.openStore();
+    if (!fs.existsSync(this.sessionsDb)) { this.openStore(); }
     const db = this.open();
     try {
       this.ensureProfileDisplayTable(db);
@@ -311,7 +311,7 @@ export class SessionResolver {
   }
 
   deleteProfileDisplay(profileName: string): void {
-    if (!fs.existsSync(this.sessionsDb)) return;
+    if (!fs.existsSync(this.sessionsDb)) { return; }
     const db = this.open();
     try {
       if (this.hasProfileDisplayTable(db)) {
@@ -325,7 +325,7 @@ export class SessionResolver {
   }
 
   latest(profileName?: string): SessionSummary | undefined {
-    if (!fs.existsSync(this.sessionsDb)) return undefined;
+    if (!fs.existsSync(this.sessionsDb)) { return undefined; }
     const db = this.open();
     let id: string | undefined;
     try {
@@ -348,7 +348,7 @@ export class SessionResolver {
   }
 
   get(sessionId: string): SessionDetail | undefined {
-    if (!fs.existsSync(this.sessionsDb)) return undefined;
+    if (!fs.existsSync(this.sessionsDb)) { return undefined; }
 
     const db = this.open();
     try {
@@ -385,7 +385,7 @@ export class SessionResolver {
         turnCount: number;
         preview: string | null;
       } | undefined;
-      if (!row) return undefined;
+      if (!row) { return undefined; }
 
       const preview = row.preview ? sessionPreview(row.preview) : '';
       return {
@@ -419,10 +419,10 @@ export class SessionResolver {
       || !Number.isInteger(attachmentIndex) || attachmentIndex < 0) {
       throw MarifoldError.configInvalid('Attachment coordinates must be non-negative integers.');
     }
-    if (!fs.existsSync(this.sessionsDb)) return undefined;
+    if (!fs.existsSync(this.sessionsDb)) { return undefined; }
     const db = this.open();
     try {
-      if (!this.hasAttachmentsTable(db)) return undefined;
+      if (!this.hasAttachmentsTable(db)) { return undefined; }
       const row = db.prepare(`
         SELECT media_type AS mediaType, data, url,
           ${this.hasAttachmentPaths(db) ? 'source_path' : 'NULL'} AS sourcePath
@@ -434,15 +434,15 @@ export class SessionResolver {
         url: string | null;
         sourcePath: string | null;
       } | undefined;
-      if (!row) return undefined;
-      if (row.sourcePath !== null) return { mediaType: row.mediaType, path: row.sourcePath };
+      if (!row) { return undefined; }
+      if (row.sourcePath !== null) { return { mediaType: row.mediaType, path: row.sourcePath }; }
       return {
         mediaType: row.mediaType,
         ...(row.data !== null ? { data: row.data } : {}),
         ...(row.url !== null ? { url: row.url } : {}),
       };
     } catch (error) {
-      if (error instanceof MarifoldError) throw error;
+      if (error instanceof MarifoldError) { throw error; }
       throw this.storeError(`Could not read an attachment for session '${sessionId}' from ${this.sessionsDb}: ${String(error)}`);
     } finally {
       db.close();
@@ -450,7 +450,7 @@ export class SessionResolver {
   }
 
   delete(sessionId: string): boolean {
-    if (!fs.existsSync(this.sessionsDb)) return false;
+    if (!fs.existsSync(this.sessionsDb)) { return false; }
 
     const db = this.open();
     try {
@@ -473,7 +473,7 @@ export class SessionResolver {
    * or Priest's metadata column. A separate table prevents a model save that
    * finishes later from overwriting a rename/pin made during the run. */
   updateDisplay(sessionId: string, update: SessionDisplayUpdate): boolean {
-    if (!fs.existsSync(this.sessionsDb)) return false;
+    if (!fs.existsSync(this.sessionsDb)) { return false; }
     if (update.title === undefined && update.pinned === undefined && update.archived === undefined) {
       throw MarifoldError.configInvalid('At least one of title, pinned, or archived is required.');
     }
@@ -487,7 +487,7 @@ export class SessionResolver {
 
     const db = this.open();
     try {
-      if (!db.prepare('SELECT id FROM sessions WHERE id = ?').get(sessionId)) return false;
+      if (!db.prepare('SELECT id FROM sessions WHERE id = ?').get(sessionId)) { return false; }
       this.ensureSessionDisplayTable(db);
       const current = db.prepare(`
         SELECT title, pinned, archived
@@ -511,7 +511,7 @@ export class SessionResolver {
       }
       return true;
     } catch (error) {
-      if (error instanceof MarifoldError) throw error;
+      if (error instanceof MarifoldError) { throw error; }
       throw this.storeError(`Could not update session '${sessionId}' in ${this.sessionsDb}: ${String(error)}`);
     } finally {
       db.close();
@@ -525,12 +525,12 @@ export class SessionResolver {
     if (!Number.isInteger(userTurnIndex) || userTurnIndex < 0) {
       throw MarifoldError.configInvalid('userTurnIndex must be a non-negative integer.');
     }
-    if (!fs.existsSync(this.sessionsDb)) return { found: false, removedTurns: 0 };
+    if (!fs.existsSync(this.sessionsDb)) { return { found: false, removedTurns: 0 }; }
 
     const db = this.open();
     try {
       const session = db.prepare('SELECT id FROM sessions WHERE id = ?').get(sessionId);
-      if (!session) return { found: false, removedTurns: 0 };
+      if (!session) { return { found: false, removedTurns: 0 }; }
       const target = db.prepare(`
         SELECT id
         FROM turns
@@ -552,7 +552,7 @@ export class SessionResolver {
             WHERE session_id = ? AND user_turn_index >= ?
           `).run(sessionId, userTurnIndex);
         }
-        if (!target) return 0;
+        if (!target) { return 0; }
         const removedTurns = db.prepare(`
           DELETE FROM turns
           WHERE session_id = ? AND id >= ?
@@ -568,7 +568,7 @@ export class SessionResolver {
       });
       return { found: true, removedTurns: transaction() };
     } catch (error) {
-      if (error instanceof MarifoldError) throw error;
+      if (error instanceof MarifoldError) { throw error; }
       throw this.storeError(`Could not truncate session '${sessionId}' in ${this.sessionsDb}: ${String(error)}`);
     } finally {
       db.close();
@@ -583,12 +583,12 @@ export class SessionResolver {
       throw MarifoldError.configInvalid('userTurnIndex must be a non-negative integer.');
     }
     const detail = this.get(sessionId);
-    if (!detail) return undefined;
+    if (!detail) { return undefined; }
     const before: SessionTurnSummary[] = [];
     let currentUserIndex = 0;
     for (const turn of detail.turns) {
       if (turn.role === 'user') {
-        if (currentUserIndex === userTurnIndex) return before;
+        if (currentUserIndex === userTurnIndex) { return before; }
         currentUserIndex += 1;
       }
       before.push(turn);
@@ -610,7 +610,7 @@ export class SessionResolver {
     if (!Number.isInteger(userTurnIndex) || userTurnIndex < 0) {
       throw MarifoldError.configInvalid('userTurnIndex must be a non-negative integer.');
     }
-    if (!fs.existsSync(this.sessionsDb)) return { found: false, replaced: false };
+    if (!fs.existsSync(this.sessionsDb)) { return { found: false, replaced: false }; }
 
     const db = this.open();
     try {
@@ -618,7 +618,7 @@ export class SessionResolver {
         id: string;
         metadata: string;
       } | undefined;
-      if (!session) return { found: false, replaced: false };
+      if (!session) { return { found: false, replaced: false }; }
       const target = db.prepare(`
         SELECT id
         FROM turns
@@ -626,7 +626,7 @@ export class SessionResolver {
         ORDER BY id ASC
         LIMIT 1 OFFSET ?
       `).get(sessionId, userTurnIndex) as { id: number } | undefined;
-      if (!target) return { found: true, replaced: false };
+      if (!target) { return { found: true, replaced: false }; }
       const nextUser = db.prepare(`
         SELECT id
         FROM turns
@@ -644,12 +644,12 @@ export class SessionResolver {
       `).get(...(nextUser
         ? [sessionId, target.id, nextUser.id]
         : [sessionId, target.id])) as { id: number } | undefined;
-      if (!assistant) return { found: true, replaced: false };
+      if (!assistant) { return { found: true, replaced: false }; }
 
       const transaction = db.transaction(() => {
         db.prepare('UPDATE turns SET content = ? WHERE id = ?').run(userText, target.id);
         db.prepare('UPDATE turns SET content = ? WHERE id = ?').run(assistantText, assistant.id);
-        if (images !== undefined) this.replaceUserTurnAttachments(db, sessionId, userTurnIndex, images);
+        if (images !== undefined) { this.replaceUserTurnAttachments(db, sessionId, userTurnIndex, images); }
         if (responseMetrics) {
           this.upsertResponseMetrics(db, sessionId, userTurnIndex, responseMetrics);
         } else if (this.hasResponseMetricsTable(db)) {
@@ -672,7 +672,7 @@ export class SessionResolver {
       transaction();
       return { found: true, replaced: true };
     } catch (error) {
-      if (error instanceof MarifoldError) throw error;
+      if (error instanceof MarifoldError) { throw error; }
       throw this.storeError(`Could not replace exchange ${userTurnIndex} in session '${sessionId}': ${String(error)}`);
     } finally {
       db.close();
@@ -680,7 +680,7 @@ export class SessionResolver {
   }
 
   clear(options: { profileName?: string; before?: string; keepLast?: number } = {}): { count: number; ids: string[] } {
-    if (!fs.existsSync(this.sessionsDb)) return { count: 0, ids: [] };
+    if (!fs.existsSync(this.sessionsDb)) { return { count: 0, ids: [] }; }
     const keepLast = options.keepLast ?? 0;
     if (!Number.isInteger(keepLast) || keepLast < 0) {
       throw MarifoldError.configInvalid('keepLast must be a non-negative integer.');
@@ -707,7 +707,7 @@ export class SessionResolver {
       `).all(...params) as Array<{ id: string }>;
 
       const ids = rows.map(row => row.id).slice(keepLast);
-      if (ids.length === 0) return { count: 0, ids: [] };
+      if (ids.length === 0) { return { count: 0, ids: [] }; }
 
       const transaction = db.transaction((sessionIds: string[]) => {
         const deleteTurns = db.prepare('DELETE FROM turns WHERE session_id = ?');
@@ -723,7 +723,7 @@ export class SessionResolver {
       transaction(ids);
       return { count: ids.length, ids };
     } catch (error) {
-      if (error instanceof MarifoldError) throw error;
+      if (error instanceof MarifoldError) { throw error; }
       throw this.storeError(`Could not clear sessions from ${this.sessionsDb}: ${String(error)}`);
     } finally {
       db.close();
@@ -731,7 +731,7 @@ export class SessionResolver {
   }
 
   replaceLastAssistantTurn(sessionId: string, content: string): boolean {
-    if (!fs.existsSync(this.sessionsDb)) return false;
+    if (!fs.existsSync(this.sessionsDb)) { return false; }
 
     const db = this.open();
     try {
@@ -755,7 +755,7 @@ export class SessionResolver {
   }
 
   replaceLastUserTurn(sessionId: string, content: string): boolean {
-    if (!fs.existsSync(this.sessionsDb)) return false;
+    if (!fs.existsSync(this.sessionsDb)) { return false; }
 
     const db = this.open();
     try {
@@ -796,7 +796,7 @@ export class SessionResolver {
     session.appendTurn('assistant', assistantText);
     await store.save(session);
     this.saveLastUserTurnAttachments(sessionId, images);
-    if (responseMetrics) this.saveLastResponseMetrics(sessionId, responseMetrics);
+    if (responseMetrics) { this.saveLastResponseMetrics(sessionId, responseMetrics); }
   }
 
   /** Persist display-only image sources against the newest user turn. Priest
@@ -808,7 +808,7 @@ export class SessionResolver {
       (image): image is ImageInput & ({ data: string } | { url: string } | { path: string }) =>
         Boolean(image.path || image.data || image.url),
     );
-    if (persistable.length === 0 || !fs.existsSync(this.sessionsDb)) return;
+    if (persistable.length === 0 || !fs.existsSync(this.sessionsDb)) { return; }
 
     const db = this.open();
     try {
@@ -818,7 +818,7 @@ export class SessionResolver {
         FROM turns
         WHERE session_id = ? AND role = 'user'
       `).get(sessionId) as { count: number };
-      if (userTurns.count === 0) return;
+      if (userTurns.count === 0) { return; }
 
       const transaction = db.transaction(() => {
         // Priest rewrites the turns table on every session save, so SQLite
@@ -857,7 +857,7 @@ export class SessionResolver {
    * Like attachments, the zero-based user-turn ordinal survives Priest's
    * whole-session turn-row rewrites. */
   saveLastResponseMetrics(sessionId: string, responseMetrics: ResponseMetrics): void {
-    if (!fs.existsSync(this.sessionsDb)) return;
+    if (!fs.existsSync(this.sessionsDb)) { return; }
 
     const db = this.open();
     try {
@@ -866,7 +866,7 @@ export class SessionResolver {
         FROM turns
         WHERE session_id = ? AND role = 'user'
       `).get(sessionId) as { count: number };
-      if (userTurns.count === 0) return;
+      if (userTurns.count === 0) { return; }
       this.upsertResponseMetrics(db, sessionId, userTurns.count - 1, responseMetrics);
     } catch (error) {
       throw this.storeError(`Could not save response metrics for session '${sessionId}' in ${this.sessionsDb}: ${String(error)}`);
@@ -876,13 +876,13 @@ export class SessionResolver {
   }
 
   rename(fromSessionId: string, toSessionId: string): boolean {
-    if (!fs.existsSync(this.sessionsDb)) return false;
-    if (!toSessionId.trim()) throw MarifoldError.configInvalid('New session id cannot be empty.');
+    if (!fs.existsSync(this.sessionsDb)) { return false; }
+    if (!toSessionId.trim()) { throw MarifoldError.configInvalid('New session id cannot be empty.'); }
 
     const db = this.open();
     try {
       const exists = db.prepare('SELECT id FROM sessions WHERE id = ?').get(fromSessionId);
-      if (!exists) return false;
+      if (!exists) { return false; }
       const conflict = db.prepare('SELECT id FROM sessions WHERE id = ?').get(toSessionId);
       if (conflict) {
         throw new MarifoldError(
@@ -917,7 +917,7 @@ export class SessionResolver {
       transaction();
       return true;
     } catch (error) {
-      if (error instanceof MarifoldError) throw error;
+      if (error instanceof MarifoldError) { throw error; }
       throw this.storeError(`Could not rename session '${fromSessionId}' in ${this.sessionsDb}: ${String(error)}`);
     } finally {
       db.close();
@@ -940,7 +940,7 @@ export class SessionResolver {
     const responseMetrics = this.listResponseMetrics(db, sessionId);
     let userTurnIndex = -1;
     return rows.map(row => {
-      if (row.role === 'user') userTurnIndex += 1;
+      if (row.role === 'user') { userTurnIndex += 1; }
       const turnAttachments = row.role === 'user' ? attachments.get(userTurnIndex) : undefined;
       const turnResponseMetrics = row.role === 'assistant' ? responseMetrics.get(userTurnIndex) : undefined;
       return {
@@ -970,7 +970,7 @@ export class SessionResolver {
     `);
     // Empty data satisfies the legacy source constraint for path-backed records;
     // no image bytes are retained. Existing embedded records remain unchanged.
-    if (!this.hasAttachmentPaths(db)) db.exec(`ALTER TABLE ${ATTACHMENTS_TABLE} ADD COLUMN source_path TEXT`);
+    if (!this.hasAttachmentPaths(db)) { db.exec(`ALTER TABLE ${ATTACHMENTS_TABLE} ADD COLUMN source_path TEXT`); }
   }
 
   private hasAttachmentPaths(db: Database.Database): boolean {
@@ -990,7 +990,7 @@ export class SessionResolver {
     sessionId: string,
   ): Map<number, NonNullable<SessionTurnSummary['attachments']>> {
     const byTurn = new Map<number, NonNullable<SessionTurnSummary['attachments']>>();
-    if (!this.hasAttachmentsTable(db)) return byTurn;
+    if (!this.hasAttachmentsTable(db)) { return byTurn; }
     const rows = db.prepare(`
       SELECT
         a.user_turn_index AS userTurnIndex,
@@ -1035,13 +1035,13 @@ export class SessionResolver {
     const persistable = images.filter(
       (image): image is ImageInput & ({ data: string } | { url: string } | { path: string }) => Boolean(image.path || image.data || image.url),
     );
-    if (persistable.length > 0) this.ensureAttachmentsTable(db);
-    if (!this.hasAttachmentsTable(db)) return;
+    if (persistable.length > 0) { this.ensureAttachmentsTable(db); }
+    if (!this.hasAttachmentsTable(db)) { return; }
     db.prepare(`
       DELETE FROM ${ATTACHMENTS_TABLE}
       WHERE session_id = ? AND user_turn_index = ?
     `).run(sessionId, userTurnIndex);
-    if (persistable.length === 0) return;
+    if (persistable.length === 0) { return; }
     const insert = db.prepare(`
       INSERT INTO ${ATTACHMENTS_TABLE}
         (session_id, user_turn_index, attachment_index, media_type, data, url, source_path)
@@ -1061,7 +1061,7 @@ export class SessionResolver {
   }
 
   private deleteAttachmentsForSession(db: Database.Database, sessionId: string): void {
-    if (!this.hasAttachmentsTable(db)) return;
+    if (!this.hasAttachmentsTable(db)) { return; }
     db.prepare(`DELETE FROM ${ATTACHMENTS_TABLE} WHERE session_id = ?`).run(sessionId);
   }
 
@@ -1160,7 +1160,7 @@ export class SessionResolver {
 
   private listResponseMetrics(db: Database.Database, sessionId: string): Map<number, ResponseMetrics> {
     const byTurn = new Map<number, ResponseMetrics>();
-    if (!this.hasResponseMetricsTable(db)) return byTurn;
+    if (!this.hasResponseMetricsTable(db)) { return byTurn; }
     const rows = db.prepare(`
       SELECT
         user_turn_index AS userTurnIndex,
@@ -1205,7 +1205,7 @@ export class SessionResolver {
   }
 
   private deleteResponseMetricsForSession(db: Database.Database, sessionId: string): void {
-    if (!this.hasResponseMetricsTable(db)) return;
+    if (!this.hasResponseMetricsTable(db)) { return; }
     db.prepare(`DELETE FROM ${RESPONSE_METRICS_TABLE} WHERE session_id = ?`).run(sessionId);
   }
 
@@ -1250,7 +1250,7 @@ export class SessionResolver {
   }
 
   private deleteDisplayForSession(db: Database.Database, sessionId: string): void {
-    if (!this.hasSessionDisplayTable(db)) return;
+    if (!this.hasSessionDisplayTable(db)) { return; }
     db.prepare(`DELETE FROM ${SESSION_DISPLAY_TABLE} WHERE session_id = ?`).run(sessionId);
   }
 
@@ -1263,7 +1263,7 @@ const PREVIEW_MAX_CHARS = 80;
 
 function sessionPreview(content: string): string {
   const flat = content.replace(/\s+/g, ' ').trim();
-  if (flat.length <= PREVIEW_MAX_CHARS) return flat;
+  if (flat.length <= PREVIEW_MAX_CHARS) { return flat; }
   return `${flat.slice(0, PREVIEW_MAX_CHARS - 1).trimEnd()}…`;
 }
 
@@ -1287,6 +1287,6 @@ function firstLinePreview(content: string): string {
     ?.replace(/^#{1,6}\s+/, '')
     .replace(/^[-*+]\s+/, '')
     .replace(/^\d+[.)]\s+/, '') ?? '';
-  if (first.length <= PREVIEW_MAX_CHARS) return first;
+  if (first.length <= PREVIEW_MAX_CHARS) { return first; }
   return `${first.slice(0, PREVIEW_MAX_CHARS - 1).trimEnd()}…`;
 }

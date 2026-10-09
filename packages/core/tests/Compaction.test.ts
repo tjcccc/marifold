@@ -18,7 +18,7 @@ const SUMMARY_MARKER = 'compress prior conversation';
 
 afterEach(() => {
   vi.unstubAllGlobals();
-  for (const dir of tempDirs.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
+  for (const dir of tempDirs.splice(0)) { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
 function makeConfig(

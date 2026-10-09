@@ -11,7 +11,7 @@ export interface CatchUpBannerProps {
 /** "While you were away…" (design 1b): agent work that finished without the
  * tab attached. Show expands the run into the thread via event replay. */
 export function CatchUpBanner({ runs, onShow, onDismiss }: CatchUpBannerProps) {
-  if (runs.length === 0) return null;
+  if (runs.length === 0) { return null; }
   return (
     <div className={styles.banner}>
       <div className={styles.rows}>

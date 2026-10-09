@@ -4,7 +4,7 @@ export async function localStun() {
   // A minimal binding responder; no public network or deployed bridge is used.
   const stun = dgram.createSocket('udp4');
   stun.on('message', (request, remote) => {
-    if (request.length < 20 || request.readUInt16BE(0) !== 1) return;
+    if (request.length < 20 || request.readUInt16BE(0) !== 1) { return; }
     const response = Buffer.alloc(32);
     request.copy(response, 0, 0, 20);
     response.writeUInt16BE(0x0101, 0); response.writeUInt16BE(12, 2);

@@ -351,10 +351,10 @@ export class AgentRunner {
       assistantText: string,
       outcome: 'completed' | 'failed' | 'cancelled',
     ): Promise<void> => {
-      if (sessionTurnPersisted || !options.sessionId || !this.deps.persistTurn) return;
+      if (sessionTurnPersisted || !options.sessionId || !this.deps.persistTurn) { return; }
       // A failed regeneration must leave the existing exchange intact. Ordinary
       // append-only runs still keep their submitted prompt and terminal state.
-      if (outcome !== 'completed' && options.replaceUserTurnIndex !== undefined) return;
+      if (outcome !== 'completed' && options.replaceUserTurnIndex !== undefined) { return; }
 
       this.deps.checkSession?.(options);
       sessionTurnPersisted = true;
@@ -384,7 +384,7 @@ export class AgentRunner {
           responseMetrics,
         );
       } catch (error) {
-        if (outcome === 'completed') throw error;
+        if (outcome === 'completed') { throw error; }
         const message = error instanceof Error ? error.message : String(error);
         this.deps.taskStore.appendEvent(task.id, {
           kind: 'note',
@@ -477,7 +477,7 @@ export class AgentRunner {
             });
             continue;
           }
-          if (response.error?.code === 'REQUEST_ABORTED') throw new AbortedError();
+          if (response.error?.code === 'REQUEST_ABORTED') { throw new AbortedError(); }
           const message = response.error?.message ?? 'Provider call failed.';
           yield { type: 'error', code: response.error?.code ?? 'PROVIDER_ERROR', message };
           await persistSessionTurn(failedSessionOutcome(message), 'failed');
@@ -502,8 +502,8 @@ export class AgentRunner {
           // Record the real runner-initiated call for coherent tool-result replay.
           // It follows the same validation, approval, cancellation and limits as
           // a model-selected read; never publish the premature draft as final.
-          if (state.mode === 'native') state.exchange.push({ kind: 'assistant', toolCalls: [sourceCall] });
-          else state.transcript.push(`Marifold requested source inspection: ${String(sourceCall.arguments.url)}`);
+          if (state.mode === 'native') { state.exchange.push({ kind: 'assistant', toolCalls: [sourceCall] }); }
+          else { state.transcript.push(`Marifold requested source inspection: ${String(sourceCall.arguments.url)}`); }
           yield* this.executeCall(task.id, sourceCall, runOptions, state, toolContext,
             new Set(this.toolDefinitions(webSearchMode, runOptions.instructions).map(tool => tool.name)));
           continue;
@@ -535,7 +535,7 @@ export class AgentRunner {
           return;
         }
         const visibleText = calls.length === 0 ? markSourceCitations(text, state.webSourceUrls ?? []) : text;
-        if (visibleText) yield { type: 'text', text: visibleText, phase: calls.length > 0 ? 'progress' : 'final' };
+        if (visibleText) { yield { type: 'text', text: visibleText, phase: calls.length > 0 ? 'progress' : 'final' }; }
 
         if (calls.length === 0) {
           finalText = visibleText;
@@ -626,8 +626,8 @@ export class AgentRunner {
       return;
     }
 
-    if (call.name === 'web_search' || call.name === 'read_web_page') state.webToolAttempted = true;
-    if (call.name === 'read_web_page') state.webPageAttempted = true;
+    if (call.name === 'web_search' || call.name === 'read_web_page') { state.webToolAttempted = true; }
+    if (call.name === 'read_web_page') { state.webPageAttempted = true; }
     const previouslyDenied = state.deniedCalls.some(denied =>
       denied.name === call.name && isDeepStrictEqual(denied.arguments, call.arguments));
     const decision = previouslyDenied
@@ -637,7 +637,7 @@ export class AgentRunner {
       yield { type: 'approval_decision', requestId: call.id, approved: false, source: 'policy', reason: decision.reason };
     }
     if (!decision.approved) {
-      if (!previouslyDenied) state.deniedCalls.push({ name: call.name, arguments: structuredClone(call.arguments) });
+      if (!previouslyDenied) { state.deniedCalls.push({ name: call.name, arguments: structuredClone(call.arguments) }); }
       const message = `Tool call denied${decision.reason ? `: ${decision.reason}` : '.'} Do not retry this call or seek another route to the denied access. Continue only with independent authorized work; otherwise explain the limitation and answer from available information.`;
       yield { type: 'tool_result', callId: call.id, tool: call.name, summary: 'denied', isError: true };
       this.deps.taskStore.appendEvent(taskId, { kind: 'decision', message: `Denied ${summary}${decision.reason ? ` (${decision.reason})` : ''}` });
@@ -659,11 +659,11 @@ export class AgentRunner {
       resultSummary = result.summary ?? summary;
       if (!isError && result.images?.length) {
         for (const image of result.images) {
-          if (!state.activeImages.includes(image)) state.activeImages.push(image);
+          if (!state.activeImages.includes(image)) { state.activeImages.push(image); }
         }
       }
     } catch (error) {
-      if (error instanceof UncertainToolOutcomeError) throw error;
+      if (error instanceof UncertainToolOutcomeError) { throw error; }
       content = `Tool '${call.name}' failed: ${error instanceof Error ? error.message : String(error)}`;
       isError = true;
       resultSummary = `${summary} failed`;
@@ -778,7 +778,7 @@ export class AgentRunner {
       ? { ...this.deps.agentConfig.approval, ...(this.deps.agentConfig.unattended ?? {}) }
       : this.deps.agentConfig.approval;
     let mode = approval[tool.kind];
-    if (risk.escalate && mode === 'allow') mode = 'ask';
+    if (risk.escalate && mode === 'allow') { mode = 'ask'; }
 
     if (mode === 'allow') {
       yield { type: 'approval_decision', requestId: call.id, approved: true, source: 'policy' };
@@ -834,7 +834,7 @@ export class AgentRunner {
    */
   private trace(record: Record<string, unknown>): void {
     const target = process.env.MARIFOLD_AGENT_TRACE;
-    if (!target) return;
+    if (!target) { return; }
     try {
       const file = target === '1' || target === 'true'
         ? path.join(os.homedir(), '.marifold', 'agent-trace.jsonl')
@@ -877,11 +877,11 @@ export class AgentRunner {
    * turn. Returns the drained notes so the run generator can surface each as a
    * `steering` event to attached clients. */
   private drainSteering(taskId: string, options: AgentRunOptions, state: LoopState): string[] {
-    if (!options.steering) return [];
+    if (!options.steering) { return []; }
     const drained: string[] = [];
     for (const note of options.steering()) {
       const text = note.trim();
-      if (!text) continue;
+      if (!text) { continue; }
       state.steeringNotes.push(text);
       drained.push(text);
       this.deps.taskStore.appendEvent(taskId, { kind: 'note', message: `Steering: ${text}` });
@@ -983,10 +983,10 @@ export class AgentRunner {
       workspaceContext,
     ];
     // Skill instructions are authoritative for this run — lead with them.
-    if (instructions?.length) context.unshift(...instructions);
+    if (instructions?.length) { context.unshift(...instructions); }
     // Bounded prior-conversation memory (non-lean only) so the objective can
     // reference earlier turns. Placed after framing, before tool instructions.
-    if (state.historyContext) context.push(state.historyContext);
+    if (state.historyContext) { context.push(state.historyContext); }
     if (state.mode === 'control-block') {
       context.push(buildControlBlockInstructions(toolDefinitions));
     }
@@ -1029,8 +1029,8 @@ export class AgentRunner {
   }
 
   private shouldFallBackToControlBlocks(response: PriestResponse, state: LoopState): boolean {
-    if (state.mode !== 'native' || state.triedNativeFallback) return false;
-    if (response.error?.code !== 'PROVIDER_ERROR') return false;
+    if (state.mode !== 'native' || state.triedNativeFallback) { return false; }
+    if (response.error?.code !== 'PROVIDER_ERROR') { return false; }
     return /tool/i.test(response.error.message);
   }
 
@@ -1052,7 +1052,7 @@ export class AgentRunner {
       output: { jsonSchema: PLAN_SCHEMA, jsonSchemaName: 'agent_plan' },
     }, { signal: options.signal });
     if (!response.ok) {
-      if (response.error?.code === 'REQUEST_ABORTED') throw new AbortedError();
+      if (response.error?.code === 'REQUEST_ABORTED') { throw new AbortedError(); }
       return fallback;
     }
 
@@ -1065,9 +1065,9 @@ export class AgentRunner {
   }
 
   private completePlanSteps(taskId: string, passed: boolean): void {
-    if (!passed) return;
+    if (!passed) { return; }
     const task = this.deps.taskStore.get(taskId);
-    if (!task) return;
+    if (!task) { return; }
     this.deps.taskStore.update(taskId, {
       plan: task.plan.map(step => ({ id: step.id, text: step.text, status: 'completed' as const })),
     });
@@ -1088,7 +1088,7 @@ export class AgentRunner {
     });
     if (workspace) {
       try {
-        for (const artifact of await (this.deps.listArtifacts ?? listRunArtifacts)(workspace)) yield { type: 'artifact', artifact };
+        for (const artifact of await (this.deps.listArtifacts ?? listRunArtifacts)(workspace)) { yield { type: 'artifact', artifact }; }
       } catch (error) {
         yield { type: 'error', code: 'ARTIFACTS_UNAVAILABLE', message: error instanceof Error ? error.message : 'Artifact listing unavailable.' };
       }
@@ -1104,7 +1104,7 @@ export class AgentRunner {
   }
 
   private assertNotAborted(signal?: AbortSignal): void {
-    if (signal?.aborted) throw new AbortedError();
+    if (signal?.aborted) { throw new AbortedError(); }
   }
 }
 
@@ -1112,11 +1112,11 @@ function compactNativeToolExchange(exchange: ToolExchangeTurn[]): void {
   let total = exchange.reduce((sum, turn) => (
     sum + (turn.kind === 'tool_result' ? turn.content.length : (turn.text?.length ?? 0))
   ), 0);
-  if (total <= MODEL_TOOL_EXCHANGE_MAX_CHARS) return;
+  if (total <= MODEL_TOOL_EXCHANGE_MAX_CHARS) { return; }
 
   for (let index = 0; index < exchange.length && total > MODEL_TOOL_EXCHANGE_MAX_CHARS; index += 1) {
     const turn = exchange[index];
-    if (turn.kind !== 'tool_result' || turn.content.startsWith('[Earlier tool result compacted')) continue;
+    if (turn.kind !== 'tool_result' || turn.content.startsWith('[Earlier tool result compacted')) { continue; }
     const replacement = `[Earlier tool result compacted: ${turn.name}; ${turn.content.length.toLocaleString('en-US')} characters omitted. Re-run a bounded read or search if the details are still needed.]`;
     total -= turn.content.length - replacement.length;
     exchange[index] = { ...turn, content: replacement };
@@ -1125,10 +1125,10 @@ function compactNativeToolExchange(exchange: ToolExchangeTurn[]): void {
 
 function compactControlBlockTranscript(transcript: string[]): void {
   let total = transcript.reduce((sum, turn) => sum + turn.length, 0);
-  if (total <= MODEL_TOOL_EXCHANGE_MAX_CHARS) return;
+  if (total <= MODEL_TOOL_EXCHANGE_MAX_CHARS) { return; }
   for (let index = 0; index < transcript.length - 1 && total > MODEL_TOOL_EXCHANGE_MAX_CHARS; index += 1) {
     const turn = transcript[index];
-    if (turn.startsWith('[Earlier control-block turn compacted')) continue;
+    if (turn.startsWith('[Earlier control-block turn compacted')) { continue; }
     const replacement = `[Earlier control-block turn compacted; ${turn.length.toLocaleString('en-US')} characters omitted.]`;
     total -= turn.length - replacement.length;
     transcript[index] = replacement;
@@ -1145,7 +1145,7 @@ class AbortedError extends Error {
 function parseJsonObject(text: string): Record<string, JSONValue> | undefined {
   const candidates = [text.trim()];
   const match = text.match(/\{[\s\S]*\}/);
-  if (match) candidates.push(match[0]);
+  if (match) { candidates.push(match[0]); }
   for (const candidate of candidates) {
     try {
       const parsed = JSON.parse(candidate) as JSONValue;
@@ -1160,9 +1160,9 @@ function parseJsonObject(text: string): Record<string, JSONValue> | undefined {
 }
 
 function formatAttachmentBytes(bytes: number): string {
-  if (bytes === 0) return 'remote';
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KiB`;
+  if (bytes === 0) { return 'remote'; }
+  if (bytes < 1024) { return `${bytes} B`; }
+  if (bytes < 1024 * 1024) { return `${(bytes / 1024).toFixed(1)} KiB`; }
   return `${(bytes / (1024 * 1024)).toFixed(1)} MiB`;
 }
 
@@ -1205,18 +1205,18 @@ function withUsageTally(engine: AgentEngine, total: AgentUsage): AgentEngine {
 }
 
 function addUsage(total: AgentUsage, usage?: UsageInfo): void {
-  if (!usage) return;
-  if (usage.inputTokens != null) total.inputTokens = (total.inputTokens ?? 0) + usage.inputTokens;
-  if (usage.outputTokens != null) total.outputTokens = (total.outputTokens ?? 0) + usage.outputTokens;
-  if (usage.cachedInputTokens != null) total.cachedInputTokens = (total.cachedInputTokens ?? 0) + usage.cachedInputTokens;
-  if (usage.reasoningTokens != null) total.reasoningTokens = (total.reasoningTokens ?? 0) + usage.reasoningTokens;
+  if (!usage) { return; }
+  if (usage.inputTokens != null) { total.inputTokens = (total.inputTokens ?? 0) + usage.inputTokens; }
+  if (usage.outputTokens != null) { total.outputTokens = (total.outputTokens ?? 0) + usage.outputTokens; }
+  if (usage.cachedInputTokens != null) { total.cachedInputTokens = (total.cachedInputTokens ?? 0) + usage.cachedInputTokens; }
+  if (usage.reasoningTokens != null) { total.reasoningTokens = (total.reasoningTokens ?? 0) + usage.reasoningTokens; }
   const turnTotal = usage.totalTokens ?? sumDefined(usage.inputTokens, usage.outputTokens);
-  if (turnTotal != null) total.totalTokens = (total.totalTokens ?? 0) + turnTotal;
-  if (usage.estimatedCostUSD != null) total.estimatedCostUSD = (total.estimatedCostUSD ?? 0) + usage.estimatedCostUSD;
+  if (turnTotal != null) { total.totalTokens = (total.totalTokens ?? 0) + turnTotal; }
+  if (usage.estimatedCostUSD != null) { total.estimatedCostUSD = (total.estimatedCostUSD ?? 0) + usage.estimatedCostUSD; }
 }
 
 function sumDefined(a?: number, b?: number): number | undefined {
-  if (a == null && b == null) return undefined;
+  if (a == null && b == null) { return undefined; }
   return (a ?? 0) + (b ?? 0);
 }
 

@@ -11,8 +11,8 @@ export class ArtifactTickets {
   private readonly entries = new Map<string, { expires: number; send: (reply: FastifyReply) => Promise<unknown> }>();
 
   issue(send: (reply: FastifyReply) => Promise<unknown>): { path: string; expiresAt: string } {
-    for (const [key, entry] of this.entries) if (entry.expires <= Date.now()) this.entries.delete(key);
-    while (this.entries.size >= MAX_TICKETS) this.entries.delete(this.entries.keys().next().value!);
+    for (const [key, entry] of this.entries) { if (entry.expires <= Date.now()) { this.entries.delete(key); } }
+    while (this.entries.size >= MAX_TICKETS) { this.entries.delete(this.entries.keys().next().value!); }
     const key = randomBytes(24).toString('hex');
     const expires = Date.now() + LIFETIME_MS;
     this.entries.set(key, { expires, send });
@@ -20,7 +20,7 @@ export class ArtifactTickets {
   }
 
   authorize = (request: FastifyRequest): boolean => {
-    if (request.method !== 'GET' && request.method !== 'HEAD') return false;
+    if (request.method !== 'GET' && request.method !== 'HEAD') { return false; }
     const key = TICKET_PATH.exec(request.url)?.[1];
     return Boolean(key && this.get(key));
   };
@@ -29,7 +29,7 @@ export class ArtifactTickets {
     server.get<{ Params: { ticket: string } }>('/v1/downloads/:ticket', async (request, reply) => {
       reply.header('cache-control', 'no-store').header('referrer-policy', 'no-referrer');
       const entry = this.get(request.params.ticket);
-      if (!entry) return reply.code(410).send({ ok: false, error: { code: 'DOWNLOAD_EXPIRED', message: 'Download link expired. Click Download again to create a new link.' } });
+      if (!entry) { return reply.code(410).send({ ok: false, error: { code: 'DOWNLOAD_EXPIRED', message: 'Download link expired. Click Download again to create a new link.' } }); }
       return entry.send(reply);
     });
     server.addHook('onClose', async () => { this.entries.clear(); });
@@ -37,7 +37,7 @@ export class ArtifactTickets {
 
   private get(key: string) {
     const entry = this.entries.get(key);
-    if (entry && entry.expires > Date.now()) return entry;
+    if (entry && entry.expires > Date.now()) { return entry; }
     this.entries.delete(key);
     return undefined;
   }

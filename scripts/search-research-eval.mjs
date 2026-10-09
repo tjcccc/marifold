@@ -13,7 +13,7 @@ const { WebPageReader } = require('../packages/core/dist/search/WebPageReader');
 const args = process.argv.slice(2);
 const arg = (name, fallback) => args.includes(name) ? args[args.indexOf(name) + 1] : fallback;
 const model = arg('--model', 'gemma4:e4b-mlx');
-if (/cloud/i.test(model)) throw new Error('Choose a local model.');
+if (/cloud/i.test(model)) { throw new Error('Choose a local model.'); }
 const fixture = args.includes('--fixture');
 const root = mkdtempSync(path.join(tmpdir(), 'marifold-research-eval-'));
 const profilesDir = path.join(root, 'profiles');
@@ -49,7 +49,7 @@ const runtime = new MarifoldRuntime({ loadedConfig: { config, configPath: path.j
 if (!fixture) {
   registry = new ToolRegistry();
   for (const tool of runtime.createDefaultToolRegistry().list()) {
-    if (tool.definition.name !== 'read_web_page') registry.register(tool);
+    if (tool.definition.name !== 'read_web_page') { registry.register(tool); }
   }
   const reader = new WebPageReader();
   registry.register(new ReadWebPageTool({ read: async (...args) => {
@@ -67,7 +67,7 @@ try {
     signal: AbortSignal.timeout(180_000), approvalHandler: async call => ({ approved: call.kind === 'network' }),
   })) {
     events.push(event);
-    if (['tool_request', 'tool_result', 'completed', 'failed'].includes(event.type)) console.log(JSON.stringify(event));
+    if (['tool_request', 'tool_result', 'completed', 'failed'].includes(event.type)) { console.log(JSON.stringify(event)); }
   }
 } catch (e) { error = e.message; }
 finally { runtime.close(); rmSync(root, { recursive: true, force: true }); }

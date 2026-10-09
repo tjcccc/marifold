@@ -7,7 +7,7 @@ import { createArtifactPreview } from '../src/agent/ArtifactPreview';
 import { listRunArtifacts } from '../src/agent/RunArtifacts';
 
 const directories: string[] = [];
-afterEach(() => { for (const dir of directories.splice(0)) fs.rmSync(dir, { recursive: true, force: true }); });
+afterEach(() => { for (const dir of directories.splice(0)) { fs.rmSync(dir, { recursive: true, force: true }); } });
 it('renders a bounded thumbnail while preserving the original full-resolution image', async () => {
   const outputDir = fs.mkdtempSync(path.join(os.tmpdir(), 'artifact-preview-')); directories.push(outputDir);
   const file = path.join(outputDir, 'desktop.png');

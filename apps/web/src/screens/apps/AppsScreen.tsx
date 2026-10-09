@@ -122,20 +122,20 @@ export function AppsScreen({
         applyInstanceSnapshot(instance);
       })
       .catch(reason => {
-        if (!live) return;
-        if (reason instanceof MarifoldApiError && reason.code === 'UNAUTHORIZED') onUnauthorized();
+        if (!live) { return; }
+        if (reason instanceof MarifoldApiError && reason.code === 'UNAUTHORIZED') { onUnauthorized(); }
         appendActivity('error', 'Could not open app', errorMessage(reason));
         setActivityOpen(true);
       })
       .finally(() => {
-        if (live && epoch === appEpoch.current) setPending(0);
+        if (live && epoch === appEpoch.current) { setPending(0); }
       });
     return () => {
       live = false;
-      if (appEpoch.current === epoch) appEpoch.current += 1;
+      if (appEpoch.current === epoch) { appEpoch.current += 1; }
       mutationVersion.current += 1;
       instanceRef.current = undefined;
-      if (openedId) storeInstance(storageKey, openedId);
+      if (openedId) { storeInstance(storageKey, openedId); }
     };
   }, [app, client, onUnauthorized]);
 
@@ -148,9 +148,9 @@ export function AppsScreen({
   }, [interfaceBusy, onBusyChange]);
 
   useEffect(() => {
-    if (!activityOpen) return;
+    if (!activityOpen) { return; }
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setActivityOpen(false);
+      if (event.key === 'Escape') { setActivityOpen(false); }
     };
     document.addEventListener('keydown', closeOnEscape);
     return () => document.removeEventListener('keydown', closeOnEscape);
@@ -158,20 +158,20 @@ export function AppsScreen({
 
   useEffect(() => {
     const instanceId = instanceRef.current;
-    if (!instanceId || !executionActive || !execution) return;
+    if (!instanceId || !executionActive || !execution) { return; }
     let live = true;
     let timer: number | undefined;
     const poll = async (): Promise<void> => {
       try {
         const snapshot = await getSkillAppInstance(client, instanceId);
-        if (!live) return;
+        if (!live) { return; }
         applyInstanceSnapshot(snapshot);
         if (isExecutionActive(snapshot.execution)) {
           timer = window.setTimeout(() => void poll(), 400);
         }
       } catch (reason) {
-        if (!live) return;
-        if (reason instanceof MarifoldApiError && reason.code === 'UNAUTHORIZED') onUnauthorized();
+        if (!live) { return; }
+        if (reason instanceof MarifoldApiError && reason.code === 'UNAUTHORIZED') { onUnauthorized(); }
         appendActivity('error', 'Could not follow App operation', errorMessage(reason));
         setActivityOpen(true);
       }
@@ -179,7 +179,7 @@ export function AppsScreen({
     timer = window.setTimeout(() => void poll(), 250);
     return () => {
       live = false;
-      if (timer !== undefined) window.clearTimeout(timer);
+      if (timer !== undefined) { window.clearTimeout(timer); }
     };
   }, [client, execution?.id, execution?.phase, executionActive, onUnauthorized]);
 
@@ -211,7 +211,7 @@ export function AppsScreen({
       storeInstance(storageKey, snapshot.id);
     }
     const terminal = snapshot.execution;
-    if (!terminal || isExecutionActive(terminal) || handledExecutions.current.has(terminal.id)) return;
+    if (!terminal || isExecutionActive(terminal) || handledExecutions.current.has(terminal.id)) { return; }
     handledExecutions.current.add(terminal.id);
     setRunningOperation(undefined);
     const label = humanize(terminal.operation);
@@ -249,11 +249,11 @@ export function AppsScreen({
   }
 
   function setValue(name: string, value: string): void {
-    if (!app) return;
+    if (!app) { return; }
     const nextValues = { ...valuesRef.current, [name]: value };
     const nextStaleOutputs = new Set(staleOutputsRef.current);
     for (const operation of app.operations.filter(candidate => operationInputStates(candidate).includes(name))) {
-      if ((nextValues[operation.output] ?? '').trim()) nextStaleOutputs.add(operation.output);
+      if ((nextValues[operation.output] ?? '').trim()) { nextStaleOutputs.add(operation.output); }
     }
     valuesRef.current = nextValues;
     staleOutputsRef.current = nextStaleOutputs;
@@ -262,7 +262,7 @@ export function AppsScreen({
     setRunningOperation(undefined);
 
     const instanceId = instanceRef.current;
-    if (!instanceId) return;
+    if (!instanceId) { return; }
     const version = ++mutationVersion.current;
     const epoch = appEpoch.current;
     setPending(current => current + 1);
@@ -270,15 +270,15 @@ export function AppsScreen({
       .then(result => applyMutation(result, version))
       .catch(reason => handleError(reason, version, 'Could not update app'))
       .finally(() => {
-        if (epoch === appEpoch.current) setPending(current => Math.max(0, current - 1));
+        if (epoch === appEpoch.current) { setPending(current => Math.max(0, current - 1)); }
       });
   }
 
   function run(operationName: string): void {
-    if (!app) return;
+    if (!app) { return; }
     const operation = app.operations.find(candidate => candidate.name === operationName);
     const instanceId = instanceRef.current;
-    if (!operation || !instanceId || !isOperationRunnable(operation.requiredInputs, valuesRef.current)) return;
+    if (!operation || !instanceId || !isOperationRunnable(operation.requiredInputs, valuesRef.current)) { return; }
 
     const version = ++mutationVersion.current;
     const epoch = appEpoch.current;
@@ -297,14 +297,14 @@ export function AppsScreen({
       .then(result => applyMutation(result, version))
       .catch(reason => handleError(reason, version, `${label} failed`))
       .finally(() => {
-        if (epoch === appEpoch.current) setPending(current => Math.max(0, current - 1));
-        if (!operation.interactive && version === mutationVersion.current) setRunningOperation(undefined);
+        if (epoch === appEpoch.current) { setPending(current => Math.max(0, current - 1)); }
+        if (!operation.interactive && version === mutationVersion.current) { setRunningOperation(undefined); }
       });
   }
 
   async function submitExecutionInput(submission: UserInputSubmission): Promise<void> {
     const instanceId = instanceRef.current;
-    if (!instanceId || !execution?.userInput) return;
+    if (!instanceId || !execution?.userInput) { return; }
     setPending(current => current + 1);
     try {
       applyInstanceSnapshot(await answerSkillAppInput(client, instanceId, execution.id, submission));
@@ -318,7 +318,7 @@ export function AppsScreen({
 
   async function answerExecutionApproval(action: 'once' | 'deny'): Promise<void> {
     const instanceId = instanceRef.current;
-    if (!instanceId || !execution?.approval) return;
+    if (!instanceId || !execution?.approval) { return; }
     setPending(current => current + 1);
     try {
       applyInstanceSnapshot(await answerSkillAppApproval(client, instanceId, execution.id, action));
@@ -332,7 +332,7 @@ export function AppsScreen({
 
   async function cancelExecution(): Promise<void> {
     const instanceId = instanceRef.current;
-    if (!instanceId || !execution || !isExecutionActive(execution)) return;
+    if (!instanceId || !execution || !isExecutionActive(execution)) { return; }
     setPending(current => current + 1);
     try {
       applyInstanceSnapshot(await cancelSkillAppExecution(client, instanceId, execution.id));
@@ -345,7 +345,7 @@ export function AppsScreen({
   }
 
   async function resetApp(): Promise<void> {
-    if (!app || interfaceBusy) return;
+    if (!app || interfaceBusy) { return; }
     const previousId = instanceRef.current;
     const epoch = appEpoch.current;
     setPending(current => current + 1);
@@ -367,16 +367,16 @@ export function AppsScreen({
         void deleteSkillAppInstance(client, previousId).catch(() => {});
       }
     } catch (reason) {
-      if (reason instanceof MarifoldApiError && reason.code === 'UNAUTHORIZED') onUnauthorized();
+      if (reason instanceof MarifoldApiError && reason.code === 'UNAUTHORIZED') { onUnauthorized(); }
       appendActivity('error', 'Could not reset app', errorMessage(reason));
       setActivityOpen(true);
     } finally {
-      if (epoch === appEpoch.current) setPending(current => Math.max(0, current - 1));
+      if (epoch === appEpoch.current) { setPending(current => Math.max(0, current - 1)); }
     }
   }
 
   async function addAttachments(stateName: string, files: File[]): Promise<void> {
-    if (!app || files.length === 0) return;
+    if (!app || files.length === 0) { return; }
     const epoch = appEpoch.current;
     setPending(current => current + 1);
     try {
@@ -390,26 +390,26 @@ export function AppsScreen({
         );
         setActivityOpen(true);
       }
-      if (prepared.accepted.length === 0) return;
+      if (prepared.accepted.length === 0) { return; }
       await persistAttachments(stateName, [...previous, ...prepared.accepted], previous);
     } catch (reason) {
       appendActivity('error', 'Could not attach files', errorMessage(reason));
       setActivityOpen(true);
     } finally {
-      if (epoch === appEpoch.current) setPending(current => Math.max(0, current - 1));
+      if (epoch === appEpoch.current) { setPending(current => Math.max(0, current - 1)); }
     }
   }
 
   async function removeAttachment(stateName: string, index: number): Promise<void> {
     const previous = attachmentsRef.current[stateName] ?? [];
-    if (index < 0 || index >= previous.length) return;
+    if (index < 0 || index >= previous.length) { return; }
     const next = previous.filter((_, candidate) => candidate !== index);
     const epoch = appEpoch.current;
     setPending(current => current + 1);
     try {
       await persistAttachments(stateName, next, previous);
     } finally {
-      if (epoch === appEpoch.current) setPending(current => Math.max(0, current - 1));
+      if (epoch === appEpoch.current) { setPending(current => Math.max(0, current - 1)); }
     }
   }
 
@@ -419,7 +419,7 @@ export function AppsScreen({
     previous: PreparedAttachment[],
   ): Promise<void> {
     const instanceId = instanceRef.current;
-    if (!app || !instanceId) return;
+    if (!app || !instanceId) { return; }
     const nextByState = { ...attachmentsRef.current, [stateName]: next };
     const previousStaleOutputs = staleOutputsRef.current;
     attachmentsRef.current = nextByState;
@@ -427,7 +427,7 @@ export function AppsScreen({
     const optimisticValues = { ...valuesRef.current };
     const nextStaleOutputs = new Set(staleOutputsRef.current);
     for (const operation of app.operations.filter(candidate => candidate.attachments === stateName)) {
-      if ((optimisticValues[operation.output] ?? '').trim()) nextStaleOutputs.add(operation.output);
+      if ((optimisticValues[operation.output] ?? '').trim()) { nextStaleOutputs.add(operation.output); }
     }
     valuesRef.current = optimisticValues;
     staleOutputsRef.current = nextStaleOutputs;
@@ -456,10 +456,10 @@ export function AppsScreen({
   }
 
   function applyMutation(result: SkillAppMutationResult, version: number): void {
-    if (version !== mutationVersion.current || result.status === 'superseded') return;
+    if (version !== mutationVersion.current || result.status === 'superseded') { return; }
     applyInstanceSnapshot(result.instance);
-    if (result.reason === 'missing_required_input') return;
-    if (result.status === 'running') return;
+    if (result.reason === 'missing_required_input') { return; }
+    if (result.status === 'running') { return; }
 
     const label = humanize(result.operation ?? runningOperation ?? 'operation');
     if (result.result?.status === 'error') {
@@ -478,8 +478,8 @@ export function AppsScreen({
   }
 
   function handleError(reason: unknown, version: number, title: string): void {
-    if (version !== mutationVersion.current) return;
-    if (reason instanceof MarifoldApiError && reason.code === 'UNAUTHORIZED') onUnauthorized();
+    if (version !== mutationVersion.current) { return; }
+    if (reason instanceof MarifoldApiError && reason.code === 'UNAUTHORIZED') { onUnauthorized(); }
     appendActivity('error', title, errorMessage(reason));
     setActivityOpen(true);
   }
@@ -555,7 +555,7 @@ export function AppsScreen({
                   request={execution.approval}
                   busy={pending > 0}
                   onAnswer={action => {
-                    if (action === 'once' || action === 'deny') void answerExecutionApproval(action);
+                    if (action === 'once' || action === 'deny') { void answerExecutionApproval(action); }
                   }}
                 />
               ) : null}
@@ -707,7 +707,7 @@ function SkillLayoutItem({
       </div>
     );
   }
-  if (item.component === 'spacer') return <span aria-hidden className={styles.spacer} />;
+  if (item.component === 'spacer') { return <span aria-hidden className={styles.spacer} />; }
   if (item.component === 'button') {
     const operation = item.trigger
       ? app.operations.find(candidate => candidate.name === item.trigger)
@@ -732,7 +732,7 @@ function SkillLayoutItem({
       </div>
     ) : button;
   }
-  if (!item.bind || !item.label) return null;
+  if (!item.bind || !item.label) { return null; }
   const fieldLabel = (
     <span className={item.showLabel === false ? styles.visuallyHidden : styles.label}>{item.label}</span>
   );
@@ -807,7 +807,7 @@ function SkillAttachments({
   const inputId = `skillapp-${item.bind}-${path}`;
 
   function acceptFiles(files: FileList | File[]): void {
-    if (!busy && files.length > 0) onAttachFiles([...files]);
+    if (!busy && files.length > 0) { onAttachFiles([...files]); }
   }
 
   return (
@@ -818,15 +818,15 @@ function SkillAttachments({
       <div
         className={`${styles.attachmentZone} ${dragActive ? styles.attachmentZoneActive : ''}`}
         onDragEnter={event => {
-          if (![...event.dataTransfer.types].includes('Files')) return;
+          if (![...event.dataTransfer.types].includes('Files')) { return; }
           event.preventDefault();
           setDragActive(true);
         }}
         onDragLeave={event => {
-          if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragActive(false);
+          if (!event.currentTarget.contains(event.relatedTarget as Node | null)) { setDragActive(false); }
         }}
         onDragOver={event => {
-          if (![...event.dataTransfer.types].includes('Files')) return;
+          if (![...event.dataTransfer.types].includes('Files')) { return; }
           event.preventDefault();
           event.dataTransfer.dropEffect = 'copy';
         }}
@@ -1017,7 +1017,7 @@ function SkillTextarea({
 
   useLayoutEffect(() => {
     const textarea = textareaRef.current;
-    if (!textarea || !item.autoGrow) return;
+    if (!textarea || !item.autoGrow) { return; }
     textarea.style.height = 'auto';
     textarea.style.height = `${textarea.scrollHeight + 2}px`;
   }, [item.autoGrow, value]);
@@ -1074,15 +1074,15 @@ function downloadText(value: string, filename: string, mediaType: string): void 
 
 function describeDownload(mediaType: string): string {
   const normalized = mediaType.toLowerCase();
-  if (normalized.startsWith('text/markdown')) return 'Markdown document';
-  if (normalized.startsWith('application/json')) return 'JSON document';
-  if (normalized.startsWith('text/csv')) return 'CSV document';
+  if (normalized.startsWith('text/markdown')) { return 'Markdown document'; }
+  if (normalized.startsWith('application/json')) { return 'JSON document'; }
+  if (normalized.startsWith('text/csv')) { return 'CSV document'; }
   return 'Text document';
 }
 
 function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KiB`;
+  if (bytes < 1024) { return `${bytes} B`; }
+  if (bytes < 1024 * 1024) { return `${Math.round(bytes / 1024)} KiB`; }
   return `${(bytes / (1024 * 1024)).toFixed(1)} MiB`;
 }
 
@@ -1151,9 +1151,9 @@ async function openSkillAppInstance(
   if (storedId) {
     try {
       const snapshot = await getSkillAppInstance(client, storedId);
-      if (snapshot.appName === appName) return snapshot;
+      if (snapshot.appName === appName) { return snapshot; }
     } catch (error) {
-      if (!(error instanceof MarifoldApiError) || error.code !== 'APP_NOT_FOUND') throw error;
+      if (!(error instanceof MarifoldApiError) || error.code !== 'APP_NOT_FOUND') { throw error; }
     }
     removeStoredInstance(storageKey);
   }
@@ -1223,8 +1223,8 @@ function formatActivityTime(date: Date): string {
 
 function formatMetrics(metrics: RunMetrics): string {
   const parts: string[] = [];
-  if (metrics.latencyMs !== undefined) parts.push(`${formatSeconds(metrics.latencyMs)}s`);
-  if (metrics.usage?.totalTokens !== undefined) parts.push(`${formatTokens(metrics.usage.totalTokens)} tokens`);
+  if (metrics.latencyMs !== undefined) { parts.push(`${formatSeconds(metrics.latencyMs)}s`); }
+  if (metrics.usage?.totalTokens !== undefined) { parts.push(`${formatTokens(metrics.usage.totalTokens)} tokens`); }
   return parts.join(' · ');
 }
 

@@ -72,13 +72,13 @@ async function* sseFrames(response: Response): AsyncGenerator<SseFrame> {
   let buffer = '';
   while (true) {
     const { done, value } = await reader.read();
-    if (done) break;
+    if (done) { break; }
     buffer += decoder.decode(value, { stream: true });
     let boundary: number;
     while ((boundary = buffer.indexOf('\n\n')) !== -1) {
       const frame = parseSseBlock(buffer.slice(0, boundary));
       buffer = buffer.slice(boundary + 2);
-      if (frame) yield frame;
+      if (frame) { yield frame; }
     }
   }
 }
@@ -88,12 +88,12 @@ function parseSseBlock(block: string): SseFrame | undefined {
   let event = '';
   let data = '';
   for (const line of block.split('\n')) {
-    if (line.startsWith(':')) continue;
-    if (line.startsWith('id: ')) id = Number(line.slice(4));
-    else if (line.startsWith('event: ')) event = line.slice(7);
-    else if (line.startsWith('data: ')) data += line.slice(6);
+    if (line.startsWith(':')) { continue; }
+    if (line.startsWith('id: ')) { id = Number(line.slice(4)); }
+    else if (line.startsWith('event: ')) { event = line.slice(7); }
+    else if (line.startsWith('data: ')) { data += line.slice(6); }
   }
-  if (!event || !data) return undefined;
+  if (!event || !data) { return undefined; }
   return { id, event, data: JSON.parse(data) as Record<string, unknown> };
 }
 
@@ -106,9 +106,9 @@ async function pullFrames(
   const seen: SseFrame[] = [];
   while (true) {
     const result = await frames.next();
-    if (result.done) return { seen };
+    if (result.done) { return { seen }; }
     seen.push(result.value);
-    if (predicate(result.value)) return { matched: result.value, seen };
+    if (predicate(result.value)) { return { matched: result.value, seen }; }
   }
 }
 
@@ -351,7 +351,7 @@ Transform {{text}} into the final prompt.
       expect(invalid.status).toBe(400);
       expect((await invalid.json()).error.message).toContain('must be base64');
     } finally {
-      if (runDir) fs.rmSync(runDir, { recursive: true, force: true });
+      if (runDir) { fs.rmSync(runDir, { recursive: true, force: true }); }
       await server.close();
     }
   });
@@ -585,7 +585,7 @@ Transform {{text}} into the final prompt.
       expect(overflow.status).toBe(429);
       expect((await overflow.json()).error.code).toBe('RUN_LIMIT_EXCEEDED');
 
-      for (const id of runIds) await postJson(base, `/v1/runs/${id}/cancel`, {});
+      for (const id of runIds) { await postJson(base, `/v1/runs/${id}/cancel`, {}); }
     } finally {
       await server.close();
     }

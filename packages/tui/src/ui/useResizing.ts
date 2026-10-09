@@ -18,16 +18,16 @@ export function useResizing(quietMs = 150): boolean {
   const [resizing, setResizing] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
-    if (!stdout) return;
+    if (!stdout) { return; }
     const onResize = (): void => {
       setResizing(true);
-      if (timer.current) clearTimeout(timer.current);
+      if (timer.current) { clearTimeout(timer.current); }
       timer.current = setTimeout(() => setResizing(false), quietMs);
     };
     stdout.on('resize', onResize);
     return () => {
       stdout.off('resize', onResize);
-      if (timer.current) clearTimeout(timer.current);
+      if (timer.current) { clearTimeout(timer.current); }
     };
   }, [stdout, quietMs]);
   return resizing;

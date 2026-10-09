@@ -48,12 +48,12 @@ async function postForm(url: string, body: Record<string, string>, label: string
       body: new URLSearchParams(body),
       signal: AbortSignal.timeout(REFRESH_TIMEOUT_MS),
     };
-    if (dispatcher) init.dispatcher = dispatcher;
+    if (dispatcher) { init.dispatcher = dispatcher; }
     let response: Response;
     try {
       response = await fetchWithTransientRetry(url, init as RequestInit);
     } catch (error) {
-      if (!(error instanceof Error)) throw new Error(`${label}: ${String(error)}`);
+      if (!(error instanceof Error)) { throw new Error(`${label}: ${String(error)}`); }
       // undici puts the real transport reason on `.cause` (ECONNREFUSED, TLS,
       // proxy errors); surface it so a "fetch failed" is diagnosable.
       const cause = (error as { cause?: { code?: string; message?: string } }).cause;

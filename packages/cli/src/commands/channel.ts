@@ -76,7 +76,7 @@ export function registerChannelCommand(program: Command, printer: ConsolePrinter
         );
         allowlistPrompt.close();
         prompt = undefined;
-        if (idsRaw === undefined) throw new PromptAbortError();
+        if (idsRaw === undefined) { throw new PromptAbortError(); }
         const allowlist = idsRaw.trim() ? parseIds(idsRaw) : (existing?.allowlist ?? []);
         if (allowlist.length === 0) {
           process.stderr.write('Warning: empty allowlist — the bot will respond to nobody until you add an id.\n');

@@ -46,7 +46,7 @@ export function FullScreen({ items, header, footer, keyboardActive, workspaceNot
       const result = mapSelectionLines(headerLines, headerLines, 0);
       items.forEach((item, index) => {
         const previous = items[index - 1]?.kind ?? 'banner';
-        if (topGap(item.kind, previous)) result.push(...mapSelectionLines([''], [''], 0));
+        if (topGap(item.kind, previous)) { result.push(...mapSelectionLines([''], [''], 0)); }
         let entry = cache.current.get(item);
         if (!entry || entry.width !== width) {
           const styled = renderToString(<Box width={width} paddingX={1}><TranscriptRow item={item} /></Box>, { columns: width }).split('\n');
@@ -73,36 +73,36 @@ export function FullScreen({ items, header, footer, keyboardActive, workspaceNot
   };
 
   const scroll = (delta: number) => {
-    if (drag.current) return;
+    if (drag.current) { return; }
     const next = Math.max(0, Math.min(maxOffset, top + delta));
     setOffset(next === maxOffset ? null : next);
     setSelection(undefined); setFrozen(undefined); setCopyStatus('');
   };
   useInput((_input, key) => {
-    if (key.eventType === 'release') return;
-    if (key.pageUp) scroll(-Math.max(1, height - 1));
-    if (key.pageDown) scroll(Math.max(1, height - 1));
+    if (key.eventType === 'release') { return; }
+    if (key.pageUp) { scroll(-Math.max(1, height - 1)); }
+    if (key.pageDown) { scroll(Math.max(1, height - 1)); }
     if (key.ctrl && key.end) {
       setOffset(null); setSelection(undefined); setFrozen(undefined); setCopyStatus('');
     }
   }, { isActive: keyboardActive });
 
   useMouse(event => {
-    if (!viewport.current) return;
+    if (!viewport.current) { return; }
     const bounds = measureElement(viewport.current);
     const inside = event.y >= bounds.y && event.y < bounds.y + bounds.height && event.x >= bounds.x && event.x < bounds.x + bounds.width;
     if (event.action === 'wheel') {
-      if (inside) scroll(event.button === 0 ? -3 : 3);
+      if (inside) { scroll(event.button === 0 ? -3 : 3); }
       return;
     }
-    if (event.button !== 0) return;
+    if (event.button !== 0) { return; }
     const snapshot = drag.current;
     const source = snapshot?.lines ?? displayed;
     const viewportRow = Math.max(0, Math.min(bounds.height - 1, event.y - bounds.y));
     const row = Math.max(0, Math.min(source.length - 1, (snapshot?.top ?? top) + viewportRow));
     const position: Position = { row, column: Math.max(0, Math.min(width, event.x - bounds.x)) };
     if (event.action === 'press') {
-      if (!inside || !displayed.length) return;
+      if (!inside || !displayed.length) { return; }
       drag.current = { selection: { anchor: position, focus: position }, lines: displayed, top, offset };
       setFrozen(displayed); setOffset(top); setCopyStatus('');
       setSelection({ anchor: position, focus: position });
@@ -130,7 +130,7 @@ export function FullScreen({ items, header, footer, keyboardActive, workspaceNot
         {visible.map((entry, index) => {
           const line = entry.styled;
           const row = top + index;
-          if (!line || !range || row < range[0].row || row > range[1].row) return <Text key={index} wrap="truncate-end">{line || ' '}</Text>;
+          if (!line || !range || row < range[0].row || row > range[1].row) { return <Text key={index} wrap="truncate-end">{line || ' '}</Text>; }
           // Off-screen rendering turns the transcript's one-cell padding into text.
           const padding = stripAnsi(line).startsWith(' ') ? 1 : 0;
           const start = Math.max(padding, row === range[0].row ? range[0].column : 0);

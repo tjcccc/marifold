@@ -151,7 +151,7 @@ export class MarifoldRuntime {
     const model = request.model ?? profileSettings.model ?? config.default.model;
     const think = request.think ?? profileSettings.think ?? config.default.think;
     const mode = profileSettings.mode ?? 'agent';
-    if (!provider || !model) throw MarifoldError.missingProviderModel(configPath);
+    if (!provider || !model) { throw MarifoldError.missingProviderModel(configPath); }
     return {
       profile, provider, model, think, mode,
       maxContextTokens: request.maxContextTokens ?? profileSettings.maxContextTokens,
@@ -160,7 +160,7 @@ export class MarifoldRuntime {
   }
 
   async ask(request: MarifoldRunRequest): Promise<MarifoldAskResponse> {
-    if (request.sessionId) this.assertSessionAvailable(request.sessionId, request.sessionOwner);
+    if (request.sessionId) { this.assertSessionAvailable(request.sessionId, request.sessionOwner); }
     const startedAtMs = Date.now();
     const startedAt = new Date(startedAtMs).toISOString();
     const settings = this.resolveSettings(request);
@@ -237,7 +237,7 @@ export class MarifoldRuntime {
         iteration -= 1;
         continue;
       }
-      if (!response.ok || !chatTools || !response.toolCalls?.length) break;
+      if (!response.ok || !chatTools || !response.toolCalls?.length) { break; }
 
       exchange.push({
         kind: 'assistant',
@@ -289,7 +289,7 @@ export class MarifoldRuntime {
           responseMetrics,
         );
       } else {
-        if (request.userTurn) this.sessionResolver.replaceLastUserTurn(request.sessionId, request.userTurn);
+        if (request.userTurn) { this.sessionResolver.replaceLastUserTurn(request.sessionId, request.userTurn); }
         this.sessionResolver.replaceLastAssistantTurn(request.sessionId, stripped.text);
         this.sessionResolver.saveLastUserTurnAttachments(request.sessionId, historyImages);
         this.sessionResolver.saveLastResponseMetrics(request.sessionId, responseMetrics);
@@ -316,7 +316,7 @@ export class MarifoldRuntime {
     onComplete?: (summary: { usage?: UsageInfo; latencyMs?: number }) => void,
     onReasoningSummary?: (text: string) => void,
   ): AsyncGenerator<string, void, unknown> {
-    if (request.sessionId) this.assertSessionAvailable(request.sessionId, request.sessionOwner);
+    if (request.sessionId) { this.assertSessionAvailable(request.sessionId, request.sessionOwner); }
     const startedAtMs = Date.now();
     const startedAt = new Date(startedAtMs).toISOString();
     const settings = this.resolveSettings(request);
@@ -458,7 +458,7 @@ export class MarifoldRuntime {
             'EMPTY_RESPONSE',
           );
         }
-        if (streamedText.length === 0 && finalText) yield finalText;
+        if (streamedText.length === 0 && finalText) { yield finalText; }
         const userTurn = request.userTurn ?? request.prompt;
         const responseMetrics = completedResponseMetrics(
           'chat',
@@ -488,7 +488,7 @@ export class MarifoldRuntime {
               responseMetrics,
             );
           } else {
-            if (request.userTurn) this.sessionResolver.replaceLastUserTurn(request.sessionId, request.userTurn);
+            if (request.userTurn) { this.sessionResolver.replaceLastUserTurn(request.sessionId, request.userTurn); }
             this.sessionResolver.replaceLastAssistantTurn(request.sessionId, finalText);
             this.sessionResolver.saveLastUserTurnAttachments(request.sessionId, historyImages);
             this.sessionResolver.saveLastResponseMetrics(request.sessionId, responseMetrics);
@@ -528,7 +528,7 @@ export class MarifoldRuntime {
   /** Run the selected web-search backend directly for non-chat integrations. */
   async searchWeb(query: string, maxResults?: number): Promise<string> {
     const config = resolveWebSearchConfig(this.options.loadedConfig.config.webSearch);
-    if (!config.enabled) throw new Error('Web search is disabled.');
+    if (!config.enabled) { throw new Error('Web search is disabled.'); }
     const results = await this.searchBackend.search(query, maxResults ?? config.maxResults);
     return formatSearchResults(query, results);
   }
@@ -580,7 +580,7 @@ export class MarifoldRuntime {
       })
       .sort((a, b) => {
         const pinOrder = Number(Boolean(b.pinned)) - Number(Boolean(a.pinned));
-        if (pinOrder !== 0) return pinOrder;
+        if (pinOrder !== 0) { return pinOrder; }
         const activityOrder = (b.updatedAt ?? '').localeCompare(a.updatedAt ?? '');
         return activityOrder !== 0 ? activityOrder : a.name.localeCompare(b.name);
       });
@@ -880,7 +880,7 @@ export class MarifoldRuntime {
     const global = resolveAgentConfig(this.options.loadedConfig.config.agent);
     const name = profile ?? this.options.loadedConfig.config.default.profile;
     const override = this.profileResolver.loadSettings(name).agent;
-    if (!override) return global;
+    if (!override) { return global; }
     const unattended = { ...(global.unattended ?? {}), ...(override.unattended ?? {}) };
     return {
       approval: { ...global.approval, ...(override.approval ?? {}) },
@@ -909,7 +909,7 @@ export class MarifoldRuntime {
     } = {},
   ): AgentRunner {
     return new AgentRunner({
-      checkSession: options => { if (options.sessionId) this.assertSessionAvailable(options.sessionId, options.sessionOwner); },
+      checkSession: options => { if (options.sessionId) { this.assertSessionAvailable(options.sessionId, options.sessionOwner); } },
       holdSession: options => options.sessionId
         ? this.sessionLeases.hold(options.sessionId, options.sessionOwner ?? this.sessionOwner)
         : undefined,
@@ -982,7 +982,7 @@ export class MarifoldRuntime {
           .filter(t => t.role === 'user' || t.role === 'assistant')
           .map(t => ({ role: t.role as 'user' | 'assistant', content: t.content })),
       resolveBuiltInInstructions: (objective, resolvedProfile) => {
-        if (runtimeOptions.deviceInstructions) return [runtimeOptions.deviceInstructions];
+        if (runtimeOptions.deviceInstructions) { return [runtimeOptions.deviceInstructions]; }
         const { config } = this.options.loadedConfig;
         if (mentionsSkillApps(objective)) {
           return [buildSkillAppBuilderGuide({
@@ -990,7 +990,7 @@ export class MarifoldRuntime {
             appsDir: config.paths.appsDir ?? defaultAppsDir(),
           })];
         }
-        if (!mentionsSkills(objective)) return [];
+        if (!mentionsSkills(objective)) { return []; }
         return [buildSkillManagerGuide({
           profile: resolvedProfile,
           profilesDir: config.paths.profilesDir,
@@ -998,7 +998,7 @@ export class MarifoldRuntime {
         })];
       },
       resolveReadOnlyFolders: resolvedProfile => {
-        if (runtimeOptions.readOnlyFolders) return runtimeOptions.readOnlyFolders;
+        if (runtimeOptions.readOnlyFolders) { return runtimeOptions.readOnlyFolders; }
         const { config } = this.options.loadedConfig;
         return [
           path.join(config.paths.profilesDir, resolvedProfile, 'skills'),
@@ -1013,7 +1013,7 @@ export class MarifoldRuntime {
   createHostContextTools(profile?: string): ToolRegistry {
     const registry = new ToolRegistry();
     for (const tool of this.createDefaultToolRegistry(profile).list()) {
-      if (tool.kind === 'interaction' || ['web_search', 'read_web_page', 'delegate'].includes(tool.definition.name)) registry.register(tool);
+      if (tool.kind === 'interaction' || ['web_search', 'read_web_page', 'delegate'].includes(tool.definition.name)) { registry.register(tool); }
     }
     return registry;
   }
@@ -1086,9 +1086,9 @@ export class MarifoldRuntime {
 
   listSkills(profile?: string, scope?: SkillScope): MarifoldSkill[] {
     const userSkills = this.createSkillStore(profile).list(scope);
-    if (scope !== undefined) return userSkills;
+    if (scope !== undefined) { return userSkills; }
     const byName = new Map(userSkills.map(skill => [skill.name, skill]));
-    for (const skill of listBuiltInSkills()) byName.set(skill.name, skill);
+    for (const skill of listBuiltInSkills()) { byName.set(skill.name, skill); }
     return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name));
   }
 
@@ -1098,7 +1098,7 @@ export class MarifoldRuntime {
 
   resolveSkillInvocation(input: string, profile?: string): ResolvedSkillInvocation {
     const parsed = parseSkillInvocation(input);
-    if (!parsed) throw MarifoldError.skillInvalid('Expected an invocation beginning with $.');
+    if (!parsed) { throw MarifoldError.skillInvalid('Expected an invocation beginning with $.'); }
     const resolvedProfile = profile ?? this.options.loadedConfig.config.default.profile;
     this.profileResolver.loadSettings(resolvedProfile);
     const skill = getBuiltInSkill(parsed.name)
@@ -1266,7 +1266,7 @@ export class MarifoldRuntime {
         ...(effects && effects.length > 0 ? { effects } : {}),
       };
     } catch (error) {
-      if (signal?.aborted) throw error;
+      if (signal?.aborted) { throw error; }
       return {
         status: 'error',
         error: {
@@ -1296,7 +1296,7 @@ export class MarifoldRuntime {
     skillName?: string,
   ): Promise<{ text: string; usage?: UsageInfo; effects?: SkillAppInstalledEffect[] }> {
     const registry = new ToolRegistry();
-    if (interactions) registry.register(new AskUserTool());
+    if (interactions) { registry.register(new AskUserTool()); }
     if (attachments.length > 0) {
       registry.register(new InspectAttachmentTool());
       registry.register(new ReadAttachmentTool());
@@ -1394,8 +1394,8 @@ export class MarifoldRuntime {
         userInputHandler: interactions.userInputHandler,
       } : {}),
     })) {
-      if (event.type === 'text' && event.phase === 'final') finalText = event.text;
-      if (event.type === 'error') failure = { code: event.code, message: event.message };
+      if (event.type === 'text' && event.phase === 'final') { finalText = event.text; }
+      if (event.type === 'error') { failure = { code: event.code, message: event.message }; }
       if (event.type === 'tool_result' && event.tool === 'manage_skill_app' && event.isError) {
         lastBuilderValidationError = event.summary;
       }
@@ -1473,7 +1473,7 @@ export class MarifoldRuntime {
    * disabled, or missing a resolvable token. Call start()/stop(). */
   createTelegramBridge(log?: (message: string) => void): TelegramBridge | undefined {
     const config = this.options.loadedConfig.config.channels?.telegram;
-    if (!config || config.enabled === false) return undefined;
+    if (!config || config.enabled === false) { return undefined; }
     const token = config.botTokenEnv ? process.env[config.botTokenEnv] : config.botToken;
     if (!token) {
       log?.(`Telegram channel configured but no bot token resolved${config.botTokenEnv ? ` (env ${config.botTokenEnv} unset)` : ''} — bridge not started.`);
@@ -1553,9 +1553,9 @@ export class MarifoldRuntime {
   }
 
   private discardFailedNewSession(sessionId: string | undefined, sessionWasMissing: boolean): void {
-    if (!sessionId || !sessionWasMissing) return;
+    if (!sessionId || !sessionWasMissing) { return; }
     const session = this.sessionResolver.get(sessionId);
-    if (session?.turnCount === 0) this.sessionResolver.delete(sessionId);
+    if (session?.turnCount === 0) { this.sessionResolver.delete(sessionId); }
   }
 
   private createEngine(providerName: string, useSession: boolean, profileContext = true): PriestEngine {
@@ -1579,15 +1579,15 @@ export class MarifoldRuntime {
   }
 
   private async refreshProviderCredentialsIfNeeded(providerName: string): Promise<void> {
-    if (providerName !== 'github_copilot' && providerName !== 'chatgpt' && providerName !== 'xai') return;
+    if (providerName !== 'github_copilot' && providerName !== 'chatgpt' && providerName !== 'xai') { return; }
 
     await withOAuthCredentials(this.options.loadedConfig, providerName, async provider => {
-      if (!provider.oauthToken) return;
-      if (provider.apiKeyEnv && process.env[provider.apiKeyEnv]) return;
+      if (!provider.oauthToken) { return; }
+      if (provider.apiKeyEnv && process.env[provider.apiKeyEnv]) { return; }
 
       const nowSeconds = Math.floor(Date.now() / 1000);
       if (provider.apiKey && provider.apiKeyExpiresAt !== undefined
-        && provider.apiKeyExpiresAt > nowSeconds + 60) return;
+        && provider.apiKeyExpiresAt > nowSeconds + 60) { return; }
 
       try {
         if (providerName === 'github_copilot') {
@@ -1599,7 +1599,7 @@ export class MarifoldRuntime {
           return { apiKey: refreshed.apiKey, oauthToken: refreshed.refreshToken, apiKeyExpiresAt: refreshed.expiresAt };
         }
         // Legacy ChatGPT credentials may be valid without a reported expiry.
-        if (provider.apiKey && provider.apiKeyExpiresAt === undefined) return;
+        if (provider.apiKey && provider.apiKeyExpiresAt === undefined) { return; }
         const refreshed: ChatGptRefreshedTokens = await refreshChatGptAccessToken(provider.oauthToken);
         return {
           apiKey: refreshed.apiKey, oauthToken: refreshed.refreshToken, apiKeyExpiresAt: refreshed.expiresAt,
@@ -1620,16 +1620,16 @@ export class MarifoldRuntime {
     definitions: ToolDefinition[];
     execute: (name: string, args: Record<string, JSONValue>) => Promise<{ content: string; isError?: boolean }>;
   } | undefined {
-    if (request.chatTools === false) return undefined;
+    if (request.chatTools === false) { return undefined; }
     const webSearch = resolveWebSearchConfig(this.options.loadedConfig.config.webSearch);
-    if (!webSearch.enabled && webSearchMode !== 'fallback') return undefined;
+    if (!webSearch.enabled && webSearchMode !== 'fallback') { return undefined; }
 
     const agentConfig = this.resolveAgentConfigForProfile(request.profile);
     const approval = agentConfig.approval;
     const tools: AgentTool[] = [];
-    if (webSearchMode === 'fallback') tools.push(new WebSearchTool(this.searchBackend, webSearch.maxResults), new ReadWebPageTool(new WebPageReader({ proxy: webSearch.proxy })));
-    if (approval.read === 'allow') tools.push(new ReadFileTool());
-    if (tools.length === 0) return undefined;
+    if (webSearchMode === 'fallback') { tools.push(new WebSearchTool(this.searchBackend, webSearch.maxResults), new ReadWebPageTool(new WebPageReader({ proxy: webSearch.proxy }))); }
+    if (approval.read === 'allow') { tools.push(new ReadFileTool()); }
+    if (tools.length === 0) { return undefined; }
 
     const outputLimit = agentConfig.toolOutputLimit;
     const toolContext = { cwd: process.cwd(), outputLimit, signal: request.signal };
@@ -1637,7 +1637,7 @@ export class MarifoldRuntime {
       definitions: tools.map(tool => tool.definition),
       execute: async (name, args) => {
         const tool = tools.find(t => t.definition.name === name);
-        if (!tool) return { content: `Unknown tool '${name}'.`, isError: true };
+        if (!tool) { return { content: `Unknown tool '${name}'.`, isError: true }; }
         try {
           const result = await tool.execute(args, toolContext);
           return { content: result.content, isError: result.isError };
@@ -1656,7 +1656,7 @@ export class MarifoldRuntime {
     const provider = config.providers[settings.provider];
     const neutralReasoning = this.supportsNeutralReasoning(settings.provider, settings.model);
     const providerOptions: Record<string, JSONValue> = {};
-    if (LEGACY_THINK_PROVIDER_NAMES.has(settings.provider)) providerOptions['think'] = settings.think;
+    if (LEGACY_THINK_PROVIDER_NAMES.has(settings.provider)) { providerOptions['think'] = settings.think; }
     // Compatibility bridge for Priest 3.0.x. Priest 3.1 reads providerTools
     // directly; Marifold's Responses wrapper consumes and removes this marker
     // when an older engine does not forward that additive request field.
@@ -1714,7 +1714,7 @@ export class MarifoldRuntime {
 
   private memoryForRequest(profile: string, requestMemories = true, prompt = '', thinking = false): string[] {
     const { config } = this.options.loadedConfig;
-    if (!this.memoryEnabled(profile, requestMemories)) return [];
+    if (!this.memoryEnabled(profile, requestMemories)) { return []; }
     this.ensureProfileMemoryFiles(profile);
     return this.memoryStore.listPromptMemory(profile, {
       contextLimit: config.memory.contextLimit,
@@ -1781,7 +1781,7 @@ export class MarifoldRuntime {
     }
     if (memoryOn) {
       context.push('Profile memory is app-owned context. Current user messages and profile rules outrank memory.');
-      if (shouldInjectMemoryInstructions(prompt)) context.push(buildMemoryInstructions());
+      if (shouldInjectMemoryInstructions(prompt)) { context.push(buildMemoryInstructions()); }
     } else if (memory.length > 0) {
       context.push('Profile memory is app-owned context. Current user messages and profile rules outrank memory.');
     }
@@ -1792,7 +1792,7 @@ export class MarifoldRuntime {
     request: MarifoldRunRequest,
     settings: MarifoldResolvedSettings,
   ): string[] {
-    if (request.replaceUserTurnIndex === undefined) return [];
+    if (request.replaceUserTurnIndex === undefined) { return []; }
     if (!request.sessionId) {
       throw MarifoldError.configInvalid('replaceUserTurnIndex requires sessionId.');
     }
@@ -1821,7 +1821,7 @@ export class MarifoldRuntime {
       images,
       responseMetrics,
     );
-    if (!result.replaced) this.missingEditedTurn(sessionId, userTurnIndex);
+    if (!result.replaced) { this.missingEditedTurn(sessionId, userTurnIndex); }
   }
 
   private missingEditedTurn(sessionId: string, userTurnIndex: number): never {
@@ -1892,8 +1892,8 @@ function completedResponseMetrics(
 /** Sum two provider usage reports, preserving undefined when neither side has
  * a given field (so absent token data stays absent rather than showing 0). */
 function sumUsage(a: UsageInfo | undefined, b: UsageInfo | undefined): UsageInfo | undefined {
-  if (!a) return b;
-  if (!b) return a;
+  if (!a) { return b; }
+  if (!b) { return a; }
   const add = (x?: number, y?: number): number | undefined =>
     x == null && y == null ? undefined : (x ?? 0) + (y ?? 0);
   return {

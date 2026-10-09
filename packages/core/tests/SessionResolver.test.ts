@@ -33,7 +33,7 @@ function seed(dbPath: string): void {
 }
 
 afterEach(() => {
-  for (const dir of tempDirs.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
+  for (const dir of tempDirs.splice(0)) { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
 describe('SessionResolver.checkIntegrity', () => {
@@ -119,7 +119,7 @@ describe('SessionResolver display metadata', () => {
     // A provider turn may have loaded the Priest session before the sidebar
     // action. Its later save replaces Priest's metadata blob, but must not
     // overwrite Marifold's separate display row.
-    if (staleModelSession) await store.save(staleModelSession);
+    if (staleModelSession) { await store.save(staleModelSession); }
     expect(resolver.get('s1')).toMatchObject({ title: 'Important chat', pinned: true });
 
     expect(resolver.updateDisplay('s1', { title: null, pinned: false })).toBe(true);

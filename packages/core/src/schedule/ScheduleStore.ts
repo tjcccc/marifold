@@ -68,7 +68,7 @@ export class ScheduleStore {
   }
 
   list(): ScheduleState[] {
-    if (!fs.existsSync(this.schedulesDir)) return [];
+    if (!fs.existsSync(this.schedulesDir)) { return []; }
     return fs.readdirSync(this.schedulesDir, { withFileTypes: true })
       .filter(entry => entry.isFile() && entry.name.endsWith('.json'))
       .map(entry => this.readFile(path.join(this.schedulesDir, entry.name)))
@@ -78,32 +78,32 @@ export class ScheduleStore {
   get(scheduleId: string): ScheduleState | undefined {
     this.assertSafeId(scheduleId);
     const filePath = this.schedulePath(scheduleId);
-    if (!fs.existsSync(filePath)) return undefined;
+    if (!fs.existsSync(filePath)) { return undefined; }
     return this.readFile(filePath);
   }
 
   require(scheduleId: string): ScheduleState {
     const schedule = this.get(scheduleId);
-    if (!schedule) throw MarifoldError.scheduleNotFound(scheduleId);
+    if (!schedule) { throw MarifoldError.scheduleNotFound(scheduleId); }
     return schedule;
   }
 
   update(scheduleId: string, input: ScheduleUpdateInput): ScheduleState {
     const schedule = this.require(scheduleId);
-    if (input.name !== undefined) schedule.name = requiredText(input.name, 'name');
-    if (input.objective !== undefined) schedule.objective = requiredText(input.objective, 'objective');
+    if (input.name !== undefined) { schedule.name = requiredText(input.name, 'name'); }
+    if (input.objective !== undefined) { schedule.objective = requiredText(input.objective, 'objective'); }
     if (input.cron !== undefined) {
       validateCron(input.cron);
       schedule.cron = input.cron.trim();
     }
     if (input.profile !== undefined) {
-      if (input.profile.trim()) schedule.profile = input.profile.trim();
-      else delete schedule.profile;
+      if (input.profile.trim()) { schedule.profile = input.profile.trim(); }
+      else { delete schedule.profile; }
     }
-    if (input.enabled !== undefined) schedule.enabled = input.enabled;
-    if (input.lastRunAt !== undefined) schedule.lastRunAt = input.lastRunAt;
-    if (input.lastTaskId !== undefined) schedule.lastTaskId = input.lastTaskId;
-    if (input.lastResultSeen !== undefined) schedule.lastResultSeen = input.lastResultSeen;
+    if (input.enabled !== undefined) { schedule.enabled = input.enabled; }
+    if (input.lastRunAt !== undefined) { schedule.lastRunAt = input.lastRunAt; }
+    if (input.lastTaskId !== undefined) { schedule.lastTaskId = input.lastTaskId; }
+    if (input.lastResultSeen !== undefined) { schedule.lastResultSeen = input.lastResultSeen; }
     schedule.updatedAt = new Date().toISOString();
     this.write(schedule);
     return schedule;
@@ -112,7 +112,7 @@ export class ScheduleStore {
   delete(scheduleId: string): boolean {
     this.assertSafeId(scheduleId);
     const filePath = this.schedulePath(scheduleId);
-    if (!fs.existsSync(filePath)) return false;
+    if (!fs.existsSync(filePath)) { return false; }
     fs.rmSync(filePath);
     return true;
   }
@@ -126,7 +126,7 @@ export class ScheduleStore {
     const reference = schedule.lastRunAt ?? schedule.createdAt;
     const cron = new Cron(schedule.cron);
     const next = cron.nextRun(new Date(reference));
-    if (!next) return undefined;
+    if (!next) { return undefined; }
     // A firing that was missed (e.g. while the service was down) is due now.
     return next <= now ? next : next;
   }
@@ -135,16 +135,16 @@ export class ScheduleStore {
    * or invalid cron expression is reported and skipped, so one bad schedule
    * cannot stop every other schedule from firing. */
   due(now: Date = new Date(), onInvalid?: (file: string, error: unknown) => void): ScheduleState[] {
-    if (!fs.existsSync(this.schedulesDir)) return [];
+    if (!fs.existsSync(this.schedulesDir)) { return []; }
     const due: ScheduleState[] = [];
     for (const entry of fs.readdirSync(this.schedulesDir, { withFileTypes: true })) {
-      if (!entry.isFile() || !entry.name.endsWith('.json')) continue;
+      if (!entry.isFile() || !entry.name.endsWith('.json')) { continue; }
       const file = path.join(this.schedulesDir, entry.name);
       try {
         const schedule = this.readFile(file);
-        if (!schedule.enabled) continue;
+        if (!schedule.enabled) { continue; }
         const next = this.nextRun(schedule, now);
-        if (next !== undefined && next <= now) due.push(schedule);
+        if (next !== undefined && next <= now) { due.push(schedule); }
       } catch (error) {
         onInvalid?.(file, error);
       }
@@ -155,7 +155,7 @@ export class ScheduleStore {
   private createScheduleId(): string {
     for (let attempt = 0; attempt < 10; attempt += 1) {
       const id = `sched_${crypto.randomBytes(4).toString('hex')}`;
-      if (!fs.existsSync(this.schedulePath(id))) return id;
+      if (!fs.existsSync(this.schedulePath(id))) { return id; }
     }
     throw MarifoldError.scheduleInvalid('Could not create a unique schedule id.');
   }
@@ -192,7 +192,7 @@ export class ScheduleStore {
         updatedAt: requiredText(parsed.updatedAt, 'updatedAt'),
       };
     } catch (error) {
-      if (error instanceof MarifoldError) throw error;
+      if (error instanceof MarifoldError) { throw error; }
       throw MarifoldError.scheduleInvalid(`Could not read schedule ${filePath}: ${String(error)}`);
     }
   }
@@ -215,6 +215,6 @@ function validateCron(expression: string): void {
 }
 
 function requiredText(value: unknown, label: string): string {
-  if (typeof value === 'string' && value.trim()) return value.trim();
+  if (typeof value === 'string' && value.trim()) { return value.trim(); }
   throw MarifoldError.scheduleInvalid(`Schedule ${label} cannot be empty.`);
 }

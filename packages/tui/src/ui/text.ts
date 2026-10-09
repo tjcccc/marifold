@@ -2,9 +2,9 @@
  * ellipsis, so list rows and menus stay a single, non-wrapping line. Returns ''
  * when there is no room. */
 export function truncate(text: string, max: number): string {
-  if (max <= 0) return '';
+  if (max <= 0) { return ''; }
   const flat = text.replace(/\s+/g, ' ').trim();
-  if (flat.length <= max) return flat;
+  if (flat.length <= max) { return flat; }
   return flat.slice(0, Math.max(0, max - 1)) + '…';
 }
 

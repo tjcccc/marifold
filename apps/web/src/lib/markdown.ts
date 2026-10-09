@@ -72,7 +72,7 @@ export function parseMarkdown(source: string): MarkdownBlock[] {
       const inner: string[] = [];
       while (index < lines.length) {
         const stripped = quoteLine(lines[index]);
-        if (stripped === undefined) break;
+        if (stripped === undefined) { break; }
         inner.push(stripped);
         index += 1;
       }
@@ -86,7 +86,7 @@ export function parseMarkdown(source: string): MarkdownBlock[] {
       const items: InlineNode[][] = [];
       while (index < lines.length) {
         const item = listItem(lines[index]);
-        if (!item || item.ordered !== ordered) break;
+        if (!item || item.ordered !== ordered) { break; }
         items.push(parseInline(item.text));
         index += 1;
       }
@@ -127,23 +127,23 @@ function tableAt(
   lines: string[],
   index: number,
 ): { block: Extract<MarkdownBlock, { type: 'table' }>; nextIndex: number } | undefined {
-  if (index + 1 >= lines.length || !lines[index].includes('|')) return undefined;
+  if (index + 1 >= lines.length || !lines[index].includes('|')) { return undefined; }
 
   const headerCells = splitTableRow(lines[index]);
   const delimiterCells = splitTableRow(lines[index + 1]);
-  if (headerCells.length === 0 || delimiterCells.length !== headerCells.length) return undefined;
-  if (!delimiterCells.every(cell => /^:?-{3,}:?$/.test(cell))) return undefined;
+  if (headerCells.length === 0 || delimiterCells.length !== headerCells.length) { return undefined; }
+  if (!delimiterCells.every(cell => /^:?-{3,}:?$/.test(cell))) { return undefined; }
 
   const alignments = delimiterCells.map<TableAlignment>(cell => {
-    if (cell.startsWith(':') && cell.endsWith(':')) return 'center';
-    if (cell.endsWith(':')) return 'right';
+    if (cell.startsWith(':') && cell.endsWith(':')) { return 'center'; }
+    if (cell.endsWith(':')) { return 'right'; }
     return 'left';
   });
   const rows: InlineNode[][][] = [];
   let nextIndex = index + 2;
   while (nextIndex < lines.length && lines[nextIndex].trim() !== '' && lines[nextIndex].includes('|')) {
     const cells = splitTableRow(lines[nextIndex]);
-    if (cells.length === 0) break;
+    if (cells.length === 0) { break; }
     rows.push(normalizeTableCells(cells, headerCells.length).map(parseInline));
     nextIndex += 1;
   }
@@ -163,8 +163,8 @@ function tableAt(
  * inline-code spans as cell boundaries. Leading/trailing pipes are optional. */
 function splitTableRow(line: string): string[] {
   let text = line.trim();
-  if (text.startsWith('|')) text = text.slice(1);
-  if (text.endsWith('|') && !isEscaped(text, text.length - 1)) text = text.slice(0, -1);
+  if (text.startsWith('|')) { text = text.slice(1); }
+  if (text.endsWith('|') && !isEscaped(text, text.length - 1)) { text = text.slice(0, -1); }
 
   const cells: string[] = [];
   let cell = '';
@@ -176,7 +176,7 @@ function splitTableRow(line: string): string[] {
       index += 1;
       continue;
     }
-    if (char === '`') inCode = !inCode;
+    if (char === '`') { inCode = !inCode; }
     if (char === '|' && !inCode) {
       cells.push(cell.trim());
       cell = '';
@@ -190,7 +190,7 @@ function splitTableRow(line: string): string[] {
 
 function isEscaped(text: string, index: number): boolean {
   let slashes = 0;
-  for (let cursor = index - 1; cursor >= 0 && text[cursor] === '\\'; cursor -= 1) slashes += 1;
+  for (let cursor = index - 1; cursor >= 0 && text[cursor] === '\\'; cursor -= 1) { slashes += 1; }
   return slashes % 2 === 1;
 }
 
@@ -207,9 +207,9 @@ function quoteLine(line: string): string | undefined {
 
 function listItem(line: string): { ordered: boolean; text: string } | undefined {
   const unordered = /^\s*[-*]\s+(.*)$/.exec(line);
-  if (unordered) return { ordered: false, text: unordered[1] };
+  if (unordered) { return { ordered: false, text: unordered[1] }; }
   const ordered = /^\s*\d+[.)]\s+(.*)$/.exec(line);
-  if (ordered) return { ordered: true, text: ordered[1] };
+  if (ordered) { return { ordered: true, text: ordered[1] }; }
   return undefined;
 }
 
@@ -225,7 +225,7 @@ export function parseInline(text: string): InlineNode[] {
       nodes.push({ type: 'text', text: rest });
       break;
     }
-    if (match.index > 0) nodes.push({ type: 'text', text: rest.slice(0, match.index) });
+    if (match.index > 0) { nodes.push({ type: 'text', text: rest.slice(0, match.index) }); }
     const token = match[0];
     if (match[1]) {
       nodes.push({ type: 'break' });
@@ -247,7 +247,7 @@ export function parseInline(text: string): InlineNode[] {
   // Recognize older source wrappers without reclassifying ordinary links.
   for (let i = 1; i < nodes.length - 1; i++) {
     const before = nodes[i - 1], link = nodes[i], after = nodes[i + 1];
-    if (before.type !== 'text' || link.type !== 'link' || after.type !== 'text' || !/^https?:/.test(link.href)) continue;
+    if (before.type !== 'text' || link.type !== 'link' || after.type !== 'text' || !/^https?:/.test(link.href)) { continue; }
     const opening = /[（(]\s*(?:来源|source)\s*[:：]\s*$/i;
     if (opening.test(before.text) && /^\s*[）)]/.test(after.text)) {
       before.text = before.text.replace(opening, '');
@@ -259,7 +259,7 @@ export function parseInline(text: string): InlineNode[] {
   // punctuation after one or more source links.
   for (let i = 0; i < nodes.length; i++) {
     const node = nodes[i];
-    if (node.type !== 'link' || !node.citation) continue;
+    if (node.type !== 'link' || !node.citation) { continue; }
     let end = i + 1;
     while (end < nodes.length) {
       const next = nodes[end];
@@ -272,12 +272,12 @@ export function parseInline(text: string): InlineNode[] {
       break;
     }
     const after = nodes[end];
-    if (after?.type !== 'text') continue;
+    if (after?.type !== 'text') { continue; }
     const punctuation = /^[ \t]*([。！？.!?]+)/.exec(after.text);
-    if (!punctuation) continue;
+    if (!punctuation) { continue; }
     after.text = after.text.slice(punctuation[0].length);
     const before = nodes[i - 1];
-    if (before?.type === 'text') before.text = before.text.replace(/[ \t]+$/, '') + punctuation[1];
+    if (before?.type === 'text') { before.text = before.text.replace(/[ \t]+$/, '') + punctuation[1]; }
     else { nodes.splice(i, 0, { type: 'text', text: punctuation[1] }); i++; }
   }
   return nodes;

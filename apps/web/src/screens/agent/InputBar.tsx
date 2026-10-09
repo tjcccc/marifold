@@ -77,7 +77,7 @@ export function InputBar(props: InputBarProps) {
 
   // Keep the highlighted suggestion scrolled into view as the arrows move it.
   useEffect(() => {
-    if (menuOpen) activeItemRef.current?.scrollIntoView?.({ block: 'nearest' });
+    if (menuOpen) { activeItemRef.current?.scrollIntoView?.({ block: 'nearest' }); }
   }, [active, menuOpen]);
 
   // Pasting a long block can make the native textarea scroll to the caret
@@ -86,7 +86,7 @@ export function InputBar(props: InputBarProps) {
   // caret scrolling), otherwise newly typed tail characters look invisible.
   useLayoutEffect(() => {
     const node = textareaRef.current;
-    if (!node) return;
+    if (!node) { return; }
     autosize(node);
     return syncHighlightAfterLayout(node);
   }, [text]);
@@ -96,10 +96,10 @@ export function InputBar(props: InputBarProps) {
   // completed token once that value has reached the DOM.
   useLayoutEffect(() => {
     const caret = completionCaretRef.current;
-    if (caret === undefined) return;
+    if (caret === undefined) { return; }
     completionCaretRef.current = undefined;
     const node = textareaRef.current;
-    if (!node) return;
+    if (!node) { return; }
     node.focus();
     node.setSelectionRange(caret, caret);
     autosize(node);
@@ -108,14 +108,14 @@ export function InputBar(props: InputBarProps) {
 
   function submit(): void {
     const value = text.trim();
-    if (!value || props.disabled) return;
+    if (!value || props.disabled) { return; }
     props.onSubmit(value);
     setText('');
     removeDraft(props.draftKey);
     setCaret(0);
     setDismissed(false);
     const node = textareaRef.current;
-    if (node) node.style.height = 'auto';
+    if (node) { node.style.height = 'auto'; }
   }
 
   function complete(item: Suggestion): void {
@@ -136,7 +136,7 @@ export function InputBar(props: InputBarProps) {
   function onKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>): void {
     // Enter commits an active IME composition. It must never also submit the
     // half-composed text (keyCode 229 covers older WebKit behavior).
-    if (composingRef.current || event.nativeEvent.isComposing || event.keyCode === 229) return;
+    if (composingRef.current || event.nativeEvent.isComposing || event.keyCode === 229) { return; }
     if (event.key === 'Backspace' && !event.altKey && !event.ctrlKey && !event.metaKey && event.currentTarget.selectionStart === event.currentTarget.selectionEnd) {
       const token = composerTokenBefore(text, event.currentTarget.selectionStart);
       if (token) {
@@ -160,7 +160,7 @@ export function InputBar(props: InputBarProps) {
     }
     // Mobile keyboards expose Enter as the only practical newline control.
     // Leave its native textarea behavior intact; the send button submits.
-    if (event.key === 'Enter' && props.enterSubmits === false) return;
+    if (event.key === 'Enter' && props.enterSubmits === false) { return; }
     if (menuOpen) {
       if (event.key === 'ArrowDown') {
         event.preventDefault();
@@ -190,9 +190,9 @@ export function InputBar(props: InputBarProps) {
   }
 
   function onPaste(event: React.ClipboardEvent<HTMLTextAreaElement>): void {
-    if (!canAttach) return;
+    if (!canAttach) { return; }
     const files = [...event.clipboardData.files];
-    if (files.length === 0) return;
+    if (files.length === 0) { return; }
     event.preventDefault();
     props.onAttachFiles?.(files);
   }
@@ -204,14 +204,14 @@ export function InputBar(props: InputBarProps) {
 
   function syncHighlightScroll(node: HTMLTextAreaElement): void {
     const highlight = highlightRef.current;
-    if (!highlight) return;
+    if (!highlight) { return; }
     highlight.scrollTop = node.scrollTop;
     highlight.scrollLeft = node.scrollLeft;
   }
 
   function syncHighlightAfterLayout(node: HTMLTextAreaElement): (() => void) | undefined {
     syncHighlightScroll(node);
-    if (typeof window.requestAnimationFrame !== 'function') return undefined;
+    if (typeof window.requestAnimationFrame !== 'function') { return undefined; }
     const frame = window.requestAnimationFrame(() => syncHighlightScroll(node));
     return () => window.cancelAnimationFrame(frame);
   }
@@ -360,7 +360,7 @@ export function InputBar(props: InputBarProps) {
                 multiple
                 onChange={event => {
                   const files = [...(event.target.files ?? [])];
-                  if (files.length > 0) props.onAttachFiles?.(files);
+                  if (files.length > 0) { props.onAttachFiles?.(files); }
                   event.target.value = '';
                 }}
               />
@@ -411,7 +411,7 @@ export function InputBar(props: InputBarProps) {
 const DRAFT_PREFIX = 'marifold.composer-draft.';
 
 function readDraft(key?: string): string {
-  if (!key) return '';
+  if (!key) { return ''; }
   try {
     return localStorage.getItem(`${DRAFT_PREFIX}${key}`) ?? '';
   } catch {
@@ -420,10 +420,10 @@ function readDraft(key?: string): string {
 }
 
 function writeDraft(key: string | undefined, value: string): void {
-  if (!key) return;
+  if (!key) { return; }
   try {
-    if (value) localStorage.setItem(`${DRAFT_PREFIX}${key}`, value);
-    else localStorage.removeItem(`${DRAFT_PREFIX}${key}`);
+    if (value) { localStorage.setItem(`${DRAFT_PREFIX}${key}`, value); }
+    else { localStorage.removeItem(`${DRAFT_PREFIX}${key}`); }
   } catch {
     // Browsers may deny storage in private/embedded contexts; drafts then stay
     // available for the lifetime of the mounted composer.
@@ -435,21 +435,21 @@ function removeDraft(key?: string): void {
 }
 
 function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KiB`;
+  if (bytes < 1024) { return `${bytes} B`; }
+  if (bytes < 1024 * 1024) { return `${Math.round(bytes / 1024)} KiB`; }
   return `${(bytes / (1024 * 1024)).toFixed(1)} MiB`;
 }
 
 function officeKindGlyph(kind: OfficeFileKind | undefined): string {
-  if (kind === 'word') return 'W';
-  if (kind === 'spreadsheet') return 'X';
-  if (kind === 'presentation') return 'P';
+  if (kind === 'word') { return 'W'; }
+  if (kind === 'spreadsheet') { return 'X'; }
+  if (kind === 'presentation') { return 'P'; }
   return '📄';
 }
 
 function officeKindLabel(kind: OfficeFileKind): string {
-  if (kind === 'word') return 'Word document';
-  if (kind === 'spreadsheet') return 'Excel workbook';
+  if (kind === 'word') { return 'Word document'; }
+  if (kind === 'spreadsheet') { return 'Excel workbook'; }
   return 'PowerPoint presentation';
 }
 

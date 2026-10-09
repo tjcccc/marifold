@@ -57,7 +57,7 @@ export async function resolveModelAddTarget(
 ): Promise<{ provider: string; model: string }> {
   const providerWasPicked = providerArg === undefined;
   const provider = providerArg ?? await selectProvider(loadedConfig, getPrompt, style);
-  if (providerWasPicked) process.stdout.write('\n');
+  if (providerWasPicked) { process.stdout.write('\n'); }
   const shouldPromptProviderSetup = providerWasPicked || modelArg === undefined;
   if (shouldPromptProviderSetup) {
     await promptProviderSetupIfNeeded(loadedConfig, getPrompt, style, provider, options);
@@ -83,7 +83,7 @@ async function selectProvider(
   })), {
     defaultIndex: defaultIndex >= 0 ? defaultIndex : 0,
   });
-  if (selected !== undefined) return selected;
+  if (selected !== undefined) { return selected; }
 
   process.stdout.write('Select provider:\n');
   providers.forEach((provider, index) => {
@@ -123,7 +123,7 @@ async function selectModel(
     });
 
     if (selected !== undefined) {
-      if (selected === customValue) return readRequiredLine(getPrompt(), style, `Model for ${provider}: `);
+      if (selected === customValue) { return readRequiredLine(getPrompt(), style, `Model for ${provider}: `); }
       return selected;
     }
 
@@ -137,7 +137,7 @@ async function selectModel(
     });
   }
 
-  if (result.message) process.stdout.write(style.dim(`${result.message}\n`));
+  if (result.message) { process.stdout.write(style.dim(`${result.message}\n`)); }
   return readRequiredLine(getPrompt(), style, `Model for ${provider}: `);
 }
 
@@ -153,21 +153,21 @@ export async function readChoice(
   const defaultSuffix = options.defaultIndex !== undefined ? ` [${options.defaultIndex + 1}]` : '';
   const customSuffix = options.allowCustom ? ' (number or custom name)' : '';
   const answer = await prompt.readUserMessage(style.bold(`${label}${customSuffix}${defaultSuffix}: `));
-  if (answer === undefined) throw new PromptAbortError();
+  if (answer === undefined) { throw new PromptAbortError(); }
   const raw = answer.trim();
 
-  if (!raw && options.defaultIndex !== undefined) return values[options.defaultIndex];
+  if (!raw && options.defaultIndex !== undefined) { return values[options.defaultIndex]; }
   const index = Number(raw);
-  if (Number.isInteger(index) && index >= 1 && index <= values.length) return values[index - 1];
-  if (options.allowCustom && raw) return raw;
+  if (Number.isInteger(index) && index >= 1 && index <= values.length) { return values[index - 1]; }
+  if (options.allowCustom && raw) { return raw; }
   throw MarifoldError.configInvalid(`Invalid ${label.toLowerCase()} selection.`);
 }
 
 async function readRequiredLine(prompt: InteractivePrompt, style: TerminalStyle, label: string): Promise<string> {
   const answer = await prompt.readUserMessage(style.bold(label));
-  if (answer === undefined) throw new PromptAbortError();
+  if (answer === undefined) { throw new PromptAbortError(); }
   const value = answer.trim();
-  if (!value) throw MarifoldError.configInvalid(`${label.replace(/:\s*$/, '')} cannot be empty.`);
+  if (!value) { throw MarifoldError.configInvalid(`${label.replace(/:\s*$/, '')} cannot be empty.`); }
   return value;
 }
 
@@ -220,8 +220,8 @@ async function promptProviderSetupIfNeeded(
   options: ModelAddSetupOptions,
 ): Promise<void> {
   const entry = listProviderRegistry().find(item => item.name === provider);
-  if (entry?.kind !== 'oauth') return;
-  if (providerHasUsableCredential(loadedConfig.config.providers[provider], options)) return;
+  if (entry?.kind !== 'oauth') { return; }
+  if (providerHasUsableCredential(loadedConfig.config.providers[provider], options)) { return; }
 
   await reauthenticateOAuthProvider(loadedConfig, getPrompt, style, provider);
 }
@@ -270,11 +270,11 @@ export function applyOAuthCredentials(
   // Keep the in-memory config as clean as the serialized TOML: switching from
   // OAuth to a manual credential must not retain an obsolete refresh token,
   // expiry, or ChatGPT account id.
-  if (!updated.apiKeyEnv) delete updated.apiKeyEnv;
-  if (!updated.apiKey) delete updated.apiKey;
-  if (!updated.oauthToken) delete updated.oauthToken;
-  if (updated.apiKeyExpiresAt === undefined) delete updated.apiKeyExpiresAt;
-  if (!updated.accountId) delete updated.accountId;
+  if (!updated.apiKeyEnv) { delete updated.apiKeyEnv; }
+  if (!updated.apiKey) { delete updated.apiKey; }
+  if (!updated.oauthToken) { delete updated.oauthToken; }
+  if (updated.apiKeyExpiresAt === undefined) { delete updated.apiKeyExpiresAt; }
+  if (!updated.accountId) { delete updated.accountId; }
   return updated;
 }
 
@@ -284,9 +284,9 @@ async function promptOAuthCredentials(
   provider: ProviderRegistryEntry,
   proxy?: string,
 ): Promise<Partial<MarifoldProviderConfig>> {
-  if (provider.name === 'github_copilot') return promptGitHubCopilotCredentials(getPrompt, style, provider);
-  if (provider.name === 'chatgpt') return promptChatGptCredentials(getPrompt, style, provider);
-  if (provider.name === 'xai') return promptXaiCredentials(getPrompt, style, provider, proxy);
+  if (provider.name === 'github_copilot') { return promptGitHubCopilotCredentials(getPrompt, style, provider); }
+  if (provider.name === 'chatgpt') { return promptChatGptCredentials(getPrompt, style, provider); }
+  if (provider.name === 'xai') { return promptXaiCredentials(getPrompt, style, provider, proxy); }
 
   const token = await readRequiredSecret(getPrompt, style, 'OAuth token: ');
   return {
@@ -305,7 +305,7 @@ async function promptGitHubCopilotCredentials(
     { label: 'Paste token manually', value: 'manual' },
   ]);
 
-  if (method === 'device') return authorizeGitHubCopilotWithDevice();
+  if (method === 'device') { return authorizeGitHubCopilotWithDevice(); }
 
   const tokenType = await selectLabeledChoice(getPrompt, style, 'Token type:', [
     { label: 'GitHub OAuth/PAT token (exchange now)', value: 'github' },
@@ -393,7 +393,7 @@ async function selectLabeledChoice<T extends string>(
   options: Array<{ label: string; value: T }>,
 ): Promise<T> {
   const selected = await selectTerminalOption(message, options);
-  if (selected !== undefined) return selected;
+  if (selected !== undefined) { return selected; }
 
   process.stdout.write(`${message}\n`);
   options.forEach((option, index) => {
@@ -406,7 +406,7 @@ async function selectLabeledChoice<T extends string>(
 
 async function readRequiredSecret(getPrompt: PromptFactory, style: TerminalStyle, label: string): Promise<string> {
   const value = await readSecretLine(style.bold(label), getPrompt);
-  if (!value) throw MarifoldError.configInvalid(`${label.replace(/:\s*$/, '')} cannot be empty.`);
+  if (!value) { throw MarifoldError.configInvalid(`${label.replace(/:\s*$/, '')} cannot be empty.`); }
   return value;
 }
 
@@ -414,9 +414,9 @@ export function providerHasUsableCredential(
   provider: MarifoldProviderConfig | undefined,
   options: ModelAddSetupOptions,
 ): boolean {
-  if (options.apiKeyEnv) return true;
-  if (!provider) return false;
-  if (provider.apiKeyEnv && process.env[provider.apiKeyEnv]) return true;
+  if (options.apiKeyEnv) { return true; }
+  if (!provider) { return false; }
+  if (provider.apiKeyEnv && process.env[provider.apiKeyEnv]) { return true; }
   if (provider.apiKey) {
     const refreshWindowSeconds = 60;
     const nowSeconds = Math.floor(Date.now() / 1000);

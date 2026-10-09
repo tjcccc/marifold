@@ -50,7 +50,7 @@ export async function respond(runtime: MarifoldRuntime, request: RespondRequest)
 
   if (mode === 'chat') {
     let text = '';
-    for await (const chunk of runtime.stream({ prompt, profile, sessionId, think })) text += chunk;
+    for await (const chunk of runtime.stream({ prompt, profile, sessionId, think })) { text += chunk; }
     return { text: text.trim(), ok: true, denied: [] };
   }
 
@@ -63,8 +63,8 @@ export async function respond(runtime: MarifoldRuntime, request: RespondRequest)
   let text = '';
   let ok = false;
   for await (const event of runner.run({ objective: prompt, profile, sessionId, approvalHandler, cwd, trustedFolders, instructions, think })) {
-    if (event.type === 'text') text += event.text;
-    else if (event.type === 'tool_request') toolById.set(event.call.id, event.call.tool);
+    if (event.type === 'text') { text += event.text; }
+    else if (event.type === 'tool_request') { toolById.set(event.call.id, event.call.tool); }
     else if (event.type === 'approval_decision' && !event.approved) {
       denied.add(toolById.get(event.requestId) ?? event.requestId);
     } else if (event.type === 'done') {

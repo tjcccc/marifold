@@ -45,7 +45,7 @@ export function registerAskCommand(program: Command, printer: ConsolePrinter): v
         };
         const response = api ? await api.request<MarifoldAskResponse>('POST', '/v1/ask', request) : await runtime!.ask(request);
         printer.printAskResponse(response);
-        if (!response.ok) process.exitCode = 1;
+        if (!response.ok) { process.exitCode = 1; }
       } catch (error) {
         printer.printError(error);
         process.exitCode = 1;
@@ -60,9 +60,9 @@ function collectImage(value: string, previous: string[]): string[] {
 }
 
 function parseOptionalBoolean(value?: string): boolean {
-  if (value === undefined) return true;
+  if (value === undefined) { return true; }
   const normalized = value.trim().toLowerCase();
-  if (normalized === 'true' || normalized === 'on' || normalized === '1') return true;
-  if (normalized === 'false' || normalized === 'off' || normalized === '0') return false;
+  if (normalized === 'true' || normalized === 'on' || normalized === '1') { return true; }
+  if (normalized === 'false' || normalized === 'off' || normalized === '0') { return false; }
   throw new Error('Expected --think to be true or false.');
 }

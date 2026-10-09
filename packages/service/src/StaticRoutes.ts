@@ -47,21 +47,21 @@ export function registerStaticRoutes(server: FastifyInstance, webDir: string): v
 
   server.get('/*', async (request, reply) => {
     const pathname = decodePathname(request.url);
-    if (pathname === undefined) return notFound(reply);
+    if (pathname === undefined) { return notFound(reply); }
     if (pathname === '/health' || pathname === '/v1' || pathname.startsWith('/v1/')) {
       return notFound(reply);
     }
 
     const resolved = path.resolve(root, `.${path.posix.normalize(pathname)}`);
-    if (resolved !== root && !resolved.startsWith(root + path.sep)) return notFound(reply);
+    if (resolved !== root && !resolved.startsWith(root + path.sep)) { return notFound(reply); }
 
     const filePath = await resolveFile(resolved);
-    if (filePath) return sendFile(reply, filePath, pathname);
+    if (filePath) { return sendFile(reply, filePath, pathname); }
 
     // SPA fallback: routes without an extension are app views.
     if (path.posix.extname(pathname) === '') {
       const index = await resolveFile(path.join(root, 'index.html'));
-      if (index) return sendFile(reply, index, '/index.html');
+      if (index) { return sendFile(reply, index, '/index.html'); }
     }
     return notFound(reply);
   });
@@ -72,7 +72,7 @@ function decodePathname(url: string): string | undefined {
     const pathname = new URL(url, 'http://loopback').pathname;
     const decoded = decodeURIComponent(pathname);
     // Encoded separators or null bytes have no legitimate use here.
-    if (decoded.includes('\0') || decoded.includes('\\')) return undefined;
+    if (decoded.includes('\0') || decoded.includes('\\')) { return undefined; }
     return decoded;
   } catch {
     return undefined;
@@ -82,11 +82,11 @@ function decodePathname(url: string): string | undefined {
 async function resolveFile(candidate: string): Promise<string | undefined> {
   try {
     const stat = await fs.promises.stat(candidate);
-    if (stat.isFile()) return candidate;
+    if (stat.isFile()) { return candidate; }
     if (stat.isDirectory()) {
       const index = path.join(candidate, 'index.html');
       const indexStat = await fs.promises.stat(index).catch(() => undefined);
-      if (indexStat?.isFile()) return index;
+      if (indexStat?.isFile()) { return index; }
     }
   } catch {
     // Missing — the caller decides between SPA fallback and 404.

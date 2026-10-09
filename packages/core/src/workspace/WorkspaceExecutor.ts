@@ -55,27 +55,29 @@ export class WorkspaceExecutor {
     private readonly transfers?: ArtifactWebRtc,
     device?: DeviceExecution,
   ) {
-    for (const tool of executionTools(device)) this.registry.register(tool);
+    for (const tool of executionTools(device)) { this.registry.register(tool); }
     this.timer = setInterval(() => {
-      for (const [id, run] of this.runs)
+      for (const [id, run] of this.runs) {
         if (run.lease < Date.now()) {
           run.abort.abort();
           this.runs.delete(id);
         }
+      }
     }, 5000);
     this.timer.unref();
   }
   close(): void {
     clearInterval(this.timer);
-    for (const run of this.runs.values()) run.abort.abort();
+    for (const run of this.runs.values()) { run.abort.abort(); }
     this.runs.clear();
   }
   cancelWorkspace(workspaceId: string): void {
-    for (const [key, run] of this.runs)
+    for (const [key, run] of this.runs) {
       if (key.startsWith(`${workspaceId}:`)) {
         run.abort.abort();
         this.runs.delete(key);
       }
+    }
   }
   async handle(operation: string, value: unknown, context: WorkspaceOperationContext): Promise<unknown> {
     const b = record(value);
@@ -89,16 +91,17 @@ export class WorkspaceExecutor {
         identifier(b.artifactId),
         this.runsDir ?? path.join(marifoldHome(), 'runs'),
       );
-      if (b.metadata === true) return { available: Boolean(artifact) };
-      if (!artifact) throw new Error('Artifact is unavailable.');
+      if (b.metadata === true) { return { available: Boolean(artifact) }; }
+      if (!artifact) { throw new Error('Artifact is unavailable.'); }
       if (b.offer !== undefined) {
-        if (!this.transfers) throw new Error('Direct downloads unavailable.');
+        if (!this.transfers) { throw new Error('Direct downloads unavailable.'); }
         return this.transfers.offerFile(artifact, b.offer, context.workspaceId);
       }
-      if (b.preview === true) return { data: (await createArtifactPreview(artifact, artifactPreviewVariant(b.variant))).toString('base64') };
+      if (b.preview === true) { return { data: (await createArtifactPreview(artifact, artifactPreviewVariant(b.variant))).toString('base64') }; }
       const offset = b.offset;
-      if (typeof offset !== 'number' || !Number.isSafeInteger(offset) || offset < 0 || offset > artifact.size)
+      if (typeof offset !== 'number' || !Number.isSafeInteger(offset) || offset < 0 || offset > artifact.size) {
         throw new Error('Invalid artifact offset.');
+      }
       const fd = fs.openSync(artifact.path, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
       try {
         const bytes = Buffer.alloc(Math.min(artifactReadLength(b.length), artifact.size - offset));
@@ -109,10 +112,11 @@ export class WorkspaceExecutor {
       }
     }
     if (operation === 'executor.prepare') {
-      if (this.runs.has(key)) throw new Error('Execution already prepared.');
-      if (this.runs.size >= MAX_ACTIVE_EXECUTIONS) throw new Error('Execution capacity reached.');
-      if (Array.isArray(b.images) && b.images.some((image) => !image || typeof image !== 'object' || 'path' in image))
+      if (this.runs.has(key)) { throw new Error('Execution already prepared.'); }
+      if (this.runs.size >= MAX_ACTIVE_EXECUTIONS) { throw new Error('Execution capacity reached.'); }
+      if (Array.isArray(b.images) && b.images.some((image) => !image || typeof image !== 'object' || 'path' in image)) {
         throw new Error('Remote image inputs must carry bytes or URLs, never device paths.');
+      }
       const config = this.config();
       const workspace = createRunWorkspace({
         deniedRoots: this.protectedPaths,
@@ -132,13 +136,13 @@ export class WorkspaceExecutor {
       return workspace;
     }
     const run = this.runs.get(key);
-    if (!run) throw new Error('Execution is unavailable or its lease expired. Start a new run explicitly.');
+    if (!run) { throw new Error('Execution is unavailable or its lease expired. Start a new run explicitly.'); }
     if (operation === 'executor.cancel') {
       run.abort.abort();
       return { cancelled: true };
     }
     if (operation === 'executor.lease') {
-      if (!run.abort.signal.aborted) run.lease = Date.now() + 45000;
+      if (!run.abort.signal.aborted) { run.lease = Date.now() + 45000; }
       return { active: !run.abort.signal.aborted };
     }
     if (operation === 'executor.artifacts') {
@@ -152,9 +156,9 @@ export class WorkspaceExecutor {
         this.runs.delete(key);
       }
     }
-    if (run.abort.signal.aborted) throw new Error('Execution has ended.');
+    if (run.abort.signal.aborted) { throw new Error('Execution has ended.'); }
     const tool = this.registry.get(String(b.tool));
-    if (!tool || tool.kind === 'interaction') throw new Error('Unsupported execution tool.');
+    if (!tool || tool.kind === 'interaction') { throw new Error('Unsupported execution tool.'); }
     const input = record(b.input) as Record<string, JSONValue>;
     const toolContext: ToolExecutionContext = {
       workspace: run.workspace,
@@ -174,9 +178,9 @@ export class WorkspaceExecutor {
     const hash = digest(JSON.stringify([tool.definition.name, input]));
     if (operation === 'executor.assess') {
       const grant = randomId();
-      for (const [id, g] of run.grants) if (g.expires < Date.now()) run.grants.delete(id);
-      if (run.grants.size >= 128) throw new Error('Too many outstanding execution grants.');
-      if (!blocked) run.grants.set(grant, { hash, expires: Date.now() + 6 * 60 * 1000, ...(risk.sudo ? { sudoId: risk.sudo.id } : {}) });
+      for (const [id, g] of run.grants) { if (g.expires < Date.now()) { run.grants.delete(id); } }
+      if (run.grants.size >= 128) { throw new Error('Too many outstanding execution grants.'); }
+      if (!blocked) { run.grants.set(grant, { hash, expires: Date.now() + 6 * 60 * 1000, ...(risk.sudo ? { sudoId: risk.sudo.id } : {}) }); }
       return {
         ...risk,
         blocked,
@@ -189,19 +193,20 @@ export class WorkspaceExecutor {
           : (risk.reason ?? (trustedAttachment ? 'Read access granted by this upload.' : 'Approve this call on the selected device.')),
       };
     }
-    if (operation !== 'executor.execute') throw new Error('Unsupported executor operation.');
+    if (operation !== 'executor.execute') { throw new Error('Unsupported executor operation.'); }
     const grant = run.grants.get(String(b.grant));
     run.grants.delete(String(b.grant));
-    if (blocked || !grant || grant.hash !== hash || grant.expires < Date.now() || grant.sudoId !== toolContext.sudoResponse?.id)
+    if (blocked || !grant || grant.hash !== hash || grant.expires < Date.now() || grant.sudoId !== toolContext.sudoResponse?.id) {
       throw new Error('Execution grant is invalid or expired.');
+    }
     const result = await tool.execute(input, toolContext);
-    if (!result.images?.length) return result;
+    if (!result.images?.length) { return result; }
     // The provider runs on the host. A guest-local path cannot be opened there.
     let remaining = MAX_RUN_INPUT_BYTES;
     const images = result.images.map(image => {
-      if (!image.path) return image;
+      if (!image.path) { return image; }
       const attachment = run.workspace.attachments.find(item => item.image?.path === image.path);
-      if (!attachment) throw new Error('Image is not an attachment in this run.');
+      if (!attachment) { throw new Error('Image is not an attachment in this run.'); }
       const fd = fs.openSync(image.path, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
       try {
         const stat = fs.fstatSync(fd);

@@ -64,7 +64,7 @@ export function registerRunRoutes(server: FastifyInstance, registry: RunRegistry
   });
 
   const sendArtifact = async (runId: string, artifactId: string, reply: FastifyReply, inline = false) => {
-    if (await options.artifact?.(runId, artifactId, reply, inline)) return reply;
+    if (await options.artifact?.(runId, artifactId, reply, inline)) { return reply; }
     const artifact = registry.requireArtifact(runId, artifactId);
     let fd: number;
     try {
@@ -89,22 +89,22 @@ export function registerRunRoutes(server: FastifyInstance, registry: RunRegistry
       return reply.type('image/webp').header('cache-control', 'no-store').header('x-content-type-options', 'nosniff').send(bytes);
     },
   );
-  if (options.tickets) server.post<{ Params: { id: string; artifactId: string } }>(
+  if (options.tickets) { server.post<{ Params: { id: string; artifactId: string } }>(
     '/v1/runs/:id/artifacts/:artifactId/access', async (request, reply) => {
       const { id, artifactId } = request.params;
       const artifact = registry.require(id).artifacts?.find(item => item.id === artifactId);
-      if (!artifact) throw MarifoldError.artifactNotFound(id, artifactId);
+      if (!artifact) { throw MarifoldError.artifactNotFound(id, artifactId); }
       const purpose = objectBody(request.body).purpose;
-      if (purpose !== 'download' && purpose !== 'image') throw MarifoldError.configInvalid('Invalid file access purpose.');
-      if (purpose === 'image' && !isPreviewableArtifact(artifact.mediaType)) throw MarifoldError.configInvalid('This file is not a previewable image.');
+      if (purpose !== 'download' && purpose !== 'image') { throw MarifoldError.configInvalid('Invalid file access purpose.'); }
+      if (purpose === 'image' && !isPreviewableArtifact(artifact.mediaType)) { throw MarifoldError.configInvalid('This file is not a previewable image.'); }
       const available = options.artifactAvailable ? await options.artifactAvailable(id, artifactId) : Boolean(registry.requireArtifact(id, artifactId));
-      if (available === false) throw MarifoldError.artifactNotFound(id, artifactId);
+      if (available === false) { throw MarifoldError.artifactNotFound(id, artifactId); }
       reply.header('cache-control', 'no-store');
       return { ok: true, ...options.tickets!.issue(async response => purpose === 'image'
         ? response.type('image/webp').header('x-content-type-options', 'nosniff').send(await previewBytes(id, artifactId, 'viewer'))
         : sendArtifact(id, artifactId, response)) };
     },
-  );
+  ); }
 
   server.get<{ Params: { id: string }; Querystring: { after?: string; access_token?: string } }>(
     '/v1/runs/:id/events',
@@ -170,7 +170,7 @@ async function streamRunEvents(
 
   try {
     for await (const { seq, event } of registry.events(runId, afterSeq, abort.signal)) {
-      if (closed) break;
+      if (closed) { break; }
       writeSse(reply, event.type, event, seq);
     }
   } catch (error) {
@@ -182,13 +182,13 @@ async function streamRunEvents(
     }
   } finally {
     stopHeartbeat();
-    if (!closed) reply.raw.end();
+    if (!closed) { reply.raw.end(); }
   }
 }
 
 function parseRunStartInput(value: unknown): RunStartInput {
   const body = objectBody(value);
-  if (body.toolMode !== undefined && !['auto', 'native', 'control-block'].includes(String(body.toolMode))) throw MarifoldError.configInvalid('Invalid toolMode.');
+  if (body.toolMode !== undefined && !['auto', 'native', 'control-block'].includes(String(body.toolMode))) { throw MarifoldError.configInvalid('Invalid toolMode.'); }
   return {
     ...(body.toolMode !== undefined ? { toolMode: body.toolMode as RunStartInput['toolMode'] } : {}),
     objective: requiredString(body.objective, 'objective'),
@@ -213,14 +213,14 @@ function parseRunStartInput(value: unknown): RunStartInput {
 function parseApprovalAction(value: unknown): RunApprovalAction {
   const body = objectBody(value);
   const action = requiredString(body.action, 'action');
-  if (action === 'once' || action === 'always' || action === 'trust' || action === 'deny') return action;
+  if (action === 'once' || action === 'always' || action === 'trust' || action === 'deny') { return action; }
   throw MarifoldError.configInvalid('action must be one of "once", "always", "trust", or "deny".');
 }
 
 /** The Last-Event-ID header (an EventSource reconnect) wins over ?after. */
 function resolveAfterSeq(header: string | string[] | undefined, after: string | undefined): number {
   const raw = typeof header === 'string' && header !== '' ? header : after;
-  if (raw === undefined || raw === '') return 0;
+  if (raw === undefined || raw === '') { return 0; }
   const seq = Number.parseInt(raw, 10);
   if (!Number.isInteger(seq) || seq < 0) {
     throw MarifoldError.configInvalid('after / Last-Event-ID must be a non-negative integer sequence number.');

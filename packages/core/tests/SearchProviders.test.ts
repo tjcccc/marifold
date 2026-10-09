@@ -52,7 +52,7 @@ ${extra}`);
 
 afterEach(() => {
   vi.unstubAllGlobals();
-  for (const dir of tempDirs.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
+  for (const dir of tempDirs.splice(0)) { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
 describe('web_search config', () => {

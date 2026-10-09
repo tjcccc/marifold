@@ -68,10 +68,10 @@ export class ShellExecTool implements AgentTool {
 
   async execute(input: Record<string, JSONValue>, ctx: ToolExecutionContext): Promise<ToolExecutionResult> {
     const command = requireStringInput(input, 'command', 'shell_exec');
-    if (ctx.signal?.aborted) throw new Error('Run cancelled before shell execution.');
-    if (input.access !== undefined && input.access !== 'scoped' && input.access !== 'full') throw new Error('Invalid shell access mode.');
+    if (ctx.signal?.aborted) { throw new Error('Run cancelled before shell execution.'); }
+    if (input.access !== undefined && input.access !== 'scoped' && input.access !== 'full') { throw new Error('Invalid shell access mode.'); }
     if (input.access === 'full') {
-      if (!this.device) throw new Error('Full device execution is unavailable.');
+      if (!this.device) { throw new Error('Full device execution is unavailable.'); }
       const job = await this.device.start(command, ctx.cwd, {
         ...process.env,
         ...(ctx.workspace ? { MARIFOLD_OUTPUT_DIR: ctx.workspace.outputDir, MARIFOLD_WORK_DIR: ctx.workspace.workDir,
@@ -88,7 +88,7 @@ export class ShellExecTool implements AgentTool {
     }
     if (/\b(?:python(?:3(?:\.\d+)?)?|pip3?|uv)\b/.test(command)) {
       const environmentError = await ensurePythonEnvironment(ctx.workspace, ctx.outputLimit, ctx.signal);
-      if (environmentError) return environmentError;
+      if (environmentError) { return environmentError; }
     }
     return runScopedProcess({
       executable: '/bin/sh',

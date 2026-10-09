@@ -64,7 +64,7 @@ export function createApiClient(options: ApiClientOptions = {}): ApiClient {
   }
 
   function withEnvironment(path: string, body: unknown): unknown {
-    if (!options.interface || !['/v1/runs', '/v1/ask', '/v1/chat/stream'].includes(path) || !body || typeof body !== 'object') return body;
+    if (!options.interface || !['/v1/runs', '/v1/ask', '/v1/chat/stream'].includes(path) || !body || typeof body !== 'object') { return body; }
     return { ...body, environment: { interface: options.interface, timezone: options.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone } };
   }
 
@@ -73,14 +73,14 @@ export function createApiClient(options: ApiClientOptions = {}): ApiClient {
     path: string,
     body?: unknown,
   ): Promise<T> {
-    if (method === 'POST') body = withEnvironment(path, body);
+    if (method === 'POST') { body = withEnvironment(path, body); }
     const run =
       typeof body === 'object' && body !== null
         ? (body as { lean?: boolean; userTurn?: string; objective?: string })
         : undefined;
     const hostSkill = run?.lean || /^\s*\$[\w-]+/.test(run?.userTurn ?? run?.objective ?? '');
     const executionDeviceId = path === '/v1/runs' && !hostSkill ? options.executionDevice?.() : undefined;
-    if (executionDeviceId && typeof body === 'object' && body !== null) body = { ...body, executionDeviceId };
+    if (executionDeviceId && typeof body === 'object' && body !== null) { body = { ...body, executionDeviceId }; }
     const response = await fetch(`${baseUrl}${path}`, {
       method,
       ...(method === 'DELETE' && path.endsWith('/lease') ? { keepalive: true } : {}),
@@ -104,7 +104,7 @@ export function createApiClient(options: ApiClientOptions = {}): ApiClient {
   }
 
   async function stream(path: string, init: StreamInit = {}): Promise<Response> {
-    if (init.method === 'POST') init = { ...init, body: withEnvironment(path, init.body) };
+    if (init.method === 'POST') { init = { ...init, body: withEnvironment(path, init.body) }; }
     const response = await fetch(`${baseUrl}${path}`, {
       method: init.method ?? 'GET',
       headers: headers({
@@ -129,8 +129,8 @@ export function createApiClient(options: ApiClientOptions = {}): ApiClient {
 
   async function blob(path: string): Promise<Blob | undefined> {
     const response = await fetch(`${baseUrl}${path}`, { headers: headers() });
-    if (response.status === 404) return undefined;
-    if (!response.ok) throw toApiError(response.status, await parseJson(response));
+    if (response.status === 404) { return undefined; }
+    if (!response.ok) { throw toApiError(response.status, await parseJson(response)); }
     return response.blob();
   }
 

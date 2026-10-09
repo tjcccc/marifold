@@ -11,6 +11,7 @@
   "scripts": {
     "build": "pnpm -r build",
     "check:versions": "node scripts/check-versions.mjs",
+    "lint": "biome lint .",
     "typecheck": "pnpm check:versions && pnpm -r typecheck",
     "test": "pnpm -r test",
     "command-test": "node scripts/test-commands.mjs",
@@ -19,6 +20,7 @@
     "marifold": "node packages/cli/dist/index.js"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.5.15",
     "@marifold/core": "workspace:*",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^24.13.3",

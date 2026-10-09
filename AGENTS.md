@@ -67,8 +67,12 @@ The service defaults to loopback. Explicit non-loopback binds accept only direct
 - For a release checkpoint, update the matching `DEVLOG.md` heading and refresh `pnpm-lock.yaml` with pnpm when the manifest changes affect it.
 - After a version bump, rebuild from clean output before publishing. Verify packed package versions and the packed CLI's `--version` match the release version.
 
+## Code style
+
+- Every control-flow body has braces, including single statements: `if (done) { return; }`, never `if (done) return;`. The same applies to `else`, loops, and arrow-function bodies containing them. `pnpm lint` (Biome `useBlockStatements`, configured in `biome.json`) enforces it; `pnpm exec biome lint --write --unsafe .` applies the fix.
+
 ## Validation
 
-The full gate is `pnpm -r typecheck && pnpm -r build && pnpm -r test`; run it before finishing a milestone, and at least typecheck + build for smaller changes. Add targeted tests when practical.
+The full gate is `pnpm lint && pnpm -r typecheck && pnpm -r build && pnpm -r test`; run it before finishing a milestone, and at least lint + typecheck + build for smaller changes. Add targeted tests when practical.
 
 Note: `packages/service` tests resolve `@marifold/core` from its built `dist`, so rebuild core (`pnpm --filter @marifold/core build`) before service tests can observe core source changes.

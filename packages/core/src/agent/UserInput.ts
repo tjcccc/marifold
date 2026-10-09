@@ -69,7 +69,7 @@ export function parseUserInputRequest(
   const questions = rawQuestions.map((raw, index) => {
     const item = record(raw, `questions[${index}]`);
     const id = identifier(item.id, `questions[${index}].id`);
-    if (seenQuestionIds.has(id)) throw invalid(`Duplicate question id '${id}'.`);
+    if (seenQuestionIds.has(id)) { throw invalid(`Duplicate question id '${id}'.`); }
     seenQuestionIds.add(id);
     const optionsValue = item.options;
     if (!Array.isArray(optionsValue)
@@ -115,7 +115,7 @@ export function normalizeUserInputSubmission(
   value: unknown,
 ): UserInputSubmission {
   const body = record(value, 'submission');
-  if (!Array.isArray(body.answers)) throw invalid('answers must be an array.');
+  if (!Array.isArray(body.answers)) { throw invalid('answers must be an array.'); }
   if (body.answers.length !== request.questions.length) {
     throw invalid('Every question requires an answer before submission.');
   }
@@ -126,8 +126,8 @@ export function normalizeUserInputSubmission(
     const answer = record(raw, `answers[${index}]`);
     const questionId = identifier(answer.questionId, `answers[${index}].questionId`);
     const question = questions.get(questionId);
-    if (!question) throw invalid(`Unknown question id '${questionId}'.`);
-    if (seen.has(questionId)) throw invalid(`Question '${questionId}' was answered more than once.`);
+    if (!question) { throw invalid(`Unknown question id '${questionId}'.`); }
+    if (seen.has(questionId)) { throw invalid(`Question '${questionId}' was answered more than once.`); }
     seen.add(questionId);
 
     if (question.multiple) {
@@ -259,9 +259,9 @@ function identifier(value: unknown, label: string): string {
 }
 
 function boundedString(value: unknown, label: string, maxLength: number): string {
-  if (typeof value !== 'string' || !value.trim()) throw invalid(`${label} must be a non-empty string.`);
+  if (typeof value !== 'string' || !value.trim()) { throw invalid(`${label} must be a non-empty string.`); }
   const normalized = value.trim();
-  if (normalized.length > maxLength) throw invalid(`${label} must be at most ${maxLength} characters.`);
+  if (normalized.length > maxLength) { throw invalid(`${label} must be at most ${maxLength} characters.`); }
   return normalized;
 }
 
@@ -271,12 +271,12 @@ function optionalBoundedString(
   maxLength: number,
   key = 'description',
 ): Record<string, string> {
-  if (value === undefined) return {};
+  if (value === undefined) { return {}; }
   return { [key]: boundedString(value, label, maxLength) };
 }
 
 function optionalTrue(value: unknown, label: string, key: string): Record<string, true> {
-  if (value === undefined || value === false) return {};
-  if (value !== true) throw invalid(`${label} must be a boolean.`);
+  if (value === undefined || value === false) { return {}; }
+  if (value !== true) { throw invalid(`${label} must be a boolean.`); }
   return { [key]: true };
 }

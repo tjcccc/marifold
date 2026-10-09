@@ -318,7 +318,7 @@ export class SkillManagementTool implements AgentTool {
 }
 
 function skillScope(value: JSONValue | undefined): SkillScope {
-  if (value === 'profile' || value === 'global') return value;
+  if (value === 'profile' || value === 'global') { return value; }
   throw MarifoldError.agentToolInvalid(
     "Tool 'manage_skill' requires scope 'profile' or 'global'.",
     'manage_skill',
@@ -332,7 +332,7 @@ function requireMutableName(input: Record<string, JSONValue>, key: string): stri
       `Invalid skill name '${name}'. Use lowercase letters, numbers, underscores, or hyphens (starting alphanumeric).`,
     );
   }
-  if (isBuiltInSkillName(name)) throw protectedBuiltIn(name);
+  if (isBuiltInSkillName(name)) { throw protectedBuiltIn(name); }
   return name;
 }
 
@@ -351,7 +351,7 @@ function localSource(input: Record<string, JSONValue>, ctx: ToolExecutionContext
 }
 
 function bundledTextFiles(value: JSONValue | undefined): BundledTextFile[] {
-  if (value === undefined) return [];
+  if (value === undefined) { return []; }
   if (!Array.isArray(value)) {
     throw MarifoldError.agentToolInvalid("Tool 'manage_skill' expects 'files' to be an array.", 'manage_skill');
   }

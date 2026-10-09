@@ -32,11 +32,11 @@ export function listRunArtifacts(
 }
 
 export function resolveRunArtifact(runId: string, artifactId: string, runsDir = path.join(marifoldHome(), 'runs')): ResolvedRunArtifact | undefined {
-  if (!/^[A-Za-z0-9_-]{1,160}$/.test(runId) || !/^[a-f0-9]{24}$/.test(artifactId)) return undefined;
+  if (!/^[A-Za-z0-9_-]{1,160}$/.test(runId) || !/^[a-f0-9]{24}$/.test(artifactId)) { return undefined; }
   const outputDir = path.join(runsDir, runId, 'output');
   try {
     const root = fs.realpathSync(runsDir);
-    if (fs.lstatSync(path.dirname(outputDir)).isSymbolicLink() || fs.lstatSync(outputDir).isSymbolicLink() || !isInside(fs.realpathSync(outputDir), root)) return undefined;
+    if (fs.lstatSync(path.dirname(outputDir)).isSymbolicLink() || fs.lstatSync(outputDir).isSymbolicLink() || !isInside(fs.realpathSync(outputDir), root)) { return undefined; }
   } catch { return undefined; }
   return listResolvedArtifacts(outputDir).find(artifact => artifact.id === artifactId);
 }
@@ -44,7 +44,7 @@ export function resolveRunArtifact(runId: string, artifactId: string, runsDir = 
 function listResolvedArtifacts(outputDir: string): ResolvedRunArtifact[] {
   let root: string;
   try {
-    if (fs.lstatSync(outputDir).isSymbolicLink() || fs.lstatSync(path.dirname(outputDir)).isSymbolicLink()) return [];
+    if (fs.lstatSync(outputDir).isSymbolicLink() || fs.lstatSync(path.dirname(outputDir)).isSymbolicLink()) { return []; }
     root = fs.realpathSync(outputDir);
   } catch {
     return [];
@@ -56,26 +56,26 @@ function listResolvedArtifacts(outputDir: string): ResolvedRunArtifact[] {
     const directory = pending.shift()!;
     let entries: fs.Dirent[];
     try {
-      if (fs.lstatSync(directory).isSymbolicLink() || !isInside(fs.realpathSync(directory), root)) continue;
+      if (fs.lstatSync(directory).isSymbolicLink() || !isInside(fs.realpathSync(directory), root)) { continue; }
       entries = fs.readdirSync(directory, { withFileTypes: true })
         .sort((left, right) => left.name.localeCompare(right.name));
     } catch {
       continue;
     }
     for (const entry of entries) {
-      if (artifacts.length >= MAX_RUN_ARTIFACTS) break;
+      if (artifacts.length >= MAX_RUN_ARTIFACTS) { break; }
       const candidate = path.join(directory, entry.name);
-      if (entry.isSymbolicLink()) continue;
+      if (entry.isSymbolicLink()) { continue; }
       if (entry.isDirectory()) {
         pending.push(candidate);
         continue;
       }
-      if (!entry.isFile()) continue;
+      if (!entry.isFile()) { continue; }
       try {
         const real = fs.realpathSync(candidate);
-        if (!isInside(real, root)) continue;
+        if (!isInside(real, root)) { continue; }
         const stat = fs.statSync(real);
-        if (!stat.isFile() || stat.size > MAX_RUN_ARTIFACT_BYTES) continue;
+        if (!stat.isFile() || stat.size > MAX_RUN_ARTIFACT_BYTES) { continue; }
         const relative = path.relative(root, real).split(path.sep).join('/');
         artifacts.push({
           id: crypto.createHash('sha256').update(relative).digest('hex').slice(0, 24),

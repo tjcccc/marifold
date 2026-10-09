@@ -50,7 +50,7 @@ export async function prepareImageInputs(
   inputs?: ImageInput[],
   options: PrepareImageOptions = {},
 ): Promise<PreparedImages> {
-  if (!inputs || inputs.length === 0) return { images: [], summaries: [] };
+  if (!inputs || inputs.length === 0) { return { images: [], summaries: [] }; }
   if (inputs.length > MAX_IMAGES_PER_REQUEST) {
     throw MarifoldError.imageInvalid(`Up to ${MAX_IMAGES_PER_REQUEST} images may be attached to one request.`);
   }
@@ -198,18 +198,18 @@ async function readImageBytes(input: ImageInput, index: number, remainingBytes: 
   if (input.path) {
     try {
       const stat = await fs.stat(input.path);
-      if (!stat.isFile()) throw new Error('path is not a regular file');
-      if (stat.size > remainingBytes) throw sourceLimitError();
+      if (!stat.isFile()) { throw new Error('path is not a regular file'); }
+      if (stat.size > remainingBytes) { throw sourceLimitError(); }
       return await fs.readFile(input.path);
     } catch (error) {
-      if (error instanceof MarifoldError) throw error;
+      if (error instanceof MarifoldError) { throw error; }
       throw MarifoldError.imageInvalid(`Could not read image #${index + 1} at ${input.path}: ${errorMessage(error)}`);
     }
   }
   if (input.data) {
     const data = input.data.trim();
     // Reject oversized base64 before allocating the decoded Buffer.
-    if (data.length > Math.ceil(remainingBytes / 3) * 4 + 4) throw sourceLimitError();
+    if (data.length > Math.ceil(remainingBytes / 3) * 4 + 4) { throw sourceLimitError(); }
     if (!isBase64(data)) {
       throw MarifoldError.imageInvalid(`Image #${index + 1} does not contain valid base64 data.`);
     }
@@ -225,10 +225,10 @@ function sourceLimitError(): MarifoldError {
 }
 
 function isBase64(value: string): boolean {
-  if (value.length === 0 || value.length % 4 !== 0) return false;
+  if (value.length === 0 || value.length % 4 !== 0) { return false; }
   let padding = 0;
-  if (value.endsWith('==')) padding = 2;
-  else if (value.endsWith('=')) padding = 1;
+  if (value.endsWith('==')) { padding = 2; }
+  else if (value.endsWith('=')) { padding = 1; }
   const contentEnd = value.length - padding;
   for (let index = 0; index < value.length; index += 1) {
     const code = value.charCodeAt(index);
@@ -238,7 +238,7 @@ function isBase64(value: string): boolean {
       || (code >= 48 && code <= 57)
       || code === 43
       || code === 47;
-    if ((content && !validContent) || (!content && code !== 61)) return false;
+    if ((content && !validContent) || (!content && code !== 61)) { return false; }
   }
   return true;
 }

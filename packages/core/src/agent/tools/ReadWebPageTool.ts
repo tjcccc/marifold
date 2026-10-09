@@ -26,8 +26,8 @@ export class ReadWebPageTool implements AgentTool {
     const attempts = this.attempts.get(scope) ?? { count: 0, pages: new Set<string>() };
     const focus = typeof input.focus === 'string' ? input.focus.trim().slice(0, 200) : undefined;
     const key = JSON.stringify([url.replace(/#.*$/, ''), focus ?? '']);
-    if (attempts.pages.has(key)) return { content: 'This page/excerpt was already attempted. Use another source URL or refine web_search; do not reread identical evidence.', summary: 'duplicate page read skipped', isError: true };
-    if (attempts.count >= 3) return { content: 'Page-read budget exhausted (3 attempts). Answer from available evidence and explain remaining gaps.', summary: 'page-read budget exhausted', isError: true };
+    if (attempts.pages.has(key)) { return { content: 'This page/excerpt was already attempted. Use another source URL or refine web_search; do not reread identical evidence.', summary: 'duplicate page read skipped', isError: true }; }
+    if (attempts.count >= 3) { return { content: 'Page-read budget exhausted (3 attempts). Answer from available evidence and explain remaining gaps.', summary: 'page-read budget exhausted', isError: true }; }
     attempts.count++;
     attempts.pages.add(key);
     this.attempts.set(scope, attempts);

@@ -14,7 +14,7 @@ function tempDir(): string {
 }
 
 afterEach(() => {
-  for (const dir of tempDirs.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
+  for (const dir of tempDirs.splice(0)) { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
 describe('run artifacts', () => {
@@ -48,7 +48,7 @@ describe('run artifacts', () => {
   });
 
   it('never exposes output symlinks', () => {
-    if (process.platform === 'win32') return;
+    if (process.platform === 'win32') { return; }
     const home = tempDir();
     const cwd = path.join(home, 'repo');
     fs.mkdirSync(cwd);

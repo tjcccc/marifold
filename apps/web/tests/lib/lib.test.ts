@@ -141,7 +141,7 @@ describe('markdown', () => {
     const blocks = parseMarkdown('おっ、即決ありがとう笑  \nいいよ、結婚しよ♡\nでも冗談だよ');
     expect(blocks).toHaveLength(1);
     const paragraph = blocks[0];
-    if (paragraph.type !== 'paragraph') throw new Error('expected paragraph');
+    if (paragraph.type !== 'paragraph') { throw new Error('expected paragraph'); }
     expect(paragraph.inline).toEqual([
       { type: 'text', text: 'おっ、即決ありがとう笑' },
       { type: 'break' },
@@ -159,7 +159,7 @@ describe('markdown', () => {
     const blocks = parseMarkdown('**おすすめ：**\n> *Shanghai, 1920s.*\n> *Time changes. Beauty stays.*\n\nafter');
     expect(blocks.map(b => b.type)).toEqual(['paragraph', 'quote', 'paragraph']);
     const quote = blocks[1];
-    if (quote.type !== 'quote') throw new Error('expected quote');
+    if (quote.type !== 'quote') { throw new Error('expected quote'); }
     expect(quote.blocks).toHaveLength(1);
     expect(quote.blocks[0]).toMatchObject({ type: 'paragraph' });
     // No literal '>' survives anywhere in the quote's text nodes.
@@ -170,7 +170,7 @@ describe('markdown', () => {
     const blocks = parseMarkdown('> # Quoted heading\n> - a\n> - b\n\n---\n\ntail');
     expect(blocks.map(b => b.type)).toEqual(['quote', 'rule', 'paragraph']);
     const quote = blocks[0];
-    if (quote.type !== 'quote') throw new Error('expected quote');
+    if (quote.type !== 'quote') { throw new Error('expected quote'); }
     expect(quote.blocks.map(b => b.type)).toEqual(['heading', 'list']);
   });
 
@@ -185,7 +185,7 @@ describe('markdown', () => {
 
     expect(blocks.map(block => block.type)).toEqual(['paragraph', 'table']);
     const table = blocks[1];
-    if (table.type !== 'table') throw new Error('expected table');
+    if (table.type !== 'table') { throw new Error('expected table'); }
     expect(table.alignments).toEqual(['left', 'center', 'right']);
     expect(table.header).toHaveLength(3);
     expect(table.rows).toHaveLength(2);
@@ -198,7 +198,7 @@ describe('markdown', () => {
   it('keeps escaped and inline-code pipes inside table cells', () => {
     const blocks = parseMarkdown('| value | code |\n| --- | --- |\n| a \\| b | `x|y` |');
     const table = blocks[0];
-    if (table.type !== 'table') throw new Error('expected table');
+    if (table.type !== 'table') { throw new Error('expected table'); }
     expect(table.rows[0]).toEqual([
       [{ type: 'text', text: 'a | b' }],
       [{ type: 'code', text: 'x|y' }],

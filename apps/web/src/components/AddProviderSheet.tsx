@@ -53,11 +53,11 @@ export function AddProviderSheet(props: AddProviderSheetProps) {
         closeRef.current();
         return;
       }
-      if (event.key !== 'Tab') return;
+      if (event.key !== 'Tab') { return; }
       const controls = [...(dialogRef.current?.querySelectorAll<HTMLElement>(
         'button:not(:disabled), input:not(:disabled)',
       ) ?? [])];
-      if (controls.length === 0) return;
+      if (controls.length === 0) { return; }
       const current = controls.indexOf(document.activeElement as HTMLElement);
       const next = current < 0
         ? event.shiftKey ? controls.length - 1 : 0
@@ -77,12 +77,12 @@ export function AddProviderSheet(props: AddProviderSheetProps) {
   }, []);
 
   useEffect(() => {
-    if (selected) firstSetupRef.current?.focus();
-    else (firstOptionRef.current ?? closeButtonRef.current)?.focus();
+    if (selected) { firstSetupRef.current?.focus(); }
+    else { (firstOptionRef.current ?? closeButtonRef.current)?.focus(); }
   }, [selected, firstAvailableName]);
 
   function choose(entry: ProviderCatalogEntry): void {
-    if (existing.has(entry.name)) return;
+    if (existing.has(entry.name)) { return; }
     setSelectedName(entry.name);
     setBaseUrl(entry.defaultBaseUrl ?? '');
     setApiKeyEnv(entry.apiKeyEnv ?? '');
@@ -90,7 +90,7 @@ export function AddProviderSheet(props: AddProviderSheetProps) {
   }
 
   function submit(): void {
-    if (!selected || !canSubmit) return;
+    if (!selected || !canSubmit) { return; }
     props.onSubmit({
       name: selected.name,
       ...(baseUrl.trim() ? { baseUrl: baseUrl.trim() } : {}),

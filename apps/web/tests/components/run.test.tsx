@@ -62,7 +62,7 @@ describe('RunCard', () => {
 
   it('marks a file unavailable if it disappears between checking and downloading', async () => {
     const artifact = { id: 'removed', name: 'removed.pdf', mediaType: 'application/pdf', size: 4 };
-    const client = { blob: vi.fn(), request: vi.fn(async (method: string) => { if (method === 'POST') throw new MarifoldApiError(404, { code: 'ARTIFACT_NOT_FOUND', message: 'File removed' }); return { artifacts: [{ ...artifact, available: true }] }; }) } as unknown as ApiClient;
+    const client = { blob: vi.fn(), request: vi.fn(async (method: string) => { if (method === 'POST') { throw new MarifoldApiError(404, { code: 'ARTIFACT_NOT_FOUND', message: 'File removed' }); } return { artifacts: [{ ...artifact, available: true }] }; }) } as unknown as ApiClient;
     render(<RunArtifacts client={client} runId="run_1" artifacts={[artifact]} />);
     await waitFor(() => expect(client.request).toHaveBeenCalled());
     fireEvent.click(screen.getByRole('button', { name: 'Download removed.pdf' }));

@@ -31,15 +31,15 @@ describe('useAgentController session lifecycle', () => {
   it('blocks an already-open session and does not load its transcript', async () => {
     const request = vi.fn(async (method: string, path: string) => {
       if (path.endsWith('/lease')) {
-        if (method === 'DELETE') return { ok: true };
+        if (method === 'DELETE') { return { ok: true }; }
         throw new MarifoldApiError(409, { code: 'SESSION_BUSY', message: 'This session is in use in another page or terminal.' });
       }
-      if (path === '/v1/profiles') return { profiles: [profile] };
-      if (path === '/v1/models') return { default: {}, options: [] };
-      if (path === '/v1/profiles/prompt-maker') return { profile };
-      if (path.startsWith('/v1/skills?')) return { skills: [] };
-      if (path.startsWith('/v1/sessions?')) return { sessions: [] };
-      if (path.startsWith('/v1/runs')) return { runs: [] };
+      if (path === '/v1/profiles') { return { profiles: [profile] }; }
+      if (path === '/v1/models') { return { default: {}, options: [] }; }
+      if (path === '/v1/profiles/prompt-maker') { return { profile }; }
+      if (path.startsWith('/v1/skills?')) { return { skills: [] }; }
+      if (path.startsWith('/v1/sessions?')) { return { sessions: [] }; }
+      if (path.startsWith('/v1/runs')) { return { runs: [] }; }
       throw new Error(`Unexpected request: ${path}`);
     });
     const client = { request } as unknown as ApiClient;
@@ -56,17 +56,17 @@ describe('useAgentController session lifecycle', () => {
     let renewal: 'ok' | 'offline' | 'busy' = 'ok';
     const request = vi.fn(async (method: string, path: string) => {
       if (path.endsWith('/lease')) {
-        if (method === 'DELETE' || renewal === 'ok') return { ok: true };
-        if (renewal === 'offline') throw new TypeError('Failed to fetch');
+        if (method === 'DELETE' || renewal === 'ok') { return { ok: true }; }
+        if (renewal === 'offline') { throw new TypeError('Failed to fetch'); }
         throw new MarifoldApiError(409, { code: 'SESSION_BUSY', message: 'This session is in use in another page or terminal.' });
       }
-      if (path === '/v1/profiles') return { profiles: [profile] };
-      if (path === '/v1/models') return { default: {}, options: [] };
-      if (path === '/v1/profiles/prompt-maker') return { profile };
-      if (path.startsWith('/v1/skills?')) return { skills: [] };
-      if (path.startsWith('/v1/sessions?')) return { sessions: [] };
-      if (path === '/v1/runs' || path.startsWith('/v1/runs?')) return { runs: [] };
-      if (path === '/v1/sessions/held') return { session: { turns: [{ role: 'user', content: 'Hello' }, { role: 'assistant', content: 'Kept answer' }] } };
+      if (path === '/v1/profiles') { return { profiles: [profile] }; }
+      if (path === '/v1/models') { return { default: {}, options: [] }; }
+      if (path === '/v1/profiles/prompt-maker') { return { profile }; }
+      if (path.startsWith('/v1/skills?')) { return { skills: [] }; }
+      if (path.startsWith('/v1/sessions?')) { return { sessions: [] }; }
+      if (path === '/v1/runs' || path.startsWith('/v1/runs?')) { return { runs: [] }; }
+      if (path === '/v1/sessions/held') { return { session: { turns: [{ role: 'user', content: 'Hello' }, { role: 'assistant', content: 'Kept answer' }] } }; }
       throw new Error(`Unexpected request: ${path}`);
     });
     const client = { request } as unknown as ApiClient;
@@ -99,13 +99,13 @@ describe('useAgentController session lifecycle', () => {
     const profiles = new Promise((resolve, reject) => { finishProfiles = resolve; failProfiles = reject; });
     const sessions = new Promise((resolve, reject) => { finishSessions = resolve; failSessions = reject; });
     const request = vi.fn(async (_method: string, path: string) => {
-        if (path.endsWith('/lease')) return { ok: true } as never;
-      if (path === '/v1/profiles') return profiles;
-      if (path === '/v1/models') return { default: {}, options: [] };
-      if (path === '/v1/profiles/prompt-maker') return { profile };
-      if (path.startsWith('/v1/skills?')) return { skills: [] };
-      if (path.startsWith('/v1/sessions?')) return sessions;
-      if (path === '/v1/runs' || path.startsWith('/v1/runs?')) return { runs: [] };
+        if (path.endsWith('/lease')) { return { ok: true } as never; }
+      if (path === '/v1/profiles') { return profiles; }
+      if (path === '/v1/models') { return { default: {}, options: [] }; }
+      if (path === '/v1/profiles/prompt-maker') { return { profile }; }
+      if (path.startsWith('/v1/skills?')) { return { skills: [] }; }
+      if (path.startsWith('/v1/sessions?')) { return sessions; }
+      if (path === '/v1/runs' || path.startsWith('/v1/runs?')) { return { runs: [] }; }
       throw new Error(`Unexpected request: ${path}`);
     });
     const client = { request } as unknown as ApiClient;
@@ -120,14 +120,14 @@ describe('useAgentController session lifecycle', () => {
     expect(result.current.sessionsLoading).toBe(true);
     await waitFor(() => expect(request.mock.calls.some(call => call[1].startsWith('/v1/sessions?'))).toBe(true));
     await act(async () => {
-      if (outcome === 'success') finishProfiles({ profiles: [profile] });
-      else failProfiles(new Error('Profiles unavailable'));
+      if (outcome === 'success') { finishProfiles({ profiles: [profile] }); }
+      else { failProfiles(new Error('Profiles unavailable')); }
     });
     expect(result.current.profilesLoading).toBe(false);
     expect(result.current.sessionsLoading).toBe(true);
     await act(async () => {
-      if (outcome === 'success') finishSessions({ sessions: [] });
-      else failSessions(new Error('Sessions unavailable'));
+      if (outcome === 'success') { finishSessions({ sessions: [] }); }
+      else { failSessions(new Error('Sessions unavailable')); }
     });
     expect(result.current.sessionsLoading).toBe(false);
   });
@@ -139,15 +139,15 @@ describe('useAgentController session lifecycle', () => {
     const pendingA = new Promise((resolve, reject) => { finishA = resolve; failA = reject; });
     const pendingB = new Promise(resolve => { finishB = resolve; });
     const request = vi.fn(async (_method: string, path: string) => {
-        if (path.endsWith('/lease')) return { ok: true } as never;
-      if (path === '/v1/profiles') return { profiles: [profile] };
-      if (path === '/v1/models') return { default: {}, options: [] };
-      if (path === '/v1/profiles/prompt-maker') return { profile };
-      if (path.startsWith('/v1/skills?')) return { skills: [] };
-      if (path.startsWith('/v1/sessions?')) return { sessions: [] };
-      if (path === '/v1/runs' || path.startsWith('/v1/runs?')) return { runs: [] };
-      if (path === '/v1/sessions/session-a') return pendingA;
-      if (path === '/v1/sessions/session-b') return pendingB;
+        if (path.endsWith('/lease')) { return { ok: true } as never; }
+      if (path === '/v1/profiles') { return { profiles: [profile] }; }
+      if (path === '/v1/models') { return { default: {}, options: [] }; }
+      if (path === '/v1/profiles/prompt-maker') { return { profile }; }
+      if (path.startsWith('/v1/skills?')) { return { skills: [] }; }
+      if (path.startsWith('/v1/sessions?')) { return { sessions: [] }; }
+      if (path === '/v1/runs' || path.startsWith('/v1/runs?')) { return { runs: [] }; }
+      if (path === '/v1/sessions/session-a') { return pendingA; }
+      if (path === '/v1/sessions/session-b') { return pendingB; }
       throw new Error(`Unexpected request: ${path}`);
     });
     const client = { request } as unknown as ApiClient;
@@ -160,8 +160,8 @@ describe('useAgentController session lifecycle', () => {
     expect(result.current.sessionLoading).toBe(true);
     act(() => result.current.selectSession('session-b'));
     await act(async () => {
-      if (outcome === 'success') finishA({ session: { turns: [{ role: 'assistant', content: 'Old conversation' }] } });
-      else failA(new Error('Old request failed'));
+      if (outcome === 'success') { finishA({ session: { turns: [{ role: 'assistant', content: 'Old conversation' }] } }); }
+      else { failA(new Error('Old request failed')); }
     });
     expect(result.current.sessionLoading).toBe(true);
     expect(result.current.thread.items).toEqual([]);
@@ -175,14 +175,14 @@ describe('useAgentController session lifecycle', () => {
     let rejectSession!: (error: Error) => void;
     const pending = new Promise((resolve, reject) => { resolveSession = resolve; rejectSession = reject; });
     const request = vi.fn(async (_method: string, path: string) => {
-        if (path.endsWith('/lease')) return { ok: true } as never;
-      if (path === '/v1/profiles') return { profiles: [profile] };
-      if (path === '/v1/models') return { default: {}, options: [] };
-      if (path === '/v1/profiles/prompt-maker') return { profile };
-      if (path.startsWith('/v1/skills?')) return { skills: [] };
-      if (path.startsWith('/v1/sessions?')) return { sessions: [] };
-      if (path === '/v1/runs' || path.startsWith('/v1/runs?')) return { runs: [] };
-      if (path === '/v1/sessions/session-a') return pending;
+        if (path.endsWith('/lease')) { return { ok: true } as never; }
+      if (path === '/v1/profiles') { return { profiles: [profile] }; }
+      if (path === '/v1/models') { return { default: {}, options: [] }; }
+      if (path === '/v1/profiles/prompt-maker') { return { profile }; }
+      if (path.startsWith('/v1/skills?')) { return { skills: [] }; }
+      if (path.startsWith('/v1/sessions?')) { return { sessions: [] }; }
+      if (path === '/v1/runs' || path.startsWith('/v1/runs?')) { return { runs: [] }; }
+      if (path === '/v1/sessions/session-a') { return pending; }
       throw new Error(`Unexpected request: ${path}`);
     });
     const client = { request } as unknown as ApiClient;
@@ -193,28 +193,28 @@ describe('useAgentController session lifecycle', () => {
       navigate, onUnauthorized,
     }));
     expect(result.current.sessionLoading).toBe(true);
-    if (outcome === 'leave') act(() => result.current.showProfiles());
+    if (outcome === 'leave') { act(() => result.current.showProfiles()); }
     await act(async () => {
-      if (outcome === 'failure') rejectSession(new Error('Bridge unavailable'));
-      else resolveSession({ session: { turns: outcome === 'empty' ? [] : [{ role: 'assistant', content: 'Stale' }] } });
+      if (outcome === 'failure') { rejectSession(new Error('Bridge unavailable')); }
+      else { resolveSession({ session: { turns: outcome === 'empty' ? [] : [{ role: 'assistant', content: 'Stale' }] } }); }
     });
     expect(result.current.sessionLoading).toBe(false);
-    if (outcome === 'failure') expect(result.current.thread.items).toMatchObject([{ kind: 'notice', text: 'Bridge unavailable' }]);
-    else expect(result.current.thread.items).toEqual([]);
+    if (outcome === 'failure') { expect(result.current.thread.items).toMatchObject([{ kind: 'notice', text: 'Bridge unavailable' }]); }
+    else { expect(result.current.thread.items).toEqual([]); }
   });
 
   it.each(['', '/v1/workspaces/guest'])('keeps the open %s transcript unchanged until reopened', async (baseUrl) => {
     let turns = [{ role: 'user', content: 'Hello' }, { role: 'assistant', content: 'Original answer' }];
     const request = vi.fn(async (_method: string, path: string) => {
-        if (path.endsWith('/lease')) return { ok: true } as never;
-      if (path === '/v1/profiles') return { profiles: [profile] };
-      if (path === '/v1/models') return { default: {}, options: [] };
-      if (path === '/v1/profiles/prompt-maker') return { profile };
-      if (path.startsWith('/v1/skills?')) return { skills: [] };
-      if (path.startsWith('/v1/sessions?')) return { sessions: [{ id: 'session-a' }] };
-      if (path === '/v1/runs' || path.startsWith('/v1/runs?')) return { runs: [] };
-      if (path === '/v1/sessions/session-a') return { session: { turns } };
-      if (path === '/v1/sessions/session-b') return { session: { turns: [] } };
+        if (path.endsWith('/lease')) { return { ok: true } as never; }
+      if (path === '/v1/profiles') { return { profiles: [profile] }; }
+      if (path === '/v1/models') { return { default: {}, options: [] }; }
+      if (path === '/v1/profiles/prompt-maker') { return { profile }; }
+      if (path.startsWith('/v1/skills?')) { return { skills: [] }; }
+      if (path.startsWith('/v1/sessions?')) { return { sessions: [{ id: 'session-a' }] }; }
+      if (path === '/v1/runs' || path.startsWith('/v1/runs?')) { return { runs: [] }; }
+      if (path === '/v1/sessions/session-a') { return { session: { turns } }; }
+      if (path === '/v1/sessions/session-b') { return { session: { turns: [] } }; }
       throw new Error(`Unexpected request: ${path}`);
     });
     const client = { baseUrl, request } as unknown as ApiClient;
@@ -254,9 +254,9 @@ describe('useAgentController session lifecycle', () => {
     const client: ApiClient = {
       baseUrl: '',
       request: async (method, path) => {
-        if (path.endsWith('/lease')) return { ok: true } as never;
-        if (method === 'GET' && path === '/v1/profiles') return { profiles: [profile] } as never;
-        if (method === 'GET' && path === '/v1/models') return { default: {}, options: [] } as never;
+        if (path.endsWith('/lease')) { return { ok: true } as never; }
+        if (method === 'GET' && path === '/v1/profiles') { return { profiles: [profile] } as never; }
+        if (method === 'GET' && path === '/v1/models') { return { default: {}, options: [] } as never; }
         throw new Error(`Unexpected request: ${method} ${path}`);
       },
       stream: async () => new Response(),
@@ -279,12 +279,12 @@ describe('useAgentController session lifecycle', () => {
     const client: ApiClient = {
       baseUrl: '',
       request: async (method, path) => {
-        if (path.endsWith('/lease')) return { ok: true } as never;
-        if (method === 'GET' && path === '/v1/profiles') return { profiles: [profile] } as never;
-        if (method === 'GET' && path === '/v1/models') return { default: {}, options: [] } as never;
-        if (method === 'GET' && path === '/v1/profiles/prompt-maker') return { profile } as never;
-        if (method === 'GET' && path === '/v1/skills?profile=prompt-maker') return { skills: [] } as never;
-        if (method === 'GET' && path.startsWith('/v1/sessions?')) return { sessions: [] } as never;
+        if (path.endsWith('/lease')) { return { ok: true } as never; }
+        if (method === 'GET' && path === '/v1/profiles') { return { profiles: [profile] } as never; }
+        if (method === 'GET' && path === '/v1/models') { return { default: {}, options: [] } as never; }
+        if (method === 'GET' && path === '/v1/profiles/prompt-maker') { return { profile } as never; }
+        if (method === 'GET' && path === '/v1/skills?profile=prompt-maker') { return { skills: [] } as never; }
+        if (method === 'GET' && path.startsWith('/v1/sessions?')) { return { sessions: [] } as never; }
         throw new Error(`Unexpected request: ${method} ${path}`);
       },
       stream: async () => new Response(),
@@ -316,12 +316,12 @@ describe('useAgentController session lifecycle', () => {
     const client: ApiClient = {
       baseUrl: '',
       request: async (method, path) => {
-        if (path.endsWith('/lease')) return { ok: true } as never;
-        if (method === 'GET' && path === '/v1/profiles') return { profiles: [profile] } as never;
-        if (method === 'GET' && path === '/v1/models') return { default: {}, options: [] } as never;
-        if (method === 'GET' && path === '/v1/profiles/prompt-maker') return { profile } as never;
-        if (method === 'GET' && path === '/v1/skills?profile=prompt-maker') return { skills: [] } as never;
-        if (method === 'GET' && path.startsWith('/v1/sessions?')) return { sessions: [] } as never;
+        if (path.endsWith('/lease')) { return { ok: true } as never; }
+        if (method === 'GET' && path === '/v1/profiles') { return { profiles: [profile] } as never; }
+        if (method === 'GET' && path === '/v1/models') { return { default: {}, options: [] } as never; }
+        if (method === 'GET' && path === '/v1/profiles/prompt-maker') { return { profile } as never; }
+        if (method === 'GET' && path === '/v1/skills?profile=prompt-maker') { return { skills: [] } as never; }
+        if (method === 'GET' && path.startsWith('/v1/sessions?')) { return { sessions: [] } as never; }
         throw new Error(`Unexpected request: ${method} ${path}`);
       },
       stream: async () => new Response(),
@@ -351,12 +351,12 @@ describe('useAgentController session lifecycle', () => {
     const client: ApiClient = {
       baseUrl: '',
       request: async (method, path) => {
-        if (path.endsWith('/lease')) return { ok: true } as never;
-        if (method === 'GET' && path === '/v1/profiles') return { profiles: [profile] } as never;
-        if (method === 'GET' && path === '/v1/models') return { default: {}, options: [] } as never;
-        if (method === 'GET' && path === '/v1/profiles/prompt-maker') return { profile } as never;
-        if (method === 'GET' && path === '/v1/skills?profile=prompt-maker') return { skills: [] } as never;
-        if (method === 'GET' && path.startsWith('/v1/sessions?')) return { sessions: [] } as never;
+        if (path.endsWith('/lease')) { return { ok: true } as never; }
+        if (method === 'GET' && path === '/v1/profiles') { return { profiles: [profile] } as never; }
+        if (method === 'GET' && path === '/v1/models') { return { default: {}, options: [] } as never; }
+        if (method === 'GET' && path === '/v1/profiles/prompt-maker') { return { profile } as never; }
+        if (method === 'GET' && path === '/v1/skills?profile=prompt-maker') { return { skills: [] } as never; }
+        if (method === 'GET' && path.startsWith('/v1/sessions?')) { return { sessions: [] } as never; }
         if (method === 'POST' && path === '/v1/skills/resolve') {
           return {
             invocation: {
@@ -428,13 +428,13 @@ describe('useAgentController session lifecycle', () => {
     const client: ApiClient = {
       baseUrl: '',
       request: async (method, path, body) => {
-        if (path.endsWith('/lease')) return { ok: true } as never;
-        if (method === 'GET' && path === '/v1/profiles') return { profiles: [legacyChatProfile] } as never;
-        if (method === 'GET' && path === '/v1/models') return { default: {}, options: [] } as never;
-        if (method === 'GET' && path === '/v1/profiles/prompt-maker') return { profile: legacyChatProfile } as never;
-        if (method === 'GET' && path === '/v1/skills?profile=prompt-maker') return { skills: [] } as never;
-        if (method === 'GET' && path.startsWith('/v1/sessions?')) return { sessions: [] } as never;
-        if (method === 'GET' && (path === '/v1/runs' || path.startsWith('/v1/runs?'))) return { runs: [] } as never;
+        if (path.endsWith('/lease')) { return { ok: true } as never; }
+        if (method === 'GET' && path === '/v1/profiles') { return { profiles: [legacyChatProfile] } as never; }
+        if (method === 'GET' && path === '/v1/models') { return { default: {}, options: [] } as never; }
+        if (method === 'GET' && path === '/v1/profiles/prompt-maker') { return { profile: legacyChatProfile } as never; }
+        if (method === 'GET' && path === '/v1/skills?profile=prompt-maker') { return { skills: [] } as never; }
+        if (method === 'GET' && path.startsWith('/v1/sessions?')) { return { sessions: [] } as never; }
+        if (method === 'GET' && (path === '/v1/runs' || path.startsWith('/v1/runs?'))) { return { runs: [] } as never; }
         if (method === 'POST' && path === '/v1/runs') {
           const input = body as { objective: string; sessionId: string };
           return {
@@ -515,22 +515,22 @@ describe('useAgentController session lifecycle', () => {
     const client: ApiClient = {
       baseUrl: '',
       request: async (method, path) => {
-        if (path.endsWith('/lease')) return { ok: true } as never;
-        if (method === 'GET' && path === '/v1/profiles') return { profiles: [profile] } as never;
+        if (path.endsWith('/lease')) { return { ok: true } as never; }
+        if (method === 'GET' && path === '/v1/profiles') { return { profiles: [profile] } as never; }
         if (method === 'GET' && path === '/v1/status') {
           return { service: 'marifold', apiVersion: 'v1', configPath: '', foundConfig: true, default: { profile: 'prompt-maker' } } as never;
         }
-        if (method === 'GET' && path === '/v1/models') return { default: {}, options: [] } as never;
-        if (method === 'GET' && path === '/v1/profiles/prompt-maker') return { profile } as never;
-        if (method === 'GET' && path === '/v1/skills?profile=prompt-maker') return { skills: [] } as never;
+        if (method === 'GET' && path === '/v1/models') { return { default: {}, options: [] } as never; }
+        if (method === 'GET' && path === '/v1/profiles/prompt-maker') { return { profile } as never; }
+        if (method === 'GET' && path === '/v1/skills?profile=prompt-maker') { return { skills: [] } as never; }
         if (method === 'GET' && path === '/v1/sessions?limit=100&profile=prompt-maker&archived=false') {
           return { sessions: serverHasSession ? [durable] : [] } as never;
         }
         if (method === 'GET' && path === '/v1/sessions/session_new') {
           throw new MarifoldApiError(404, { code: 'NOT_FOUND', message: 'not persisted yet' });
         }
-        if (method === 'GET' && (path === '/v1/runs' || path.startsWith('/v1/runs?'))) return { runs: [] } as never;
-        if (method === 'POST' && path === '/v1/runs') return { run } as never;
+        if (method === 'GET' && (path === '/v1/runs' || path.startsWith('/v1/runs?'))) { return { runs: [] } as never; }
+        if (method === 'POST' && path === '/v1/runs') { return { run } as never; }
         throw new Error(`Unexpected request: ${method} ${path}`);
       },
       stream: async path => {
@@ -603,13 +603,13 @@ describe('useAgentController session lifecycle', () => {
     const client: ApiClient = {
       baseUrl: '',
       request: async (method, path, body) => {
-        if (path.endsWith('/lease')) return { ok: true } as never;
-        if (method === 'GET' && path === '/v1/profiles') return { profiles: [profile] } as never;
+        if (path.endsWith('/lease')) { return { ok: true } as never; }
+        if (method === 'GET' && path === '/v1/profiles') { return { profiles: [profile] } as never; }
         if (method === 'GET' && path === '/v1/status') {
           return { service: 'marifold', apiVersion: 'v1', configPath: '', foundConfig: true, default: { profile: 'prompt-maker' } } as never;
         }
-        if (method === 'GET' && path === '/v1/models') return { default: {}, options: [] } as never;
-        if (method === 'GET' && path === '/v1/profiles/prompt-maker') return { profile } as never;
+        if (method === 'GET' && path === '/v1/models') { return { default: {}, options: [] } as never; }
+        if (method === 'GET' && path === '/v1/profiles/prompt-maker') { return { profile } as never; }
         if (method === 'GET' && path === '/v1/skills?profile=prompt-maker') {
           return { skills: [{ name: 'make-prompt', description: 'Make a prompt', usage: '$make-prompt <text>' }] } as never;
         }
@@ -619,7 +619,7 @@ describe('useAgentController session lifecycle', () => {
         if (method === 'GET' && path === '/v1/sessions/session_skill') {
           throw new MarifoldApiError(404, { code: 'NOT_FOUND', message: 'not persisted yet' });
         }
-        if (method === 'GET' && (path === '/v1/runs' || path.startsWith('/v1/runs?'))) return { runs: [] } as never;
+        if (method === 'GET' && (path === '/v1/runs' || path.startsWith('/v1/runs?'))) { return { runs: [] } as never; }
         if (method === 'POST' && path === '/v1/skills/resolve') {
           expect(body).toEqual({
             invocation: '$make-prompt "summer morning"',
@@ -685,21 +685,21 @@ describe('useAgentController session lifecycle', () => {
     const client: ApiClient = {
       baseUrl: '',
       request: async (method, path) => {
-        if (path.endsWith('/lease')) return { ok: true } as never;
-        if (method === 'GET' && path === '/v1/profiles') return { profiles: [profile] } as never;
+        if (path.endsWith('/lease')) { return { ok: true } as never; }
+        if (method === 'GET' && path === '/v1/profiles') { return { profiles: [profile] } as never; }
         if (method === 'GET' && path === '/v1/status') {
           return { service: 'marifold', apiVersion: 'v1', configPath: '', foundConfig: true, default: { profile: 'prompt-maker' } } as never;
         }
-        if (method === 'GET' && path === '/v1/models') return { default: {}, options: [] } as never;
-        if (method === 'GET' && path === '/v1/profiles/prompt-maker') return { profile } as never;
-        if (method === 'GET' && path === '/v1/skills?profile=prompt-maker') return { skills: [] } as never;
+        if (method === 'GET' && path === '/v1/models') { return { default: {}, options: [] } as never; }
+        if (method === 'GET' && path === '/v1/profiles/prompt-maker') { return { profile } as never; }
+        if (method === 'GET' && path === '/v1/skills?profile=prompt-maker') { return { skills: [] } as never; }
         if (method === 'GET' && path === '/v1/sessions?limit=100&profile=prompt-maker&archived=false') {
           return { sessions: [] } as never;
         }
         if (method === 'GET' && path === '/v1/sessions/session_chat_skill') {
           throw new MarifoldApiError(404, { code: 'NOT_FOUND', message: 'not persisted yet' });
         }
-        if (method === 'GET' && (path === '/v1/runs' || path.startsWith('/v1/runs?'))) return { runs: [] } as never;
+        if (method === 'GET' && (path === '/v1/runs' || path.startsWith('/v1/runs?'))) { return { runs: [] } as never; }
         if (method === 'POST' && path === '/v1/skills/resolve') {
           return {
             invocation: {
@@ -758,11 +758,11 @@ describe('useAgentController session lifecycle', () => {
     const client: ApiClient = {
       baseUrl: '',
       request: async (method, path) => {
-        if (path.endsWith('/lease')) return { ok: true } as never;
-        if (method === 'GET' && path === '/v1/profiles') return { profiles: [profile] } as never;
-        if (method === 'GET' && path === '/v1/models') return { default: {}, options: [] } as never;
-        if (method === 'GET' && path === '/v1/profiles/prompt-maker') return { profile } as never;
-        if (method === 'GET' && path === '/v1/skills?profile=prompt-maker') return { skills: [] } as never;
+        if (path.endsWith('/lease')) { return { ok: true } as never; }
+        if (method === 'GET' && path === '/v1/profiles') { return { profiles: [profile] } as never; }
+        if (method === 'GET' && path === '/v1/models') { return { default: {}, options: [] } as never; }
+        if (method === 'GET' && path === '/v1/profiles/prompt-maker') { return { profile } as never; }
+        if (method === 'GET' && path === '/v1/skills?profile=prompt-maker') { return { skills: [] } as never; }
         if (method === 'GET' && path === '/v1/sessions?limit=100&profile=prompt-maker&archived=false') {
           return { sessions: [summary] } as never;
         }
@@ -800,7 +800,7 @@ describe('useAgentController session lifecycle', () => {
             },
           } as never;
         }
-        if (method === 'GET' && (path === '/v1/runs' || path.startsWith('/v1/runs?'))) return { runs: [] } as never;
+        if (method === 'GET' && (path === '/v1/runs' || path.startsWith('/v1/runs?'))) { return { runs: [] } as never; }
         throw new Error(`Unexpected request: ${method} ${path}`);
       },
       stream: async () => new Response(),
@@ -860,11 +860,11 @@ describe('useAgentController session lifecycle', () => {
     const client: ApiClient = {
       baseUrl: '',
       request: async (method, path, body) => {
-        if (path.endsWith('/lease')) return { ok: true } as never;
-        if (method === 'GET' && path === '/v1/profiles') return { profiles: [profile] } as never;
-        if (method === 'GET' && path === '/v1/models') return { default: {}, options: [] } as never;
-        if (method === 'GET' && path === '/v1/profiles/prompt-maker') return { profile } as never;
-        if (method === 'GET' && path === '/v1/skills?profile=prompt-maker') return { skills: [] } as never;
+        if (path.endsWith('/lease')) { return { ok: true } as never; }
+        if (method === 'GET' && path === '/v1/profiles') { return { profiles: [profile] } as never; }
+        if (method === 'GET' && path === '/v1/models') { return { default: {}, options: [] } as never; }
+        if (method === 'GET' && path === '/v1/profiles/prompt-maker') { return { profile } as never; }
+        if (method === 'GET' && path === '/v1/skills?profile=prompt-maker') { return { skills: [] } as never; }
         if (method === 'GET' && path === '/v1/sessions?limit=100&profile=prompt-maker&archived=false') {
           return { sessions: deleted ? [] : [current] } as never;
         }
@@ -879,7 +879,7 @@ describe('useAgentController session lifecycle', () => {
             },
           } as never;
         }
-        if (method === 'GET' && (path === '/v1/runs' || path.startsWith('/v1/runs?'))) return { runs: [] } as never;
+        if (method === 'GET' && (path === '/v1/runs' || path.startsWith('/v1/runs?'))) { return { runs: [] } as never; }
         if (method === 'PATCH' && path === '/v1/sessions/session_actions') {
           current = { ...current, ...(body as Partial<SessionSummary>) };
           return { session: { ...current, turns: [] } } as never;
@@ -945,11 +945,11 @@ describe('useAgentController session lifecycle', () => {
     const client: ApiClient = {
       baseUrl: '',
       request: async (method, path, body) => {
-        if (path.endsWith('/lease')) return { ok: true } as never;
-        if (method === 'GET' && path === '/v1/profiles') return { profiles: [profile] } as never;
-        if (method === 'GET' && path === '/v1/models') return { default: {}, options: [] } as never;
-        if (method === 'GET' && path === '/v1/profiles/prompt-maker') return { profile } as never;
-        if (method === 'GET' && path === '/v1/skills?profile=prompt-maker') return { skills: [] } as never;
+        if (path.endsWith('/lease')) { return { ok: true } as never; }
+        if (method === 'GET' && path === '/v1/profiles') { return { profiles: [profile] } as never; }
+        if (method === 'GET' && path === '/v1/models') { return { default: {}, options: [] } as never; }
+        if (method === 'GET' && path === '/v1/profiles/prompt-maker') { return { profile } as never; }
+        if (method === 'GET' && path === '/v1/skills?profile=prompt-maker') { return { skills: [] } as never; }
         if (method === 'GET' && path === '/v1/sessions?limit=100&profile=prompt-maker&archived=false') {
           return { sessions: [summary] } as never;
         }
@@ -977,7 +977,7 @@ describe('useAgentController session lifecycle', () => {
             },
           } as never;
         }
-        if (method === 'GET' && (path === '/v1/runs' || path.startsWith('/v1/runs?'))) return { runs: [] } as never;
+        if (method === 'GET' && (path === '/v1/runs' || path.startsWith('/v1/runs?'))) { return { runs: [] } as never; }
         if (method === 'POST' && path === '/v1/runs') {
           expect(body).toMatchObject({
             objective: 'Updated conversation 2',
@@ -1008,7 +1008,7 @@ describe('useAgentController session lifecycle', () => {
     const target = result.current.thread.items.find(
       item => item.kind === 'user' && item.text === 'Conversation 2',
     );
-    if (!target) throw new Error('missing editable turn');
+    if (!target) { throw new Error('missing editable turn'); }
 
     let replacement!: Promise<boolean>;
     act(() => { replacement = result.current.resendEdited(target.id, 'Updated conversation 2'); });
@@ -1056,11 +1056,11 @@ describe('useAgentController session lifecycle', () => {
     const client: ApiClient = {
       baseUrl: '',
       request: async (method, path) => {
-        if (path.endsWith('/lease')) return { ok: true } as never;
-        if (method === 'GET' && path === '/v1/profiles') return { profiles: [profile] } as never;
-        if (method === 'GET' && path === '/v1/models') return { default: {}, options: [] } as never;
-        if (method === 'GET' && path === '/v1/profiles/prompt-maker') return { profile } as never;
-        if (method === 'GET' && path === '/v1/skills?profile=prompt-maker') return { skills: [] } as never;
+        if (path.endsWith('/lease')) { return { ok: true } as never; }
+        if (method === 'GET' && path === '/v1/profiles') { return { profiles: [profile] } as never; }
+        if (method === 'GET' && path === '/v1/models') { return { default: {}, options: [] } as never; }
+        if (method === 'GET' && path === '/v1/profiles/prompt-maker') { return { profile } as never; }
+        if (method === 'GET' && path === '/v1/skills?profile=prompt-maker') { return { skills: [] } as never; }
         if (method === 'GET' && path === '/v1/sessions?limit=100&profile=prompt-maker&archived=false') {
           return { sessions: [first, second] } as never;
         }
@@ -1076,7 +1076,7 @@ describe('useAgentController session lifecycle', () => {
             },
           } as never;
         }
-        if (method === 'GET' && (path === '/v1/runs' || path.startsWith('/v1/runs?'))) return { runs: [finished] } as never;
+        if (method === 'GET' && (path === '/v1/runs' || path.startsWith('/v1/runs?'))) { return { runs: [finished] } as never; }
         throw new Error(`Unexpected request: ${method} ${path}`);
       },
       stream: async () => new Response(),

@@ -31,19 +31,19 @@ export class ProfileResolver implements ProfileLoader {
   load(name: string): Profile {
     this.assertSafeName(name);
     const directoryProfile = this.loadDirectoryProfile(name);
-    if (directoryProfile) return directoryProfile;
+    if (directoryProfile) { return directoryProfile; }
 
     const jsonProfile = this.loadJsonProfile(name);
-    if (jsonProfile) return jsonProfile;
+    if (jsonProfile) { return jsonProfile; }
 
-    if (name === 'default') return { ...BUILT_IN_DEFAULT_PROFILE };
+    if (name === 'default') { return { ...BUILT_IN_DEFAULT_PROFILE }; }
     throw MarifoldError.profileInvalid(`Profile '${name}' was not found in ${this.profilesDir}.`, name);
   }
 
   loadSettings(name: string): ProfileSettings {
     this.assertSafeName(name);
     const profileToml = path.join(this.profilesDir, name, 'profile.toml');
-    if (!fs.existsSync(profileToml)) return { memories: true };
+    if (!fs.existsSync(profileToml)) { return { memories: true }; }
 
     const raw = this.readToml(profileToml);
     const displayName = normalizeProfileDisplayName(
@@ -109,7 +109,7 @@ export class ProfileResolver implements ProfileLoader {
     // default can carry one (setAvatar scaffolds the dir without md/toml files).
     for (const summary of profiles.values()) {
       const avatar = findProfileAvatar(this.profilesDir, summary.name);
-      if (avatar) summary.avatar = { mediaType: avatar.mediaType };
+      if (avatar) { summary.avatar = { mediaType: avatar.mediaType }; }
     }
 
     return [...profiles.values()].sort((a, b) => a.name.localeCompare(b.name));
@@ -184,7 +184,7 @@ export class ProfileResolver implements ProfileLoader {
 
   private loadDirectoryProfile(name: string): Profile | undefined {
     const profileDir = path.join(this.profilesDir, name);
-    if (!isProfileDirectory(profileDir)) return undefined;
+    if (!isProfileDirectory(profileDir)) { return undefined; }
     const instructions = resolveDirectoryProfileInstructions(profileDir);
     return {
       name,
@@ -197,7 +197,7 @@ export class ProfileResolver implements ProfileLoader {
 
   private loadJsonProfile(name: string): Profile | undefined {
     const filePath = path.join(this.profilesDir, `${name}.json`);
-    if (!fs.existsSync(filePath)) return undefined;
+    if (!fs.existsSync(filePath)) { return undefined; }
     try {
       const raw = JSON.parse(fs.readFileSync(filePath, 'utf-8')) as Partial<Profile>;
       return {
@@ -267,33 +267,33 @@ function readProfileFile(filePath: string): ProfileFileSummary {
 }
 
 function combineProfileFields(profile: Profile | undefined): string {
-  if (!profile) return '';
+  if (!profile) { return ''; }
   return combineInstructionParts([profile.rules, profile.identity, profile.custom]);
 }
 
 function optionalString(value: unknown, label: string): string | undefined {
-  if (value === undefined) return undefined;
-  if (typeof value === 'string') return value;
+  if (value === undefined) { return undefined; }
+  if (typeof value === 'string') { return value; }
   throw MarifoldError.configInvalid(`Expected ${label} to be a string.`);
 }
 
 function optionalBoolean(value: unknown, label: string): boolean | undefined {
-  if (value === undefined) return undefined;
-  if (typeof value === 'boolean') return value;
+  if (value === undefined) { return undefined; }
+  if (typeof value === 'boolean') { return value; }
   throw MarifoldError.configInvalid(`Expected ${label} to be a boolean.`);
 }
 
 function optionalNumber(value: unknown, label: string): number | undefined {
-  if (value === undefined) return undefined;
-  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (value === undefined) { return undefined; }
+  if (typeof value === 'number' && Number.isFinite(value)) { return value; }
   throw MarifoldError.configInvalid(`Expected ${label} to be a number.`);
 }
 
 /** Parse `session_context_turns`: `"all"` (or unset) → undefined (no cap),
  *  a non-negative integer → that many recent turns. */
 function optionalTurnWindow(value: unknown, label: string): number | undefined {
-  if (value === undefined) return undefined;
-  if (typeof value === 'string' && value.trim().toLowerCase() === 'all') return undefined;
-  if (typeof value === 'number' && Number.isInteger(value) && value >= 0) return value;
+  if (value === undefined) { return undefined; }
+  if (typeof value === 'string' && value.trim().toLowerCase() === 'all') { return undefined; }
+  if (typeof value === 'number' && Number.isInteger(value) && value >= 0) { return value; }
   throw MarifoldError.configInvalid(`Expected ${label} to be a non-negative integer or "all".`);
 }

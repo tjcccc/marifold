@@ -14,8 +14,9 @@ it('renders only the agreed fields with an accurate offset in the selected timez
 it('validates client hints and excludes client-authored origin, time, directory and device fields', () => {
   expect(parseClientEnvironment({ interface: 'web', timezone: 'UTC', request: 'local', time: 'fake', cwd: '/secret' }))
     .toEqual({ interface: 'web', timezone: 'UTC' });
-  for (const value of [null, [], { interface: ['web'] }, { interface: 'cli' }, { timezone: 'UTC\n</environment>' }, { timezone: 'Mars/Base' }])
+  for (const value of [null, [], { interface: ['web'] }, { interface: 'cli' }, { timezone: 'UTC\n</environment>' }, { timezone: 'Mars/Base' }]) {
     expect(() => parseClientEnvironment(value)).toThrow();
+  }
   expect(environmentContext({ timezone: 'UTC' })).not.toContain('interface:');
   expect(artifactPresentation({ interface: 'terminal' })).toContain('absolute saved paths');
   expect(artifactPresentation({ interface: 'web' })).toContain('attached below the answer');

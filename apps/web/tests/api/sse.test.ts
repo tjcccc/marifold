@@ -6,7 +6,7 @@ function byteStream(chunks: string[]): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
   return new ReadableStream({
     start(controller) {
-      for (const chunk of chunks) controller.enqueue(encoder.encode(chunk));
+      for (const chunk of chunks) { controller.enqueue(encoder.encode(chunk)); }
       controller.close();
     },
   });
@@ -14,7 +14,7 @@ function byteStream(chunks: string[]): ReadableStream<Uint8Array> {
 
 async function collect(chunks: string[]): Promise<SseFrame[]> {
   const frames: SseFrame[] = [];
-  for await (const frame of parseSse(byteStream(chunks))) frames.push(frame);
+  for await (const frame of parseSse(byteStream(chunks))) { frames.push(frame); }
   return frames;
 }
 

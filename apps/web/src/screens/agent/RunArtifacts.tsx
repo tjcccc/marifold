@@ -13,7 +13,7 @@ export function RunArtifacts({ client, runId, artifacts }: { client?: ApiClient;
   const { unavailable, downloading, started, error, download } = useArtifactDownloads(client, runId, artifacts);
   const [preview, setPreview] = useState<PreviewImage>();
   useEffect(() => { setPreview(undefined); }, [client, runId]);
-  if (!artifacts.length) return null;
+  if (!artifacts.length) { return null; }
   return (
     <section className={styles.files} aria-label="Generated files">
       {artifacts.map(artifact => {
@@ -65,18 +65,18 @@ function ArtifactThumbnail({ client, runId, artifact, onPreview }: { client: Api
     const load = async () => {
       try {
         const blob = await artifactPreviewBlob(client, runId, artifact, 'thumbnail');
-        if (cancelled) return;
+        if (cancelled) { return; }
         if (!blob) { setFailed(true); return; }
         objectUrl = URL.createObjectURL(blob);
         setSrc(objectUrl);
-      } catch { if (!cancelled) setFailed(true); }
+      } catch { if (!cancelled) { setFailed(true); } }
     };
     const observer = typeof IntersectionObserver !== 'undefined' ? new IntersectionObserver(entries => {
       if (entries.some(entry => entry.isIntersecting)) { observer?.disconnect(); void load(); }
     }, { rootMargin: '240px' }) : undefined;
-    if (observer && host.current) observer.observe(host.current);
-    else void load();
-    return () => { cancelled = true; observer?.disconnect(); if (objectUrl) URL.revokeObjectURL(objectUrl); };
+    if (observer && host.current) { observer.observe(host.current); }
+    else { void load(); }
+    return () => { cancelled = true; observer?.disconnect(); if (objectUrl) { URL.revokeObjectURL(objectUrl); } };
   }, [client, runId, artifact.id, artifact.size, artifact.mediaType, attempt]);
   return (
     <button ref={host} className={styles.preview} type="button" aria-label={`${failed ? 'Retry preview of' : 'Preview'} ${artifact.name}`}
@@ -93,7 +93,7 @@ function ArtifactThumbnail({ client, runId, artifact, onPreview }: { client: Api
 }
 
 function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024) { return `${bytes} B`; }
+  if (bytes < 1024 * 1024) { return `${(bytes / 1024).toFixed(1)} KB`; }
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }

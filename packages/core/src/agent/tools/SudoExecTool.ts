@@ -13,15 +13,15 @@ export class SudoExecTool implements AgentTool {
   summarizeCall(input: Record<string, JSONValue>): string { return `[ADMINISTRATOR] run ${typeof input.command === 'string' ? input.command : '<missing command>'}`; }
   assessRisk(input: Record<string, JSONValue>, ctx: ToolExecutionContext): ToolRiskAssessment {
     const command = this.command(input);
-    if (this.device?.mode() !== 'full') return { blocked: true, escalate: true, persistable: false, reason: 'Enable full access locally on the execution device before requesting sudo.' };
+    if (this.device?.mode() !== 'full') { return { blocked: true, escalate: true, persistable: false, reason: 'Enable full access locally on the execution device before requesting sudo.' }; }
     return { escalate: true, persistable: false,
       reason: 'Run this exact command as root on the target. Enter the target OS account password only in the secure authorization dialog. Job continues after disconnect.',
       ...(!ctx.sudoResponse ? { sudo: this.device.sudo.create(command) } : {}) };
   }
   async execute(input: Record<string, JSONValue>, ctx: ToolExecutionContext) {
     const command = this.command(input);
-    if (ctx.signal?.aborted) throw new Error('Run cancelled before sudo execution.');
-    if (this.device?.mode() !== 'full' || !ctx.sudoResponse) throw new Error('Sudo requires full access and a fresh secure authorization.');
+    if (ctx.signal?.aborted) { throw new Error('Run cancelled before sudo execution.'); }
+    if (this.device?.mode() !== 'full' || !ctx.sudoResponse) { throw new Error('Sudo requires full access and a fresh secure authorization.'); }
     const password = this.device.sudo.consume(command, ctx.sudoResponse);
     try {
       const job = await this.device.start(command, ctx.cwd, {
@@ -32,7 +32,7 @@ export class SudoExecTool implements AgentTool {
     } finally { password.fill(0); }
   }
   private command(input: Record<string, JSONValue>): string {
-    if (Object.keys(input).some(key => key !== 'command')) throw new Error('sudo_exec accepts only a command; credentials must use the secure dialog.');
+    if (Object.keys(input).some(key => key !== 'command')) { throw new Error('sudo_exec accepts only a command; credentials must use the secure dialog.'); }
     return requireStringInput(input, 'command', 'sudo_exec');
   }
 }

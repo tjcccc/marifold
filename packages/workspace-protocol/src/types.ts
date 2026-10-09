@@ -96,33 +96,37 @@ export interface WorkspaceEvent {
 export type WorkspaceMessage = WorkspaceRequest | WorkspaceResponse | WorkspaceEvent;
 
 export function record(value: unknown): Record<string, unknown> {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Expected an object.');
+  if (!value || typeof value !== 'object' || Array.isArray(value)) { throw new Error('Expected an object.'); }
   return value as Record<string, unknown>;
 }
 export function identifier(value: unknown): string {
-  if (typeof value !== 'string' || !/^[A-Za-z0-9_-]{1,100}$/.test(value)) throw new Error('Invalid identifier.');
+  if (typeof value !== 'string' || !/^[A-Za-z0-9_-]{1,100}$/.test(value)) { throw new Error('Invalid identifier.'); }
   return value;
 }
 export function label(value: unknown): string {
-  if (typeof value !== 'string' || !value.trim() || value.length > 80 || /[\x00-\x1f\x7f]/.test(value))
+  if (typeof value !== 'string' || !value.trim() || value.length > 80 || /[\x00-\x1f\x7f]/.test(value)) {
     throw new Error('Invalid display name.');
+  }
   return value.trim();
 }
 export function bridgeOrigin(input: string): string {
   const url = new URL(input);
-  if (url.username || url.password || url.search || url.hash || url.pathname !== '/')
+  if (url.username || url.password || url.search || url.hash || url.pathname !== '/') {
     throw new Error('Bridge URL must be an origin without credentials.');
+  }
   if (
     url.protocol !== 'https:' &&
     !(url.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname))
-  )
+  ) {
     throw new Error('Bridge requires HTTPS (HTTP is allowed only on loopback).');
+  }
   return url.origin;
 }
 export function parseHeader(value: unknown): MessageHeader {
   const h = record(value);
-  if (h.version !== 1 || typeof h.expiresAt !== 'number' || !Number.isSafeInteger(h.expiresAt))
+  if (h.version !== 1 || typeof h.expiresAt !== 'number' || !Number.isSafeInteger(h.expiresAt)) {
     throw new Error('Invalid message header.');
+  }
   return {
     version: 1,
     workspaceId: identifier(h.workspaceId),

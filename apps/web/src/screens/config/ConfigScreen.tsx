@@ -146,15 +146,15 @@ export function ConfigScreen({
   useEffect(() => {
     const priorItem = previousItem.current;
     previousItem.current = item;
-    if (!mobile) return;
-    if (item) setMobileLevel('detail');
-    else if (priorItem && (section === 'profiles' || section === 'providers')) setMobileLevel('items');
+    if (!mobile) { return; }
+    if (item) { setMobileLevel('detail'); }
+    else if (priorItem && (section === 'profiles' || section === 'providers')) { setMobileLevel('items'); }
   }, [item, mobile, section]);
 
   const handleError = useCallback(
     (error: unknown) => {
-      if (error instanceof MarifoldApiError && error.code === 'UNAUTHORIZED') onUnauthorized();
-      else setProblem(error instanceof Error ? error.message : String(error));
+      if (error instanceof MarifoldApiError && error.code === 'UNAUTHORIZED') { onUnauthorized(); }
+      else { setProblem(error instanceof Error ? error.message : String(error)); }
     },
     [onUnauthorized],
   );
@@ -169,12 +169,12 @@ export function ConfigScreen({
           getConfig(client),
           getModels(client),
         ]);
-        if (cancelled) return;
+        if (cancelled) { return; }
         setProfiles(profileList);
         setConfig(publicConfig);
         setModels(modelsView);
       } catch (error) {
-        if (!cancelled) handleError(error);
+        if (!cancelled) { handleError(error); }
       }
     })();
     return () => {
@@ -184,17 +184,17 @@ export function ConfigScreen({
 
   // Landing on a list section without an item selects a sensible default.
   useEffect(() => {
-    if (mobile || item || !config) return;
-    if (section === 'profiles') go('profiles', config.default.profile);
+    if (mobile || item || !config) { return; }
+    if (section === 'profiles') { go('profiles', config.default.profile); }
     else if (section === 'providers') {
       const first = Object.keys(config.providers).sort()[0];
-      if (first) go('providers', first);
+      if (first) { go('providers', first); }
     }
   }, [section, item, config, go, mobile]);
 
   // Profile detail for the selected profile.
   useEffect(() => {
-    if (section !== 'profiles' || !item) return;
+    if (section !== 'profiles' || !item) { return; }
     let cancelled = false;
     (async () => {
       try {
@@ -202,12 +202,12 @@ export function ConfigScreen({
           getProfile(client, item),
           listMemories(client, item),
         ]);
-        if (cancelled) return;
+        if (cancelled) { return; }
         setDetail(profileDetail);
         setMemories(memoryEntries);
         setProblem(undefined);
       } catch (error) {
-        if (!cancelled) handleError(error);
+        if (!cancelled) { handleError(error); }
       }
     })();
     return () => {
@@ -225,7 +225,7 @@ export function ConfigScreen({
   }, [client, handleError]);
 
   useEffect(() => {
-    if (section === 'providers' && providerStatus === undefined) void refreshProviderStatus();
+    if (section === 'providers' && providerStatus === undefined) { void refreshProviderStatus(); }
   }, [section, providerStatus, refreshProviderStatus]);
 
   const refreshProviderCatalog = useCallback(async () => {
@@ -233,13 +233,13 @@ export function ConfigScreen({
       setProviderCatalog(await getProviderCatalog(client));
       setProviderAddError(undefined);
     } catch (error) {
-      if (error instanceof MarifoldApiError && error.code === 'UNAUTHORIZED') onUnauthorized();
-      else setProviderAddError(error instanceof Error ? error.message : String(error));
+      if (error instanceof MarifoldApiError && error.code === 'UNAUTHORIZED') { onUnauthorized(); }
+      else { setProviderAddError(error instanceof Error ? error.message : String(error)); }
     }
   }, [client, onUnauthorized]);
 
   useEffect(() => {
-    if (section === 'providers' && providerCatalog === undefined) void refreshProviderCatalog();
+    if (section === 'providers' && providerCatalog === undefined) { void refreshProviderCatalog(); }
   }, [section, providerCatalog, refreshProviderCatalog]);
 
   /** Run one profile write; the fresh ProfileDetail replaces local state. */
@@ -268,7 +268,7 @@ export function ConfigScreen({
 
   const onAvatarPick = useCallback(
     async (file: File) => {
-      if (!item) return;
+      if (!item) { return; }
       const data = await fileToBase64(file);
       await mutate(() => putAvatar(client, item, data, file.type));
       setAvatarVersion(version => version + 1);
@@ -302,15 +302,15 @@ export function ConfigScreen({
       setProviderAddOpen(false);
       go('providers', input.name);
     } catch (error) {
-      if (error instanceof MarifoldApiError && error.code === 'UNAUTHORIZED') onUnauthorized();
-      else setProviderAddError(error instanceof Error ? error.message : String(error));
+      if (error instanceof MarifoldApiError && error.code === 'UNAUTHORIZED') { onUnauthorized(); }
+      else { setProviderAddError(error instanceof Error ? error.message : String(error)); }
     } finally {
       setProviderAddBusy(false);
     }
   }
 
   const removeSelectedProfile = useCallback(async () => {
-    if (!item) return;
+    if (!item) { return; }
     setBusy(true);
     try {
       await deleteProfile(client, item);
@@ -328,7 +328,7 @@ export function ConfigScreen({
   }, [client, go, handleError, item]);
 
   const removeSelectedProvider = useCallback(async () => {
-    if (!item) return;
+    if (!item) { return; }
     setBusy(true);
     try {
       const result = await removeProvider(client, item);
@@ -495,7 +495,7 @@ export function ConfigScreen({
                   onClick={() => {
                     setProviderAddError(undefined);
                     setProviderAddOpen(true);
-                    if (providerCatalog === undefined) void refreshProviderCatalog();
+                    if (providerCatalog === undefined) { void refreshProviderCatalog(); }
                   }}
                 >
                   +
@@ -511,7 +511,7 @@ export function ConfigScreen({
               onClick={() => {
                 setProviderAddError(undefined);
                 setProviderAddOpen(true);
-                if (providerCatalog === undefined) void refreshProviderCatalog();
+                if (providerCatalog === undefined) { void refreshProviderCatalog(); }
               }}
             >
               +
@@ -576,7 +576,7 @@ export function ConfigScreen({
               }
               onAvatarPick={file => void onAvatarPick(file)}
               onAvatarDelete={() => {
-                if (!item) return;
+                if (!item) { return; }
                 void mutate(() => deleteAvatar(client, item)).then(() => {
                   setAvatarVersion(version => version + 1);
                   void refreshProfiles();
@@ -585,21 +585,21 @@ export function ConfigScreen({
               onPatch={(patch: ProfilePatchInput) => {
                 if (item) {
                   void mutate(() => updateProfile(client, item, patch)).then(() => {
-                    if (patch.displayName !== undefined) void refreshProfiles();
+                    if (patch.displayName !== undefined) { void refreshProfiles(); }
                   });
                 }
               }}
               onSaveFile={(file: ProfileFileKind, content: string) => {
-                if (item) void mutate(() => putProfileFile(client, item, file, content));
+                if (item) { void mutate(() => putProfileFile(client, item, file, content)); }
               }}
               onAddTrustedFolder={folder => {
-                if (item) void mutate(() => addTrustedFolder(client, item, folder));
+                if (item) { void mutate(() => addTrustedFolder(client, item, folder)); }
               }}
               onRemoveTrustedFolder={folder => {
-                if (item) void mutate(() => removeTrustedFolder(client, item, folder));
+                if (item) { void mutate(() => removeTrustedFolder(client, item, folder)); }
               }}
               onMemoryAction={(id, mode) => {
-                if (!item) return;
+                if (!item) { return; }
                 setBusy(true);
                 deleteMemory(client, item, id, mode)
                   .then(fresh => {
@@ -731,7 +731,7 @@ export function ConfigScreen({
           error={providerAddError}
           onSubmit={input => void submitAddProvider(input)}
           onClose={() => {
-            if (providerAddBusy) return;
+            if (providerAddBusy) { return; }
             setProviderAddOpen(false);
             setProviderAddError(undefined);
           }}

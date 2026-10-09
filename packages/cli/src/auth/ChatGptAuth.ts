@@ -110,11 +110,11 @@ async function postForm(url: string, data: Record<string, string>, label: string
     signal: AbortSignal.timeout(60000),
   };
   const dispatcher = proxyDispatcher();
-  if (dispatcher) init.dispatcher = dispatcher;
+  if (dispatcher) { init.dispatcher = dispatcher; }
   const response = await fetch(url, init as RequestInit).catch(error => {
     throw new Error(`${label}: ${stringifyError(error)}`);
   });
-  if (!response.ok) throw new Error(`${label}: HTTP ${response.status}: ${await response.text()}`);
+  if (!response.ok) { throw new Error(`${label}: HTTP ${response.status}: ${await response.text()}`); }
   return await response.json() as Record<string, unknown>;
 }
 

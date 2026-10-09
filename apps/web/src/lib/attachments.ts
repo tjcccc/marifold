@@ -58,7 +58,7 @@ export type AttachmentClass =
   | { kind: 'rejected'; reason: string };
 
 export function classifyFile(name: string, mediaType: string, size: number): AttachmentClass {
-  if (IMAGE_MEDIA_TYPES.has(mediaType)) return { kind: 'image' };
+  if (IMAGE_MEDIA_TYPES.has(mediaType)) { return { kind: 'image' }; }
   if (mediaType.startsWith('image/')) {
     return { kind: 'rejected', reason: `${name}: unsupported image type (${mediaType}); use PNG, JPEG, WebP, or GIF.` };
   }
@@ -150,7 +150,7 @@ export function capViolation(existing: PreparedAttachment[], nextSize: number, n
 /** Append text attachments to the prompt as fenced blocks headed by the
  * filename. Fences stretch past any backtick run inside the content. */
 export function inlineTextAttachments(prompt: string, files: Array<{ name: string; content: string }>): string {
-  if (files.length === 0) return prompt;
+  if (files.length === 0) { return prompt; }
   const blocks = files.map(file => {
     const fence = '`'.repeat(Math.max(3, longestBacktickRun(file.content) + 1));
     return `Attached file: ${file.name}\n${fence}\n${file.content}\n${fence}`;
@@ -180,26 +180,26 @@ export interface SplitInlineAttachments {
 export function splitInlineTextAttachments(value: string): SplitInlineAttachments {
   const marker = '\n\nAttached file: ';
   const firstMarker = value.indexOf(marker);
-  if (firstMarker === -1) return { prompt: value, files: [] };
+  if (firstMarker === -1) { return { prompt: value, files: [] }; }
 
   const files: Array<{ name: string; content: string }> = [];
   let cursor = firstMarker;
   while (cursor < value.length) {
-    if (!value.startsWith(marker, cursor)) return { prompt: value, files: [] };
+    if (!value.startsWith(marker, cursor)) { return { prompt: value, files: [] }; }
     const nameStart = cursor + marker.length;
     const nameEnd = value.indexOf('\n', nameStart);
-    if (nameEnd === -1) return { prompt: value, files: [] };
+    if (nameEnd === -1) { return { prompt: value, files: [] }; }
     const name = value.slice(nameStart, nameEnd);
     const fenceEnd = value.indexOf('\n', nameEnd + 1);
-    if (fenceEnd === -1) return { prompt: value, files: [] };
+    if (fenceEnd === -1) { return { prompt: value, files: [] }; }
     const fence = value.slice(nameEnd + 1, fenceEnd);
-    if (!/^`{3,}$/.test(fence)) return { prompt: value, files: [] };
+    if (!/^`{3,}$/.test(fence)) { return { prompt: value, files: [] }; }
     const closing = `\n${fence}`;
     const contentEnd = value.indexOf(closing, fenceEnd + 1);
-    if (contentEnd === -1) return { prompt: value, files: [] };
+    if (contentEnd === -1) { return { prompt: value, files: [] }; }
     files.push({ name, content: value.slice(fenceEnd + 1, contentEnd) });
     cursor = contentEnd + closing.length;
-    if (cursor === value.length) break;
+    if (cursor === value.length) { break; }
   }
   return { prompt: value.slice(0, firstMarker), files };
 }
@@ -292,8 +292,8 @@ export async function prepareFiles(files: Iterable<File>, existing: PreparedAtta
 }
 
 function officeMediaType(kind: OfficeFileKind): string {
-  if (kind === 'word') return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-  if (kind === 'spreadsheet') return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+  if (kind === 'word') { return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'; }
+  if (kind === 'spreadsheet') { return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'; }
   return 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
 }
 
@@ -304,7 +304,7 @@ function extension(name: string): string {
 
 function longestBacktickRun(content: string): number {
   let longest = 0;
-  for (const run of content.match(/`+/g) ?? []) longest = Math.max(longest, run.length);
+  for (const run of content.match(/`+/g) ?? []) { longest = Math.max(longest, run.length); }
   return longest;
 }
 
@@ -352,7 +352,7 @@ export async function optimizeBrowserImage(file: File): Promise<BrowserOptimized
     canvas.width = width;
     canvas.height = height;
     const context = canvas.getContext('2d');
-    if (!context) return originalBrowserImage(file);
+    if (!context) { return originalBrowserImage(file); }
     context.drawImage(bitmap, 0, 0, width, height);
 
     // Keep PNG lossless. JPEG uses a high-quality re-encode after resizing.
@@ -360,7 +360,7 @@ export async function optimizeBrowserImage(file: File): Promise<BrowserOptimized
     // animated WebP apart and must never flatten animation accidentally.
     const outputType = file.type === 'image/png' ? 'image/png' : file.type;
     const candidate = await canvasToBlob(canvas, outputType, IMAGE_OUTPUT_QUALITY);
-    if (candidate.size >= file.size) return originalBrowserImage(file);
+    if (candidate.size >= file.size) { return originalBrowserImage(file); }
     return {
       size: candidate.size,
       originalSize: file.size,
@@ -386,8 +386,8 @@ async function originalBrowserImage(file: File): Promise<BrowserOptimizedImage> 
 function canvasToBlob(canvas: HTMLCanvasElement, type: string, quality: number): Promise<Blob> {
   return new Promise((resolve, reject) => {
     canvas.toBlob(blob => {
-      if (blob) resolve(blob);
-      else reject(new Error(`browser could not encode ${type}`));
+      if (blob) { resolve(blob); }
+      else { reject(new Error(`browser could not encode ${type}`)); }
     }, type, quality);
   });
 }

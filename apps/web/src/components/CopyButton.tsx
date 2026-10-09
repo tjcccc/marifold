@@ -14,7 +14,7 @@ export function CopyButton({ text, label, className, disabled, variant = 'icon' 
   const resetTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   useEffect(() => () => {
-    if (resetTimer.current !== undefined) clearTimeout(resetTimer.current);
+    if (resetTimer.current !== undefined) { clearTimeout(resetTimer.current); }
   }, []);
 
   async function copy(): Promise<void> {
@@ -24,7 +24,7 @@ export function CopyButton({ text, label, className, disabled, variant = 'icon' 
     } catch {
       setStatus('failed');
     }
-    if (resetTimer.current !== undefined) clearTimeout(resetTimer.current);
+    if (resetTimer.current !== undefined) { clearTimeout(resetTimer.current); }
     resetTimer.current = setTimeout(() => setStatus('idle'), 1600);
   }
 
@@ -63,7 +63,7 @@ async function writeClipboardText(text: string): Promise<void> {
   textarea.select();
   try {
     const copied = document.execCommand?.('copy') ?? false;
-    if (!copied) throw new Error('Clipboard is unavailable.');
+    if (!copied) { throw new Error('Clipboard is unavailable.'); }
   } finally {
     textarea.remove();
   }

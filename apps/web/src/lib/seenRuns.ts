@@ -15,7 +15,7 @@ export class SeenRuns {
   add(id: string): void {
     this.ids.delete(id);
     this.ids.add(id);
-    while (this.ids.size > 2000) this.ids.delete(this.ids.values().next().value!);
+    while (this.ids.size > 2000) { this.ids.delete(this.ids.values().next().value!); }
     try { localStorage.setItem(this.key, JSON.stringify([...this.ids])); } catch { /* Keep in-memory acknowledgement. */ }
   }
 }

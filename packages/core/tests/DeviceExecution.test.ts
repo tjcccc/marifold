@@ -13,7 +13,7 @@ import type { ToolExecutionResult } from '../src/agent/ToolRegistry';
 // Run the core build first (as in the full repository gate).
 const BuiltDeviceExecution: typeof DeviceExecution = require('../dist/agent/DeviceExecution').DeviceExecution;
 const directories: string[] = [];
-afterEach(() => { for (const directory of directories.splice(0)) fs.rmSync(directory, { recursive: true, force: true }); });
+afterEach(() => { for (const directory of directories.splice(0)) { fs.rmSync(directory, { recursive: true, force: true }); } });
 function fixture() {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'marifold-device-execution-'));
   directories.push(directory);
@@ -23,7 +23,7 @@ async function finished(device: DeviceExecution, id: string): Promise<DeviceJob>
   const deadline = Date.now() + 10_000;
   while (Date.now() < deadline) {
     const job = device.status(id);
-    if (!['running', 'queued'].includes(job.state)) return job;
+    if (!['running', 'queued'].includes(job.state)) { return job; }
     await new Promise(resolve => setTimeout(resolve, 30));
   }
   throw new Error('Job did not finish.');

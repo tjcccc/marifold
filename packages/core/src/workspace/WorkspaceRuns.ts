@@ -35,28 +35,30 @@ export class WorkspaceRuns {
     origin?: WorkspaceOperationContext,
   ): Promise<RunStartInput> {
     const mentions = [...input.objective.matchAll(/(^|\s)@(?:"([^"\r\n]+)"|([^\s"]+))(?=\s|$)/g)];
-    if (mentions.length > 1) throw new Error('Select one @device per task.');
+    if (mentions.length > 1) { throw new Error('Select one @device per task.'); }
     const mention = mentions[0];
     const task = mention ? (input.objective.slice(0, mention.index) + input.objective.slice(mention.index! + mention[0].length)).trim() : input.objective;
-    if ((input.objective.startsWith('@') && !mention) || (mention && !task))
+    if ((input.objective.startsWith('@') && !mention) || (mention && !task)) {
       throw new Error('Use @device with a task.');
-    if (mention && /^[$/]/.test(task))
+    }
+    if (mention && /^[$/]/.test(task)) {
       throw new Error('Use a plain task with @device; run skills and commands separately.');
+    }
     // Hosting shares this same local workspace; local runs need its device tools too.
     const workspaceId = origin?.workspaceId ?? selection.workspaceId ??
       this.manager.store.list().find(connection => connection.role === 'host')?.id;
     if (!workspaceId) {
-      if (selection.executionDeviceId || mention) throw new Error('Select a workspace before an execution device.');
+      if (selection.executionDeviceId || mention) { throw new Error('Select a workspace before an execution device.'); }
       return input;
     }
     const connection = this.manager.store.get(workspaceId);
-    if (connection.role !== 'host') throw new Error('Run must be submitted to the workspace host.');
+    if (connection.role !== 'host') { throw new Error('Run must be submitted to the workspace host.'); }
     const originId = origin?.senderDeviceId ?? connection.deviceId;
     const devices = this.manager.devices(connection.id);
     const skill = input.lean || /^\s*\$[\w-]+/.test(input.userTurn ?? input.objective);
     const name = mention?.[2] ?? mention?.[3];
     const matches = name ? devices.filter(d => d.id === name || d.name.toLowerCase() === name.toLowerCase()) : [];
-    if (name && matches.length !== 1) throw new Error('The mentioned device is unknown or ambiguous. Select a device from the @ menu.');
+    if (name && matches.length !== 1) { throw new Error('The mentioned device is unknown or ambiguous. Select a device from the @ menu.'); }
     const explicit = name ? matches[0]!.id : selection.executionDeviceId;
     const executionDeviceId =
       explicit === 'host'
@@ -65,16 +67,18 @@ export class WorkspaceRuns {
           (skill
             ? connection.hostDeviceId
             : (devices.find((d) => d.id === originId && d.executor)?.id ?? connection.hostDeviceId)));
-    if (skill && executionDeviceId !== connection.hostDeviceId)
+    if (skill && executionDeviceId !== connection.hostDeviceId) {
       throw new Error('Skills execute on the workspace host in this version.');
+    }
     const device = devices.find((d) => d.id === executionDeviceId);
-    if (!device || !device.online || !device.executor)
+    if (!device || !device.online || !device.executor) {
       throw new Error('The selected execution device is unavailable or has disabled execution.');
+    }
     return { ...input, environment: { ...input.environment, request: input.environment?.request === 'remote' || originId !== connection.hostDeviceId ? 'remote' : 'local' }, execution: { workspaceId: connection.id, originDeviceId: originId, executionDeviceId } };
   }
   createRunner(input: RunStartInput): AgentRunner {
     const execution = input.execution;
-    if (!execution) return this.runtime.createAgentRunner(input.profile);
+    if (!execution) { return this.runtime.createAgentRunner(input.profile); }
     const { workspaceId, executionDeviceId } = execution;
     const host = this.manager.store.get(workspaceId);
     const devices = this.manager.devices(workspaceId);
@@ -97,7 +101,7 @@ export class WorkspaceRuns {
           const matches = this.manager
             .devices(workspaceId)
             .filter((d) => d.id === selected || d.name === selected || ((selected === 'host' || selected === host.name) && d.host));
-          if (matches.length !== 1) throw new Error('Device name is ambiguous or unknown; use its ID.');
+          if (matches.length !== 1) { throw new Error('Device name is ambiguous or unknown; use its ID.'); }
           const child = await this.resolve(
             {
               objective,
@@ -116,8 +120,9 @@ export class WorkspaceRuns {
         }),
       );
     }
-    if (executionDeviceId === host.hostDeviceId)
+    if (executionDeviceId === host.hostDeviceId) {
       return this.runtime.createAgentRunner(input.profile, registry, undefined, { contextInstructions });
+    }
     let runId: string;
     let lease: ReturnType<typeof setInterval> | undefined;
     let signal: AbortSignal | undefined;
@@ -140,7 +145,7 @@ export class WorkspaceRuns {
           `[${devices.find((device) => device.id === executionDeviceId)?.name ?? executionDeviceId}] ${tool.summarizeCall(value)}`,
         assessRisk: async (value, context) => {
           signal = context.signal;
-          if (signal?.aborted) throw new Error('Run cancelled.');
+          if (signal?.aborted) { throw new Error('Run cancelled.'); }
           signal?.removeEventListener('abort', cancel);
           signal?.addEventListener('abort', cancel, { once: true });
           const assessment = (await request('executor.assess', {
@@ -152,7 +157,7 @@ export class WorkspaceRuns {
           return assessment;
         },
         execute: async (value, context): Promise<ToolExecutionResult> => {
-          if (context.signal?.aborted) throw new Error('Run cancelled.');
+          if (context.signal?.aborted) { throw new Error('Run cancelled.'); }
           const permission = grant;
           grant = undefined;
           try {

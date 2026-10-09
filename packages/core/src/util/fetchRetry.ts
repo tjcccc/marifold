@@ -33,7 +33,7 @@ export async function fetchWithTransientRetry(
     try {
       return await fetchImpl(input, init);
     } catch (error) {
-      if (attempt >= attempts || init?.signal?.aborted || !isTransientFetchError(error)) throw error;
+      if (attempt >= attempts || init?.signal?.aborted || !isTransientFetchError(error)) { throw error; }
       await delay(delayMs * attempt);
     }
   }
@@ -43,7 +43,7 @@ export function isTransientFetchError(error: unknown): boolean {
   let current: unknown = error;
   for (let depth = 0; depth < 4 && current && typeof current === 'object'; depth += 1) {
     const code = (current as { code?: unknown }).code;
-    if (typeof code === 'string' && TRANSIENT_NETWORK_CODES.has(code)) return true;
+    if (typeof code === 'string' && TRANSIENT_NETWORK_CODES.has(code)) { return true; }
     current = (current as { cause?: unknown }).cause;
   }
   return false;

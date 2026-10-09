@@ -87,7 +87,7 @@ export class MarifoldOpenAICompatProvider implements ProviderAdapter {
     options?: AdapterCallOptions,
   ): AsyncGenerator<string, void, unknown> {
     for await (const event of this.streamEvents(messages, config, outputSpec, options)) {
-      if (event.type === 'text_delta') yield event.text;
+      if (event.type === 'text_delta') { yield event.text; }
     }
   }
 
@@ -167,7 +167,7 @@ export class MarifoldOpenAICompatProvider implements ProviderAdapter {
   }
 
   private endpointForRequest(config: PriestConfig): OpenAICompatEndpoint {
-    if (this.options.providerName === 'chatgpt') return 'responses';
+    if (this.options.providerName === 'chatgpt') { return 'responses'; }
     if (this.options.providerName === 'github_copilot' && isGitHubCopilotResponsesModelId(config.model)) {
       return 'responses';
     }
@@ -190,7 +190,7 @@ export class MarifoldOpenAICompatProvider implements ProviderAdapter {
     // ChatGPT subscription Codex backend rejects it as an unsupported field.
     // Keep the limit for Copilot/standard Responses routes and omit it only at
     // this subscription-specific transport boundary.
-    if (this.options.providerName === 'chatgpt') delete providerOptions['max_output_tokens'];
+    if (this.options.providerName === 'chatgpt') { delete providerOptions['max_output_tokens']; }
 
     // Priest 3.1 forwards providerTools and combines them with function tools.
     // Keep Marifold releases built against 3.0.x functional until that SDK is
@@ -222,7 +222,7 @@ export class MarifoldOpenAICompatProvider implements ProviderAdapter {
   }
 
   private copilotHeaders(): Record<string, string> {
-    if (this.options.providerName !== 'github_copilot') return {};
+    if (this.options.providerName !== 'github_copilot') { return {}; }
     return {
       'Editor-Version': 'marifold/0',
       'Editor-Plugin-Version': 'marifold/0',
@@ -232,13 +232,13 @@ export class MarifoldOpenAICompatProvider implements ProviderAdapter {
   }
 
   private chatgptHeaders(): Record<string, string> {
-    if (this.options.providerName !== 'chatgpt') return {};
+    if (this.options.providerName !== 'chatgpt') { return {}; }
     const headers: Record<string, string> = {
       originator: 'codex_cli_rs',
       'OpenAI-Beta': 'responses=experimental',
       session_id: this.sessionId,
     };
-    if (this.options.accountId) headers['chatgpt-account-id'] = this.options.accountId;
+    if (this.options.accountId) { headers['chatgpt-account-id'] = this.options.accountId; }
     return headers;
   }
 }

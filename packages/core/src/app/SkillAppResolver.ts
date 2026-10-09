@@ -124,7 +124,7 @@ function resolveProfileSkillName(
   operation: SkillAppOperationDefinition,
   state: Record<string, SkillAppStateValue>,
 ): string {
-  if (operation.skill) return operation.skill;
+  if (operation.skill) { return operation.skill; }
   const selected = operation.skillState ? state[operation.skillState] ?? '' : '';
   if (!selected || !operation.skillOptions?.includes(selected)) {
     throw MarifoldError.appInvalid(
@@ -138,7 +138,7 @@ function stripLeadingSkillName(input: string, skills: string[]): string {
   const escaped = [...skills]
     .sort((left, right) => right.length - left.length)
     .map(skill => skill.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-  if (escaped.length === 0) return input;
+  if (escaped.length === 0) { return input; }
   return input.replace(
     new RegExp(`^\\s*\\$?(?:${escaped.join('|')})(?=\\s|:|$)\\s*:?\\s*`, 'i'),
     '',

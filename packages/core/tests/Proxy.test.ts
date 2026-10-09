@@ -15,8 +15,8 @@ beforeEach(() => {
 });
 afterEach(() => {
   for (const key of PROXY_KEYS) {
-    if (saved[key] === undefined) delete process.env[key];
-    else process.env[key] = saved[key];
+    if (saved[key] === undefined) { delete process.env[key]; }
+    else { process.env[key] = saved[key]; }
   }
 });
 
@@ -53,7 +53,7 @@ describe('proxyDispatcher', () => {
       const [host, port] = (request.url ?? '').split(':');
       const upstream = connect(Number(port), host, () => {
         client.write('HTTP/1.1 200 Connection Established\r\n\r\n');
-        if (head.length > 0) upstream.write(head);
+        if (head.length > 0) { upstream.write(head); }
         upstream.pipe(client);
         client.pipe(upstream);
       });

@@ -66,9 +66,9 @@ export function registerAgentCommand(program: Command, printer: ConsolePrinter):
         let failed = false;
         for await (const event of events) {
           renderAgentEvent(inert(event), style);
-          if (event.type === 'done' && event.status !== 'completed') failed = true;
+          if (event.type === 'done' && event.status !== 'completed') { failed = true; }
         }
-        if (failed) process.exitCode = 1;
+        if (failed) { process.exitCode = 1; }
       } catch (error) {
         printer.printError(error);
         process.exitCode = 1;
@@ -154,8 +154,8 @@ function renderAgentEvent(event: AgentEvent, style: TerminalStyle): void {
 }
 
 function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KiB`;
+  if (bytes < 1024) { return `${bytes} B`; }
+  if (bytes < 1024 * 1024) { return `${(bytes / 1024).toFixed(1)} KiB`; }
   return `${(bytes / (1024 * 1024)).toFixed(1)} MiB`;
 }
 
@@ -168,6 +168,6 @@ function parsePositiveInteger(value: string): number {
 }
 
 function parseToolMode(value: string): 'auto' | 'native' | 'control-block' {
-  if (value === 'auto' || value === 'native' || value === 'control-block') return value;
+  if (value === 'auto' || value === 'native' || value === 'control-block') { return value; }
   throw new Error('Expected --tool-mode to be auto, native, or control-block.');
 }

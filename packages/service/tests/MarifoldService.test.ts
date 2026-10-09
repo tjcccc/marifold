@@ -582,7 +582,7 @@ describe('MarifoldService', () => {
     try {
       await server.listen({ host: '127.0.0.1', port: 0 });
       const address = server.server.address();
-      if (typeof address !== 'object' || address === null) throw new Error('service did not report a listen address');
+      if (typeof address !== 'object' || address === null) { throw new Error('service did not report a listen address'); }
       const base = `http://127.0.0.1:${address.port}`;
 
       const clientAbort = new AbortController();
@@ -629,7 +629,7 @@ describe('MarifoldService', () => {
     try {
       await server.listen({ host: '127.0.0.1', port: 0 });
       const address = server.server.address();
-      if (typeof address !== 'object' || address === null) throw new Error('service did not report a listen address');
+      if (typeof address !== 'object' || address === null) { throw new Error('service did not report a listen address'); }
       const base = `http://127.0.0.1:${address.port}`;
 
       const clientAbort = new AbortController();
@@ -904,7 +904,7 @@ describe('MarifoldService', () => {
   it('refuses to delete a session while its run is active', async () => {
     const realFetch = globalThis.fetch;
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      if (String(input).includes('localhost:11434')) return stallingOllamaResponse(init?.signal ?? undefined);
+      if (String(input).includes('localhost:11434')) { return stallingOllamaResponse(init?.signal ?? undefined); }
       return realFetch(input, init);
     }));
     const dir = tempDir();

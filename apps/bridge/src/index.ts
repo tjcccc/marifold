@@ -16,7 +16,7 @@ import type { RelayStore } from './Store';
 export { MemoryRelayStore, RedisRelayStore } from './Store';
 
 export function createBridge(store: RelayStore, registrationToken: string) {
-  if (registrationToken.length < 32) throw new Error('Bridge registration token must contain at least 32 characters.');
+  if (registrationToken.length < 32) { throw new Error('Bridge registration token must contain at least 32 characters.'); }
   const server = createServer(async (req, res) => {
     res.setHeader('content-type', 'application/json');
     res.setHeader('cache-control', 'no-store');
@@ -41,11 +41,11 @@ export function createBridge(store: RelayStore, registrationToken: string) {
       let body = '';
       for await (const chunk of req) {
         body += chunk;
-        if (body.length > 16384) throw new Error('Body too large.');
+        if (body.length > 16384) { throw new Error('Body too large.'); }
       }
       const b = record(JSON.parse(body));
       const host = record(b.host) as unknown as PublicIdentity;
-      if (typeof host.signingKey !== 'string' || !host.encryptionKey) throw new Error('Invalid host identity.');
+      if (typeof host.signingKey !== 'string' || !host.encryptionKey) { throw new Error('Invalid host identity.'); }
       await store.register({ workspaceId: identifier(b.workspaceId), hostDeviceId: identifier(b.hostDeviceId), host });
       res.end('{"ok":true}');
     } catch {
@@ -91,16 +91,17 @@ export function createBridge(store: RelayStore, registrationToken: string) {
             window = Date.now();
             count = 0;
           }
-          if (++count > 512) throw new Error('Rate limit.');
-          if (ws.readyState !== WebSocket.OPEN) return;
+          if (++count > 512) { throw new Error('Rate limit.'); }
+          if (ws.readyState !== WebSocket.OPEN) { return; }
           const data = record(JSON.parse(bytes.toString()));
           if (!auth) {
-            if (data.type !== 'auth') throw new Error('Authentication required.');
+            if (data.type !== 'auth') { throw new Error('Authentication required.'); }
             const workspace = identifier(data.workspaceId);
             const device = identifier(data.deviceId);
             const host = await store.host(workspace);
-            if (!host || (await store.revoked(workspace, device)))
+            if (!host || (await store.revoked(workspace, device))) {
               throw new Error('Unknown or revoked workspace membership.');
+            }
             const certificate = data.certificate as SignedMembership | undefined;
             let identity: PublicIdentity;
             if (certificate) {
@@ -108,14 +109,15 @@ export function createBridge(store: RelayStore, registrationToken: string) {
                 !validMembership(certificate, host.host) ||
                 certificate.membership.workspaceId !== workspace ||
                 certificate.membership.deviceId !== device
-              )
+              ) {
                 throw new Error('Invalid membership.');
+              }
               identity = certificate.membership.identity;
             } else {
-              if (!device.startsWith('pending_')) throw new Error('Invalid pairing identity.');
+              if (!device.startsWith('pending_')) { throw new Error('Invalid pairing identity.'); }
               identity = data.identity as PublicIdentity;
             }
-            if (!verifyText(identity, nonce, String(data.signature))) throw new Error('Invalid proof of possession.');
+            if (!verifyText(identity, nonce, String(data.signature))) { throw new Error('Invalid proof of possession.'); }
             auth = { workspace, device, identity, certificate, hostDevice: host.hostDeviceId };
             await store.connect(workspace, device, generation);
             stop = await store.receive(workspace, device, (id, packet) => {
@@ -125,9 +127,10 @@ export function createBridge(store: RelayStore, registrationToken: string) {
                     ws.close(1008, 'Membership or connection replaced');
                     return;
                   }
-                  if (ws.readyState === WebSocket.OPEN && ws.bufferedAmount < MAX_FRAME_BYTES * 8)
+                  if (ws.readyState === WebSocket.OPEN && ws.bufferedAmount < MAX_FRAME_BYTES * 8) {
                     ws.send(JSON.stringify({ type: 'delivery', deliveryId: id, packet: JSON.parse(packet) }));
-                  else ws.close(1013, 'Slow consumer');
+                  }
+                  else { ws.close(1013, 'Slow consumer'); }
                 })
                 .catch(() => ws.close(1011, 'Relay unavailable'));
             });
@@ -142,16 +145,18 @@ export function createBridge(store: RelayStore, registrationToken: string) {
           if (
             (await store.revoked(auth.workspace, auth.device)) ||
             !(await store.current(auth.workspace, auth.device, generation))
-          )
+          ) {
             throw new Error('Membership or connection replaced.');
+          }
           if (data.type === 'ping') {
             await store.connect(auth.workspace, auth.device, generation);
             ws.send('{"type":"pong"}');
             return;
           }
           if (data.type === 'ack') {
-            if (typeof data.deliveryId !== 'string' || data.deliveryId.length > 100)
+            if (typeof data.deliveryId !== 'string' || data.deliveryId.length > 100) {
               throw new Error('Invalid acknowledgment.');
+            }
             await store.ack(auth.workspace, auth.device, data.deliveryId);
             return;
           }
@@ -160,17 +165,18 @@ export function createBridge(store: RelayStore, registrationToken: string) {
             ws.send(JSON.stringify({ type: 'revoked', id: identifier(data.id) }));
             return;
           }
-          if (data.type !== 'send') throw new Error('Unknown message.');
+          if (data.type !== 'send') { throw new Error('Unknown message.'); }
           const message = record(data.message);
           const h = parseHeader(message.header);
           if (
             h.workspaceId !== auth.workspace ||
             h.sender !== auth.device ||
             (auth.device !== auth.hostDevice && h.recipient !== auth.hostDevice)
-          )
+          ) {
             throw new Error('Routing denied.');
-          if (h.expiresAt < Date.now() || h.expiresAt > Date.now() + 65000) throw new Error('Message expired.');
-          if (await store.revoked(auth.workspace, h.recipient)) return;
+          }
+          if (h.expiresAt < Date.now() || h.expiresAt > Date.now() + 65000) { throw new Error('Message expired.'); }
+          if (await store.revoked(auth.workspace, h.recipient)) { return; }
           await store.publish(
             auth.workspace,
             h.recipient,
@@ -189,7 +195,7 @@ export function createBridge(store: RelayStore, registrationToken: string) {
     ws.on('error', () => undefined);
   });
   server.on('close', () => {
-    for (const ws of wss.clients) ws.terminate();
+    for (const ws of wss.clients) { ws.terminate(); }
     wss.close();
     void store.close();
   });
