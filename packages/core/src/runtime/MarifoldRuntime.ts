@@ -826,6 +826,10 @@ export class MarifoldRuntime {
     this.sessionLeases.acquire(sessionId, owner);
   }
 
+  takeOverSession(sessionId: string, owner: string = this.sessionOwner): void {
+    this.sessionLeases.takeover(sessionId, owner);
+  }
+
   releaseSession(sessionId: string, owner: string = this.sessionOwner): void {
     this.sessionLeases.release(sessionId, owner);
   }

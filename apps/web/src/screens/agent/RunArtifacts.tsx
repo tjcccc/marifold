@@ -7,6 +7,7 @@ import { ARTIFACT_UNAVAILABLE_NOTICE, downloadRunArtifact, isImageArtifact } fro
 import { useArtifactDownloads } from './useArtifactDownloads';
 import styles from './RunArtifacts.module.css';
 import { artifactPreviewBlob } from '../../lib/artifactPreviewCache';
+import { formatBytes } from '../../lib/format';
 
 /** Deliverables belong to the answer and remain visible independently of logs. */
 export function RunArtifacts({ client, runId, artifacts }: { client?: ApiClient; runId: string; artifacts: RunArtifact[] }) {
@@ -90,10 +91,4 @@ function ArtifactThumbnail({ client, runId, artifact, onPreview }: { client: Api
       )}
     </button>
   );
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) { return `${bytes} B`; }
-  if (bytes < 1024 * 1024) { return `${(bytes / 1024).toFixed(1)} KB`; }
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }

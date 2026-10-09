@@ -44,7 +44,9 @@ export function registerSessionRoutes(
   server.post<{ Params: { id: string } }>('/v1/sessions/:id/lease', async request => {
     const owner = request.headers['x-marifold-session-owner'];
     if (typeof owner !== 'string' || !/^[a-zA-Z0-9-]{20,100}$/.test(owner)) { throw MarifoldError.configInvalid('A session owner identifier is required.'); }
-    runtime.acquireSession(request.params.id, owner);
+    // `takeover` moves a session held by another of the owner's devices here.
+    if ((request.body as { takeover?: unknown } | undefined)?.takeover === true) { runtime.takeOverSession(request.params.id, owner); }
+    else { runtime.acquireSession(request.params.id, owner); }
     return { ok: true };
   });
   server.delete<{ Params: { id: string } }>('/v1/sessions/:id/lease', async request => {

@@ -38,7 +38,7 @@ import { QuestionModal } from './QuestionModal.js';
 import { SelectList, type SelectItem } from './SelectList.js';
 import { useTerminalSize } from './useTerminalSize.js';
 import { useResizing } from './useResizing.js';
-import { copyToClipboard, errorText, runSummary, skillInvocation, unwrapPath } from './appHelpers.js';
+import { copyToClipboard, errorText, runSummary, sessionBusyText, skillInvocation, unwrapPath } from './appHelpers.js';
 
 const READ_FILE_CHAR_LIMIT = 100000;
 
@@ -181,6 +181,8 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
   const steeringRef = useRef<string[]>([]);
   const pendingContextRef = useRef<string[]>([]);
   const pendingImagesRef = useRef<ImageInput[]>([]);
+  // Increments per agent run; a detached run's events no longer reach the view.
+  const runGenerationRef = useRef(0);
   const lastCtrlCRef = useRef(0);
 
   // Latest state for callbacks that must read current values without re-binding.
@@ -228,10 +230,16 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
         if (disposed || (error as { code?: unknown } | undefined)?.code !== 'SESSION_BUSY') { return; }
         disposed = true;
         if (stateRef.current.sessionId === id) {
-          abortRef.current?.abort();
+          // Another device took the session over. A service-hosted task keeps
+          // running there, so only stop following it; a task running inside
+          // this terminal process cannot move and is cancelled.
+          runGenerationRef.current += 1;
+          if (!runtime.remote) { abortRef.current?.abort(); }
+          abortRef.current = null;
+          dispatch({ type: 'set_running', running: false });
           dispatch({ type: 'new_session' });
           setHistory([]);
-          notify(errorText(error), 'error');
+          notify(sessionBusyText(error, id), 'error');
         }
       }
     };
@@ -332,6 +340,7 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
   const runAgent = useCallback(async (objective: string, options: { instructions?: string[]; userTurn?: string; lean?: boolean; forcePlan?: boolean; originalImages?: boolean } = {}) => {
     const controller = new AbortController();
     abortRef.current = controller;
+    const generation = ++runGenerationRef.current;
     steeringRef.current = [];
     setSteeringCount(0);
     const images = pendingImagesRef.current;
@@ -344,6 +353,9 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
     const sessionId = current.sessionId ?? randomUUID();
     if (!current.sessionId) { dispatch({ type: 'set_session', sessionId }); }
     dispatch({ type: 'set_running', running: true });
+    // Shown until the first run event: a large upload to a remote workspace
+    // can take a while before the host starts the task.
+    dispatch({ type: 'set_activity', activity: 'sending' });
     const startedAt = Date.now();
     let usage: AgentUsage | undefined;
     let doneStatus: string | undefined;
@@ -373,6 +385,8 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
           return queued;
         },
       })) {
+        // The session moved to another device; leave the task to it.
+        if (runGenerationRef.current !== generation) { break; }
         if (event.type === 'done') {
           usage = event.usage;
           doneStatus = event.status;
@@ -380,8 +394,9 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
         dispatch({ type: 'agent_event', event });
       }
     } catch (error) {
-      if (!controller.signal.aborted) { notify(errorText(error), 'error'); }
+      if (!controller.signal.aborted && runGenerationRef.current === generation) { notify(errorText(error), 'error'); }
     } finally {
+      if (runGenerationRef.current !== generation) { return; }
       dispatch({ type: 'set_running', running: false });
       abortRef.current = null;
       if (usage?.inputTokens != null) { dispatch({ type: 'set_context_usage', tokens: usage.inputTokens }); }
@@ -1090,7 +1105,7 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
               dispatch({ type: 'add_item', item: { kind: turn.role === 'user' ? 'user' : 'assistant', text: turn.content } });
             }
             notify(`Resumed session ${detail.id.slice(0, 8)} — your next message continues it.`, 'info');
-            } catch (error) { notify(errorText(error), 'error'); }
+            } catch (error) { notify(sessionBusyText(error, value), 'error'); }
           }}
           onCancel={() => setOverlay(null)}
           emptyHint={['No saved sessions for this profile yet.']}

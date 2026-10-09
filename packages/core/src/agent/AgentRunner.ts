@@ -229,13 +229,13 @@ export class AgentRunner {
     // the finished run's transcript write into SESSION_BUSY.
     const release = this.deps.holdSession?.(options);
     try {
-      yield* this.runReserved(options);
+      yield* this.runReserved(options, release !== undefined);
     } finally {
       release?.();
     }
   }
 
-  private async *runReserved(options: AgentRunOptions): AsyncGenerator<AgentEvent, void, unknown> {
+  private async *runReserved(options: AgentRunOptions, held: boolean): AsyncGenerator<AgentEvent, void, unknown> {
     this.deps.checkSession?.(options);
     const startedAtMs = Date.now();
     const startedAt = new Date(startedAtMs).toISOString();
@@ -356,7 +356,9 @@ export class AgentRunner {
       // append-only runs still keep their submitted prompt and terminal state.
       if (outcome !== 'completed' && options.replaceUserTurnIndex !== undefined) { return; }
 
-      this.deps.checkSession?.(options);
+      // A held session stays this run's even after another device takes it
+      // over; the turn still belongs in the conversation.
+      if (!held) { this.deps.checkSession?.(options); }
       sessionTurnPersisted = true;
       let responseMetrics: ResponseMetrics | undefined;
       if (outcome === 'completed') {

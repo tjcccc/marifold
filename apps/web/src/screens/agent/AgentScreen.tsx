@@ -16,6 +16,7 @@ import { AppsScreen } from '../apps/AppsScreen';
 import { AppsSidebarContent } from '../apps/AppsSidebar';
 import { useAppsCatalog } from '../apps/useAppsCatalog';
 import { CatchUpBanner } from './CatchUpBanner';
+import { SessionBlockedBanner } from './SessionBlockedBanner';
 import { InputBar } from './InputBar';
 import { ProfileSidebarContent } from './ProfileSidebar';
 import { SessionListContent, sessionTitle } from './SessionList';
@@ -321,7 +322,11 @@ export function AgentScreen(props: AgentScreenProps) {
               onToggleRun={controller.toggleRun}
               onEditUserMessage={controller.resendEdited}
               editingDisabled={controller.steeringRun !== undefined || controller.sending}
+              sendingBytes={controller.sendingBytes}
             />
+            {controller.sessionBlocked && controller.sessionId ? (
+              <SessionBlockedBanner onTakeOver={controller.takeOverSession} />
+            ) : null}
             <InputBar
               draftKey={`${props.connectionId}:${controller.profileName}:${controller.sessionId ?? 'new'}`}
               steering={controller.steeringRun !== undefined}

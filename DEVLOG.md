@@ -2,7 +2,35 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
-## Unreleased — Service route modules
+## 2026-10-09 — v0.80.0 — Session takeover, robustness, and code standards
+
+Release of the work since v0.79.2: session takeover between the owner's
+devices, send progress for slow uploads, robustness and workspace edge-case
+fixes, brace enforcement, and the service route split. Paired devices must
+both run 0.80.0.
+
+### Session takeover and send progress
+
+- Move a session open on another of the owner's devices here: the Web UI shows
+  **Open here** under the "in use" notice, and the TUI accepts
+  `marifold --resume <id> --takeover` (and suggests it when a session is busy).
+  The lease route takes `{ "takeover": true }`, also through a workspace
+  bridge. The displaced client finds out at its next renewal. A service-hosted
+  task keeps running for the new owner and still saves its turn; a task inside
+  a displaced local terminal process is cancelled, since it cannot move.
+- Show that a message is on its way before its task starts: the Web UI shows
+  "Sending… (size)" where "Thinking…" will appear, and the TUI status reads
+  "Sending" until the first run event, so a large image uploading through a
+  bridge no longer looks unresponsive. No cancel while sending: an aborted
+  upload can still have created the run on the host.
+- Validation: full gate passes (1,089 tests, one existing skip); new tests fail
+  on the previous code. Real-terminal check: plain resume is refused while
+  another client holds the session, `--takeover` opens it with its transcript
+  and displaces that client, and `--takeover` without `--resume` is rejected.
+  Live OrbStack: a guest takes a host page's session over through the TLS
+  bridge; rejoin and 55-delegation checks still pass.
+
+### Service route modules
 
 - Split `packages/service/src/MarifoldService.ts` (1,253 → 362 lines) into
   route modules beside the existing `RunRoutes`/`ProfileRoutes`/
@@ -17,7 +45,7 @@ Cross-session development log. Newest first. Keep entries short: what shipped, w
   print order. Full gate passes (1,081 tests); live OrbStack rejoin and
   55-delegation checks pass.
 
-## Unreleased — Braces on every control-flow body
+### Braces on every control-flow body
 
 - Require braces on every `if`/`else`/loop body, including single statements,
   as the owner's coding standard. Biome 2.5.15 (pinned dev dependency, linter
@@ -31,7 +59,7 @@ Cross-session development log. Newest first. Keep entries short: what shipped, w
 - Validation: lint reports zero violations; full gate passes (1,081 tests,
   one existing skip). Behavior is unchanged by construction.
 
-## Unreleased — Robustness and workspace edge cases
+### Robustness and workspace edge cases
 
 - Service errors keep their meaning: malformed, oversized, or unsupported
   request bodies return their 4xx status instead of 500; host file paths in

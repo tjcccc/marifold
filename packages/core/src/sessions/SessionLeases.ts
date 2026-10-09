@@ -31,6 +31,22 @@ export class SessionLeases {
     } finally { db.close(); }
   }
 
+  /** Move a session to `owner` even while another client holds it. A
+   * workspace belongs to one person, so this is how they continue a session on
+   * another device. The displaced client finds out at its next renewal; work
+   * it started keeps running under the new owner and still saves its turn. */
+  takeover(sessionId: string, owner: string): void {
+    const db = this.open();
+    try {
+      db.prepare(`INSERT INTO leases VALUES (?, ?, ?)
+        ON CONFLICT(session_id) DO UPDATE SET owner = excluded.owner, expires_at = excluded.expires_at`)
+        .run(sessionId, owner, this.now() + 60_000);
+    } finally { db.close(); }
+    this.held.set(sessionId, owner);
+    const pin = this.pinned.get(sessionId);
+    if (pin) { pin.owner = owner; }
+  }
+
   assertAvailable(sessionId: string, owner?: string): void {
     if (!fs.existsSync(this.file)) { return; }
     const db = this.open();
@@ -52,8 +68,11 @@ export class SessionLeases {
     this.acquire(sessionId, owner);
     if (pin) { pin.count += 1; }
     else {
+      // Renew for whoever owns the session now; a takeover moves the hold too.
       const timer = setInterval(() => {
-        try { this.acquire(sessionId, owner); } catch { /* Another client took an expired lease. */ }
+        const current = this.pinned.get(sessionId);
+        if (!current) { return; }
+        try { this.acquire(sessionId, current.owner); } catch { /* Another client took an expired lease. */ }
       }, 15_000);
       timer.unref?.();
       this.pinned.set(sessionId, { owner, count: 1, timer });

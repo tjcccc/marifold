@@ -14,6 +14,8 @@ interface Props {
   service: ApiClientOptions;
   profile?: string;
   resume?: string | boolean;
+  /** Take the resumed session over from another device or page. */
+  takeover?: boolean;
   version: string;
   fullscreen?: boolean;
 }
@@ -32,7 +34,7 @@ export function WorkspaceShell(props: Props) {
   const localApi = useRef(createApiClient(props.service)).current;
   const serial = useRef(0);
   const load = useCallback(
-    async (id: string, resume?: string | boolean): Promise<void> => {
+    async (id: string, resume?: string | boolean, takeover = false): Promise<void> => {
       const version = ++serial.current;
       let runtime: TuiRuntime = props.local;
       let config = props.loadedConfig;
@@ -68,7 +70,10 @@ export function WorkspaceShell(props: Props) {
       else if (resume === true) {
         sessionId = (await runtime.listSessions(1, settings.profile, { order: 'recent' }))[0]?.id;
       }
-      if (sessionId) { await runtime.acquireSession?.(sessionId); }
+      if (sessionId) {
+        if (takeover) { await runtime.takeOverSession?.(sessionId); }
+        else { await runtime.acquireSession?.(sessionId); }
+      }
       const session = sessionId ? await runtime.getSession(sessionId) : undefined;
       if (version !== serial.current) { return; }
       selected.current = id;
@@ -107,14 +112,14 @@ export function WorkspaceShell(props: Props) {
       .then(async (result) => {
         if (!alive) { return; }
         const workspace = result.workspaces.find((w) => w.id === result.defaultId && w.online);
-        await load(workspace?.id ?? 'local', props.resume);
+        await load(workspace?.id ?? 'local', props.resume, props.takeover);
         if (result.defaultId !== 'local' && !workspace) {
           setNotice('Default workspace is offline. Opened Local for this launch.');
         }
       })
       .catch(async () => {
         if (alive) {
-          await load('local', props.resume);
+          await load('local', props.resume, props.takeover);
           setNotice('Workspace service unavailable. Opened Local.');
         }
       });

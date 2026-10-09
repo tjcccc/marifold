@@ -50,3 +50,9 @@ export function formatRelativeTime(iso: string, nowMs = Date.now()): string {
   if (days < 7) { return `${days}d ago`; }
   return new Date(then).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
+
+export function formatBytes(bytes: number): string {
+  if (bytes < 1024) { return `${bytes} B`; }
+  if (bytes < 1024 * 1024) { return `${(bytes / 1024).toFixed(1)} KB`; }
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}

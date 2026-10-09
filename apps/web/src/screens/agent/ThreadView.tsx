@@ -9,7 +9,7 @@ import { ImagePreviewDialog } from '../../components/ImagePreviewDialog';
 import type { PreviewImage } from '../../components/ImagePreviewDialog';
 import type { RunApprovalAction, UserInputSubmission } from '../../api/types';
 import { splitLeading } from '../../lib/commandSyntax';
-import { formatCostUSD, formatDuration, formatRunDuration, formatTokens } from '../../lib/format';
+import { formatCostUSD, formatDuration, formatRunDuration, formatTokens, formatBytes } from '../../lib/format';
 import { artifactForSandboxHref, ARTIFACT_UNAVAILABLE_NOTICE } from '../../lib/runArtifacts';
 import { useArtifactDownloads } from './useArtifactDownloads';
 import type { ResponseMetaState, RunCardState, ThreadItem, UserAttachment } from '../../state/thread';
@@ -32,6 +32,8 @@ export interface ThreadViewProps {
   editingDisabled?: boolean;
   /** Increment for an explicit user submission, which always repins the tail. */
   scrollToBottomRequest?: number;
+  /** Bytes of a message still uploading before its run exists. */
+  sendingBytes?: number;
 }
 
 /** The conversation: user bubbles right, assistant markdown blocks, notices,
@@ -47,6 +49,7 @@ export function ThreadView({
   onEditUserMessage,
   editingDisabled = false,
   scrollToBottomRequest = 0,
+  sendingBytes,
 }: ThreadViewProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const pinnedRef = useRef(true);
@@ -59,7 +62,7 @@ export function ThreadView({
     if (scrollRequestRef.current !== scrollToBottomRequest) { pinnedRef.current = true; }
     if (node && pinnedRef.current) { node.scrollTop = node.scrollHeight; }
     scrollRequestRef.current = scrollToBottomRequest;
-  }, [items, scrollToBottomRequest]);
+  }, [items, scrollToBottomRequest, sendingBytes]);
 
   function onScroll(): void {
     const node = scrollRef.current;
@@ -118,6 +121,13 @@ export function ThreadView({
             client={client}
           />
         ))}
+        {sendingBytes !== undefined ? (
+          <div className={styles.thinking} role="status">
+            <span className={styles.thinkingLabel}>
+              {sendingBytes >= 64 * 1024 ? `Sending ${formatBytes(sendingBytes)}…` : 'Sending…'}
+            </span>
+          </div>
+        ) : null}
       </div>
       {preview ? (
         <ImagePreviewDialog

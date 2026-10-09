@@ -646,6 +646,37 @@ Transform {{text}} into the final prompt.
     }
   });
 
+  it('lets another device take over a session while its task keeps running and saves its turn', async () => {
+    stubProvider([toolCall('write_file', { path: 'held.txt', content: 'held' }), 'Saved after takeover.']);
+    const { server, base } = await startServer();
+    const office = { 'x-marifold-session-owner': `office-${'a'.repeat(24)}` };
+    const home = { 'x-marifold-session-owner': `home-${'b'.repeat(24)}` };
+    try {
+      expect((await postJson(base, '/v1/sessions/moved/lease', {}, office)).status).toBe(200);
+      const created = await postJson(base, '/v1/runs', { objective: 'Write held.txt.', cwd: tempDir(), sessionId: 'moved' }, office);
+      const { run } = await created.json();
+      const frames = sseFrames(await fetch(`${base}/v1/runs/${run.id}/events`));
+      const { matched } = await pullFrames(frames, frame => frame.event === 'approval_request');
+      const request = (matched!.data as { request: { id: string } }).request;
+
+      expect((await postJson(base, '/v1/sessions/moved/lease', {}, home)).status).toBe(409);
+      expect((await postJson(base, '/v1/sessions/moved/lease', { takeover: true }, home)).status).toBe(200);
+      // The office device is displaced at its next renewal.
+      const displaced = await postJson(base, '/v1/sessions/moved/lease', {}, office);
+      expect(displaced.status).toBe(409);
+      expect((await displaced.json()).error.code).toBe('SESSION_BUSY');
+
+      await postJson(base, `/v1/runs/${run.id}/approvals/${request.id}`, { action: 'once' }, home);
+      const { seen } = await pullFrames(frames, frame => frame.event === 'done');
+      expect(seen.at(-1)!.data).toMatchObject({ status: 'completed' });
+      const session = await (await fetch(`${base}/v1/sessions/moved`, { headers: home })).json();
+      expect(JSON.stringify(session)).toContain('Saved after takeover.');
+      expect((await fetch(`${base}/v1/sessions/moved`, { headers: office })).status).toBe(409);
+    } finally {
+      await server.close();
+    }
+  });
+
   it('accepts ?access_token= on the events stream when auth is on', async () => {
     stubProvider(['All done.']);
     const { server, base } = await startServer({}, { auth: { token: 'sekret' } });

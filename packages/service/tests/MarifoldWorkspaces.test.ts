@@ -234,6 +234,18 @@ describe('device-hosted workspaces', () => {
     expect(remoteExecution(manager, execution('removed', 'host-device'))).toBeUndefined();
     expect(remoteExecution(manager, execution('removed', 'guest-device'))).toBeUndefined();
   });
+  it('moves a session to a paired device that takes it over through the bridge', async () => {
+    const p = await paired();
+    const host = { 'x-marifold-session-owner': `host-tab-${'a'.repeat(24)}` };
+    const guest = { 'x-marifold-session-owner': `guest-tab-${'b'.repeat(24)}` };
+    expect((await p.host.inject({ method: 'POST', url: '/v1/sessions/shared/lease', headers: host })).statusCode).toBe(200);
+    const blocked = await p.guest.inject({ method: 'POST', url: `${p.prefix}/v1/sessions/shared/lease`, headers: guest });
+    expect(blocked.statusCode).toBe(409);
+    const moved = await p.guest.inject({ method: 'POST', url: `${p.prefix}/v1/sessions/shared/lease`, headers: guest, payload: { takeover: true } });
+    expect(moved.statusCode, moved.body).toBe(200);
+    expect((await p.host.inject({ method: 'POST', url: '/v1/sessions/shared/lease', headers: host })).statusCode).toBe(409);
+  });
+
   it('reports workspace join refusals as client errors', async () => {
     const p = await paired();
     await expect.poll(async () => (await p.guest.inject('/v1/workspaces')).json().workspaces[0].online, { timeout: 10000 }).toBe(true);

@@ -76,6 +76,10 @@ export class RemoteRuntime implements TuiRuntime {
   acquireSession = async (id: string): Promise<void> => {
     await this.api.request('POST', `/v1/sessions/${encodeURIComponent(id)}/lease`);
   };
+  readonly remote = true;
+  takeOverSession = async (id: string): Promise<void> => {
+    await this.api.request('POST', `/v1/sessions/${encodeURIComponent(id)}/lease`, { takeover: true });
+  };
   /** Lease releases still in flight, awaited before the process exits so a
    * closed TUI does not keep its session reserved until the lease expires. */
   private static releases = new Set<Promise<unknown>>();

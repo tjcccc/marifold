@@ -74,3 +74,11 @@ export async function copyTerminalSelection(text: string): Promise<void> {
   const sequence = `\x1b]52;c;${Buffer.from(text).toString('base64')}\x07`;
   process.stdout.write(process.env.TMUX ? `\x1bPtmux;${sequence.replaceAll('\x1b', '\x1b\x1b')}\x1b\\` : sequence);
 }
+
+/** A session-in-use error, with how to move that session to this terminal. */
+export function sessionBusyText(error: unknown, sessionId: string): string {
+  const text = errorText(error);
+  return (error as { code?: unknown } | undefined)?.code === 'SESSION_BUSY'
+    ? `${text} To open it here instead: marifold --resume ${sessionId} --takeover`
+    : text;
+}

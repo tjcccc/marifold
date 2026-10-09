@@ -91,6 +91,76 @@ describe('useAgentController session lifecycle', () => {
     }
   });
 
+  it('takes over a session open on another device without releasing the new lease', async () => {
+    let takenOver = false;
+    const request = vi.fn(async (method: string, path: string, body?: unknown) => {
+      if (path.endsWith('/lease')) {
+        if (method === 'DELETE') { return { ok: true }; }
+        if ((body as { takeover?: boolean } | undefined)?.takeover === true) { takenOver = true; return { ok: true }; }
+        if (takenOver) { return { ok: true }; }
+        throw new MarifoldApiError(409, { code: 'SESSION_BUSY', message: 'This session is in use in another page or terminal.' });
+      }
+      if (path === '/v1/profiles') { return { profiles: [profile] }; }
+      if (path === '/v1/models') { return { default: {}, options: [] }; }
+      if (path === '/v1/profiles/prompt-maker') { return { profile }; }
+      if (path.startsWith('/v1/skills?')) { return { skills: [] }; }
+      if (path.startsWith('/v1/sessions?')) { return { sessions: [] }; }
+      if (path === '/v1/runs' || path.startsWith('/v1/runs?')) { return { runs: [] }; }
+      if (path === '/v1/sessions/shared') { return { session: { turns: [{ role: 'user', content: 'From the office' }, { role: 'assistant', content: 'Office answer' }] } }; }
+      throw new Error(`Unexpected request: ${path}`);
+    });
+    const client = { request } as unknown as ApiClient;
+    const navigate = vi.fn();
+    const onUnauthorized = vi.fn();
+    const { result } = renderHook(() => useAgentController({ client,
+      route: { view: 'agent', profile: 'prompt-maker', session: 'shared' }, navigate, onUnauthorized }));
+    await waitFor(() => expect(result.current.sessionBlocked).toBe(true));
+    await act(async () => { await result.current.takeOverSession(); });
+    await waitFor(() => expect(result.current.thread.items).toHaveLength(2));
+    expect(result.current.sessionBlocked).toBe(false);
+    expect(request).toHaveBeenCalledWith('POST', '/v1/sessions/shared/lease', { takeover: true });
+    expect(request.mock.calls.filter(([method]) => method === 'DELETE')).toEqual([]);
+  });
+
+  it('reports the upload size until the host has created the run', async () => {
+    let createRun!: () => void;
+    const run: RunRecord = {
+      id: 'run_upload', objective: 'Describe this', profile: 'prompt-maker', sessionId: 'session_upload', status: 'running',
+      createdAt: '2026-10-09T00:00:00.000Z', eventCount: 0, pendingApprovals: [], pendingUserInputs: [],
+    };
+    const client: ApiClient = {
+      baseUrl: '',
+      request: async (method, path) => {
+        if (path.endsWith('/lease')) { return { ok: true } as never; }
+        if (method === 'GET' && path === '/v1/profiles') { return { profiles: [profile] } as never; }
+        if (method === 'GET' && path === '/v1/models') { return { default: {}, options: [] } as never; }
+        if (method === 'GET' && path === '/v1/profiles/prompt-maker') { return { profile } as never; }
+        if (method === 'GET' && path.startsWith('/v1/skills?')) { return { skills: [] } as never; }
+        if (method === 'GET' && path.startsWith('/v1/sessions?')) { return { sessions: [] } as never; }
+        if (method === 'GET' && path === '/v1/sessions/session_upload') { throw new MarifoldApiError(404, { code: 'NOT_FOUND', message: 'new' }); }
+        if (method === 'GET' && (path === '/v1/runs' || path.startsWith('/v1/runs?'))) { return { runs: [] } as never; }
+        if (method === 'POST' && path === '/v1/runs') {
+          await new Promise<void>(resolve => { createRun = resolve; });
+          return { run } as never;
+        }
+        throw new Error(`Unexpected request: ${method} ${path}`);
+      },
+      stream: async () => new Promise<Response>(() => undefined),
+      blob: async () => undefined,
+    };
+    const navigate = vi.fn();
+    const onUnauthorized = vi.fn();
+    const { result } = renderHook(() => useAgentController({ client,
+      route: { view: 'agent', profile: 'prompt-maker', session: 'session_upload' }, navigate, onUnauthorized }));
+    await waitFor(() => expect(result.current.profileDetail?.name).toBe('prompt-maker'));
+    let send!: Promise<void>;
+    act(() => { send = result.current.send('Describe this'); });
+    await waitFor(() => expect(result.current.sendingBytes).toBe('Describe this'.length));
+    act(() => createRun());
+    await act(async () => { await send; });
+    await waitFor(() => expect(result.current.sendingBytes).toBeUndefined());
+  });
+
   it.each(['success', 'failure'] as const)('shows list loading until requests finish with %s', async outcome => {
     let finishProfiles!: (value: unknown) => void;
     let failProfiles!: (error: Error) => void;

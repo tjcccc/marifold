@@ -79,6 +79,10 @@ export interface AgentController {
   thread: ThreadState;
   sessionLoading: boolean;
   sessionBlocked: boolean;
+  /** Move a session open on another of the owner's devices to this page. */
+  takeOverSession: () => Promise<void>;
+  /** Request bytes of a message still uploading, before its run exists. */
+  sendingBytes?: number;
   profilesLoading: boolean;
   sessionsLoading: boolean;
   steeringRun?: string;
@@ -153,6 +157,11 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
   const [runs, setRuns] = useState<RunRecord[]>([]);
   const [sessionId, setSessionId] = useState<string | undefined>(route.session);
   const [sessionBlocked, setSessionBlocked] = useState(false);
+  const [sendingBytes, setSendingBytes] = useState<number>();
+  // Bumping this restarts lease renewal after a takeover.
+  const [leaseEpoch, setLeaseEpoch] = useState(0);
+  // The renewal that a takeover replaces must not release the lease it just took.
+  const keepLeaseRef = useRef<string | undefined>(undefined);
   const [sessionLoading, setSessionLoading] = useState(Boolean(route.session));
   const sessionLoadRef = useRef(0);
   const [think, setThink] = useState(false);
@@ -532,9 +541,24 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
       window.removeEventListener('pagehide', release);
       window.removeEventListener('pageshow', resume);
       document.removeEventListener('visibilitychange', resume);
-      release();
+      if (keepLeaseRef.current === id) { keepLeaseRef.current = undefined; }
+      else { release(); }
     };
-  }, [client, sessionId, handleError, resetThread]);
+  }, [client, sessionId, handleError, resetThread, leaseEpoch]);
+
+  const takeOverSession = useCallback(async () => {
+    const id = sessionId;
+    if (!id) { return; }
+    try {
+      await client.request('POST', `/v1/sessions/${encodeURIComponent(id)}/lease`, { takeover: true });
+    } catch (error) {
+      handleError(error);
+      return;
+    }
+    keepLeaseRef.current = id;
+    setLeaseEpoch(epoch => epoch + 1);
+    await loadSession(id);
+  }, [client, sessionId, handleError, loadSession]);
 
   const selectProfile = useCallback(
     (name: string) => {
@@ -899,6 +923,11 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
 
       try {
         setSending(true);
+        // Large uploads can take a while over a workspace bridge; show that the
+        // message is on its way until the host has created the run.
+        setSendingBytes(prompt.length
+          + images.reduce((total, image) => total + ('data' in image && image.data ? image.data.length : 0), 0)
+          + files.reduce((total, file) => total + file.data.length, 0));
         const run = await startRun(client, {
           objective: prompt,
           ...(skill ? {
@@ -928,6 +957,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
         return false;
       } finally {
         setSending(false);
+        setSendingBytes(undefined);
       }
     },
     [client, profileName, sessionId, modelChoice, think, followers, navigate, handleError, refreshSessions, loadSession, attachmentDraftKey],
@@ -1231,6 +1261,8 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
     thread,
     sessionLoading,
     sessionBlocked,
+    takeOverSession,
+    sendingBytes,
     profilesLoading,
     sessionsLoading,
     steeringRun: activeRun(thread)?.runId,

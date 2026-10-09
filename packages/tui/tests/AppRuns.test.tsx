@@ -78,6 +78,70 @@ function initial(mode: Mode) {
 const delay = () => new Promise(resolve => setTimeout(resolve, 30));
 
 describe('App run routing', () => {
+  it('shows that a message is being sent until the task reports its first event', async () => {
+    let started!: () => void;
+    const upload = new Promise<void>(resolve => { started = resolve; });
+    const { runtime } = makeRuntime({
+      agentRun: async function* () {
+        await upload; // A large image still on its way to a remote workspace.
+        yield { type: 'status', taskId: 't', status: 'running' };
+        yield { type: 'done', taskId: 't', status: 'completed' };
+      },
+    });
+    const { stdin, lastFrame, unmount } = render(<App runtime={runtime} loadedConfig={config} initial={initial('agent')} />);
+    await delay();
+    stdin.write('describe this image');
+    await delay();
+    stdin.write('\r');
+    await vi.waitFor(() => expect(lastFrame()).toContain('Sending'));
+    started();
+    await vi.waitFor(() => expect(lastFrame()).not.toContain('Sending'));
+    unmount();
+  });
+
+  it.each([true, false])('when another device takes the session over mid-task (remote=%s), detaches or cancels', async remote => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    let signal: AbortSignal | undefined;
+    let finish!: () => void;
+    const finished = new Promise<void>(resolve => { finish = resolve; });
+    const { runtime } = makeRuntime({
+      agentRun: async function* (call) {
+        signal = (call as { signal?: AbortSignal }).signal;
+        yield { type: 'status', taskId: 't', status: 'running' };
+        await Promise.race([finished, new Promise(resolve => signal?.addEventListener('abort', resolve))]);
+        yield { type: 'text', text: 'Answer after takeover', phase: 'final' };
+        yield { type: 'done', taskId: 't', status: 'completed' };
+      },
+    });
+    let displaced = false;
+    Object.assign(runtime, {
+      remote,
+      acquireSession: vi.fn(async () => {
+        if (displaced) { throw Object.assign(new Error('This session is in use in another page or terminal.'), { code: 'SESSION_BUSY' }); }
+      }),
+      releaseSession: vi.fn(async () => undefined),
+    });
+    const { stdin, lastFrame, unmount } = render(<App runtime={runtime} loadedConfig={config} initial={{ ...initial('agent'), sessionId: 'shared' }} />);
+    try {
+      await delay();
+      stdin.write('long task');
+      await delay();
+      stdin.write('\r');
+      await vi.waitFor(() => expect(signal).toBeDefined());
+      displaced = true;
+      await vi.advanceTimersByTimeAsync(15_000);
+      await vi.waitFor(() => expect(lastFrame()).toContain('--takeover'));
+      expect(lastFrame()!.replace(/\s+/g, ' ')).toContain('marifold --resume shared --takeover');
+      expect(signal!.aborted).toBe(!remote);
+      finish();
+      await delay();
+      expect(lastFrame()).not.toContain('Answer after takeover');
+    } finally {
+      vi.useRealTimers();
+      unmount();
+    }
+  });
+
   it.each([true, false])('shows live reasoning, collapses completed details, and toggles them with Ctrl+O (fullscreen=%s)', async fullscreen => {
     let finish!: () => void;
     const pending = new Promise<void>(resolve => { finish = resolve; });

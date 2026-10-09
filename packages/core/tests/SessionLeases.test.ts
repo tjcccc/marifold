@@ -90,3 +90,29 @@ it('prunes expired lease rows as clients acquire sessions', () => {
     } finally { db.close(); }
   } finally { leases.close(); fs.rmSync(dir, { recursive: true, force: true }); }
 });
+
+it('moves a session and its running work to the device that takes it over', () => {
+  vi.useFakeTimers();
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'marifold-leases-'));
+  let now = 0;
+  const leases = new SessionLeases(path.join(dir, 'leases.db'), () => now);
+  try {
+    leases.acquire('shared', 'office');
+    const endRun = leases.hold('shared', 'office');
+    leases.takeover('shared', 'home');
+    expect(() => leases.acquire('shared', 'office')).toThrow('in use');
+    now = 50_000;
+    vi.advanceTimersByTime(45_000); // The run's hold now renews for home.
+    now = 100_000;
+    expect(() => leases.acquire('shared', 'office')).toThrow('in use');
+    leases.acquire('shared', 'home');
+    endRun();
+    expect(() => leases.acquire('shared', 'office')).toThrow('in use');
+    leases.takeover('fresh', 'home'); // Taking over an unclaimed session just claims it.
+    expect(() => leases.acquire('fresh', 'office')).toThrow('in use');
+  } finally {
+    vi.useRealTimers();
+    leases.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

@@ -24,7 +24,7 @@ const printer = new ConsolePrinter();
 const program = new Command()
   .name('marifold')
   .description('Marifold local-first AI workspace CLI.')
-  .version('0.79.2')
+  .version('0.80.0')
   // Allow a root --profile (for the bare-`marifold` TUI launch) to coexist with
   // subcommand options of the same name: root options must precede the
   // subcommand, and options after the subcommand bind to it.
@@ -36,7 +36,8 @@ const program = new Command()
   .option(
     '--resume [id]',
     'Resume a session: bare --resume continues the most recent session for the profile; --resume <id> continues that specific session.',
-  );
+  )
+  .option('--takeover', 'With --resume: open the session here even if another device or page has it open; it moves here.');
 
 registerInitCommand(program, printer);
 registerAgentCommand(program, printer);
@@ -72,7 +73,12 @@ program.action(async () => {
     process.exitCode = 1;
     return;
   }
-  const options = program.opts<{ profile?: string; resume?: string | boolean; fullscreen?: boolean }>();
+  const options = program.opts<{ profile?: string; resume?: string | boolean; fullscreen?: boolean; takeover?: boolean }>();
+  if (options.takeover && options.resume === undefined) {
+    printer.printError(new Error('--takeover needs --resume to name the session to open here.'));
+    process.exitCode = 1;
+    return;
+  }
   const loadedConfig = loadConfig(program);
   const { runTui } = await importEsm('@marifold/tui');
   let service; try { service = localServiceSettings(loadedConfig); } catch { /* Standalone local TUI remains available. */ }
@@ -82,6 +88,7 @@ program.action(async () => {
     fullscreen: options.fullscreen,
     ...(options.profile ? { profile: options.profile } : {}),
     ...(options.resume !== undefined ? { resume: options.resume } : {}),
+    ...(options.takeover ? { takeover: true } : {}),
   });
 });
 

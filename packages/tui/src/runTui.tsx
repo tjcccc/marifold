@@ -38,6 +38,8 @@ export interface RunTuiOptions {
    * turns are replayed into the transcript and the next message continues the
    * session's context. */
   resume?: string | boolean;
+  /** With `resume`: take the session over from another device or page. */
+  takeover?: boolean;
 }
 
 /**
@@ -59,7 +61,7 @@ export async function runTui(options: RunTuiOptions): Promise<void> {
   if (options.service) {
     const local = new MarifoldRuntime({ loadedConfig: options.loadedConfig, environment: { interface: 'terminal' } });
     try {
-      await renderSession(<WorkspaceShell local={local} loadedConfig={options.loadedConfig} service={options.service} profile={options.profile} resume={options.resume} version={readVersion()} fullscreen={fullscreen} />, fullscreen);
+      await renderSession(<WorkspaceShell local={local} loadedConfig={options.loadedConfig} service={options.service} profile={options.profile} resume={options.resume} takeover={options.takeover} version={readVersion()} fullscreen={fullscreen} />, fullscreen);
     } finally { local.close(); }
     await RemoteRuntime.settleReleases(1500);
     process.exit(process.exitCode ?? 0);
@@ -105,7 +107,10 @@ export async function runTui(options: RunTuiOptions): Promise<void> {
       const id = typeof options.resume === 'string'
         ? options.resume
         : runtime.listSessions(1, settings.profile, { order: 'recent' })[0]?.id;
-      if (id) { runtime.acquireSession(id); }
+      if (id) {
+        if (options.takeover) { runtime.takeOverSession(id); }
+        else { runtime.acquireSession(id); }
+      }
       const detail = id ? runtime.getSession(id) : undefined;
       if (detail) {
         resumeSessionId = detail.id;
