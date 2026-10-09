@@ -2,14 +2,14 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
-## 2026-10-09 — Unreleased — TUI session picker and `--resume` errors
+## 2026-10-09 — v0.81.0 — TUI session picker and `--resume` errors
 
 - `/resume` shows a session's title when it has one, marks sessions another page, terminal, or device holds with `[in use]`, and keeps their rows from opening: Enter warns, Shift+Enter (or T, since many terminals send Shift+Enter as Enter) takes the session over. Picker columns now align by terminal width, so CJK titles no longer push the hints out of line.
 - `marifold --resume <id>` no longer opens an empty session when the id is missing or held elsewhere: the launch ends with an error and exit code 1, the in-use message suggests `--takeover`, and a failure in the default workspace no longer falls back to Local. A resumed session opens under its own profile unless `--profile` names one; a conflicting `--profile` is an error.
 - `GET /v1/sessions` summaries carry `inUse: true` for sessions a client other than the caller holds (`SessionLeases.markInUse`); the flag also crosses workspace bridges. The Web UI does not show it yet.
 - Validation: TUI harness covers titles, the badge, the Enter warning, and takeover by T and by a CSI-u Shift+Enter; a service test checks the flag is relative to the caller. Real terminal (the full 39-check run plus a picker run): standalone and service-path `--resume` of a held or missing session exit 1 with their messages, and `/resume` tags, warns, and takes over a session another client holds. Live OrbStack: the host and the guest each see the session the other holds as in use through the bridge.
 
-## 2026-10-09 — Unreleased — Code health: enforced rules, guards, and module splits
+## 2026-10-09 — v0.81.0 — Code health: enforced rules, guards, and module splits
 
 A repo health check compared the code with the rules in `AGENTS.md`, `CLAUDE.md`, and the owner's global harness, then installed enforcement so the same drift cannot return. No behavior change apart from the fixes listed; no version bump.
 
