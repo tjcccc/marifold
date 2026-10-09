@@ -3,13 +3,12 @@ import { randomUUID as leaseOwnerId } from 'node:crypto';
 import { SudoExecTool } from '../agent/tools/SudoExecTool';
 import { DeviceExecution } from '../agent/DeviceExecution';
 import { ShellJobStatusTool } from '../agent/tools/ShellJobStatusTool';
-import { environmentContext, type RuntimeEnvironment } from './RuntimeEnvironment';
+import type { RuntimeEnvironment } from './RuntimeEnvironment';
 import type { AgentRunnerDeps } from '../agent/AgentRunner';
 import type { RunStartInput, RunJournal } from '../runs/RunRegistry';
-import type { ImageInput, JSONValue, PriestRequest, PriestResponse, ToolDefinition, ToolExchangeTurn, UsageInfo } from '@priest-ai/core';
+import type { ImageInput, UsageInfo } from '@priest-ai/core';
 import * as path from 'path';
 import { AgentRunner } from '../agent/AgentRunner';
-import { buildHistoryContext } from '../agent/AgentHistory';
 import { type ApprovalMode, type MarifoldAgentConfig, type ToolKind, resolveAgentConfig } from '../agent/ApprovalPolicy';
 import { DelegateTool } from '../agent/tools/DelegateTool';
 import { PythonPackageTool } from '../agent/tools/PythonPackageTool';
@@ -19,14 +18,13 @@ import { SearchAttachmentTool } from '../agent/tools/SearchAttachmentTool';
 import { ShellExecTool } from '../agent/tools/ShellExecTool';
 import { ReadWebPageTool } from '../agent/tools/ReadWebPageTool';
 import { WebPageReader } from '../search/WebPageReader';
-import { WEB_ANSWER_STYLE, webResearchGuidance } from '../search/WebResearchGuidance';
 import { WebSearchTool } from '../agent/tools/WebSearchTool';
 import { AskUserTool } from '../agent/tools/AskUserTool';
 import { InspectAttachmentTool } from '../agent/tools/InspectAttachmentTool';
 import { WriteFileTool } from '../agent/tools/WriteFileTool';
 import { SkillManagementTool } from '../agent/tools/SkillManagementTool';
 import { SkillAppContextTool, SkillAppManagementTool } from '../agent/tools/SkillAppTools';
-import { type AgentTool, ToolRegistry } from '../agent/ToolRegistry';
+import { ToolRegistry } from '../agent/ToolRegistry';
 import { ConfigManager } from '../config/ConfigManager';
 import type { ConfigAddProviderOptions } from '../config/ConfigManager';
 import { type LoadedMarifoldConfig, type ProfileDetail, type ProfileMode, type ProfileSummary, type ProviderType, resolveWebSearchConfig, type SessionDetail, type SessionSummary } from '../config/ConfigSchema';
@@ -40,15 +38,6 @@ import { MarifoldError } from '../errors/MarifoldError';
 import { prepareImageInputs } from '../images/ImageOptimizer';
 import { MemoryStore } from '../memory/MemoryStore';
 import type { MemoryEntry, MemoryKind, MemoryMutationResult, MemoryRememberResult, MemoryScaffoldFile } from '../memory/MemoryStore';
-import {
-  MemoryControlStripper,
-  buildMemoryInstructions,
-  extractPromptForgetQueries,
-  extractPromptMemoryInputs,
-  shouldInjectMemoryInstructions,
-  stripMemoryControls,
-} from '../memory/MemoryControls';
-import type { MemoryControlPayloads } from '../memory/MemoryControls';
 import { ProfileResolver } from '../profiles/ProfileResolver';
 import { ProfileManager } from '../profiles/ProfileManager';
 import type { ProfileFileKind, ProfileInstructionsMigrationResult } from '../profiles/ProfileManager';
@@ -91,13 +80,10 @@ import { TaskStore } from '../tasks/TaskStore';
 import { defaultAppsDir, defaultSchedulesDir, defaultSkillsDir } from '../workspace/WorkspacePaths';
 import type { TaskCreateInput, TaskEventInput, TaskListOptions, TaskState, TaskSummary, TaskUpdateInput } from '../tasks/TaskStore';
 import type { MarifoldAskResponse, MarifoldProviderToolDefinition, MarifoldResolvedSettings, MarifoldRunRequest, MarifoldWebSearchMode } from './MarifoldTypes';
-import { isNativeWebSearchCapabilityError } from './NativeWebSearch';
 import { ProviderEngines } from './ProviderEngines';
+import { ChatTurns } from './ChatTurns';
 import { SkillAppOperations } from './SkillAppOperations';
 
-const CHAT_TOOL_MAX_ITERATIONS = 3;
-const EDIT_HISTORY_BUDGET_DEFAULT_CHARS = 16_000;
-const WEB_SEARCH_UNAVAILABLE_CONTEXT = 'Web search is unavailable for this run. If the user asks you to browse or search the web, or their question requires current information, say clearly that you cannot access web search; do not imply that you searched.';
 
 export interface MarifoldRuntimeOptions {
   environment?: RuntimeEnvironment;
@@ -115,6 +101,7 @@ export class MarifoldRuntime {
   private readonly providerFactory: ProviderFactory;
   private readonly engines: ProviderEngines;
   private readonly skillApps: SkillAppOperations;
+  private readonly chat: ChatTurns;
   private readonly memoryStore: MemoryStore;
   private readonly taskStore: TaskStore;
   private searchBackend: SearchBackend;
@@ -129,7 +116,31 @@ export class MarifoldRuntime {
     this.sessionResolver = new SessionResolver(config.paths.sessionsDb);
     this.providerFactory = new ProviderFactory(config, configPath);
     this.engines = new ProviderEngines(options.loadedConfig, this.providerFactory, this.profileResolver, this.sessionResolver);
+    this.memoryStore = new MemoryStore(config.paths.profilesDir);
+    this.taskStore = new TaskStore(config.paths.tasksDir);
+    this.searchBackendOverridden = options.searchBackend !== undefined;
+    this.searchBackend = options.searchBackend
+      ?? createSearchBackend(resolveWebSearchConfig(config.webSearch));
+    this.scheduleStore = new ScheduleStore(config.paths.schedulesDir ?? defaultSchedulesDir());
     // Closures, not bound methods: spies installed on this runtime later still apply.
+    this.chat = new ChatTurns({
+      loadedConfig: options.loadedConfig,
+      environment: options.environment,
+      engines: this.engines,
+      sessionResolver: this.sessionResolver,
+      memoryStore: this.memoryStore,
+      searchBackend: () => this.searchBackend,
+      resolveSettings: request => this.resolveSettings(request),
+      assertSessionAvailable: (sessionId, owner) => this.assertSessionAvailable(sessionId, owner),
+      memoryEnabled: (profile, requestMemories) => this.memoryEnabled(profile, requestMemories),
+      memoryForRequest: (profile, requestMemories, prompt, thinking) => this.memoryForRequest(profile, requestMemories, prompt, thinking),
+      resolveAgentConfigForProfile: profile => this.resolveAgentConfigForProfile(profile),
+      resolveWebSearch: (settings, modelToolsEnabled) => this.resolveWebSearch(settings, modelToolsEnabled),
+      fallbackWebSearchAvailable: (settings, modelToolsEnabled) => this.fallbackWebSearchAvailable(settings, modelToolsEnabled),
+      providerToolsFor: (mode, nativeStrategy) => this.providerToolsFor(mode, nativeStrategy),
+      replaceEditedExchange: (...args) => this.replaceEditedExchange(...args),
+      missingEditedTurn: (sessionId, userTurnIndex) => this.missingEditedTurn(sessionId, userTurnIndex),
+    });
     this.skillApps = new SkillAppOperations({
       loadedConfig: options.loadedConfig,
       engines: this.engines,
@@ -142,12 +153,6 @@ export class MarifoldRuntime {
       listProfiles: () => this.listProfiles(),
       listSkills: profile => this.listSkills(profile),
     });
-    this.memoryStore = new MemoryStore(config.paths.profilesDir);
-    this.taskStore = new TaskStore(config.paths.tasksDir);
-    this.searchBackendOverridden = options.searchBackend !== undefined;
-    this.searchBackend = options.searchBackend
-      ?? createSearchBackend(resolveWebSearchConfig(config.webSearch));
-    this.scheduleStore = new ScheduleStore(config.paths.schedulesDir ?? defaultSchedulesDir());
   }
 
   resolveSettings(request: Pick<MarifoldRunRequest, 'profile' | 'provider' | 'model' | 'think' | 'maxContextTokens'>): MarifoldResolvedSettings {
@@ -167,369 +172,15 @@ export class MarifoldRuntime {
   }
 
   async ask(request: MarifoldRunRequest): Promise<MarifoldAskResponse> {
-    if (request.sessionId) { this.assertSessionAvailable(request.sessionId, request.sessionOwner); }
-    const startedAtMs = Date.now();
-    const startedAt = new Date(startedAtMs).toISOString();
-    const settings = this.resolveSettings(request);
-    const environment = environmentContext({ ...this.options.environment, ...request.environment }, new Date(startedAtMs), settings);
-    const preparedImages = await prepareImageInputs(request.images, { optimize: request.originalImages !== true });
-    const historyImages = preparedImages.images.map((image, index) => request.images?.[index]?.path
-      ? { path: path.resolve(request.images[index].path!), mediaType: preparedImages.summaries[index]?.sourceMediaType ?? request.images[index].mediaType }
-      : image);
-    await this.engines.refreshCredentials(settings.provider);
-    const replacing = request.replaceUserTurnIndex !== undefined;
-    const isolated = request.isolated === true;
-    const engine = this.engines.create(
-      settings.provider,
-      Boolean(request.sessionId) && !replacing && !isolated,
-      request.profileContext !== false,
-    );
-    const memoryOn = this.memoryEnabled(settings.profile, request.memories);
-    const memory = this.memoryForRequest(settings.profile, request.memories, request.prompt, settings.think);
-    const searchResolution = this.resolveWebSearch(settings, request.chatTools !== false);
-    let webSearchMode = searchResolution.mode;
-    let chatTools = this.chatTools(request, webSearchMode);
-    const nativeFallbackAvailable = webSearchMode === 'native'
-      && this.fallbackWebSearchAvailable(settings, request.chatTools !== false);
-    let nativeFallbackAttempted = false;
-    const buildPriestRequest = (): PriestRequest & { providerTools?: MarifoldProviderToolDefinition[] } => ({
-      config: this.engines.priestConfig(
-        settings,
-        webSearchMode === 'native' ? searchResolution.nativeStrategy : 'none',
-      ),
-      profile: settings.profile,
-      prompt: request.prompt,
-      session: request.sessionId && !replacing && !isolated
-        ? { id: request.sessionId, createIfMissing: true }
-        : undefined,
-      context: [
-        environment,
-        ...this.runtimeContext(memory, request.prompt, memoryOn, webSearchMode),
-        ...this.editHistoryContext(request, settings),
-        ...(request.instructions ?? []),
-      ],
-      memory,
-      images: preparedImages.images.length > 0 ? preparedImages.images : undefined,
-      userContext: request.userContext,
-      providerTools: this.providerToolsFor(webSearchMode, searchResolution.nativeStrategy),
-    });
-    let priestRequest = buildPriestRequest();
-    const exchange: ToolExchangeTurn[] = [];
-    const maxIterations = chatTools || nativeFallbackAvailable ? CHAT_TOOL_MAX_ITERATIONS : 1;
-    let response: PriestResponse | undefined;
-    let aggregateUsage: UsageInfo | undefined;
-
-    // Keep the non-streaming CLI/service path at parity with stream(): a model
-    // without hosted search can call Marifold's configured fallback, then see
-    // the turn-local result before producing its final answer.
-    for (let iteration = 0; iteration < maxIterations; iteration += 1) {
-      const lastIteration = iteration === maxIterations - 1;
-      response = await engine.run({
-        ...priestRequest,
-        ...(chatTools && !lastIteration ? { tools: chatTools.definitions } : {}),
-        ...(exchange.length > 0 ? { toolExchange: exchange } : {}),
-      }, request.signal ? { signal: request.signal } : undefined);
-      aggregateUsage = sumUsage(aggregateUsage, response.usage);
-      if (
-        !response.ok
-        && webSearchMode === 'native'
-        && nativeFallbackAvailable
-        && !nativeFallbackAttempted
-        && isNativeWebSearchCapabilityError(response.error)
-      ) {
-        nativeFallbackAttempted = true;
-        webSearchMode = 'fallback';
-        chatTools = this.chatTools(request, webSearchMode);
-        priestRequest = buildPriestRequest();
-        iteration -= 1;
-        continue;
-      }
-      if (!response.ok || !chatTools || !response.toolCalls?.length) { break; }
-
-      exchange.push({
-        kind: 'assistant',
-        text: response.text,
-        toolCalls: response.toolCalls,
-        ...(response.reasoning ? { reasoning: response.reasoning } : {}),
-      });
-      for (const call of response.toolCalls) {
-        const result = await chatTools.execute(call.name, call.arguments);
-        exchange.push({
-          kind: 'tool_result',
-          toolCallId: call.id,
-          name: call.name,
-          content: result.content,
-          isError: result.isError,
-        });
-      }
-    }
-
-    // maxIterations is clamped above and therefore always produces a response.
-    const finalResponse = response!;
-    const stripped = stripMemoryControls(finalResponse.text ?? '');
-    const userTurn = request.userTurn ?? request.prompt;
-    const responseMetrics = completedResponseMetrics(
-      'chat',
-      settings,
-      startedAt,
-      startedAtMs,
-      aggregateUsage,
-    );
-    if (finalResponse.ok && request.sessionId) {
-      this.assertSessionAvailable(request.sessionId, request.sessionOwner);
-      if (request.replaceUserTurnIndex !== undefined) {
-        this.replaceEditedExchange(
-          request.sessionId,
-          request.replaceUserTurnIndex,
-          userTurn,
-          stripped.text,
-          historyImages,
-          responseMetrics,
-        );
-      } else if (isolated) {
-        await this.sessionResolver.appendExchange(
-          request.sessionId,
-          settings.profile,
-          userTurn,
-          stripped.text,
-          historyImages,
-          responseMetrics,
-        );
-      } else {
-        if (request.userTurn) { this.sessionResolver.replaceLastUserTurn(request.sessionId, request.userTurn); }
-        this.sessionResolver.replaceLastAssistantTurn(request.sessionId, stripped.text);
-        this.sessionResolver.saveLastUserTurnAttachments(request.sessionId, historyImages);
-        this.sessionResolver.saveLastResponseMetrics(request.sessionId, responseMetrics);
-      }
-    }
-    if (finalResponse.ok && memoryOn) {
-      this.applyTurnMemory(settings.profile, request.prompt, stripped, request.sessionId);
-    }
-
-    return {
-      ok: finalResponse.ok,
-      text: stripped.text,
-      settings,
-      latencyMs: finalResponse.ok ? responseMetrics.latencyMs : finalResponse.execution.latencyMs,
-      session: finalResponse.session,
-      error: finalResponse.error
-        ? { code: finalResponse.error.code, message: finalResponse.error.message }
-        : undefined,
-    };
+    return this.chat.ask(request);
   }
 
-  async *stream(
+  stream(
     request: MarifoldRunRequest,
     onComplete?: (summary: { usage?: UsageInfo; latencyMs?: number }) => void,
     onReasoningSummary?: (text: string) => void,
   ): AsyncGenerator<string, void, unknown> {
-    if (request.sessionId) { this.assertSessionAvailable(request.sessionId, request.sessionOwner); }
-    const startedAtMs = Date.now();
-    const startedAt = new Date(startedAtMs).toISOString();
-    const settings = this.resolveSettings(request);
-    const environment = environmentContext({ ...this.options.environment, ...request.environment }, new Date(startedAtMs), settings);
-    const preparedImages = await prepareImageInputs(request.images, { optimize: request.originalImages !== true });
-    const historyImages = preparedImages.images.map((image, index) => request.images?.[index]?.path
-      ? { path: path.resolve(request.images[index].path!), mediaType: preparedImages.summaries[index]?.sourceMediaType ?? request.images[index].mediaType }
-      : image);
-    await this.engines.refreshCredentials(settings.provider);
-    let aggregateUsage: UsageInfo | undefined;
-    const replacing = request.replaceUserTurnIndex !== undefined;
-    const isolated = request.isolated === true;
-    const enginePersistsSession = Boolean(request.sessionId) && !replacing && !isolated;
-    const sessionWasMissing = enginePersistsSession
-      ? this.sessionResolver.get(request.sessionId!) === undefined
-      : false;
-    const engine = this.engines.create(
-      settings.provider,
-      enginePersistsSession,
-      request.profileContext !== false,
-    );
-    const memoryOn = this.memoryEnabled(settings.profile, request.memories);
-    const memory = this.memoryForRequest(settings.profile, request.memories, request.prompt, settings.think);
-    const searchResolution = this.resolveWebSearch(settings, request.chatTools !== false);
-    let webSearchMode = searchResolution.mode;
-    let chatTools = this.chatTools(request, webSearchMode);
-    const nativeFallbackAvailable = webSearchMode === 'native'
-      && this.fallbackWebSearchAvailable(settings, request.chatTools !== false);
-    let nativeFallbackAttempted = false;
-    const buildBaseRequest = (): PriestRequest & { providerTools?: MarifoldProviderToolDefinition[] } => ({
-      config: this.engines.priestConfig(
-        settings,
-        webSearchMode === 'native' ? searchResolution.nativeStrategy : 'none',
-      ),
-      profile: settings.profile,
-      prompt: request.prompt,
-      session: request.sessionId && !replacing && !isolated
-        ? { id: request.sessionId, createIfMissing: true }
-        : undefined,
-      context: [
-        environment,
-        ...this.runtimeContext(memory, request.prompt, memoryOn, webSearchMode),
-        ...this.editHistoryContext(request, settings),
-        ...(request.instructions ?? []),
-      ],
-      memory,
-      images: preparedImages.images.length > 0 ? preparedImages.images : undefined,
-      userContext: request.userContext,
-      providerTools: this.providerToolsFor(webSearchMode, searchResolution.nativeStrategy),
-    });
-    let baseRequest = buildBaseRequest();
-
-    // Caller-executed fallback/read loop. Provider-hosted search is carried
-    // separately and does not enter Marifold's tool exchange.
-    // Intermediate tool-call turns are turn-local; the engine persists the
-    // session only on the loop's final response, and memory payloads are
-    // applied only from that final response.
-    const exchange: ToolExchangeTurn[] = [];
-    const maxIterations = chatTools || nativeFallbackAvailable ? CHAT_TOOL_MAX_ITERATIONS : 1;
-
-    for (let iteration = 0; iteration < maxIterations; iteration += 1) {
-      const stripper = new MemoryControlStripper();
-      const visibleParts: string[] = [];
-      let done: PriestResponse | undefined;
-      let providerOutputStarted = false;
-      const lastIteration = iteration === maxIterations - 1;
-
-      for await (const event of engine.streamEvents(
-        {
-          ...baseRequest,
-          ...(chatTools && !lastIteration ? { tools: chatTools.definitions } : {}),
-          ...(exchange.length > 0 ? { toolExchange: exchange } : {}),
-        },
-        request.signal ? { signal: request.signal } : undefined,
-      )) {
-        if (event.type === 'text_delta') {
-          providerOutputStarted = true;
-          const visible = stripper.feed(event.text);
-          if (visible) {
-            visibleParts.push(visible);
-            yield visible;
-          }
-        } else if (event.type === 'reasoning_summary_delta') {
-          providerOutputStarted = true;
-          onReasoningSummary?.(event.text);
-        } else if (
-          event.type === 'tool_call_start'
-          || event.type === 'tool_call_delta'
-          || event.type === 'tool_call_end'
-        ) {
-          providerOutputStarted = true;
-        } else if (event.type === 'done') {
-          done = event.response;
-        }
-      }
-      const tail = stripper.flush();
-      if (tail) {
-        visibleParts.push(tail);
-        yield tail;
-      }
-
-      aggregateUsage = sumUsage(aggregateUsage, done?.usage);
-      if (
-        !providerOutputStarted
-        && webSearchMode === 'native'
-        && nativeFallbackAvailable
-        && !nativeFallbackAttempted
-        && isNativeWebSearchCapabilityError(done?.error)
-      ) {
-        nativeFallbackAttempted = true;
-        webSearchMode = 'fallback';
-        chatTools = this.chatTools(request, webSearchMode);
-        baseRequest = buildBaseRequest();
-        iteration -= 1;
-        continue;
-      }
-      if (done?.error) {
-        this.discardFailedNewSession(request.sessionId, sessionWasMissing);
-        throw MarifoldError.providerError(
-          done.error.message,
-          settings.provider,
-          settings.model,
-          done.error.code,
-        );
-      }
-      const toolCalls = done?.toolCalls ?? [];
-      if (!chatTools || toolCalls.length === 0) {
-        const streamedText = visibleParts.join('');
-        const fallbackControls = streamedText.length === 0
-          ? stripMemoryControls(done?.text ?? '')
-          : undefined;
-        const finalText = streamedText || fallbackControls?.text || '';
-        if (done?.text === undefined && finalText.length === 0) {
-          this.discardFailedNewSession(request.sessionId, sessionWasMissing);
-          throw MarifoldError.providerError(
-            `Provider '${settings.provider}' returned no text for model '${settings.model}'.`,
-            settings.provider,
-            settings.model,
-            'EMPTY_RESPONSE',
-          );
-        }
-        if (streamedText.length === 0 && finalText) { yield finalText; }
-        const userTurn = request.userTurn ?? request.prompt;
-        const responseMetrics = completedResponseMetrics(
-          'chat',
-          settings,
-          startedAt,
-          startedAtMs,
-          aggregateUsage,
-        );
-        if (request.sessionId) {
-          this.assertSessionAvailable(request.sessionId, request.sessionOwner);
-          if (request.replaceUserTurnIndex !== undefined) {
-            this.replaceEditedExchange(
-              request.sessionId,
-              request.replaceUserTurnIndex,
-              userTurn,
-              finalText,
-              historyImages,
-              responseMetrics,
-            );
-          } else if (isolated) {
-            await this.sessionResolver.appendExchange(
-              request.sessionId,
-              settings.profile,
-              userTurn,
-              finalText,
-              historyImages,
-              responseMetrics,
-            );
-          } else {
-            if (request.userTurn) { this.sessionResolver.replaceLastUserTurn(request.sessionId, request.userTurn); }
-            this.sessionResolver.replaceLastAssistantTurn(request.sessionId, finalText);
-            this.sessionResolver.saveLastUserTurnAttachments(request.sessionId, historyImages);
-            this.sessionResolver.saveLastResponseMetrics(request.sessionId, responseMetrics);
-          }
-        }
-        if (memoryOn) {
-          this.applyTurnMemory(
-            settings.profile,
-            request.prompt,
-            fallbackControls ?? stripper,
-            request.sessionId,
-          );
-        }
-        onComplete?.({ usage: aggregateUsage, latencyMs: responseMetrics.latencyMs });
-        return;
-      }
-
-      exchange.push({
-        kind: 'assistant',
-        text: done?.text,
-        toolCalls,
-        ...(done?.reasoning ? { reasoning: done.reasoning } : {}),
-      });
-      for (const call of toolCalls) {
-        const result = await chatTools.execute(call.name, call.arguments);
-        exchange.push({
-          kind: 'tool_result',
-          toolCallId: call.id,
-          name: call.name,
-          content: result.content,
-          isError: result.isError,
-        });
-      }
-    }
+    return this.chat.stream(request, onComplete, onReasoningSummary);
   }
 
   /** Run the selected web-search backend directly for non-chat integrations. */
@@ -1293,46 +944,6 @@ export class MarifoldRuntime {
     this.sessionResolver.close();
   }
 
-  private discardFailedNewSession(sessionId: string | undefined, sessionWasMissing: boolean): void {
-    if (!sessionId || !sessionWasMissing) { return; }
-    const session = this.sessionResolver.get(sessionId);
-    if (session?.turnCount === 0) { this.sessionResolver.delete(sessionId); }
-  }
-
-  /** Caller-executed tools for chat turns. Marifold web_search is advertised
-   * only in fallback mode; provider-hosted search travels separately. */
-  private chatTools(request: MarifoldRunRequest, webSearchMode: MarifoldWebSearchMode): {
-    definitions: ToolDefinition[];
-    execute: (name: string, args: Record<string, JSONValue>) => Promise<{ content: string; isError?: boolean }>;
-  } | undefined {
-    if (request.chatTools === false) { return undefined; }
-    const webSearch = resolveWebSearchConfig(this.options.loadedConfig.config.webSearch);
-    if (!webSearch.enabled && webSearchMode !== 'fallback') { return undefined; }
-
-    const agentConfig = this.resolveAgentConfigForProfile(request.profile);
-    const approval = agentConfig.approval;
-    const tools: AgentTool[] = [];
-    if (webSearchMode === 'fallback') { tools.push(new WebSearchTool(this.searchBackend, webSearch.maxResults), new ReadWebPageTool(new WebPageReader({ proxy: webSearch.proxy }))); }
-    if (approval.read === 'allow') { tools.push(new ReadFileTool()); }
-    if (tools.length === 0) { return undefined; }
-
-    const outputLimit = agentConfig.toolOutputLimit;
-    const toolContext = { cwd: process.cwd(), outputLimit, signal: request.signal };
-    return {
-      definitions: tools.map(tool => tool.definition),
-      execute: async (name, args) => {
-        const tool = tools.find(t => t.definition.name === name);
-        if (!tool) { return { content: `Unknown tool '${name}'.`, isError: true }; }
-        try {
-          const result = await tool.execute(args, toolContext);
-          return { content: result.content, isError: result.isError };
-        } catch (error) {
-          return { content: `Tool '${name}' failed: ${error instanceof Error ? error.message : String(error)}`, isError: true };
-        }
-      },
-    };
-  }
-
   /** Whether the profile's resolved provider honors thinking mode — so a channel
    * can tell the user when `/think` would have no effect. */
   profileSupportsThink(profile: string): boolean {
@@ -1393,46 +1004,6 @@ export class MarifoldRuntime {
       : undefined;
   }
 
-  private runtimeContext(
-    memory: string[],
-    prompt: string,
-    memoryOn: boolean,
-    webSearchMode: MarifoldWebSearchMode,
-  ): string[] {
-    const context = ['Running inside Marifold.'];
-    if (webSearchMode === 'native') {
-      context.push('Provider-hosted web search is available for this run. Use it for web or current-information requests; Marifold fallback search is not exposed while native search is available. ' + WEB_ANSWER_STYLE);
-    } else if (webSearchMode === 'fallback') {
-      context.push(webResearchGuidance());
-    } else if (webSearchMode === 'unavailable') {
-      context.push(WEB_SEARCH_UNAVAILABLE_CONTEXT);
-    }
-    if (memoryOn) {
-      context.push('Profile memory is app-owned context. Current user messages and profile rules outrank memory.');
-      if (shouldInjectMemoryInstructions(prompt)) { context.push(buildMemoryInstructions()); }
-    } else if (memory.length > 0) {
-      context.push('Profile memory is app-owned context. Current user messages and profile rules outrank memory.');
-    }
-    return context;
-  }
-
-  private editHistoryContext(
-    request: MarifoldRunRequest,
-    settings: MarifoldResolvedSettings,
-  ): string[] {
-    if (request.replaceUserTurnIndex === undefined) { return []; }
-    if (!request.sessionId) {
-      throw MarifoldError.configInvalid('replaceUserTurnIndex requires sessionId.');
-    }
-    const turns = this.sessionResolver.turnsBeforeUserTurn(request.sessionId, request.replaceUserTurnIndex)
-      ?? this.missingEditedTurn(request.sessionId, request.replaceUserTurnIndex);
-    const history = buildHistoryContext(
-      turns.map(turn => ({ role: turn.role, content: turn.content })),
-      settings.maxContextTokens ?? EDIT_HISTORY_BUDGET_DEFAULT_CHARS,
-    );
-    return history ? [history] : [];
-  }
-
   private replaceEditedExchange(
     sessionId: string,
     userTurnIndex: number,
@@ -1458,55 +1029,4 @@ export class MarifoldRuntime {
     );
   }
 
-  private applyTurnMemory(
-    profile: string,
-    prompt: string,
-    controls: MemoryControlPayloads,
-    sessionId?: string,
-  ): void {
-    this.memoryStore.applySavePayloads(profile, controls.savePayloads, { sessionId });
-    this.memoryStore.applyForgetPayloads(profile, controls.forgetPayloads);
-    for (const query of extractPromptForgetQueries(prompt)) {
-      this.memoryStore.forget(profile, query);
-    }
-    this.memoryStore.save(profile, extractPromptMemoryInputs(prompt), { sessionId });
-    this.memoryStore.trimShortTerm(profile, this.options.loadedConfig.config.memory.sizeLimit);
-  }
-}
-
-function completedResponseMetrics(
-  mode: ProfileMode,
-  settings: MarifoldResolvedSettings,
-  startedAt: string,
-  startedAtMs: number,
-  usage?: UsageInfo,
-): ResponseMetrics {
-  const finishedAtMs = Date.now();
-  return {
-    mode,
-    provider: settings.provider,
-    model: settings.model,
-    think: settings.think,
-    startedAt,
-    finishedAt: new Date(finishedAtMs).toISOString(),
-    latencyMs: Math.max(0, finishedAtMs - startedAtMs),
-    ...(usage && Object.values(usage).some(value => value !== undefined) ? { usage: { ...usage } } : {}),
-  };
-}
-
-/** Sum two provider usage reports, preserving undefined when neither side has
- * a given field (so absent token data stays absent rather than showing 0). */
-function sumUsage(a: UsageInfo | undefined, b: UsageInfo | undefined): UsageInfo | undefined {
-  if (!a) { return b; }
-  if (!b) { return a; }
-  const add = (x?: number, y?: number): number | undefined =>
-    x == null && y == null ? undefined : (x ?? 0) + (y ?? 0);
-  return {
-    inputTokens: add(a.inputTokens, b.inputTokens),
-    outputTokens: add(a.outputTokens, b.outputTokens),
-    totalTokens: add(a.totalTokens, b.totalTokens),
-    cachedInputTokens: add(a.cachedInputTokens, b.cachedInputTokens),
-    reasoningTokens: add(a.reasoningTokens, b.reasoningTokens),
-    estimatedCostUSD: add(a.estimatedCostUSD, b.estimatedCostUSD),
-  };
 }
