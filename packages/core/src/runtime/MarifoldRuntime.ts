@@ -529,11 +529,6 @@ export class MarifoldRuntime {
   }
 
   /**
-   * Build an approval-aware agent runner over this runtime's engine wiring,
-   * TaskStore, and config policy. Pass a custom registry to replace the
-   * default file/shell/delegate tool set.
-   */
-  /**
    * Effective agent config for a profile: the global `[agent]` with the
    * profile's `[agent]` overrides (profile.toml) merged on top. Unset profile
    * keys inherit global/defaults; `undefined` profile → global only.
@@ -555,6 +550,11 @@ export class MarifoldRuntime {
     };
   }
 
+  /**
+   * Build an approval-aware agent runner over this runtime's engine wiring,
+   * TaskStore, and config policy. Pass a custom registry to replace the
+   * default file/shell/delegate tool set.
+   */
   createAgentRunner(
     profile?: string,
     registry?: ToolRegistry,
