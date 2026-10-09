@@ -320,6 +320,38 @@ describe('useAgentController session lifecycle', () => {
     expect(result.current.thread.items[2]).toMatchObject({ text: 'From another device' });
   });
 
+  it('runs /commands against the live controller state', async () => {
+    const request = vi.fn(async (method: string, path: string, _body?: unknown) => {
+      if (path.endsWith('/lease')) { return { ok: true }; }
+      if (path === '/v1/profiles') { return { profiles: [profile] }; }
+      if (path === '/v1/models') { return { default: {}, options: [] }; }
+      if (path === '/v1/profiles/prompt-maker') { return { profile }; }
+      if (path.startsWith('/v1/skills?')) { return { skills: [] }; }
+      if (path.startsWith('/v1/sessions?')) { return { sessions: [] }; }
+      if (path.startsWith('/v1/runs')) { return { runs: [] }; }
+      if (method === 'POST' && path === '/v1/profiles/prompt-maker/memories') { return { memories: [] }; }
+      throw new Error(`Unexpected request: ${method} ${path}`);
+    });
+    const client = { request } as unknown as ApiClient;
+    // Stable props, as App passes them: a new onUnauthorized per render would
+    // re-run the profile effect and reset the thinking default.
+    const options = { client, route: { view: 'agent' as const, profile: 'prompt-maker' }, navigate: vi.fn(), onUnauthorized: vi.fn() };
+    const { result } = renderHook(() => useAgentController(options));
+    await waitFor(() => expect(result.current.profileDetail?.name).toBe('prompt-maker'));
+    const thread = () => JSON.stringify(result.current.thread);
+    act(() => { void result.current.send('/think'); });
+    await waitFor(() => expect(result.current.think).toBe(true));
+    act(() => { void result.current.send('/model xai/grok-4.5'); });
+    await waitFor(() => expect(thread()).toContain('Model set to xai/grok-4.5.'));
+    act(() => { void result.current.send('/status'); });
+    await waitFor(() => expect(thread()).toContain('Model: xai/grok-4.5'));
+    expect(thread()).toContain('Thinking mode on.');
+    expect(thread()).toContain('Thinking: on');
+    act(() => { void result.current.send('/remember I prefer tea'); });
+    await waitFor(() => expect(thread()).toContain('Saved to memory.'));
+    expect(request).toHaveBeenCalledWith('POST', '/v1/profiles/prompt-maker/memories', { text: 'I prefer tea' });
+  });
+
   it('keeps the root Agent route on the profile picker', async () => {
     const client: ApiClient = {
       baseUrl: '',
