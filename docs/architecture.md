@@ -41,30 +41,7 @@ Chat resolves search in three states: provider/model-hosted search when the veri
 
 Scheduling lives in `packages/core/src/schedule`: a file-backed `ScheduleStore` (cron via `croner`) and a minute-resolution `Scheduler` hosted inside the `marifold service` process. Scheduled firings are unattended agent runs (`AgentRunOptions.unattended`): `[agent.unattended]` approval overrides apply, and `ask` degrades to deny. Schedule results link to TaskStore tasks tagged `scheduled`.
 
-The App subsystem (`packages/core/src/app`) statically compiles restricted
-`marifold.skillapp.v1`/`.v2` `<apps_dir>/<name>/skillapp.ts` templates into
-renderer-neutral definitions. A v1 operation binds service-owned string state
-to one app-local Skill, one explicit provider/model, and one normalized result;
-it remains profile-free and tool-free. A v2 operation instead registers an
-existing profile, resolves one Skill through its profile-over-global catalog,
-loads the live profile documents, and inherits or locally overrides its model.
-An operation may select among a statically allowlisted set of those Skills from
-service-owned form state; every candidate is validated before the App loads.
-Selected Skill bundles are mounted through the existing narrow read-only run
-workspace. Static `FileAccess`/`FolderAccess` declarations add fail-closed
-read-only capabilities without serializing host paths to clients; exact files
-do not widen to their parent directories. `AttachmentState` uploads retain only
-metadata in instance snapshots and stage original bytes behind the existing
-opaque attachment inspection boundary for the selected operation. Optional memory is read-only and optional history is confined to the
-ephemeral App instance/profile reference; neither touches profile conversation
-history. Profile Agent permissions and trusted folders are not inherited, and
-write/shell/network/delegation tools are not exposed. Ephemeral instances
-implement read-only output bindings plus button and debounced latest-wins state
-triggers. The TypeScript authoring file is never imported or executed. The Web
-UI renders the normalized semantic component tree at bookmarkable
-`/apps/<app-name>` paths, and a future SwiftUI client
-can consume the same service data. Approval-aware effectful actions and general
-scripted App logic remain out of scope.
+The App subsystem (`packages/core/src/app`) statically compiles restricted `marifold.skillapp.v1`/`.v2` `<apps_dir>/<name>/skillapp.ts` templates into renderer-neutral definitions. A v1 operation binds service-owned string state to one app-local Skill, one explicit provider/model, and one normalized result; it remains profile-free and tool-free. A v2 operation instead registers an existing profile, resolves one Skill through its profile-over-global catalog, loads the live profile documents, and inherits or locally overrides its model. An operation may select among a statically allowlisted set of those Skills from service-owned form state; every candidate is validated before the App loads. Selected Skill bundles are mounted through the existing narrow read-only run workspace. Static `FileAccess`/`FolderAccess` declarations add fail-closed read-only capabilities without serializing host paths to clients; exact files do not widen to their parent directories. `AttachmentState` uploads retain only metadata in instance snapshots and stage original bytes behind the existing opaque attachment inspection boundary for the selected operation. Optional memory is read-only and optional history is confined to the ephemeral App instance/profile reference; neither touches profile conversation history. Profile Agent permissions and trusted folders are not inherited, and write/shell/network/delegation tools are not exposed. Ephemeral instances implement read-only output bindings plus button and debounced latest-wins state triggers. The TypeScript authoring file is never imported or executed. The Web UI renders the normalized semantic component tree at bookmarkable `/apps/<app-name>` paths, and a future SwiftUI client can consume the same service data. Approval-aware effectful actions and general scripted App logic remain out of scope.
 
 The skill subsystem (`packages/core/src/skill`) defines the `marifold.skill.v0` primitive — a prompt template with declared `{{variables}}` and an optional run mode. `SkillStore` loads user skills from `[paths].skills_dir` (default `~/.marifold/skills`) and each profile's `skills/` directory, with profile skills shadowing global ones; `parseSkill`/`renderSkillPrompt` validate and expand them. A separate compiled built-in registry contributes protected `$skill-installer` and `$skill-creator` definitions to effective listing/resolution without materializing them in either mutable directory; their names are reserved. Their agent-mode instructions use the approval-aware `manage_skill` tool, which defaults user-facing mutations to the global catalog, validates local sources/content and bundled text paths through `SkillStore`, and mutates exactly one explicit scope. An explicit `--profile <name>` is checked against the stored profile catalog before the tool resolves that profile's skill directory. The TUI invokes an indexed skill directly with core's binding rules; service/Web clients use `resolveSkillInvocation` to do the same over HTTP. Both paths resolve exactly one skill before model execution, inject its expanded body and bundled-file directory, preserve the typed invocation in durable history, and use history-isolated execution so one prompt skill cannot inherit another prompt skill's style. A Skill is also the shared unit a graphical SkillApp consumes: v1 binds semantic form state to an app-local Skill and explicit model, while v2 binds it to an installed profile Skill and that profile's live context/model resolution. See `docs/tui.md`.
 
@@ -90,12 +67,7 @@ profiles/default/
     auto_short.jsonl
 ```
 
-`INSTRUCTIONS.md` is the sole canonical human-authored instruction document.
-Marifold maps it through its Priest `ProfileLoader`; Priest does not depend on
-the Markdown filename. When the canonical file is absent, the resolver combines
-legacy `RULES.md`, `PROFILE.md`, and `CUSTOM.md` content in that existing
-effective order without mutating disk. `marifold doctor --fix` owns the explicit,
-backed-up migration.
+`INSTRUCTIONS.md` is the sole canonical human-authored instruction document. Marifold maps it through its Priest `ProfileLoader`; Priest does not depend on the Markdown filename. When the canonical file is absent, the resolver combines legacy `RULES.md`, `PROFILE.md`, and `CUSTOM.md` content in that existing effective order without mutating disk. `marifold doctor --fix` owns the explicit, backed-up migration.
 
 marifold owns the profile memory file meaning and passes selected memory to `@priest-ai/core` through `PriestRequest.memory`. The memory path can be disabled per profile through `profile.toml` or per run through `--no-memories`. When enabled, marifold injects memory policy instructions, strips hidden `<memory_save>` and `<memory_forget>` blocks from visible output and saved session history, applies JSONL mutations after the turn, applies conservative prompt fallback extraction, applies prompt-driven forgets, and trims low-priority short-term memory.
 
@@ -105,19 +77,7 @@ Memory is context, not authority. Human-authored profile instructions and the cu
 
 Thinking mode is a provider option selected by marifold and only forwarded to known compatible providers. It does not change context assembly or introduce agent behavior.
 
-SQLite session continuity is reused from `@priest-ai/core`. marifold-owned
-metadata stays in companion tables in that same database:
-`marifold_session_display` holds session title/pin/archive state,
-`marifold_profile_display` holds profile pin state,
-`marifold_turn_attachments` holds display-only image sources, and
-`marifold_response_metrics` holds content-free timing/model/token/cost metadata
-for completed chat and agent exchanges. Response metrics use the stable
-zero-based user-turn ordinal rather than Priest's rewritten SQLite turn ids;
-session rename, edit, truncate, clear, and delete operations maintain the
-companion rows. Profile contact previews and activity dates are derived from
-the latest durable session/assistant turn rather than copied into profile files
-or model context. Removing a stored profile clears its profile-display row but
-deliberately retains its session turns and response metrics.
+SQLite session continuity is reused from `@priest-ai/core`. marifold-owned metadata stays in companion tables in that same database: `marifold_session_display` holds session title/pin/archive state, `marifold_profile_display` holds profile pin state, `marifold_turn_attachments` holds display-only image sources, and `marifold_response_metrics` holds content-free timing/model/token/cost metadata for completed chat and agent exchanges. Response metrics use the stable zero-based user-turn ordinal rather than Priest's rewritten SQLite turn ids; session rename, edit, truncate, clear, and delete operations maintain the companion rows. Profile contact previews and activity dates are derived from the latest durable session/assistant turn rather than copied into profile files or model context. Removing a stored profile clears its profile-display row but deliberately retains its session turns and response metrics.
 
 Task state is stored as JSON files under `paths.tasks_dir`, defaulting to `~/.marifold/tasks`. Task state is generated working context: objective, status, plan, events, summary, next action, profile, and session references. It is separate from durable profile memory and is not promoted into profile memory by default.
 

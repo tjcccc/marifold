@@ -1,8 +1,6 @@
 # @marifold/web
 
-The marifold Web UI — a browser client over the service API (`docs/service-api.md`),
-rendering the same contracts the TUI renders. Design reference:
-`docs/design/marifold-web-concept.dc.html` (marigold `#EAA221` system, light + dark).
+The marifold Web UI — a browser client over the service API (`docs/service-api.md`), rendering the same contracts the TUI renders. Design reference: `docs/design/marifold-web-concept.dc.html` (marigold `#EAA221` system, light + dark).
 
 ## Module responsibilities
 
@@ -23,10 +21,7 @@ screens/ ──► components/ ──► state/ ──► api/ ──► theme
 | `src/screens/` | Composition per view (`agent/`, `apps/`, `config/`): hooks, controllers, dispatch. The only layer that wires api + state + components together. | — |
 | `src/theme/` | `palette.css` (design tokens once, via `light-dark()`), `base.css`, `useTheme`. | — |
 
-`src/api/types.ts` is the single file importing from `@marifold/core`, and only
-with `import type` — the wire contract stays one source of truth while the
-Node-only core never reaches the browser bundle (`verbatimModuleSyntax` turns a
-slip into a compile error).
+`src/api/types.ts` is the single file importing from `@marifold/core`, and only with `import type` — the wire contract stays one source of truth while the Node-only core never reaches the browser bundle (`verbatimModuleSyntax` turns a slip into a compile error).
 
 ## Development
 
@@ -38,23 +33,13 @@ marifold service --cors-origin http://127.0.0.1:5173
 pnpm --filter @marifold/web dev
 ```
 
-`VITE_MARIFOLD_URL` overrides the dev service URL. If the service runs with a
-token, set it in the app through the sidebar's Connection sheet.
+`VITE_MARIFOLD_URL` overrides the dev service URL. If the service runs with a token, set it in the app through the sidebar's Connection sheet.
 
 ## Server connections
 
-The Connection sheet keeps a named list of marifold services. **This server**
-uses the origin that delivered the Web UI; additional entries use an explicit
-HTTP(S) service root and their own bearer token. A candidate is saved and made
-active only after its `/v1/status` response identifies a compatible marifold v1
-service. Switching servers remounts the data-owning screens and namespaces the
-last Agent route and composer drafts by server, preventing one server's
-profiles or sessions from remaining in another server's workspace.
+The Connection sheet keeps a named list of marifold services. **This server** uses the origin that delivered the Web UI; additional entries use an explicit HTTP(S) service root and their own bearer token. A candidate is saved and made active only after its `/v1/status` response identifies a compatible marifold v1 service. Switching servers remounts the data-owning screens and namespaces the last Agent route and composer drafts by server, preventing one server's profiles or sessions from remaining in another server's workspace.
 
-An explicit remote URL is cross-origin from the local shell, so its service
-must allow the shell's exact origin with `[service].cors_origins`. Directly
-opening the Web UI hosted by the remote service remains same-origin and needs
-no CORS entry.
+An explicit remote URL is cross-origin from the local shell, so its service must allow the shell's exact origin with `[service].cors_origins`. Directly opening the Web UI hosted by the remote service remains same-origin and needs no CORS entry.
 
 ## Production
 
@@ -62,131 +47,46 @@ no CORS entry.
 marifold service # npm installs serve the bundled Web UI at http://127.0.0.1:32140
 ```
 
-Served same-origin, no CORS configuration needed; with a token configured,
-auth covers `/v1/*` while the shell stays reachable. Source builds stage this
-app into `@marifold/service`; `[service].web_dir` or `--web-dir` remains an
-override for a different built bundle.
+Served same-origin, no CORS configuration needed; with a token configured, auth covers `/v1/*` while the shell stays reachable. Source builds stage this app into `@marifold/service`; `[service].web_dir` or `--web-dir` remains an override for a different built bundle.
 
 ## Mobile layout
 
-Browsers below 900 px use a dedicated touch layout instead of compressing the
-desktop columns. Agent navigation drills from Profiles to Sessions to a
-full-screen conversation; Apps and Config use the same list-to-detail pattern.
-Agent, Apps, and Config share an icon-based bottom tab bar on their root/list
-screens. Config opens a compact action sheet for the active server connection,
-appearance, and full Settings. The mobile shell also includes safe-area
-padding, dynamic visual-viewport sizing and offset alignment for the on-screen keyboard,
-touch-visible actions, and bottom-sheet treatments for compact dialogs. Wider
-windows retain the resizable desktop sidebar and multi-column Config layout.
-In the mobile composer, Enter inserts a line break and only the Send button
-submits; desktop keeps Enter-to-send with Shift+Enter for a line break.
+Browsers below 900 px use a dedicated touch layout instead of compressing the desktop columns. Agent navigation drills from Profiles to Sessions to a full-screen conversation; Apps and Config use the same list-to-detail pattern. Agent, Apps, and Config share an icon-based bottom tab bar on their root/list screens. Config opens a compact action sheet for the active server connection, appearance, and full Settings. The mobile shell also includes safe-area padding, dynamic visual-viewport sizing and offset alignment for the on-screen keyboard, touch-visible actions, and bottom-sheet treatments for compact dialogs. Wider windows retain the resizable desktop sidebar and multi-column Config layout. In the mobile composer, Enter inserts a line break and only the Send button submits; desktop keeps Enter-to-send with Shift+Enter for a line break.
 
 ## Attachments
 
-The composer accepts images, plain-text/code files, and modern Microsoft Office
-files: Word `.docx`, Excel `.xlsx`, and PowerPoint `.pptx`. Office files are
-OOXML ZIP archives; marifold opens them locally in the browser, extracts text
-with useful paragraph/slide/sheet structure, and inlines that text into the model
-prompt. Ordinary messages stage the original through the local service as a
-read-only file in the private Agent workspace so file tools can inspect it; raw
-Office bytes are not sent to the model. The retained chat transport is used
-only by explicitly chat-mode Skills and compatibility clients.
+The composer accepts images, plain-text/code files, and modern Microsoft Office files: Word `.docx`, Excel `.xlsx`, and PowerPoint `.pptx`. Office files are OOXML ZIP archives; marifold opens them locally in the browser, extracts text with useful paragraph/slide/sheet structure, and inlines that text into the model prompt. Ordinary messages stage the original through the local service as a read-only file in the private Agent workspace so file tools can inspect it; raw Office bytes are not sent to the model. The retained chat transport is used only by explicitly chat-mode Skills and compatibility clients.
 
-While the selected conversation is responding, the circular Send control
-becomes Stop. It cancels a live agent run through the service run API or aborts
-a plain chat stream; partial chat text already received remains visible.
+While the selected conversation is responding, the circular Send control becomes Stop. It cancels a live agent run through the service run API or aborts a plain chat stream; partial chat text already received remains visible.
 
-Submitted `$skill [args]` turns are resolved by `/v1/skills/resolve` before a
-model run starts. The service expands the selected profile/global skill once;
-the Web UI runs those instructions without prior skill-turn history and keeps
-the original `$skill …` text in the transcript.
+Submitted `$skill [args]` turns are resolved by `/v1/skills/resolve` before a model run starts. The service expands the selected profile/global skill once; the Web UI runs those instructions without prior skill-turn history and keeps the original `$skill …` text in the transcript.
 
-The Apps view renders global `~/.marifold/apps/<name>/skillapp.ts` bundles from
-the service's normalized JSON contract. Agent and Apps share one persistent
-desktop shell: switching tabs changes only the sidebar catalog body and
-right-pane content, preserving the marifold brand, system footer, sidebar
-width/visibility, and header controls. Apps renders no profile/session list,
-transcript, or composer. It supports semantic row/column form layouts,
-service-owned state, direct buttons, and debounced latest-wins operations over
-an app-local Skill and explicit model. A workspace footer exposes the App
-version and an Activity drawer for runs, genuine warnings/errors, latency, and
-token use; missing required input remains a silent idle form state. See
-`docs/app.md` and `examples/apps/translator`.
+The Apps view renders global `~/.marifold/apps/<name>/skillapp.ts` bundles from the service's normalized JSON contract. Agent and Apps share one persistent desktop shell: switching tabs changes only the sidebar catalog body and right-pane content, preserving the marifold brand, system footer, sidebar width/visibility, and header controls. Apps renders no profile/session list, transcript, or composer. It supports semantic row/column form layouts, service-owned state, direct buttons, and debounced latest-wins operations over an app-local Skill and explicit model. A workspace footer exposes the App version and an Activity drawer for runs, genuine warnings/errors, latency, and token use; missing required input remains a silent idle form state. See `docs/app.md` and `examples/apps/translator`.
 
 ## Profile navigation
 
-The primary sidebar treats profiles like contacts: 40 px avatars, one-line
-previews from the latest assistant response, a relative activity time, and
-recent-session ordering. Pinned profiles remain above the activity-sorted list
-and use the same glyph as pinned sessions. Each row's hover/focus menu can
-pin/unpin the profile or open its Config page.
+The primary sidebar treats profiles like contacts: 40 px avatars, one-line previews from the latest assistant response, a relative activity time, and recent-session ordering. Pinned profiles remain above the activity-sorted list and use the same glyph as pinned sessions. Each row's hover/focus menu can pin/unpin the profile or open its Config page.
 
-Profile Config includes confirmed removal for stored profiles. The configured
-default profile must be changed first, active requests must finish or be
-cancelled, and the built-in `default` profile cannot be removed. The user must
-type the exact profile name in the destructive dialog before its final action
-enables. Removal deletes the profile directory (instructions, memories, skills,
-and avatar) but preserves its SQLite conversation history.
-Memory and Agent permissions share one Advanced settings control. The area is
-collapsed whenever Profile Config opens and can be expanded manually for the
-current visit.
+Profile Config includes confirmed removal for stored profiles. The configured default profile must be changed first, active requests must finish or be cancelled, and the built-in `default` profile cannot be removed. The user must type the exact profile name in the destructive dialog before its final action enables. Removal deletes the profile directory (instructions, memories, skills, and avatar) but preserves its SQLite conversation history. Memory and Agent permissions share one Advanced settings control. The area is collapsed whenever Profile Config opens and can be expanded manually for the current visit.
 
-The Providers column's `+` action opens a modal backed by the same ordered
-registry as `marifold provider add`. Selecting an entry pre-fills its type,
-server URL, and API-key environment-variable name; the browser never accepts
-or transmits a raw key. Provider Config uses the same typed-confirmation
-pattern for removal. A provider cannot be
-removed while it is the global default or referenced by a profile override.
-Removal clears its local credentials/config and saved model options without
-touching provider-owned models or remote accounts. OAuth provider pages expose
-a **Re-authenticate…** dialog with a copyable
-`marifold provider reauth <provider>` command. The command runs on the
-service host because a remotely forwarded browser's loopback callback points at
-the client machine, not the Mac hosting marifold.
+The Providers column's `+` action opens a modal backed by the same ordered registry as `marifold provider add`. Selecting an entry pre-fills its type, server URL, and API-key environment-variable name; the browser never accepts or transmits a raw key. Provider Config uses the same typed-confirmation pattern for removal. A provider cannot be removed while it is the global default or referenced by a profile override. Removal clears its local credentials/config and saved model options without touching provider-owned models or remote accounts. OAuth provider pages expose a **Re-authenticate…** dialog with a copyable `marifold provider reauth <provider>` command. The command runs on the service host because a remotely forwarded browser's loopback callback points at the client machine, not the Mac hosting marifold.
 
-Web-search Config selects DuckDuckGo, Firecrawl, or the account-backed Ollama
-Cloud fallback and makes the external Ollama query boundary explicit. Bailian
-and Alibaba Cloud provider pages expose Auto / Responses / Chat / Off native
-search routing; Auto uses the core's conservative model matrix, while the
-explicit modes cover newly released provider models.
+Web-search Config selects DuckDuckGo, Firecrawl, or the account-backed Ollama Cloud fallback and makes the external Ollama query boundary explicit. Bailian and Alibaba Cloud provider pages expose Auto / Responses / Chat / Off native search routing; Auto uses the core's conservative model matrix, while the explicit modes cover newly released provider models.
 
-Completed chat and agent responses show a shared time/token/reasoning/cost
-footer. The service persists those content-free metrics by session and stable
-user-turn ordinal, so the footer survives navigation, page reload, and service
-restart; providers that omit a usage field simply leave that field hidden.
+Completed chat and agent responses show a shared time/token/reasoning/cost footer. The service persists those content-free metrics by session and stable user-turn ordinal, so the footer survives navigation, page reload, and service restart; providers that omit a usage field simply leave that field hidden.
 
-Agent clarification sheets render ordinary questions as radio choices and
-questions marked `multiple` as “select all that apply” checkboxes. A
-multi-select answer may combine suggested choices with “Something else” text;
-the run resumes only after every question has a complete answer.
+Agent clarification sheets render ordinary questions as radio choices and questions marked `multiple` as “select all that apply” checkboxes. A multi-select answer may combine suggested choices with “Something else” text; the run resumes only after every question has a complete answer.
 
-Office source files are limited to 16 MiB, selected expanded XML to 8 MiB, and
-extracted prompt text to 256 KiB. Embedded images, charts, complex formatting,
-macros, password-protected/encrypted files, and legacy `.doc`/`.xls`/`.ppt`
-binaries are not interpreted.
+Office source files are limited to 16 MiB, selected expanded XML to 8 MiB, and extracted prompt text to 256 KiB. Embedded images, charts, complex formatting, macros, password-protected/encrypted files, and legacy `.doc`/`.xls`/`.ppt` binaries are not interpreted.
 
 ## Tests
 
-`pnpm --filter @marifold/web test` — unit (SSE parser, thread reducer,
-follower reconnect, libs), component smoke (jsdom + testing-library), and an
-integration suite that drives the real `ApiClient` against a real
-`createMarifoldService` instance.
+`pnpm --filter @marifold/web test` — unit (SSE parser, thread reducer, follower reconnect, libs), component smoke (jsdom + testing-library), and an integration suite that drives the real `ApiClient` against a real `createMarifoldService` instance.
 
-`pnpm --filter @marifold/web test:e2e` builds the relevant packages, starts a
-real service over disposable profile/session storage, and runs the desktop
-workspace flows in Chromium, including profile/session search, Office uploads,
-archive/drafts, image galleries, accessible dialogs, and global settings. Browser artifacts stay under
-`output/playwright/`.
+`pnpm --filter @marifold/web test:e2e` builds the relevant packages, starts a real service over disposable profile/session storage, and runs the desktop workspace flows in Chromium, including profile/session search, Office uploads, archive/drafts, image galleries, accessible dialogs, and global settings. Browser artifacts stay under `output/playwright/`.
 
 ## Open-session updates
 
-Opening a saved session shows a spinner and “Loading conversation…” until its
-messages arrive. Sending is disabled during that fetch. Switching sessions ignores
-late responses from the previous selection; an empty-session prompt appears only
-after loading completes. The spinner respects reduced-motion preferences.
+Opening a saved session shows a spinner and “Loading conversation…” until its messages arrive. Sending is disabled during that fetch. Switching sessions ignores late responses from the previous selection; an empty-session prompt appears only after loading completes. The spinner respects reduced-motion preferences.
 
-An open conversation keeps its local transcript while workspace notifications
-refresh navigation metadata. Runs started in that view continue streaming normally.
-To see transcript changes or runs started on another device, reload the page or
-switch away and reopen the session; workspace notifications do not reload the
-conversation or automatically attach newly started remote runs.
+An open conversation keeps its local transcript while workspace notifications refresh navigation metadata. Runs started in that view continue streaming normally. To see transcript changes or runs started on another device, reload the page or switch away and reopen the session; workspace notifications do not reload the conversation or automatically attach newly started remote runs.

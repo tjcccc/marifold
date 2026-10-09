@@ -1,35 +1,14 @@
 # Device-hosted workspaces
 
-**Status: in testing (v0.76.0).** Local automated checks and paired Mac
-profile/avatar/session reads through an Aliyun ECS bridge over public HTTPS
-have passed, including Web UI refresh. The ECS update and seven concurrent original
-avatar downloads passed with matching file hashes and a responsive session list.
-Bulk speed is still connection-dependent: the live 3 MB burst took 54 seconds.
-Reboot recovery, live rollback and broader host–guest acceptance remain pending.
+**Status: in testing (v0.76.0).** Local automated checks and paired Mac profile/avatar/session reads through an Aliyun ECS bridge over public HTTPS have passed, including Web UI refresh. The ECS update and seven concurrent original avatar downloads passed with matching file hashes and a responsive session list. Bulk speed is still connection-dependent: the live 3 MB burst took 54 seconds. Reboot recovery, live rollback and broader host–guest acceptance remain pending.
 
-A disposable OrbStack Linux guest with a local HTTPS bridge and a private test
-tailnet passed file delegation in both directions, bridge execution while
-Tailscale was stopped or failed to start, tunnel recovery, and guest-service
-reconnection. The model was mocked; bridge transport, filesystem operations and
-Tailscale were real. A subsequent full-access test performed daemon restart,
-reported an injected startup failure, and recovered the daemon through approved
-Marifold shell jobs. Scoped Linux shell execution remains refused because its
-sandbox adapter is not implemented. This does not validate restarting Tailscale on a remote Mac or prove
-that a particular device's bridge route is independent of its VPN/proxy settings.
+A disposable OrbStack Linux guest with a local HTTPS bridge and a private test tailnet passed file delegation in both directions, bridge execution while Tailscale was stopped or failed to start, tunnel recovery, and guest-service reconnection. The model was mocked; bridge transport, filesystem operations and Tailscale were real. A subsequent full-access test performed daemon restart, reported an injected startup failure, and recovered the daemon through approved Marifold shell jobs. Scoped Linux shell execution remains refused because its sandbox adapter is not implemented. This does not validate restarting Tailscale on a remote Mac or prove that a particular device's bridge route is independent of its VPN/proxy settings.
 
-A workspace belongs to one person. Hosting shares this device's existing local
-`.marifold` configuration, profiles, sessions, Skills, Apps and schedules. The host
-retains the model credentials and authoritative data. A guest joins a live view;
-it does not copy the host's database or become another host when disconnected.
+A workspace belongs to one person. Hosting shares this device's existing local `.marifold` configuration, profiles, sessions, Skills, Apps and schedules. The host retains the model credentials and authoritative data. A guest joins a live view; it does not copy the host's database or become another host when disconnected.
 
-The host and every guest must run the exact same Marifold release. An invitation
-from a different release is rejected before pairing. Existing pairings remain
-unavailable after one device updates until the other device updates too; the Web
-workspace control shows a version mismatch warning. Update all devices together.
+The host and every guest must run the exact same Marifold release. An invitation from a different release is rejected before pairing. Existing pairings remain unavailable after one device updates until the other device updates too; the Web workspace control shows a version mismatch warning. Update all devices together.
 
-Each Mac runs `marifold service`. CLI, TUI and the service-hosted Web UI use that
-local service's outbound bridge connection, so neither Mac needs an inbound port
-or Tailscale. Browser-only pairing and native iOS clients are future work.
+Each Mac runs `marifold service`. CLI, TUI and the service-hosted Web UI use that local service's outbound bridge connection, so neither Mac needs an inbound port or Tailscale. Browser-only pairing and native iOS clients are future work.
 
 ## Setup
 
@@ -39,27 +18,11 @@ Prepare a standalone Vercel deployment package:
 marifold workspace bridge prepare ./marifold-bridge
 ```
 
-Missing parent directories are created automatically; the destination directory
-must not already exist. Use `~/.marifold/bridge` for a directory under your home,
-or a relative path for a directory under your current working directory.
-It contains compiled bridge/protocol code,
-a dependency manifest, environment template and Vercel configuration. No personal
-data or secrets are copied. Follow its README to provision TCP Redis, review the
-provider plans, configure the environment and deploy. See the complete
-[bridge deployment guide](../apps/bridge/README.md). Cloud resource creation is
-manual in this version; both workspace creation screens accept a running bridge.
+Missing parent directories are created automatically; the destination directory must not already exist. Use `~/.marifold/bridge` for a directory under your home, or a relative path for a directory under your current working directory. It contains compiled bridge/protocol code, a dependency manifest, environment template and Vercel configuration. No personal data or secrets are copied. Follow its README to provision TCP Redis, review the provider plans, configure the environment and deploy. See the complete [bridge deployment guide](../apps/bridge/README.md). Cloud resource creation is manual in this version; both workspace creation screens accept a running bridge.
 
-For the prepared package at `~/.marifold/bridge`, follow the
-[Vercel project configuration](../apps/bridge/README.md#standalone-project-configuration)
-for project linking, Redis, environment variables and production deployment.
-For other providers, see the [hosting guide](../apps/bridge/HOSTING.md), including
-Cloudflare Tunnel, AWS EC2, and Aliyun ECS.
+For the prepared package at `~/.marifold/bridge`, follow the [Vercel project configuration](../apps/bridge/README.md#standalone-project-configuration) for project linking, Redis, environment variables and production deployment. For other providers, see the [hosting guide](../apps/bridge/HOSTING.md), including Cloudflare Tunnel, AWS EC2, and Aliyun ECS.
 
-On a Linux bridge server with Docker Engine/Compose and Python 3, run
-`marifold workspace bridge install` for guided Redis/HTTPS configuration and
-persistent service startup. Or transfer the prepared package and run
-`sudo bash setup.sh` there. See the
-[Linux installer](../apps/bridge/HOSTING.md#guided-linux-installer).
+On a Linux bridge server with Docker Engine/Compose and Python 3, run `marifold workspace bridge install` for guided Redis/HTTPS configuration and persistent service startup. Or transfer the prepared package and run `sudo bash setup.sh` there. See the [Linux installer](../apps/bridge/HOSTING.md#guided-linux-installer).
 
 On the host:
 
@@ -78,11 +41,7 @@ marifold workspace add https://your-bridge.vercel.app --executor
 marifold workspace default Home
 ```
 
-The Web UI's **Workspace** control offers Host this device, Join workspace,
-rename, invitations, device revocation, executor opt-in and a startup default.
-**Direct servers** preserves existing private-network connections and tokens.
-Web workspace pairing uses the service that hosts the page; open each Mac's own
-Web UI to pair that Mac. A remote browser is not itself an execution device.
+The Web UI's **Workspace** control offers Host this device, Join workspace, rename, invitations, device revocation, executor opt-in and a startup default. **Direct servers** preserves existing private-network connections and tokens. Web workspace pairing uses the service that hosts the page; open each Mac's own Web UI to pair that Mac. A remote browser is not itself an execution device.
 
 CLI management:
 
@@ -98,11 +57,7 @@ marifold workspace default local
 marifold workspace remove <name_or_id>
 ```
 
-`remove` stops sharing a hosted workspace or disconnects this guest, while
-preserving local profiles and sessions. An offline guest can disconnect locally;
-the host may still list its old identity until it is revoked there. Stopping an
-offline host removes its local keys but cannot update an unreachable relay until
-a separate administrative cleanup. Never reuse those removed keys.
+`remove` stops sharing a hosted workspace or disconnects this guest, while preserving local profiles and sessions. An offline guest can disconnect locally; the host may still list its old identity until it is revoked there. Stopping an offline host removes its local keys but cannot update an unreachable relay until a separate administrative cleanup. Never reuse those removed keys.
 
 The TUI switches among already-paired workspaces:
 
@@ -126,36 +81,19 @@ marifold ask --workspace Home "Hello"
 marifold schedule --workspace Home list
 ```
 
-Without `--workspace`, these use the configured startup default. Other standalone
-CLI configuration/profile commands retain their local behavior; shared profile,
-Skill and configuration management is available in the paired Web UI and TUI.
-A new guest needs no local provider authentication to use a configured host model.
-Local remains the fallback when the default workspace is unavailable at startup.
-Clients briefly allow connections to initialize first. An explicitly selected
-offline workspace reports an error. A disconnected active conversation stays in
-its workspace, including its draft, and never silently submits work to Local.
+Without `--workspace`, these use the configured startup default. Other standalone CLI configuration/profile commands retain their local behavior; shared profile, Skill and configuration management is available in the paired Web UI and TUI. A new guest needs no local provider authentication to use a configured host model. Local remains the fallback when the default workspace is unavailable at startup. Clients briefly allow connections to initialize first. An explicitly selected offline workspace reports an error. A disconnected active conversation stays in its workspace, including its draft, and never silently submits work to Local.
 
 ## Bridge proxy settings (planned)
 
-Each device should choose **Direct** (the default) or an explicit proxy for each
-local workspace connection. A bridge reachable directly, including one hosted on
-Aliyun or another provider, needs no proxy. Another connection may need one; home
-and office can use different settings for the same bridge.
+Each device should choose **Direct** (the default) or an explicit proxy for each local workspace connection. A bridge reachable directly, including one hosted on Aliyun or another provider, needs no proxy. Another connection may need one; home and office can use different settings for the same bridge.
 
-This setting is device-local, never synchronized from the host, and separate from
-model-provider proxies. It belongs in local connection settings, not the deployed
-bridge's `.env`. It must cover registration, pairing, WebSocket connections and
-reconnects, and be available in CLI/Web UI before create/join.
+This setting is device-local, never synchronized from the host, and separate from model-provider proxies. It belongs in local connection settings, not the deployed bridge's `.env`. It must cover registration, pairing, WebSocket connections and reconnects, and be available in CLI/Web UI before create/join.
 
-This is a design requirement, **not an available option yet**. Current workspace
-connections do not use provider proxy settings. See the
-[connectivity notes](../apps/bridge/README.md#device-connectivity-and-proxies)
-for current limitations and hosting-provider distinctions.
+This is a design requirement, **not an available option yet**. Current workspace connections do not use provider proxy settings. See the [connectivity notes](../apps/bridge/README.md#device-connectivity-and-proxies) for current limitations and hosting-provider distinctions.
 
 ## Execution and paths
 
-The host owns each model call and conversation. Every ordinary agent run records
-three independent identities:
+The host owns each model call and conversation. Every ordinary agent run records three independent identities:
 
 ```json
 {
@@ -165,259 +103,81 @@ three independent identities:
 }
 ```
 
-Origin comes from authenticated membership, not client-supplied device metadata.
-For ordinary guest requests, Automatic uses the guest if its executor is enabled;
-otherwise it uses the host. A selected unavailable/disabled device fails explicitly.
-One execution device is fixed for the entire run. Its OS, architecture, home,
-working directory and capability set govern its tools. Provider authentication
-stays on the host; guest shell environments never inherit host secrets.
+Origin comes from authenticated membership, not client-supplied device metadata. For ordinary guest requests, Automatic uses the guest if its executor is enabled; otherwise it uses the host. A selected unavailable/disabled device fails explicitly. One execution device is fixed for the entire run. Its OS, architecture, home, working directory and capability set govern its tools. Provider authentication stays on the host; guest shell environments never inherit host secrets.
 
-For natural-language requests such as “ask my home Mac to create a report”, the
-model can call `delegate_device` with an online device name or ID. This requires
-approval and starts one child in the same workspace, using the same profile/model.
-The child cannot delegate again. Child approvals, clarifications, results and
-artifacts appear in the parent conversation. Cancelling the parent cancels its
-children. Revoking a device cancels active workspace runs involving that identity.
+For natural-language requests such as “ask my home Mac to create a report”, the model can call `delegate_device` with an online device name or ID. This requires approval and starts one child in the same workspace, using the same profile/model. The child cannot delegate again. Child approvals, clarifications, results and artifacts appear in the parent conversation. Cancelling the parent cancels its children. Revoking a device cancels active workspace runs involving that identity.
 
-Local conversations on a device hosting a workspace also receive these device
-tools, including when the startup default is Local. Home can delegate to an
-opted-in guest through the bridge without SSH or Tailscale. Joining another
-workspace does not attach local conversations to it. Delegation retains the
-guest's local execution policy. See [device execution](device-execution.md) for locally enabled full access and durable jobs.
+Local conversations on a device hosting a workspace also receive these device tools, including when the startup default is Local. Home can delegate to an opted-in guest through the bridge without SSH or Tailscale. Joining another workspace does not attach local conversations to it. Delegation retains the guest's local execution policy. See [device execution](device-execution.md) for locally enabled full access and durable jobs.
 
-Device context identifies the workspace name, its host, the requesting device,
-and the execution device separately. A request for the workspace's home desktop
-targets its host; “my current device” means the requesting device. When these
-targets differ from the execution device, the agent must delegate the work or ask
-for clarification before acting.
+Device context identifies the workspace name, its host, the requesting device, and the execution device separately. A request for the workspace's home desktop targets its host; “my current device” means the requesting device. When these targets differ from the execution device, the agent must delegate the work or ask for clarification before acting.
 
-Guest execution is an explicit, locally revocable opt-in. It supports bounded file
-reading/writing, attachment inspection and the existing macOS shell sandbox. A
-separate local full-access opt-in enables approved shell commands with the
-execution account’s OS permissions on macOS and Linux.
-Guest file and shell calls require a nonpersistent approval; host profile permissions
-cannot widen the guest's local policy. “Always” and “Trust” are rejected for these
-calls. Uploading an attachment grants ID-scoped `inspect_attachment`,
-`read_attachment`, and `search_attachment` access without another prompt, as on
-the host. Inspected guest images return bytes to the host's model, never guest-local
-image paths. Disabling this device's executor cancels its active agent runs; already-started full-access jobs continue to completion. Pairing alone
-does not enable shell or filesystem execution.
+Guest execution is an explicit, locally revocable opt-in. It supports bounded file reading/writing, attachment inspection and the existing macOS shell sandbox. A separate local full-access opt-in enables approved shell commands with the execution account’s OS permissions on macOS and Linux. Guest file and shell calls require a nonpersistent approval; host profile permissions cannot widen the guest's local policy. “Always” and “Trust” are rejected for these calls. Uploading an attachment grants ID-scoped `inspect_attachment`, `read_attachment`, and `search_attachment` access without another prompt, as on the host. Inspected guest images return bytes to the host's model, never guest-local image paths. Disabling this device's executor cancels its active agent runs; already-started full-access jobs continue to completion. Pairing alone does not enable shell or filesystem execution.
 
-Skills, SkillApps and schedules run on the host in this version. Their paths retain
-host meaning. An image Skill configured to output under the host's home directory
-writes there, without replacing usernames or translating absolute paths. For an
-ordinary guest execution, paths instead belong to that selected guest. The service
-never interprets a requesting device's path as an upload; attachments carry bytes.
+Skills, SkillApps and schedules run on the host in this version. Their paths retain host meaning. An image Skill configured to output under the host's home directory writes there, without replacing usernames or translating absolute paths. For an ordinary guest execution, paths instead belong to that selected guest. The service never interprets a requesting device's path as an upload; attachments carry bytes.
 
-Each model turn receives a small environment block with the runtime time,
-timezone, client interface (`terminal`, `web`, `desktop`, or `mobile` when known),
-and whether the request is local or remote to the workspace host. The connection
-establishes origin; client text cannot change it. Device inventories are fetched
-with `list_devices` only when needed, and `delegate_device` accepts `host` or a
-resolved device name/ID. Delegated runs preserve the originating interface and
-timezone. Terminal replies report execution-device paths; graphical clients use
-file cards and previews. A remote path is not a file saved on the browser device.
+Each model turn receives a small environment block with the runtime time, timezone, client interface (`terminal`, `web`, `desktop`, or `mobile` when known), and whether the request is local or remote to the workspace host. The connection establishes origin; client text cannot change it. Device inventories are fetched with `list_devices` only when needed, and `delegate_device` accepts `host` or a resolved device name/ID. Delegated runs preserve the originating interface and timezone. Terminal replies report execution-device paths; graphical clients use file cards and previews. A remote path is not a file saved on the browser device.
 
-Regular files in a run's output directory become authenticated downloadable
-artifacts. Files deliberately written elsewhere stay on that execution device and
-are not automatically copied. Download controls save files on the computer running
-the browser. They do not run a file-copy command on the workspace host. Files
-appear in cards below the final answer; PNG/JPEG/WebP outputs show thumbnails
-with full-resolution viewing and download controls. Working details remain
-collapsible above the answer. A download click creates a short-lived scoped URL
-on the connected service, then the browser streams it directly and shows normal
-download progress. Thumbnails are resized on the source device before transfer.
-Completed artifact references persist separately from live run diagnostics and
-are restored when a session is reopened. Published output files survive the
-24-hour cleanup of temporary run state and remain stored until explicitly removed
-from the output device. Execution capabilities and grants are never reconstructed.
-Downloads still require the relevant host and output device to be reachable;
-files or references removed by older versions cannot be recovered automatically.
-If a retained file expires or is removed, its filename and disabled Download entry
-remain visible with an unavailability notice. The browser checks file availability
-when reopening the conversation. Offline devices remain retryable and are not
-labeled expired.
+Regular files in a run's output directory become authenticated downloadable artifacts. Files deliberately written elsewhere stay on that execution device and are not automatically copied. Download controls save files on the computer running the browser. They do not run a file-copy command on the workspace host. Files appear in cards below the final answer; PNG/JPEG/WebP outputs show thumbnails with full-resolution viewing and download controls. Working details remain collapsible above the answer. A download click creates a short-lived scoped URL on the connected service, then the browser streams it directly and shows normal download progress. Thumbnails are resized on the source device before transfer. Completed artifact references persist separately from live run diagnostics and are restored when a session is reopened. Published output files survive the 24-hour cleanup of temporary run state and remain stored until explicitly removed from the output device. Execution capabilities and grants are never reconstructed. Downloads still require the relevant host and output device to be reachable; files or references removed by older versions cannot be recovered automatically. If a retained file expires or is removed, its filename and disabled Download entry remain visible with an unavailability notice. The browser checks file availability when reopening the conversation. Offline devices remain retryable and are not labeled expired.
 
-Scoped execution cannot read another workspace's control state, credentials or
-local Marifold data, and scoped shell processes have no general network or desktop
-control. Explicit full-access commands use the destination account's permissions,
-including access to its data and network; administrator and macOS privacy grants
-remain OS requirements. The dedicated remote Python package tool remains outside
-this executor scope. Existing host Skill/package-install capabilities are unchanged.
+Scoped execution cannot read another workspace's control state, credentials or local Marifold data, and scoped shell processes have no general network or desktop control. Explicit full-access commands use the destination account's permissions, including access to its data and network; administrator and macOS privacy grants remain OS requirements. The dedicated remote Python package tool remains outside this executor scope. Existing host Skill/package-install capabilities are unchanged.
 
 ## Data, pairing and isolation
 
-A configuration can host its existing local workspace once and join multiple
-other workspaces, including ones on different bridges. Each connection has distinct
-keys and a distinct workspace ID. The host's API exposes only its own application
-resources; nested workspace APIs and device-local settings are rejected. UI drafts,
-routes and cached views are scoped by connection. Appearance stays a local UI
-preference. Provider key values never appear in the shared configuration response.
+A configuration can host its existing local workspace once and join multiple other workspaces, including ones on different bridges. Each connection has distinct keys and a distinct workspace ID. The host's API exposes only its own application resources; nested workspace APIs and device-local settings are rejected. UI drafts, routes and cached views are scoped by connection. Appearance stays a local UI preference. Provider key values never appear in the shared configuration response.
 
 State lives below `<config directory>/workspaces/<config filename hash>/`:
 
-- `control.db`: connection metadata, invitation verifiers, host-signed memberships,
-  operation journals and recent run events. Files are owner-only; the enclosing
-  workspace directory is mode 0700.
-- `<workspace id>.credentials.json`: independent signing/encryption private keys,
-  atomically replaced in a mode 0600 regular file. Symlinked or group/world-readable
-  credential files are rejected. Keychain support is deferred.
+- `control.db`: connection metadata, invitation verifiers, host-signed memberships, operation journals and recent run events. Files are owner-only; the enclosing workspace directory is mode 0700.
+- `<workspace id>.credentials.json`: independent signing/encryption private keys, atomically replaced in a mode 0600 regular file. Symlinked or group/world-readable credential files are rejected. Keychain support is deferred.
 - `runs/`: isolated guest execution directories and output files.
-- `service.lock`: prevents two live services from coordinating the same config.
-  A dead process's lock is recovered; a live process's lock is not replaced.
+- `service.lock`: prevents two live services from coordinating the same config. A dead process's lock is recovered; a live process's lock is not replaced.
 
-An invitation embeds the bridge URL and pinned host public identity plus a random
-32-byte secret. Only its verifier is stored by the host. It expires in 15 minutes
-and is consumed by successful pairing. Creating another invitation invalidates
-unused prior invitations, without changing already-paired device keys. Each paired
-device receives its own host-signed membership. Use `revoke` to invalidate that
-device separately. Recover lost device keys by revoking and re-pairing; there is
-no shared permanent guest token. A revoked device retains its saved workspace;
-use **Rejoin workspace** with a fresh host invitation to replace the unavailable
-pairing without disconnecting it first. Revoking the current device in the Web UI
-opens the invitation form automatically. Invalid invitations leave the saved pairing
-intact; an active pairing or a locally hosted workspace cannot be replaced by joining.
-All paired devices belong to the same owner and
-can manage the shared workspace. Permission roles are deferred.
+An invitation embeds the bridge URL and pinned host public identity plus a random 32-byte secret. Only its verifier is stored by the host. It expires in 15 minutes and is consumed by successful pairing. Creating another invitation invalidates unused prior invitations, without changing already-paired device keys. Each paired device receives its own host-signed membership. Use `revoke` to invalidate that device separately. Recover lost device keys by revoking and re-pairing; there is no shared permanent guest token. A revoked device retains its saved workspace; use **Rejoin workspace** with a fresh host invitation to replace the unavailable pairing without disconnecting it first. Revoking the current device in the Web UI opens the invitation form automatically. Invalid invitations leave the saved pairing intact; an active pairing or a locally hosted workspace cannot be replaced by joining. All paired devices belong to the same owner and can manage the shared workspace. Permission roles are deferred.
 
-Do not copy live workspace state between Macs: it would duplicate device identity
-and undermine delivery coordination. Back up the host's data and credential files
-securely for disaster recovery; pair additional devices instead of cloning them.
+Do not copy live workspace state between Macs: it would duplicate device identity and undermine delivery coordination. Back up the host's data and credential files securely for disaster recovery; pair additional devices instead of cloning them.
 
 ## Transport and interruptions
 
-The bridge is a relay, with no model runtime or application API. Both endpoints
-connect outbound over WSS. HPKE (P-256, HKDF-SHA256, AES-256-GCM) protects content;
-Ed25519 endpoint signatures and authenticated headers bind workspace, sender,
-recipient, message ID and expiry. Membership verification pins the host identity.
-The relay sees public identities, routing, timing and packet sizes. It does not
-receive decrypted conversations or provider keys.
+The bridge is a relay, with no model runtime or application API. Both endpoints connect outbound over WSS. HPKE (P-256, HKDF-SHA256, AES-256-GCM) protects content; Ed25519 endpoint signatures and authenticated headers bind workspace, sender, recipient, message ID and expiry. Membership verification pins the host identity. The relay sees public identities, routing, timing and packet sizes. It does not receive decrypted conversations or provider keys.
 
-Vercel WebSocket functions require Redis coordination because function instances
-and connections can rotate. Durable Redis inboxes contain at most 128 encrypted
-frames per recipient for five minutes. Messages expire after one minute. Large
-application payloads use authenticated chunks with acknowledgment, transfer-size
-limits and assembly expiry. Updated devices negotiate four chunks in flight per
-transfer, with eight bulk chunks total per connection; ordinary requests do not
-wait for a whole file transfer. Older receivers and relays retain sequential delivery.
-The relay delivers each inbox entry once per connection, replaying unacknowledged
-entries after reconnect instead of repeating them on every publish.
-Artifact downloads request up to 128 KiB per read with four reads ahead, preserving
-byte order and bounded memory; older hosts fall back to 32 KiB reads. Redis must
-preserve host and revocation metadata. Update both Mac services and the ECS bridge
-with `marifold workspace bridge update` to enable concurrent bulk transfers.
+Vercel WebSocket functions require Redis coordination because function instances and connections can rotate. Durable Redis inboxes contain at most 128 encrypted frames per recipient for five minutes. Messages expire after one minute. Large application payloads use authenticated chunks with acknowledgment, transfer-size limits and assembly expiry. Updated devices negotiate four chunks in flight per transfer, with eight bulk chunks total per connection; ordinary requests do not wait for a whole file transfer. Older receivers and relays retain sequential delivery. The relay delivers each inbox entry once per connection, replaying unacknowledged entries after reconnect instead of repeating them on every publish. Artifact downloads request up to 128 KiB per read with four reads ahead, preserving byte order and bounded memory; older hosts fall back to 32 KiB reads. Redis must preserve host and revocation metadata. Update both Mac services and the ECS bridge with `marifold workspace bridge update` to enable concurrent bulk transfers.
 
-An operation has a stable request ID and input hash. The receiving endpoint journals
-mutations before execution. Reconnection resends the same operation ID; completed
-results replay without repeating the effect. Reusing an ID with changed input is
-rejected. A process restart marks unfinished requests as interrupted/unknown; it
-never starts their model/tool loops again. Uncertain remote tool outcomes stop the
-run rather than invite the model to repeat an effect automatically.
+An operation has a stable request ID and input hash. The receiving endpoint journals mutations before execution. Reconnection resends the same operation ID; completed results replay without repeating the effect. Reusing an ID with changed input is rejected. A process restart marks unfinished requests as interrupted/unknown; it never starts their model/tool loops again. Uncertain remote tool outcomes stop the run rather than invite the model to repeat an effect automatically.
 
-Result payloads and recent run recovery have a 24-hour retention window (with
-bounded event buffers). Old request tombstones remain so expired IDs cannot execute
-again. Each service control journal caps accepted mutation IDs at 100,000 and fails
-closed at capacity; creating/re-pairing a new workspace preserves the host's normal
-profiles and sessions. Oversized completed results may expire immediately from the
-replay journal. Durable session history is independent of these recovery buffers.
+Result payloads and recent run recovery have a 24-hour retention window (with bounded event buffers). Old request tombstones remain so expired IDs cannot execute again. Each service control journal caps accepted mutation IDs at 100,000 and fails closed at capacity; creating/re-pairing a new workspace preserves the host's normal profiles and sessions. Oversized completed results may expire immediately from the replay journal. Durable session history is independent of these recovery buffers.
 
-One active request owns a conversation session. Another submission to that same
-session receives `SESSION_BUSY` (HTTP 409), with its active run ID when available.
-Separate sessions can run concurrently, up to the existing active-run limit.
-Clients resume SSE by event sequence without resubmitting a run. Guest execution
-leases expire after 45 seconds without host renewal; active commands are aborted.
-Known-offline workspaces reject new user commands; requests already in flight
-can reconnect under their original IDs. Accepted work can finish on an
-online host while the viewing client disconnects, then be viewed on reconnect.
+One active request owns a conversation session. Another submission to that same session receives `SESSION_BUSY` (HTTP 409), with its active run ID when available. Separate sessions can run concurrently, up to the existing active-run limit. Clients resume SSE by event sequence without resubmitting a run. Guest execution leases expire after 45 seconds without host renewal; active commands are aborted. Known-offline workspaces reject new user commands; requests already in flight can reconnect under their original IDs. Accepted work can finish on an online host while the viewing client disconnects, then be viewed on reconnect.
 
 ## Verification and first deployment
 
-Automated coverage exercises encrypted pairing, tampering/wrong-scope rejection,
-single-use invitations, secret exclusion, live shared data, same-session conflicts,
-remote approvals, child delegation/artifacts, large transfers, reconnect deduplication,
-revocation, executor opt-out, process restart and real macOS sandbox isolation.
-Chromium covers workspace switching, defaults, separate drafts and direct connections.
-A disposable real Redis test covers independent relay instances and retained delivery.
+Automated coverage exercises encrypted pairing, tampering/wrong-scope rejection, single-use invitations, secret exclusion, live shared data, same-session conflicts, remote approvals, child delegation/artifacts, large transfers, reconnect deduplication, revocation, executor opt-out, process restart and real macOS sandbox isolation. Chromium covers workspace switching, defaults, separate drafts and direct connections. A disposable real Redis test covers independent relay instances and retained delivery.
 
-The remaining live acceptance step is a reviewed Vercel/TCP-Redis deployment with
-your actual host and MacBook. Verify a model response, a simple approved file write
-on each target, artifact download, concurrent separate sessions, bridge reconnect,
-host-offline behavior and device revocation before depending on it. These checks
-need your cloud account and second device; local tests do not claim to replace them.
+The remaining live acceptance step is a reviewed Vercel/TCP-Redis deployment with your actual host and MacBook. Verify a model response, a simple approved file write on each target, artifact download, concurrent separate sessions, bridge reconnect, host-offline behavior and device revocation before depending on it. These checks need your cloud account and second device; local tests do not claim to replace them.
 
-Cloud-owned workspaces, offline editing, automatic conflict merging, browser-only
-pairing, iOS, Keychain, role tiers, other deployment providers and automatic
-installation of privileged OS helpers are deferred. The optional standalone
-Tailscale workflow uses existing OS permissions; see [device execution](device-execution.md). The local HTTP service remains private-network-only.
+Cloud-owned workspaces, offline editing, automatic conflict merging, browser-only pairing, iOS, Keychain, role tiers, other deployment providers and automatic installation of privileged OS helpers are deferred. The optional standalone Tailscale workflow uses existing OS permissions; see [device execution](device-execution.md). The local HTTP service remains private-network-only.
 
-Web avatar saves crop to 512px and compress as WebP at quality 85, preserving
-transparency (PNG fallback where WebP encoding is unavailable). Existing saved
-avatars remain unchanged. Displays use 256px WebP thumbnails to keep image traffic
-from delaying workspace navigation. Other file transfers preserve original bytes.
-Transcript images request host-generated WebP thumbnails (up to 480px and 80,000
-bytes); opening the image viewer still fetches the stored image. Executor requests,
-including attachment preparation and transfers, have a 120-second deadline and
-retain the same request ID across recovery. Bridge reads have a 60-second
-deadline; a connected-host timeout reports `WORKSPACE_TIMEOUT` (HTTP 504), distinct
-from `WORKSPACE_OFFLINE` (HTTP 503). Recovered connections refresh navigation metadata and other data views. Open
-conversation transcripts stay unchanged; reload the page or reopen the session
-to see messages and runs started on another device. Runs already followed by
-that view continue streaming.
+Web avatar saves crop to 512px and compress as WebP at quality 85, preserving transparency (PNG fallback where WebP encoding is unavailable). Existing saved avatars remain unchanged. Displays use 256px WebP thumbnails to keep image traffic from delaying workspace navigation. Other file transfers preserve original bytes. Transcript images request host-generated WebP thumbnails (up to 480px and 80,000 bytes); opening the image viewer still fetches the stored image. Executor requests, including attachment preparation and transfers, have a 120-second deadline and retain the same request ID across recovery. Bridge reads have a 60-second deadline; a connected-host timeout reports `WORKSPACE_TIMEOUT` (HTTP 504), distinct from `WORKSPACE_OFFLINE` (HTTP 503). Recovered connections refresh navigation metadata and other data views. Open conversation transcripts stay unchanged; reload the page or reopen the session to see messages and runs started on another device. Runs already followed by that view continue streaming.
 
 
 ## Experimental direct file downloads
 
-The WebRTC experiment is **off by default**. It changes only remote original-file
-downloads, not pairing, model requests, thumbnails, or the compressed image viewer.
-Both the requesting service and the file's source service must run this build
-with `MARIFOLD_EXPERIMENTAL_WEBRTC=1`. For guest-owned files reached through the
-host, enable it on the host as well. No bridge redeployment is required.
+The WebRTC experiment is **off by default**. It changes only remote original-file downloads, not pairing, model requests, thumbnails, or the compressed image viewer. Both the requesting service and the file's source service must run this build with `MARIFOLD_EXPERIMENTAL_WEBRTC=1`. For guest-owned files reached through the host, enable it on the host as well. No bridge redeployment is required.
 
-For a source checkout, build once with `pnpm install && pnpm -r build`. Stop an
-existing managed service before starting a foreground test instance. On both
-Mac and Fedora, run from the updated checkout:
+For a source checkout, build once with `pnpm install && pnpm -r build`. Stop an existing managed service before starting a foreground test instance. On both Mac and Fedora, run from the updated checkout:
 
 ```sh
 MARIFOLD_EXPERIMENTAL_WEBRTC=1 pnpm marifold service start
 ```
 
-Keep the usual config/host/port options if your installation needs them. The
-experiment does not open a public HTTP listener, change firewall rules, or install
-a VPN. It opens WebRTC UDP sockets and uses ICE/STUN; existing VPN routing and
-network restrictions can prevent a direct path. The default discovery server is
-`stun:stun.l.google.com:19302`. Set `MARIFOLD_WEBRTC_STUN_URL=stun:hostname:port`
-locally on each service to use another reachable STUN server. This setting is
-not synchronized. Only STUN URLs are accepted; no TURN relay is added. STUN sees
-network addresses, not file contents. Connection descriptions, including DTLS
-fingerprints, travel over the existing authenticated, encrypted workspace RPC.
-The source resolves only already-published artifact IDs within that workspace.
+Keep the usual config/host/port options if your installation needs them. The experiment does not open a public HTTP listener, change firewall rules, or install a VPN. It opens WebRTC UDP sockets and uses ICE/STUN; existing VPN routing and network restrictions can prevent a direct path. The default discovery server is `stun:stun.l.google.com:19302`. Set `MARIFOLD_WEBRTC_STUN_URL=stun:hostname:port` locally on each service to use another reachable STUN server. This setting is not synchronized. Only STUN URLs are accepted; no TURN relay is added. STUN sees network addresses, not file contents. Connection descriptions, including DTLS fingerprints, travel over the existing authenticated, encrypted workspace RPC. The source resolves only already-published artifact IDs within that workspace.
 
-The initial experiment supports files up to 64 MiB, four active/pending downloads
-per service, a 15-second negotiation/idle deadline and a two-minute transfer
-limit. Larger files, unsupported/disabled peers, connectivity failures, changed
-sources, checksum mismatches and timeouts fall back to the existing bridge path.
-Files stream in bounded 16 KiB data-channel messages with 512 KiB credit windows.
-The receiving service stages a private temporary copy and checks its length and
-SHA-256 before serving it to the browser. Therefore browser download progress
-starts **after** the direct transfer completes. Temporary files are removed when
-the response closes; interruption, membership removal and service shutdown close
-active transfers. An abrupt process kill can leave private temporary files in the
-OS temporary directory. There is no persistent original-file cache or resume yet.
+The initial experiment supports files up to 64 MiB, four active/pending downloads per service, a 15-second negotiation/idle deadline and a two-minute transfer limit. Larger files, unsupported/disabled peers, connectivity failures, changed sources, checksum mismatches and timeouts fall back to the existing bridge path. Files stream in bounded 16 KiB data-channel messages with 512 KiB credit windows. The receiving service stages a private temporary copy and checks its length and SHA-256 before serving it to the browser. Therefore browser download progress starts **after** the direct transfer completes. Temporary files are removed when the response closes; interruption, membership removal and service shutdown close active transfers. An abrupt process kill can leave private temporary files in the OS temporary directory. There is no persistent original-file cache or resume yet.
 
 To test from Fedora:
 
 1. Open the paired workspace and download an existing image/file from the Mac.
-2. In browser developer tools, preserve the Network log and inspect the
-   `/v1/downloads/...` response. `X-Marifold-Transfer: webrtc` confirms direct file
-   delivery. `bridge` means fallback; `X-Marifold-Direct-Fallback` distinguishes
-   a disabled experiment from an unavailable direct connection.
-3. Compare the same file with the experiment disabled, timing from the click
-   through completion. Check the saved file's size/hash, not just the transfer
-   label. Try both normal and VPN-connected networks.
-4. If connectivity or performance is worse, stop the test service and restart
-   without `MARIFOLD_EXPERIMENTAL_WEBRTC`, or set it to `0`. The existing bridge
-   behavior returns without re-pairing or changing the bridge server.
+2. In browser developer tools, preserve the Network log and inspect the `/v1/downloads/...` response. `X-Marifold-Transfer: webrtc` confirms direct file delivery. `bridge` means fallback; `X-Marifold-Direct-Fallback` distinguishes a disabled experiment from an unavailable direct connection.
+3. Compare the same file with the experiment disabled, timing from the click through completion. Check the saved file's size/hash, not just the transfer label. Try both normal and VPN-connected networks.
+4. If connectivity or performance is worse, stop the test service and restart without `MARIFOLD_EXPERIMENTAL_WEBRTC`, or set it to `0`. The existing bridge behavior returns without re-pairing or changing the bridge server.
 
-Local tests cover real data-channel transfer, bounded negotiation, cancellation,
-source changes, authenticated workspace routing, and old-peer bridge fallback.
-They do not establish cross-network performance or Fedora/VPN compatibility.
+Local tests cover real data-channel transfer, bounded negotiation, cancellation, source changes, authenticated workspace routing, and old-peer bridge fallback. They do not establish cross-network performance or Fedora/VPN compatibility.

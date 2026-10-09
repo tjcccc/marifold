@@ -14,57 +14,27 @@
 
 ## fx-inspired reliability backlog (reviewed 2026-08-20)
 
-These items borrow bounded contracts and lifecycle discipline from `fx` without
-changing marifold's product direction. marifold remains a local-first personal
-AI workspace and coordinator, not a heavyweight coding agent or general agent
-SDK.
+These items borrow bounded contracts and lifecycle discipline from `fx` without changing marifold's product direction. marifold remains a local-first personal AI workspace and coordinator, not a heavyweight coding agent or general agent SDK.
 
 ### Design next
 
-- **Minimal context provenance and omission tracing.** Centralize the duplicated
-  chat/agent request assembly and retain a stable source id, target Priest lane,
-  lifetime, and omission reason before projecting into today's `context`,
-  `memory`, `userContext`, session, image, and `toolExchange` fields. marifold
-  owns product source/trust policy; `@priest-ai/core` continues to own provider
-  message projection, token budgeting, and any provider cache semantics. Start
-  only with tracing and deterministic projection—do not create a competing
-  generic prompt/message model.
-- **Workflow run and artifact contracts.** Continue the constrained design in
-  `docs/workflow-plan.md`: durable node status, typed inputs/outputs, artifacts,
-  approvals, cancellation, and rerun. Let the first Workflow implementation
-  reveal which runtime ports and checkpoint boundaries are actually reusable.
+- **Minimal context provenance and omission tracing.** Centralize the duplicated chat/agent request assembly and retain a stable source id, target Priest lane, lifetime, and omission reason before projecting into today's `context`, `memory`, `userContext`, session, image, and `toolExchange` fields. marifold owns product source/trust policy; `@priest-ai/core` continues to own provider message projection, token budgeting, and any provider cache semantics. Start only with tracing and deterministic projection—do not create a competing generic prompt/message model.
+- **Workflow run and artifact contracts.** Continue the constrained design in `docs/workflow-plan.md`: durable node status, typed inputs/outputs, artifacts, approvals, cancellation, and rerun. Let the first Workflow implementation reveal which runtime ports and checkpoint boundaries are actually reusable.
 
 ### Design with the first real consumer
 
-- **External-agent aliases.** Define a capability-negotiated marifold contract
-  for session creation/attachment, prompts, semantic events, permission requests,
-  cancellation, close, and result/artifact handoff. Use ACP v1 as one adapter
-  when the first real external coding agent supports it; do not make ACP the
-  internal run model or force external events into `AgentEvent` losslessly.
-- **MCP integration.** Add MCP only for a concrete App or Workflow. Keep server
-  transport/auth/discovery/lifecycle separate from execution; adapt an explicitly
-  selected MCP tool through `ToolRegistry`, enrich effect metadata beyond the
-  current `ToolKind`, lazily advertise schemas, and fail closed on unknown effects.
+- **External-agent aliases.** Define a capability-negotiated marifold contract for session creation/attachment, prompts, semantic events, permission requests, cancellation, close, and result/artifact handoff. Use ACP v1 as one adapter when the first real external coding agent supports it; do not make ACP the internal run model or force external events into `AgentEvent` losslessly.
+- **MCP integration.** Add MCP only for a concrete App or Workflow. Keep server transport/auth/discovery/lifecycle separate from execution; adapt an explicitly selected MCP tool through `ToolRegistry`, enrich effect metadata beyond the current `ToolKind`, lazily advertise schemas, and fail closed on unknown effects.
 
 ### Research until a product trigger exists
 
-- **Recoverable execution checkpoints.** Keep conversation history, TaskStore
-  activity, live RunRegistry state, and execution recovery separate. Introduce a
-  versioned, execution-kind-specific checkpoint only when Workflow nodes,
-  external-agent reattachment, or measured interrupted native runs require it.
-- **Durable process sessions.** Preserve `shell_exec` as bounded foreground
-  execution. Design a service-owned process resource only when a Workflow,
-  external-agent CLI, or terminal App needs long-lived input/output. Require an
-  owning run/node, immutable capability snapshot, quotas, explicit close, cleanup,
-  and backend-specific restart guarantees.
-- **ACP v2 and remote transports.** Track the draft and HTTP/WebSocket transport
-  work, but keep the first adapter on stable local ACP v1 semantics.
+- **Recoverable execution checkpoints.** Keep conversation history, TaskStore activity, live RunRegistry state, and execution recovery separate. Introduce a versioned, execution-kind-specific checkpoint only when Workflow nodes, external-agent reattachment, or measured interrupted native runs require it.
+- **Durable process sessions.** Preserve `shell_exec` as bounded foreground execution. Design a service-owned process resource only when a Workflow, external-agent CLI, or terminal App needs long-lived input/output. Require an owning run/node, immutable capability snapshot, quotas, explicit close, cleanup, and backend-specific restart guarantees.
+- **ACP v2 and remote transports.** Track the draft and HTTP/WebSocket transport work, but keep the first adapter on stable local ACP v1 semantics.
 
 ### Non-goals
 
-- No Zig rewrite, binary-size program, Unix-shell-centered product, browser-local
-  full agent runtime, public embeddable marifold SDK, universal Agent Host callback
-  table, full durable subagent manager, or copied `fx` sandbox defaults.
+- No Zig rewrite, binary-size program, Unix-shell-centered product, browser-local full agent runtime, public embeddable marifold SDK, universal Agent Host callback table, full durable subagent manager, or copied `fx` sandbox defaults.
 
 ## Current Plan
 
@@ -167,16 +137,7 @@ SDK.
 - External-agent aliases: Codex and Claude Code wrappers, capability metadata, handoff summaries, result import, and write-conflict safeguards.
 - Subagent/delegation model: only after the basic agent loop is stable; use summary-only returns, clear ownership boundaries, and conservative write coordination.
 - Web UI: chat, sessions, profiles, memory inspection/editing, task-state inspection, streaming, cancellation, and local service connection management.
-- Apple clients (agreed architecture): build native SwiftUI renderers over a shared
-  `MarifoldClient` package that consumes the service HTTP/SSE contracts with
-  `URLSession`. The macOS app connects directly to the loopback service on its
-  host; iOS connects to the Mac mini through private Tailscale Serve HTTPS.
-  Keep profiles, memory, skills, sessions, tools, approvals, provider credentials,
-  and execution authoritative in the TypeScript service. Store remote bearer
-  credentials in Keychain, recover interrupted iOS streams by reloading durable
-  task/session state, and reserve PriestSwift for a later explicit offline/local
-  execution backend rather than running a second engine in ordinary connected
-  clients.
+- Apple clients (agreed architecture): build native SwiftUI renderers over a shared `MarifoldClient` package that consumes the service HTTP/SSE contracts with `URLSession`. The macOS app connects directly to the loopback service on its host; iOS connects to the Mac mini through private Tailscale Serve HTTPS. Keep profiles, memory, skills, sessions, tools, approvals, provider credentials, and execution authoritative in the TypeScript service. Store remote bearer credentials in Keychain, recover interrupted iOS streams by reloading durable task/session state, and reserve PriestSwift for a later explicit offline/local execution backend rather than running a second engine in ordinary connected clients.
 - App and workflow expansion: richer declarative components/actions, workflow composition, external-agent routing, and durable App/workflow history.
 - Testing and evaluation: service integration tests, cross-client contract tests, streaming smoke tests, adversarial memory tests, task-state regression tests, and broader provider-backed evals.
 - Operations and packaging: install/start/restart behavior, local daemon strategy, log rotation, migrations, diagnostics, crash recovery, and user-friendly troubleshooting.

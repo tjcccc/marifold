@@ -4,1246 +4,578 @@ Cross-session development log. Newest first. Keep entries short: what shipped, w
 
 ## 2026-10-09 — v0.80.0 — Session takeover, robustness, and code standards
 
-Release of the work since v0.79.2: session takeover between the owner's
-devices, send progress for slow uploads, robustness and workspace edge-case
-fixes, brace enforcement, and the service route split. Paired devices must
-both run 0.80.0.
+Release of the work since v0.79.2: session takeover between the owner's devices, send progress for slow uploads, robustness and workspace edge-case fixes, brace enforcement, and the service route split. Paired devices must both run 0.80.0.
 
 ### Session takeover and send progress
 
-- Move a session open on another of the owner's devices here: the Web UI shows
-  **Open here** under the "in use" notice, and the TUI accepts
-  `marifold --resume <id> --takeover` (and suggests it when a session is busy).
-  The lease route takes `{ "takeover": true }`, also through a workspace
-  bridge. The displaced client finds out at its next renewal. A service-hosted
-  task keeps running for the new owner and still saves its turn; a task inside
-  a displaced local terminal process is cancelled, since it cannot move.
-- Show that a message is on its way before its task starts: the Web UI shows
-  "Sending… (size)" where "Thinking…" will appear, and the TUI status reads
-  "Sending" until the first run event, so a large image uploading through a
-  bridge no longer looks unresponsive. No cancel while sending: an aborted
-  upload can still have created the run on the host.
-- Validation: full gate passes (1,089 tests, one existing skip); new tests fail
-  on the previous code. Real-terminal check: plain resume is refused while
-  another client holds the session, `--takeover` opens it with its transcript
-  and displaces that client, and `--takeover` without `--resume` is rejected.
-  Live OrbStack: a guest takes a host page's session over through the TLS
-  bridge; rejoin and 55-delegation checks still pass.
+- Move a session open on another of the owner's devices here: the Web UI shows **Open here** under the "in use" notice, and the TUI accepts `marifold --resume <id> --takeover` (and suggests it when a session is busy). The lease route takes `{ "takeover": true }`, also through a workspace bridge. The displaced client finds out at its next renewal. A service-hosted task keeps running for the new owner and still saves its turn; a task inside a displaced local terminal process is cancelled, since it cannot move.
+- Show that a message is on its way before its task starts: the Web UI shows "Sending… (size)" where "Thinking…" will appear, and the TUI status reads "Sending" until the first run event, so a large image uploading through a bridge no longer looks unresponsive. No cancel while sending: an aborted upload can still have created the run on the host.
+- Validation: full gate passes (1,089 tests, one existing skip); new tests fail on the previous code. Real-terminal check: plain resume is refused while another client holds the session, `--takeover` opens it with its transcript and displaces that client, and `--takeover` without `--resume` is rejected. Live OrbStack: a guest takes a host page's session over through the TLS bridge; rejoin and 55-delegation checks still pass.
 
 ### Service route modules
 
-- Split `packages/service/src/MarifoldService.ts` (1,253 → 362 lines) into
-  route modules beside the existing `RunRoutes`/`ProfileRoutes`/
-  `WorkspaceRoutes`: `ConfigRoutes` (config, providers, models),
-  `SkillAppRoutes` (skills, apps, app instances), `SessionRoutes`,
-  `ChatRoutes` (`/v1/ask`, `/v1/chat/stream`), `TaskRoutes`, and
-  `ServiceErrors`; profile read routes joined `ProfileRoutes`, and shared query
-  parsers moved to `Validation`. `MarifoldService` keeps service wiring, shared
-  session-request accounting, health, status, change revisions, and schedules.
-- Pure move: route bodies are byte-identical (checked with `git diff
-  --color-moved`); the Fastify route table with hooks is unchanged apart from
-  print order. Full gate passes (1,081 tests); live OrbStack rejoin and
-  55-delegation checks pass.
+- Split `packages/service/src/MarifoldService.ts` (1,253 → 362 lines) into route modules beside the existing `RunRoutes`/`ProfileRoutes`/ `WorkspaceRoutes`: `ConfigRoutes` (config, providers, models), `SkillAppRoutes` (skills, apps, app instances), `SessionRoutes`, `ChatRoutes` (`/v1/ask`, `/v1/chat/stream`), `TaskRoutes`, and `ServiceErrors`; profile read routes joined `ProfileRoutes`, and shared query parsers moved to `Validation`. `MarifoldService` keeps service wiring, shared session-request accounting, health, status, change revisions, and schedules.
+- Pure move: route bodies are byte-identical (checked with `git diff --color-moved`); the Fastify route table with hooks is unchanged apart from print order. Full gate passes (1,081 tests); live OrbStack rejoin and 55-delegation checks pass.
 
 ### Braces on every control-flow body
 
-- Require braces on every `if`/`else`/loop body, including single statements,
-  as the owner's coding standard. Biome 2.5.15 (pinned dev dependency, linter
-  only, single rule `useBlockStatements`; formatter and import sorting off)
-  enforces it through `pnpm lint`, now part of the `AGENTS.md` gate. Biome was
-  chosen over typescript-eslint because TypeScript 7 has no JavaScript parser
-  API.
-- Convert all existing bodies mechanically (282 source files; the generated `docs/design/support.js` is excluded). Biome's fix kept
-  short bodies inline (`if (done) { return; }`); spacing glitches it left on
-  42 multi-statement lines and 9 trailing-comment lines were normalized.
-- Validation: lint reports zero violations; full gate passes (1,081 tests,
-  one existing skip). Behavior is unchanged by construction.
+- Require braces on every `if`/`else`/loop body, including single statements, as the owner's coding standard. Biome 2.5.15 (pinned dev dependency, linter only, single rule `useBlockStatements`; formatter and import sorting off) enforces it through `pnpm lint`, now part of the `AGENTS.md` gate. Biome was chosen over typescript-eslint because TypeScript 7 has no JavaScript parser API.
+- Convert all existing bodies mechanically (282 source files; the generated `docs/design/support.js` is excluded). Biome's fix kept short bodies inline (`if (done) { return; }`); spacing glitches it left on 42 multi-statement lines and 9 trailing-comment lines were normalized.
+- Validation: lint reports zero violations; full gate passes (1,081 tests, one existing skip). Behavior is unchanged by construction.
 
 ### Robustness and workspace edge cases
 
-- Service errors keep their meaning: malformed, oversized, or unsupported
-  request bodies return their 4xx status instead of 500; host file paths in
-  system errors are shown only to clients on the same device. Bridge policy
-  refusals arrive as 403 (`HOST_ONLY_SETTING`, `WORKSPACE_FORBIDDEN`) and
-  workspace join refusals as 400/409, and a vanished artifact file is a 404.
-- `read_file` opens files non-blocking and refuses FIFOs, sockets, and devices,
-  so a named pipe can no longer hang the service; files over a few hundred KB
-  are read only for the head and tail the tool keeps.
-- One unreadable schedule file or invalid cron no longer stops every schedule;
-  invalid files are reported once and skipped, and a schedule removed during a
-  tick no longer aborts the others.
-- `config.toml` is replaced atomically (temp file plus rename, keeping its mode
-  and any symlink), so a service re-reading it never sees a truncated file.
-- An OAuth refresh that rotates tokens is kept when the same provider was
-  edited meanwhile (for example its proxy); only a concurrent sign-in wins.
-  The deliberate v0.53.1 transport retry of xAI refresh is unchanged.
-- Workspace edge cases: removing a hosted workspace keeps downloads of runs that
-  executed on this device; a fresh invitation replaces a saved pairing only
-  after the bridge refused it (revoked or removed), never during an offline
-  host, reconnect, or version mismatch; a revoked guest cancels the host's work
-  on it at once instead of when its lease expires; forwarded bridge responses
-  carry `nosniff` and a sandbox CSP.
-- TUI: `[image #n]` numbers only the images dropped into the prompt; `/image`
-  attachments no longer shift them or get dropped from the turn.
-- Device execution: on Linux, `sudo_exec` jobs enforce the 10-minute limit as
-  root through coreutils `timeout` (an unprivileged worker cannot stop a root
-  command, and sudo does not relay signals here); timed-out jobs report the
-  limit instead of hanging as running. Scoped `shell_exec` runs in its own
-  process group: background processes it leaves are stopped two seconds after
-  it exits (previously they ran on and the call waited for its full timeout),
-  and a timeout or cancellation stops the whole group. Durable job records
-  older than a week and expired session-lease rows are pruned.
-- Not changed, by design: deleting a typed `[image #N]` tag in the Web composer
-  removes that attachment (v0.79.0 behavior); generated run outputs are kept
-  for downloads; the sudo key exchange is not target-signed, because a host
-  that issues membership certificates could also forge a target identity.
-- Fix intermittent TUI picker tests: they pressed Enter after the picker was
-  drawn but before it subscribed to input. They now wait for the frame, yield
-  once, then select; 12 of 12 suite runs pass under three-way concurrent load
-  (previously 3 of 9 failed).
-- Validation: full gate passes (1,081 tests, one existing skip); each new test
-  fails on the previous code except the FIFO case, which blocks the old test
-  worker outright. Live OrbStack: a root `sleep 120` stops at a 3-second test
-  limit with exit 124; an offline host keeps a valid pairing and a revoked
-  guest rejoins with a fresh invitation (~10 s); 55 delegations complete.
+- Service errors keep their meaning: malformed, oversized, or unsupported request bodies return their 4xx status instead of 500; host file paths in system errors are shown only to clients on the same device. Bridge policy refusals arrive as 403 (`HOST_ONLY_SETTING`, `WORKSPACE_FORBIDDEN`) and workspace join refusals as 400/409, and a vanished artifact file is a 404.
+- `read_file` opens files non-blocking and refuses FIFOs, sockets, and devices, so a named pipe can no longer hang the service; files over a few hundred KB are read only for the head and tail the tool keeps.
+- One unreadable schedule file or invalid cron no longer stops every schedule; invalid files are reported once and skipped, and a schedule removed during a tick no longer aborts the others.
+- `config.toml` is replaced atomically (temp file plus rename, keeping its mode and any symlink), so a service re-reading it never sees a truncated file.
+- An OAuth refresh that rotates tokens is kept when the same provider was edited meanwhile (for example its proxy); only a concurrent sign-in wins. The deliberate v0.53.1 transport retry of xAI refresh is unchanged.
+- Workspace edge cases: removing a hosted workspace keeps downloads of runs that executed on this device; a fresh invitation replaces a saved pairing only after the bridge refused it (revoked or removed), never during an offline host, reconnect, or version mismatch; a revoked guest cancels the host's work on it at once instead of when its lease expires; forwarded bridge responses carry `nosniff` and a sandbox CSP.
+- TUI: `[image #n]` numbers only the images dropped into the prompt; `/image` attachments no longer shift them or get dropped from the turn.
+- Device execution: on Linux, `sudo_exec` jobs enforce the 10-minute limit as root through coreutils `timeout` (an unprivileged worker cannot stop a root command, and sudo does not relay signals here); timed-out jobs report the limit instead of hanging as running. Scoped `shell_exec` runs in its own process group: background processes it leaves are stopped two seconds after it exits (previously they ran on and the call waited for its full timeout), and a timeout or cancellation stops the whole group. Durable job records older than a week and expired session-lease rows are pruned.
+- Not changed, by design: deleting a typed `[image #N]` tag in the Web composer removes that attachment (v0.79.0 behavior); generated run outputs are kept for downloads; the sudo key exchange is not target-signed, because a host that issues membership certificates could also forge a target identity.
+- Fix intermittent TUI picker tests: they pressed Enter after the picker was drawn but before it subscribed to input. They now wait for the frame, yield once, then select; 12 of 12 suite runs pass under three-way concurrent load (previously 3 of 9 failed).
+- Validation: full gate passes (1,081 tests, one existing skip); each new test fails on the previous code except the FIFO case, which blocks the old test worker outright. Live OrbStack: a root `sleep 120` stops at a 3-second test limit with exit 124; an offline host keeps a valid pairing and a revoked guest rejoins with a fresh invitation (~10 s); 55 delegations complete.
 
 ## 2026-10-08 — v0.79.2 — Security and workspace hardening
 
-- Release a guest executor's capacity slot when a run finishes. Each finished
-  run previously held one of 50 slots for 24 hours, so a guest refused every
-  delegation after 50 runs a day ("Execution capacity reached") until restart.
-  Reproduced live on the OrbStack guest (run 51 failed); after the fix, 55
-  consecutive delegations complete.
-- Assess file tool paths at their real destination. A dangling symlink inside
-  the working folder no longer passes as a new in-folder file while the write
-  creates its target elsewhere. Approvals report the destination, so trusting
-  a folder never applies to a link's location.
-- Persist a trusted folder before trusting it for the run or Telegram bridge.
-  The profile layer's refusal of broad folders (now compared by real path, so
-  a symlink to home counts as home) can no longer leave home trusted in memory.
-  A refused Web/TUI trust keeps the approval open; Telegram allows the call once.
-- Keep provider endpoints and credential references on the host. Paired
-  devices can no longer add, reconfigure, or remove providers, or set a model's
-  server URL or key variable. A query string no longer bypasses the host-only
-  `PATCH /v1/config` key filter (previously any key could be set this way).
-- Make session reservation tolerate real networks. A running task now holds
-  its session until it ends, so closing the starting tab no longer lets another
-  client take the session and lose the finished turn. Web and TUI clients end a
-  session only on `SESSION_BUSY`; a network drop or service restart retries
-  instead of cancelling the remote run or clearing the Web thread. Web renews
-  when a tab becomes visible again. The remote TUI now waits up to 1.5 seconds
-  for in-flight lease releases before exiting; against a local service the
-  release already completed in a real-terminal check, so this only guards
-  slower connections.
-- Real-terminal (pty) checks with an isolated HOME: fullscreen and inline TUI
-  launch, resize redraw, Ctrl+C and SIGTERM exits restore terminal modes; a
-  service-connected TUI holds its session while open (409 for another client)
-  and frees it immediately on quit.
-- Keep terminal control sequences in model, tool, and remote output inert. The
-  CLI (`agent`, `ask`, `chat`, errors, approval prompts) strips every escape and
-  control character except tab and newline, so output cannot move the cursor
-  over an approval prompt, retitle the window, or write the clipboard. Ink 8
-  already drops cursor movement and most OSC from TUI text but keeps OSC 8
-  hyperlinks (visible text that opens another URL); the TUI now filters
-  device-control strings from every frame.
-- Refuse SkillApp read permissions on sensitive account data (`~/.ssh`,
-  `~/.gnupg`, `~/Library/Keychains`) and folders containing it. SkillApp reads
-  are auto-approved, while ordinary runs approve these paths one access at a
-  time. An existing App declaring such a path now fails to load with that reason.
-- Scope durable device jobs to the workspace that started them. A device that
-  joined several workspaces no longer lists or returns one workspace's
-  full-access or `sudo_exec` job output to another; its own runs still see all.
-- Validation: full workspace typecheck and build; 1,067 tests pass with the one
-  existing skip, each new regression test failing on the previous code. Live
-  OrbStack: 55 consecutive delegations through the bridge complete on the
-  updated guest. The full-access OrbStack harness was not rerun (its test
-  Tailscale service is stopped); the job-scope change is covered by the built
-  device worker in unit tests.
-- Synchronize versions to 0.79.2; rebuild from clean output, and verify every
-  packed package version and the packed CLI version. Paired devices must both
-  run 0.79.2.
+- Release a guest executor's capacity slot when a run finishes. Each finished run previously held one of 50 slots for 24 hours, so a guest refused every delegation after 50 runs a day ("Execution capacity reached") until restart. Reproduced live on the OrbStack guest (run 51 failed); after the fix, 55 consecutive delegations complete.
+- Assess file tool paths at their real destination. A dangling symlink inside the working folder no longer passes as a new in-folder file while the write creates its target elsewhere. Approvals report the destination, so trusting a folder never applies to a link's location.
+- Persist a trusted folder before trusting it for the run or Telegram bridge. The profile layer's refusal of broad folders (now compared by real path, so a symlink to home counts as home) can no longer leave home trusted in memory. A refused Web/TUI trust keeps the approval open; Telegram allows the call once.
+- Keep provider endpoints and credential references on the host. Paired devices can no longer add, reconfigure, or remove providers, or set a model's server URL or key variable. A query string no longer bypasses the host-only `PATCH /v1/config` key filter (previously any key could be set this way).
+- Make session reservation tolerate real networks. A running task now holds its session until it ends, so closing the starting tab no longer lets another client take the session and lose the finished turn. Web and TUI clients end a session only on `SESSION_BUSY`; a network drop or service restart retries instead of cancelling the remote run or clearing the Web thread. Web renews when a tab becomes visible again. The remote TUI now waits up to 1.5 seconds for in-flight lease releases before exiting; against a local service the release already completed in a real-terminal check, so this only guards slower connections.
+- Real-terminal (pty) checks with an isolated HOME: fullscreen and inline TUI launch, resize redraw, Ctrl+C and SIGTERM exits restore terminal modes; a service-connected TUI holds its session while open (409 for another client) and frees it immediately on quit.
+- Keep terminal control sequences in model, tool, and remote output inert. The CLI (`agent`, `ask`, `chat`, errors, approval prompts) strips every escape and control character except tab and newline, so output cannot move the cursor over an approval prompt, retitle the window, or write the clipboard. Ink 8 already drops cursor movement and most OSC from TUI text but keeps OSC 8 hyperlinks (visible text that opens another URL); the TUI now filters device-control strings from every frame.
+- Refuse SkillApp read permissions on sensitive account data (`~/.ssh`, `~/.gnupg`, `~/Library/Keychains`) and folders containing it. SkillApp reads are auto-approved, while ordinary runs approve these paths one access at a time. An existing App declaring such a path now fails to load with that reason.
+- Scope durable device jobs to the workspace that started them. A device that joined several workspaces no longer lists or returns one workspace's full-access or `sudo_exec` job output to another; its own runs still see all.
+- Validation: full workspace typecheck and build; 1,067 tests pass with the one existing skip, each new regression test failing on the previous code. Live OrbStack: 55 consecutive delegations through the bridge complete on the updated guest. The full-access OrbStack harness was not rerun (its test Tailscale service is stopped); the job-scope change is covered by the built device worker in unit tests.
+- Synchronize versions to 0.79.2; rebuild from clean output, and verify every packed package version and the packed CLI version. Paired devices must both run 0.79.2.
 
 ## 2026-10-06 — v0.79.1 — Connected workspace sessions and rejoining
 
-- Preserve the client session owner through workspace API forwarding and host
-  injection, fixing session opening failures on connected devices while keeping
-  ownership renewal, competing-client rejection, and owner-only release intact.
-- Allow a fresh invitation from the pinned host to replace an unavailable guest
-  pairing without deleting its workspace entry or startup default. Active pairings
-  and locally hosted workspaces remain protected from replacement.
-- Add Web rejoining with the saved bridge URL and executor preference. Revoking
-  the current device clears its active connection and opens the invitation form;
-  revoking another device keeps the current connection.
-- Verify targeted session forwarding, workspace bridge, and Web popover tests.
-  Live OrbStack checks cover session opening, self-revoke, fresh-invitation rejoin,
-  and transcript reads afterward. User confirmed the mock Web workspace works.
-- Synchronize versions to 0.79.1; clean workspace build and typecheck pass. The
-  full suite passes 1,049 tests with one existing skip. All six packed packages
-  and the packed CLI version match the release.
+- Preserve the client session owner through workspace API forwarding and host injection, fixing session opening failures on connected devices while keeping ownership renewal, competing-client rejection, and owner-only release intact.
+- Allow a fresh invitation from the pinned host to replace an unavailable guest pairing without deleting its workspace entry or startup default. Active pairings and locally hosted workspaces remain protected from replacement.
+- Add Web rejoining with the saved bridge URL and executor preference. Revoking the current device clears its active connection and opens the invitation form; revoking another device keeps the current connection.
+- Verify targeted session forwarding, workspace bridge, and Web popover tests. Live OrbStack checks cover session opening, self-revoke, fresh-invitation rejoin, and transcript reads afterward. User confirmed the mock Web workspace works.
+- Synchronize versions to 0.79.1; clean workspace build and typecheck pass. The full suite passes 1,049 tests with one existing skip. All six packed packages and the packed CLI version match the release.
 
 ## Unreleased — pnpm 12 workspace tooling
 
-- Pin pnpm 12.9.1 in the root package manager field for every workspace package
-  and document Corepack setup. Retain existing application dependency resolutions;
-  pnpm adds its own package-manager metadata to the lockfile.
-- Verify root and package-directory version selection, frozen-lockfile install,
-  synchronized package versions, workspace typechecks, and workspace build.
-  No application tests rerun for this tooling-only change.
+- Pin pnpm 12.9.1 in the root package manager field for every workspace package and document Corepack setup. Retain existing application dependency resolutions; pnpm adds its own package-manager metadata to the lockfile.
+- Verify root and package-directory version selection, frozen-lockfile install, synchronized package versions, workspace typechecks, and workspace build. No application tests rerun for this tooling-only change.
 
 ## 2026-10-05 — v0.79.0 — Exclusive sessions and composer token editing
 
-- Reserve open sessions across Web pages, local TUI processes, and remote TUI
-  clients. Block a second client with a session-in-use message; renew ownership
-  every 15 seconds and recover abandoned claims after 60 seconds.
-- Delete complete `$skill`, `/command`, and `[image #N]` tokens with Backspace
-  at their end in both composers, preserving ordinary text and IME editing.
-  Removing an image tag also removes its attachment and renumbers later tags.
-- Load only the images still referenced by edited or recalled TUI prompts and
-  normalize their display tags, avoiding failures from unused older image paths.
-- Reused the passing workspace suite (1,041 tests, one existing skip) and subsequent
-  targeted TUI checks (18 tests) for the final attachment changes. Verified the
-  synchronized release versions, clean workspace build, and packed CLI version.
+- Reserve open sessions across Web pages, local TUI processes, and remote TUI clients. Block a second client with a session-in-use message; renew ownership every 15 seconds and recover abandoned claims after 60 seconds.
+- Delete complete `$skill`, `/command`, and `[image #N]` tokens with Backspace at their end in both composers, preserving ordinary text and IME editing. Removing an image tag also removes its attachment and renumbers later tags.
+- Load only the images still referenced by edited or recalled TUI prompts and normalize their display tags, avoiding failures from unused older image paths.
+- Reused the passing workspace suite (1,041 tests, one existing skip) and subsequent targeted TUI checks (18 tests) for the final attachment changes. Verified the synchronized release versions, clean workspace build, and packed CLI version.
 
 ## 2026-10-05 — v0.78.2 — TUI prompt history and completed run details
 
-- Complete and highlight whitespace-delimited `$skill` and `/command` tokens at
-  the cursor, including inline tokens and later input lines, preserving arguments.
-- Keep local image uploads as original absolute paths in session attachment
-  records rather than encoded bytes. Preserve exact prompt/image associations
-  during recall; missing image references require reattachment instead of guessing
-  another session image. Existing embedded and Web uploads remain readable.
-- Keep host paths out of service transcripts and serve validated local images
-  through the authenticated image route; moved/deleted sources return 404.
-- Collapse reasoning summaries and intermediate progress text when runs end;
-  Ctrl+O reveals completed details. Keep final answers, tool results, and errors
-  visible. Add a blank row above the transcript history hint.
-- Verify local-path persistence, distinct-image recall after restart, missing-file
-  delivery, completion parsing, and live/collapsed reasoning in both TUI layouts.
-  User accepted hint spacing; no visual tests for that presentation-only change.
+- Complete and highlight whitespace-delimited `$skill` and `/command` tokens at the cursor, including inline tokens and later input lines, preserving arguments.
+- Keep local image uploads as original absolute paths in session attachment records rather than encoded bytes. Preserve exact prompt/image associations during recall; missing image references require reattachment instead of guessing another session image. Existing embedded and Web uploads remain readable.
+- Keep host paths out of service transcripts and serve validated local images through the authenticated image route; moved/deleted sources return 404.
+- Collapse reasoning summaries and intermediate progress text when runs end; Ctrl+O reveals completed details. Keep final answers, tool results, and errors visible. Add a blank row above the transcript history hint.
+- Verify local-path persistence, distinct-image recall after restart, missing-file delivery, completion parsing, and live/collapsed reasoning in both TUI layouts. User accepted hint spacing; no visual tests for that presentation-only change.
 
 ## 2026-10-05 — v0.78.1 — TUI selection, resume, and resize fixes
 
-- Keep dropped images with recalled prompts and unfinished drafts. Both startup
-  resume and the session picker restore saved user prompts; retained images load
-  lazily on resubmission through local storage or authenticated workspace routes.
-  Missing saved images fail explicitly instead of sending only placeholders.
-- Add composer drag selection and copy-on-release with shared `Copied` feedback.
-  Preserve blank transcript rows while selecting and exclude the left padding
-  from highlighting. Join visual wraps when copying while retaining explicit
-  newlines, paragraph breaks, and code lines.
-- Redraw the alternate screen after width/height resize bursts, preserving drafts
-  and clearing stale rows and borders. Use lighter grey submitted-prompt borders
-  (`#999999`) and preserve the Web Settings version tag's lowercase `v`.
-- User confirmed transcript selection padding and spacing fixes. Reuse focused
-  development regressions and unchanged-package tests. All 101 TUI tests and
-  workspace typecheck pass; verify synchronized 0.78.1 versions, a clean build,
-  all six packed package versions, and the packed CLI version.
+- Keep dropped images with recalled prompts and unfinished drafts. Both startup resume and the session picker restore saved user prompts; retained images load lazily on resubmission through local storage or authenticated workspace routes. Missing saved images fail explicitly instead of sending only placeholders.
+- Add composer drag selection and copy-on-release with shared `Copied` feedback. Preserve blank transcript rows while selecting and exclude the left padding from highlighting. Join visual wraps when copying while retaining explicit newlines, paragraph breaks, and code lines.
+- Redraw the alternate screen after width/height resize bursts, preserving drafts and clearing stale rows and borders. Use lighter grey submitted-prompt borders (`#999999`) and preserve the Web Settings version tag's lowercase `v`.
+- User confirmed transcript selection padding and spacing fixes. Reuse focused development regressions and unchanged-package tests. All 101 TUI tests and workspace typecheck pass; verify synchronized 0.78.1 versions, a clean build, all six packed package versions, and the packed CLI version.
 
 ## 2026-10-05 — v0.78.0 — Full-screen TUI
 
-- Upgrade the TUI to stable Ink 8.0.0 / React 19.3.0 with matching React types;
-  use Ink's terminal-size hook and preserve modified Enter through the input boundary.
-- Default to full-screen with configurable `[tui] fullscreen`; explicit launch
-  flags override environment preferences and config. `--no-fullscreen` retains
-  inline scrollback for both local and service-connected workspaces. Preserve
-  TUI preferences across config rewrites and support `config get/set tui.fullscreen`.
-- Keep the composer pinned beneath a bounded, cached transcript viewport. Add
-  wheel/page scrolling, paused history following, mouse caret placement, and
-  drag selection with copy on release and stable text during streaming.
-- Align history hints with the transcript, show `Copied` at the right edge,
-  and remove fenced code block borders.
-- Add Option/Alt word movement and backward word deletion, with Ctrl-arrow
-  and readline Alt+B/Alt+F support and Unicode word boundaries.
-- Use grapheme/cell-aware input editing and wrapping; preserve literal bracketed
-  pastes and restore terminal modes on normal exit, SIGTERM, and SIGHUP.
-- Local selection copying uses platform utilities; SSH/fallback copying uses
-  terminal-controlled OSC 52. Real terminal clipboard acceptance remains user-dependent.
-- Verify workspace typecheck/build and all package tests (86 TUI tests); peer
-  and synchronized-version checks pass. PTY checks cover mouse drag/copy, click
-  editing, submission, normal exit, SIGTERM/SIGHUP cleanup, and inline override.
-- Synchronize versions to 0.78.0, rebuild from clean output, and verify all six
-  packed package versions and the packed CLI version.
+- Upgrade the TUI to stable Ink 8.0.0 / React 19.3.0 with matching React types; use Ink's terminal-size hook and preserve modified Enter through the input boundary.
+- Default to full-screen with configurable `[tui] fullscreen`; explicit launch flags override environment preferences and config. `--no-fullscreen` retains inline scrollback for both local and service-connected workspaces. Preserve TUI preferences across config rewrites and support `config get/set tui.fullscreen`.
+- Keep the composer pinned beneath a bounded, cached transcript viewport. Add wheel/page scrolling, paused history following, mouse caret placement, and drag selection with copy on release and stable text during streaming.
+- Align history hints with the transcript, show `Copied` at the right edge, and remove fenced code block borders.
+- Add Option/Alt word movement and backward word deletion, with Ctrl-arrow and readline Alt+B/Alt+F support and Unicode word boundaries.
+- Use grapheme/cell-aware input editing and wrapping; preserve literal bracketed pastes and restore terminal modes on normal exit, SIGTERM, and SIGHUP.
+- Local selection copying uses platform utilities; SSH/fallback copying uses terminal-controlled OSC 52. Real terminal clipboard acceptance remains user-dependent.
+- Verify workspace typecheck/build and all package tests (86 TUI tests); peer and synchronized-version checks pass. PTY checks cover mouse drag/copy, click editing, submission, normal exit, SIGTERM/SIGHUP cleanup, and inline override.
+- Synchronize versions to 0.78.0, rebuild from clean output, and verify all six packed package versions and the packed CLI version.
 
 ## 2026-09-29 — v0.77.3 — Live OAuth credential reload
 
-- Reload saved xAI, ChatGPT, and Copilot credentials before provider requests so
-  CLI reauthentication takes effect in running services and TUIs.
-- Serialize refreshes within a process and preserve concurrent reauthentication
-  and unrelated saved config changes. Separate processes/devices still need
-  independent rotating credentials.
-- Add six regressions for live xAI reauthentication, concurrent refreshes,
-  in-flight sign-in replacement, config preservation, and failure recovery.
+- Reload saved xAI, ChatGPT, and Copilot credentials before provider requests so CLI reauthentication takes effect in running services and TUIs.
+- Serialize refreshes within a process and preserve concurrent reauthentication and unrelated saved config changes. Separate processes/devices still need independent rotating credentials.
+- Add six regressions for live xAI reauthentication, concurrent refreshes, in-flight sign-in replacement, config preservation, and failure recovery.
 - User confirmed xAI works after reauthentication and service restart.
-- Reuse passing workspace build/typecheck, 506 core tests, 263 Web tests,
-  65 TUI tests, and 35 CLI tests. The full suite retains one service artifact
-  streaming failure outside the OAuth path; nine tests were skipped.
-- Synchronize versions to 0.77.3 and verify a clean release build, package
-  versions, and the packed CLI version. Live xAI refresh remains unverified.
+- Reuse passing workspace build/typecheck, 506 core tests, 263 Web tests, 65 TUI tests, and 35 CLI tests. The full suite retains one service artifact streaming failure outside the OAuth path; nine tests were skipped.
+- Synchronize versions to 0.77.3 and verify a clean release build, package versions, and the packed CLI version. Live xAI refresh remains unverified.
 
 ## 2026-09-29 — v0.77.2 — Inline composer completion
 
-- Complete `/`, `$`, and `@` tokens at the cursor anywhere after whitespace,
-  preserving text before/after the token and highlighting inline selections.
-- Route inline device mentions before execution and reject multiple targets.
-  Inline command/skill references remain prompt text; direct invocation stays
-  at the beginning of the message. Preserve email and path handling.
-- Cover the three reported examples, caret placement, inline device routing,
-  conflicting targets, and ordinary email/path text.
-- Reuse passing typecheck/build and 963 tests (one optional bridge test skipped).
-  Verify synchronized 0.77.2 versions, a clean rebuild, all six packed packages,
-  and the packed CLI version.
-- User confirmed Home-to-MacBook Pro sudo execution, Tailscale restart, and
-  closing WeChat on the guest.
+- Complete `/`, `$`, and `@` tokens at the cursor anywhere after whitespace, preserving text before/after the token and highlighting inline selections.
+- Route inline device mentions before execution and reject multiple targets. Inline command/skill references remain prompt text; direct invocation stays at the beginning of the message. Preserve email and path handling.
+- Cover the three reported examples, caret placement, inline device routing, conflicting targets, and ordinary email/path text.
+- Reuse passing typecheck/build and 963 tests (one optional bridge test skipped). Verify synchronized 0.77.2 versions, a clean rebuild, all six packed packages, and the packed CLI version.
+- User confirmed Home-to-MacBook Pro sudo execution, Tailscale restart, and closing WeChat on the guest.
 
 ## 2026-09-29 — v0.77.1 — Web sudo approval fixes
 
-- Mark the masked sudo field as one-time entry to discourage Chrome login
-  saving; clarify that Marifold's no-storage promise does not control browser
-  password managers. Browser acceptance remains a manual check.
-- Preserve the encrypted sudo response through AgentScreen's approval callback.
-  The screen previously dropped it, so the service rejected correct password
-  entry as missing encrypted authorization.
-- Add a full-screen regression covering password entry through the approval API
-  body and successful target-side decryption, without exposing plaintext.
-- Reuse passing development typecheck/build, 259 Web tests, and the three
-  focused sudo tests after the autocomplete change. Verify synchronized 0.77.1
-  versions, a clean rebuild, all six packed packages, and the packed CLI version.
+- Mark the masked sudo field as one-time entry to discourage Chrome login saving; clarify that Marifold's no-storage promise does not control browser password managers. Browser acceptance remains a manual check.
+- Preserve the encrypted sudo response through AgentScreen's approval callback. The screen previously dropped it, so the service rejected correct password entry as missing encrypted authorization.
+- Add a full-screen regression covering password entry through the approval API body and successful target-side decryption, without exposing plaintext.
+- Reuse passing development typecheck/build, 259 Web tests, and the three focused sudo tests after the autocomplete change. Verify synchronized 0.77.1 versions, a clean rebuild, all six packed packages, and the packed CLI version.
 
 ## 2026-09-29 — v0.77.0 — Device mentions and requester-side sudo
 
-- Add leading `@device` completion to the Web composer using live workspace
-  device discovery, with keyboard selection and existing token highlighting.
-- Resolve mentions on the host before execution; keep targets per-message and
-  fail closed for unknown, ambiguous, offline, or disabled devices.
-- Cover routing/default precedence, quoted names, invalid targets, bridge device
-  discovery, and completion that preserves existing task text.
-- Add general `sudo_exec` with a fresh, command-bound encrypted password prompt
-  on the requesting Web UI/TUI/CLI; target full access and OS sudo policy remain
-  required.
-- Carry encrypted responses outside model/tool inputs and event replay; keep
-  target keys transient and pass decrypted credentials only through private
-  process pipes. Ignore sudo's cached authentication and never persist passwords.
-- Verify encrypted bridge flow in all three directions, credential expiry/replay
-  rejection, masked UI input, and real Linux sudo success/failure in OrbStack.
-  Native macOS sudo acceptance remains a real-device test.
-- Pass workspace typecheck/build and 957 tests (one optional bridge test skipped).
-  Synchronize release versions to 0.77.0; refresh the unchanged lockfile, rebuild
-  from clean output, and verify all six packed packages and packed CLI version.
+- Add leading `@device` completion to the Web composer using live workspace device discovery, with keyboard selection and existing token highlighting.
+- Resolve mentions on the host before execution; keep targets per-message and fail closed for unknown, ambiguous, offline, or disabled devices.
+- Cover routing/default precedence, quoted names, invalid targets, bridge device discovery, and completion that preserves existing task text.
+- Add general `sudo_exec` with a fresh, command-bound encrypted password prompt on the requesting Web UI/TUI/CLI; target full access and OS sudo policy remain required.
+- Carry encrypted responses outside model/tool inputs and event replay; keep target keys transient and pass decrypted credentials only through private process pipes. Ignore sudo's cached authentication and never persist passwords.
+- Verify encrypted bridge flow in all three directions, credential expiry/replay rejection, masked UI input, and real Linux sudo success/failure in OrbStack. Native macOS sudo acceptance remains a real-device test.
+- Pass workspace typecheck/build and 957 tests (one optional bridge test skipped). Synchronize release versions to 0.77.0; refresh the unchanged lockfile, rebuild from clean output, and verify all six packed packages and packed CLI version.
 
 ## 2026-09-29 — v0.76.0 — Device-local full execution
 
-- Add local `execution mode scoped|full` opt-in, shared local/remote
-  `shell_exec access=full`, per-call approval, and OS-account execution on macOS
-  and Linux. The default scoped sandbox remains unchanged.
-- Persist detached shell jobs and expose `shell_job_status` / `execution jobs`
-  so bridge loss and run cancellation do not interrupt recovery commands.
-- Add an optional standalone macOS Tailscale preflight/restart workflow using
-  existing OS permissions, with bounded startup recovery and separate restart
-  and VPN readiness results. No administrator permissions are installed.
-- Document MacBook Pro setup and real-device testing in `docs/device-execution.md`.
-  Real macOS Tailscale restart remains unverified.
-- Pass workspace typecheck/build and 941 tests (one optional bridge test
-  skipped), including bidirectional full-access bridge tests. In disposable OrbStack Linux, Marifold jobs restart a real test Tailscale
-  daemon, report injected startup failure, and recover it; tunnel checks verify
-  failure and recovery. A full-access job also completes across a forced bridge
-  socket disconnect, followed by successful bridge execution. No personal tailnet
-  or real Mac VPN was stopped.
-- Synchronize manifests and CLI to 0.76.0; refresh the unchanged lockfile. Reuse
-  the full development suite, pass a clean build/typecheck and five bridge/version
-  tests, and verify six package versions plus the packed CLI version.
+- Add local `execution mode scoped|full` opt-in, shared local/remote `shell_exec access=full`, per-call approval, and OS-account execution on macOS and Linux. The default scoped sandbox remains unchanged.
+- Persist detached shell jobs and expose `shell_job_status` / `execution jobs` so bridge loss and run cancellation do not interrupt recovery commands.
+- Add an optional standalone macOS Tailscale preflight/restart workflow using existing OS permissions, with bounded startup recovery and separate restart and VPN readiness results. No administrator permissions are installed.
+- Document MacBook Pro setup and real-device testing in `docs/device-execution.md`. Real macOS Tailscale restart remains unverified.
+- Pass workspace typecheck/build and 941 tests (one optional bridge test skipped), including bidirectional full-access bridge tests. In disposable OrbStack Linux, Marifold jobs restart a real test Tailscale daemon, report injected startup failure, and recover it; tunnel checks verify failure and recovery. A full-access job also completes across a forced bridge socket disconnect, followed by successful bridge execution. No personal tailnet or real Mac VPN was stopped.
+- Synchronize manifests and CLI to 0.76.0; refresh the unchanged lockfile. Reuse the full development suite, pass a clean build/typecheck and five bridge/version tests, and verify six package versions plus the packed CLI version.
 
 ## 2026-09-28 — v0.75.1 — Local Home device delegation
 
-- Attach local service agent runs to this device's hosted workspace so Home
-  conversations receive `list_devices` and `delegate_device`, including with
-  Local as the startup default. Joined workspaces remain explicitly selected.
-- Explain bridge-based execution and its permission limits to the model; retain
-  guest executor opt-in, once-only approvals and scoped filesystem/shell access.
-- Pass workspace typecheck/build and 928 tests (one optional bridge test skipped),
-  including Home-to-guest and guest-to-Home delegation, forwarded approvals,
-  execution-device identities and artifact downloads.
-- Verify real HTTP/WebSocket transport and macOS shell execution with a local
-  mocked model. A disposable OrbStack Linux guest additionally passes file
-  execution while its real Tailscale tunnel is stopped or fails to start, tunnel
-  recovery and guest-service reconnection through a local HTTPS bridge.
-- Test controls perform daemon management outside Marifold. Linux shell execution
-  remains fail-closed; privileged service management and a real-device macOS
-  Tailscale restart remain unimplemented/unverified.
-- Synchronize all workspace/CLI versions to 0.75.1, refresh the lockfile
-  (unchanged), and pass typecheck plus a clean build. Reuse the full development
-  suite and rerun five bridge/version tests; verify all six package tarballs,
-  internal package dependencies and the packed CLI version.
+- Attach local service agent runs to this device's hosted workspace so Home conversations receive `list_devices` and `delegate_device`, including with Local as the startup default. Joined workspaces remain explicitly selected.
+- Explain bridge-based execution and its permission limits to the model; retain guest executor opt-in, once-only approvals and scoped filesystem/shell access.
+- Pass workspace typecheck/build and 928 tests (one optional bridge test skipped), including Home-to-guest and guest-to-Home delegation, forwarded approvals, execution-device identities and artifact downloads.
+- Verify real HTTP/WebSocket transport and macOS shell execution with a local mocked model. A disposable OrbStack Linux guest additionally passes file execution while its real Tailscale tunnel is stopped or fails to start, tunnel recovery and guest-service reconnection through a local HTTPS bridge.
+- Test controls perform daemon management outside Marifold. Linux shell execution remains fail-closed; privileged service management and a real-device macOS Tailscale restart remain unimplemented/unverified.
+- Synchronize all workspace/CLI versions to 0.75.1, refresh the lockfile (unchanged), and pass typecheck plus a clean build. Reuse the full development suite and rerun five bridge/version tests; verify all six package tarballs, internal package dependencies and the packed CLI version.
 
 ## 2026-09-23 — v0.75.0 — Model identity and workspace compatibility
 
-- Show the release version beside Settings in the Web sidebar. Reject guest
-  workspace pairing and requests when host and guest releases differ; warn on
-  existing mismatches and check guest version before delegated execution.
-- Refresh expiring xAI OAuth credentials before live model listing through the
-  configured proxy. Distinguish live results from registry suggestions, surface
-  listing errors, and include Grok 4.7 as a fallback suggestion.
-- Give chat and agent turns the resolved provider and requested model in their
-  ephemeral environment context, including planning; keep client hints from
-  supplying model identity.
-- Clean-build all packages, then pass workspace typecheck and 927 tests (one
-  optional bridge test skipped). Confirm all six public package tarballs and
-  the packed CLI report 0.75.0; the refreshed lockfile is unchanged.
+- Show the release version beside Settings in the Web sidebar. Reject guest workspace pairing and requests when host and guest releases differ; warn on existing mismatches and check guest version before delegated execution.
+- Refresh expiring xAI OAuth credentials before live model listing through the configured proxy. Distinguish live results from registry suggestions, surface listing errors, and include Grok 4.7 as a fallback suggestion.
+- Give chat and agent turns the resolved provider and requested model in their ephemeral environment context, including planning; keep client hints from supplying model identity.
+- Clean-build all packages, then pass workspace typecheck and 927 tests (one optional bridge test skipped). Confirm all six public package tarballs and the packed CLI report 0.75.0; the refreshed lockfile is unchanged.
 
 ## 2026-09-21 — v0.74.3 — Workspace image handoff and UI feedback
 
-- Synchronize all workspace/CLI versions, refresh the lockfile (unchanged), and
-  rebuild clean output. Reuse passing full-suite and subsequent Web validation.
+- Synchronize all workspace/CLI versions, refresh the lockfile (unchanged), and rebuild clean output. Reuse passing full-suite and subsequent Web validation.
 
 ### Download feedback and taller composer
 
-- Animate the file download icon while preparing access, then show a check and
-  “Download started” after handing the download to the browser. Respect reduced
-  motion and preserve error/retry handling.
-- Increase the composer minimum to two text lines on desktop and mobile while
-  retaining automatic growth and aligned highlighting.
+- Animate the file download icon while preparing access, then show a check and “Download started” after handing the download to the browser. Respect reduced motion and preserve error/retry handling.
+- Increase the composer minimum to two text lines on desktop and mobile while retaining automatic growth and aligned highlighting.
 - Pass workspace typecheck/build and all 255 Web tests.
 
 ### Remember acknowledged catch-up notices
 
-- Persist Show/dismiss acknowledgements in bounded browser storage scoped to the
-  server/workspace API URL so page reloads do not restore read notifications.
-  Keep an in-memory fallback when storage is unavailable.
-- Pass workspace typecheck/build and all 255 Web tests, including persistence,
-  workspace isolation, and unavailable-storage coverage.
+- Persist Show/dismiss acknowledgements in bounded browser storage scoped to the server/workspace API URL so page reloads do not restore read notifications. Keep an in-memory fallback when storage is unavailable.
+- Pass workspace typecheck/build and all 255 Web tests, including persistence, workspace isolation, and unavailable-storage coverage.
 
 ### Sidebar list loading feedback
 
-- Show animated profile/session loading labels while initial lists or session
-  search/archive results are pending. Suppress premature empty states and respect
-  reduced-motion preferences. Clear loading after success or failure.
-- Pass workspace typecheck/build, all existing Web tests, and focused controller
-  tests for delayed profile/session success and failure. Rebuilt UI is available
-  on both local services after refresh.
+- Show animated profile/session loading labels while initial lists or session search/archive results are pending. Suppress premature empty states and respect reduced-motion preferences. Clear loading after success or failure.
+- Pass workspace typecheck/build, all existing Web tests, and focused controller tests for delayed profile/session success and failure. Rebuilt UI is available on both local services after refresh.
 
 ### Transcript thumbnails and preparation timeout
 
-- Fetch host-generated transcript thumbnails capped at 480px / 80,000 bytes;
-  preserve stored image bytes for the viewer. Share the bounded preview encoder
-  with generated artifacts.
-- Give all remote executor requests 120 seconds, including attachment preparation
-  previously limited to 10 seconds. Preserve request IDs and retry semantics.
-- Pass workspace typecheck/build and all 917 tests (optional Redis test skipped).
-  Restart host 32140 and temporary guest 32141. Verify the failed request's image
-  thumbnail through the real bridge: 15,046 bytes in 0.07s versus 1,029,848 stored
-  bytes. User confirmed the subsequent guest image request works.
+- Fetch host-generated transcript thumbnails capped at 480px / 80,000 bytes; preserve stored image bytes for the viewer. Share the bounded preview encoder with generated artifacts.
+- Give all remote executor requests 120 seconds, including attachment preparation previously limited to 10 seconds. Preserve request IDs and retry semantics.
+- Pass workspace typecheck/build and all 917 tests (optional Redis test skipped). Restart host 32140 and temporary guest 32141. Verify the failed request's image thumbnail through the real bridge: 15,046 bytes in 0.07s versus 1,029,848 stored bytes. User confirmed the subsequent guest image request works.
 
 ### Run log path wrapping
 
-- Wrap long run-log text and error paths within the card, preserving error line
-  breaks instead of expanding the transcript horizontally.
-- Pass workspace typecheck/build; verify long-path wrapping in Chromium at
-  320px and 760px container widths using the built styles.
+- Wrap long run-log text and error paths within the card, preserving error line breaks instead of expanding the transcript horizontally.
+- Pass workspace typecheck/build; verify long-path wrapping in Chromium at 320px and 760px container widths using the built styles.
 
 ### Workspace device visibility
 
-- Add extra right-pane padding only while the Workspace panel overflows. Use
-  primary theme text for online devices and keep offline devices muted.
-- Pass workspace typecheck/build and five related component tests. Verify dark
-  and light themes and padding with/without overflow in the temporary guest UI.
+- Add extra right-pane padding only while the Workspace panel overflows. Use primary theme text for online devices and keep offline devices muted.
+- Pass workspace typecheck/build and five related component tests. Verify dark and light themes and padding with/without overflow in the temporary guest UI.
 
 ### Session loading feedback
 
-- Show a spinner and “Loading conversation…” while fetching saved messages,
-  with reduced-motion support and sending disabled until loading finishes.
-  Ignore late session and run responses after navigating elsewhere.
-- Pass workspace typecheck/build and all 251 Web tests. Verify the loading state
-  and completed transcript in Chromium against the temporary guest service with
-  a delayed bridge session request. Rebuilt assets are available on port 32141.
+- Show a spinner and “Loading conversation…” while fetching saved messages, with reduced-motion support and sending disabled until loading finishes. Ignore late session and run responses after navigating elsewhere.
+- Pass workspace typecheck/build and all 251 Web tests. Verify the loading state and completed transcript in Chromium against the temporary guest service with a delayed bridge session request. Rebuilt assets are available on port 32141.
 
 ### Guest attachment inspection and denied-call retries
 
-- Return inspected guest image bytes to the host model instead of guest-local
-  paths. Bound reads to staged attachments, reject symlinks and changed sizes,
-  and retain URL references without fetching them on the executor.
-- Preserve upload authorization for ID-scoped attachment inspection, reads, and
-  searches. Ordinary guest file/shell calls still require nonpersistent approval.
-- Clarify discussion-only intent and denial handling in agent guidance. Suppress
-  repeated approval prompts for identical denied calls within the same run.
-- Pass workspace typecheck/build, version consistency, and all 911 tests; the
-  optional Redis test remains skipped. Exercise chunked image replies over a
-  local encrypted bridge with a mocked provider, retained image context, and no
-  attachment approval prompts. Host and temporary guest were updated, and the
-  user confirmed successful image recognition through the bridge.
+- Return inspected guest image bytes to the host model instead of guest-local paths. Bound reads to staged attachments, reject symlinks and changed sizes, and retain URL references without fetching them on the executor.
+- Preserve upload authorization for ID-scoped attachment inspection, reads, and searches. Ordinary guest file/shell calls still require nonpersistent approval.
+- Clarify discussion-only intent and denial handling in agent guidance. Suppress repeated approval prompts for identical denied calls within the same run.
+- Pass workspace typecheck/build, version consistency, and all 911 tests; the optional Redis test remains skipped. Exercise chunked image replies over a local encrypted bridge with a mocked provider, retained image context, and no attachment approval prompts. Host and temporary guest were updated, and the user confirmed successful image recognition through the bridge.
 
 ## 2026-09-17 — v0.74.2 — Browser preview caching
 
-- Keep downloaded thumbnail/viewer Blobs in a 16 MiB / 32-entry browser-memory
-  cache per API client. Reuse concurrent requests and repeated viewer opens;
-  isolate connection credentials/workspaces and changed artifact metadata.
-- Fetch viewer bytes through the authenticated preview route, preserving the
-  stable decoded-image swap. Each consumer releases its object URL on close;
-  originals continue to use fresh browser download tickets.
-- Pass workspace typecheck/build, 245 Web tests and all 10 Chromium checks.
-  Verify repeated viewer opens make only one preview request, with cache
-  isolation, eviction, metadata changes and retry-after-error coverage.
-- Synchronize workspace/CLI versions to 0.74.2, refresh the lockfile and rebuild
-  clean output. Verify all six packed versions and packed CLI version; reuse
-  the passing development tests.
+- Keep downloaded thumbnail/viewer Blobs in a 16 MiB / 32-entry browser-memory cache per API client. Reuse concurrent requests and repeated viewer opens; isolate connection credentials/workspaces and changed artifact metadata.
+- Fetch viewer bytes through the authenticated preview route, preserving the stable decoded-image swap. Each consumer releases its object URL on close; originals continue to use fresh browser download tickets.
+- Pass workspace typecheck/build, 245 Web tests and all 10 Chromium checks. Verify repeated viewer opens make only one preview request, with cache isolation, eviction, metadata changes and retry-after-error coverage.
+- Synchronize workspace/CLI versions to 0.74.2, refresh the lockfile and rebuild clean output. Verify all six packed versions and packed CLI version; reuse the passing development tests.
 
 ## 2026-09-17 — v0.74.1 — Stable image viewer loading
 
-- Fit the thumbnail to the viewer's final frame immediately, preserving its
-  aspect ratio. Decode the larger preview before swapping sources so the image
-  and download button stay in place; enable actual-size zoom after loading.
-- Verify workspace typecheck/build, all 240 Web tests and 10 Chromium checks.
-  Delay the viewer response to confirm stable image/button geometry and a single
-  preview download while the thumbnail remains visible.
-- Synchronize workspace/CLI versions to 0.74.1. Reuse development tests, rebuild
-  clean output, and verify all six packed versions and the packed CLI version.
-- User reports a successful Fedora WebRTC download in approximately one second;
-  broader network/VPN acceptance remains unverified.
+- Fit the thumbnail to the viewer's final frame immediately, preserving its aspect ratio. Decode the larger preview before swapping sources so the image and download button stay in place; enable actual-size zoom after loading.
+- Verify workspace typecheck/build, all 240 Web tests and 10 Chromium checks. Delay the viewer response to confirm stable image/button geometry and a single preview download while the thumbnail remains visible.
+- Synchronize workspace/CLI versions to 0.74.1. Reuse development tests, rebuild clean output, and verify all six packed versions and the packed CLI version.
+- User reports a successful Fedora WebRTC download in approximately one second; broader network/VPN acceptance remains unverified.
 
 ## 2026-09-17 — v0.74.0 — Image variants and experimental direct downloads
 
-- Generate and cache source-side WebP variants: 480-pixel / 80 KB transcript
-  thumbnails and a larger viewer capped at 1,000,000 bytes. Display transcript
-  images at half the message-content width with their original aspect ratio;
-  opening/zooming never retrieves originals.
-- Keep originals behind Download. Add opt-in service-to-service WebRTC transfer
-  with authenticated bridge signaling, bounded flow control, private temporary
-  staging and SHA-256 verification before HTTP delivery. Failures/older peers
-  retain the existing bridge download path; the experiment defaults off.
-- Document Fedora testing, transfer response headers, STUN configuration and
-  immediate opt-out. Cross-network performance remains pending user testing.
-- Pass workspace typecheck/build, 902 package tests and all 10 Chromium checks;
-  the optional Redis integration remains skipped. A local 6.28 MB screenshot
-  yields an 18 KB thumbnail (156 ms) and 190 KB viewer (265 ms), with immediate
-  cache reuse. These timings exclude bridge/network transfer.
-- Synchronize all workspace manifests and CLI to 0.74.0; refresh the lockfile,
-  rebuild clean output, and verify all six packed packages and packed CLI version.
-  Reuse development validation plus the passing desktop/phone thumbnail check.
+- Generate and cache source-side WebP variants: 480-pixel / 80 KB transcript thumbnails and a larger viewer capped at 1,000,000 bytes. Display transcript images at half the message-content width with their original aspect ratio; opening/zooming never retrieves originals.
+- Keep originals behind Download. Add opt-in service-to-service WebRTC transfer with authenticated bridge signaling, bounded flow control, private temporary staging and SHA-256 verification before HTTP delivery. Failures/older peers retain the existing bridge download path; the experiment defaults off.
+- Document Fedora testing, transfer response headers, STUN configuration and immediate opt-out. Cross-network performance remains pending user testing.
+- Pass workspace typecheck/build, 902 package tests and all 10 Chromium checks; the optional Redis integration remains skipped. A local 6.28 MB screenshot yields an 18 KB thumbnail (156 ms) and 190 KB viewer (265 ms), with immediate cache reuse. These timings exclude bridge/network transfer.
+- Synchronize all workspace manifests and CLI to 0.74.0; refresh the lockfile, rebuild clean output, and verify all six packed packages and packed CLI version. Reuse development validation plus the passing desktop/phone thumbnail check.
 
 ## 2026-09-16 — v0.73.1 — CLI package build
 
 - Require clean release builds and packed-version verification in `AGENTS.md`.
 
-- Rebuild the CLI during packing, matching the service packaging hook, so npm
-  releases cannot retain an earlier compiled CLI version string. Confirmed the
-  published 0.73.0 CLI contained a 0.72.0 string despite its correct manifest.
-- Audit all six 0.73.0 npm packages against fresh release builds: current runtime
-  functionality matches; only CLI/bridge version metadata differs. Prepare this
-  patch from clean build output to exclude obsolete compiled modules.
+- Rebuild the CLI during packing, matching the service packaging hook, so npm releases cannot retain an earlier compiled CLI version string. Confirmed the published 0.73.0 CLI contained a 0.72.0 string despite its correct manifest.
+- Audit all six 0.73.0 npm packages against fresh release builds: current runtime functionality matches; only CLI/bridge version metadata differs. Prepare this patch from clean build output to exclude obsolete compiled modules.
 
 ## 2026-09-16 — v0.73.0 — Browser deliverables and request environment
 
 ### Workspace device list
 
-- Label the workspace device section and pin the host first. Order guests by
-  membership enrollment time (oldest first), then alphabetically for equal or
-  unavailable dates. Guests without dates follow dated guests; older hosts
-  remain compatible. Use the same order in the execution-device selector.
-- Verify workspace typecheck/build, two device-list rendering regressions, and
-  three workspace bridge tests including enrollment-time delivery. An unrelated
-  transfer test timed out during concurrent suites and passed on focused rerun.
+- Label the workspace device section and pin the host first. Order guests by membership enrollment time (oldest first), then alphabetically for equal or unavailable dates. Guests without dates follow dated guests; older hosts remain compatible. Use the same order in the execution-device selector.
+- Verify workspace typecheck/build, two device-list rendering regressions, and three workspace bridge tests including enrollment-time delivery. An unrelated transfer test timed out during concurrent suites and passed on focused rerun.
 
 ### Compact request environment
 
-- Add runtime time/offset, timezone, interface, and local/remote request origin
-  as a small instruction block across plain chat, agent loops, and planning.
-  Preserve user messages and saved conversation text unchanged.
-- Send interface/timezone hints from Web and both terminal clients. Derive origin
-  from direct connections and authenticated workspace provenance, including the
-  host-local workspace facade. Preserve environment through device delegation.
-- Replace browser-only file guidance with interface-specific presentation. Keep
-  device inventories out of ordinary prompts and resolve them with `list_devices`.
-  Keep execution paths in filesystem-tool context, outside the environment block.
-- Verify workspace typecheck/build, all package suites (893 tests), and 10 Chromium
-  regressions. Cover offset/DST formatting, plain-chat persistence, planning/tool
-  context, terminal/Web payloads, forged-origin rejection, and delegated runs.
-  Optional Redis integration remains skipped.
+- Add runtime time/offset, timezone, interface, and local/remote request origin as a small instruction block across plain chat, agent loops, and planning. Preserve user messages and saved conversation text unchanged.
+- Send interface/timezone hints from Web and both terminal clients. Derive origin from direct connections and authenticated workspace provenance, including the host-local workspace facade. Preserve environment through device delegation.
+- Replace browser-only file guidance with interface-specific presentation. Keep device inventories out of ordinary prompts and resolve them with `list_devices`. Keep execution paths in filesystem-tool context, outside the environment block.
+- Verify workspace typecheck/build, all package suites (893 tests), and 10 Chromium regressions. Cover offset/DST formatting, plain-chat persistence, planning/tool context, terminal/Web payloads, forged-origin rejection, and delegated runs. Optional Redis integration remains skipped.
 
 ### Browser downloads and transcript deliverables
 
-- Move generated files below the final answer and group run commentary into
-  collapsible working details. Restore the answer/file association on reload.
-- Position the image download icon outside the preview, centered 32px below it,
-  with an accessible label and space reserved on smaller screens.
-- Add lazy source-generated raster thumbnails and a full-resolution image viewer
-  with fit/actual-size controls, keyboard navigation, and browser downloads.
-- Exchange authenticated artifact requests for bounded five-minute file URLs on
-  the connected service. Stream local or paired-workspace files with known size
-  into the browser download manager; keep bearer credentials out of file URLs.
-- Keep unavailable file cards and expiration/removal notices visible after reload.
-  Offline sources remain retryable. Original files and durable references outlive
-  short-lived access URLs and temporary run diagnostics.
-- Allow the client's idempotency header in configured CORS preflights so
-  authenticated file-access requests also work through direct remote servers.
-- Validate with workspace typecheck/build, 884 package tests, all 10 Chromium
-  regressions, and focused reruns after the final preview/CORS fixes. Verify
-  paired-workspace and bearer-protected direct-server browser downloads, image
-  dimensions, reload persistence, ticket scope/expiry, and streaming before
-  source completion. Optional Redis integration remains skipped.
+- Move generated files below the final answer and group run commentary into collapsible working details. Restore the answer/file association on reload.
+- Position the image download icon outside the preview, centered 32px below it, with an accessible label and space reserved on smaller screens.
+- Add lazy source-generated raster thumbnails and a full-resolution image viewer with fit/actual-size controls, keyboard navigation, and browser downloads.
+- Exchange authenticated artifact requests for bounded five-minute file URLs on the connected service. Stream local or paired-workspace files with known size into the browser download manager; keep bearer credentials out of file URLs.
+- Keep unavailable file cards and expiration/removal notices visible after reload. Offline sources remain retryable. Original files and durable references outlive short-lived access URLs and temporary run diagnostics.
+- Allow the client's idempotency header in configured CORS preflights so authenticated file-access requests also work through direct remote servers.
+- Validate with workspace typecheck/build, 884 package tests, all 10 Chromium regressions, and focused reruns after the final preview/CORS fixes. Verify paired-workspace and bearer-protected direct-server browser downloads, image dimensions, reload persistence, ticket scope/expiry, and streaming before source completion. Optional Redis integration remains skipped.
 
 ## 2026-09-16 — v0.72.0 — Context boundaries and durable workspace downloads
 
-- Send user messages unchanged through agent planning and tool loops; move
-  runtime guidance into instruction context instead of adding `Objective:`.
-- Identify workspace hosts, requesting devices, and execution devices explicitly.
-  Guide named-device delegation and delivery of existing files without recapture.
-- Preserve artifact records and child provenance beyond live-run expiry and
-  retain generated output while cleaning temporary run state. Restore downloads
-  when reopening sessions, including after host and guest restarts.
-- Add session-scoped run retrieval and read-only artifact availability checks.
-  Keep missing files visible with disabled controls and an expiration/removal
-  notice; leave offline devices retryable. Delay browser blob cleanup safely.
-- Reuse passing workspace typecheck/build, package suites, focused recovery and
-  service regressions, and Chromium download/reload checks. Corrected an older
-  browser-test selector for the renamed Web search setting. Optional Redis was
-  skipped. Native browser downloads and transcript image/file cards come next.
+- Send user messages unchanged through agent planning and tool loops; move runtime guidance into instruction context instead of adding `Objective:`.
+- Identify workspace hosts, requesting devices, and execution devices explicitly. Guide named-device delegation and delivery of existing files without recapture.
+- Preserve artifact records and child provenance beyond live-run expiry and retain generated output while cleaning temporary run state. Restore downloads when reopening sessions, including after host and guest restarts.
+- Add session-scoped run retrieval and read-only artifact availability checks. Keep missing files visible with disabled controls and an expiration/removal notice; leave offline devices retryable. Delay browser blob cleanup safely.
+- Reuse passing workspace typecheck/build, package suites, focused recovery and service regressions, and Chromium download/reload checks. Corrected an older browser-test selector for the renamed Web search setting. Optional Redis was skipped. Native browser downloads and transcript image/file cards come next.
 - Synchronize workspace manifests and the CLI to 0.72.0.
 
 ## 2026-09-13 — v0.71.1 — Search recovery and source citations
 
-- Clarify the fallback research loop: search for missing current/external facts,
-  inspect original sources, refine for evidence gaps, and use the latest request's
-  subject and date. Continue once on short English/Chinese search promises with
-  no tool call; repeated matching promises fail visibly within existing budgets.
-- Inspect available search sources before handling an empty model response.
-  Preserve approval, cancellation, read-attempt, and iteration boundaries.
-- Render source citations as compact domain tags after sentence punctuation,
-  with title/URL previews on hover or keyboard focus and Escape dismissal.
-  Support legacy citations; preserve ordinary links and artifact downloads.
-  No third-party metadata requests are made for previews.
-- Mark final links matching successful search/page-read URLs before emitting and
-  saving agent answers, including redirected sources. Models no longer need to
-  reproduce the citation marker for those URLs; old saved answers are retained.
-- Add regressions and a custom-objective local-model harness. Reused the passing
-  full workspace gate (864 tests, optional Redis skipped), followed by passing
-  typecheck/build and all 231 Web tests after punctuation changes. The first
-  full run hit a transient TUI resume assertion; its rerun passed unchanged.
-- Live local Gemma completed search/read/analysis in about 93 seconds, using a
-  secondary source. User testing with Gemma 31B showed current-year search and
-  clearer cited answers. Source selection, corroboration, and model reasoning
-  remain experimental limitations; these observations do not verify rankings.
+- Clarify the fallback research loop: search for missing current/external facts, inspect original sources, refine for evidence gaps, and use the latest request's subject and date. Continue once on short English/Chinese search promises with no tool call; repeated matching promises fail visibly within existing budgets.
+- Inspect available search sources before handling an empty model response. Preserve approval, cancellation, read-attempt, and iteration boundaries.
+- Render source citations as compact domain tags after sentence punctuation, with title/URL previews on hover or keyboard focus and Escape dismissal. Support legacy citations; preserve ordinary links and artifact downloads. No third-party metadata requests are made for previews.
+- Mark final links matching successful search/page-read URLs before emitting and saving agent answers, including redirected sources. Models no longer need to reproduce the citation marker for those URLs; old saved answers are retained.
+- Add regressions and a custom-objective local-model harness. Reused the passing full workspace gate (864 tests, optional Redis skipped), followed by passing typecheck/build and all 231 Web tests after punctuation changes. The first full run hit a transient TUI resume assertion; its rerun passed unchanged.
+- Live local Gemma completed search/read/analysis in about 93 seconds, using a secondary source. User testing with Gemma 31B showed current-year search and clearer cited answers. Source selection, corroboration, and model reasoning remain experimental limitations; these observations do not verify rankings.
 - Synchronize all workspace manifests and the CLI to 0.71.1.
 
 ## 2026-09-13 — v0.71.0 — Experimental built-in web research
 
-- Enable native-first search by default with keyless DuckDuckGo HTML / Brave
-  HTML fallback. Retain explicit legacy provider choices; global off disables
-  both native and fallback search. Expose the experimental option in Web/CLI
-  settings and use existing host proxy configuration.
-- Add bounded public-page reading with date metadata, redirect validation,
-  direct DNS pinning, cancellation, per-run budgets, and duplicate suppression.
-  When an agent stops after finding sources without reading one, inspect the top
-  source once through normal approval and tool execution before continuing.
-- Guide source/date verification and natural answers in the user's language,
-  with short parenthetical source links. Preserve complete short-page evidence
-  even when focus keywords are supplied. Retry an empty model completion once;
-  repeated emptiness fails visibly instead of showing a successful empty answer.
-- Add parser, routing, config, network, extraction, budget, and agent regressions;
-  include a 30-query benchmark and disposable local-model research harness.
-  Document engine feasibility, evaluation results, proxy behavior, and limits in
-  `docs/web-search.md`.
-- Experimental limits: engine blocking/rate limits remain common. User testing
-  confirmed useful natural answers but also a Xi’an request answered as Shanghai
-  and weak relative-date verification. The cause of the city mismatch is not
-  yet established; successful retrieval does not guarantee factual relevance.
-- Validation: reused the passing full workspace gate (836 tests; optional Redis
-  skipped) and subsequent citation-guidance typecheck/build. Live local Gemma
-  runs demonstrated search, page reading, and cited answers; current-fact accuracy
-  remains inconsistent. All workspace manifests and the CLI synchronize to 0.71.0.
+- Enable native-first search by default with keyless DuckDuckGo HTML / Brave HTML fallback. Retain explicit legacy provider choices; global off disables both native and fallback search. Expose the experimental option in Web/CLI settings and use existing host proxy configuration.
+- Add bounded public-page reading with date metadata, redirect validation, direct DNS pinning, cancellation, per-run budgets, and duplicate suppression. When an agent stops after finding sources without reading one, inspect the top source once through normal approval and tool execution before continuing.
+- Guide source/date verification and natural answers in the user's language, with short parenthetical source links. Preserve complete short-page evidence even when focus keywords are supplied. Retry an empty model completion once; repeated emptiness fails visibly instead of showing a successful empty answer.
+- Add parser, routing, config, network, extraction, budget, and agent regressions; include a 30-query benchmark and disposable local-model research harness. Document engine feasibility, evaluation results, proxy behavior, and limits in `docs/web-search.md`.
+- Experimental limits: engine blocking/rate limits remain common. User testing confirmed useful natural answers but also a Xi’an request answered as Shanghai and weak relative-date verification. The cause of the city mismatch is not yet established; successful retrieval does not guarantee factual relevance.
+- Validation: reused the passing full workspace gate (836 tests; optional Redis skipped) and subsequent citation-guidance typecheck/build. Live local Gemma runs demonstrated search, page reading, and cited answers; current-fact accuracy remains inconsistent. All workspace manifests and the CLI synchronize to 0.71.0.
 
 ## 2026-09-13 — v0.70.8 — Stable open conversations
 
-- Stop workspace notifications from reloading the active transcript and remove
-  polling for newly started remote runs. Responses started in the current view
-  stream normally; reload or reopen the session to see another device's changes.
-- Document manual transcript refresh and cover host/guest views with regressions
-  for repeated notifications, absence of run polling, and reopening updated history.
-- Validation: reused passing workspace typecheck/build and all 220 Web tests;
-  synchronized version check passed. User confirmed the behavior works.
+- Stop workspace notifications from reloading the active transcript and remove polling for newly started remote runs. Responses started in the current view stream normally; reload or reopen the session to see another device's changes.
+- Document manual transcript refresh and cover host/guest views with regressions for repeated notifications, absence of run polling, and reopening updated history.
+- Validation: reused passing workspace typecheck/build and all 220 Web tests; synchronized version check passed. User confirmed the behavior works.
 
 ## 2026-09-12 — v0.70.7 — Workspace select arrow styling
 
-- Preserve the shared select arrow's size, position, and no-repeat settings by
-  using background-color in workspace fields; reserve right padding for the arrow.
-- Validation: reused passing workspace typecheck/build and isolated Chromium
-  rendering checks in light, dark, and automatic themes. Version check passed
-  with every workspace package and the CLI synchronized to 0.70.7.
+- Preserve the shared select arrow's size, position, and no-repeat settings by using background-color in workspace fields; reserve right padding for the arrow.
+- Validation: reused passing workspace typecheck/build and isolated Chromium rendering checks in light, dark, and automatic themes. Version check passed with every workspace package and the CLI synchronized to 0.70.7.
 
 ## 2026-09-12 — v0.70.6 — Workspace version synchronization
 
-- Synchronize every workspace package and the CLI with the root release version,
-  including the previously omitted client, workspace protocol, and private bridge.
-- Update the version policy and release guidance; add `pnpm check:versions` to
-  root typecheck and regressions for new packages, private apps, and CLI drift.
-- Validation: reused passing workspace typecheck/build and all 33 CLI tests;
-  checked synchronized 0.70.6 versions and refreshed the lockfile with pnpm.
+- Synchronize every workspace package and the CLI with the root release version, including the previously omitted client, workspace protocol, and private bridge.
+- Update the version policy and release guidance; add `pnpm check:versions` to root typecheck and regressions for new packages, private apps, and CLI drift.
+- Validation: reused passing workspace typecheck/build and all 33 CLI tests; checked synchronized 0.70.6 versions and refreshed the lockfile with pnpm.
 - npm publishing deferred until the next publication.
 
 ## 2026-09-12 — v0.70.5 — SkillApp clipboard fallback
 
-- Reuse the shared copy component for SkillApp textarea and Markdown outputs,
-  with a fallback when the Clipboard API is unavailable and visible copied/failed
-  feedback. Preserve text buttons, disabled behavior, and existing pointer styling.
-- Add regressions for both output types covering Unicode/multiline selection,
-  fallback failure feedback, and temporary textarea cleanup.
-- Validation: workspace typecheck/build and all 800 tests passed (optional real
-  Redis test skipped). Native Fedora browser behavior remains unverified.
+- Reuse the shared copy component for SkillApp textarea and Markdown outputs, with a fallback when the Clipboard API is unavailable and visible copied/failed feedback. Preserve text buttons, disabled behavior, and existing pointer styling.
+- Add regressions for both output types covering Unicode/multiline selection, fallback failure feedback, and temporary textarea cleanup.
+- Validation: workspace typecheck/build and all 800 tests passed (optional real Redis test skipped). Native Fedora browser behavior remains unverified.
 
 ## 2026-09-11 — v0.70.4 — SkillApp background refresh fix
 
-- Keep the active SkillApp form mounted while workspace notifications refresh
-  the catalog. Reuse unchanged definitions so unrelated activity does not reopen
-  the instance, reset Activity, or interrupt input focus.
-- Regression coverage repeats background refreshes, checks preserved input/focus
-  and a single instance open, and confirms changed definitions still reach the UI.
+- Keep the active SkillApp form mounted while workspace notifications refresh the catalog. Reuse unchanged definitions so unrelated activity does not reopen the instance, reset Activity, or interrupt input focus.
+- Regression coverage repeats background refreshes, checks preserved input/focus and a single instance open, and confirms changed definitions still reach the UI.
 - Future work: simplify bridge setup and reduce manual installation/configuration steps.
-- Validation: workspace typecheck/build passed; all 798 tests passed on retry
-  (optional real Redis test skipped). The first run hit a five-second timeout in
-  the existing artifact-transfer test; no code changes were needed for the retry.
+- Validation: workspace typecheck/build passed; all 798 tests passed on retry (optional real Redis test skipped). The first run hit a five-second timeout in the existing artifact-transfer test; no code changes were needed for the retry.
 
 ## 2026-09-11 — v0.70.3 — Relay delivery amplification and safe updates (in testing)
 
-- Live v0.70.2 testing exposed repeated Redis inbox delivery under concurrent
-  chunks: original-avatar downloads regressed and a seven-file burst overloaded
-  the old relay. Keep sequential transfers until the relay advertises fixed delivery.
-- Track a delivery cursor per Redis subscription; retain unacknowledged entries
-  for reconnect replay without resending them on every publish.
-- Add `workspace bridge update` for installer-managed Linux deployments. Stage
-  and build a release, preserve local Dockerfile/mirror settings and all runtime
-  configuration, replace only the bridge, and restore the prior image on failure.
-  No Redis/Caddy container replacement or data/config regeneration.
-- Relay cursor, legacy relay fallback and installer preservation/rollback tests
-  added. Full typecheck/build/test passed (797 tests; optional real Redis skipped),
-  plus 8 installer fixtures. An 8 MiB encrypted local transfer preserved every byte.
-- User deployed the updater on ECS; public health advertises the new relay mode.
-  All 24 live guest requests passed, including seven concurrent original avatars
-  (3,063,975 bytes total), with all seven hashes matching the host and Home staying
-  online. Session/change reads completed in 0.6 seconds at burst start; additional
-  reads during the burst completed in 0.07–1.27 seconds. Bulk throughput remains
-  limited: the full seven-file burst took 54.2 seconds. Live reboot/rollback and
-  broader workspace acceptance remain pending.
+- Live v0.70.2 testing exposed repeated Redis inbox delivery under concurrent chunks: original-avatar downloads regressed and a seven-file burst overloaded the old relay. Keep sequential transfers until the relay advertises fixed delivery.
+- Track a delivery cursor per Redis subscription; retain unacknowledged entries for reconnect replay without resending them on every publish.
+- Add `workspace bridge update` for installer-managed Linux deployments. Stage and build a release, preserve local Dockerfile/mirror settings and all runtime configuration, replace only the bridge, and restore the prior image on failure. No Redis/Caddy container replacement or data/config regeneration.
+- Relay cursor, legacy relay fallback and installer preservation/rollback tests added. Full typecheck/build/test passed (797 tests; optional real Redis skipped), plus 8 installer fixtures. An 8 MiB encrypted local transfer preserved every byte.
+- User deployed the updater on ECS; public health advertises the new relay mode. All 24 live guest requests passed, including seven concurrent original avatars (3,063,975 bytes total), with all seven hashes matching the host and Home staying online. Session/change reads completed in 0.6 seconds at burst start; additional reads during the burst completed in 0.07–1.27 seconds. Bulk throughput remains limited: the full seven-file burst took 54.2 seconds. Live reboot/rollback and broader workspace acceptance remain pending.
 
 ## 2026-09-11 — v0.70.2 — Bounded concurrent workspace transfers (in testing)
 
-- Pipeline authenticated bulk chunks with a negotiated four-chunk window and an
-  eight-chunk connection budget. Preserve sequential delivery for older peers,
-  bounded assembly, sender-bound acknowledgments and disconnect cleanup.
-- Stream artifacts with four reads ahead and up to 128 KiB per read, retaining
-  older 32 KiB readers and verifying lengths without changing file contents.
-- Save new Web avatars as 512px WebP (PNG fallback); keep existing avatars intact.
-  Live testing later exposed a relay bottleneck; see the v0.70.3 follow-up above.
-- Added multi-megabyte byte-integrity, mixed-traffic, ordering, compatibility,
-  read-ahead, disconnect and full artifact-route regressions. Full typecheck/build/test
-  passed (795 tests; optional real Redis skipped). Chromium avatar saving produced
-  a valid 512px WebP from a synthetic PNG. Live throughput acceptance failed on
-  the older ECS relay despite passing local tests; see v0.70.3.
+- Pipeline authenticated bulk chunks with a negotiated four-chunk window and an eight-chunk connection budget. Preserve sequential delivery for older peers, bounded assembly, sender-bound acknowledgments and disconnect cleanup.
+- Stream artifacts with four reads ahead and up to 128 KiB per read, retaining older 32 KiB readers and verifying lengths without changing file contents.
+- Save new Web avatars as 512px WebP (PNG fallback); keep existing avatars intact. Live testing later exposed a relay bottleneck; see the v0.70.3 follow-up above.
+- Added multi-megabyte byte-integrity, mixed-traffic, ordering, compatibility, read-ahead, disconnect and full artifact-route regressions. Full typecheck/build/test passed (795 tests; optional real Redis skipped). Chromium avatar saving produced a valid 512px WebP from a synthetic PNG. Live throughput acceptance failed on the older ECS relay despite passing local tests; see v0.70.3.
 
 ## 2026-09-11 — v0.70.1 — Workspace avatar traffic and recovery (in testing)
 
-- Reproduced concurrent avatar downloads on the paired MacBook causing profile,
-  session and change requests to hit the 10-second read deadline while Home was online.
-- Web avatars now request bounded 256px WebP thumbnails; stored originals remain
-  available. Allow 60 seconds for bridge reads and distinguish connected-host
-  timeouts (504) from offline hosts (503). Refresh views after a connection recovers,
-  even when the host revision has not changed.
-- Added thumbnail, response/ETag, timeout-classification and recovery regressions.
-  Full typecheck/build/test passed (784 tests; optional real Redis test skipped).
-- Deployed to both Macs. Three live concurrent request rounds passed (30/30 HTTP
-  200, all under four seconds); Home stayed online. Guest Web UI navigation and
-  refresh loaded the avatar and all 13 sessions without an offline warning.
-  Broader workspace acceptance remains in testing.
+- Reproduced concurrent avatar downloads on the paired MacBook causing profile, session and change requests to hit the 10-second read deadline while Home was online.
+- Web avatars now request bounded 256px WebP thumbnails; stored originals remain available. Allow 60 seconds for bridge reads and distinguish connected-host timeouts (504) from offline hosts (503). Refresh views after a connection recovers, even when the host revision has not changed.
+- Added thumbnail, response/ETag, timeout-classification and recovery regressions. Full typecheck/build/test passed (784 tests; optional real Redis test skipped).
+- Deployed to both Macs. Three live concurrent request rounds passed (30/30 HTTP 200, all under four seconds); Home stayed online. Guest Web UI navigation and refresh loaded the avatar and all 13 sessions without an offline warning. Broader workspace acceptance remains in testing.
 
 ## 2026-09-11 — v0.70.0 — Device-hosted personal workspaces (in testing)
 
-- Added `workspace bridge install` and a portable Linux setup wizard for Docker
-  Compose: optional dedicated persistent Redis, existing Redis URLs, Caddy or
-  existing HTTPS ingress, private generated tokens, startup health checks and
-  reboot recovery. Existing installations/data are never overwritten. Linux
-  Docker execution and public HTTPS remain pending live validation.
-- Documented Vercel project configuration, Cloudflare Tunnel, AWS EC2 and Aliyun
-  ECS setup, plus planned per-device bridge proxies. Include the hosting guide
-  in prepared packages. Verified packaging tests and standalone pnpm 11.17.0
-  installs/runtime import; live cloud deployments remain unverified.
-- Fixed bridge package preparation for nested destinations with missing parent
-  directories, retaining refusal to overwrite an existing destination.
-- Added encrypted outbound workspace bridges, host-pinned single-use pairing,
-  independent device credentials, revocation, protected state and durable request
-  deduplication. The host shares its existing local data; Local is the startup fallback.
-- Added host-owned model runs with approved guest tools, device context, one-level
-  device delegation, child interaction/artifact forwarding, lease cancellation and
-  restart recovery. Skills/Apps/schedules remain host execution paths.
-- Added workspace CLI/TUI/Web selection, shared views and change notifications,
-  isolated drafts, executor opt-out, schedule management and retained direct servers.
-- Added a standalone Vercel package generator, Redis relay and deployment guide.
-  Live cloud deployment and host–MacBook acceptance remain pending. Native iOS
-  and privileged maintenance helpers are deferred.
-- Verified typecheck/build and 781 tests, including disposable real Redis, two
-  relay instances with reconnect, and macOS sandbox isolation; 9 Chromium tests
-  passed. The standalone bridge package installs and serves health successfully.
-  Latest full gate passed 781 tests with the optional Redis integration skipped;
-  earlier real Redis and Chromium results are retained. Six installer fixture
-  tests passed. This is a testing checkpoint, not production acceptance.
+- Added `workspace bridge install` and a portable Linux setup wizard for Docker Compose: optional dedicated persistent Redis, existing Redis URLs, Caddy or existing HTTPS ingress, private generated tokens, startup health checks and reboot recovery. Existing installations/data are never overwritten. Linux Docker execution and public HTTPS remain pending live validation.
+- Documented Vercel project configuration, Cloudflare Tunnel, AWS EC2 and Aliyun ECS setup, plus planned per-device bridge proxies. Include the hosting guide in prepared packages. Verified packaging tests and standalone pnpm 11.17.0 installs/runtime import; live cloud deployments remain unverified.
+- Fixed bridge package preparation for nested destinations with missing parent directories, retaining refusal to overwrite an existing destination.
+- Added encrypted outbound workspace bridges, host-pinned single-use pairing, independent device credentials, revocation, protected state and durable request deduplication. The host shares its existing local data; Local is the startup fallback.
+- Added host-owned model runs with approved guest tools, device context, one-level device delegation, child interaction/artifact forwarding, lease cancellation and restart recovery. Skills/Apps/schedules remain host execution paths.
+- Added workspace CLI/TUI/Web selection, shared views and change notifications, isolated drafts, executor opt-out, schedule management and retained direct servers.
+- Added a standalone Vercel package generator, Redis relay and deployment guide. Live cloud deployment and host–MacBook acceptance remain pending. Native iOS and privileged maintenance helpers are deferred.
+- Verified typecheck/build and 781 tests, including disposable real Redis, two relay instances with reconnect, and macOS sandbox isolation; 9 Chromium tests passed. The standalone bridge package installs and serves health successfully. Latest full gate passed 781 tests with the optional Redis integration skipped; earlier real Redis and Chromium results are retained. Six installer fixture tests passed. This is a testing checkpoint, not production acceptance.
 
 ## 2026-09-11 — v0.69.2 — GPT-6 catalog discovery and reasoning defaults
 
-- Fixed ChatGPT catalog version gating that omitted GPT-6 Astra despite account
-  access. Use newer local Codex catalog version metadata when available, a
-  verified `0.154.0` fallback, and an optional environment override. Models
-  continue to come from the authenticated provider API.
-- Set GPT-6 Astra reasoning to `low` normally and `medium` with thinking enabled,
-  retaining thinking summaries and other models' existing defaults.
-- Confirmed the live catalog includes Astra with `0.154.0` and omits it with
-  `0.149.0`; user confirmed Astra appears in Marifold after the fix.
-- Verified workspace typecheck/build/test (760 tests: core 393, service 62,
-  TUI 63, CLI 29, Web 213). Reused these passing checks for the checkpoint;
-  subsequent changes only synchronize release versions and documentation.
+- Fixed ChatGPT catalog version gating that omitted GPT-6 Astra despite account access. Use newer local Codex catalog version metadata when available, a verified `0.154.0` fallback, and an optional environment override. Models continue to come from the authenticated provider API.
+- Set GPT-6 Astra reasoning to `low` normally and `medium` with thinking enabled, retaining thinking summaries and other models' existing defaults.
+- Confirmed the live catalog includes Astra with `0.154.0` and omits it with `0.149.0`; user confirmed Astra appears in Marifold after the fix.
+- Verified workspace typecheck/build/test (760 tests: core 393, service 62, TUI 63, CLI 29, Web 213). Reused these passing checks for the checkpoint; subsequent changes only synchronize release versions and documentation.
 
 ## 2026-09-03 — v0.69.1 — Clear explicit SkillApp results while running
 
-- Cleared only the bound output when a button-triggered SkillApp operation
-  starts, preventing a previous result from appearing to be newly generated.
-- Mirrored the service-owned behavior optimistically in Web output components,
-  with a `Generating…` state and empty output after failure or cancellation;
-  automatic triggers continue to retain and label stale results.
-- Fixed the shared select-arrow styling interaction that tiled oversized arrows
-  across SkillApp selects after the profile-settings select update.
-- Added core and Web regressions. Verified the full workspace
-  typecheck/build/test gate (749 tests: core 382, service 62, TUI 63, CLI 29,
-  Web 213).
+- Cleared only the bound output when a button-triggered SkillApp operation starts, preventing a previous result from appearing to be newly generated.
+- Mirrored the service-owned behavior optimistically in Web output components, with a `Generating…` state and empty output after failure or cancellation; automatic triggers continue to retain and label stale results.
+- Fixed the shared select-arrow styling interaction that tiled oversized arrows across SkillApp selects after the profile-settings select update.
+- Added core and Web regressions. Verified the full workspace typecheck/build/test gate (749 tests: core 382, service 62, TUI 63, CLI 29, Web 213).
 
 ## 2026-09-03 — v0.69.0 — Agent-first simplification
 
-- Removed Chat/Agent selectors and mode-switch commands from profile creation,
-  profile settings, Web, TUI, Telegram, and the top-level CLI surface.
-- Routed ordinary Web, TUI, Telegram, and profile-backed App messages through
-  Agent execution while retaining the chat engine, service transport, legacy
-  config parsing, and explicit chat-mode Skill compatibility internally.
-- Made user-managed Skills global by default across direct TUI installation,
-  the protected installer/creator, and lazy agent guidance. Added explicit
-  `--profile <name>` targeting while retaining `--global`/`-g` as compatibility
-  aliases.
-- Grouped Web profile Memory and Agent permissions under one Advanced settings
-  control. It stays collapsed by default and can be expanded manually.
-- Verified the full workspace typecheck/build/test gate (748 tests: core 381,
-  service 62, TUI 63, CLI 29, Web 213) and all 120 non-provider command checks.
+- Removed Chat/Agent selectors and mode-switch commands from profile creation, profile settings, Web, TUI, Telegram, and the top-level CLI surface.
+- Routed ordinary Web, TUI, Telegram, and profile-backed App messages through Agent execution while retaining the chat engine, service transport, legacy config parsing, and explicit chat-mode Skill compatibility internally.
+- Made user-managed Skills global by default across direct TUI installation, the protected installer/creator, and lazy agent guidance. Added explicit `--profile <name>` targeting while retaining `--global`/`-g` as compatibility aliases.
+- Grouped Web profile Memory and Agent permissions under one Advanced settings control. It stays collapsed by default and can be expanded manually.
+- Verified the full workspace typecheck/build/test gate (748 tests: core 381, service 62, TUI 63, CLI 29, Web 213) and all 120 non-provider command checks.
 
 ## 2026-09-03 — v0.68.0 — Unified profile instructions
 
-- Replaced the three-document profile scaffold with one free-form
-  `INSTRUCTIONS.md`, shared by new workspace and profile initialization.
-- Kept old profiles behavior-compatible through a read-only
-  `RULES.md` → `PROFILE.md` → `CUSTOM.md` fallback; an existing canonical file
-  wins even when empty, and forced workspace initialization never shadows
-  legacy instructions.
-- Added backed-up, idempotent migration and cleanup through explicit
-  `marifold doctor --fix`, plus active-profile `/doctor [--fix]` status and
-  migration in the TUI.
-- Replaced the Web Config split editors with one always-visible Instructions
-  editor above Model while retaining deprecated service response fields and
-  write aliases for older clients during migration.
-- Updated examples, eval fixtures, architecture/API/TUI documentation, and
-  focused regressions. Verified the full workspace typecheck/build/test gate
-  (744 tests: core 380, service 62, TUI 61, CLI 29, Web 212) and all 129
-  non-provider command checks.
+- Replaced the three-document profile scaffold with one free-form `INSTRUCTIONS.md`, shared by new workspace and profile initialization.
+- Kept old profiles behavior-compatible through a read-only `RULES.md` → `PROFILE.md` → `CUSTOM.md` fallback; an existing canonical file wins even when empty, and forced workspace initialization never shadows legacy instructions.
+- Added backed-up, idempotent migration and cleanup through explicit `marifold doctor --fix`, plus active-profile `/doctor [--fix]` status and migration in the TUI.
+- Replaced the Web Config split editors with one always-visible Instructions editor above Model while retaining deprecated service response fields and write aliases for older clients during migration.
+- Updated examples, eval fixtures, architecture/API/TUI documentation, and focused regressions. Verified the full workspace typecheck/build/test gate (744 tests: core 380, service 62, TUI 61, CLI 29, Web 212) and all 129 non-provider command checks.
 
 ## 2026-09-02 — v0.67.0 — Interactive SkillApp builder
 
-- Added the protected built-in `skillapp-builder`, with version-matched
-  inspection of the active App directory, existing Apps, profiles, effective
-  Skills, components, and static template rules.
-- Clarified the `$skill-creator` boundary without keyword-based runtime
-  rejection: it distinguishes the requested deliverable, so ordinary Skills may
-  validly explain, support, or be invoked by SkillApps while actual App creation
-  is directed to `$skillapp-builder`.
-- Added one approve-once `manage_skill_app` boundary that confines generated
-  text paths, validates a complete staged bundle through the static compiler,
-  refuses implicit collision updates, and installs create/update results
-  atomically without a service restart. A committed installation remains the
-  authoritative success if the Agent is cancelled or fails afterward.
-- Added exclusive service-owned interactive App executions with Agent questions,
-  approval, cancellation, terminal results, and typed `app_installed` effects.
-  `skillapp.ts` remains declarative and contains no executable async functions.
-- Added Web global operation locking, inline single/multiple-question and
-  approval sheets, polling and browser-session reconnection, Activity results,
-  plus automatic catalog refresh after a successful installation. The builder
-  remains open so its final response is visible instead of jumping to the new App.
-- Kept the selected App renderer mounted while viewing Agent, remembered the
-  last App route per server, and retained inactive as well as running instance
-  IDs for browser-session restoration. The hidden renderer keeps receiving that
-  selected App even in a multi-App catalog, so Agent/App switching preserves
-  form content and running Activity without a warning.
-- Kept text and select controls focused during ordinary asynchronous state
-  persistence while retaining the global lock for interactive Agent execution.
-- Added a footer Reset action immediately before Activity. It creates the fresh
-  instance before retiring the old one, clears form/output/attachment/Activity
-  state, and stays disabled while any update or operation is active.
-- Added explicit `Markdown` preview/source and renderer-owned `Download`
-  components. Both can bind one text output state, and the download uses a
-  validated static filename and media type without filesystem access. Empty
-  download states no longer present that filename as an existing file, and the
-  builder now states the text-only, static-name, one-file-per-component limit.
-- Taught `skillapp-builder` when and how to pair those output components and to
-  keep file creation out of the model Skill response.
-- Fixed a real builder run that exhausted 20 iterations after probing denied
-  App paths and submitting 11 invalid bundles: inspection now supplies complete
-  canonical v1/v2 skeletons and bundle rules, unused generic readers are not
-  advertised, builder runs are bounded to eight iterations and three failed
-  installations, and terminal errors retain the cap plus last validation cause.
-- Added compiler, runtime, tool, service, and Web regressions. Verified the full
-  workspace typecheck/build/test gate (738 tests: core 376, service 62, TUI 60,
-  CLI 28, Web 212), plus a real multi-App Chromium Agent → Apps round trip
-  preserving the selected route, App input, and attached Activity state.
+- Added the protected built-in `skillapp-builder`, with version-matched inspection of the active App directory, existing Apps, profiles, effective Skills, components, and static template rules.
+- Clarified the `$skill-creator` boundary without keyword-based runtime rejection: it distinguishes the requested deliverable, so ordinary Skills may validly explain, support, or be invoked by SkillApps while actual App creation is directed to `$skillapp-builder`.
+- Added one approve-once `manage_skill_app` boundary that confines generated text paths, validates a complete staged bundle through the static compiler, refuses implicit collision updates, and installs create/update results atomically without a service restart. A committed installation remains the authoritative success if the Agent is cancelled or fails afterward.
+- Added exclusive service-owned interactive App executions with Agent questions, approval, cancellation, terminal results, and typed `app_installed` effects. `skillapp.ts` remains declarative and contains no executable async functions.
+- Added Web global operation locking, inline single/multiple-question and approval sheets, polling and browser-session reconnection, Activity results, plus automatic catalog refresh after a successful installation. The builder remains open so its final response is visible instead of jumping to the new App.
+- Kept the selected App renderer mounted while viewing Agent, remembered the last App route per server, and retained inactive as well as running instance IDs for browser-session restoration. The hidden renderer keeps receiving that selected App even in a multi-App catalog, so Agent/App switching preserves form content and running Activity without a warning.
+- Kept text and select controls focused during ordinary asynchronous state persistence while retaining the global lock for interactive Agent execution.
+- Added a footer Reset action immediately before Activity. It creates the fresh instance before retiring the old one, clears form/output/attachment/Activity state, and stays disabled while any update or operation is active.
+- Added explicit `Markdown` preview/source and renderer-owned `Download` components. Both can bind one text output state, and the download uses a validated static filename and media type without filesystem access. Empty download states no longer present that filename as an existing file, and the builder now states the text-only, static-name, one-file-per-component limit.
+- Taught `skillapp-builder` when and how to pair those output components and to keep file creation out of the model Skill response.
+- Fixed a real builder run that exhausted 20 iterations after probing denied App paths and submitting 11 invalid bundles: inspection now supplies complete canonical v1/v2 skeletons and bundle rules, unused generic readers are not advertised, builder runs are bounded to eight iterations and three failed installations, and terminal errors retain the cap plus last validation cause.
+- Added compiler, runtime, tool, service, and Web regressions. Verified the full workspace typecheck/build/test gate (738 tests: core 376, service 62, TUI 60, CLI 28, Web 212), plus a real multi-App Chromium Agent → Apps round trip preserving the selected route, App input, and attached Activity state.
 
 ## 2026-09-01 — v0.66.0 — Profile-backed SkillApps
 
-- Added the additive `marifold.skillapp.v2` contract with statically compiled
-  `registerProfile()` and `useProfileSkill()` builders while preserving v1.
-- Profile operations inherit or locally override the profile model, always load
-  PROFILE/RULES/CUSTOM, resolve live profile-over-global Skills, and expose the
-  selected Skill bundles through narrow read-only run capabilities.
-- Added optional read-only profile memory and ephemeral per-App/profile history;
-  effectful tools, profile approvals, trusted folders, and normal conversation
-  history remain isolated from Apps.
-- Added the `Painer's Room` example and installed a live local copy backed by
-  the existing `painter` profile's seven `make-*-prompt` Skills.
-- Refined the example into a single-column prompt-maker form with a friendly
-  label/value selector, one statically allowlisted dynamic Skill operation, a
-  four-row Idea field with a field-aligned Make action, and a ten-row
-  auto-growing Prompt result. Pasted leading Skill names are stripped without
-  treating arbitrary Idea text as a Skill selection.
-- Added static read-only `FileAccess`/`FolderAccess` declarations with exact-file
-  enforcement and server-only host paths. The live Painer App now grants its
-  shared variable TOML explicitly without inheriting Painter permissions.
-- Added renderer-neutral attachment state plus a rounded Web picker/drop zone
-  with image thumbnails, ellipsized filenames, removal, shared preprocessing,
-  metadata-only snapshots, and lazy Agent attachment inspection.
-- Added bookmarkable `/apps/<app-name>` routes whose selection follows browser
-  Back/Forward navigation.
-- Made the App footer's running hint pulse gently while an operation is active,
-  with a static reduced-motion fallback.
-- Preserved completed App output when its inputs or attachments change and
-  added a renderer-neutral stale-output marker shown as “Based on previous
-  inputs” until the next successful run.
+- Added the additive `marifold.skillapp.v2` contract with statically compiled `registerProfile()` and `useProfileSkill()` builders while preserving v1.
+- Profile operations inherit or locally override the profile model, always load PROFILE/RULES/CUSTOM, resolve live profile-over-global Skills, and expose the selected Skill bundles through narrow read-only run capabilities.
+- Added optional read-only profile memory and ephemeral per-App/profile history; effectful tools, profile approvals, trusted folders, and normal conversation history remain isolated from Apps.
+- Added the `Painer's Room` example and installed a live local copy backed by the existing `painter` profile's seven `make-*-prompt` Skills.
+- Refined the example into a single-column prompt-maker form with a friendly label/value selector, one statically allowlisted dynamic Skill operation, a four-row Idea field with a field-aligned Make action, and a ten-row auto-growing Prompt result. Pasted leading Skill names are stripped without treating arbitrary Idea text as a Skill selection.
+- Added static read-only `FileAccess`/`FolderAccess` declarations with exact-file enforcement and server-only host paths. The live Painer App now grants its shared variable TOML explicitly without inheriting Painter permissions.
+- Added renderer-neutral attachment state plus a rounded Web picker/drop zone with image thumbnails, ellipsized filenames, removal, shared preprocessing, metadata-only snapshots, and lazy Agent attachment inspection.
+- Added bookmarkable `/apps/<app-name>` routes whose selection follows browser Back/Forward navigation.
+- Made the App footer's running hint pulse gently while an operation is active, with a static reduced-motion fallback.
+- Preserved completed App output when its inputs or attachments change and added a renderer-neutral stale-output marker shown as “Based on previous inputs” until the next successful run.
 - Added compiler, resolver, history-isolation, and service/runtime regressions.
-- Verified the full workspace typecheck/build/test gate (713 tests: core 357,
-  service 62, TUI 60, CLI 28, Web 206) and resolved the live App against all
-  seven installed `painter` Skills without making a provider call. A headed
-  Chromium pass verified the refined desktop and 390 px mobile layouts, Skill
-  selection, textarea sizing, and responsive Make action without submitting it.
+- Verified the full workspace typecheck/build/test gate (713 tests: core 357, service 62, TUI 60, CLI 28, Web 206) and resolved the live App against all seven installed `painter` Skills without making a provider call. A headed Chromium pass verified the refined desktop and 390 px mobile layouts, Skill selection, textarea sizing, and responsive Make action without submitting it.
 
 ## 2026-09-01 — v0.65.1 — Mobile composer line breaks
 
-- Made Enter insert a line break in the mobile Web composer and reserved
-  submission for the Send button, including while autocomplete is open.
+- Made Enter insert a line break in the mobile Web composer and reserved submission for the Send button, including while autocomplete is open.
 - Preserved desktop Enter-to-send and Shift+Enter line-break behavior.
-- Added focused composer regression coverage and verified all 205 Web tests,
-  the workspace typecheck/build gate, the flow in Chromium at 390×844, and the
-  corrected interaction in an iPhone browser.
+- Added focused composer regression coverage and verified all 205 Web tests, the workspace typecheck/build gate, the flow in Chromium at 390×844, and the corrected interaction in an iPhone browser.
 - Version 0.65.0 → 0.65.1 across all packages + CLI `.version`.
 
 ## 2026-08-31 — v0.65.0 — Mobile Web workspace and expanded search
 
-- Replaced the below-900-px desktop-width notice with a dedicated mobile Web
-  shell: Profiles → Sessions → Conversation, Apps → App detail, and
-  Settings → Section → Item/Detail drill-down navigation.
-- Added compact iOS-style navigation bars, touch-sized list/actions and forms,
-  responsive App layouts, mobile bottom sheets, safe-area padding, and dynamic
-  visual-viewport correction so the composer follows the iPhone keyboard.
-- Consolidated root mobile navigation into an icon-based Agent / Apps / Config
-  tab bar, with Config opening an anchored Connection / Appearance / Settings
-  sheet. Preserved the resizable desktop workspace and widened the Add Model
-  provider selector without changing other form controls.
-- Extended native-first hosted web search from ChatGPT subscription models to
-  the verified OpenAI API and xAI/Grok Responses routes plus model-aware
-  Bailian/Alibaba Cloud search. Documented newer Qwen/DeepSeek/GLM families use
-  Responses tools, documented Qwen chat families use `enable_search`, and
-  unknown model ids retain fallback search.
-- Added `[providers.<name>].native_web_search = "auto" | "responses" | "chat" |
-  "off"` parsing, persistence, sanitized service exposure, and Bailian Web
-  Config controls for newly released or exceptional models.
-- Added one guarded fallback transition for chat and agent runs: when the
-  provider rejects hosted search before emitting output, the same turn retries
-  through the configured Marifold search tool. Partial provider output is never
-  replayed or duplicated.
-- Added `ollama` as an opt-in fallback backend backed by
-  `https://ollama.com/api/web_search`, with `OLLAMA_API_KEY`, proxy support, a
-  ten-result bound, CLI/Web configuration, and an explicit warning that local
-  Ollama inference remains local while search queries use Ollama Cloud.
-- Kept search requests natural-language and model-initiated; removed stale
-  documentation that claimed the intentionally retired `/search` command was
-  still available.
-- Kept unsupported provider families on the existing Marifold fallback path;
-  Anthropic and Gemini native search remain adapter-specific future work.
-- Added focused capability-matrix, adapter wire, search-backend, configuration,
-  CLI, service, Web, streaming, non-streaming, and agent-loop regression
-  coverage. Verified the full workspace typecheck/build/test gate (705 tests:
-  core 352, service 61, TUI 60, CLI 28, Web 204).
+- Replaced the below-900-px desktop-width notice with a dedicated mobile Web shell: Profiles → Sessions → Conversation, Apps → App detail, and Settings → Section → Item/Detail drill-down navigation.
+- Added compact iOS-style navigation bars, touch-sized list/actions and forms, responsive App layouts, mobile bottom sheets, safe-area padding, and dynamic visual-viewport correction so the composer follows the iPhone keyboard.
+- Consolidated root mobile navigation into an icon-based Agent / Apps / Config tab bar, with Config opening an anchored Connection / Appearance / Settings sheet. Preserved the resizable desktop workspace and widened the Add Model provider selector without changing other form controls.
+- Extended native-first hosted web search from ChatGPT subscription models to the verified OpenAI API and xAI/Grok Responses routes plus model-aware Bailian/Alibaba Cloud search. Documented newer Qwen/DeepSeek/GLM families use Responses tools, documented Qwen chat families use `enable_search`, and unknown model ids retain fallback search.
+- Added `[providers.<name>].native_web_search = "auto" | "responses" | "chat" | "off"` parsing, persistence, sanitized service exposure, and Bailian Web Config controls for newly released or exceptional models.
+- Added one guarded fallback transition for chat and agent runs: when the provider rejects hosted search before emitting output, the same turn retries through the configured Marifold search tool. Partial provider output is never replayed or duplicated.
+- Added `ollama` as an opt-in fallback backend backed by `https://ollama.com/api/web_search`, with `OLLAMA_API_KEY`, proxy support, a ten-result bound, CLI/Web configuration, and an explicit warning that local Ollama inference remains local while search queries use Ollama Cloud.
+- Kept search requests natural-language and model-initiated; removed stale documentation that claimed the intentionally retired `/search` command was still available.
+- Kept unsupported provider families on the existing Marifold fallback path; Anthropic and Gemini native search remain adapter-specific future work.
+- Added focused capability-matrix, adapter wire, search-backend, configuration, CLI, service, Web, streaming, non-streaming, and agent-loop regression coverage. Verified the full workspace typecheck/build/test gate (705 tests: core 352, service 61, TUI 60, CLI 28, Web 204).
 - Version 0.64.2 → 0.65.0 across all packages + CLI `.version`.
 
 ## 2026-08-30 — v0.64.2 — LAN Web session creation
 
-- Fixed new-session creation in Web clients opened over plain HTTP private-LAN
-  addresses, where browsers do not expose secure-context-only `randomUUID()`.
-- Centralized browser-owned UUID generation with Web Crypto and non-secret
-  fallbacks, covering both the Sessions `+` action and first-message bootstrap.
-- Added focused insecure-origin regression coverage and verified all 197 Web
-  tests, workspace typecheck/build, and the corrected flow in real Chromium on
-  a non-loopback HTTP address.
+- Fixed new-session creation in Web clients opened over plain HTTP private-LAN addresses, where browsers do not expose secure-context-only `randomUUID()`.
+- Centralized browser-owned UUID generation with Web Crypto and non-secret fallbacks, covering both the Sessions `+` action and first-message bootstrap.
+- Added focused insecure-origin regression coverage and verified all 197 Web tests, workspace typecheck/build, and the corrected flow in real Chromium on a non-loopback HTTP address.
 
 ## 2026-08-27 — Deferred Topics and Teams design
 
-- Captured Topics as global shared places for instructions, managed resources,
-  invited Profiles and Teams, and multiple conversations or work runs.
-- Captured Teams as reusable Profile rosters with collaboration policy while
-  preserving private per-Profile memory and existing direct conversations.
-- Defined group chat as a future authored multi-party contract with selective
-  floor routing, first-class silence, per-Profile transcript projection, and
-  bounded Profile-to-Profile turns; implementation remains unscheduled.
-- Verified the documentation diff with `git diff --check`; version unchanged at
-  the user's request.
+- Captured Topics as global shared places for instructions, managed resources, invited Profiles and Teams, and multiple conversations or work runs.
+- Captured Teams as reusable Profile rosters with collaboration policy while preserving private per-Profile memory and existing direct conversations.
+- Defined group chat as a future authored multi-party contract with selective floor routing, first-class silence, per-Profile transcript projection, and bounded Profile-to-Profile turns; implementation remains unscheduled.
+- Verified the documentation diff with `git diff --check`; version unchanged at the user's request.
 
 ## 2026-08-27 — v0.64.1 — Priest web search and session creation
 
-- Updated `@priest-ai/core` from 3.0.1 to the published 3.1.0 release, which
-  supplies the provider-executed web-search request contract used by Marifold.
-- Fixed the Sessions `+` button on profile routes without a selected session;
-  it now creates the first draft while still protecting an existing unsaved
-  draft from accidental replacement.
-- Added focused controller coverage and verified the corrected empty-session
-  interaction against the running Web UI in Chromium.
-- Verified the full workspace typecheck/build/test gate (676 tests: core 333,
-  service 61, TUI 60, CLI 26, Web 196).
+- Updated `@priest-ai/core` from 3.0.1 to the published 3.1.0 release, which supplies the provider-executed web-search request contract used by Marifold.
+- Fixed the Sessions `+` button on profile routes without a selected session; it now creates the first draft while still protecting an existing unsaved draft from accidental replacement.
+- Added focused controller coverage and verified the corrected empty-session interaction against the running Web UI in Chromium.
+- Verified the full workspace typecheck/build/test gate (676 tests: core 333, service 61, TUI 60, CLI 26, Web 196).
 - Version 0.64.0 → 0.64.1 across all packages + CLI `.version`.
 
 ## 2026-08-27 — v0.64.0 — Protected skill management
 
-- Added compiled, undeletable `$skill-installer` and `$skill-creator` skills to
-  core listing and direct invocation, while keeping mutable profile/global
-  management views limited to user-owned skills.
-- Added an approval-aware `manage_skill` tool for validated local install,
-  exact-name update, exact-scope removal, and collaborative creation with safe
-  bundled text files. Profile scope is the default user-facing behavior;
-  `--global`/`-g` is explicit, and removals report shadow fallbacks.
-- Reserved both built-in names so user files cannot shadow, update, or remove
-  them. Direct filesystem management remains supported for ordinary skills.
-- Made `$skill-creator` author skill metadata, instructions, examples, and
-  model-written bundled documentation in English by default. The request
-  language no longer implies the documentation language; only an explicit
-  authoring-language request overrides it.
-- Reconciled retained Web run records with durable assistant response metrics:
-  already-rendered completions no longer reappear in the away banner, and
-  restored artifact cards return beside the exchange that produced them.
-- Added focused core regressions for built-in resolution, name protection,
-  creation, scope isolation, updates, removals, local-only sources, and write
-  escalation, plus Web regressions for run-history reconciliation and dismissal.
-- Verified the full workspace typecheck/build/test gate (675 tests: core 333,
-  service 61, TUI 60, CLI 26, Web 195), and reproduced the corrected ordering
-  and post-poll banner state in the reported live conversation.
+- Added compiled, undeletable `$skill-installer` and `$skill-creator` skills to core listing and direct invocation, while keeping mutable profile/global management views limited to user-owned skills.
+- Added an approval-aware `manage_skill` tool for validated local install, exact-name update, exact-scope removal, and collaborative creation with safe bundled text files. Profile scope is the default user-facing behavior; `--global`/`-g` is explicit, and removals report shadow fallbacks.
+- Reserved both built-in names so user files cannot shadow, update, or remove them. Direct filesystem management remains supported for ordinary skills.
+- Made `$skill-creator` author skill metadata, instructions, examples, and model-written bundled documentation in English by default. The request language no longer implies the documentation language; only an explicit authoring-language request overrides it.
+- Reconciled retained Web run records with durable assistant response metrics: already-rendered completions no longer reappear in the away banner, and restored artifact cards return beside the exchange that produced them.
+- Added focused core regressions for built-in resolution, name protection, creation, scope isolation, updates, removals, local-only sources, and write escalation, plus Web regressions for run-history reconciliation and dismissal.
+- Verified the full workspace typecheck/build/test gate (675 tests: core 333, service 61, TUI 60, CLI 26, Web 195), and reproduced the corrected ordering and post-poll banner state in the reported live conversation.
 - Version 0.63.0 → 0.64.0 across all packages + CLI `.version`.
 
 ## 2026-08-26 — v0.63.0 — Local document workspace and generated artifacts
 
-- Replaced eager Agent document injection with immutable staged resources:
-  compact inspection, bounded range reads, local search, and authoritative
-  read-only paths for complete-file processing across document formats.
-- Capped individual/accumulated model-visible tool results so several
-  successful attachment operations cannot overflow the next provider request.
-- Exposed regular run outputs as renderer-neutral artifacts with containment,
-  symlink, count, and size checks plus authenticated Web downloads.
-- Resolved model-authored `sandbox:` Markdown links only through same-run
-  artifact IDs, keeping host paths inert while preserving inline downloads.
-- Kept generated-file download buttons visible when completed run activity is
-  collapsed, so deliverables never hide behind the `Show` diagnostics toggle.
-- Rehydrated recent artifact-bearing runs directly into their session after a
-  page reload instead of requiring the catch-up banner's `Show` action.
-- Kept Chat-mode text inlining and durable Web attachment edit/resend markers
-  while removing their duplicate copy from the current Agent objective.
-- Verified the full workspace typecheck/build gate, all 661 tests, 129 CLI
-  command checks, and the authenticated download flow in a real browser.
+- Replaced eager Agent document injection with immutable staged resources: compact inspection, bounded range reads, local search, and authoritative read-only paths for complete-file processing across document formats.
+- Capped individual/accumulated model-visible tool results so several successful attachment operations cannot overflow the next provider request.
+- Exposed regular run outputs as renderer-neutral artifacts with containment, symlink, count, and size checks plus authenticated Web downloads.
+- Resolved model-authored `sandbox:` Markdown links only through same-run artifact IDs, keeping host paths inert while preserving inline downloads.
+- Kept generated-file download buttons visible when completed run activity is collapsed, so deliverables never hide behind the `Show` diagnostics toggle.
+- Rehydrated recent artifact-bearing runs directly into their session after a page reload instead of requiring the catch-up banner's `Show` action.
+- Kept Chat-mode text inlining and durable Web attachment edit/resend markers while removing their duplicate copy from the current Agent objective.
+- Verified the full workspace typecheck/build gate, all 661 tests, 129 CLI command checks, and the authenticated download flow in a real browser.
 - Version 0.62.0 → 0.63.0 across all packages + CLI `.version`.
 
 ## 2026-08-26 — v0.62.0 — npm self-update and ChatGPT output compatibility
 
-- Added `marifold update` as a direct, cross-platform wrapper around
-  `npm install --global marifold@latest`, with normal CLI error handling and a
-  service-restart reminder.
-- Omitted `max_output_tokens` only for the ChatGPT subscription Codex backend,
-  which rejects the public Responses field, while preserving the configured
-  limit for standard Responses and GitHub Copilot routes.
-- Verified core/CLI typecheck + build, all 316 core tests, all 26 CLI tests,
-  and 129 command checks; documented both behaviors.
+- Added `marifold update` as a direct, cross-platform wrapper around `npm install --global marifold@latest`, with normal CLI error handling and a service-restart reminder.
+- Omitted `max_output_tokens` only for the ChatGPT subscription Codex backend, which rejects the public Responses field, while preserving the configured limit for standard Responses and GitHub Copilot routes.
+- Verified core/CLI typecheck + build, all 316 core tests, all 26 CLI tests, and 129 command checks; documented both behaviors.
 - Version 0.61.0 → 0.62.0 across all packages + CLI `.version`.
 
 ## 2026-08-26 — v0.61.0 — Service access, provider onboarding, and native search
 
-- Made foreground, daemon, and status output show usable loopback/private entry
-  URLs, including concrete LAN and Tailscale addresses for wildcard binds.
-- Hid Web UI directory, CORS, raw bind, config, and request-logging details by
-  default, with `--verbose` restoring the technical startup diagnostics.
-- Added a Providers-column `+` action in Web Config using the same ordered
-  registry and safe defaults as `marifold provider add`, without accepting raw
-  API keys in the browser.
-- Made provider-hosted web search native-first for ChatGPT Responses models,
-  independent of Marifold's fallback toggle; other models use the configured
-  DuckDuckGo/Firecrawl fallback or receive an explicit unavailable instruction.
-- Added fallback parity to non-streaming CLI/service requests, preserved
-  unrelated caller tools, and kept unattended hosted search behind explicit
-  network `allow`.
-- Verified 128 CLI command checks, all 8 Chromium workspace tests, and the full
-  workspace typecheck/build/test gate (646 tests: core 316, service 60, TUI 60,
-  CLI 23, Web 187). The upstream Priest TypeScript suite passed all 136 tests
-  plus build, typecheck, and package dry-run validation.
+- Made foreground, daemon, and status output show usable loopback/private entry URLs, including concrete LAN and Tailscale addresses for wildcard binds.
+- Hid Web UI directory, CORS, raw bind, config, and request-logging details by default, with `--verbose` restoring the technical startup diagnostics.
+- Added a Providers-column `+` action in Web Config using the same ordered registry and safe defaults as `marifold provider add`, without accepting raw API keys in the browser.
+- Made provider-hosted web search native-first for ChatGPT Responses models, independent of Marifold's fallback toggle; other models use the configured DuckDuckGo/Firecrawl fallback or receive an explicit unavailable instruction.
+- Added fallback parity to non-streaming CLI/service requests, preserved unrelated caller tools, and kept unattended hosted search behind explicit network `allow`.
+- Verified 128 CLI command checks, all 8 Chromium workspace tests, and the full workspace typecheck/build/test gate (646 tests: core 316, service 60, TUI 60, CLI 23, Web 187). The upstream Priest TypeScript suite passed all 136 tests plus build, typecheck, and package dry-run validation.
 - Version 0.60.1 → 0.61.0 across all packages + CLI `.version`.
 
 ## 2026-08-25 — v0.60.1 — Lowercase marifold branding
 
-- Standardized the human-facing `marifold` brand in lowercase across the main
-  README, project guidance, development notes, product documentation, example
-  profile, and Web concept document.
-- Preserved case-sensitive code identifiers and the exact historical CLI output
-  quoted in this log.
-- Verified the documentation casing inventory, `git diff --check`, workspace
-  typecheck, and build.
+- Standardized the human-facing `marifold` brand in lowercase across the main README, project guidance, development notes, product documentation, example profile, and Web concept document.
+- Preserved case-sensitive code identifiers and the exact historical CLI output quoted in this log.
+- Verified the documentation casing inventory, `git diff --check`, workspace typecheck, and build.
 - Version 0.60.0 → 0.60.1 across all packages + CLI `.version`.
 
 ## 2026-08-25 — v0.60.0 — Profile display names and npm packaging
 
-- Added optional per-profile display names in `profile.toml`, with the stable
-  profile name as the default for existing and newly created profiles.
-- Showed display names throughout the Web profile and session surfaces, with an
-  editable display-name field above model settings and explicit profile-name
-  rules in Web creation/settings, CLI help, and API documentation.
-- Showed `Display Name (profile_name)` in the TUI header and fixed profile
-  switching so `$skill` completion immediately reloads the selected profile's
-  skill catalog.
-- Bundled the production Web UI into `@marifold/service`, so one
-  `npm install -g marifold` includes the CLI, TUI, service, and Web UI and the
-  service hosts the Web UI without a manual `web_dir`.
-- Added core, service, Web, and TUI regressions for persistence, fallback,
-  editing, rendering, naming guidance, and switched-profile skill completion.
-- Verified 128 CLI command checks and the full workspace typecheck/build/test
-  gate (632 tests: core 310, service 59, TUI 60, CLI 19, Web 184), plus the
-  npm tarball contents and recursive publication dry run.
+- Added optional per-profile display names in `profile.toml`, with the stable profile name as the default for existing and newly created profiles.
+- Showed display names throughout the Web profile and session surfaces, with an editable display-name field above model settings and explicit profile-name rules in Web creation/settings, CLI help, and API documentation.
+- Showed `Display Name (profile_name)` in the TUI header and fixed profile switching so `$skill` completion immediately reloads the selected profile's skill catalog.
+- Bundled the production Web UI into `@marifold/service`, so one `npm install -g marifold` includes the CLI, TUI, service, and Web UI and the service hosts the Web UI without a manual `web_dir`.
+- Added core, service, Web, and TUI regressions for persistence, fallback, editing, rendering, naming guidance, and switched-profile skill completion.
+- Verified 128 CLI command checks and the full workspace typecheck/build/test gate (632 tests: core 310, service 59, TUI 60, CLI 19, Web 184), plus the npm tarball contents and recursive publication dry run.
 - Version 0.59.0 → 0.60.0 across all packages + CLI `.version`.
 - Prepared v0.60.0 for npm publication.
 
 ## 2026-08-23 — v0.59.0 — Model-driven SkillApps
 
-- Added restricted, statically compiled `skillapp.ts` templates with explicit
-  models, app-local Skills, string state bindings, semantic form components,
-  direct button operations, and debounced latest-wins state triggers.
-- Added profile-free SkillApp execution and a structured text result contract;
-  runs load no profile, memory, history, Agent transcript, or tools.
-- Added ephemeral service-owned App instances and Web rendering for the same
-  normalized contract a future SwiftUI client can consume.
-- Treats empty required Skill inputs as an idle form state: pending work is
-  cancelled, stale output is cleared, and operation buttons are disabled.
-- Added a fixed App footer with version and an Activity drawer for runs, real
-  warnings/errors, response time, and token usage.
-- Removed the unreleased `marifold.app.v0` TOML runtime, action endpoint,
-  renderer, schema, examples, and tests; `skillapp.ts` is the only App format.
-- Verified the full workspace typecheck/build/test gate (626 tests: core 308,
-  service 58, TUI 59, CLI 19, Web 182).
+- Added restricted, statically compiled `skillapp.ts` templates with explicit models, app-local Skills, string state bindings, semantic form components, direct button operations, and debounced latest-wins state triggers.
+- Added profile-free SkillApp execution and a structured text result contract; runs load no profile, memory, history, Agent transcript, or tools.
+- Added ephemeral service-owned App instances and Web rendering for the same normalized contract a future SwiftUI client can consume.
+- Treats empty required Skill inputs as an idle form state: pending work is cancelled, stale output is cleared, and operation buttons are disabled.
+- Added a fixed App footer with version and an Activity drawer for runs, real warnings/errors, response time, and token usage.
+- Removed the unreleased `marifold.app.v0` TOML runtime, action endpoint, renderer, schema, examples, and tests; `skillapp.ts` is the only App format.
+- Verified the full workspace typecheck/build/test gate (626 tests: core 308, service 58, TUI 59, CLI 19, Web 182).
 - Version 0.58.1 → 0.59.0 across all packages + CLI `.version`.
 - Released as v0.59.0.
 
 ## 2026-08-22 — v0.58.1 — Optional-token private service access
 
-- Kept bearer authentication optional for `--host 0.0.0.0` and removed
-  `--public`; every non-loopback bind permanently rejects public source
-  addresses, even when bearer authentication is configured.
-- Kept LAN, link-local, Tailscale/CGNAT, IPv6 ULA, and IPv6 link-local access
-  for the owner's other devices and a future native iOS client.
-- Made legacy public launch state visible as a warning and fail closed on the
-  next restart, which drops the obsolete mode instead of preserving it.
-- Corrected the CLI version banner and documented every authoritative version
-  site.
-- Verified 128 CLI command checks and the full workspace typecheck/build/test
-  gate (633 tests: core 315, service 58, TUI 59, CLI 19, Web 182).
+- Kept bearer authentication optional for `--host 0.0.0.0` and removed `--public`; every non-loopback bind permanently rejects public source addresses, even when bearer authentication is configured.
+- Kept LAN, link-local, Tailscale/CGNAT, IPv6 ULA, and IPv6 link-local access for the owner's other devices and a future native iOS client.
+- Made legacy public launch state visible as a warning and fail closed on the next restart, which drops the obsolete mode instead of preserving it.
+- Corrected the CLI version banner and documented every authoritative version site.
+- Verified 128 CLI command checks and the full workspace typecheck/build/test gate (633 tests: core 315, service 58, TUI 59, CLI 19, Web 182).
 - Version 0.58.0 → 0.58.1 across all packages + CLI `.version`.
 - Released as v0.58.1.
 
 ## 2026-08-22 — v0.58.0 — Lazy run attachment inspection
 
-- Staged every agent-run upload behind an opaque, read-only attachment manifest
-  and added `inspect_attachment` as the single model-facing inspection tool.
-- Made image inspection lazy and run-scoped after selection, fixing direct
-  Skills that resolve another bundled input after opening an image without
-  adding image tokens before the attachment is actually requested.
-- Added bounded extracted-text previews for browser-read Office files and
-  turn-local Web upload support for generic binaries such as audio and archives.
+- Staged every agent-run upload behind an opaque, read-only attachment manifest and added `inspect_attachment` as the single model-facing inspection tool.
+- Made image inspection lazy and run-scoped after selection, fixing direct Skills that resolve another bundled input after opening an image without adding image tokens before the attachment is actually requested.
+- Added bounded extracted-text previews for browser-read Office files and turn-local Web upload support for generic binaries such as audio and archives.
 
 ## 2026-08-22 — v0.57.0 — Live ChatGPT models and managed service access
 
-- Made interactive `marifold model add chatgpt` query the authenticated Codex
-  model catalog and offer its current list-visible, API-supported models.
-- Kept the curated ChatGPT model list as an offline/auth-failure fallback and
-  preserved custom model entry.
-- Corrected Responses conversation replay so saved assistant turns use
-  `output_text` instead of the input-only `input_text`; adopted the published
-  `@priest-ai/core` 3.0.1 fix and removed the temporary pnpm patch.
-- Stopped swallowing provider failures and empty completions in chat streams:
-  the Web UI now receives the real error, and failed brand-new sessions do not
-  leave empty database rows.
-- Added `marifold service restart`, preserving the running service's foreground
-  or daemon mode and its safe launch options.
-- Kept raw bearer tokens out of restart state and require `--token` again when
-  the original service used a raw token; added spawned lifecycle regressions
-  for option reuse and safe refusal before stopping.
-- Made non-loopback binds private-network-only by default, allowing tokenless
-  LAN, link-local, IPv6 ULA, and Tailscale peers while rejecting public source
-  addresses and DNS-rebinding hosts. Added token-required `--public` access and
-  persisted that mode across service restarts.
-- Verified the live signed-in catalog returned six selectable models, a real
-  ChatGPT assistant-history replay returned `HISTORY_OK`, and the full workspace
-  typecheck/build/test gate passed (630 tests). The upstream Priest suite passed
-  134 tests.
+- Made interactive `marifold model add chatgpt` query the authenticated Codex model catalog and offer its current list-visible, API-supported models.
+- Kept the curated ChatGPT model list as an offline/auth-failure fallback and preserved custom model entry.
+- Corrected Responses conversation replay so saved assistant turns use `output_text` instead of the input-only `input_text`; adopted the published `@priest-ai/core` 3.0.1 fix and removed the temporary pnpm patch.
+- Stopped swallowing provider failures and empty completions in chat streams: the Web UI now receives the real error, and failed brand-new sessions do not leave empty database rows.
+- Added `marifold service restart`, preserving the running service's foreground or daemon mode and its safe launch options.
+- Kept raw bearer tokens out of restart state and require `--token` again when the original service used a raw token; added spawned lifecycle regressions for option reuse and safe refusal before stopping.
+- Made non-loopback binds private-network-only by default, allowing tokenless LAN, link-local, IPv6 ULA, and Tailscale peers while rejecting public source addresses and DNS-rebinding hosts. Added token-required `--public` access and persisted that mode across service restarts.
+- Verified the live signed-in catalog returned six selectable models, a real ChatGPT assistant-history replay returned `HISTORY_OK`, and the full workspace typecheck/build/test gate passed (630 tests). The upstream Priest suite passed 134 tests.
 - Version 0.56.1 → 0.57.0 across all packages + CLI `.version`.
 - Released as v0.57.0.
 
 ## 2026-08-21 — v0.56.1 — Idempotent empty-session creation
 
-- Made Web `New session` idempotent while the active GUID has no corresponding
-  database session. Optimistic `Saving…` rows and filtered sidebar results do
-  not count as persistence; successful session detail/list responses do.
-- Preserved normal new-session creation once the active session is confirmed
-  durable, with a controller regression covering both sides of the boundary.
-- Verified 127 CLI command checks and the full workspace typecheck/build/test
-  gate (618 tests: core 306, service 55, TUI 59, CLI 18, Web 180).
+- Made Web `New session` idempotent while the active GUID has no corresponding database session. Optimistic `Saving…` rows and filtered sidebar results do not count as persistence; successful session detail/list responses do.
+- Preserved normal new-session creation once the active session is confirmed durable, with a controller regression covering both sides of the boundary.
+- Verified 127 CLI command checks and the full workspace typecheck/build/test gate (618 tests: core 306, service 55, TUI 59, CLI 18, Web 180).
 - Version 0.56.0 → 0.56.1 across all packages + CLI `.version`.
 - Released as v0.56.1.
 
 ## 2026-08-21 — v0.56.0 — Managed service daemon lifecycle
 
-- Added equivalent foreground `marifold service` / `marifold service start`
-  entry points plus detached `marifold service start --daemon` execution.
-- Added single-instance state, stale-state recovery, graceful
-  `marifold service stop`, `marifold status`, and a bounded
-  `marifold status --logs` daemon tail.
-- Kept `--log` as Fastify request logging in both modes; daemon stdout/stderr is
-  stored under `~/.marifold/service/service.log`.
-- Added spawned-process regressions for foreground deduplication/status and the
-  complete daemon start/status/log/deduplicate/stop lifecycle.
-- Verified 127 CLI command checks and the full workspace typecheck/build/test
-  gate (618 tests: core 306, service 55, TUI 59, CLI 18, Web 180).
+- Added equivalent foreground `marifold service` / `marifold service start` entry points plus detached `marifold service start --daemon` execution.
+- Added single-instance state, stale-state recovery, graceful `marifold service stop`, `marifold status`, and a bounded `marifold status --logs` daemon tail.
+- Kept `--log` as Fastify request logging in both modes; daemon stdout/stderr is stored under `~/.marifold/service/service.log`.
+- Added spawned-process regressions for foreground deduplication/status and the complete daemon start/status/log/deduplicate/stop lifecycle.
+- Verified 127 CLI command checks and the full workspace typecheck/build/test gate (618 tests: core 306, service 55, TUI 59, CLI 18, Web 180).
 - Version 0.55.0 → 0.56.0 across all packages + CLI `.version`.
 - Released as v0.56.0.
 
 ## 2026-08-20 — v0.55.0 — Web response control and multi-select questions
 
-- Added a ChatGPT-style Stop control to the Web composer while either a plain
-  chat stream or agent run is responding. Agent mode uses the existing run
-  cancellation route; chat mode aborts the SSE request and keeps received
-  partial text without misclassifying the cancelled exchange as durable.
-- Added Web component, reducer, and controller regressions for both cancellation
-  paths.
-- Extended `ask_user` with opt-in `multiple: true` questions. The core validates
-  and normalizes several selected option ids plus optional custom text, while
-  preserving single-select defaults and accepting a legacy single `optionId`
-  for a multi-select question.
-- Added checkbox interaction to the Web question sheet and keyboard toggle
-  interaction to the TUI modal, with core, service, Web, and TUI regressions and
-  updated API/client documentation.
-- Verified the full workspace typecheck/build/test gate (614 tests: core 306,
-  service 55, TUI 59, CLI 14, Web 180).
+- Added a ChatGPT-style Stop control to the Web composer while either a plain chat stream or agent run is responding. Agent mode uses the existing run cancellation route; chat mode aborts the SSE request and keeps received partial text without misclassifying the cancelled exchange as durable.
+- Added Web component, reducer, and controller regressions for both cancellation paths.
+- Extended `ask_user` with opt-in `multiple: true` questions. The core validates and normalizes several selected option ids plus optional custom text, while preserving single-select defaults and accepting a legacy single `optionId` for a multi-select question.
+- Added checkbox interaction to the Web question sheet and keyboard toggle interaction to the TUI modal, with core, service, Web, and TUI regressions and updated API/client documentation.
+- Verified the full workspace typecheck/build/test gate (614 tests: core 306, service 55, TUI 59, CLI 14, Web 180).
 - Version 0.54.0 → 0.55.0 across all packages + CLI `.version`.
 - Aligned the live agent contract, README, architecture/service documentation, TODOs, and `.projnavi` notes with the post-v0.24.2 runtime: observable checks run through ordinary tools inside the loop, with no separate model self-grading call. The legacy `AgentEvent.verification` variant remains deprecated compatibility surface, while the generic TaskStore event name is reserved for explicit evidence from future producers.
 - Added focused-check guidance to ordinary agent context and standardized every built-in tool description on explicit “When to use” / “When NOT to use” affordances without changing permission or execution policy.

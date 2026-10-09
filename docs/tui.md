@@ -1,11 +1,6 @@
 # marifold TUI
 
-The TUI is marifold's primary interactive surface (v0.14.0). Ordinary messages
-always use `AgentRunner.run` → `AgentEvent`; the retained
-`MarifoldRuntime.stream` path supports explicit compatibility consumers and
-chat-mode Skills. The TUI also provides an input grammar and command/skill
-registries. It lives in `packages/tui` (Ink + React), an ESM-only package the
-CommonJS CLI loads through a dynamic `import()`.
+The TUI is marifold's primary interactive surface (v0.14.0). Ordinary messages always use `AgentRunner.run` → `AgentEvent`; the retained `MarifoldRuntime.stream` path supports explicit compatibility consumers and chat-mode Skills. The TUI also provides an input grammar and command/skill registries. It lives in `packages/tui` (Ink + React), an ESM-only package the CommonJS CLI loads through a dynamic `import()`.
 
 ## Launch
 
@@ -15,162 +10,70 @@ marifold --profile work  # launch on a named profile
 marifold --fullscreen    # alternate screen, mouse editing, and drag-to-copy
 ```
 
-Bare `marifold` (no subcommand) launches the TUI. `marifold agent` remains the
-scriptable Agent surface. When stdout is not a TTY (piped/non-interactive), the
-TUI prints a hint and exits instead of starting Ink.
+Bare `marifold` (no subcommand) launches the TUI. `marifold agent` remains the scriptable Agent surface. When stdout is not a TTY (piped/non-interactive), the TUI prints a hint and exits instead of starting Ink.
 
-The launch directory is the working directory: `cd ~/notes && marifold` treats
-`~/notes` as the workspace. `~/.marifold` stays the config/state home. Profiles
-are identities (model + rules + memory + skills), not workspaces.
-The startup header shows the human-readable profile label together with its
-stable name as `Display Name (profile_name)`; when no display label is set,
-the profile name fills both positions (for example, `default (default)`).
+The launch directory is the working directory: `cd ~/notes && marifold` treats `~/notes` as the workspace. `~/.marifold` stays the config/state home. Profiles are identities (model + rules + memory + skills), not workspaces. The startup header shows the human-readable profile label together with its stable name as `Display Name (profile_name)`; when no display label is set, the profile name fills both positions (for example, `default (default)`).
 
-When no profile resolves a provider/model (e.g. before configuring a default),
-the bare launch shows a profile picker; otherwise it goes straight to the
-prompt.
+When no profile resolves a provider/model (e.g. before configuring a default), the bare launch shows a profile picker; otherwise it goes straight to the prompt.
 
 ## Full-screen mode
 
-The terminal stack uses Ink 8 and React 19.3. Full-screen mode is the default
-for both local and service-connected workspaces. To use inline scrollback by
-default, add this to your local `config.toml`:
+The terminal stack uses Ink 8 and React 19.3. Full-screen mode is the default for both local and service-connected workspaces. To use inline scrollback by default, add this to your local `config.toml`:
 
 ```toml
 [tui]
 fullscreen = false
 ```
 
-You can also use `marifold config set tui.fullscreen false`. Launch flags
-`--fullscreen` and `--no-fullscreen` override the setting for one launch.
-`MARIFOLD_FULLSCREEN=1` or `0` overrides the config as a shell preference;
-explicit launch flags take precedence over that environment variable.
+You can also use `marifold config set tui.fullscreen false`. Launch flags `--fullscreen` and `--no-fullscreen` override the setting for one launch. `MARIFOLD_FULLSCREEN=1` or `0` overrides the config as a shell preference; explicit launch flags take precedence over that environment variable.
 
 Full-screen mode keeps the composer below a bounded transcript viewport:
 
-- Mouse wheel and Page Up/Page Down scroll history. Scrolling up pauses automatic
-  following while new replies arrive; reaching the bottom or Ctrl+End follows
-  the latest output again. Submitting a new prompt also follows the latest turn.
-- Clicking the composer positions the caret, including in wrapped Chinese text,
-  combining characters, and emoji. The existing keyboard editing and completion
-  controls remain available. Dragging within the composer selects draft text
-  and copies it on release without changing the draft; click or type to clear
-  the highlight.
-- Dragging across transcript text highlights it and copies it on mouse release.
-  The displayed transcript stays stable during selection, even while a reply
-  streams. Scroll, submit a prompt, or press Ctrl+End to return to live output.
-  A click without a selection leaves the clipboard unchanged.
+- Mouse wheel and Page Up/Page Down scroll history. Scrolling up pauses automatic following while new replies arrive; reaching the bottom or Ctrl+End follows the latest output again. Submitting a new prompt also follows the latest turn.
+- Clicking the composer positions the caret, including in wrapped Chinese text, combining characters, and emoji. The existing keyboard editing and completion controls remain available. Dragging within the composer selects draft text and copies it on release without changing the draft; click or type to clear the highlight.
+- Dragging across transcript text highlights it and copies it on mouse release. The displayed transcript stays stable during selection, even while a reply streams. Scroll, submit a prompt, or press Ctrl+End to return to live output. A click without a selection leaves the clipboard unchanged.
 
-Selections copy rendered text with terminal wrapping removed, preserving explicit
-newlines and paragraph breaks. Outer transcript padding is excluded. `/copy` copies the
-original response text. Local selection copying uses the existing platform
-clipboard utility (`pbcopy`, `clip`, or `xclip`). SSH sessions and local utility
-failures use OSC 52; the client terminal must allow clipboard writes. tmux also
-needs to allow the clipboard sequence/passthrough. If the terminal blocks OSC 52,
-marifold cannot detect that refusal.
+Selections copy rendered text with terminal wrapping removed, preserving explicit newlines and paragraph breaks. Outer transcript padding is excluded. `/copy` copies the original response text. Local selection copying uses the existing platform clipboard utility (`pbcopy`, `clip`, or `xclip`). SSH sessions and local utility failures use OSC 52; the client terminal must allow clipboard writes. tmux also needs to allow the clipboard sequence/passthrough. If the terminal blocks OSC 52, marifold cannot detect that refusal.
 
-After a resize settles, full-screen mode redraws the terminal at its new width
-and height while preserving the composer draft. Ctrl+L also forces a redraw.
+After a resize settles, full-screen mode redraws the terminal at its new width and height while preserving the composer draft. Ctrl+L also forces a redraw.
 
-The alternate screen restores the prior shell display on exit; its transcript
-is available through saved sessions rather than native terminal scrollback.
-Use inline mode for terminal-native selection and scrollback. Mouse capture is
-only enabled for full-screen launches, and is released on exit.
+The alternate screen restores the prior shell display on exit; its transcript is available through saved sessions rather than native terminal scrollback. Use inline mode for terminal-native selection and scrollback. Mouse capture is only enabled for full-screen launches, and is released on exit.
 
 ## Input grammar
 
 - **plain text** → talk to the agent; it answers directly or uses tools as needed.
-- **`/command [args]`** → an app-executed action. Most commands are local;
-  `/retry` and `/attach-original <prompt>` start a model turn intentionally.
+- **`/command [args]`** → an app-executed action. Most commands are local; `/retry` and `/attach-original <prompt>` start a model turn intentionally.
 - **`$skill [args]`** → run a model-backed skill. `$<name>` *is* the run.
 
 ## Input editing
 
 - **History**: Up/Down recall previous inputs.
-- **Multi-line**: end a line with `\` to continue onto the next line; Enter on a
-  line that does not end with `\` submits.
-- **Cursor & readline keys**: Left/Right move; Ctrl+A/Ctrl+E jump to start/end;
-  Ctrl+U deletes to start; Ctrl+W deletes the previous word; Backspace removes
-  the character before the cursor (including the macOS DEL byte), while Del
-  removes the character under the cursor.
-- **Prompt history**: Up/Down restores prompts and their attachments. Editing a
-  recalled prompt keeps its images; returning to an unfinished draft restores
-  that draft's attachments. Both `--resume` and `/resume` restore saved inputs.
-  Image numbers are local to each prompt. Missing or out-of-range `[image #N]`
-  references block submission instead of guessing another session image. When
-  tags are present, submission loads only their referenced images and renumbers
-  those tags; unused images from earlier draft edits cannot block the request.
-  Local file uploads retain their original absolute paths, without storing image
-  bytes. Moved or deleted source files fail to load on resubmission. Existing
-  embedded attachments and Web uploads remain readable; their bytes load lazily
-  on resubmission, including from service-connected workspaces. Missing saved
-  images produce an error instead of silently sending only placeholders.
-- **Marked tokens**: Backspace at the end of a `$skill`, `/command`, or
-  `[image #N]` deletes the entire token. Deleting an image tag removes its
-  attachment and renumbers remaining tags. Editing inside a token stays normal.
-- **Session ownership**: An open session is reserved by its page or terminal.
-  Another Web page or TUI cannot open it and receives a session-in-use error.
-  Switching sessions or exiting releases it; after a crash, stale reservations
-  expire within 60 seconds. Clients renew reservations every 15 seconds.
-- **Word editing**: Option/Alt+Left and Option/Alt+Right move by word;
-  Option/Alt+Backspace deletes the previous word. Ctrl+Left/Right and
-  Alt+B/Alt+F also move by word. The terminal must send Option as Alt/Meta.
-- **Tab completion** completes `/command` and `$skill` tokens at the cursor
-  anywhere after whitespace, including later lines, while preserving surrounding
-  text and arguments. These tokens are highlighted throughout the draft.
-- **Run details**: Reasoning summaries and intermediate progress text appear while
-  running and collapse when the run ends. Ctrl+O toggles completed details. Final
-  answers, tool results, and errors remain visible.
-- **Cancel/exit**: Esc or Ctrl+C cancels a running task; when idle, press Ctrl+C
-  twice to exit.
+- **Multi-line**: end a line with `\` to continue onto the next line; Enter on a line that does not end with `\` submits.
+- **Cursor & readline keys**: Left/Right move; Ctrl+A/Ctrl+E jump to start/end; Ctrl+U deletes to start; Ctrl+W deletes the previous word; Backspace removes the character before the cursor (including the macOS DEL byte), while Del removes the character under the cursor.
+- **Prompt history**: Up/Down restores prompts and their attachments. Editing a recalled prompt keeps its images; returning to an unfinished draft restores that draft's attachments. Both `--resume` and `/resume` restore saved inputs. Image numbers are local to each prompt. Missing or out-of-range `[image #N]` references block submission instead of guessing another session image. When tags are present, submission loads only their referenced images and renumbers those tags; unused images from earlier draft edits cannot block the request. Local file uploads retain their original absolute paths, without storing image bytes. Moved or deleted source files fail to load on resubmission. Existing embedded attachments and Web uploads remain readable; their bytes load lazily on resubmission, including from service-connected workspaces. Missing saved images produce an error instead of silently sending only placeholders.
+- **Marked tokens**: Backspace at the end of a `$skill`, `/command`, or `[image #N]` deletes the entire token. Deleting an image tag removes its attachment and renumbers remaining tags. Editing inside a token stays normal.
+- **Session ownership**: An open session is reserved by its page or terminal. Another Web page or TUI cannot open it and receives a session-in-use error. Switching sessions or exiting releases it; after a crash, stale reservations expire within 60 seconds. Clients renew reservations every 15 seconds.
+- **Word editing**: Option/Alt+Left and Option/Alt+Right move by word; Option/Alt+Backspace deletes the previous word. Ctrl+Left/Right and Alt+B/Alt+F also move by word. The terminal must send Option as Alt/Meta.
+- **Tab completion** completes `/command` and `$skill` tokens at the cursor anywhere after whitespace, including later lines, while preserving surrounding text and arguments. These tokens are highlighted throughout the draft.
+- **Run details**: Reasoning summaries and intermediate progress text appear while running and collapse when the run ends. Ctrl+O toggles completed details. Final answers, tool results, and errors remain visible.
+- **Cancel/exit**: Esc or Ctrl+C cancels a running task; when idle, press Ctrl+C twice to exit.
 
 ## Commands
 
-`/help` `/exit` (`/quit`) `/new` `/model` `/profile` `/resume`
-`/think on|off` `/clear` `/stop` `/btw <text>` `/permissions` `/skills`
-`/install-skill [--profile <name>] <path|url>` `/doctor [--fix]`, plus chat carry-overs `/read`
-`/image` `/attach-original <prompt>` `/remember` `/forget` `/delete-memory`.
+`/help` `/exit` (`/quit`) `/new` `/model` `/profile` `/resume` `/think on|off` `/clear` `/stop` `/btw <text>` `/permissions` `/skills` `/install-skill [--profile <name>] <path|url>` `/doctor [--fix]`, plus chat carry-overs `/read` `/image` `/attach-original <prompt>` `/remember` `/forget` `/delete-memory`.
 
-- `/btw <text>` steers a **running** task without cancelling it: the text is
-  queued and handed to the model on its next turn. With no run active, it is sent
-  as a normal message.
+- `/btw <text>` steers a **running** task without cancelling it: the text is queued and handed to the model on its next turn. With no run active, it is sent as a normal message.
 - `/stop` (or Esc / Ctrl+C while running) cancels the current run.
-- `/doctor` reports the active profile's instruction format without changing
-  files. `/doctor --fix` backs up and consolidates its legacy split documents
-  into `INSTRUCTIONS.md`.
-- `/think on|off` maps to Priest's provider-neutral reasoning configuration on
-  Ollama, Anthropic, ChatGPT, and Responses-only GitHub Copilot models (with
-  legacy provider options retained for Bailian-compatible endpoints). Safe
-  provider summaries appear as muted `Reasoning:` rows before the answer;
-  opaque continuation data is never rendered.
-- `/attach-original <prompt>` sends every image attached to that message with
-  its original encoded bytes, then returns to default optimization for the next
-  message. Validation, the four-image count limit, and the 16 MiB aggregate
-  source limit still apply. Normal sends resize large images and choose a
-  smaller high-fidelity encoding while preserving transparency and animation.
-- `/resume` opens a recent-session picker for the current profile; choose with
-  Up/Down and Enter. It is ordered strictly by conversation recency; Web UI
-  session pins do not influence this TUI workflow. `/session` remains as a
-  compatibility alias. Ordinary agent prompts remain in the session after a
-  failed or cancelled run, paired with a short terminal outcome so the next
-  resume does not silently lose the request. A failed historical regeneration
-  leaves the prior successful exchange unchanged.
+- `/doctor` reports the active profile's instruction format without changing files. `/doctor --fix` backs up and consolidates its legacy split documents into `INSTRUCTIONS.md`.
+- `/think on|off` maps to Priest's provider-neutral reasoning configuration on Ollama, Anthropic, ChatGPT, and Responses-only GitHub Copilot models (with legacy provider options retained for Bailian-compatible endpoints). Safe provider summaries appear as muted `Reasoning:` rows before the answer; opaque continuation data is never rendered.
+- `/attach-original <prompt>` sends every image attached to that message with its original encoded bytes, then returns to default optimization for the next message. Validation, the four-image count limit, and the 16 MiB aggregate source limit still apply. Normal sends resize large images and choose a smaller high-fidelity encoding while preserving transparency and animation.
+- `/resume` opens a recent-session picker for the current profile; choose with Up/Down and Enter. It is ordered strictly by conversation recency; Web UI session pins do not influence this TUI workflow. `/session` remains as a compatibility alias. Ordinary agent prompts remain in the session after a failed or cancelled run, paired with a short terminal outcome so the next resume does not silently lose the request. A failed historical regeneration leaves the prior successful exchange unchanged.
 - `/skills` opens an arrow-key list: Enter runs the selected skill, Del removes it.
 ## Skills
 
-A skill is a `marifold.skill.v0` markdown file — a YAML frontmatter block with
-the metadata, then a prompt body with declared `{{variables}}`. `mode` is
-optional (`agent` or the retained compatibility value `chat`); when omitted,
-the Skill uses Agent execution. User-managed skills live in
-`[paths].skills_dir` (default `~/.marifold/skills`) and in each profile's
-`skills/` directory (profile skills shadow global ones).
+A skill is a `marifold.skill.v0` markdown file — a YAML frontmatter block with the metadata, then a prompt body with declared `{{variables}}`. `mode` is optional (`agent` or the retained compatibility value `chat`); when omitted, the Skill uses Agent execution. User-managed skills live in `[paths].skills_dir` (default `~/.marifold/skills`) and in each profile's `skills/` directory (profile skills shadow global ones).
 
-Skills are stored as `<name>/SKILL.md` folders (the Claude Code layout).
-`/install-skill` accepts either a single `.md` file (saved as `<name>/SKILL.md`)
-or a skill **folder** containing a `SKILL.md` (e.g. `/install-skill ./translate`),
-which is copied whole. marifold parses `SKILL.md` as the definition; bundled
-files travel with the skill and are available to agent-mode skill runs through
-`read_file` when their instructions reference them.
+Skills are stored as `<name>/SKILL.md` folders (the Claude Code layout). `/install-skill` accepts either a single `.md` file (saved as `<name>/SKILL.md`) or a skill **folder** containing a `SKILL.md` (e.g. `/install-skill ./translate`), which is copied whole. marifold parses `SKILL.md` as the definition; bundled files travel with the skill and are available to agent-mode skill runs through `read_file` when their instructions reference them.
 
 ```markdown
 ---
@@ -188,28 +91,16 @@ Translate into {{language}}:
 {{text}}
 ```
 
-Run it with `$translate ja こんにちは` — positional args fill the declared
-variables in order, and the final variable absorbs trailing words. Missing
-required variables are prompted inline. `/install-skill <path>` adds to the
-global catalog for all profiles; `--profile <name>` adds a profile-only copy.
-Install the bundled examples
-with:
+Run it with `$translate ja こんにちは` — positional args fill the declared variables in order, and the final variable absorbs trailing words. Missing required variables are prompted inline. `/install-skill <path>` adds to the global catalog for all profiles; `--profile <name>` adds a profile-only copy. Install the bundled examples with:
 
 ```text
 /install-skill examples/skills/translate                    # global folder Skill
 /install-skill --profile writer examples/skills/summarize-file.md
 ```
 
-Installing the same skill name again updates its `SKILL.md`; installing from a
-folder replaces that skill's whole folder. `/install-skill` does not uninstall:
-use `/skills` for the global catalog, or `/skills --profile <name>` for a
-profile-only catalog, and press Del to remove the selected skill from that scope.
+Installing the same skill name again updates its `SKILL.md`; installing from a folder replaces that skill's whole folder. `/install-skill` does not uninstall: use `/skills` for the global catalog, or `/skills --profile <name>` for a profile-only catalog, and press Del to remove the selected skill from that scope.
 
-For ordinary agent prompts that mention skills, marifold lazily attaches its
-built-in `$skill-manager` guide. The guide supplies the active profile and
-configured global skill paths so the agent manages marifold skills instead of
-creating another tool's skill directory in the working folder. It prefers the
-same validated mutation boundary used by the protected built-ins:
+For ordinary agent prompts that mention skills, marifold lazily attaches its built-in `$skill-manager` guide. The guide supplies the active profile and configured global skill paths so the agent manages marifold skills instead of creating another tool's skill directory in the working folder. It prefers the same validated mutation boundary used by the protected built-ins:
 
 ```text
 $skill-installer install <local-path> [--profile <name>]
@@ -219,79 +110,31 @@ $skill-installer help
 $skill-creator [name and requirements] [--profile <name>]
 ```
 
-These two skills are compiled into core rather than copied into either mutable
-skill directory. They always appear in `$` completion, cannot be shadowed or
-removed, and do not appear in the scope-specific `/skills` deletion picker.
-`skill-installer` accepts local files and folders only; `/install-skill` retains
-its existing local-path/URL behavior. Every mutation targets exactly one scope,
-defaults to the global catalog, validates the resulting `SKILL.md`, and passes
-through normal write approval. `--profile <name>` targets only that existing
-profile; the older `--global`/`-g` spelling remains accepted but is unnecessary.
-Removing a profile copy reports when it reveals a shadowed global copy. Creating
-or managing ordinary skills through direct filesystem operations remains supported.
-`$skill-creator` authors `SKILL.md`
-and model-written bundled documentation in English by default, regardless of
-the request language; only an explicit request to write the skill or its
-documentation in another language overrides that default. The skill's intended
-input/output language remains an independent behavior setting.
+These two skills are compiled into core rather than copied into either mutable skill directory. They always appear in `$` completion, cannot be shadowed or removed, and do not appear in the scope-specific `/skills` deletion picker. `skill-installer` accepts local files and folders only; `/install-skill` retains its existing local-path/URL behavior. Every mutation targets exactly one scope, defaults to the global catalog, validates the resulting `SKILL.md`, and passes through normal write approval. `--profile <name>` targets only that existing profile; the older `--global`/`-g` spelling remains accepted but is unnecessary. Removing a profile copy reports when it reveals a shadowed global copy. Creating or managing ordinary skills through direct filesystem operations remains supported. `$skill-creator` authors `SKILL.md` and model-written bundled documentation in English by default, regardless of the request language; only an explicit request to write the skill or its documentation in another language overrides that default. The skill's intended input/output language remains an independent behavior setting.
 
-A Skill is the shared primitive a graphical **SkillApp** renders as a form.
-SkillApp v1 runs an app-local Skill with an explicitly registered model; v2 can
-register an existing profile and run its installed Skills with live profile
-documents and read-only bundled-file access. Apps are not rendered in the TUI.
+A Skill is the shared primitive a graphical **SkillApp** renders as a form. SkillApp v1 runs an app-local Skill with an explicitly registered model; v2 can register an existing profile and run its installed Skills with live profile documents and read-only bundled-file access. Apps are not rendered in the TUI.
 
 ## Clarification questions
 
-In agent mode, the model may call `ask_user` when essential information is
-missing and a reasonable assumption could materially change the result. It is
-not a required phase: ordinary tasks continue without a prompt. One checkpoint
-may contain up to three questions with two to four suggested choices each,
-plus a free-text “Something else” answer supplied by the client. Questions are
-single-select unless the model marks them “select all that apply.”
+In agent mode, the model may call `ask_user` when essential information is missing and a reasonable assumption could materially change the result. It is not a required phase: ordinary tasks continue without a prompt. One checkpoint may contain up to three questions with two to four suggested choices each, plus a free-text “Something else” answer supplied by the client. Questions are single-select unless the model marks them “select all that apply.”
 
-The TUI shows every question in one keyboard modal. Use Up/Down to choose,
-Left/Right to move between questions, Enter to select or edit the custom answer,
-and Space or Enter to toggle choices in a multi-select question. Then press `s`
-once every question is complete. Esc cancels the run. This is separate from
-tool approval: answering a question never grants filesystem, shell, network,
-or delegation permission.
+The TUI shows every question in one keyboard modal. Use Up/Down to choose, Left/Right to move between questions, Enter to select or edit the custom answer, and Space or Enter to toggle choices in a multi-select question. Then press `s` once every question is complete. Esc cancels the run. This is separate from tool approval: answering a question never grants filesystem, shell, network, or delegation permission.
 
 ## Permissions
 
-The TUI reuses the core approval engine unchanged (see
-[architecture.md](architecture.md)): per tool-kind (`read`/`write`/`shell`/
-`network`/`delegate`) × mode (`allow`/`ask`/`deny`). Defaults ship safe and quiet:
-`read`+`delegate` allow, `write`+`shell`+`network` ask.
+The TUI reuses the core approval engine unchanged (see [architecture.md](architecture.md)): per tool-kind (`read`/`write`/`shell`/ `network`/`delegate`) × mode (`allow`/`ask`/`deny`). Defaults ship safe and quiet: `read`+`delegate` allow, `write`+`shell`+`network` ask.
 
-When a tool needs approval, the modal previews the tool's arguments (the file
-content being written, the shell command, …) so you approve with sight of *what*
-is happening, then offers:
+When a tool needs approval, the modal previews the tool's arguments (the file content being written, the shell command, …) so you approve with sight of *what* is happening, then offers:
 
 - **allow once** — approve this single call.
 - **session `<kind>`** — approve this kind for the rest of the session (in-memory).
 - **persist `<kind>`** — write `allow` for this kind to `[agent.approval]` in config.
 - **deny**.
 
-Escalated calls (e.g. a write outside the working directory) always prompt,
-regardless of any grant. `/permissions` shows current modes and active session
-grants. Requests involving external/sensitive filesystem paths and package
-installation cannot be persisted, so their modal offers only **allow once** and
-**deny**.
+Escalated calls (e.g. a write outside the working directory) always prompt, regardless of any grant. `/permissions` shows current modes and active session grants. Requests involving external/sensitive filesystem paths and package installation cannot be persisted, so their modal offers only **allow once** and **deny**.
 
-Every agent run has a private workspace under `~/.marifold/runs/<run-id>/`.
-User-facing `~` and `$HOME` paths continue to resolve to the real account home;
-the private run home is internal runtime state only.
-On macOS, shell commands run through the system sandbox with network disabled and
-writes limited to that run, the selected working folder, and configured in-home
-trusted folders. Python uses the run's `.venv`; network package installation is a
-separate one-time-approved `uv` tool. Approval never disables these hard limits,
-and shell execution fails closed when no supported sandbox backend is available.
+Every agent run has a private workspace under `~/.marifold/runs/<run-id>/`. User-facing `~` and `$HOME` paths continue to resolve to the real account home; the private run home is internal runtime state only. On macOS, shell commands run through the system sandbox with network disabled and writes limited to that run, the selected working folder, and configured in-home trusted folders. Python uses the run's `.venv`; network package installation is a separate one-time-approved `uv` tool. Approval never disables these hard limits, and shell execution fails closed when no supported sandbox backend is available.
 
 ## Architecture
 
-Logic lives in pure, unit-tested modules under `packages/tui/src/core/`
-(`inputGrammar`, `eventView`, `appState` reducer, `commands`, `skills`); the Ink
-components under `packages/tui/src/ui/` stay thin. The agent run wires a TUI
-`ApprovalHandler` whose Promise the approval modal resolves, a `UserInputHandler`
-whose Promise the question modal resolves, an `AbortController` for cancellation,
-and a steering drain closure for `/btw`.
+Logic lives in pure, unit-tested modules under `packages/tui/src/core/` (`inputGrammar`, `eventView`, `appState` reducer, `commands`, `skills`); the Ink components under `packages/tui/src/ui/` stay thin. The agent run wires a TUI `ApprovalHandler` whose Promise the approval modal resolves, a `UserInputHandler` whose Promise the question modal resolves, an `AbortController` for cancellation, and a steering drain closure for `/btw`.

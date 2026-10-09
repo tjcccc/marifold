@@ -1,44 +1,31 @@
 # Workflow Composition — Ongoing Design Plan
 
-This is a living design document for marifold's future multi-profile and
-multi-model workflow system. It records the current direction and open
-questions; it is not an implementation commitment or a frozen schema.
+This is a living design document for marifold's future multi-profile and multi-model workflow system. It records the current direction and open questions; it is not an implementation commitment or a frozen schema.
 
 ## Product boundary
 
-Workflows should make marifold a lightweight orchestration layer for profiles,
-models, Skills, and Apps. They should not turn marifold into a heavyweight
-coding agent or project/goal manager. Long-running repository work remains a
-better fit for tools such as Codex and Claude Code.
+Workflows should make marifold a lightweight orchestration layer for profiles, models, Skills, and Apps. They should not turn marifold into a heavyweight coding agent or project/goal manager. Long-running repository work remains a better fit for tools such as Codex and Claude Code.
 
 The central rule is:
 
-> One declarative workflow definition, executed by one shared runtime through
-> multiple interfaces.
+> One declarative workflow definition, executed by one shared runtime through multiple interfaces.
 
 ## Interfaces and triggers
 
-The workflow runtime should be owned by `packages/core`. Every client should
-use the same definitions, run state, events, approvals, and output contracts.
+The workflow runtime should be owned by `packages/core`. Every client should use the same definitions, run state, events, approvals, and output contracts.
 
 - **CLI** — create, edit, validate, run, inspect, and list workflows.
-- **TUI** — list, run, monitor, cancel, and approve workflow runs. A graph
-  editor is not a TUI requirement.
-- **Web UI** — visually author workflows and inspect their execution timeline,
-  node outputs, approvals, failures, and reruns.
-- **Chat** — optionally trigger an existing workflow through a small command
-  such as `/workflow run make-news-to-word`.
+- **TUI** — list, run, monitor, cancel, and approve workflow runs. A graph editor is not a TUI requirement.
+- **Web UI** — visually author workflows and inspect their execution timeline, node outputs, approvals, failures, and reruns.
+- **Chat** — optionally trigger an existing workflow through a small command such as `/workflow run make-news-to-word`.
 - **Scheduler** — invoke the same workflow runtime with declared inputs.
-- **Service API** — expose the transport-neutral workflow and run contracts
-  used by all clients.
+- **Service API** — expose the transport-neutral workflow and run contracts used by all clients.
 
-Execution should be available across CLI, TUI, and Web UI even if the first
-authoring experience is TOML plus CLI scaffolding.
+Execution should be available across CLI, TUI, and Web UI even if the first authoring experience is TOML plus CLI scaffolding.
 
 ## CLI direction
 
-The CLI should manipulate the same files that users can edit by hand. It must
-not become a second configuration system.
+The CLI should manipulate the same files that users can edit by hand. It must not become a second configuration system.
 
 ```bash
 marifold workflow init make-news-to-word
@@ -65,8 +52,7 @@ marifold workflow runs make-news-to-word
 marifold workflow run make-news-to-word --input topic="AI news"
 ```
 
-An explicit `run` subcommand keeps execution distinct from workflow-management
-operations.
+An explicit `run` subcommand keeps execution distinct from workflow-management operations.
 
 ## Definition layout
 
@@ -127,8 +113,7 @@ type = "json"
 required = true
 ```
 
-The downstream document node consumes the declared output, not the preceding
-node's transcript:
+The downstream document node consumes the declared output, not the preceding node's transcript:
 
 ```toml
 version = 1
@@ -145,8 +130,7 @@ formats = ["docx"]
 required = true
 ```
 
-Inline prompts may be supported, but separate prompt files are easier to edit,
-review, and reuse.
+Inline prompts may be supported, but separate prompt files are easier to edit, review, and reuse.
 
 ## Execution and isolation
 
@@ -166,16 +150,12 @@ Every invocation receives a workflow run ID and a persistent run directory:
 Each node should receive:
 
 - a fresh model context;
-- its selected profile and that profile's default model, with an optional
-  explicit node override;
+- its selected profile and that profile's default model, with an optional explicit node override;
 - only its declared skills and upstream inputs;
 - a node-specific workspace;
 - the normal marifold approval and filesystem policies.
 
-Node history must be isolated. A downstream profile must not inherit an
-upstream transcript, cached skill instructions, or unrelated conversation
-context. Data crosses node boundaries only through declared, validated inputs
-and outputs.
+Node history must be isolated. A downstream profile must not inherit an upstream transcript, cached skill instructions, or unrelated conversation context. Data crosses node boundaries only through declared, validated inputs and outputs.
 
 Initial output types:
 
@@ -184,18 +164,13 @@ Initial output types:
 - `file`
 - `files`
 
-Structured outputs are a core reliability boundary. A node's output must not
-mean merely "whatever the model said last."
+Structured outputs are a core reliability boundary. A node's output must not mean merely "whatever the model said last."
 
-Workflow runs should produce renderer-neutral events so CLI, TUI, Web UI, and
-future clients can show the same state: queued, running, waiting for approval,
-completed, failed, cancelled, and skipped.
+Workflow runs should produce renderer-neutral events so CLI, TUI, Web UI, and future clients can show the same state: queued, running, waiting for approval, completed, failed, cancelled, and skipped.
 
 ## Scheduling and approvals
 
-Schedules should remain separate from workflow definitions. A workflow
-describes what happens; a schedule describes when a particular machine should
-run it.
+Schedules should remain separate from workflow definitions. A workflow describes what happens; a schedule describes when a particular machine should run it.
 
 ```bash
 marifold schedule add daily-news \
@@ -204,12 +179,9 @@ marifold schedule add daily-news \
   --input topic="AI"
 ```
 
-The Web UI may show schedules associated with a workflow without embedding
-machine-specific trigger policy into `workflow.toml`.
+The Web UI may show schedules associated with a workflow without embedding machine-specific trigger policy into `workflow.toml`.
 
-Scheduled runs must never bypass the existing approval system. If an unattended
-node needs an unapproved capability, the run pauses in a waiting-for-approval
-state.
+Scheduled runs must never bypass the existing approval system. If an unattended node needs an unapproved capability, the run pauses in a waiting-for-approval state.
 
 ## First implementation boundary
 
@@ -236,9 +208,7 @@ Defer until real use demonstrates a need:
 
 ## Relationship to Apps
 
-Workflows and Apps should share typed variables, approval vocabulary,
-actor/model invocation, and artifact handling. A later App action may invoke a
-workflow, and a workflow may eventually use an App as a node:
+Workflows and Apps should share typed variables, approval vocabulary, actor/model invocation, and artifact handling. A later App action may invoke a workflow, and a workflow may eventually use an App as a node:
 
 ```toml
 type = "app"
@@ -255,27 +225,19 @@ Workflow
   -> structured artifacts
 ```
 
-Profile nodes are the appropriate first implementation. Skill and App
-nodes should be added only after their input/output and UI contracts are
-stable.
+Profile nodes are the appropriate first implementation. Skill and App nodes should be added only after their input/output and UI contracts are stable.
 
 ## Open design questions
 
 These points remain intentionally unresolved:
 
-1. Whether workflow and node schemas use numeric `version` fields or namespaced
-   schema identifiers such as `marifold.workflow.v0`.
-2. Whether node model overrides are necessary in v0 or whether distinct
-   profiles are the only model-selection mechanism.
-3. How JSON output schemas are declared and validated without making the
-   definition format cumbersome.
-4. Whether rerunning one node invalidates all descendants automatically or
-   offers the user a choice.
+1. Whether workflow and node schemas use numeric `version` fields or namespaced schema identifiers such as `marifold.workflow.v0`.
+2. Whether node model overrides are necessary in v0 or whether distinct profiles are the only model-selection mechanism.
+3. How JSON output schemas are declared and validated without making the definition format cumbersome.
+4. Whether rerunning one node invalidates all descendants automatically or offers the user a choice.
 5. How workflow runs and node sessions appear in ordinary session history.
 6. Which deterministic node types, if any, belong in the first release.
-7. How the Web UI graph editor represents artifacts, approvals, and parallel
-   branches without becoming a developer-only tool.
+7. How the Web UI graph editor represents artifacts, approvals, and parallel branches without becoming a developer-only tool.
 8. How workflow definitions are exported, imported, and shared safely.
 
-Update this document as discussion resolves these questions. Move stable
-contracts into dedicated specifications only when implementation begins.
+Update this document as discussion resolves these questions. Move stable contracts into dedicated specifications only when implementation begins.

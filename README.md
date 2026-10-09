@@ -103,8 +103,7 @@ Marifold enables web search by default: supported provider/model connections use
 
 ## Setup
 
-marifold requires Node.js 24 LTS. Install the published CLI globally; this one
-package brings the TUI, service, and bundled Web UI:
+marifold requires Node.js 24 LTS. Install the published CLI globally; this one package brings the TUI, service, and bundled Web UI:
 
 ```bash
 npm install -g marifold
@@ -117,19 +116,15 @@ Update an npm-installed copy to the package on npm's `latest` dist-tag:
 marifold update
 ```
 
-This is equivalent to `npm install --global marifold@latest`. Restart a running
-service afterward so its background process uses the newly installed version.
+This is equivalent to `npm install --global marifold@latest`. Restart a running service afterward so its background process uses the newly installed version.
 
-Run `marifold` for the TUI, or start the service and open the Web UI at
-`http://127.0.0.1:32140`:
+Run `marifold` for the TUI, or start the service and open the Web UI at `http://127.0.0.1:32140`:
 
 ```bash
 marifold service start --daemon
 ```
 
-For source development, the repository's `.nvmrc` pins the current LTS patch,
-and the root `packageManager` pins pnpm 12.9.1 for all workspace packages.
-Use Corepack so commands from the root or any package directory select that version.
+For source development, the repository's `.nvmrc` pins the current LTS patch, and the root `packageManager` pins pnpm 12.9.1 for all workspace packages. Use Corepack so commands from the root or any package directory select that version.
 
 Install and build:
 
@@ -140,10 +135,7 @@ pnpm install
 pnpm build
 ```
 
-All workspace packages, including private apps, share the root `package.json`
-release version. Update them together with the CLI version in
-`packages/cli/src/index.ts`; run `pnpm check:versions` before publishing.
-`pnpm typecheck` also checks version consistency.
+All workspace packages, including private apps, share the root `package.json` release version. Update them together with the CLI version in `packages/cli/src/index.ts`; run `pnpm check:versions` before publishing. `pnpm typecheck` also checks version consistency.
 
 After building or linking the source workspace, create local configuration:
 
@@ -201,12 +193,7 @@ The agent eval runs scripted objectives in sandboxed temp directories and report
 
 ## Personal workspaces across devices
 
-Host your existing local workspace and pair your other Macs through an encrypted
-bridge. Profiles, sessions, models, Skills, Apps and schedules stay on the host;
-approved agent tools can run on a paired Mac. The Web **Workspace** control and TUI
-`/workspace` switch between Local and paired workspaces. Existing direct private
-connections remain available. See [setup, permissions and recovery](docs/workspaces.md)
-and the [Vercel/Redis deployment guide](apps/bridge/README.md).
+Host your existing local workspace and pair your other Macs through an encrypted bridge. Profiles, sessions, models, Skills, Apps and schedules stay on the host; approved agent tools can run on a paired Mac. The Web **Workspace** control and TUI `/workspace` switch between Local and paired workspaces. Existing direct private connections remain available. See [setup, permissions and recovery](docs/workspaces.md) and the [Vercel/Redis deployment guide](apps/bridge/README.md).
 
 ## Commands
 
@@ -294,10 +281,7 @@ marifold service --host 0.0.0.0
 marifold update
 ```
 
-Profile names are stable filesystem- and URL-safe identifiers: use ASCII
-letters, numbers, underscores, and hyphens only (`[A-Za-z0-9_-]+`). Spaces and
-other characters are rejected. Use the optional profile display name for a
-human-readable label with spaces or Unicode.
+Profile names are stable filesystem- and URL-safe identifiers: use ASCII letters, numbers, underscores, and hyphens only (`[A-Za-z0-9_-]+`). Spaces and other characters are rejected. Use the optional profile display name for a human-readable label with spaces or Unicode.
 
 The packaged binary name is `marifold`.
 
@@ -406,26 +390,15 @@ cors_origins = ["http://127.0.0.1:5173"] # exact-match browser origins allowed t
 
 With no token resolved, auth is off; loopback and private-network access remain available. With no `cors_origins`, cross-origin browser requests are rejected; a hosted Web UI reached through the same loopback, LAN, or Tailscale address is same-origin and needs no allowlist entry. `marifold service --token/--token-env/--cors-origin` override the config per start. When enabled, auth covers `/v1/*`; `/health` and hosted static files stay reachable. Authentication protects the API but never admits public source addresses.
 
-GPT-6 Astra uses `low` reasoning in normal mode and `medium` with thinking
-enabled. Thinking mode also requests reasoning summaries. Other models retain
-their existing reasoning defaults.
+GPT-6 Astra uses `low` reasoning in normal mode and `medium` with thinking enabled. Thinking mode also requests reasoning summaries. Other models retain their existing reasoning defaults.
 
-ChatGPT model discovery queries the signed-in Codex catalog. Its required client
-version uses `MARIFOLD_CHATGPT_CATALOG_CLIENT_VERSION` when set to a numeric
-`major.minor.patch` version; otherwise it uses the newer of the bundled baseline
-(`0.154.0`) and the `client_version` in `$CODEX_HOME/models_cache.json` (default
-`~/.codex/models_cache.json`). Codex is optional: missing or invalid metadata
-uses the baseline. Local cached models and Codex credentials are never imported.
-Restart a running service after changing the environment override.
+ChatGPT model discovery queries the signed-in Codex catalog. Its required client version uses `MARIFOLD_CHATGPT_CATALOG_CLIENT_VERSION` when set to a numeric `major.minor.patch` version; otherwise it uses the newer of the bundled baseline (`0.154.0`) and the `client_version` in `$CODEX_HOME/models_cache.json` (default `~/.codex/models_cache.json`). Codex is optional: missing or invalid metadata uses the baseline. Local cached models and Codex credentials are never imported. Restart a running service after changing the environment override.
 
 ### Service token workflow
 
-The bearer token is an optional, user-chosen shared secret for marifold's
-`/v1/*` API. It is not a model-provider token, marifold does not issue one,
-and the API intentionally never reveals its value.
+The bearer token is an optional, user-chosen shared secret for marifold's `/v1/*` API. It is not a model-provider token, marifold does not issue one, and the API intentionally never reveals its value.
 
-On the machine that runs the service, generate a strong token and keep it in
-the environment used to start marifold:
+On the machine that runs the service, generate a strong token and keep it in the environment used to start marifold:
 
 ```sh
 openssl rand -hex 32
@@ -434,55 +407,28 @@ marifold config set service.token_env MARIFOLD_SERVICE_TOKEN
 marifold service
 ```
 
-The `export` above lasts only for that shell. A daemon started from that shell
-inherits the variable, and `marifold service restart` reuses the configured
-environment-variable name. A raw `--token` is never persisted and must be
-supplied again to the restart command. For automatic restart after login or
-reboot, define the variable in the external service manager or another
-appropriate local secret store.
+The `export` above lasts only for that shell. A daemon started from that shell inherits the variable, and `marifold service restart` reuses the configured environment-variable name. A raw `--token` is never persisted and must be supplied again to the restart command. For automatic restart after login or reboot, define the variable in the external service manager or another appropriate local secret store.
 
-In the Web UI, open **Connection** from the sidebar, select **This server**, and
-enter the same value in **Bearer token**. The token is stored for that named
-server in the browser's local storage and sent as the
-`Authorization: Bearer …` header.
+In the Web UI, open **Connection** from the sidebar, select **This server**, and enter the same value in **Bearer token**. The token is stored for that named server in the browser's local storage and sent as the `Authorization: Bearer …` header.
 
-For direct access over a trusted LAN or tailnet, start the service in private
-mode; a token is optional:
+For direct access over a trusted LAN or tailnet, start the service in private mode; a token is optional:
 
 ```sh
 marifold service --host 0.0.0.0
 ```
 
-Then open `http://<service-host-ip>:32140`. The hosted Web UI and API are
-already same-origin. If a token is configured, enter it in the Web UI
-Connection sheet. Binding `0.0.0.0` opens the port on every active interface,
-but marifold rejects source addresses outside its private ranges. Pass the
-host's specific Tailscale or LAN address when narrower interface exposure is
-desired.
+Then open `http://<service-host-ip>:32140`. The hosted Web UI and API are already same-origin. If a token is configured, enter it in the Web UI Connection sheet. Binding `0.0.0.0` opens the port on every active interface, but marifold rejects source addresses outside its private ranges. Pass the host's specific Tailscale or LAN address when narrower interface exposure is desired.
 
-Private mode uses the direct socket peer and deliberately ignores forwarded-IP
-headers. Public reverse proxies and internet tunnels are unsupported because
-they can hide the original peer from this boundary. Use a private LAN or an
-encrypted private overlay such as Tailscale; add bearer authentication as
-defense in depth. See
-[Service API authentication](docs/service-api.md#authentication) for the full
-security behavior.
+Private mode uses the direct socket peer and deliberately ignores forwarded-IP headers. Public reverse proxies and internet tunnels are unsupported because they can hide the original peer from this boundary. Use a private LAN or an encrypted private overlay such as Tailscale; add bearer authentication as defense in depth. See [Service API authentication](docs/service-api.md#authentication) for the full security behavior.
 
-Alternatively, keep using a locally hosted Web UI and point it at another
-marifold service: open **Connection**, choose **Add server**, name it, and enter
-the remote root URL (for example `http://<mac-mini-tailscale-ip>:32140`) plus
-that server's bearer token. Switching entries remounts the workspace against
-the selected service; profiles, sessions, routes, and drafts do not leak across
-servers. Because this route is cross-origin, the remote service must include
-the local Web UI's exact origin in `[service].cors_origins`, for example:
+Alternatively, keep using a locally hosted Web UI and point it at another marifold service: open **Connection**, choose **Add server**, name it, and enter the remote root URL (for example `http://<mac-mini-tailscale-ip>:32140`) plus that server's bearer token. Switching entries remounts the workspace against the selected service; profiles, sessions, routes, and drafts do not leak across servers. Because this route is cross-origin, the remote service must include the local Web UI's exact origin in `[service].cors_origins`, for example:
 
 ```toml
 [service]
 cors_origins = ["http://127.0.0.1:32140"]
 ```
 
-Native macOS/iOS/iPadOS clients are not subject to browser CORS, but still use
-the same service root and bearer token.
+Native macOS/iOS/iPadOS clients are not subject to browser CORS, but still use the same service root and bearer token.
 
 ## Web UI
 
@@ -565,12 +511,7 @@ profiles/default/
     auto_short.jsonl
 ```
 
-`INSTRUCTIONS.md` is one free-form Markdown document for the profile's identity,
-behavior, tone, and optional context. Headings are organizational only; marifold
-does not require or parse a section schema. Older `RULES.md`, `PROFILE.md`, and
-`CUSTOM.md` files remain readable in their previous effective order. Run
-`marifold doctor` to find them and `marifold doctor --fix` to back them up and
-consolidate them into `INSTRUCTIONS.md`.
+`INSTRUCTIONS.md` is one free-form Markdown document for the profile's identity, behavior, tone, and optional context. Headings are organizational only; marifold does not require or parse a section schema. Older `RULES.md`, `PROFILE.md`, and `CUSTOM.md` files remain readable in their previous effective order. Run `marifold doctor` to find them and `marifold doctor --fix` to back them up and consolidate them into `INSTRUCTIONS.md`.
 
 ### `profile.toml` properties
 
