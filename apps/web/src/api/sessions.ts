@@ -1,5 +1,10 @@
 import type { ApiClient } from './client';
+import { MarifoldApiError } from './client';
+import { listRuns } from './runs';
 import type { SessionDetail, SessionSummary } from './types';
+
+const RUN_SETTLE_POLL_MS = 75;
+const RUN_SETTLE_TIMEOUT_MS = 15_000;
 
 export {
   acquireSessionLease,
@@ -64,4 +69,36 @@ export async function compactSession(
     request,
   );
   return { compacted: body.compacted };
+}
+
+/** Path of one stored user-turn attachment, fetched with ApiClient.blob. */
+export function sessionAttachmentPath(sessionId: string, userTurnIndex: number, attachmentIndex: number): string {
+  return `/v1/sessions/${encodeURIComponent(sessionId)}/attachments/${userTurnIndex}/${attachmentIndex}`;
+}
+
+/** Wait until no run of the session is still running, polling the run list. */
+export async function waitForSessionRunsToSettle(client: ApiClient, sessionId: string): Promise<void> {
+  const deadline = Date.now() + RUN_SETTLE_TIMEOUT_MS;
+  while (Date.now() < deadline) {
+    const active = (await listRuns(client)).some(
+      run => run.sessionId === sessionId && run.status === 'running',
+    );
+    if (!active) { return; }
+    await new Promise(resolve => window.setTimeout(resolve, RUN_SETTLE_POLL_MS));
+  }
+  throw new Error('The active run did not stop in time. The session was not deleted.');
+}
+
+/** Delete a session, retrying while the service still refuses because a request is finishing. */
+export async function deleteSessionWhenIdle(client: ApiClient, sessionId: string): Promise<boolean> {
+  const deadline = Date.now() + RUN_SETTLE_TIMEOUT_MS;
+  while (Date.now() < deadline) {
+    try {
+      return await deleteSession(client, sessionId);
+    } catch (error) {
+      if (!(error instanceof MarifoldApiError && error.code === 'AGENT_RUN_INVALID')) { throw error; }
+      await new Promise(resolve => window.setTimeout(resolve, RUN_SETTLE_POLL_MS));
+    }
+  }
+  throw new Error('The active request did not stop in time. The session was not deleted.');
 }

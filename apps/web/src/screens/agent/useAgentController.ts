@@ -19,11 +19,12 @@ import { answerApproval, answerUserInput, cancelRun, listRuns, startRun, steerRu
 import {
   acquireSessionLease,
   compactSession,
-  deleteSession as deleteSessionRequest,
+  deleteSessionWhenIdle,
   getSession,
   isSessionBusy,
   listSessions,
   updateSession,
+  waitForSessionRunsToSettle,
 } from '../../api/sessions';
 import type {
   ProfileDetail,
@@ -31,7 +32,6 @@ import type {
   RunApprovalAction,
   RunFileInput,
   RunRecord,
-  SessionImageAttachment,
   SessionSummary,
   UserInputSubmission,
 } from '../../api/types';
@@ -52,10 +52,9 @@ import { withPendingSession } from '../../lib/sessionSummaries';
 import { RunFollowers } from '../../state/followers';
 import type { ThreadState, UserAttachment } from '../../state/thread';
 import { activeRun, createThreadState, threadReducer } from '../../state/thread';
+import { preparedAttachmentsFromUser, toUserAttachments } from './sessionAttachments';
 import { useSessionLease } from './useSessionLease';
 
-const RUN_SETTLE_POLL_MS = 75;
-const RUN_SETTLE_TIMEOUT_MS = 15_000;
 
 export interface AgentControllerOptions {
   client: ApiClient;
@@ -1263,111 +1262,6 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
     expandCatchUp,
     dismissCatchUp,
   };
-}
-
-function parseImageDataUrl(url: string): { mediaType: string; data: string } | undefined {
-  const match = /^data:(image\/(?:png|jpeg|webp|gif));base64,(.*)$/s.exec(url);
-  return match ? { mediaType: match[1], data: match[2] } : undefined;
-}
-
-async function waitForSessionRunsToSettle(client: ApiClient, sessionId: string): Promise<void> {
-  const deadline = Date.now() + RUN_SETTLE_TIMEOUT_MS;
-  while (Date.now() < deadline) {
-    const active = (await listRuns(client)).some(
-      run => run.sessionId === sessionId && run.status === 'running',
-    );
-    if (!active) { return; }
-    await new Promise(resolve => window.setTimeout(resolve, RUN_SETTLE_POLL_MS));
-  }
-  throw new Error('The active run did not stop in time. The session was not deleted.');
-}
-
-async function deleteSessionWhenIdle(client: ApiClient, sessionId: string): Promise<boolean> {
-  const deadline = Date.now() + RUN_SETTLE_TIMEOUT_MS;
-  while (Date.now() < deadline) {
-    try {
-      return await deleteSessionRequest(client, sessionId);
-    } catch (error) {
-      if (!(error instanceof MarifoldApiError && error.code === 'AGENT_RUN_INVALID')) { throw error; }
-      await new Promise(resolve => window.setTimeout(resolve, RUN_SETTLE_POLL_MS));
-    }
-  }
-  throw new Error('The active request did not stop in time. The session was not deleted.');
-}
-
-function base64ByteLength(data: string): number {
-  const padding = data.endsWith('==') ? 2 : data.endsWith('=') ? 1 : 0;
-  return Math.max(0, Math.floor(data.length * 3 / 4) - padding);
-}
-
-async function preparedAttachmentsFromUser(
-  items: UserAttachment[] | undefined,
-  client: ApiClient,
-): Promise<PreparedAttachment[]> {
-  const prepared: PreparedAttachment[] = [];
-  for (const attachment of items ?? []) {
-    // Generic binaries are intentionally scoped to their original agent run;
-    // historical resend cannot recover bytes that were never persisted.
-    if (attachment.kind === 'file') { continue; }
-    if (attachment.kind === 'text') {
-      if (attachment.content === undefined) { continue; }
-      prepared.push({
-        kind: 'text',
-        name: attachment.name,
-        size: new TextEncoder().encode(attachment.content).length,
-        content: attachment.content,
-        ...(attachment.officeKind ? { officeKind: attachment.officeKind } : {}),
-        ...(attachment.truncated ? { truncated: true } : {}),
-      });
-      continue;
-    }
-    let parsed = attachment.previewUrl ? parseImageDataUrl(attachment.previewUrl) : undefined;
-    if (!parsed && attachment.sourcePath) {
-      const blob = await client.blob(attachment.sourcePath);
-      if (blob) { parsed = { mediaType: blob.type || 'image/jpeg', data: await blobToBase64(blob) }; }
-    }
-    if (!parsed) { continue; }
-    const size = base64ByteLength(parsed.data);
-    prepared.push({
-      kind: 'image' as const,
-      name: attachment.name,
-      size,
-      originalSize: size,
-      optimized: false,
-      data: parsed.data,
-      mediaType: parsed.mediaType,
-    });
-  }
-  return prepared;
-}
-
-function toUserAttachments(sessionId: string, attachments: SessionImageAttachment[]): UserAttachment[] {
-  return attachments.flatMap((attachment, index) => {
-    const previewUrl = attachment.data
-      ? `data:${attachment.mediaType};base64,${attachment.data}`
-      : attachment.url;
-    const sourcePath = attachment.ref
-      ? `/v1/sessions/${encodeURIComponent(sessionId)}/attachments/${attachment.ref.userTurnIndex}/${attachment.ref.attachmentIndex}`
-      : undefined;
-    return previewUrl || sourcePath
-      ? [{
-          kind: 'image' as const,
-          name: `Image ${index + 1}`,
-          ...(previewUrl ? { previewUrl } : {}),
-          ...(sourcePath ? { sourcePath } : {}),
-        }]
-      : [];
-  });
-}
-
-async function blobToBase64(blob: Blob): Promise<string> {
-  const bytes = new Uint8Array(await blob.arrayBuffer());
-  let binary = '';
-  const chunkSize = 0x8000;
-  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
-    binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
-  }
-  return btoa(binary);
 }
 
 function splitModelChoice(choice?: string): [string | undefined, string | undefined] {
