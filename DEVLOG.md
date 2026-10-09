@@ -2,6 +2,14 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-10-09 — Unreleased — Publish gate, cleanup, and UI tokens
+
+- Publishing to npm requires `pnpm gate` (lint, typecheck, build, tests on a clean, committed tree) to have passed on the exact commit; each public package's `prepublishOnly` runs `scripts/release-check.mjs`. GitHub CI stays deferred: a solo project gets the same guarantee at publish time.
+- Removed the unregistered `commands/chat.ts` (dead since v0.69.0); the TUI sudo test no longer imports core internals.
+- `TODO.md` keeps only unbuilt work; the roadmap's shipped ladder runs through v0.81; the vision names the agent-first path and device-hosted workspaces.
+- Web `--warning` and `--scrim` tokens replace raw colors and five backdrops (two become slightly darker, 32% → 36%); `MOBILE_QUERY` is shared; the RunCard spinner honors reduced motion; the TUI code color moved into its palette.
+- Validation: the gate passed end to end and the publish guard accepted its stamp; Web (273) and TUI (137) tests, lint, and the Web build pass.
+
 ## 2026-10-09 — v0.81.0 — TUI session picker and `--resume` errors
 
 - `/resume` shows a session's title when it has one, marks sessions another page, terminal, or device holds with `[in use]`, and keeps their rows from opening: Enter warns, Shift+Enter (or T, since many terminals send Shift+Enter as Enter) takes the session over. Picker columns now align by terminal width, so CJK titles no longer push the hints out of line.
