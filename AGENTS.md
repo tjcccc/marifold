@@ -39,6 +39,7 @@ marifold is a local-first, single-owner personal AI workspace: profiles, convers
 - No explicit `any`, no import cycles, and type-only imports use `import type` (Biome `noExplicitAny`, `noImportCycles`, `useImportType`; `pnpm exec biome lint --write .` fixes import style).
 - Outside `apps/web/src/api/types.ts`, the Web UI must not import `@marifold/core` or `@marifold/service`; a `noRestrictedImports` override in `biome.json` enforces it.
 - File-size ratchet: source files stay at or below 800 lines. Files recorded in `.file-size-baseline.json` may shrink but not grow; after splitting one, run `node scripts/check-file-sizes.mjs --update` to lower its recorded size.
+- UI changes follow `spec/ui.md`: Web design tokens, the TUI palette, and cross-surface consistency.
 - Markdown prose is not hard-wrapped: one paragraph or list item per source line. `pnpm lint` runs `scripts/markdown-wrap.mjs`; `node scripts/markdown-wrap.mjs --fix` joins wrapped lines. Code blocks, tables, and explicit hard breaks are kept.
 
 ## Validation

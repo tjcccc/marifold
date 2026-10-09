@@ -15,7 +15,7 @@ export function loadThemePreference(): ThemePreference {
   return 'auto';
 }
 
-/** `auto` removes the attribute so tokens.css follows the OS color scheme. */
+/** `auto` removes the attribute so palette.css follows the OS color scheme. */
 export function applyThemePreference(preference: ThemePreference): void {
   const root = document.documentElement;
   if (preference === 'auto') { root.removeAttribute('data-theme'); }
