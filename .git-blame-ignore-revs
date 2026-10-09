@@ -4,3 +4,6 @@
 
 # style: require braces on all control-flow bodies
 0f663fa9a323ce481399189f038f4dc19c5ec84d
+
+# style: import types with import type
+a56be9f358c014ae29fb09b8cfeb13009e4ea470
