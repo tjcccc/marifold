@@ -1,9 +1,9 @@
 import {
-  ImageInput,
+  type ImageInput,
   MarifoldError,
   MAX_RUN_INPUT_BYTES,
   MAX_RUN_INSPECTION_TEXT_BYTES,
-  RunFileInput,
+  type RunFileInput,
 } from '@marifold/core';
 
 export type JsonObject = Record<string, unknown>;

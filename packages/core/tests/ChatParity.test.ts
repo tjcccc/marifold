@@ -4,8 +4,8 @@ import * as path from 'path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MarifoldRuntime } from '../src';
 import { ConfigManager } from '../src/config/ConfigManager';
-import { MarifoldConfig } from '../src/config/ConfigSchema';
-import { formatSearchContext, formatSearchResults, SearchBackend } from '../src/search/SearchBackend';
+import type { MarifoldConfig } from '../src/config/ConfigSchema';
+import { formatSearchContext, formatSearchResults, type SearchBackend } from '../src/search/SearchBackend';
 
 const tempDirs: string[] = [];
 

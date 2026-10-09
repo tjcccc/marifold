@@ -1,4 +1,4 @@
-import React from 'react';
+import type React from 'react';
 import { Box, Text } from 'ink';
 import { marifoldHome } from '@marifold/core';
 import type { AppState } from '../core/appState.js';

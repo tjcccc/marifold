@@ -1,4 +1,4 @@
-import { LoadedMarifoldConfig, MarifoldProviderConfig, ProviderType } from './ConfigSchema';
+import type { LoadedMarifoldConfig, MarifoldProviderConfig, ProviderType } from './ConfigSchema';
 import { openAIModelsUrl } from './OpenAICompatUrls';
 import {
   getProviderRegistryEntry,

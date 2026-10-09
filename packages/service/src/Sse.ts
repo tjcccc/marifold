@@ -1,4 +1,4 @@
-import { FastifyReply } from 'fastify';
+import type { FastifyReply } from 'fastify';
 
 /** Response headers for a server-sent-event stream over a hijacked reply. */
 export const SSE_HEADERS = {

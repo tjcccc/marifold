@@ -1,8 +1,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import Database from 'better-sqlite3';
-import { ImageInput, SQLiteSessionStore } from '@priest-ai/core';
-import { SessionDetail, SessionSummary, SessionTurnSummary } from '../config/ConfigSchema';
+import { type ImageInput, SQLiteSessionStore } from '@priest-ai/core';
+import type { SessionDetail, SessionSummary, SessionTurnSummary } from '../config/ConfigSchema';
 import { MarifoldError } from '../errors/MarifoldError';
 import type { ResponseMetrics } from './ResponseMetrics';
 

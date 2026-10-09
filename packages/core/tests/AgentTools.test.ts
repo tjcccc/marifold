@@ -18,7 +18,7 @@ import { SkillManagementTool } from '../src/agent/tools/SkillManagementTool';
 import { SkillAppContextTool, SkillAppManagementTool } from '../src/agent/tools/SkillAppTools';
 import { AppStore } from '../src/app/AppStore';
 import { createRunWorkspace } from '../src/agent/RunWorkspace';
-import { capToolOutput, ToolExecutionContext, ToolRegistry } from '../src/agent/ToolRegistry';
+import { capToolOutput, type ToolExecutionContext, ToolRegistry } from '../src/agent/ToolRegistry';
 import { SkillStore } from '../src/skill/SkillStore';
 import { getBuiltInSkill } from '../src/skill/BuiltInSkills';
 import {

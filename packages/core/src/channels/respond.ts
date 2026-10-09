@@ -1,6 +1,6 @@
 import type { MarifoldRuntime } from '../runtime/MarifoldRuntime';
-import { ProfileMode } from '../config/ConfigSchema';
-import { ApprovalHandler } from '../agent/ApprovalPolicy';
+import type { ProfileMode } from '../config/ConfigSchema';
+import type { ApprovalHandler } from '../agent/ApprovalPolicy';
 
 export interface RespondRequest {
   /** Profile whose model + permissions the reply runs under. */

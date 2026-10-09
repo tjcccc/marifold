@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { LoadedMarifoldConfig } from './ConfigSchema';
+import type { LoadedMarifoldConfig } from './ConfigSchema';
 import { ConfigLoader } from './ConfigLoader';
 import { renderMarifoldConfig } from './ConfigManager';
 import { MarifoldError } from '../errors/MarifoldError';

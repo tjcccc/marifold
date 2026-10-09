@@ -1,8 +1,8 @@
 import { workspaceClient } from './WorkspaceClient';
 import type { MarifoldRuntime } from '@marifold/core';
-import { Command } from 'commander';
-import { ScheduleState } from '@marifold/core';
-import { ConsolePrinter } from '../output/ConsolePrinter';
+import type { Command } from 'commander';
+import type { ScheduleState } from '@marifold/core';
+import type { ConsolePrinter } from '../output/ConsolePrinter';
 import { TerminalStyle } from '../output/TerminalStyle';
 import { createRuntime } from './RuntimeFactory';
 

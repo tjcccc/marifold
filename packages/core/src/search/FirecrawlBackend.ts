@@ -1,4 +1,4 @@
-import { SearchBackend, SearchResultItem } from './SearchBackend';
+import type { SearchBackend, SearchResultItem } from './SearchBackend';
 import { proxyDispatcher } from '../util/proxy';
 
 const FIRECRAWL_SEARCH_URL = 'https://api.firecrawl.dev/v2/search';

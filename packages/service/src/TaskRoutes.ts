@@ -1,16 +1,16 @@
-import { FastifyInstance } from 'fastify';
+import type { FastifyInstance } from 'fastify';
 import {
   MarifoldError,
-  MarifoldRuntime,
-  TaskCreateInput,
-  TaskEventInput,
-  TaskEventKind,
-  TaskListOptions,
-  TaskPlanInput,
-  TaskStatus,
-  TaskUpdateInput,
+  type MarifoldRuntime,
+  type TaskCreateInput,
+  type TaskEventInput,
+  type TaskEventKind,
+  type TaskListOptions,
+  type TaskPlanInput,
+  type TaskStatus,
+  type TaskUpdateInput,
 } from '@marifold/core';
-import { JsonObject, objectBody, optionalStringField, parseLimitQuery, requiredString, stringArray, stringValue } from './Validation';
+import { type JsonObject, objectBody, optionalStringField, parseLimitQuery, requiredString, stringArray, stringValue } from './Validation';
 
 /** Ephemeral task-state CRUD. */
 export function registerTaskRoutes(server: FastifyInstance, runtime: MarifoldRuntime): void {

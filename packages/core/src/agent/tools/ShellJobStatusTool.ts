@@ -1,5 +1,5 @@
 import type { JSONValue } from '@priest-ai/core';
-import { DeviceExecution } from '../DeviceExecution';
+import type { DeviceExecution } from '../DeviceExecution';
 import { capToolOutput, type AgentTool, type ToolExecutionContext, type ToolExecutionResult } from '../ToolRegistry';
 
 export class ShellJobStatusTool implements AgentTool {

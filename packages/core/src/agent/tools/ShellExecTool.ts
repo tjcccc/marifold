@@ -1,12 +1,12 @@
-import { JSONValue } from '@priest-ai/core';
+import type { JSONValue } from '@priest-ai/core';
 import { ensurePythonEnvironment, runScopedProcess } from '../ScopedProcess';
-import { DeviceExecution } from '../DeviceExecution';
+import type { DeviceExecution } from '../DeviceExecution';
 import {
-  AgentTool,
+  type AgentTool,
   requireStringInput,
-  ToolExecutionContext,
-  ToolExecutionResult,
-  ToolRiskAssessment,
+  type ToolExecutionContext,
+  type ToolExecutionResult,
+  type ToolRiskAssessment,
 } from '../ToolRegistry';
 
 export class ShellExecTool implements AgentTool {

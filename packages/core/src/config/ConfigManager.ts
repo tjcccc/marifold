@@ -1,12 +1,12 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import {
-  LoadedMarifoldConfig,
-  MarifoldConfig,
-  MarifoldProviderConfig,
-  MarifoldWebSearchConfig,
-  NativeWebSearchPreference,
-  ProviderType,
+  type LoadedMarifoldConfig,
+  type MarifoldConfig,
+  type MarifoldProviderConfig,
+  type MarifoldWebSearchConfig,
+  type NativeWebSearchPreference,
+  type ProviderType,
   resolveWebSearchConfig,
 } from './ConfigSchema';
 import { MarifoldError } from '../errors/MarifoldError';

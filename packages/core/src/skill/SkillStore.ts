@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { MarifoldError } from '../errors/MarifoldError';
 import { isBuiltInSkillName } from './BuiltInSkills';
-import { MarifoldSkill } from './SkillSchema';
+import type { MarifoldSkill } from './SkillSchema';
 import { parseSkill } from './SkillValidator';
 
 const SAFE_SKILL_NAME = /^[a-z0-9][a-z0-9_-]*$/;

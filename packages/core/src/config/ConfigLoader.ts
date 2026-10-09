@@ -1,24 +1,24 @@
 import * as fs from 'fs';
 import { parse } from 'smol-toml';
-import { AgentApprovalConfig, ApprovalMode, AgentToolMode, PartialAgentConfig, resolveAgentConfig } from '../agent/ApprovalPolicy';
+import { type AgentApprovalConfig, type ApprovalMode, type AgentToolMode, type PartialAgentConfig, resolveAgentConfig } from '../agent/ApprovalPolicy';
 import { MarifoldError } from '../errors/MarifoldError';
 import {
-  LoadedMarifoldConfig,
-  MarifoldConfig,
-  MarifoldDefaultConfig,
-  MarifoldMemoryConfig,
-  MarifoldModelsConfig,
-  MarifoldChannelsConfig,
-  NativeWebSearchPreference,
-  MarifoldPathsConfig,
-  MarifoldProviderConfig,
-  MarifoldServiceConfig,
-  MarifoldWebSearchConfig,
-  ProfileMode,
-  TelegramChannelConfig,
-  ProviderType,
+  type LoadedMarifoldConfig,
+  type MarifoldConfig,
+  type MarifoldDefaultConfig,
+  type MarifoldMemoryConfig,
+  type MarifoldModelsConfig,
+  type MarifoldChannelsConfig,
+  type NativeWebSearchPreference,
+  type MarifoldPathsConfig,
+  type MarifoldProviderConfig,
+  type MarifoldServiceConfig,
+  type MarifoldWebSearchConfig,
+  type ProfileMode,
+  type TelegramChannelConfig,
+  type ProviderType,
   resolveWebSearchConfig,
-  WebSearchProvider,
+  type WebSearchProvider,
 } from './ConfigSchema';
 import {
   defaultConfigPath,

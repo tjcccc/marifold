@@ -1,8 +1,8 @@
 import * as crypto from 'crypto';
 import { isIP } from 'net';
 import * as path from 'path';
-import { FastifyInstance, FastifyRequest } from 'fastify';
-import { MarifoldError, MarifoldServiceConfig } from '@marifold/core';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
+import { MarifoldError, type MarifoldServiceConfig } from '@marifold/core';
 
 /** Effective security settings: explicit options win over the [service]
  * config section. An unresolved/empty token means auth is disabled (bare

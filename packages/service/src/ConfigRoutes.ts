@@ -1,14 +1,14 @@
-import { FastifyInstance } from 'fastify';
+import type { FastifyInstance } from 'fastify';
 import {
   listProviderRegistry,
-  LoadedMarifoldConfig,
+  type LoadedMarifoldConfig,
   MarifoldError,
-  MarifoldProviderConfig,
-  MarifoldRuntime,
+  type MarifoldProviderConfig,
+  type MarifoldRuntime,
   resolveAgentConfig,
   resolveWebSearchConfig,
 } from '@marifold/core';
-import { JsonObject, objectBody, optionalStringField, requiredString, stringValue } from './Validation';
+import { type JsonObject, objectBody, optionalStringField, requiredString, stringValue } from './Validation';
 
 /** Config, provider, and model management. Responses expose env-var names and
  * presence flags only; raw keys and tokens never cross the wire. */

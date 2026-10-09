@@ -4,13 +4,13 @@ import { requestEnvironment, requestOrigin } from './RequestEnvironment';
 import { registerWorkspaceScheduleRoutes } from './WorkspaceScheduleRoutes';
 import * as path from 'node:path';
 import { WorkspaceRequestContext } from './WorkspaceRequestContext';
-import fastify, { FastifyInstance } from 'fastify';
+import fastify, { type FastifyInstance } from 'fastify';
 import {
   workspaceTerminal,
   WorkspaceManager,
   WorkspaceExecutor,
   WorkspaceRuns,
-  LoadedMarifoldConfig,
+  type LoadedMarifoldConfig,
   MarifoldError,
   MarifoldRuntime,
 } from '@marifold/core';

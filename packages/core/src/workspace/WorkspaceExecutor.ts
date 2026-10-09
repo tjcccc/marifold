@@ -1,6 +1,6 @@
 import { SudoExecTool } from '../agent/tools/SudoExecTool';
 import { parseSudoResponse } from '../agent/SudoCredentials';
-import { DeviceExecution } from '../agent/DeviceExecution';
+import type { DeviceExecution } from '../agent/DeviceExecution';
 import { ShellJobStatusTool } from '../agent/tools/ShellJobStatusTool';
 import type { ArtifactWebRtc } from './ArtifactWebRtc';
 import { createArtifactPreview, artifactPreviewVariant } from '../agent/ArtifactPreview';

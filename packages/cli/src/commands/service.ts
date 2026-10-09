@@ -1,19 +1,19 @@
-import { ChildProcess, spawn } from 'child_process';
+import { type ChildProcess, spawn } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
-import { Command } from 'commander';
+import type { Command } from 'commander';
 import { ConfigLoader, MarifoldError } from '@marifold/core';
 import { resolveSecurityOptions, startMarifoldService } from '@marifold/service';
-import { ConsolePrinter } from '../output/ConsolePrinter';
+import type { ConsolePrinter } from '../output/ConsolePrinter';
 import {
   claimServiceProcess,
   ensureServiceProcessDir,
   getActiveServiceProcess,
   markServiceProcessRunning,
   releaseServiceProcess,
-  ServiceLaunchOptions,
-  ServiceProcessState,
-  ServiceStartupDetails,
+  type ServiceLaunchOptions,
+  type ServiceProcessState,
+  type ServiceStartupDetails,
   serviceProcessPaths,
   stopActiveServiceProcess,
 } from '../service/ServiceProcess';

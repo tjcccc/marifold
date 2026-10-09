@@ -1,10 +1,10 @@
-import { Command } from 'commander';
+import type { Command } from 'commander';
 import { ConfigManager, MarifoldError, MarifoldRuntime } from '@marifold/core';
 import { InteractivePrompt } from '../input/InteractivePrompt';
 import { PromptAbortError, isPromptAbortError } from '../input/PromptAbort';
 import { readSecretLine } from '../input/SecretPrompt';
 import { selectTerminalOption } from '../input/TerminalSelect';
-import { ConsolePrinter } from '../output/ConsolePrinter';
+import type { ConsolePrinter } from '../output/ConsolePrinter';
 import { loadConfig } from './RuntimeFactory';
 
 /**

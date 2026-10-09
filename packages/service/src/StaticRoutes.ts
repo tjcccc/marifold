@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { FastifyInstance, FastifyReply } from 'fastify';
+import type { FastifyInstance, FastifyReply } from 'fastify';
 
 const CONTENT_TYPES: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',

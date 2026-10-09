@@ -1,12 +1,12 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { PriestRequest, PriestResponse } from '@priest-ai/core';
+import type { PriestRequest, PriestResponse } from '@priest-ai/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { AgentEngine, AgentRunner, AgentRunnerDeps } from '../src/agent/AgentRunner';
-import { AgentEvent } from '../src/agent/AgentEvents';
+import { type AgentEngine, AgentRunner, type AgentRunnerDeps } from '../src/agent/AgentRunner';
+import type { AgentEvent } from '../src/agent/AgentEvents';
 import { resolveAgentConfig } from '../src/agent/ApprovalPolicy';
-import { AgentTool, ToolRegistry } from '../src/agent/ToolRegistry';
+import { type AgentTool, ToolRegistry } from '../src/agent/ToolRegistry';
 import { WriteFileTool } from '../src/agent/tools/WriteFileTool';
 import { AskUserTool } from '../src/agent/tools/AskUserTool';
 import { InspectAttachmentTool } from '../src/agent/tools/InspectAttachmentTool';

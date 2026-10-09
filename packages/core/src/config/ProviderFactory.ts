@@ -1,10 +1,10 @@
 import {
   AnthropicProvider,
   OllamaProvider,
-  ProviderAdapter,
+  type ProviderAdapter,
 } from '@priest-ai/core';
 import { MarifoldError } from '../errors/MarifoldError';
-import { MarifoldConfig, MarifoldProviderConfig } from './ConfigSchema';
+import type { MarifoldConfig, MarifoldProviderConfig } from './ConfigSchema';
 import { MarifoldOpenAICompatProvider } from './MarifoldOpenAICompatProvider';
 
 export type NativeWebSearchStrategy = 'responses-tool' | 'chat-option' | 'none';

@@ -1,5 +1,5 @@
 import type { JSONValue } from '@priest-ai/core';
-import { DeviceExecution } from '../DeviceExecution';
+import type { DeviceExecution } from '../DeviceExecution';
 import { requireStringInput, type AgentTool, type ToolExecutionContext, type ToolRiskAssessment } from '../ToolRegistry';
 
 export class SudoExecTool implements AgentTool {

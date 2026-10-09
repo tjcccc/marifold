@@ -1,5 +1,5 @@
 import * as fs from 'fs';
-import { JSONValue } from '@priest-ai/core';
+import type { JSONValue } from '@priest-ai/core';
 import {
   canonicalPath,
   isDeniedRunPath,
@@ -10,12 +10,12 @@ import {
   resolveToolPath,
 } from '../RunWorkspace';
 import {
-  AgentTool,
+  type AgentTool,
   capToolOutput,
   requireStringInput,
-  ToolExecutionContext,
-  ToolExecutionResult,
-  ToolRiskAssessment,
+  type ToolExecutionContext,
+  type ToolExecutionResult,
+  type ToolRiskAssessment,
 } from '../ToolRegistry';
 
 export interface ReadFileToolOptions {

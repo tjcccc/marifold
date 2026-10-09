@@ -1,6 +1,6 @@
 import { spawn } from 'child_process';
-import { Command } from 'commander';
-import { ConsolePrinter } from '../output/ConsolePrinter';
+import type { Command } from 'commander';
+import type { ConsolePrinter } from '../output/ConsolePrinter';
 
 export const NPM_UPDATE_ARGS = ['install', '--global', 'marifold@latest'] as const;
 

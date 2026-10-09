@@ -1,5 +1,5 @@
 import { proxyDispatcher } from '../util/proxy';
-import { SearchBackend, SearchResultItem } from './SearchBackend';
+import type { SearchBackend, SearchResultItem } from './SearchBackend';
 
 const OLLAMA_WEB_SEARCH_URL = 'https://ollama.com/api/web_search';
 const DEFAULT_API_KEY_ENV = 'OLLAMA_API_KEY';

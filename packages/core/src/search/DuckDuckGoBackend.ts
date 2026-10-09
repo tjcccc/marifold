@@ -1,5 +1,5 @@
 import { SafeSearchType, search as ddgSearch } from 'duck-duck-scrape';
-import { SearchBackend, SearchResultItem } from './SearchBackend';
+import type { SearchBackend, SearchResultItem } from './SearchBackend';
 
 const CJK_RE = /[㐀-鿿]/;
 const DEFAULT_MAX_RESULTS = 5;

@@ -6,12 +6,12 @@ import { ShellJobStatusTool } from '../agent/tools/ShellJobStatusTool';
 import { environmentContext, type RuntimeEnvironment } from './RuntimeEnvironment';
 import type { AgentRunnerDeps } from '../agent/AgentRunner';
 import type { RunStartInput, RunJournal } from '../runs/RunRegistry';
-import { ImageInput, JSONValue, PriestConfig, PriestEngine, PriestRequest, PriestResponse, ToolDefinition, ToolExchangeTurn, UsageInfo } from '@priest-ai/core';
+import { type ImageInput, type JSONValue, type PriestConfig, PriestEngine, type PriestRequest, type PriestResponse, type ToolDefinition, type ToolExchangeTurn, type UsageInfo } from '@priest-ai/core';
 import * as path from 'path';
 import { AgentRunner } from '../agent/AgentRunner';
 import type { RunFileInput } from '../agent/RunWorkspace';
 import { buildHistoryContext } from '../agent/AgentHistory';
-import { ApprovalMode, MarifoldAgentConfig, ToolKind, resolveAgentConfig } from '../agent/ApprovalPolicy';
+import { type ApprovalMode, type MarifoldAgentConfig, type ToolKind, resolveAgentConfig } from '../agent/ApprovalPolicy';
 import { DelegateTool } from '../agent/tools/DelegateTool';
 import { PythonPackageTool } from '../agent/tools/PythonPackageTool';
 import { ReadAttachmentTool } from '../agent/tools/ReadAttachmentTool';
@@ -27,18 +27,18 @@ import { InspectAttachmentTool } from '../agent/tools/InspectAttachmentTool';
 import { WriteFileTool } from '../agent/tools/WriteFileTool';
 import { SkillManagementTool } from '../agent/tools/SkillManagementTool';
 import { SkillAppContextTool, SkillAppManagementTool } from '../agent/tools/SkillAppTools';
-import { AgentTool, ToolRegistry } from '../agent/ToolRegistry';
-import { ChatGptRefreshedTokens, refreshChatGptAccessToken } from '../config/ChatGptTokenRefresh';
-import { XaiRefreshedTokens, refreshXaiAccessToken } from '../config/XaiTokenRefresh';
+import { type AgentTool, ToolRegistry } from '../agent/ToolRegistry';
+import { type ChatGptRefreshedTokens, refreshChatGptAccessToken } from '../config/ChatGptTokenRefresh';
+import { type XaiRefreshedTokens, refreshXaiAccessToken } from '../config/XaiTokenRefresh';
 import { ConfigManager } from '../config/ConfigManager';
 import { withOAuthCredentials } from '../config/OAuthCredentials';
 import type { ConfigAddProviderOptions } from '../config/ConfigManager';
-import { LoadedMarifoldConfig, ProfileDetail, ProfileMode, ProfileSummary, ProviderType, resolveWebSearchConfig, SessionDetail, SessionSummary } from '../config/ConfigSchema';
+import { type LoadedMarifoldConfig, type ProfileDetail, type ProfileMode, type ProfileSummary, type ProviderType, resolveWebSearchConfig, type SessionDetail, type SessionSummary } from '../config/ConfigSchema';
 import { ProviderInspector } from '../config/ProviderInspector';
 import type { ProviderModelList, ProviderStatus } from '../config/ProviderInspector';
 import { exchangeGitHubTokenForCopilotToken } from '../config/GitHubCopilotAuth';
 import { createSearchBackend } from '../search/createSearchBackend';
-import { formatSearchResults, SearchBackend } from '../search/SearchBackend';
+import { formatSearchResults, type SearchBackend } from '../search/SearchBackend';
 import { ProviderFactory, type NativeWebSearchStrategy } from '../config/ProviderFactory';
 import { getProviderRegistryEntry, isGitHubCopilotResponsesModelId } from '../config/ProviderRegistry';
 import { MarifoldError } from '../errors/MarifoldError';
@@ -60,18 +60,18 @@ import type { ProfileFileKind, ProfileInstructionsMigrationResult } from '../pro
 import { Scheduler } from '../schedule/Scheduler';
 import { RunRegistry } from '../runs/RunRegistry';
 import { TelegramBridge } from '../channels/TelegramBridge';
-import { ScheduleCreateInput, ScheduleState, ScheduleStore, ScheduleUpdateInput } from '../schedule/ScheduleStore';
+import { type ScheduleCreateInput, type ScheduleState, ScheduleStore, type ScheduleUpdateInput } from '../schedule/ScheduleStore';
 import {
   SessionResolver,
-  SessionDbHealth,
-  SessionDisplayUpdate,
-  SessionListOptions,
-  SessionTruncateResult,
+  type SessionDbHealth,
+  type SessionDisplayUpdate,
+  type SessionListOptions,
+  type SessionTruncateResult,
 } from '../sessions/SessionResolver';
 import type { ResponseMetrics } from '../sessions/ResponseMetrics';
 import { SkillStore } from '../skill/SkillStore';
-import { MarifoldSkill } from '../skill/SkillSchema';
-import { SkillScope } from '../skill/SkillStore';
+import type { MarifoldSkill } from '../skill/SkillSchema';
+import type { SkillScope } from '../skill/SkillStore';
 import {
   parseSkillInvocation,
   resolveSkillInvocation as resolveSkillInvocationDefinition,
@@ -97,7 +97,7 @@ import {
 import { TaskStore } from '../tasks/TaskStore';
 import { defaultAppsDir, defaultSchedulesDir, defaultSkillsDir, marifoldHome } from '../workspace/WorkspacePaths';
 import type { TaskCreateInput, TaskEventInput, TaskListOptions, TaskState, TaskSummary, TaskUpdateInput } from '../tasks/TaskStore';
-import { MarifoldAskResponse, MarifoldProviderToolDefinition, MarifoldResolvedSettings, MarifoldRunRequest, MarifoldWebSearchMode } from './MarifoldTypes';
+import type { MarifoldAskResponse, MarifoldProviderToolDefinition, MarifoldResolvedSettings, MarifoldRunRequest, MarifoldWebSearchMode } from './MarifoldTypes';
 import { isNativeWebSearchCapabilityError } from './NativeWebSearch';
 
 // Older OpenAI-compatible gateways still take a raw `{think}` body option.

@@ -5,11 +5,11 @@ import {
   MAX_ATTACHMENT_READ_CHARS,
 } from '../AttachmentResources';
 import {
-  AgentTool,
+  type AgentTool,
   requireStringInput,
-  ToolExecutionContext,
-  ToolExecutionResult,
-  ToolRiskAssessment,
+  type ToolExecutionContext,
+  type ToolExecutionResult,
+  type ToolRiskAssessment,
 } from '../ToolRegistry';
 
 export class ReadAttachmentTool implements AgentTool {

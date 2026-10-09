@@ -3,7 +3,7 @@ import {
   formatServiceAvailability,
   serviceBindUrl,
   serviceEntryUrls,
-  ServiceNetworkInterfaces,
+  type ServiceNetworkInterfaces,
 } from '../src/service/ServiceOutput';
 
 describe('service startup output', () => {

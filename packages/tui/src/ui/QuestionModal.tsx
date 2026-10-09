@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import type React from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Box, Text, useInput } from 'ink';
 import type {
   UserInputQuestion,

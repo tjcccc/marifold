@@ -1,6 +1,7 @@
 import { sessionPromptHistory, resolvePromptImages, referencedPromptImages, type PromptImage } from '../core/promptHistory.js';
 import type { TuiRuntime } from '../core/TuiRuntime.js';
-import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import type React from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { Box, Static, useApp, useInput, useStdout } from 'ink';
 import { randomUUID } from 'crypto';
 import * as fs from 'fs';

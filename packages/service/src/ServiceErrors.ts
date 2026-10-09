@@ -1,5 +1,5 @@
 import { MarifoldError } from '@marifold/core';
-import { JsonObject } from './Validation';
+import type { JsonObject } from './Validation';
 
 export function normalizeError(error: unknown, localRequest = false): { statusCode: number; error: JsonObject } {
   if (error instanceof MarifoldError) {

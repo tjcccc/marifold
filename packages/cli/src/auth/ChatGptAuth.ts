@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from 'crypto';
-import { createServer, Server } from 'http';
+import { createServer, type Server } from 'http';
 import { spawn } from 'child_process';
 import { accountIdFromIdToken, proxyDispatcher } from '@marifold/core';
 

@@ -1,11 +1,11 @@
 import { randomUUID } from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
-import { Command } from 'commander';
+import type { Command } from 'commander';
 import { expandHome, stripTerminalControls } from '@marifold/core';
 import type { ImageInput, MemoryKind } from '@marifold/core';
 import { InteractivePrompt } from '../input/InteractivePrompt';
-import { ConsolePrinter } from '../output/ConsolePrinter';
+import type { ConsolePrinter } from '../output/ConsolePrinter';
 import { TerminalStyle } from '../output/TerminalStyle';
 import { createRuntime } from './RuntimeFactory';
 

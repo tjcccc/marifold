@@ -6,11 +6,11 @@ import {
   MAX_ATTACHMENT_SEARCH_RESULTS,
 } from '../AttachmentResources';
 import {
-  AgentTool,
+  type AgentTool,
   requireStringInput,
-  ToolExecutionContext,
-  ToolExecutionResult,
-  ToolRiskAssessment,
+  type ToolExecutionContext,
+  type ToolExecutionResult,
+  type ToolRiskAssessment,
 } from '../ToolRegistry';
 
 export class SearchAttachmentTool implements AgentTool {

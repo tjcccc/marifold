@@ -1,4 +1,4 @@
-import { Command } from 'commander';
+import type { Command } from 'commander';
 import { DeviceExecution, TailscaleControl } from '@marifold/core';
 import { loadConfig } from './RuntimeFactory';
 import type { ConsolePrinter } from '../output/ConsolePrinter';

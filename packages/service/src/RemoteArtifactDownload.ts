@@ -1,5 +1,5 @@
 import { Readable } from 'node:stream';
-import { ArtifactWebRtc, workspaceArtifactStream, type ArtifactChunk } from '@marifold/core';
+import { type ArtifactWebRtc, workspaceArtifactStream, type ArtifactChunk } from '@marifold/core';
 import type { FastifyReply } from 'fastify';
 
 /** Keep transport choice behind the ordinary authenticated browser download. */

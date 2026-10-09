@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import Database from 'better-sqlite3';
 import { COMPACTION_METADATA_KEY } from '@priest-ai/core';
 import { MarifoldRuntime } from '../src';
-import { MarifoldConfig } from '../src/config/ConfigSchema';
+import type { MarifoldConfig } from '../src/config/ConfigSchema';
 
 // End-to-end compaction through the *real* MarifoldRuntime.stream — the path no
 // priest unit test can cover, because the feature's state lives in session

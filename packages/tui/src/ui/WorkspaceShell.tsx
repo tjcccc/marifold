@@ -2,7 +2,7 @@ import { sessionPromptHistory } from '../core/promptHistory.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Box, Text } from 'ink';
 import { createApiClient, startupWorkspaces, type ApiClientOptions } from '@marifold/client';
-import { MarifoldRuntime } from '@marifold/core';
+import type { MarifoldRuntime } from '@marifold/core';
 import type { WorkspaceSummary, WorkspaceDevice, LoadedMarifoldConfig } from '@marifold/core';
 import { RemoteRuntime } from '../core/RemoteRuntime.js';
 import type { TuiRuntime } from '../core/TuiRuntime.js';

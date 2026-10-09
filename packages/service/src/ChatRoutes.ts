@@ -1,5 +1,5 @@
-import { FastifyInstance, FastifyReply } from 'fastify';
-import { type AgentUsage, LoadedMarifoldConfig, MarifoldRunRequest, MarifoldRuntime } from '@marifold/core';
+import type { FastifyInstance, FastifyReply } from 'fastify';
+import type { AgentUsage, LoadedMarifoldConfig, MarifoldRunRequest, MarifoldRuntime } from '@marifold/core';
 import { requestEnvironment } from './RequestEnvironment';
 import { normalizeError } from './ServiceErrors';
 import { SSE_HEADERS, startSseHeartbeat, writeSse } from './Sse';
@@ -12,7 +12,7 @@ import {
   requiredString,
   stringArray,
 } from './Validation';
-import { WorkspaceRequestContext } from './WorkspaceRequestContext';
+import type { WorkspaceRequestContext } from './WorkspaceRequestContext';
 
 /** One-shot chat requests outside the run registry: `/v1/ask` and the
  * non-resumable `/v1/chat/stream` SSE response. */

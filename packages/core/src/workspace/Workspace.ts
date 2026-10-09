@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { MarifoldConfig } from '../config/ConfigSchema';
+import type { MarifoldConfig } from '../config/ConfigSchema';
 
 export class Workspace {
   constructor(readonly config: MarifoldConfig) {}

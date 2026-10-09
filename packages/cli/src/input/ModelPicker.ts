@@ -1,10 +1,10 @@
 import {
-  LoadedMarifoldConfig,
+  type LoadedMarifoldConfig,
   MarifoldError,
-  MarifoldProviderConfig,
+  type MarifoldProviderConfig,
   ProviderInspector,
-  ProviderRegistryEntry,
-  ProviderType,
+  type ProviderRegistryEntry,
+  type ProviderType,
   listProviderRegistry,
 } from '@marifold/core';
 import { authorizeChatGptWithBrowser } from '../auth/ChatGptAuth';
@@ -14,11 +14,11 @@ import {
   exchangeGitHubTokenForCopilotToken,
   looksLikeCopilotIdeToken,
 } from '../auth/GitHubCopilotAuth';
-import { InteractivePrompt } from './InteractivePrompt';
+import type { InteractivePrompt } from './InteractivePrompt';
 import { PromptAbortError } from './PromptAbort';
 import { readSecretLine } from './SecretPrompt';
 import { selectTerminalOption } from './TerminalSelect';
-import { TerminalStyle } from '../output/TerminalStyle';
+import type { TerminalStyle } from '../output/TerminalStyle';
 
 /** Lazily-created prompt, so an interactive picker only opens stdin when a
  * fallback line read is actually needed. Shared by `model add` and `init`. */

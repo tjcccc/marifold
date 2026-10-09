@@ -1,11 +1,11 @@
-import { JSONValue } from '@priest-ai/core';
+import type { JSONValue } from '@priest-ai/core';
 import {
   ensurePythonEnvironment,
   findExecutable,
   pythonInVenv,
   runScopedProcess,
 } from '../ScopedProcess';
-import {
+import type {
   AgentTool,
   ToolExecutionContext,
   ToolExecutionResult,

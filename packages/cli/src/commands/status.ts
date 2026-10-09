@@ -1,5 +1,5 @@
-import { Command } from 'commander';
-import { ConsolePrinter } from '../output/ConsolePrinter';
+import type { Command } from 'commander';
+import type { ConsolePrinter } from '../output/ConsolePrinter';
 import {
   getActiveServiceProcess,
   readRecentServiceLog,

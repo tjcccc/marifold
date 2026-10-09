@@ -1,6 +1,6 @@
-import { ImageInput, JSONValue, ToolDefinition } from '@priest-ai/core';
+import type { ImageInput, JSONValue, ToolDefinition } from '@priest-ai/core';
 import { MarifoldError } from '../errors/MarifoldError';
-import { ToolKind } from './ApprovalPolicy';
+import type { ToolKind } from './ApprovalPolicy';
 import type { RunWorkspace } from './RunWorkspace';
 import type {
   UserInputRequest,

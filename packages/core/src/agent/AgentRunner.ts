@@ -2,7 +2,7 @@ import { environmentContext, artifactPresentation, type RuntimeEnvironment } fro
 import { isUnfulfilledSearchPromise, WEB_RESEARCH_CONTINUATION } from '../search/WebResearchContinuation';
 import { markSourceCitations } from '../search/SourceCitations';
 import { WEB_ANSWER_STYLE, webResearchGuidance } from '../search/WebResearchGuidance';
-import {
+import type {
   ImageInput,
   JSONValue,
   PriestConfig,
@@ -18,11 +18,11 @@ import * as os from 'os';
 import * as path from 'path';
 import { isDeepStrictEqual } from 'node:util';
 import { stripMemoryControls } from '../memory/MemoryControls';
-import { buildHistoryContext, HistoryTurn } from './AgentHistory';
-import { MarifoldProviderToolDefinition, MarifoldResolvedSettings, MarifoldRunRequest, MarifoldWebSearchMode } from '../runtime/MarifoldTypes';
-import { TaskState, TaskStatus, TaskStore } from '../tasks/TaskStore';
-import { AgentEvent, AgentUsage } from './AgentEvents';
-import {
+import { buildHistoryContext, type HistoryTurn } from './AgentHistory';
+import type { MarifoldProviderToolDefinition, MarifoldResolvedSettings, MarifoldRunRequest, MarifoldWebSearchMode } from '../runtime/MarifoldTypes';
+import type { TaskState, TaskStatus, TaskStore } from '../tasks/TaskStore';
+import type { AgentEvent, AgentUsage } from './AgentEvents';
+import type {
   AgentToolMode,
   ApprovalHandler,
   ApprovalRequest,
@@ -33,9 +33,9 @@ import {
   formatControlBlockResult,
   parseControlBlockCalls,
 } from './ControlBlockTools';
-import { createRunWorkspace, CreateRunWorkspaceOptions, RunFileInput, RunWorkspace } from './RunWorkspace';
-import { listRunArtifacts, RunArtifact } from './RunArtifacts';
-import { capToolOutput, ToolRegistry, UncertainToolOutcomeError } from './ToolRegistry';
+import { createRunWorkspace, type CreateRunWorkspaceOptions, type RunFileInput, type RunWorkspace } from './RunWorkspace';
+import { listRunArtifacts, type RunArtifact } from './RunArtifacts';
+import { capToolOutput, type ToolRegistry, UncertainToolOutcomeError } from './ToolRegistry';
 import type { EffectfulAgentTool, ToolExecutionContext, UserInputAgentTool } from './ToolRegistry';
 import type { UserInputHandler } from './UserInput';
 import type { ResponseMetrics } from '../sessions/ResponseMetrics';

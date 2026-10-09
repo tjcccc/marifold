@@ -1,12 +1,12 @@
-import { FastifyInstance } from 'fastify';
+import type { FastifyInstance } from 'fastify';
 import {
   MarifoldError,
-  MarifoldRuntime,
-  MarifoldSkill,
+  type MarifoldRuntime,
+  type MarifoldSkill,
   type SkillAppAttachmentInput,
   type SkillAppDefinition,
 } from '@marifold/core';
-import { JsonObject, objectBody, optionalStringField, requiredString } from './Validation';
+import { type JsonObject, objectBody, optionalStringField, requiredString } from './Validation';
 
 /** Skill hints and invocation resolution, and SkillApp definitions and instances. */
 export function registerSkillAppRoutes(

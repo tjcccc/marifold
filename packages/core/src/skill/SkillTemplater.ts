@@ -1,4 +1,4 @@
-import { MarifoldSkill } from './SkillSchema';
+import type { MarifoldSkill } from './SkillSchema';
 
 export interface SkillRenderResult {
   /** The expanded prompt with every `{{var}}` resolved. */

@@ -1,9 +1,9 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { parse } from 'smol-toml';
-import { Profile, ProfileLoader } from '@priest-ai/core';
+import type { Profile, ProfileLoader } from '@priest-ai/core';
 import { MarifoldError } from '../errors/MarifoldError';
-import { ProfileDetail, ProfileFileSummary, ProfileMode, ProfileSettings, ProfileSummary } from '../config/ConfigSchema';
+import type { ProfileDetail, ProfileFileSummary, ProfileMode, ProfileSettings, ProfileSummary } from '../config/ConfigSchema';
 import { parsePartialAgentConfig } from '../config/ConfigLoader';
 import { findProfileAvatar, normalizeProfileDisplayName } from './ProfileManager';
 import {

@@ -1,6 +1,6 @@
-import { JSONValue } from '@priest-ai/core';
-import { TaskPlanItem, TaskStatus, TaskStepStatus } from '../tasks/TaskStore';
-import { ApprovalRequest } from './ApprovalPolicy';
+import type { JSONValue } from '@priest-ai/core';
+import type { TaskPlanItem, TaskStatus, TaskStepStatus } from '../tasks/TaskStore';
+import type { ApprovalRequest } from './ApprovalPolicy';
 import type { AgentToolKind } from './ToolRegistry';
 import type { UserInputRequest, UserInputResponse } from './UserInput';
 import type { RunArtifact } from './RunArtifacts';

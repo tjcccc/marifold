@@ -1,5 +1,5 @@
-import { JSONValue } from '@priest-ai/core';
-import { AgentTool, capToolOutput, requireStringInput, ToolExecutionContext, ToolExecutionResult } from '../ToolRegistry';
+import type { JSONValue } from '@priest-ai/core';
+import { type AgentTool, capToolOutput, requireStringInput, type ToolExecutionContext, type ToolExecutionResult } from '../ToolRegistry';
 
 export interface DelegateAskRequest {
   prompt: string;

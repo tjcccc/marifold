@@ -1,5 +1,5 @@
-import { Command } from 'commander';
-import { ConfigLoader, LoadedMarifoldConfig, MarifoldRuntime } from '@marifold/core';
+import type { Command } from 'commander';
+import { ConfigLoader, type LoadedMarifoldConfig, MarifoldRuntime } from '@marifold/core';
 
 export interface RootCommandOptions {
   config?: string;

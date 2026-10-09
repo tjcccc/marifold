@@ -1,8 +1,8 @@
 import { workspaceClient, remoteAgent } from './WorkspaceClient';
-import { AgentEvent, ApprovalDecision, ApprovalRequest, encryptSudoPassword } from '@marifold/core';
-import { Command } from 'commander';
+import { type AgentEvent, type ApprovalDecision, type ApprovalRequest, encryptSudoPassword } from '@marifold/core';
+import type { Command } from 'commander';
 import { InteractivePrompt } from '../input/InteractivePrompt';
-import { ConsolePrinter } from '../output/ConsolePrinter';
+import type { ConsolePrinter } from '../output/ConsolePrinter';
 import { inert } from '../output/inert';
 import { TerminalStyle } from '../output/TerminalStyle';
 import { createRuntime } from './RuntimeFactory';

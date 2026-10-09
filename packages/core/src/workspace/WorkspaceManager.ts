@@ -16,7 +16,7 @@ import type {
   WorkspaceRequest,
   PublicIdentity,
 } from '@marifold/workspace-protocol';
-import { WorkspaceStore, WorkspaceConnection } from './WorkspaceStore';
+import { WorkspaceStore, type WorkspaceConnection } from './WorkspaceStore';
 import { BridgePeer } from './bridge/BridgePeer';
 import { MARIFOLD_VERSION, workspaceVersionError } from './MarifoldVersion';
 

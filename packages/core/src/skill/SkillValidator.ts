@@ -2,9 +2,9 @@ import { parse as parseYaml } from 'yaml';
 import { MarifoldError } from '../errors/MarifoldError';
 import {
   extractTemplateVariables,
-  MarifoldSkill,
-  SkillMode,
-  SkillVariable,
+  type MarifoldSkill,
+  type SkillMode,
+  type SkillVariable,
   SKILL_SCHEMA_ID,
 } from './SkillSchema';
 

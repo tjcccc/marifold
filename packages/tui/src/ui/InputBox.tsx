@@ -1,6 +1,7 @@
 import { composerTokenBefore } from '@marifold/client';
 import { inputTokens } from '../core/inputTokens.js';
-import React, { useContext, useEffect, useRef, useState } from 'react';
+import type React from 'react';
+import { useContext, useEffect, useRef, useState } from 'react';
 import { Box, Text, useInput, useWindowSize, measureElement, type DOMElement } from 'ink';
 import * as fs from 'fs';
 import * as path from 'path';

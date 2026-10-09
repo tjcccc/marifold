@@ -1,8 +1,8 @@
-import { Command } from 'commander';
+import type { Command } from 'commander';
 import { MarifoldError } from '@marifold/core';
 import { InteractivePrompt } from '../input/InteractivePrompt';
 import { PromptAbortError, isPromptAbortError } from '../input/PromptAbort';
-import { ConsolePrinter } from '../output/ConsolePrinter';
+import type { ConsolePrinter } from '../output/ConsolePrinter';
 import { createRuntime } from './RuntimeFactory';
 
 interface SessionListOptions {

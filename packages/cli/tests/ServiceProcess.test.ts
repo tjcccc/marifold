@@ -9,7 +9,7 @@ import {
   markServiceProcessRunning,
   readRecentServiceLog,
   releaseServiceProcess,
-  ServiceProcessPaths,
+  type ServiceProcessPaths,
 } from '../src/service/ServiceProcess';
 
 const tempDirs: string[] = [];

@@ -1,18 +1,18 @@
-import { Command } from 'commander';
+import type { Command } from 'commander';
 import {
   ConfigManager,
-  LoadedMarifoldConfig,
+  type LoadedMarifoldConfig,
   MarifoldError,
   ProfileManager,
   ProviderInspector,
-  ProviderType,
+  type ProviderType,
   isKnownGitHubCopilotUnsupportedModelId,
 } from '@marifold/core';
 import { InteractivePrompt } from '../input/InteractivePrompt';
 import { isPromptAbortError } from '../input/PromptAbort';
 import { readChoice, resolveModelAddTarget, type PromptFactory } from '../input/ModelPicker';
 import { selectTerminalOption } from '../input/TerminalSelect';
-import { ConsolePrinter } from '../output/ConsolePrinter';
+import type { ConsolePrinter } from '../output/ConsolePrinter';
 import { TerminalStyle } from '../output/TerminalStyle';
 import { createRuntime, loadConfig } from './RuntimeFactory';
 

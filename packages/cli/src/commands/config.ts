@@ -1,13 +1,13 @@
-import { Command } from 'commander';
+import type { Command } from 'commander';
 import {
   ConfigManager,
   exportConfigBackup,
   importConfigBackup,
   MarifoldError,
-  MarifoldWebSearchConfig,
+  type MarifoldWebSearchConfig,
   renderMarifoldConfig,
 } from '@marifold/core';
-import { ConsolePrinter } from '../output/ConsolePrinter';
+import type { ConsolePrinter } from '../output/ConsolePrinter';
 import { InteractivePrompt } from '../input/InteractivePrompt';
 import { isPromptAbortError, PromptAbortError } from '../input/PromptAbort';
 import { readSecretLine } from '../input/SecretPrompt';

@@ -1,7 +1,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { Command } from 'commander';
+import type { Command } from 'commander';
 import { createApiClient, type ApiClient } from '@marifold/client';
 import type { LoadedMarifoldConfig, WorkspaceSummary } from '@marifold/core';
 import { loadConfig } from './RuntimeFactory';

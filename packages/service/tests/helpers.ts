@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { LoadedMarifoldConfig, MarifoldConfig } from '@marifold/core';
+import type { LoadedMarifoldConfig, MarifoldConfig } from '@marifold/core';
 
 const tempDirs: string[] = [];
 

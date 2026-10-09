@@ -3,7 +3,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MarifoldRuntime, SessionResolver } from '../src';
-import { MarifoldConfig } from '../src/config/ConfigSchema';
+import type { MarifoldConfig } from '../src/config/ConfigSchema';
 
 const tempDirs: string[] = [];
 const TINY_PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl2nGQAAAAASUVORK5CYII=';

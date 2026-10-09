@@ -1,6 +1,6 @@
-import { JSONValue } from '@priest-ai/core';
-import { formatSearchResults, SearchBackend } from '../../search/SearchBackend';
-import { AgentTool, capToolOutput, requireStringInput, ToolExecutionContext, ToolExecutionResult } from '../ToolRegistry';
+import type { JSONValue } from '@priest-ai/core';
+import { formatSearchResults, type SearchBackend } from '../../search/SearchBackend';
+import { type AgentTool, capToolOutput, requireStringInput, type ToolExecutionContext, type ToolExecutionResult } from '../ToolRegistry';
 
 export class WebSearchTool implements AgentTool {
   readonly kind = 'network' as const;

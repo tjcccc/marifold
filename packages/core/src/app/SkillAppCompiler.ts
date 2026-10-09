@@ -3,17 +3,17 @@ import { MarifoldError } from '../errors/MarifoldError';
 import {
   SKILL_APP_PROFILE_SCHEMA,
   SKILL_APP_SCHEMA,
-  SkillAppDefinition,
-  SkillAppAttachmentStateDefinition,
-  SkillAppLayoutItem,
-  SkillAppModelDefinition,
-  SkillAppOperationDefinition,
-  SkillAppProfileDefinition,
-  SkillAppPermissionDefinition,
-  SkillAppSelectOption,
-  SkillAppSkillDefinition,
-  SkillAppStateDefinition,
-  SkillAppTriggerDefinition,
+  type SkillAppDefinition,
+  type SkillAppAttachmentStateDefinition,
+  type SkillAppLayoutItem,
+  type SkillAppModelDefinition,
+  type SkillAppOperationDefinition,
+  type SkillAppProfileDefinition,
+  type SkillAppPermissionDefinition,
+  type SkillAppSelectOption,
+  type SkillAppSkillDefinition,
+  type SkillAppStateDefinition,
+  type SkillAppTriggerDefinition,
 } from './SkillAppSchema';
 
 const MAX_SOURCE_BYTES = 128 * 1024;

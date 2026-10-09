@@ -1,4 +1,4 @@
-import { ScheduleState, ScheduleStore } from './ScheduleStore';
+import type { ScheduleState, ScheduleStore } from './ScheduleStore';
 
 const DEFAULT_TICK_MS = 30_000;
 

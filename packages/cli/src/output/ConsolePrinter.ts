@@ -1,9 +1,9 @@
 import {
-  MarifoldAskResponse,
-  ProfileSummary,
-  SessionSummary,
+  type MarifoldAskResponse,
+  type ProfileSummary,
+  type SessionSummary,
   stripTerminalControls,
-  WorkspaceInitResult,
+  type WorkspaceInitResult,
 } from '@marifold/core';
 
 export class ConsolePrinter {

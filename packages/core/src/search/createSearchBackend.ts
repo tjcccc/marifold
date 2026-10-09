@@ -1,9 +1,9 @@
-import { MarifoldWebSearchConfig } from '../config/ConfigSchema';
+import type { MarifoldWebSearchConfig } from '../config/ConfigSchema';
 import { BuiltInSearchBackend } from './BuiltInSearchBackend';
 import { DuckDuckGoBackend } from './DuckDuckGoBackend';
 import { FirecrawlBackend } from './FirecrawlBackend';
 import { OllamaSearchBackend } from './OllamaSearchBackend';
-import { SearchBackend } from './SearchBackend';
+import type { SearchBackend } from './SearchBackend';
 
 /**
  * Select the active web-search backend from the resolved [web_search] config.

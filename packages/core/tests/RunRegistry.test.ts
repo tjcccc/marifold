@@ -1,16 +1,16 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { PriestRequest, PriestResponse } from '@priest-ai/core';
+import type { PriestRequest, PriestResponse } from '@priest-ai/core';
 import { afterEach, describe, expect, it } from 'vitest';
-import { AgentEngine, AgentRunner } from '../src/agent/AgentRunner';
-import { AgentEvent } from '../src/agent/AgentEvents';
+import { type AgentEngine, AgentRunner } from '../src/agent/AgentRunner';
+import type { AgentEvent } from '../src/agent/AgentEvents';
 import { resolveAgentConfig } from '../src/agent/ApprovalPolicy';
-import { AgentTool, ToolRegistry } from '../src/agent/ToolRegistry';
+import { type AgentTool, ToolRegistry } from '../src/agent/ToolRegistry';
 import { WriteFileTool } from '../src/agent/tools/WriteFileTool';
 import { AskUserTool } from '../src/agent/tools/AskUserTool';
 import { MarifoldError } from '../src/errors/MarifoldError';
-import { RunRegistry, RunRegistryOptions, SequencedEvent } from '../src/runs/RunRegistry';
+import { RunRegistry, type RunRegistryOptions, type SequencedEvent } from '../src/runs/RunRegistry';
 import { TaskStore } from '../src/tasks/TaskStore';
 import { SudoCredentials, encryptSudoPassword } from '../src/agent/SudoCredentials';
 

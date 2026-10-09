@@ -3,15 +3,15 @@ import * as path from 'path';
 import type { JSONValue } from '@priest-ai/core';
 import { MarifoldError } from '../../errors/MarifoldError';
 import { isBuiltInSkillName } from '../../skill/BuiltInSkills';
-import { readSkillSource, SkillScope, SkillStore } from '../../skill/SkillStore';
+import { readSkillSource, type SkillScope, SkillStore } from '../../skill/SkillStore';
 import { parseSkill } from '../../skill/SkillValidator';
 import { expandHome } from '../../workspace/WorkspacePaths';
 import {
-  AgentTool,
+  type AgentTool,
   requireStringInput,
-  ToolExecutionContext,
-  ToolExecutionResult,
-  ToolRiskAssessment,
+  type ToolExecutionContext,
+  type ToolExecutionResult,
+  type ToolRiskAssessment,
 } from '../ToolRegistry';
 
 interface BundledTextFile {

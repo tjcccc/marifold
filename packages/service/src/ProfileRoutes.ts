@@ -1,12 +1,12 @@
 import * as fs from 'fs';
-import { FastifyInstance } from 'fastify';
+import type { FastifyInstance } from 'fastify';
 import {
-  ApprovalMode,
+  type ApprovalMode,
   avatarThumbnail,
   MarifoldError,
-  MarifoldRuntime,
-  ProfileFileKind,
-  ToolKind,
+  type MarifoldRuntime,
+  type ProfileFileKind,
+  type ToolKind,
 } from '@marifold/core';
 import { objectBody, parseBooleanQuery, parseLimitQuery, requiredString, stringValue } from './Validation';
 

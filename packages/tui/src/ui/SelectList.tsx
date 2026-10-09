@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import type React from 'react';
+import { useState } from 'react';
 import { Box, Text, useInput, useWindowSize } from 'ink';
 import { ACCENT, DIM } from './theme.js';
 import { padTo, truncate } from './text.js';

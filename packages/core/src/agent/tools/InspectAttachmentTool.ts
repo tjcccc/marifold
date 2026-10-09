@@ -1,10 +1,10 @@
 import type { JSONValue } from '@priest-ai/core';
 import {
-  AgentTool,
+  type AgentTool,
   requireStringInput,
-  ToolExecutionContext,
-  ToolExecutionResult,
-  ToolRiskAssessment,
+  type ToolExecutionContext,
+  type ToolExecutionResult,
+  type ToolRiskAssessment,
 } from '../ToolRegistry';
 import { AttachmentResource } from '../AttachmentResources';
 

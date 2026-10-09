@@ -1,4 +1,4 @@
-import { parseToolArguments, ToolCall, ToolDefinition } from '@priest-ai/core';
+import { parseToolArguments, type ToolCall, type ToolDefinition } from '@priest-ai/core';
 
 /**
  * Prompt-based tool calling for models without native tool support, following

@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { MarifoldError } from '../errors/MarifoldError';
-import { ProviderType } from '../config/ConfigSchema';
+import type { ProviderType } from '../config/ConfigSchema';
 import { ensureProfileMemoryFiles } from '../memory/MemoryStore';
 import { PROFILE_TOML_STUB } from '../profiles/ProfileManager';
 import {

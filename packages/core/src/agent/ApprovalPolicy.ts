@@ -1,4 +1,4 @@
-import { JSONValue } from '@priest-ai/core';
+import type { JSONValue } from '@priest-ai/core';
 
 export type ToolKind = 'read' | 'write' | 'shell' | 'network' | 'delegate';
 export type ApprovalMode = 'allow' | 'ask' | 'deny';

@@ -1,7 +1,7 @@
 import * as path from 'path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ProviderInspector } from '../src';
-import { LoadedMarifoldConfig } from '../src/config/ConfigSchema';
+import type { LoadedMarifoldConfig } from '../src/config/ConfigSchema';
 import { openAIChatCompletionsUrl, openAIModelsUrl, openAIResponsesUrl } from '../src/config/OpenAICompatUrls';
 
 vi.mock('../src/config/ChatGptCatalogVersion', () => ({

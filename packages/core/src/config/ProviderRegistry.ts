@@ -1,4 +1,4 @@
-import { MarifoldProviderConfig, ProviderType } from './ConfigSchema';
+import type { MarifoldProviderConfig, ProviderType } from './ConfigSchema';
 
 export type ProviderRegistryKind = 'local' | 'api' | 'oauth';
 

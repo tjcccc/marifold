@@ -1,4 +1,4 @@
-import React from 'react';
+import type React from 'react';
 import { Box, Text } from 'ink';
 import * as path from 'path';
 import type { AppState } from '../core/appState.js';

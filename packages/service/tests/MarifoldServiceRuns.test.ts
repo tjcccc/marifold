@@ -1,10 +1,10 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { AddressInfo } from 'net';
-import { FastifyInstance } from 'fastify';
+import type { AddressInfo } from 'net';
+import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { MarifoldConfig, resolveAgentConfig } from '@marifold/core';
+import { type MarifoldConfig, resolveAgentConfig } from '@marifold/core';
 import { createMarifoldService } from '../src';
 import { cleanupTempDirs, fixtureLoadedConfig, tempDir } from './helpers';
 

@@ -1,7 +1,7 @@
 import * as fs from 'fs';
-import { ArtifactTickets, artifactHeaders } from './ArtifactTickets';
-import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { createArtifactPreview, artifactPreviewVariant, type ArtifactPreviewVariant, isPreviewableArtifact, MarifoldError, RunApprovalAction, RunRegistry, RunStartInput } from '@marifold/core';
+import { type ArtifactTickets, artifactHeaders } from './ArtifactTickets';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import { createArtifactPreview, artifactPreviewVariant, type ArtifactPreviewVariant, isPreviewableArtifact, MarifoldError, type RunApprovalAction, type RunRegistry, type RunStartInput } from '@marifold/core';
 import { SSE_HEADERS, startSseHeartbeat, writeSse, writeSseRetry } from './Sse';
 import {
   objectBody,

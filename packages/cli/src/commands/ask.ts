@@ -1,8 +1,8 @@
 import { workspaceClient } from './WorkspaceClient';
 import { prepareImageInputs, type MarifoldAskResponse } from '@marifold/core';
-import { Command } from 'commander';
+import type { Command } from 'commander';
 import { expandHome } from '@marifold/core';
-import { ConsolePrinter } from '../output/ConsolePrinter';
+import type { ConsolePrinter } from '../output/ConsolePrinter';
 import { createRuntime } from './RuntimeFactory';
 
 interface AskOptions {

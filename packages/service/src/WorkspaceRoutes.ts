@@ -5,9 +5,9 @@ import { SSE_HEADERS, writeSse, startSseHeartbeat } from './Sse';
 import type { SequencedEvent, RunRecord } from '@marifold/core';
 import type { WorkspaceRequestContext } from './WorkspaceRequestContext';
 import * as fs from 'node:fs';
-import { ArtifactTickets, artifactHeaders } from './ArtifactTickets';
+import { type ArtifactTickets, artifactHeaders } from './ArtifactTickets';
 import type { FastifyInstance, FastifyReply } from 'fastify';
-import { createArtifactPreview, artifactPreviewVariant, isPreviewableArtifact, MarifoldError, type RunArtifact, artifactReadLength, WorkspaceManager, type RunRegistry, type WorkspaceOperationContext } from '@marifold/core';
+import { createArtifactPreview, artifactPreviewVariant, isPreviewableArtifact, MarifoldError, type RunArtifact, artifactReadLength, type WorkspaceManager, type RunRegistry, type WorkspaceOperationContext } from '@marifold/core';
 import { objectBody, requiredString } from './Validation';
 
 /** Only application resources can traverse the bridge. Device-local configuration

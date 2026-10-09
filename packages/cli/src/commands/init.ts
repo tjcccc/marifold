@@ -1,18 +1,18 @@
-import { Command } from 'commander';
+import type { Command } from 'commander';
 import {
   ConfigManager,
   MarifoldError,
-  ProviderType,
+  type ProviderType,
   WorkspaceInitializer,
   resolveWebSearchConfig,
 } from '@marifold/core';
 import { InteractivePrompt } from '../input/InteractivePrompt';
 import { isPromptAbortError } from '../input/PromptAbort';
-import { ConsolePrinter } from '../output/ConsolePrinter';
+import type { ConsolePrinter } from '../output/ConsolePrinter';
 import { TerminalStyle } from '../output/TerminalStyle';
 import { resolveModelAddTarget } from '../input/ModelPicker';
 import { searchUpdateFromFlags } from './config';
-import { loadConfig, RootCommandOptions } from './RuntimeFactory';
+import { loadConfig, type RootCommandOptions } from './RuntimeFactory';
 
 interface InitOptions {
   force?: boolean;

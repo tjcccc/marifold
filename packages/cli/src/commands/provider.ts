@@ -1,4 +1,4 @@
-import { Command } from 'commander';
+import type { Command } from 'commander';
 import {
   ConfigManager,
   getProviderRegistryEntry,
@@ -10,7 +10,7 @@ import { InteractivePrompt } from '../input/InteractivePrompt';
 import { reauthenticateOAuthProvider } from '../input/ModelPicker';
 import { isPromptAbortError, isPromptBackError, PromptAbortError } from '../input/PromptAbort';
 import { selectTerminalOption } from '../input/TerminalSelect';
-import { ConsolePrinter } from '../output/ConsolePrinter';
+import type { ConsolePrinter } from '../output/ConsolePrinter';
 import { TerminalStyle } from '../output/TerminalStyle';
 import { loadConfig } from './RuntimeFactory';
 

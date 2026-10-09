@@ -5,16 +5,16 @@ import type { WorkspaceExecutionContext } from '@marifold/workspace-protocol';
 import * as crypto from 'crypto';
 import { dirname } from 'path';
 import type { ImageInput } from '@priest-ai/core';
-import { AgentEvent, AgentUsage } from '../agent/AgentEvents';
-import { AgentRunner } from '../agent/AgentRunner';
-import { ApprovalDecision, ApprovalMode, ApprovalRequest, ToolKind } from '../agent/ApprovalPolicy';
+import type { AgentEvent, AgentUsage } from '../agent/AgentEvents';
+import type { AgentRunner } from '../agent/AgentRunner';
+import type { ApprovalDecision, ApprovalMode, ApprovalRequest, ToolKind } from '../agent/ApprovalPolicy';
 import { RUN_WORKSPACE_RETENTION_MS } from '../agent/RunWorkspace';
 import type { RunFileInput } from '../agent/RunWorkspace';
 import { resolveRunArtifact } from '../agent/RunArtifacts';
 import type { ResolvedRunArtifact, RunArtifact } from '../agent/RunArtifacts';
 import { isInsideAny } from '../agent/tools/WriteFileTool';
 import { MarifoldError } from '../errors/MarifoldError';
-import { TaskStatus } from '../tasks/TaskStore';
+import type { TaskStatus } from '../tasks/TaskStore';
 import {
   normalizeUserInputSubmission,
   type UserInputRequest,

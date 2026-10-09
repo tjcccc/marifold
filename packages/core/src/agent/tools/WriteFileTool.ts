@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { JSONValue } from '@priest-ai/core';
+import type { JSONValue } from '@priest-ai/core';
 import { expandHome } from '../../workspace/WorkspacePaths';
 import {
   canonicalPath,
@@ -11,7 +11,7 @@ import {
   isSensitiveHostPath,
   resolveToolPath,
 } from '../RunWorkspace';
-import { AgentTool, requireStringInput, ToolExecutionContext, ToolExecutionResult, ToolRiskAssessment } from '../ToolRegistry';
+import { type AgentTool, requireStringInput, type ToolExecutionContext, type ToolExecutionResult, type ToolRiskAssessment } from '../ToolRegistry';
 import { formatBytes } from './ReadFileTool';
 
 export class WriteFileTool implements AgentTool {

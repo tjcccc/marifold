@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
-import { FastifyInstance } from 'fastify';
-import { createImagePreview, MarifoldError, MarifoldRuntime, prepareImageInputs, RunRegistry } from '@marifold/core';
+import type { FastifyInstance } from 'fastify';
+import { createImagePreview, MarifoldError, type MarifoldRuntime, prepareImageInputs, type RunRegistry } from '@marifold/core';
 import { nonNegativeIntegerPath, objectBody, parseBooleanQuery, parseLimitQuery, requiredString } from './Validation';
 
 /** Session listing, transcripts, leases, attachments, and history edits. */

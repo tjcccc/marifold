@@ -1,8 +1,8 @@
 import { spawn } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
-import { capToolOutput, ToolExecutionResult } from './ToolRegistry';
-import { isInside, RunWorkspace } from './RunWorkspace';
+import { capToolOutput, type ToolExecutionResult } from './ToolRegistry';
+import { isInside, type RunWorkspace } from './RunWorkspace';
 
 const DEFAULT_TIMEOUT_MS = 60_000;
 const MAX_BUFFER_BYTES = 10 * 1024 * 1024;
