@@ -73,8 +73,8 @@ export interface Suggestion {
   description: string;
 }
 
-/** The web's `/command` set — each is wired to a controller action in
- * useAgentController's send(). Keep in sync with the command switch there. */
+/** The web's `/command` set — useAgentController's send() routes each to
+ * runAgentCommand (screens/agent/agentCommands.ts). Keep the two in sync. */
 export const WEB_COMMANDS: Suggestion[] = [
   { name: 'help', usage: '/help', description: 'List available commands.' },
   { name: 'status', usage: '/status', description: 'Show profile, model, thinking, and session.' },
