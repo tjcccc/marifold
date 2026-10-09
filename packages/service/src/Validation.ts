@@ -116,3 +116,26 @@ export function optionalRunFilesField(value: unknown): { files: RunFileInput[] }
   });
   return { files };
 }
+
+export function parseLimitQuery(value: string | undefined): number | undefined {
+  if (value === undefined) { return undefined; }
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isInteger(parsed) || parsed < 1) {
+    throw MarifoldError.configInvalid('limit must be a positive integer.');
+  }
+  return parsed;
+}
+export function nonNegativeIntegerPath(value: string, name: string): number {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    throw MarifoldError.configInvalid(`${name} must be a non-negative integer.`);
+  }
+  return parsed;
+}
+export function parseBooleanQuery(value: string | undefined): boolean {
+  if (value === undefined) { return false; }
+  const normalized = value.trim().toLowerCase();
+  if (normalized === 'true' || normalized === '1' || normalized === 'yes') { return true; }
+  if (normalized === 'false' || normalized === '0' || normalized === 'no') { return false; }
+  throw MarifoldError.configInvalid('Boolean query values must be true or false.');
+}

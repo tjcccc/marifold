@@ -8,7 +8,7 @@ import {
   ProfileFileKind,
   ToolKind,
 } from '@marifold/core';
-import { objectBody, requiredString, stringValue } from './Validation';
+import { objectBody, parseBooleanQuery, parseLimitQuery, requiredString, stringValue } from './Validation';
 
 const TOOL_KINDS: ToolKind[] = ['read', 'write', 'shell', 'network', 'delegate'];
 const APPROVAL_MODES: ApprovalMode[] = ['allow', 'ask', 'deny'];
@@ -212,6 +212,30 @@ export function registerProfileRoutes(
       ok: true,
       profile: name,
       memories: runtime.listMemories(name, false),
+    };
+  });
+
+  server.get('/v1/profiles', async () => ({
+    ok: true,
+    profiles: runtime.listProfiles(),
+  }));
+
+  server.get<{ Params: { name: string } }>('/v1/profiles/:name', async request => ({
+    ok: true,
+    profile: runtime.getProfile(request.params.name),
+  }));
+
+  server.get<{
+    Params: { name: string };
+    Querystring: { all?: string; limit?: string };
+  }>('/v1/profiles/:name/memories', async request => {
+    const includeSuperseded = parseBooleanQuery(request.query.all);
+    const limit = parseLimitQuery(request.query.limit);
+    const entries = runtime.listMemories(request.params.name, includeSuperseded);
+    return {
+      ok: true,
+      profile: request.params.name,
+      memories: limit === undefined ? entries : entries.slice(0, limit),
     };
   });
 }

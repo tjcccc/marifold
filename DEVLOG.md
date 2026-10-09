@@ -2,6 +2,21 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## Unreleased — Service route modules
+
+- Split `packages/service/src/MarifoldService.ts` (1,253 → 362 lines) into
+  route modules beside the existing `RunRoutes`/`ProfileRoutes`/
+  `WorkspaceRoutes`: `ConfigRoutes` (config, providers, models),
+  `SkillAppRoutes` (skills, apps, app instances), `SessionRoutes`,
+  `ChatRoutes` (`/v1/ask`, `/v1/chat/stream`), `TaskRoutes`, and
+  `ServiceErrors`; profile read routes joined `ProfileRoutes`, and shared query
+  parsers moved to `Validation`. `MarifoldService` keeps service wiring, shared
+  session-request accounting, health, status, change revisions, and schedules.
+- Pure move: route bodies are byte-identical (checked with `git diff
+  --color-moved`); the Fastify route table with hooks is unchanged apart from
+  print order. Full gate passes (1,081 tests); live OrbStack rejoin and
+  55-delegation checks pass.
+
 ## Unreleased — Braces on every control-flow body
 
 - Require braces on every `if`/`else`/loop body, including single statements,
