@@ -1,10 +1,12 @@
-# Flow: add a new agent tool
+# Flow: add an agent tool
 
-A representative cross-layer change.
+A representative cross-layer change: how to add an agent tool, wire it into every registry that should expose it, and keep approval, config, and clients in step.
 
-1. Implement `AgentTool` in `packages/core/src/agent/tools/<Name>Tool.ts` (`definition` with JSON-schema params, `kind: ToolKind`, `summarizeCall`, optional `assessRisk`, `execute`). Expand `~` in path args via `workspace/WorkspacePaths` `expandHome`.
-2. If it is a new risk class, add a `ToolKind` in `agent/ApprovalPolicy.ts` and a default `ApprovalMode` in `DEFAULT_AGENT_CONFIG`, plus `[agent.approval]` parsing in `config/ConfigLoader.ts` `normalizeAgent` and rendering in `config/ConfigManager.ts`.
-3. Register it in `MarifoldRuntime.createDefaultToolRegistry()` (runtime/MarifoldRuntime.ts).
-4. For chat reuse, expose it in `MarifoldRuntime.chatTools()`.
-5. Tests: add to `packages/core/tests/AgentTools.test.ts`; the loop is covered by `AgentRunner.test.ts`.
-6. Control-block fallback works automatically (definitions are rendered into the prompt by `agent/ControlBlockTools.ts`).
+1. Implement `AgentTool` (`packages/core/src/agent/ToolRegistry.ts`) in `packages/core/src/agent/tools/<Name>Tool.ts`: `definition` with JSON-schema parameters, `kind: ToolKind`, `summarizeCall`, optional `assessRisk` (returns `escalate`/`blocked`/`trusted`/`persistable`), and `execute(input, ctx)`. Resolve path arguments with `resolveToolPath` from `packages/core/src/agent/RunWorkspace.ts` so `~` and run capability roots apply; shell-like work goes through `packages/core/src/agent/ScopedProcess.ts`.
+2. If it is a new risk class, add a `ToolKind` and its default `ApprovalMode` in `packages/core/src/agent/ApprovalPolicy.ts` (`DEFAULT_AGENT_CONFIG`), the kind list in `normalizeApprovalModes` (`packages/core/src/config/ConfigLoader.ts`), `parseToolKind` and `[agent.approval]` rendering in `packages/core/src/config/ConfigManager.ts`, and the labels/defaults in `apps/web/src/lib/permissions.ts`.
+3. Register it in `MarifoldRuntime.createDefaultToolRegistry()` (`packages/core/src/runtime/MarifoldRuntime.ts`), conditionally when it depends on config or policy (as `web_search`/`read_web_page` do).
+4. Decide which other registries need it: `MarifoldRuntime.createHostContextTools()` (tools a host keeps when a run executes on a guest device), `WorkspaceExecutor.executionTools()` (`packages/core/src/workspace/WorkspaceExecutor.ts`, tools a guest executes for a host), and `SkillAppOperations.runProfileAgent` (`packages/core/src/runtime/SkillAppOperations.ts`, read-only App runs).
+5. Chat turns do not use the registry: `ChatTurns.chatTools()` (`packages/core/src/runtime/ChatTurns.ts`) assembles a fixed caller-executed set (`web_search`, `read_web_page`, `read_file`); add the tool there only if it belongs in the chat loop.
+6. Export the class from `packages/core/src/index.ts` if clients or tests need it. Renderers show `tool_request`/`tool_result` events generically from `summarizeCall`, so no client change is needed unless the tool adds an `AgentEvent` variant (see `.projnavi/flows/agent-event-contract.md`).
+7. Control-block fallback works automatically: definitions are rendered into the prompt by `packages/core/src/agent/ControlBlockTools.ts`.
+8. Tests: `packages/core/tests/AgentTools.test.ts` for the tool; `packages/core/tests/AgentRunner.test.ts` covers the approval-aware loop.

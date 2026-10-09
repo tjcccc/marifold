@@ -1,30 +1,34 @@
 # Project Notes
 
-marifold is a local-first personal AI workspace: profile-based chat and an
-approval-aware agent, plus scheduling and a service API. Both chat and agent
-talk to models **through `@priest-ai/core`** (the priest protocol SDK);
-marifold owns acting on the world (tools, approval, task state, scheduling).
+marifold is a local-first, single-owner personal AI workspace: profiles, conversations, Skills and SkillApps, scheduled runs, and device-hosted workspaces that connect the owner's devices. Every ordinary message runs through one approval-aware agent path, rendered by the TUI (primary surface), the CLI, the Web UI, and Telegram. Models are reached only through `@priest-ai/core`; marifold owns acting on the world (tools, approval, task state, rendering).
 
-Authoritative prose docs (read these first for design, don't restate them here):
+Authoritative docs (read these for design; this file only points at code):
 
-- `docs/architecture.md` — package dependency direction, module responsibilities, boundaries.
-- `docs/vision.md` / `docs/roadmap.md` — product direction and milestone history.
-- `AGENTS.md` — stack, boundaries, validation gates.
-- `DEVLOG.md` — newest-first change log.
+- `docs/architecture.md` — runtime pieces, package responsibilities and dependency directions, trust boundaries, glossary, dated decisions.
+- `AGENTS.md` — stack, package boundaries, code style, validation gates.
+- `DEVLOG.md` — newest-first change log; trust dated entries over older docs.
+- `docs/roadmap.md` / `docs/vision.md` — direction and milestone history.
+- Feature specs: `docs/service-api.md`, `docs/tui.md`, `docs/app.md`, `docs/workspaces.md`, `docs/device-execution.md`, `docs/web-search.md`, `apps/bridge/HOSTING.md`, `spec/ui.md`.
 
 ## Package map
 
-- `packages/core` — runtime, config, profiles, memory, tasks, **agent**, **schedule**, **search**, **skillapp**, sessions. The product brain.
-- `packages/cli` — commander commands + interactive chat/agent terminal UI.
-- `packages/service` — thin loopback Fastify transport over core. No business logic.
-- Dependency direction: `cli`/`service` -> `core` -> `@priest-ai/core` -> provider.
+- `packages/core` (`@marifold/core`) — runtime, config, profiles, memory, sessions and leases, agent subsystem, runs, schedules, Skills, SkillApps, channels, and the workspace implementation. Notes: `.projnavi/modules/runtime.md`, `.projnavi/modules/agent.md`, `.projnavi/modules/config.md`, `.projnavi/modules/providers.md`, `.projnavi/modules/memory.md`, `.projnavi/modules/schedule.md`, `.projnavi/modules/skills.md`, `.projnavi/modules/app.md`, `.projnavi/modules/workspaces.md`.
+- `packages/service` (`@marifold/service`) — Fastify HTTP/SSE transport split into route modules; hosts the Web UI, scheduler, Telegram bridge, run registry, and workspace manager. Note: `.projnavi/modules/service.md`.
+- `packages/client` (`@marifold/client`) — typed HTTP/SSE client and session lease helpers for TUI, CLI, and Web. Note: `.projnavi/modules/client.md`.
+- `packages/tui` (`@marifold/tui`) — Ink TUI; bare `marifold` launches it. Note: `.projnavi/modules/tui.md`.
+- `packages/cli` (`marifold`) — commander commands, service process management, OAuth sign-in. Note: `.projnavi/modules/cli.md`.
+- `packages/workspace-protocol` and `apps/bridge` — workspace wire types/crypto and the relay server. Note: `.projnavi/modules/workspaces.md`.
+- `apps/web` (`@marifold/web`) — Vite/React Web UI over the service API. Note: `.projnavi/modules/web.md`.
+- Dependency directions and their enforcement: `docs/architecture.md` (Dependency directions).
 
 ## Cross-cutting contracts (highest-value to know before editing)
 
-- **`AgentEvent` union** (`packages/core/src/agent/AgentEvents.ts`) — the renderer-agnostic event stream consumed by CLI, TUI, Web, service SSE, and future clients. Change it carefully; `verification` is deprecated compatibility surface, not a current runner phase.
-- **priest tool-calling boundary** — the SDK transports tool calls; marifold executes them. Tools live in `packages/core/src/agent/tools/`, registered via `ToolRegistry`.
-- **approval seam** — `ApprovalHandler` callback (`packages/core/src/agent/ApprovalPolicy.ts`); CLI, TUI, Web/service, and Telegram provide their own interaction surfaces.
-- **memory pipeline** — chat runs apply memory control blocks; agent runs strip and discard them. See `packages/core/src/memory/MemoryControls.ts`.
+- **`AgentEvent` union** (`packages/core/src/agent/AgentEvents.ts`) — the renderer-agnostic event stream consumed by CLI, TUI, Web, service SSE, and Telegram. See `.projnavi/flows/agent-event-contract.md`; `verification` is deprecated compatibility surface.
+- **priest tool-calling boundary** — the SDK transports tool calls; marifold executes them. Tools live in `packages/core/src/agent/tools/` and are registered in `MarifoldRuntime.createDefaultToolRegistry()`. See `.projnavi/flows/add-agent-tool.md`.
+- **approval seam** — `ApprovalHandler` (`packages/core/src/agent/ApprovalPolicy.ts`); CLI, TUI, Web/service, and Telegram provide their own interaction surfaces; unattended runs degrade `ask` to deny.
+- **memory pipeline** — chat turns apply memory control blocks (`packages/core/src/runtime/ChatTurns.ts`); agent runs strip and discard them. See `packages/core/src/memory/MemoryControls.ts`.
+- **session leases** — one client per open session; running tasks hold their session; owners can take over (`packages/core/src/sessions/SessionLeases.ts`). See `.projnavi/flows/session-takeover.md`.
+- **Web import boundary** — only `apps/web/src/api/types.ts` imports `@marifold/core`, type-only (Biome-enforced).
 
 ## Useful queries
 
@@ -34,10 +38,14 @@ Authoritative prose docs (read these first for design, don't restate them here):
 - `projnavi guide "control-block fallback"`
 - `projnavi guide "provider routing copilot responses api"`
 - `projnavi guide "chat tool loop web search"`
-- `projnavi guide "scheduled unattended run"`
 - `projnavi guide "chatgpt token refresh"`
 - `projnavi guide "memory control blocks"`
-- `projnavi guide "skillapp schema"`
+- `projnavi guide "scheduled unattended run"`
+- `projnavi guide "skillapp template compiler"`
+- `projnavi guide "session takeover"`
+- `projnavi guide "service route modules"`
+- `projnavi guide "workspace bridge pairing"`
+- `projnavi guide "tui controller hooks"`
 
 <!-- projnavi-generated: project-inventory-v1 -->
 
@@ -45,18 +53,18 @@ Use this file for durable, human-reviewed project context. The inventory below w
 
 ## Overview
 
-Detected Node package @marifold/workspace. Indexed 105 relevant files. Detected 16 test files.
+Detected Node package @marifold/workspace. Indexed 498 relevant files. Detected 126 test files.
 
 ## Inventory
 
 - Package: `@marifold/workspace`
-- Package scripts: `agent-eval`, `build`, `command-test`, `marifold`, `memory-eval`, `test`, `typecheck`
-- Top-level directories: `.claude`, `docs`, `examples`, `packages`, `scripts`
-- Test files: `packages/core/tests/AgentRunner.test.ts`, `packages/core/tests/AgentTools.test.ts`, `packages/core/tests/ChatParity.test.ts`, `packages/core/tests/ConfigLoader.test.ts`, `packages/core/tests/ManagementCommands.test.ts`, `packages/core/tests/MarifoldOpenAICompatProvider.test.ts`, `packages/core/tests/MarifoldRuntime.test.ts`, `packages/core/tests/MemoryControls.test.ts`, `packages/core/tests/MemoryStore.test.ts`, `packages/core/tests/ProfileResolver.test.ts`, `packages/core/tests/ProviderInspector.test.ts`, `packages/core/tests/Schedule.test.ts`
+- Package scripts: `agent-eval`, `build`, `check:versions`, `command-test`, `lint`, `marifold`, `memory-eval`, `test`, `typecheck`
+- Top-level directories: `.claude`, `apps`, `docs`, `examples`, `packages`, `scripts`, `spec`
+- Test files: `apps/bridge/tests/Bridge.test.ts`, `apps/bridge/tests/RedisRelay.test.ts`, `apps/bridge/tests/RelayDelivery.test.ts`, `apps/web/tests/api/chat.test.ts`, `apps/web/tests/api/client.test.ts`, `apps/web/tests/api/follow.test.ts`, `apps/web/tests/api/profiles.test.ts`, `apps/web/tests/api/sse.test.ts`, `apps/web/tests/components/app.test.tsx`, `apps/web/tests/components/apps.test.tsx`, `apps/web/tests/components/citations.test.tsx`, `apps/web/tests/components/config.test.tsx`
 
 ## File Counts
 
-- config: 8
-- docs: 13
-- source: 68
-- test: 16
+- config: 23
+- docs: 26
+- source: 323
+- test: 126

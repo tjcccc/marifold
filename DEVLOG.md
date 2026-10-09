@@ -2,6 +2,57 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-10-09 — Unreleased — Code health: enforced rules, guards, and module splits
+
+A repo health check compared the code with the rules in `AGENTS.md`, `CLAUDE.md`, and the owner's global harness, then installed enforcement so the same drift cannot return. No behavior change apart from the fixes listed; no version bump.
+
+### Baseline (measured before the changes)
+
+- Lint-measured: 0 brace violations (already enforced), 5 explicit `any`, 1 import cycle (runtime channel), 197 type-only imports without `import type`.
+- Hard-wrapped Markdown prose: 2,464 lines in scope (2,470 total; `.projnavi/` and `examples/` excluded).
+- Files over 800 lines: 11, 10 of them source (the generated `docs/design` bundle is excluded). Highest churn since 2026-08-01 (88 commits): `MarifoldRuntime.ts` 26, `AgentRunner.ts` 23, Web `useAgentController.ts` 19, TUI `App.tsx` 15.
+- Docs: `docs/architecture.md` predated the TUI, client, Web, workspace, and bridge packages; no `spec/ui.md`; the projnavi index was six weeks stale.
+
+### Gates added
+
+- `.githooks/pre-commit` runs any global pre-commit hook, then `pnpm lint`; enable it per clone with `git config core.hooksPath .githooks`.
+- Biome rules `noExplicitAny`, `noImportCycles`, and `useImportType` join `useBlockStatements`; a `noRestrictedImports` override keeps `@marifold/core` and `@marifold/service` out of the Web UI except the type-only `src/api/types.ts`.
+- `scripts/markdown-wrap.mjs` rejects hard-wrapped Markdown prose (`--fix` joins it); `scripts/check-file-sizes.mjs` with `.file-size-baseline.json` is an 800-line ratchet: listed files may shrink but not grow.
+- Mechanical conversions (type imports, Markdown unwrap) are listed in `.git-blame-ignore-revs`; use `git config blame.ignoreRevsFile .git-blame-ignore-revs`.
+
+### Docs
+
+- Rewrote `docs/architecture.md` from the code (runtime pieces, package responsibilities, dependency directions with enforcement, trust boundaries, glossary, dated decisions) and `AGENTS.md` (current stack, boundaries, code style, validation).
+- Added `spec/ui.md`, recording the existing Web tokens, typography, layout, and patterns, the TUI palette and conventions, and measured drift as open questions.
+- Refreshed the projnavi notes, glossary, and claims for the current packages and today's splits.
+
+### Refactors (behavior unchanged, moved code verified verbatim)
+
+- `@marifold/client` owns the session lease routes and the renewal loop (`renewSessionLease`, busy versus transient errors); the Web UI and TUI no longer duplicate them, and Web screens no longer build lease URLs.
+- `MarifoldRuntime.ts` 1,911 → 1,032 lines: `ProviderEngines` (engines, OAuth refresh, Priest config), `SkillAppOperations`, and `ChatTurns` (`ask`/`stream` with the chat tool loop) moved out behind closures, so test spies still apply. The emitted public declarations are unchanged.
+- TUI `App.tsx` 1,294 → 925 lines: `useRuns`, `useApprovals`, and `useSkills` hooks, after the App harness gained skill-run and approval-modal tests.
+- Web `useAgentController.ts` 1,411 → 1,272 lines: `useSessionLease`, session polling helpers in `api/sessions`, and stored-attachment conversions in `sessionAttachments.ts`; `api/` is again the only Web layer that builds service URLs.
+- `AgentRunner.ts` was reviewed and not split: it has one responsibility, and its 366-line loop should be cut together with the request-assembly work in `TODO.md` (context provenance).
+
+### Fixes found along the way
+
+- Web: the Profile and Session search fields used the undefined `var(--brand)` for their focus border (since v0.49.0), so it fell back to the text color; they now use `--brand-fill`.
+- `createAgentRunner`'s doc comment sat on `resolveAgentConfigForProfile`; `theme.ts` named a nonexistent `tokens.css`.
+
+### Validation
+
+- Each commit passed the pre-commit lint; each refactor ran its package tests, rebuilding dependencies first where tests resolve `dist`. Final gate (`pnpm lint && pnpm -r typecheck && pnpm -r build && pnpm -r test`) passes: 1,095 tests, one existing skip.
+- Real terminal: 36 of 36 checks, including a new check that a standalone TUI renews its own lease (the expiry advances 15 s). Live OrbStack after the runtime split: rejoin and takeover through the bridge pass, and 55 of 55 delegations complete.
+
+### Deferred
+
+- GitHub CI (owner's call for later).
+- Large files kept on the ratchet: `SessionResolver.ts` 1,292, `MemoryStore.ts` 1,252, `AgentRunner.ts` 1,232, Web `AppsScreen.tsx` 1,238 and its CSS 826, `SkillAppCompiler.ts` 1,016, Web `state/thread.ts` 819, Web `useAgentController.ts` (`sendMessage` and `runCommand`), and `MarifoldRuntime.ts` (agent runner wiring and the store facade).
+- Tests that import other packages' internals; stale `TODO.md`, `docs/roadmap.md`, and `docs/vision.md`; the `spec/ui.md` open questions (type scale, radius literals, warning and scrim tokens, a shared breakpoint, the RunCard spinner's reduced motion).
+- No check yet that CSS custom properties referenced by the Web UI are defined (the `--brand` slip would have been caught).
+- `packages/cli/src/commands/chat.ts` (`registerChatCommand`) has not been registered since v0.69.0; remove it or wire it back.
+- Standalone TUI: keys typed during its startup remount arrive while the terminal is still in cooked mode, so they echo and Enter inserts a newline instead of sending.
+
 ## 2026-10-09 — v0.80.0 — Session takeover, robustness, and code standards
 
 Release of the work since v0.79.2: session takeover between the owner's devices, send progress for slow uploads, robustness and workspace edge-case fixes, brace enforcement, and the service route split. Paired devices must both run 0.80.0.

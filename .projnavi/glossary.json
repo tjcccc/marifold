@@ -2,99 +2,163 @@
   "terms": [
     {
       "term": "agent event stream",
-      "aliases": ["AgentEvent", "agent events", "render contract", "event union"],
-      "mapsTo": ["AgentEvent", "AgentRunner"],
-      "topics": ["agent", "events", "tui", "contract"],
-      "paths": ["packages/core/src/agent/AgentEvents.ts", "packages/core/src/agent/AgentRunner.ts", "packages/cli/src/commands/agent.ts"],
-      "notes": "The renderer-agnostic event union consumed by CLI, TUI, Web, service SSE, and future clients. The legacy verification variant is deprecated and not emitted by the current runner."
+      "aliases": ["AgentEvent", "agent events", "render contract", "event union", "run events"],
+      "mapsTo": ["AgentEvent", "AgentRunner", "agentEventToItems", "applyAgentEvent", "applyRunEvent"],
+      "topics": ["agent", "events", "tui", "web", "contract"],
+      "paths": ["packages/core/src/agent/AgentEvents.ts", "packages/core/src/agent/AgentRunner.ts", "packages/cli/src/commands/agent.ts", "packages/tui/src/core/eventView.ts", "packages/tui/src/core/appState.ts", "apps/web/src/state/thread.ts", "packages/service/src/RunRoutes.ts"],
+      "notes": "The renderer-agnostic event union consumed by CLI, TUI, Web, service SSE, and Telegram. The legacy verification variant is deprecated and not emitted by the current runner."
     },
     {
       "term": "agent loop",
-      "aliases": ["agent runner", "marifold agent", "optional plan tool loop outcome"],
-      "mapsTo": ["AgentRunner"],
+      "aliases": ["agent runner", "marifold agent", "optional plan tool loop outcome", "createAgentRunner"],
+      "mapsTo": ["AgentRunner", "createAgentRunner"],
       "topics": ["agent", "loop", "tools", "tasks"],
-      "paths": ["packages/core/src/agent/AgentRunner.ts", "packages/cli/src/commands/agent.ts"],
-      "notes": "Optional plan -> approval-aware tool loop -> final outcome over TaskStore; focused checks use ordinary tools and no separate model self-grade."
+      "paths": ["packages/core/src/agent/AgentRunner.ts", "packages/core/src/runtime/MarifoldRuntime.ts", "packages/core/src/tasks/TaskStore.ts"],
+      "notes": "Optional plan -> approval-aware tool loop -> final outcome over TaskStore; focused checks use ordinary tools and there is no separate model self-grade. Wired by MarifoldRuntime.createAgentRunner."
     },
     {
       "term": "approval policy",
-      "aliases": ["approval handler", "tool approval", "ask deny allow", "unattended approval"],
-      "mapsTo": ["ApprovalHandler", "ApprovalPolicy", "MarifoldAgentConfig"],
+      "aliases": ["approval handler", "tool approval", "ask deny allow", "unattended approval", "trusted folders"],
+      "mapsTo": ["ApprovalHandler", "ApprovalPolicy", "MarifoldAgentConfig", "resolveAgentConfigForProfile"],
       "topics": ["agent", "approval", "policy", "config"],
-      "paths": ["packages/core/src/agent/ApprovalPolicy.ts", "packages/core/src/config/ConfigLoader.ts"],
-      "notes": "Per-tool-kind allow/ask/deny; ask degrades to deny when unattended."
+      "paths": ["packages/core/src/agent/ApprovalPolicy.ts", "packages/core/src/agent/AgentRunner.ts", "packages/core/src/config/ConfigLoader.ts"],
+      "notes": "Per-tool-kind allow/ask/deny with per-profile overrides; ask degrades to deny when no handler is present (unattended)."
     },
     {
       "term": "agent tool",
-      "aliases": ["tool registry", "read_file write_file shell_exec", "ask_profile", "delegate tool"],
-      "mapsTo": ["ToolRegistry", "AgentTool"],
+      "aliases": ["tool registry", "add an agent tool", "createDefaultToolRegistry", "read_file write_file shell_exec", "ask_profile", "delegate tool"],
+      "mapsTo": ["ToolRegistry", "AgentTool", "createDefaultToolRegistry"],
       "topics": ["agent", "tools", "registry"],
-      "paths": ["packages/core/src/agent/ToolRegistry.ts", "packages/core/src/agent/tools/ReadFileTool.ts", "packages/core/src/agent/tools/WriteFileTool.ts", "packages/core/src/agent/tools/ShellExecTool.ts", "packages/core/src/agent/tools/DelegateTool.ts"],
-      "notes": "Built-in tools and the registry. WriteFileTool has a workspace jail and ~ expansion."
+      "paths": ["packages/core/src/agent/ToolRegistry.ts", "packages/core/src/runtime/MarifoldRuntime.ts", "packages/core/src/agent/tools/ReadFileTool.ts", "packages/core/src/agent/tools/WriteFileTool.ts", "packages/core/src/agent/tools/ShellExecTool.ts", "packages/core/src/agent/tools/DelegateTool.ts", "packages/core/src/agent/RunWorkspace.ts"],
+      "notes": "AgentTool implementations registered in MarifoldRuntime.createDefaultToolRegistry; RunWorkspace supplies per-run capability roots and path resolution."
     },
     {
       "term": "control-block fallback",
       "aliases": ["tool_call block", "prompt tool calling", "models without native tools"],
-      "mapsTo": ["parseControlBlockCalls", "buildControlBlockInstructions"],
+      "mapsTo": ["parseControlBlockCalls", "buildControlBlockInstructions", "shouldFallBackToControlBlocks"],
       "topics": ["agent", "tools", "fallback"],
       "paths": ["packages/core/src/agent/ControlBlockTools.ts", "packages/core/src/agent/AgentRunner.ts"],
-      "notes": "Prompt-based <tool_call> tools for models lacking native tool calling; auto-switch in 'auto' mode."
+      "notes": "Prompt-based <tool_call> tools for models lacking native tool calling; auto-switch in 'auto' tool mode."
     },
     {
       "term": "provider routing",
-      "aliases": ["copilot responses api", "openai compatible adapter", "endpointForModel", "responses path"],
-      "mapsTo": ["MarifoldOpenAICompatProvider", "ProviderRegistry"],
+      "aliases": ["copilot responses api", "openai compatible adapter", "endpointForRequest", "responses path", "hosted web search"],
+      "mapsTo": ["MarifoldOpenAICompatProvider", "ProviderRegistry", "ProviderFactory", "nativeWebSearchStrategy"],
       "topics": ["providers", "copilot", "routing", "openai-compatible"],
-      "paths": ["packages/core/src/config/MarifoldOpenAICompatProvider.ts", "packages/core/src/config/ProviderRegistry.ts"],
-      "notes": "Chat-completions vs Copilot Responses API routing and tool mapping."
+      "paths": ["packages/core/src/config/MarifoldOpenAICompatProvider.ts", "packages/core/src/config/ProviderRegistry.ts", "packages/core/src/config/ProviderFactory.ts"],
+      "notes": "Chat Completions vs Responses API routing and subscription headers; the Priest SDK owns request bodies and tool wire mapping."
     },
     {
       "term": "chatgpt token refresh",
-      "aliases": ["oauth refresh", "copilot token refresh", "credential refresh"],
-      "mapsTo": ["refreshProviderCredentialsIfNeeded", "ChatGptTokenRefresh", "GitHubCopilotAuth"],
+      "aliases": ["oauth refresh", "copilot token refresh", "xai token refresh", "credential refresh", "refreshCredentials"],
+      "mapsTo": ["refreshCredentials", "withOAuthCredentials", "ChatGptTokenRefresh", "XaiTokenRefresh", "GitHubCopilotAuth"],
       "topics": ["providers", "oauth", "auth"],
-      "paths": ["packages/core/src/config/ChatGptTokenRefresh.ts", "packages/core/src/config/GitHubCopilotAuth.ts", "packages/core/src/runtime/MarifoldRuntime.ts"],
-      "notes": "Per-provider OAuth refresh dispatched before provider calls."
+      "paths": ["packages/core/src/runtime/ProviderEngines.ts", "packages/core/src/config/OAuthCredentials.ts", "packages/core/src/config/ChatGptTokenRefresh.ts", "packages/core/src/config/XaiTokenRefresh.ts", "packages/core/src/config/GitHubCopilotAuth.ts"],
+      "notes": "ProviderEngines.refreshCredentials refreshes GitHub Copilot, ChatGPT, and xAI credentials before chat turns and agent runs; withOAuthCredentials serializes and persists rotations."
     },
     {
       "term": "chat tool loop",
-      "aliases": ["web search chat", "model-initiated chat tools", "/search"],
-      "mapsTo": ["chatTools", "WebSearchTool", "SearchBackend"],
+      "aliases": ["web search chat", "model-initiated chat tools", "hosted search fallback", "chatTools", "chat turns"],
+      "mapsTo": ["ChatTurns", "chatTools", "WebSearchTool", "ReadWebPageTool", "SearchBackend"],
       "topics": ["chat", "tools", "search", "runtime"],
-      "paths": ["packages/core/src/runtime/MarifoldRuntime.ts", "packages/core/src/search/SearchBackend.ts", "packages/core/src/search/DuckDuckGoBackend.ts", "packages/core/src/agent/tools/WebSearchTool.ts"],
-      "notes": "Bounded tool loop on chat turns under [web_search].enabled; memory applied only on final response."
+      "paths": ["packages/core/src/runtime/ChatTurns.ts", "packages/core/src/runtime/MarifoldRuntime.ts", "packages/core/src/agent/tools/WebSearchTool.ts", "packages/core/src/agent/tools/ReadWebPageTool.ts", "packages/core/src/search/createSearchBackend.ts"],
+      "notes": "ChatTurns.ask/stream run a bounded caller-executed tool loop (fallback web_search/read_web_page, read_file when read is allowed); provider-hosted search travels separately; memory applies only from the final response."
     },
     {
       "term": "memory control blocks",
       "aliases": ["memory_save", "memory_forget", "hidden memory blocks", "strip memory"],
-      "mapsTo": ["stripMemoryControls", "MemoryControlStripper", "MemoryStore"],
+      "mapsTo": ["stripMemoryControls", "MemoryControlStripper", "MemoryStore", "applyTurnMemory"],
       "topics": ["memory", "controls", "chat", "agent"],
-      "paths": ["packages/core/src/memory/MemoryControls.ts", "packages/core/src/memory/MemoryStore.ts"],
+      "paths": ["packages/core/src/memory/MemoryControls.ts", "packages/core/src/memory/MemoryStore.ts", "packages/core/src/runtime/ChatTurns.ts"],
       "notes": "Chat applies save/forget payloads; agent runs strip and discard them."
     },
     {
       "term": "scheduled run",
       "aliases": ["cron schedule", "unattended agent run", "scheduler", "marifold schedule"],
-      "mapsTo": ["ScheduleStore", "Scheduler"],
+      "mapsTo": ["ScheduleStore", "Scheduler", "runScheduleUnattended"],
       "topics": ["schedule", "cron", "service", "agent"],
-      "paths": ["packages/core/src/schedule/ScheduleStore.ts", "packages/core/src/schedule/Scheduler.ts", "packages/cli/src/commands/schedule.ts"],
+      "paths": ["packages/core/src/schedule/ScheduleStore.ts", "packages/core/src/schedule/Scheduler.ts", "packages/cli/src/commands/schedule.ts", "packages/service/src/WorkspaceScheduleRoutes.ts"],
       "notes": "Cron schedules run unattended agents inside marifold service."
     },
     {
-      "term": "skillapp schema",
-      "aliases": ["mini app", "marifold.skillapp.v0", "skillapp validator"],
-      "mapsTo": ["validateSkillApp", "SKILLAPP_SCHEMA"],
-      "topics": ["skillapp", "schema", "validation"],
-      "paths": ["packages/core/src/skillapp/SkillAppValidator.ts", "packages/core/src/skillapp/SkillAppSchema.ts", "docs/skillapp.md"],
-      "notes": "Spec + validator only; no runtime yet."
+      "term": "skillapp template",
+      "aliases": ["skillapp", "skillapp schema", "skillapp compiler", "mini app", "marifold.skillapp.v1", "marifold.skillapp.v2", "skillapp.ts", "app instance"],
+      "mapsTo": ["compileSkillApp", "AppStore", "SkillAppInstanceRegistry", "SkillAppOperations", "SKILL_APP_SCHEMA"],
+      "topics": ["skillapp", "apps", "schema", "compiler"],
+      "paths": ["packages/core/src/app/SkillAppSchema.ts", "packages/core/src/app/SkillAppCompiler.ts", "packages/core/src/app/AppStore.ts", "packages/core/src/app/SkillAppInstanceRegistry.ts", "packages/core/src/runtime/SkillAppOperations.ts", "packages/service/src/SkillAppRoutes.ts", "docs/app.md"],
+      "notes": "Statically compiled skillapp.ts templates (never executed) rendered by the Web Apps screen; operations run through SkillAppOperations."
+    },
+    {
+      "term": "skill invocation",
+      "aliases": ["$skill", "skill store", "marifold.skill.v0", "manage_skill", "built-in skills"],
+      "mapsTo": ["SkillStore", "resolveSkillInvocation", "bindSkillArgs", "SkillManagementTool"],
+      "topics": ["skills", "invocation", "tui"],
+      "paths": ["packages/core/src/skill/SkillStore.ts", "packages/core/src/skill/SkillInvocation.ts", "packages/core/src/skill/SkillSchema.ts", "packages/core/src/agent/tools/SkillManagementTool.ts", "packages/tui/src/ui/useSkills.ts"],
+      "notes": "Prompt-template Skills from the global skills dir and profile skills/ dirs; profile skills shadow global ones."
     },
     {
       "term": "config sections",
       "aliases": ["agent config", "web_search config", "config.toml", "approval config"],
-      "mapsTo": ["ConfigLoader", "resolveAgentConfig", "renderMarifoldConfig"],
+      "mapsTo": ["ConfigLoader", "parsePartialAgentConfig", "resolveAgentConfig", "renderMarifoldConfig"],
       "topics": ["config", "toml", "agent", "paths"],
-      "paths": ["packages/core/src/config/ConfigSchema.ts", "packages/core/src/config/ConfigLoader.ts", "packages/core/src/config/ConfigManager.ts"],
-      "notes": "[agent], [agent.approval], [agent.unattended], [web_search], [paths] parsing and rendering."
+      "paths": ["packages/core/src/config/ConfigSchema.ts", "packages/core/src/config/ConfigLoader.ts", "packages/core/src/config/ConfigManager.ts", "packages/core/src/agent/ApprovalPolicy.ts"],
+      "notes": "[agent], [agent.approval], [agent.unattended], [web_search], [paths], [service], [channel.telegram] parsing and rendering."
+    },
+    {
+      "term": "session lease",
+      "aliases": ["session takeover", "takeover", "SESSION_BUSY", "lease renewal", "session busy"],
+      "mapsTo": ["SessionLeases", "renewSessionLease", "takeOverSessionLease", "useSessionLease", "takeOverSession"],
+      "topics": ["sessions", "lease", "takeover", "client"],
+      "paths": ["packages/core/src/sessions/SessionLeases.ts", "packages/client/src/sessionLease.ts", "packages/service/src/SessionRoutes.ts", "apps/web/src/screens/agent/useSessionLease.ts", "packages/tui/src/ui/App.tsx"],
+      "notes": "One client per open session; running tasks hold their session until they end; the owner can take a session over from another client."
+    },
+    {
+      "term": "service routes",
+      "aliases": ["route modules", "fastify routes", "http api", "v1 runs", "chat stream sse"],
+      "mapsTo": ["createMarifoldService", "registerRunRoutes", "registerSessionRoutes", "registerChatRoutes", "normalizeError"],
+      "topics": ["service", "routes", "sse", "http"],
+      "paths": ["packages/service/src/MarifoldService.ts", "packages/service/src/RunRoutes.ts", "packages/service/src/SessionRoutes.ts", "packages/service/src/ChatRoutes.ts", "packages/service/src/Security.ts", "packages/service/src/Validation.ts", "packages/service/src/ServiceErrors.ts"],
+      "notes": "Thin Fastify transport split into route modules; MarifoldService wires them and the hosted subsystems."
+    },
+    {
+      "term": "run registry",
+      "aliases": ["live agent run", "steer run", "cancel run", "approval answer", "follow run"],
+      "mapsTo": ["RunRegistry", "followRunEvents", "followRun"],
+      "topics": ["runs", "service", "sse", "agent"],
+      "paths": ["packages/core/src/runs/RunRegistry.ts", "packages/service/src/RunRoutes.ts", "packages/client/src/followRun.ts", "apps/web/src/api/runs.ts"],
+      "notes": "Live layer for service-started runs: abort handle, pending approvals/questions, steering queue, sequenced event buffer for SSE replay."
+    },
+    {
+      "term": "workspace bridge",
+      "aliases": ["device-hosted workspace", "workspace pairing", "guest device", "workspace executor", "relay", "delegate_device"],
+      "mapsTo": ["WorkspaceManager", "WorkspaceRuns", "WorkspaceExecutor", "BridgePeer", "createBridge"],
+      "topics": ["workspace", "bridge", "devices", "protocol"],
+      "paths": ["packages/core/src/workspace/WorkspaceManager.ts", "packages/core/src/workspace/WorkspaceRuns.ts", "packages/core/src/workspace/WorkspaceExecutor.ts", "packages/core/src/workspace/bridge/BridgePeer.ts", "apps/bridge/src/index.ts", "packages/workspace-protocol/src/identity.ts", "packages/service/src/WorkspaceRoutes.ts", "docs/workspaces.md"],
+      "notes": "A host device shares its data with the owner's other devices through an end-to-end encrypted relay; paired devices must run the same release."
+    },
+    {
+      "term": "tui controller",
+      "aliases": ["tui hooks", "useRuns", "useApprovals", "useSkills", "ink app"],
+      "mapsTo": ["App", "useRuns", "useApprovals", "useSkills", "appReducer"],
+      "topics": ["tui", "ink", "controller", "hooks"],
+      "paths": ["packages/tui/src/ui/App.tsx", "packages/tui/src/ui/useRuns.ts", "packages/tui/src/ui/useApprovals.ts", "packages/tui/src/ui/useSkills.ts", "packages/tui/src/core/appState.ts", "packages/tui/src/runTui.tsx"],
+      "notes": "The Ink App composes run, approval, and skill hooks over a pure appReducer."
+    },
+    {
+      "term": "web thread reducer",
+      "aliases": ["web ui", "thread reducer", "run card", "useAgentController", "run followers"],
+      "mapsTo": ["threadReducer", "applyRunEvent", "RunFollowers", "useAgentController"],
+      "topics": ["web", "react", "state", "runs"],
+      "paths": ["apps/web/src/state/thread.ts", "apps/web/src/state/followers.ts", "apps/web/src/screens/agent/useAgentController.ts", "apps/web/src/api/types.ts", "apps/web/src/api/runs.ts"],
+      "notes": "The Web renderer folds AgentEvents into run cards; only api/types.ts imports @marifold/core, type-only."
+    },
+    {
+      "term": "marifold runtime",
+      "aliases": ["runtime split", "ChatTurns", "ProviderEngines", "SkillAppOperations", "priest engine"],
+      "mapsTo": ["MarifoldRuntime", "ChatTurns", "ProviderEngines", "SkillAppOperations"],
+      "topics": ["runtime", "core", "engines"],
+      "paths": ["packages/core/src/runtime/MarifoldRuntime.ts", "packages/core/src/runtime/ChatTurns.ts", "packages/core/src/runtime/ProviderEngines.ts", "packages/core/src/runtime/SkillAppOperations.ts"],
+      "notes": "MarifoldRuntime wires ChatTurns, ProviderEngines, and SkillAppOperations through closures over its own methods."
     }
   ]
 }

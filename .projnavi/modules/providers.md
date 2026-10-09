@@ -1,11 +1,15 @@
 # Providers / priest boundary Module
 
-marifold talks to models only through `@priest-ai/core`. The one provider marifold implements itself is the OpenAI-compatible adapter, because of Copilot's Responses API.
+marifold talks to models only through `@priest-ai/core` (`../priest-typescript`). The SDK owns request bodies, streaming, tool-call wire mapping, reasoning, and usage parsing; marifold owns provider selection, endpoint routing, subscription headers, and credentials.
 
-Use this note for: provider routing, GitHub Copilot, the Responses API path, tool wire-format mapping, credential refresh, or the provider registry.
+Use this note for: provider routing, GitHub Copilot, ChatGPT/xAI subscription OAuth, the Responses API path, hosted web search, credential refresh, or the provider registry.
 
-- `config/MarifoldOpenAICompatProvider.ts` — implements the SDK `ProviderAdapter`. Routes chat-completions vs the Copilot **Responses API** (`endpointForModel`); maps tools on both paths incl. streaming function-call deltas.
-- `config/ProviderRegistry.ts` — 21 provider entries (Ollama, OpenAI, Anthropic, DeepSeek, Bailian, Kimi, MiniMax, GitHub Copilot OAuth, ChatGPT OAuth, custom, ...). `GITHUB_COPILOT_RESPONSES_MODELS` lists responses-only models (e.g. gpt-5.4-mini); `isGitHubCopilotResponsesModelId` gates routing.
-- `config/ProviderFactory.ts` — builds adapters from config.
-- `config/GitHubCopilotAuth.ts` + `config/ChatGptTokenRefresh.ts` — OAuth credential refresh; dispatched by `MarifoldRuntime.refreshProviderCredentialsIfNeeded` before each provider call.
-- Supported adapter types: `ollama`, `openai-compatible`, `anthropic`. Everything else maps onto `openai-compatible`.
+- `packages/core/src/runtime/ProviderEngines.ts` — `create` builds a `PriestEngine` per provider; `refreshCredentials` refreshes OAuth credentials (GitHub Copilot, ChatGPT, xAI) before each chat turn and agent run; `priestConfig` builds the Priest request config (limits, reasoning, hosted-search options); `supportsThink`.
+- `packages/core/src/config/OAuthCredentials.ts` — `withOAuthCredentials` serializes refreshes per config/provider and persists rotated tokens; `ChatGptTokenRefresh.ts`, `XaiTokenRefresh.ts`, `GitHubCopilotAuth.ts` perform the exchanges.
+- `packages/core/src/config/MarifoldOpenAICompatProvider.ts` — wraps the SDK's `OpenAICompatProvider` and `OpenAIResponsesProvider`; `endpointForRequest` sends ChatGPT, Copilot Responses-only models, and hosted-search requests to Responses and everything else to Chat Completions; adds Copilot/ChatGPT headers.
+- `packages/core/src/config/ProviderFactory.ts` — builds adapters by type (`ollama`, `openai-compatible`, `anthropic`) and resolves `nativeWebSearchStrategy` (Responses tool, Bailian chat option, or none).
+- `packages/core/src/config/ProviderRegistry.ts` — registry entries (local runtimes, API providers, OAuth providers `github_copilot`/`chatgpt`/`xai`, `custom`); every non-Ollama, non-Anthropic entry uses `openai-compatible`. `GITHUB_COPILOT_RESPONSES_MODELS` + `isGitHubCopilotResponsesModelId` gate Copilot Responses routing.
+- `packages/core/src/config/ProviderInspector.ts` — provider status, model listing, and model validation (no deletion).
+- CLI sign-in: `packages/cli/src/input/ModelPicker.ts` with `packages/cli/src/auth/`.
+
+Tests: `packages/core/tests/MarifoldOpenAICompatProvider.test.ts`, `packages/core/tests/OAuthCredentials.test.ts`, `packages/core/tests/NativeWebSearch.test.ts`, `packages/core/tests/ProviderInspector.test.ts`.
