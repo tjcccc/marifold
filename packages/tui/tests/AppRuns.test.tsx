@@ -372,4 +372,73 @@ describe('App run routing', () => {
     await vi.waitFor(() => expect(lastFrame()).toContain('Answered: style = Apple'));
     unmount();
   });
+
+  it('asks for a missing $skill variable, then runs the skill as a lean agent turn', async () => {
+    const { runtime, runSpy } = makeRuntime();
+    const skill = {
+      name: 'essay',
+      description: 'Write an essay',
+      prompt: 'Write about {{topic}}.',
+      variables: [{ name: 'topic', required: true }],
+      source: '/skills/essay/SKILL.md',
+    };
+    Object.assign(runtime, { getSkill: (name: string) => name === 'essay' ? skill : undefined });
+    const { stdin, lastFrame, unmount } = render(<App runtime={runtime} loadedConfig={config} initial={initial('agent')} />);
+    await delay();
+    stdin.write('$essay');
+    await delay();
+    stdin.write('\r');
+    await vi.waitFor(() => expect(lastFrame()).toContain('enter topic'));
+    expect(runSpy).not.toHaveBeenCalled();
+    stdin.write('tides');
+    await delay();
+    stdin.write('\r');
+    await vi.waitFor(() => expect(runSpy).toHaveBeenCalledTimes(1));
+    const call = runSpy.mock.calls[0][0] as RunnerCall;
+    expect(call).toMatchObject({ objective: 'tides', lean: true, userTurn: '$essay tides' });
+    expect((call.instructions as string[])[0]).toBe('Write about tides.');
+    expect((call.instructions as string[])[1]).toContain('/skills/essay');
+    unmount();
+  });
+
+  it('runs a chat-mode $skill as an isolated stream with its body as instructions', async () => {
+    const { runtime, runSpy, streamSpy } = makeRuntime();
+    const skill = { name: 'tone', description: 'Rewrite tone', prompt: 'Rewrite politely.', variables: [], mode: 'chat' };
+    Object.assign(runtime, { getSkill: () => skill });
+    const { stdin, unmount } = render(<App runtime={runtime} loadedConfig={config} initial={initial('agent')} />);
+    await delay();
+    stdin.write('$tone hey you');
+    await delay();
+    stdin.write('\r');
+    await vi.waitFor(() => expect(streamSpy).toHaveBeenCalledTimes(1));
+    expect(streamSpy.mock.calls[0][0]).toMatchObject({
+      prompt: 'hey you',
+      instructions: ['Rewrite politely.'],
+      userTurn: '$tone hey you',
+      isolated: true,
+    });
+    expect(runSpy).not.toHaveBeenCalled();
+    unmount();
+  });
+
+  it.each([['a', true], ['d', false]] as const)('resolves an approval prompt from the modal key %s', async (key, approved) => {
+    let decision: { approved: boolean } | undefined;
+    const request = { id: 'a1', tool: 'write_file', kind: 'write', summary: 'write 1KB to notes.md', input: {}, escalated: false };
+    const { runtime } = makeRuntime({
+      agentRun: call => (async function* (): AsyncGenerator<unknown> {
+        decision = await (call.approvalHandler as (value: typeof request) => Promise<{ approved: boolean }>)(request);
+        yield { type: 'done', taskId: 't', status: 'completed' };
+      })(),
+    });
+    const { stdin, lastFrame, unmount } = render(<App runtime={runtime} loadedConfig={config} initial={initial('agent')} />);
+    await delay();
+    stdin.write('save my notes');
+    await delay();
+    stdin.write('\r');
+    await vi.waitFor(() => expect(lastFrame()).toContain('Approve write action?'));
+    stdin.write(key);
+    await vi.waitFor(() => expect(decision?.approved).toBe(approved));
+    await vi.waitFor(() => expect(lastFrame()).not.toContain('Approve write action?'));
+    unmount();
+  });
 });
