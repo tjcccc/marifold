@@ -6,7 +6,7 @@ import { ShellJobStatusTool } from '../agent/tools/ShellJobStatusTool';
 import { environmentContext, type RuntimeEnvironment } from './RuntimeEnvironment';
 import type { AgentRunnerDeps } from '../agent/AgentRunner';
 import type { RunStartInput, RunJournal } from '../runs/RunRegistry';
-import { type ImageInput, type JSONValue, type PriestConfig, PriestEngine, type PriestRequest, type PriestResponse, type ToolDefinition, type ToolExchangeTurn, type UsageInfo } from '@priest-ai/core';
+import type { ImageInput, JSONValue, PriestRequest, PriestResponse, ToolDefinition, ToolExchangeTurn, UsageInfo } from '@priest-ai/core';
 import * as path from 'path';
 import { AgentRunner } from '../agent/AgentRunner';
 import type { RunFileInput } from '../agent/RunWorkspace';
@@ -28,19 +28,15 @@ import { WriteFileTool } from '../agent/tools/WriteFileTool';
 import { SkillManagementTool } from '../agent/tools/SkillManagementTool';
 import { SkillAppContextTool, SkillAppManagementTool } from '../agent/tools/SkillAppTools';
 import { type AgentTool, ToolRegistry } from '../agent/ToolRegistry';
-import { type ChatGptRefreshedTokens, refreshChatGptAccessToken } from '../config/ChatGptTokenRefresh';
-import { type XaiRefreshedTokens, refreshXaiAccessToken } from '../config/XaiTokenRefresh';
 import { ConfigManager } from '../config/ConfigManager';
-import { withOAuthCredentials } from '../config/OAuthCredentials';
 import type { ConfigAddProviderOptions } from '../config/ConfigManager';
 import { type LoadedMarifoldConfig, type ProfileDetail, type ProfileMode, type ProfileSummary, type ProviderType, resolveWebSearchConfig, type SessionDetail, type SessionSummary } from '../config/ConfigSchema';
 import { ProviderInspector } from '../config/ProviderInspector';
 import type { ProviderModelList, ProviderStatus } from '../config/ProviderInspector';
-import { exchangeGitHubTokenForCopilotToken } from '../config/GitHubCopilotAuth';
 import { createSearchBackend } from '../search/createSearchBackend';
 import { formatSearchResults, type SearchBackend } from '../search/SearchBackend';
 import { ProviderFactory, type NativeWebSearchStrategy } from '../config/ProviderFactory';
-import { getProviderRegistryEntry, isGitHubCopilotResponsesModelId } from '../config/ProviderRegistry';
+import { getProviderRegistryEntry } from '../config/ProviderRegistry';
 import { MarifoldError } from '../errors/MarifoldError';
 import { prepareImageInputs } from '../images/ImageOptimizer';
 import { MemoryStore } from '../memory/MemoryStore';
@@ -99,13 +95,10 @@ import { defaultAppsDir, defaultSchedulesDir, defaultSkillsDir, marifoldHome } f
 import type { TaskCreateInput, TaskEventInput, TaskListOptions, TaskState, TaskSummary, TaskUpdateInput } from '../tasks/TaskStore';
 import type { MarifoldAskResponse, MarifoldProviderToolDefinition, MarifoldResolvedSettings, MarifoldRunRequest, MarifoldWebSearchMode } from './MarifoldTypes';
 import { isNativeWebSearchCapabilityError } from './NativeWebSearch';
+import { ProviderEngines } from './ProviderEngines';
 
-// Older OpenAI-compatible gateways still take a raw `{think}` body option.
-// Priest 2.8 owns neutral reasoning for Ollama, Anthropic, and Responses.
-const LEGACY_THINK_PROVIDER_NAMES = new Set(['bailian', 'alibaba_cloud']);
 const CHAT_TOOL_MAX_ITERATIONS = 3;
 const EDIT_HISTORY_BUDGET_DEFAULT_CHARS = 16_000;
-const NATIVE_WEB_SEARCH_COMPAT_OPTION = 'marifold_native_web_search';
 const WEB_SEARCH_UNAVAILABLE_CONTEXT = 'Web search is unavailable for this run. If the user asks you to browse or search the web, or their question requires current information, say clearly that you cannot access web search; do not imply that you searched.';
 
 export interface MarifoldRuntimeOptions {
@@ -122,6 +115,7 @@ export class MarifoldRuntime {
   private readonly sessionLeases: SessionLeases;
   private readonly sessionOwner = leaseOwnerId();
   private readonly providerFactory: ProviderFactory;
+  private readonly engines: ProviderEngines;
   private readonly memoryStore: MemoryStore;
   private readonly taskStore: TaskStore;
   private searchBackend: SearchBackend;
@@ -135,6 +129,7 @@ export class MarifoldRuntime {
     this.profileManager = new ProfileManager(config.paths.profilesDir);
     this.sessionResolver = new SessionResolver(config.paths.sessionsDb);
     this.providerFactory = new ProviderFactory(config, configPath);
+    this.engines = new ProviderEngines(options.loadedConfig, this.providerFactory, this.profileResolver, this.sessionResolver);
     this.memoryStore = new MemoryStore(config.paths.profilesDir);
     this.taskStore = new TaskStore(config.paths.tasksDir);
     this.searchBackendOverridden = options.searchBackend !== undefined;
@@ -169,10 +164,10 @@ export class MarifoldRuntime {
     const historyImages = preparedImages.images.map((image, index) => request.images?.[index]?.path
       ? { path: path.resolve(request.images[index].path!), mediaType: preparedImages.summaries[index]?.sourceMediaType ?? request.images[index].mediaType }
       : image);
-    await this.refreshProviderCredentialsIfNeeded(settings.provider);
+    await this.engines.refreshCredentials(settings.provider);
     const replacing = request.replaceUserTurnIndex !== undefined;
     const isolated = request.isolated === true;
-    const engine = this.createEngine(
+    const engine = this.engines.create(
       settings.provider,
       Boolean(request.sessionId) && !replacing && !isolated,
       request.profileContext !== false,
@@ -186,7 +181,7 @@ export class MarifoldRuntime {
       && this.fallbackWebSearchAvailable(settings, request.chatTools !== false);
     let nativeFallbackAttempted = false;
     const buildPriestRequest = (): PriestRequest & { providerTools?: MarifoldProviderToolDefinition[] } => ({
-      config: this.toPriestConfig(
+      config: this.engines.priestConfig(
         settings,
         webSearchMode === 'native' ? searchResolution.nativeStrategy : 'none',
       ),
@@ -325,7 +320,7 @@ export class MarifoldRuntime {
     const historyImages = preparedImages.images.map((image, index) => request.images?.[index]?.path
       ? { path: path.resolve(request.images[index].path!), mediaType: preparedImages.summaries[index]?.sourceMediaType ?? request.images[index].mediaType }
       : image);
-    await this.refreshProviderCredentialsIfNeeded(settings.provider);
+    await this.engines.refreshCredentials(settings.provider);
     let aggregateUsage: UsageInfo | undefined;
     const replacing = request.replaceUserTurnIndex !== undefined;
     const isolated = request.isolated === true;
@@ -333,7 +328,7 @@ export class MarifoldRuntime {
     const sessionWasMissing = enginePersistsSession
       ? this.sessionResolver.get(request.sessionId!) === undefined
       : false;
-    const engine = this.createEngine(
+    const engine = this.engines.create(
       settings.provider,
       enginePersistsSession,
       request.profileContext !== false,
@@ -347,7 +342,7 @@ export class MarifoldRuntime {
       && this.fallbackWebSearchAvailable(settings, request.chatTools !== false);
     let nativeFallbackAttempted = false;
     const buildBaseRequest = (): PriestRequest & { providerTools?: MarifoldProviderToolDefinition[] } => ({
-      config: this.toPriestConfig(
+      config: this.engines.priestConfig(
         settings,
         webSearchMode === 'native' ? searchResolution.nativeStrategy : 'none',
       ),
@@ -726,7 +721,7 @@ export class MarifoldRuntime {
   /** Models a provider actually serves right now (CLI `model list --live`). */
   async listProviderModels(provider: string): Promise<ProviderModelList> {
     try {
-      await this.refreshProviderCredentialsIfNeeded(provider);
+      await this.engines.refreshCredentials(provider);
     } catch (error) {
       return {
         provider,
@@ -798,9 +793,9 @@ export class MarifoldRuntime {
     request: Pick<MarifoldRunRequest, 'profile' | 'provider' | 'model' | 'think' | 'maxContextTokens'>,
   ): Promise<{ compacted: boolean }> {
     const settings = this.resolveSettings(request);
-    await this.refreshProviderCredentialsIfNeeded(settings.provider);
-    const engine = this.createEngine(settings.provider, true);
-    const result = await engine.compactSession(sessionId, this.toPriestConfig(settings));
+    await this.engines.refreshCredentials(settings.provider);
+    const engine = this.engines.create(settings.provider, true);
+    const result = await engine.compactSession(sessionId, this.engines.priestConfig(settings));
     return { compacted: result.compacted };
   }
 
@@ -927,7 +922,7 @@ export class MarifoldRuntime {
       agentConfig: agentConfigOverride ?? this.resolveAgentConfigForProfile(profile),
       resolveSettings: request => this.resolveSettings(request),
       prepareEngine: async settings => {
-        await this.refreshProviderCredentialsIfNeeded(settings.provider);
+        await this.engines.refreshCredentials(settings.provider);
         const searchResolution = runtimeOptions.webSearch === false
           ? { mode: 'unavailable' as const, nativeStrategy: 'none' as const }
           : this.resolveWebSearch(settings);
@@ -936,8 +931,8 @@ export class MarifoldRuntime {
           // No engine-level session store: priest would otherwise persist the
           // raw per-iteration `Objective:`/tool framing (and duplicates). The
           // runner instead persists one clean turn pair via `persistTurn` below.
-          engine: this.createEngine(settings.provider, false),
-          config: this.toPriestConfig(settings, searchResolution.nativeStrategy),
+          engine: this.engines.create(settings.provider, false),
+          config: this.engines.priestConfig(settings, searchResolution.nativeStrategy),
           webSearchMode,
           webSearchFallbackAvailable: webSearchMode === 'native'
             && this.fallbackWebSearchAvailable(settings),
@@ -1219,9 +1214,9 @@ export class MarifoldRuntime {
               `SkillApp operation '${operationName}' needs Agent mode to inspect non-image attachments.`,
             );
           }
-          await this.refreshProviderCredentialsIfNeeded(settings.provider);
-          const response = await this.createEngine(settings.provider, false).run({
-            config: this.toPriestConfig(settings),
+          await this.engines.refreshCredentials(settings.provider);
+          const response = await this.engines.create(settings.provider, false).run({
+            config: this.engines.priestConfig(settings),
             profile: settings.profile,
             prompt: operation.prompt,
             context: instructions,
@@ -1246,9 +1241,9 @@ export class MarifoldRuntime {
           think: operation.model.think,
           mode: 'chat',
         };
-        await this.refreshProviderCredentialsIfNeeded(settings.provider);
-        const response = await this.createEngine(settings.provider, false, false).run({
-          config: this.toPriestConfig(settings),
+        await this.engines.refreshCredentials(settings.provider);
+        const response = await this.engines.create(settings.provider, false, false).run({
+          config: this.engines.priestConfig(settings),
           profile: settings.profile,
           prompt: operation.prompt,
           context: operation.instructions,
@@ -1562,62 +1557,6 @@ export class MarifoldRuntime {
     if (session?.turnCount === 0) { this.sessionResolver.delete(sessionId); }
   }
 
-  private createEngine(providerName: string, useSession: boolean, profileContext = true): PriestEngine {
-    const adapter = this.providerFactory.create(providerName);
-    const profileLoader = profileContext
-      ? this.profileResolver
-      : {
-          load: (name: string) => ({
-            name,
-            identity: '',
-            rules: '',
-            custom: '',
-            memories: [],
-          }),
-        };
-    return new PriestEngine(
-      profileLoader,
-      useSession ? this.sessionResolver.openStore() : undefined,
-      { [providerName]: adapter },
-    );
-  }
-
-  private async refreshProviderCredentialsIfNeeded(providerName: string): Promise<void> {
-    if (providerName !== 'github_copilot' && providerName !== 'chatgpt' && providerName !== 'xai') { return; }
-
-    await withOAuthCredentials(this.options.loadedConfig, providerName, async provider => {
-      if (!provider.oauthToken) { return; }
-      if (provider.apiKeyEnv && process.env[provider.apiKeyEnv]) { return; }
-
-      const nowSeconds = Math.floor(Date.now() / 1000);
-      if (provider.apiKey && provider.apiKeyExpiresAt !== undefined
-        && provider.apiKeyExpiresAt > nowSeconds + 60) { return; }
-
-      try {
-        if (providerName === 'github_copilot') {
-          const refreshed = await exchangeGitHubTokenForCopilotToken(provider.oauthToken);
-          return { apiKey: refreshed.token, baseUrl: refreshed.baseUrl, apiKeyExpiresAt: refreshed.expiresAt };
-        }
-        if (providerName === 'xai') {
-          const refreshed: XaiRefreshedTokens = await refreshXaiAccessToken(provider.oauthToken, provider.proxy);
-          return { apiKey: refreshed.apiKey, oauthToken: refreshed.refreshToken, apiKeyExpiresAt: refreshed.expiresAt };
-        }
-        // Legacy ChatGPT credentials may be valid without a reported expiry.
-        if (provider.apiKey && provider.apiKeyExpiresAt === undefined) { return; }
-        const refreshed: ChatGptRefreshedTokens = await refreshChatGptAccessToken(provider.oauthToken);
-        return {
-          apiKey: refreshed.apiKey, oauthToken: refreshed.refreshToken, apiKeyExpiresAt: refreshed.expiresAt,
-          ...(refreshed.accountId ? { accountId: refreshed.accountId } : {}),
-        };
-      } catch (error) {
-        const label = providerName === 'xai' ? 'xAI' : providerName === 'chatgpt' ? 'ChatGPT' : 'GitHub Copilot';
-        throw MarifoldError.configInvalid(
-          `${label} authorization could not be refreshed: ${error instanceof Error ? error.message : String(error)}. Run marifold provider reauth ${providerName} to sign in again.`,
-        );
-      }
-    });
-  }
-
   /** Caller-executed tools for chat turns. Marifold web_search is advertised
    * only in fallback mode; provider-hosted search travels separately. */
   private chatTools(request: MarifoldRunRequest, webSearchMode: MarifoldWebSearchMode): {
@@ -1652,68 +1591,11 @@ export class MarifoldRuntime {
     };
   }
 
-  private toPriestConfig(
-    settings: MarifoldResolvedSettings,
-    nativeWebSearch: NativeWebSearchStrategy = 'none',
-  ): PriestConfig {
-    const { config } = this.options.loadedConfig;
-    const provider = config.providers[settings.provider];
-    const neutralReasoning = this.supportsNeutralReasoning(settings.provider, settings.model);
-    const providerOptions: Record<string, JSONValue> = {};
-    if (LEGACY_THINK_PROVIDER_NAMES.has(settings.provider)) { providerOptions['think'] = settings.think; }
-    // Compatibility bridge for Priest 3.0.x. Priest 3.1 reads providerTools
-    // directly; Marifold's Responses wrapper consumes and removes this marker
-    // when an older engine does not forward that additive request field.
-    if (nativeWebSearch === 'responses-tool') {
-      providerOptions[NATIVE_WEB_SEARCH_COMPAT_OPTION] = true;
-    } else if (nativeWebSearch === 'chat-option') {
-      providerOptions['enable_search'] = true;
-    }
-    return {
-      provider: settings.provider,
-      model: settings.model,
-      timeoutSeconds: config.default.timeoutSeconds,
-      maxOutputTokens: config.default.maxOutputTokens,
-      maxSystemChars: config.default.maxSystemChars,
-      maxContextTokens: settings.maxContextTokens ?? config.default.maxContextTokens,
-      compactionKeepTurns: config.default.compactionKeepTurns,
-      sessionContextTurns: settings.sessionContextTurns ?? config.default.sessionContextTurns,
-      reasoning: provider?.type === 'ollama'
-        ? {
-            enabled: settings.think,
-            ...(settings.think ? { effort: 'high', summary: 'auto' as const } : {}),
-          }
-        : neutralReasoning && /^gpt-6-astra(?:-|$)/.test(settings.model)
-          ? {
-              enabled: true,
-              effort: settings.think ? 'medium' : 'low',
-              ...(settings.think ? { summary: 'auto' as const } : {}),
-            }
-          : neutralReasoning && settings.think
-            ? { enabled: true, effort: 'high', summary: 'auto' }
-            : undefined,
-      providerOptions: Object.keys(providerOptions).length > 0 ? providerOptions : undefined,
-    };
-  }
-
-  private supportsNeutralReasoning(providerName: string, model: string): boolean {
-    const provider = this.options.loadedConfig.config.providers[providerName];
-    return provider?.type === 'ollama'
-      || provider?.type === 'anthropic'
-      || providerName === 'chatgpt'
-      || (providerName === 'github_copilot' && isGitHubCopilotResponsesModelId(model));
-  }
-
-  private supportsThink(providerName: string, model: string): boolean {
-    return LEGACY_THINK_PROVIDER_NAMES.has(providerName)
-      || this.supportsNeutralReasoning(providerName, model);
-  }
-
   /** Whether the profile's resolved provider honors thinking mode — so a channel
    * can tell the user when `/think` would have no effect. */
   profileSupportsThink(profile: string): boolean {
     const settings = this.resolveSettings({ profile });
-    return this.supportsThink(settings.provider, settings.model);
+    return this.engines.supportsThink(settings.provider, settings.model);
   }
 
   private memoryForRequest(profile: string, requestMemories = true, prompt = '', thinking = false): string[] {

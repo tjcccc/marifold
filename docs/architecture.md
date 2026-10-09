@@ -52,7 +52,7 @@ Enforcement: package manifests (pnpm resolves only declared dependencies), Biome
 
 ## Core subsystems
 
-The runtime layer is thin. `MarifoldRuntime` resolves config/profile/session settings, selects profile memory with the current prompt and thinking mode, and delegates ask/stream execution to `PriestEngine`. `MarifoldRuntime.createAgentRunner()` wires the agent subsystem over the same engine factory, TaskStore, and config policy.
+The runtime layer is thin. `MarifoldRuntime` resolves config/profile/session settings, selects profile memory with the current prompt and thinking mode, and delegates ask/stream execution to `PriestEngine`; `ProviderEngines` builds those engines and their request config (provider adapters, OAuth credential refresh, reasoning options). `MarifoldRuntime.createAgentRunner()` wires the agent subsystem over the same engine factory, TaskStore, and config policy.
 
 The agent subsystem lives in `packages/core/src/agent`:
 
