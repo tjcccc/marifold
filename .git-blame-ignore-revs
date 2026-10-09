@@ -1,0 +1,6 @@
+# Mechanical commits hidden from `git blame`.
+# GitHub applies this file automatically; locally run:
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs
+
+# style: require braces on all control-flow bodies
+0f663fa9a323ce481399189f038f4dc19c5ec84d
