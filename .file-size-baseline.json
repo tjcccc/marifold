@@ -47,7 +47,7 @@
     "packages/core/src/app/SkillAppCompiler.ts": 1016,
     "packages/core/src/memory/MemoryStore.ts": 1252,
     "packages/core/src/runtime/MarifoldRuntime.ts": 1032,
-    "packages/core/src/sessions/SessionResolver.ts": 1292,
-    "packages/tui/src/ui/App.tsx": 925
+    "packages/core/src/sessions/SessionResolver.ts": 983,
+    "packages/tui/src/ui/App.tsx": 920
   }
 }

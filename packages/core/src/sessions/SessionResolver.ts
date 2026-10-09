@@ -5,12 +5,33 @@ import { type ImageInput, SQLiteSessionStore } from '@priest-ai/core';
 import type { SessionDetail, SessionSummary, SessionTurnSummary } from '../config/ConfigSchema';
 import { MarifoldError } from '../errors/MarifoldError';
 import type { ResponseMetrics } from './ResponseMetrics';
+import {
+  deleteResponseMetricsForSession,
+  hasResponseMetricsTable,
+  listResponseMetrics,
+  RESPONSE_METRICS_TABLE,
+  upsertResponseMetrics,
+} from './ResponseMetricsTable';
+import {
+  ATTACHMENTS_TABLE,
+  DEFAULT_IMAGE_MEDIA_TYPE,
+  deleteAttachmentsForSession,
+  ensureAttachmentsTable,
+  hasAttachmentPaths,
+  hasAttachmentsTable,
+  listAttachments,
+  replaceUserTurnAttachments,
+} from './SessionAttachmentsTable';
+import {
+  deleteDisplayForSession,
+  ensureProfileDisplayTable,
+  ensureSessionDisplayTable,
+  hasProfileDisplayTable,
+  hasSessionDisplayTable,
+  PROFILE_DISPLAY_TABLE,
+  SESSION_DISPLAY_TABLE,
+} from './SessionDisplayTables';
 
-const ATTACHMENTS_TABLE = 'marifold_turn_attachments';
-const RESPONSE_METRICS_TABLE = 'marifold_response_metrics';
-const SESSION_DISPLAY_TABLE = 'marifold_session_display';
-const PROFILE_DISPLAY_TABLE = 'marifold_profile_display';
-const DEFAULT_IMAGE_MEDIA_TYPE = 'image/jpeg';
 const COMPACTION_METADATA_KEY = '__compaction';
 const SESSION_TITLE_MAX_CHARS = 200;
 
@@ -56,23 +77,6 @@ export interface ProfileActivitySummary {
   pinned?: boolean;
   updatedAt?: string;
   preview?: string;
-}
-
-interface ResponseMetricsRow {
-  userTurnIndex: number;
-  mode: ResponseMetrics['mode'];
-  provider: string;
-  model: string;
-  think: number;
-  startedAt: string;
-  finishedAt: string;
-  latencyMs: number;
-  inputTokens: number | null;
-  outputTokens: number | null;
-  totalTokens: number | null;
-  cachedInputTokens: number | null;
-  reasoningTokens: number | null;
-  estimatedCostUSD: number | null;
 }
 
 export class SessionResolver {
@@ -135,7 +139,7 @@ export class SessionResolver {
 
     const db = this.open();
     try {
-      this.ensureSessionDisplayTable(db);
+      ensureSessionDisplayTable(db);
       const search = options.search?.trim().toLowerCase() ?? '';
       const filters = [
         ...(profileName ? ['s.profile_name = ?'] : []),
@@ -225,7 +229,7 @@ export class SessionResolver {
 
     const db = this.open();
     try {
-      this.ensureProfileDisplayTable(db);
+      ensureProfileDisplayTable(db);
       const rows = db.prepare(`
         SELECT
           p.profile_name AS profileName,
@@ -297,7 +301,7 @@ export class SessionResolver {
     if (!fs.existsSync(this.sessionsDb)) { this.openStore(); }
     const db = this.open();
     try {
-      this.ensureProfileDisplayTable(db);
+      ensureProfileDisplayTable(db);
       db.prepare(`
         INSERT INTO ${PROFILE_DISPLAY_TABLE} (profile_name, pinned)
         VALUES (?, ?)
@@ -314,7 +318,7 @@ export class SessionResolver {
     if (!fs.existsSync(this.sessionsDb)) { return; }
     const db = this.open();
     try {
-      if (this.hasProfileDisplayTable(db)) {
+      if (hasProfileDisplayTable(db)) {
         db.prepare(`DELETE FROM ${PROFILE_DISPLAY_TABLE} WHERE profile_name = ?`).run(profileName);
       }
     } catch (error) {
@@ -352,7 +356,7 @@ export class SessionResolver {
 
     const db = this.open();
     try {
-      this.ensureSessionDisplayTable(db);
+      ensureSessionDisplayTable(db);
       const row = db.prepare(`
         SELECT
           s.id AS id,
@@ -422,10 +426,10 @@ export class SessionResolver {
     if (!fs.existsSync(this.sessionsDb)) { return undefined; }
     const db = this.open();
     try {
-      if (!this.hasAttachmentsTable(db)) { return undefined; }
+      if (!hasAttachmentsTable(db)) { return undefined; }
       const row = db.prepare(`
         SELECT media_type AS mediaType, data, url,
-          ${this.hasAttachmentPaths(db) ? 'source_path' : 'NULL'} AS sourcePath
+          ${hasAttachmentPaths(db) ? 'source_path' : 'NULL'} AS sourcePath
         FROM ${ATTACHMENTS_TABLE}
         WHERE session_id = ? AND user_turn_index = ? AND attachment_index = ?
       `).get(sessionId, userTurnIndex, attachmentIndex) as {
@@ -455,9 +459,9 @@ export class SessionResolver {
     const db = this.open();
     try {
       const transaction = db.transaction(() => {
-        this.deleteAttachmentsForSession(db, sessionId);
-        this.deleteResponseMetricsForSession(db, sessionId);
-        this.deleteDisplayForSession(db, sessionId);
+        deleteAttachmentsForSession(db, sessionId);
+        deleteResponseMetricsForSession(db, sessionId);
+        deleteDisplayForSession(db, sessionId);
         db.prepare('DELETE FROM turns WHERE session_id = ?').run(sessionId);
         return db.prepare('DELETE FROM sessions WHERE id = ?').run(sessionId).changes;
       });
@@ -488,7 +492,7 @@ export class SessionResolver {
     const db = this.open();
     try {
       if (!db.prepare('SELECT id FROM sessions WHERE id = ?').get(sessionId)) { return false; }
-      this.ensureSessionDisplayTable(db);
+      ensureSessionDisplayTable(db);
       const current = db.prepare(`
         SELECT title, pinned, archived
         FROM ${SESSION_DISPLAY_TABLE}
@@ -540,13 +544,13 @@ export class SessionResolver {
       `).get(sessionId, userTurnIndex) as { id: number } | undefined;
 
       const transaction = db.transaction(() => {
-        if (this.hasAttachmentsTable(db)) {
+        if (hasAttachmentsTable(db)) {
           db.prepare(`
             DELETE FROM ${ATTACHMENTS_TABLE}
             WHERE session_id = ? AND user_turn_index >= ?
           `).run(sessionId, userTurnIndex);
         }
-        if (this.hasResponseMetricsTable(db)) {
+        if (hasResponseMetricsTable(db)) {
           db.prepare(`
             DELETE FROM ${RESPONSE_METRICS_TABLE}
             WHERE session_id = ? AND user_turn_index >= ?
@@ -649,10 +653,10 @@ export class SessionResolver {
       const transaction = db.transaction(() => {
         db.prepare('UPDATE turns SET content = ? WHERE id = ?').run(userText, target.id);
         db.prepare('UPDATE turns SET content = ? WHERE id = ?').run(assistantText, assistant.id);
-        if (images !== undefined) { this.replaceUserTurnAttachments(db, sessionId, userTurnIndex, images); }
+        if (images !== undefined) { replaceUserTurnAttachments(db, sessionId, userTurnIndex, images); }
         if (responseMetrics) {
-          this.upsertResponseMetrics(db, sessionId, userTurnIndex, responseMetrics);
-        } else if (this.hasResponseMetricsTable(db)) {
+          upsertResponseMetrics(db, sessionId, userTurnIndex, responseMetrics);
+        } else if (hasResponseMetricsTable(db)) {
           // Replacing response content without replacement metrics must not
           // leave the old response's timing/model data attached to new prose.
           db.prepare(`
@@ -713,9 +717,9 @@ export class SessionResolver {
         const deleteTurns = db.prepare('DELETE FROM turns WHERE session_id = ?');
         const deleteSession = db.prepare('DELETE FROM sessions WHERE id = ?');
         for (const id of sessionIds) {
-          this.deleteAttachmentsForSession(db, id);
-          this.deleteResponseMetricsForSession(db, id);
-          this.deleteDisplayForSession(db, id);
+          deleteAttachmentsForSession(db, id);
+          deleteResponseMetricsForSession(db, id);
+          deleteDisplayForSession(db, id);
           deleteTurns.run(id);
           deleteSession.run(id);
         }
@@ -812,7 +816,7 @@ export class SessionResolver {
 
     const db = this.open();
     try {
-      this.ensureAttachmentsTable(db);
+      ensureAttachmentsTable(db);
       const userTurns = db.prepare(`
         SELECT COUNT(*) AS count
         FROM turns
@@ -867,7 +871,7 @@ export class SessionResolver {
         WHERE session_id = ? AND role = 'user'
       `).get(sessionId) as { count: number };
       if (userTurns.count === 0) { return; }
-      this.upsertResponseMetrics(db, sessionId, userTurns.count - 1, responseMetrics);
+      upsertResponseMetrics(db, sessionId, userTurns.count - 1, responseMetrics);
     } catch (error) {
       throw this.storeError(`Could not save response metrics for session '${sessionId}' in ${this.sessionsDb}: ${String(error)}`);
     } finally {
@@ -899,15 +903,15 @@ export class SessionResolver {
           FROM sessions
           WHERE id = ?
         `).run(toSessionId, fromSessionId);
-        if (this.hasAttachmentsTable(db)) {
+        if (hasAttachmentsTable(db)) {
           db.prepare(`UPDATE ${ATTACHMENTS_TABLE} SET session_id = ? WHERE session_id = ?`)
             .run(toSessionId, fromSessionId);
         }
-        if (this.hasResponseMetricsTable(db)) {
+        if (hasResponseMetricsTable(db)) {
           db.prepare(`UPDATE ${RESPONSE_METRICS_TABLE} SET session_id = ? WHERE session_id = ?`)
             .run(toSessionId, fromSessionId);
         }
-        if (this.hasSessionDisplayTable(db)) {
+        if (hasSessionDisplayTable(db)) {
           db.prepare(`UPDATE ${SESSION_DISPLAY_TABLE} SET session_id = ? WHERE session_id = ?`)
             .run(toSessionId, fromSessionId);
         }
@@ -936,8 +940,8 @@ export class SessionResolver {
       WHERE session_id = ?
       ORDER BY id ASC
     `).all(sessionId) as SessionTurnSummary[];
-    const attachments = this.listAttachments(db, sessionId);
-    const responseMetrics = this.listResponseMetrics(db, sessionId);
+    const attachments = listAttachments(db, sessionId);
+    const responseMetrics = listResponseMetrics(db, sessionId);
     let userTurnIndex = -1;
     return rows.map(row => {
       if (row.role === 'user') { userTurnIndex += 1; }
@@ -953,307 +957,6 @@ export class SessionResolver {
     });
   }
 
-  private ensureAttachmentsTable(db: Database.Database): void {
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS ${ATTACHMENTS_TABLE} (
-        session_id TEXT NOT NULL,
-        user_turn_index INTEGER NOT NULL,
-        attachment_index INTEGER NOT NULL,
-        media_type TEXT NOT NULL,
-        data TEXT,
-        url TEXT,
-        PRIMARY KEY (session_id, user_turn_index, attachment_index),
-        CHECK ((data IS NOT NULL AND url IS NULL) OR (data IS NULL AND url IS NOT NULL))
-      );
-      CREATE INDEX IF NOT EXISTS idx_marifold_turn_attachments_session
-        ON ${ATTACHMENTS_TABLE} (session_id, user_turn_index);
-    `);
-    // Empty data satisfies the legacy source constraint for path-backed records;
-    // no image bytes are retained. Existing embedded records remain unchanged.
-    if (!this.hasAttachmentPaths(db)) { db.exec(`ALTER TABLE ${ATTACHMENTS_TABLE} ADD COLUMN source_path TEXT`); }
-  }
-
-  private hasAttachmentPaths(db: Database.Database): boolean {
-    return (db.pragma(`table_info(${ATTACHMENTS_TABLE})`) as Array<{ name: string }>).some(column => column.name === 'source_path');
-  }
-
-  private hasAttachmentsTable(db: Database.Database): boolean {
-    return db.prepare(`
-      SELECT 1
-      FROM sqlite_master
-      WHERE type = 'table' AND name = ?
-    `).get(ATTACHMENTS_TABLE) !== undefined;
-  }
-
-  private listAttachments(
-    db: Database.Database,
-    sessionId: string,
-  ): Map<number, NonNullable<SessionTurnSummary['attachments']>> {
-    const byTurn = new Map<number, NonNullable<SessionTurnSummary['attachments']>>();
-    if (!this.hasAttachmentsTable(db)) { return byTurn; }
-    const rows = db.prepare(`
-      SELECT
-        a.user_turn_index AS userTurnIndex,
-        a.attachment_index AS attachmentIndex,
-        a.media_type AS mediaType,
-        a.data IS NOT NULL AS embedded,
-        a.url AS url
-      FROM ${ATTACHMENTS_TABLE} a
-      WHERE a.session_id = ?
-      ORDER BY a.user_turn_index ASC, a.attachment_index ASC
-    `).all(sessionId) as Array<{
-      userTurnIndex: number;
-      attachmentIndex: number;
-      mediaType: string;
-      embedded: number;
-      url: string | null;
-    }>;
-    for (const row of rows) {
-      const current = byTurn.get(row.userTurnIndex) ?? [];
-      current.push({
-        kind: 'image',
-        mediaType: row.mediaType,
-        ...(row.embedded === 1 ? {
-          ref: {
-            userTurnIndex: row.userTurnIndex,
-            attachmentIndex: row.attachmentIndex,
-          },
-        } : {}),
-        ...(row.url !== null ? { url: row.url } : {}),
-      });
-      byTurn.set(row.userTurnIndex, current);
-    }
-    return byTurn;
-  }
-
-  private replaceUserTurnAttachments(
-    db: Database.Database,
-    sessionId: string,
-    userTurnIndex: number,
-    images: ImageInput[],
-  ): void {
-    const persistable = images.filter(
-      (image): image is ImageInput & ({ data: string } | { url: string } | { path: string }) => Boolean(image.path || image.data || image.url),
-    );
-    if (persistable.length > 0) { this.ensureAttachmentsTable(db); }
-    if (!this.hasAttachmentsTable(db)) { return; }
-    db.prepare(`
-      DELETE FROM ${ATTACHMENTS_TABLE}
-      WHERE session_id = ? AND user_turn_index = ?
-    `).run(sessionId, userTurnIndex);
-    if (persistable.length === 0) { return; }
-    const insert = db.prepare(`
-      INSERT INTO ${ATTACHMENTS_TABLE}
-        (session_id, user_turn_index, attachment_index, media_type, data, url, source_path)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `);
-    for (const [index, image] of persistable.entries()) {
-      insert.run(
-        sessionId,
-        userTurnIndex,
-        index,
-        image.mediaType ?? DEFAULT_IMAGE_MEDIA_TYPE,
-        image.path ? '' : image.data ?? null,
-        image.path ? null : image.url ?? null,
-        image.path ? path.resolve(image.path) : null,
-      );
-    }
-  }
-
-  private deleteAttachmentsForSession(db: Database.Database, sessionId: string): void {
-    if (!this.hasAttachmentsTable(db)) { return; }
-    db.prepare(`DELETE FROM ${ATTACHMENTS_TABLE} WHERE session_id = ?`).run(sessionId);
-  }
-
-  private ensureResponseMetricsTable(db: Database.Database): void {
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS ${RESPONSE_METRICS_TABLE} (
-        session_id TEXT NOT NULL,
-        user_turn_index INTEGER NOT NULL CHECK (user_turn_index >= 0),
-        mode TEXT NOT NULL CHECK (mode IN ('agent', 'chat')),
-        provider TEXT NOT NULL,
-        model TEXT NOT NULL,
-        think INTEGER NOT NULL CHECK (think IN (0, 1)),
-        started_at TEXT NOT NULL,
-        finished_at TEXT NOT NULL,
-        latency_ms INTEGER NOT NULL CHECK (latency_ms >= 0),
-        input_tokens INTEGER CHECK (input_tokens IS NULL OR input_tokens >= 0),
-        output_tokens INTEGER CHECK (output_tokens IS NULL OR output_tokens >= 0),
-        total_tokens INTEGER CHECK (total_tokens IS NULL OR total_tokens >= 0),
-        cached_input_tokens INTEGER CHECK (cached_input_tokens IS NULL OR cached_input_tokens >= 0),
-        reasoning_tokens INTEGER CHECK (reasoning_tokens IS NULL OR reasoning_tokens >= 0),
-        estimated_cost_usd REAL CHECK (estimated_cost_usd IS NULL OR estimated_cost_usd >= 0),
-        PRIMARY KEY (session_id, user_turn_index)
-      );
-      CREATE INDEX IF NOT EXISTS idx_marifold_response_metrics_finished
-        ON ${RESPONSE_METRICS_TABLE} (finished_at);
-      CREATE INDEX IF NOT EXISTS idx_marifold_response_metrics_provider_model
-        ON ${RESPONSE_METRICS_TABLE} (provider, model, finished_at);
-    `);
-  }
-
-  private hasResponseMetricsTable(db: Database.Database): boolean {
-    return db.prepare(`
-      SELECT 1
-      FROM sqlite_master
-      WHERE type = 'table' AND name = ?
-    `).get(RESPONSE_METRICS_TABLE) !== undefined;
-  }
-
-  private upsertResponseMetrics(
-    db: Database.Database,
-    sessionId: string,
-    userTurnIndex: number,
-    metrics: ResponseMetrics,
-  ): void {
-    this.ensureResponseMetricsTable(db);
-    db.prepare(`
-      INSERT INTO ${RESPONSE_METRICS_TABLE} (
-        session_id,
-        user_turn_index,
-        mode,
-        provider,
-        model,
-        think,
-        started_at,
-        finished_at,
-        latency_ms,
-        input_tokens,
-        output_tokens,
-        total_tokens,
-        cached_input_tokens,
-        reasoning_tokens,
-        estimated_cost_usd
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(session_id, user_turn_index) DO UPDATE SET
-        mode = excluded.mode,
-        provider = excluded.provider,
-        model = excluded.model,
-        think = excluded.think,
-        started_at = excluded.started_at,
-        finished_at = excluded.finished_at,
-        latency_ms = excluded.latency_ms,
-        input_tokens = excluded.input_tokens,
-        output_tokens = excluded.output_tokens,
-        total_tokens = excluded.total_tokens,
-        cached_input_tokens = excluded.cached_input_tokens,
-        reasoning_tokens = excluded.reasoning_tokens,
-        estimated_cost_usd = excluded.estimated_cost_usd
-    `).run(
-      sessionId,
-      userTurnIndex,
-      metrics.mode,
-      metrics.provider,
-      metrics.model,
-      metrics.think ? 1 : 0,
-      metrics.startedAt,
-      metrics.finishedAt,
-      nonNegativeInteger(metrics.latencyMs) ?? 0,
-      nonNegativeInteger(metrics.usage?.inputTokens),
-      nonNegativeInteger(metrics.usage?.outputTokens),
-      nonNegativeInteger(metrics.usage?.totalTokens),
-      nonNegativeInteger(metrics.usage?.cachedInputTokens),
-      nonNegativeInteger(metrics.usage?.reasoningTokens),
-      nonNegativeNumber(metrics.usage?.estimatedCostUSD),
-    );
-  }
-
-  private listResponseMetrics(db: Database.Database, sessionId: string): Map<number, ResponseMetrics> {
-    const byTurn = new Map<number, ResponseMetrics>();
-    if (!this.hasResponseMetricsTable(db)) { return byTurn; }
-    const rows = db.prepare(`
-      SELECT
-        user_turn_index AS userTurnIndex,
-        mode,
-        provider,
-        model,
-        think,
-        started_at AS startedAt,
-        finished_at AS finishedAt,
-        latency_ms AS latencyMs,
-        input_tokens AS inputTokens,
-        output_tokens AS outputTokens,
-        total_tokens AS totalTokens,
-        cached_input_tokens AS cachedInputTokens,
-        reasoning_tokens AS reasoningTokens,
-        estimated_cost_usd AS estimatedCostUSD
-      FROM ${RESPONSE_METRICS_TABLE}
-      WHERE session_id = ?
-      ORDER BY user_turn_index ASC
-    `).all(sessionId) as ResponseMetricsRow[];
-    for (const row of rows) {
-      const usage = {
-        ...(row.inputTokens !== null ? { inputTokens: row.inputTokens } : {}),
-        ...(row.outputTokens !== null ? { outputTokens: row.outputTokens } : {}),
-        ...(row.totalTokens !== null ? { totalTokens: row.totalTokens } : {}),
-        ...(row.cachedInputTokens !== null ? { cachedInputTokens: row.cachedInputTokens } : {}),
-        ...(row.reasoningTokens !== null ? { reasoningTokens: row.reasoningTokens } : {}),
-        ...(row.estimatedCostUSD !== null ? { estimatedCostUSD: row.estimatedCostUSD } : {}),
-      };
-      byTurn.set(row.userTurnIndex, {
-        mode: row.mode,
-        provider: row.provider,
-        model: row.model,
-        think: row.think === 1,
-        startedAt: row.startedAt,
-        finishedAt: row.finishedAt,
-        latencyMs: row.latencyMs,
-        ...(Object.keys(usage).length > 0 ? { usage } : {}),
-      });
-    }
-    return byTurn;
-  }
-
-  private deleteResponseMetricsForSession(db: Database.Database, sessionId: string): void {
-    if (!this.hasResponseMetricsTable(db)) { return; }
-    db.prepare(`DELETE FROM ${RESPONSE_METRICS_TABLE} WHERE session_id = ?`).run(sessionId);
-  }
-
-  private ensureSessionDisplayTable(db: Database.Database): void {
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS ${SESSION_DISPLAY_TABLE} (
-        session_id TEXT PRIMARY KEY,
-        title TEXT,
-        pinned INTEGER NOT NULL DEFAULT 0 CHECK (pinned IN (0, 1)),
-        archived INTEGER NOT NULL DEFAULT 0 CHECK (archived IN (0, 1))
-      )
-    `);
-    const columns = db.prepare(`PRAGMA table_info(${SESSION_DISPLAY_TABLE})`).all() as Array<{ name: string }>;
-    if (!columns.some(column => column.name === 'archived')) {
-      db.exec(`ALTER TABLE ${SESSION_DISPLAY_TABLE} ADD COLUMN archived INTEGER NOT NULL DEFAULT 0 CHECK (archived IN (0, 1))`);
-    }
-  }
-
-  private ensureProfileDisplayTable(db: Database.Database): void {
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS ${PROFILE_DISPLAY_TABLE} (
-        profile_name TEXT PRIMARY KEY,
-        pinned INTEGER NOT NULL DEFAULT 0 CHECK (pinned IN (0, 1))
-      )
-    `);
-  }
-
-  private hasProfileDisplayTable(db: Database.Database): boolean {
-    return db.prepare(`
-      SELECT 1
-      FROM sqlite_master
-      WHERE type = 'table' AND name = ?
-    `).get(PROFILE_DISPLAY_TABLE) !== undefined;
-  }
-
-  private hasSessionDisplayTable(db: Database.Database): boolean {
-    return db.prepare(`
-      SELECT 1
-      FROM sqlite_master
-      WHERE type = 'table' AND name = ?
-    `).get(SESSION_DISPLAY_TABLE) !== undefined;
-  }
-
-  private deleteDisplayForSession(db: Database.Database, sessionId: string): void {
-    if (!this.hasSessionDisplayTable(db)) { return; }
-    db.prepare(`DELETE FROM ${SESSION_DISPLAY_TABLE} WHERE session_id = ?`).run(sessionId);
-  }
-
   private storeError(message: string): MarifoldError {
     return new MarifoldError('SESSION_STORE_ERROR', message, { sessionsDb: this.sessionsDb });
   }
@@ -1265,18 +968,6 @@ function sessionPreview(content: string): string {
   const flat = content.replace(/\s+/g, ' ').trim();
   if (flat.length <= PREVIEW_MAX_CHARS) { return flat; }
   return `${flat.slice(0, PREVIEW_MAX_CHARS - 1).trimEnd()}…`;
-}
-
-function nonNegativeInteger(value: number | undefined): number | null {
-  return typeof value === 'number' && Number.isFinite(value) && value >= 0
-    ? Math.round(value)
-    : null;
-}
-
-function nonNegativeNumber(value: number | undefined): number | null {
-  return typeof value === 'number' && Number.isFinite(value) && value >= 0
-    ? value
-    : null;
 }
 
 function firstLinePreview(content: string): string {
