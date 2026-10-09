@@ -2,6 +2,19 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-10-10 — Unreleased — Splitting the large files
+
+Behavior-preserving splits of the files the health check left on the 800-line ratchet. Every moved declaration and CSS rule was checked verbatim by script; public exports keep their paths (moved types are re-exported), and the core declarations for `index`, `SkillAppCompiler`, `SessionResolver`, and `MemoryStore` are unchanged apart from private members.
+
+- `SessionResolver.ts` 1,292 → 983: the attachment, response-metrics, and display tables move to `SessionAttachmentsTable`, `ResponseMetricsTable`, and `SessionDisplayTables` (SQL text byte-identical; a legacy attachment schema migrates with identical output before and after).
+- `MemoryStore.ts` 1,252 → 463: helpers split by call graph into `MemoryText`, `MemoryConflicts`, `MemoryRecords`, `MemoryJsonl`, `MemoryRanking`, `MemoryMerge`, and `MemoryTypes`.
+- `SkillAppCompiler.ts` 1,016 → 640: `SkillAppCompilerSupport` (compile state and checks) and `SkillAppValidation`; the evaluator stays whole.
+- Web `state/thread.ts` 819 → 386: `runEvents`, `threadItems`, and `threadTypes`.
+- Web `AppsScreen.tsx` 1,238 → 627 and its CSS 826 → 369: `SkillAppLayout.tsx` with `SkillAppLayout.module.css`, and `skillAppHelpers.ts`. All 120 CSS rules keep their media/container context, no class is shared between the two modules, every `styles` reference resolves, and keyframes stay with their animations.
+- Web `useAgentController.ts` 1,272 → 1,147: the `/command` switch moves to `agentCommands.ts` behind the same `useCallback` dependencies, with a new controller test that fails if the command context is mis-wired.
+- Not split, with reasons in `TODO.md`: `AgentRunner.ts`, the rest of `MarifoldRuntime.ts`, and Web `sendMessage`.
+- Validation: full gate passes (1,099 tests, one existing skip); real terminal 44/44; live OrbStack rejoin, takeover, in-use lists, and 55 delegations pass. Web e2e: 8 of 10 pass, including the Apps screen; the other two fail identically at v0.80.0 (pre-existing, recorded in `TODO.md`), and the suite ran under a temporary `HOME` because its fixture writes into `~/.marifold/runs`.
+
 ## 2026-10-09 — Unreleased — Publish gate, cleanup, and UI tokens
 
 - Publishing to npm requires `pnpm gate` (lint, typecheck, build, tests on a clean, committed tree) to have passed on the exact commit; each public package's `prepublishOnly` runs `scripts/release-check.mjs`. GitHub CI stays deferred: a solo project gets the same guarantee at publish time.

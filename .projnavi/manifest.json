@@ -1,7 +1,7 @@
 {
   "version": 1,
   "projnaviVersion": "0.5.0",
-  "generatedAt": "2026-10-09T14:15:50.531Z",
+  "generatedAt": "2026-10-09T17:29:14.020Z",
   "root": ".",
   "files": {
     ".claude/skills/projnavi/SKILL.md": {
@@ -10,8 +10,8 @@
       "category": "docs"
     },
     ".file-size-baseline.json": {
-      "hash": "9f03f45a7e5a41d2e949365d0807ce162e69c135de934c662622b0eeb4510fe1",
-      "size": 1115,
+      "hash": "80dbacf0d6a4545f176314adc2deca22f7fdf34e28ca1043ae9c25d7974beed8",
+      "size": 851,
       "category": "source"
     },
     "AGENTS.md": {
@@ -250,8 +250,8 @@
       "category": "source"
     },
     "apps/web/src/lib/commandSyntax.ts": {
-      "hash": "232e973e8a779cfd7edc172346a639571ab75f5c0477e8a4c93f5f7d4939a28e",
-      "size": 4737,
+      "hash": "bbe397bda486144edc9b92a3233f58aecec31063f23282bbc6bc5a0ad69f3f98",
+      "size": 4739,
       "category": "source"
     },
     "apps/web/src/lib/format.ts": {
@@ -267,6 +267,11 @@
     "apps/web/src/lib/markdown.ts": {
       "hash": "a72a16212c65cd4409c549ee4baae79efc910fa7e82c4fffae87a3a7a024fa04",
       "size": 10388,
+      "category": "source"
+    },
+    "apps/web/src/lib/modelChoice.ts": {
+      "hash": "9b542359c29e6749d09f4897edd3e6f71c4e5d88fea4acd7b001caab31c79e66",
+      "size": 376,
       "category": "source"
     },
     "apps/web/src/lib/officeAttachments.ts": {
@@ -317,6 +322,11 @@
     "apps/web/src/main.tsx": {
       "hash": "29b32d2e56b930844fdf886805448ffc7fd099eb19c0e8db53d2d8a9899aaa02",
       "size": 298,
+      "category": "source"
+    },
+    "apps/web/src/screens/agent/agentCommands.ts": {
+      "hash": "acf0e5fea661b9f1b367bf6576e167cfc9e17c15cdb9e395579b9b6c285fe6ee",
+      "size": 6281,
       "category": "source"
     },
     "apps/web/src/screens/agent/AgentScreen.tsx": {
@@ -390,8 +400,8 @@
       "category": "source"
     },
     "apps/web/src/screens/agent/useAgentController.ts": {
-      "hash": "20617e25d92543d4965ab667adc9f03b431ee0c03775cdf2ba505278ccd0f8b9",
-      "size": 47874,
+      "hash": "028dd522329e5e7123f9c0411789da3f3c191b90fddb30f762072a07ec06ffda",
+      "size": 42834,
       "category": "source"
     },
     "apps/web/src/screens/agent/useArtifactDownloads.ts": {
@@ -410,13 +420,23 @@
       "category": "source"
     },
     "apps/web/src/screens/apps/AppsScreen.tsx": {
-      "hash": "3d919686f5ec30efaa42f04e42020aa12ff52a87a6763a21adb7d9683a8f3030",
-      "size": 43281,
+      "hash": "c2d8028958e808b733bbcf3443c00bb72faaa8d175d905ddc337572d2fd52a65",
+      "size": 24544,
       "category": "source"
     },
     "apps/web/src/screens/apps/AppsSidebar.tsx": {
       "hash": "18a7e462c6b734f28588a454430964b63b9853bd292062ff43915754a858315e",
       "size": 4376,
+      "category": "source"
+    },
+    "apps/web/src/screens/apps/skillAppHelpers.ts": {
+      "hash": "a3fcd55c5ab1f42449a71217dca7ee9bb073a0f851f479c88db370f8078c0342",
+      "size": 5516,
+      "category": "source"
+    },
+    "apps/web/src/screens/apps/SkillAppLayout.tsx": {
+      "hash": "b479dd0f709d722edc238cd28c89c6834dfffee23c6a810952fa66d7dde4d4b8",
+      "size": 14623,
       "category": "source"
     },
     "apps/web/src/screens/apps/useAppsCatalog.ts": {
@@ -479,9 +499,24 @@
       "size": 2235,
       "category": "source"
     },
+    "apps/web/src/state/runEvents.ts": {
+      "hash": "3a9f9e17c811195a2d23e345cc216e842b0919fcd6a522b6d835477b4e2951b5",
+      "size": 7164,
+      "category": "source"
+    },
     "apps/web/src/state/thread.ts": {
-      "hash": "5195cc0bc9f4a49d3f5e28c1f5eb74b28d38ac1631f061dd4254376fe3df228a",
-      "size": 28648,
+      "hash": "3980f1cfdc3214884f53cdb0ac9bbe4eac10543d36c48dc455c66335ac89c2cc",
+      "size": 15731,
+      "category": "source"
+    },
+    "apps/web/src/state/threadItems.ts": {
+      "hash": "f8ef887a16d6db27fb3e3dbb1ef4e90da8eb929a523e25b58a499efc96ff9000",
+      "size": 2988,
+      "category": "source"
+    },
+    "apps/web/src/state/threadTypes.ts": {
+      "hash": "387cf67c252b13fe4f4632ee28d316312b2aeaee55f24e3ff2144e2164528322",
+      "size": 3884,
       "category": "source"
     },
     "apps/web/src/state/workspaceChanges.ts": {
@@ -625,8 +660,8 @@
       "category": "test"
     },
     "apps/web/tests/screens/agentController.test.tsx": {
-      "hash": "64c837262287ce2cff1de4bb884d7ae22ce552bb6e3a6cce32375b3680d32246",
-      "size": 54963,
+      "hash": "9321a001f46156e5150fc32874a999a2a584d5d2a97f3e5db0b6d91bed223ce9",
+      "size": 57115,
       "category": "test"
     },
     "apps/web/tests/screens/route.test.tsx": {
@@ -670,8 +705,8 @@
       "category": "docs"
     },
     "DEVLOG.md": {
-      "hash": "6b64dc939124106d0a943bc2205242edfe75b757af5010318d8c99f5e3f63ea4",
-      "size": 206731,
+      "hash": "1c1e5794ff279fd8350f5cb887ad2581ac18fbfa237509b13b1943f42ab713fa",
+      "size": 209887,
       "category": "docs"
     },
     "docs/app.md": {
@@ -1245,8 +1280,13 @@
       "category": "source"
     },
     "packages/core/src/app/SkillAppCompiler.ts": {
-      "hash": "54406cc24981034cc945526231422ab66861981d0c8785d463eb60ace8144389",
-      "size": 53912,
+      "hash": "3b82a4a90c359d8f35fe17abd1902cfdad9884f7eb1ff6fc165699e43161f681",
+      "size": 34421,
+      "category": "source"
+    },
+    "packages/core/src/app/SkillAppCompilerSupport.ts": {
+      "hash": "997177ca7072348b6a3dca735e1b7e4d9a49cfbe97bc91665d07e1335e7b8654",
+      "size": 9307,
       "category": "source"
     },
     "packages/core/src/app/SkillAppDsl.ts": {
@@ -1267,6 +1307,11 @@
     "packages/core/src/app/SkillAppSchema.ts": {
       "hash": "d5585f13a28af64c64d1b66d854853525494d9f861cbe44c1e1ae5c6243f0508",
       "size": 7823,
+      "category": "source"
+    },
+    "packages/core/src/app/SkillAppValidation.ts": {
+      "hash": "c8aa1928b67024bd01ec565f59f2131c446dca397d67cbc27558f7aee145306b",
+      "size": 11702,
       "category": "source"
     },
     "packages/core/src/channels/respond.ts": {
@@ -1369,14 +1414,49 @@
       "size": 14631,
       "category": "source"
     },
+    "packages/core/src/memory/MemoryConflicts.ts": {
+      "hash": "c9f5a372e4165809b2bb937b3c8fa95622de42d4674cc9fa89e3821bf6ae6240",
+      "size": 5257,
+      "category": "source"
+    },
     "packages/core/src/memory/MemoryControls.ts": {
       "hash": "e4ed4253cd811d453fdf41a059efc25bbb60151863a70a72a2845e5ae79038fb",
       "size": 15584,
       "category": "source"
     },
+    "packages/core/src/memory/MemoryJsonl.ts": {
+      "hash": "7f6f1ca67546d66c3bf5eaa04118dcc4479271c7c05f68dcfc16a3049834d19a",
+      "size": 1716,
+      "category": "source"
+    },
+    "packages/core/src/memory/MemoryMerge.ts": {
+      "hash": "daeda0ab3122ea9132fd0e9240e2063601b72906c1aa5fa55f89e35f590aa34c",
+      "size": 2857,
+      "category": "source"
+    },
+    "packages/core/src/memory/MemoryRanking.ts": {
+      "hash": "879a9c919518d191fbc533205686d628ad3a7f6e82bcd41fea9ffb2a684f6472",
+      "size": 4081,
+      "category": "source"
+    },
+    "packages/core/src/memory/MemoryRecords.ts": {
+      "hash": "881b507b7abb5fffcc2e82e578bc24f5597f4b756ea4b013ade21071b2f2eed4",
+      "size": 10549,
+      "category": "source"
+    },
     "packages/core/src/memory/MemoryStore.ts": {
-      "hash": "b61390202071b62e90e04b7f64c593a3eec7d23cf217a5283aa8a681949b59a0",
-      "size": 44516,
+      "hash": "fb5cd3773fbb85f66945e0509d773c5d25b5e150d74fd2fc2a0f7db8af805760",
+      "size": 16471,
+      "category": "source"
+    },
+    "packages/core/src/memory/MemoryText.ts": {
+      "hash": "e8106457ece0a0a35bc754956b32524b4f2a94e67e189dea13450023114fc119",
+      "size": 4693,
+      "category": "source"
+    },
+    "packages/core/src/memory/MemoryTypes.ts": {
+      "hash": "6a05cc42520d71eb593f587db2892c0ea19cdd6caeb0db7e19fd94648ce90030",
+      "size": 2424,
       "category": "source"
     },
     "packages/core/src/profiles/ProfileInstructions.ts": {
@@ -1514,14 +1594,29 @@
       "size": 502,
       "category": "source"
     },
+    "packages/core/src/sessions/ResponseMetricsTable.ts": {
+      "hash": "7b8cfdaf3745a81c463a20ef4494b355862518b1e46f33a6e52bf84553769987",
+      "size": 6512,
+      "category": "source"
+    },
+    "packages/core/src/sessions/SessionAttachmentsTable.ts": {
+      "hash": "4945f7940888241554ff7adf97ffdd103aac603be2ade0180ff3fda91ed4fe21",
+      "size": 4382,
+      "category": "source"
+    },
+    "packages/core/src/sessions/SessionDisplayTables.ts": {
+      "hash": "15acdc3cf11da93341379bf853ccf2755efcb63bd7414d0b1d8342f101fb01a2",
+      "size": 1942,
+      "category": "source"
+    },
     "packages/core/src/sessions/SessionLeases.ts": {
       "hash": "7b3a49e2c979e6318400d34e9b351e26df021529b0b4996cf3a8ebdcb9c0baf6",
       "size": 6220,
       "category": "source"
     },
     "packages/core/src/sessions/SessionResolver.ts": {
-      "hash": "f275f5286706f820e088515bef76b878559047dd7a9f4f4306706b51d00cb338",
-      "size": 48214,
+      "hash": "3f9c1133544f0c21c457ac1024fe3318802e5ca6c18e21993c495c4edbba0c4e",
+      "size": 36414,
       "category": "source"
     },
     "packages/core/src/skill/BuiltInSkillAppBuilder.ts": {
@@ -2490,8 +2585,8 @@
       "category": "docs"
     },
     "TODO.md": {
-      "hash": "01822a62989c6bbd7704dcf267114981fbf3530492397b2c107adbd98051f548",
-      "size": 14381,
+      "hash": "8610a9423488f56ce70e2c5ca6df8dc8c2fb1a90d6939b636c1e5b5263f08755",
+      "size": 14761,
       "category": "docs"
     },
     "tsconfig.base.json": {
@@ -2512,8 +2607,8 @@
       "category": "note"
     },
     ".projnavi/modules/app.md": {
-      "hash": "c31d8936db03359d7e125c204e9eac7b0e6ab840498fbf79c035d41f2213b1d4",
-      "size": 2381,
+      "hash": "fb003e6d8216f620909147a37ef008ab14b47fd78c74633aab6ceb3a99a7bd69",
+      "size": 2692,
       "category": "note"
     },
     ".projnavi/modules/cli.md": {
@@ -2537,8 +2632,8 @@
       "category": "note"
     },
     ".projnavi/modules/memory.md": {
-      "hash": "fb72873bf73a3dc52fec33333c6fd1d2ef9aa3552ded583ad3a4e9908fc015ee",
-      "size": 1393,
+      "hash": "36cc71684fed4fdd7499bfe91ee13ed940606eed2d5371ae4c6d7f152ec8e3b5",
+      "size": 1670,
       "category": "note"
     },
     ".projnavi/modules/providers.md": {
@@ -2572,8 +2667,8 @@
       "category": "note"
     },
     ".projnavi/modules/web.md": {
-      "hash": "1f08499500d196385ea591f61a43b3c232b31ef262067c7cc4e5fd9eeeef10dd",
-      "size": 2113,
+      "hash": "9a48c8c71e2e37d98c1cae2216984ac31be5a73add289915dbebd413047fbfab",
+      "size": 2286,
       "category": "note"
     },
     ".projnavi/modules/workspaces.md": {
@@ -2650,8 +2745,8 @@
       ]
     },
     "apps/web/src/screens/agent/useAgentController.ts": {
-      "hash": "20617e25d92543d4965ab667adc9f03b431ee0c03775cdf2ba505278ccd0f8b9",
-      "size": 47874,
+      "hash": "028dd522329e5e7123f9c0411789da3f3c191b90fddb30f762072a07ec06ffda",
+      "size": 42834,
       "category": "source",
       "claimIds": [
         "claim-web-boundary-001"
@@ -2673,9 +2768,18 @@
         "claim-web-boundary-001"
       ]
     },
+    "apps/web/src/state/runEvents.ts": {
+      "hash": "3a9f9e17c811195a2d23e345cc216e842b0919fcd6a522b6d835477b4e2951b5",
+      "size": 7164,
+      "category": "source",
+      "claimIds": [
+        "claim-agent-event-contract-001",
+        "claim-web-boundary-001"
+      ]
+    },
     "apps/web/src/state/thread.ts": {
-      "hash": "5195cc0bc9f4a49d3f5e28c1f5eb74b28d38ac1631f061dd4254376fe3df228a",
-      "size": 28648,
+      "hash": "3980f1cfdc3214884f53cdb0ac9bbe4eac10543d36c48dc455c66335ac89c2cc",
+      "size": 15731,
       "category": "source",
       "claimIds": [
         "claim-agent-event-contract-001",
@@ -2691,8 +2795,8 @@
       ]
     },
     "apps/web/tests/screens/agentController.test.tsx": {
-      "hash": "64c837262287ce2cff1de4bb884d7ae22ce552bb6e3a6cce32375b3680d32246",
-      "size": 54963,
+      "hash": "9321a001f46156e5150fc32874a999a2a584d5d2a97f3e5db0b6d91bed223ce9",
+      "size": 57115,
       "category": "test",
       "claimIds": [
         "claim-web-boundary-001"
@@ -2935,8 +3039,8 @@
       ]
     },
     "packages/core/src/app/SkillAppCompiler.ts": {
-      "hash": "54406cc24981034cc945526231422ab66861981d0c8785d463eb60ace8144389",
-      "size": 53912,
+      "hash": "3b82a4a90c359d8f35fe17abd1902cfdad9884f7eb1ff6fc165699e43161f681",
+      "size": 34421,
       "category": "source",
       "claimIds": [
         "claim-skillapp-templates-001"
@@ -3049,8 +3153,8 @@
       ]
     },
     "packages/core/src/memory/MemoryStore.ts": {
-      "hash": "b61390202071b62e90e04b7f64c593a3eec7d23cf217a5283aa8a681949b59a0",
-      "size": 44516,
+      "hash": "fb5cd3773fbb85f66945e0509d773c5d25b5e150d74fd2fc2a0f7db8af805760",
+      "size": 16471,
       "category": "source",
       "claimIds": [
         "claim-memory-controls-001"
@@ -3618,7 +3722,7 @@
     }
   },
   "inventory": {
-    "summary": "Detected Node package @marifold/workspace. Indexed 499 relevant files. Detected 126 test files.",
+    "summary": "Detected Node package @marifold/workspace. Indexed 518 relevant files. Detected 126 test files.",
     "packageName": "@marifold/workspace",
     "packageScripts": [
       "agent-eval",
@@ -3643,7 +3747,7 @@
     ],
     "fileCounts": {
       "docs": 26,
-      "source": 324,
+      "source": 343,
       "config": 23,
       "test": 126
     },

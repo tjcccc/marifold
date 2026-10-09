@@ -52,7 +52,8 @@ Shipped history lives in `DEVLOG.md` and the `docs/roadmap.md` ladder; this list
 
 ### Code health (from the 2026-10-09 health check)
 
-- Large files kept on the 800-line ratchet: `SessionResolver.ts`, `MemoryStore.ts`, `SkillAppCompiler.ts`, Web `AppsScreen.tsx` and its CSS, Web `state/thread.ts`, the `sendMessage`/`runCommand` parts of Web `useAgentController.ts`, and the rest of `MarifoldRuntime.ts`.
+- Files still over 800 lines, held by the ratchet: `AgentRunner.ts` (see below), Web `useAgentController.ts` 1,147 (`sendMessage` is the riskiest Web path; split it only with dedicated tests), `MarifoldRuntime.ts` 1,032 (the store facade plus agent wiring; further moves would only add host interfaces), `SessionResolver.ts` 983 (priest session queries), and TUI `App.tsx` 920.
+- The Web e2e fixture (`apps/web/tests/e2e/start-fixture.mjs`) writes an artifact under the real `~/.marifold/runs` through `os.homedir()`; give it a temporary home. Two e2e tests (Connection switching, session image gallery) fail under a temporary `HOME` back to v0.80.0.
 - `AgentRunner.ts`: split its 366-line loop together with the context provenance work above.
 - `spec/ui.md` open questions that need a design decision: the type scale and radius literals.
 
