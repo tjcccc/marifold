@@ -11,6 +11,7 @@
     "dist"
   ],
   "scripts": {
+    "prepublishOnly": "node ../../scripts/release-check.mjs",
     "build": "tsc && chmod +x dist/index.js && node scripts/stage-bridge.mjs",
     "prepack": "pnpm run build",
     "cli": "node dist/index.js",

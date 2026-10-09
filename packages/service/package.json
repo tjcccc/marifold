@@ -8,6 +8,7 @@
     "dist"
   ],
   "scripts": {
+    "prepublishOnly": "node ../../scripts/release-check.mjs",
     "build": "tsc && pnpm --dir ../../apps/web run build && node scripts/stage-web.mjs",
     "prepack": "pnpm run build",
     "typecheck": "tsc --noEmit",

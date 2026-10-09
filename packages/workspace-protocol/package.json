@@ -8,6 +8,7 @@
     "dist"
   ],
   "scripts": {
+    "prepublishOnly": "node ../../scripts/release-check.mjs",
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests"
