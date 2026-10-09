@@ -6,7 +6,7 @@ import type { ConsolePrinter } from '../output/ConsolePrinter';
 export function registerExecutionCommand(program: Command, printer: ConsolePrinter): void {
   const group = program.command('execution').description('Configure this device’s local execution capability and inspect durable jobs.');
   const device = () => new DeviceExecution(loadConfig(program).configPath);
-  const action = (fn: (...args: any[]) => unknown) => (...args: any[]) => {
+  const action = <Args extends unknown[]>(fn: (...args: Args) => unknown) => (...args: Args) => {
     try { process.stdout.write(`${JSON.stringify(fn(...args), null, 2)}\n`); }
     catch (error) { printer.printError(error); process.exitCode = 1; }
   };

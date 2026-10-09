@@ -1,4 +1,4 @@
-import { MarifoldRuntime } from '../runtime/MarifoldRuntime';
+import type { MarifoldRuntime } from '../runtime/MarifoldRuntime';
 import { ProfileMode } from '../config/ConfigSchema';
 import { ApprovalHandler } from '../agent/ApprovalPolicy';
 

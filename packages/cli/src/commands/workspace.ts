@@ -75,8 +75,8 @@ export function registerWorkspaceCommand(program: Command, printer: ConsolePrint
   const client = () => createApiClient(localServiceSettings(loadConfig(program)));
   const show = (value: unknown) => process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
   const action =
-    (fn: (...args: any[]) => Promise<unknown>) =>
-    async (...args: any[]) => {
+    <Args extends unknown[]>(fn: (...args: Args) => Promise<unknown>) =>
+    async (...args: Args) => {
       try {
         await fn(...args);
       } catch (error) {

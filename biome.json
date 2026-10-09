@@ -10,7 +10,8 @@
     "enabled": true,
     "rules": {
       "preset": "none",
-      "style": { "useBlockStatements": "error" }
+      "style": { "useBlockStatements": "error" },
+      "suspicious": { "noExplicitAny": "error", "noImportCycles": "error" }
     }
   }
 }

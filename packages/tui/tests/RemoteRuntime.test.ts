@@ -3,7 +3,7 @@ import { RemoteRuntime } from '../src/core/RemoteRuntime';
 import { resolveAgentConfig } from '@marifold/core';
 afterEach(() => vi.unstubAllGlobals());
 it('uses the host snapshot and the workspace run contract without local model credentials', async () => {
-  const calls: Array<{ path: string; body: any }> = [];
+  const calls: Array<{ path: string; body?: { action?: string } }> = [];
   const config = {
     default: { profile: 'host-profile', provider: 'host-provider', model: 'host-model', think: false },
     models: { options: ['host-provider/host-model'] },
@@ -49,7 +49,7 @@ it('uses the host snapshot and the workspace run contract without local model cr
     events.push(event);
   }
   await vi.waitFor(() =>
-    expect(calls.some((call) => call.path.endsWith('/approvals/call') && call.body.action === 'once')).toBe(true),
+    expect(calls.some((call) => call.path.endsWith('/approvals/call') && call.body?.action === 'once')).toBe(true),
   );
   expect(approval).toHaveBeenCalledOnce();
   expect(events.at(-1)?.type).toBe('done');
