@@ -73,6 +73,8 @@ The service defaults to loopback. Explicit non-loopback binds accept only direct
 
 ## Validation
 
+Enable the pre-commit hook once per clone with `git config core.hooksPath .githooks`; it runs `pnpm lint` (after any global pre-commit) before each commit. `git commit --no-verify` and clones without the setting bypass it.
+
 The full gate is `pnpm lint && pnpm -r typecheck && pnpm -r build && pnpm -r test`; run it before finishing a milestone, and at least lint + typecheck + build for smaller changes. Add targeted tests when practical.
 
 Note: `packages/service` tests resolve `@marifold/core` from its built `dist`, so rebuild core (`pnpm --filter @marifold/core build`) before service tests can observe core source changes.

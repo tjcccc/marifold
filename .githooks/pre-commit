@@ -1,0 +1,25 @@
+#!/bin/sh
+# Project pre-commit gate. Enable once per clone: git config core.hooksPath .githooks
+set -eu
+
+HOOK_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+
+# A repo-local core.hooksPath replaces the global hooks directory, so run the
+# global pre-commit (for example a commit-safety scan) first to keep it active.
+GLOBAL_DIR="$(git config --global --type=path --get core.hooksPath 2>/dev/null || true)"
+if [ -n "$GLOBAL_DIR" ] && [ -x "$GLOBAL_DIR/pre-commit" ]; then
+  GLOBAL_DIR="$(CDPATH= cd -- "$GLOBAL_DIR" && pwd)"
+  if [ "$GLOBAL_DIR" != "$HOOK_DIR" ]; then
+    "$GLOBAL_DIR/pre-commit" "$@"
+  fi
+fi
+
+# Keep this command identical to the lint step of the project's documented gate.
+LINT_COMMAND='pnpm lint'
+case "$LINT_COMMAND" in
+  *"{{"*)
+    printf 'pre-commit: set LINT_COMMAND in %s\n' "$0" >&2
+    exit 1
+    ;;
+esac
+sh -c "$LINT_COMMAND"

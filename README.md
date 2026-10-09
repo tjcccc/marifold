@@ -178,9 +178,16 @@ Do not put real API keys in tracked files.
 ## Development Checks
 
 ```bash
+pnpm lint
 pnpm build
 pnpm typecheck
 pnpm test
+```
+
+Enable the project pre-commit hook once per clone so `pnpm lint` runs before every commit:
+
+```bash
+git config core.hooksPath .githooks
 ```
 
 For CLI smoke checks that avoid live model calls, see [docs/smoke.md](docs/smoke.md). For provider-backed checks after `pnpm build`, run:
