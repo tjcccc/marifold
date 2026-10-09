@@ -1,5 +1,6 @@
 import { spawn } from 'child_process';
 import type { AgentUsage } from '@marifold/core';
+import { isSessionBusy } from '@marifold/client';
 
 /** Echo text for a skill turn: `$name arg1 arg2…` (or just `$name` with no args). */
 export function skillInvocation(name: string, args: string[]): string {
@@ -78,7 +79,7 @@ export async function copyTerminalSelection(text: string): Promise<void> {
 /** A session-in-use error, with how to move that session to this terminal. */
 export function sessionBusyText(error: unknown, sessionId: string): string {
   const text = errorText(error);
-  return (error as { code?: unknown } | undefined)?.code === 'SESSION_BUSY'
+  return isSessionBusy(error)
     ? `${text} To open it here instead: marifold --resume ${sessionId} --takeover`
     : text;
 }

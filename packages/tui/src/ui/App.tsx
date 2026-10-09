@@ -11,6 +11,7 @@ import {
   isInsideAny,
   renderSkillPrompt,
 } from '@marifold/core';
+import { renewSessionLease } from '@marifold/client';
 import type {
   AgentUsage,
   ApprovalDecision,
@@ -221,34 +222,26 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
   useEffect(() => {
     const id = state.sessionId;
     if (!id || !runtime.acquireSession) { return; }
-    let disposed = false;
-    const renew = async () => {
-      try { await runtime.acquireSession!(id); }
-      catch (error) {
-        // Only losing the session to another client ends it here. A network
-        // blip or service restart retries on the next renewal; the service
-        // keeps a running task's session reserved meanwhile.
-        if (disposed || (error as { code?: unknown } | undefined)?.code !== 'SESSION_BUSY') { return; }
-        disposed = true;
-        if (stateRef.current.sessionId === id) {
-          // Another device took the session over. A service-hosted task keeps
-          // running there, so only stop following it; a task running inside
-          // this terminal process cannot move and is cancelled.
-          runGenerationRef.current += 1;
-          if (!runtime.remote) { abortRef.current?.abort(); }
-          abortRef.current = null;
-          dispatch({ type: 'set_running', running: false });
-          dispatch({ type: 'new_session' });
-          setHistory([]);
-          notify(sessionBusyText(error, id), 'error');
-        }
-      }
-    };
-    void renew();
-    const timer = setInterval(() => void renew(), 15_000);
+    const lease = renewSessionLease({
+      // Called on the runtime: the local MarifoldRuntime method needs its `this`.
+      acquire: () => runtime.acquireSession?.(id),
+      immediate: true,
+      onLost: error => {
+        if (stateRef.current.sessionId !== id) { return; }
+        // Another device took the session over. A service-hosted task keeps
+        // running there, so only stop following it; a task running inside
+        // this terminal process cannot move and is cancelled.
+        runGenerationRef.current += 1;
+        if (!runtime.remote) { abortRef.current?.abort(); }
+        abortRef.current = null;
+        dispatch({ type: 'set_running', running: false });
+        dispatch({ type: 'new_session' });
+        setHistory([]);
+        notify(sessionBusyText(error, id), 'error');
+      },
+    });
     return () => {
-      disposed = true;
-      clearInterval(timer);
+      lease.stop();
       void Promise.resolve(runtime.releaseSession?.(id)).catch(() => undefined);
     };
   }, [runtime, state.sessionId, notify]);

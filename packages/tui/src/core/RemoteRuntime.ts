@@ -1,5 +1,13 @@
 import * as fs from 'node:fs';
-import { createApiClient, followRunEvents, type ApiClientOptions, type ApiClient } from '@marifold/client';
+import {
+  acquireSessionLease,
+  createApiClient,
+  followRunEvents,
+  releaseSessionLease,
+  takeOverSessionLease,
+  type ApiClientOptions,
+  type ApiClient,
+} from '@marifold/client';
 import { prepareImageInputs } from '@marifold/core';
 import type {
   AgentEvent,
@@ -73,13 +81,9 @@ export class RemoteRuntime implements TuiRuntime {
         `/v1/sessions?limit=${limit}${profile ? `&profile=${encodeURIComponent(profile)}` : ''}`,
       )
     ).sessions;
-  acquireSession = async (id: string): Promise<void> => {
-    await this.api.request('POST', `/v1/sessions/${encodeURIComponent(id)}/lease`);
-  };
+  acquireSession = (id: string): Promise<void> => acquireSessionLease(this.api, id);
   readonly remote = true;
-  takeOverSession = async (id: string): Promise<void> => {
-    await this.api.request('POST', `/v1/sessions/${encodeURIComponent(id)}/lease`, { takeover: true });
-  };
+  takeOverSession = (id: string): Promise<void> => takeOverSessionLease(this.api, id);
   /** Lease releases still in flight, awaited before the process exits so a
    * closed TUI does not keep its session reserved until the lease expires. */
   private static releases = new Set<Promise<unknown>>();
@@ -93,7 +97,7 @@ export class RemoteRuntime implements TuiRuntime {
     clearTimeout(timer);
   }
   releaseSession = async (id: string): Promise<void> => {
-    const request = this.api.request('DELETE', `/v1/sessions/${encodeURIComponent(id)}/lease`);
+    const request = releaseSessionLease(this.api, id);
     RemoteRuntime.releases.add(request);
     try { await request; } finally { RemoteRuntime.releases.delete(request); }
   };

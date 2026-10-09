@@ -1,6 +1,14 @@
 import type { ApiClient } from './client';
 import type { SessionDetail, SessionSummary } from './types';
 
+export {
+  acquireSessionLease,
+  isSessionBusy,
+  releaseSessionLease,
+  renewSessionLease,
+  takeOverSessionLease,
+} from '@marifold/client';
+
 export async function listSessions(
   client: ApiClient,
   options: { limit?: number; profile?: string; archived?: boolean; search?: string } = {},

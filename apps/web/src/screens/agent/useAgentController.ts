@@ -17,10 +17,15 @@ import {
 } from '../../api/profiles';
 import { answerApproval, answerUserInput, cancelRun, listRuns, startRun, steerRun } from '../../api/runs';
 import {
+  acquireSessionLease,
   compactSession,
   deleteSession as deleteSessionRequest,
   getSession,
+  isSessionBusy,
   listSessions,
+  releaseSessionLease,
+  renewSessionLease,
+  takeOverSessionLease,
   updateSession,
 } from '../../api/sessions';
 import type {
@@ -282,7 +287,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
       if (!id) { return; }
       setSessionLoading(true);
       try {
-        await client.request('POST', `/v1/sessions/${encodeURIComponent(id)}/lease`);
+        await acquireSessionLease(client, id);
         setSessionBlocked(false);
         const detail = await getSession(client, id);
         if (loadId !== sessionLoadRef.current) { return; }
@@ -330,7 +335,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
         });
       } catch (error) {
         if (loadId !== sessionLoadRef.current) { return; }
-        if (error instanceof MarifoldApiError && error.code === 'SESSION_BUSY') { setSessionBlocked(true); }
+        if (isSessionBusy(error)) { setSessionBlocked(true); }
         // A freshly minted id has no server session yet — that's expected.
         if (!(error instanceof MarifoldApiError && error.status === 404)) {
           handleError(error);
@@ -511,33 +516,26 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
 
   useEffect(() => {
     if (!sessionId) { return; }
-    let stopped = false;
     const id = sessionId;
-    const renew = async () => {
-      try { await client.request('POST', `/v1/sessions/${encodeURIComponent(id)}/lease`); }
-      catch (error) {
-        // Only losing the session to another client ends this view. A network
-        // blip or service restart retries on the next renewal; the service
-        // keeps a running task's session reserved meanwhile.
-        if (stopped || !(error instanceof MarifoldApiError && error.code === 'SESSION_BUSY')) { return; }
-        stopped = true;
+    // loadSession already acquired the lease, so renewal starts an interval later.
+    const lease = renewSessionLease({
+      acquire: () => acquireSessionLease(client, id),
+      onLost: error => {
         setSessionBlocked(true);
         resetThread(id);
         handleError(error);
-      }
-    };
-    const timer = setInterval(() => { if (!stopped) { void renew(); } }, 15_000);
-    const release = () => { void client.request('DELETE', `/v1/sessions/${encodeURIComponent(id)}/lease`).catch(() => undefined); };
+      },
+    });
+    const release = () => { void releaseSessionLease(client, id).catch(() => undefined); };
     // Background tabs throttle timers below the renewal rate, and a page
     // restored from the back/forward cache released its lease on pagehide.
     // Renew as soon as the page is visible again.
-    const resume = () => { if (!stopped && document.visibilityState === 'visible') { void renew(); } };
+    const resume = () => { if (document.visibilityState === 'visible') { lease.renew(); } };
     window.addEventListener('pagehide', release);
     window.addEventListener('pageshow', resume);
     document.addEventListener('visibilitychange', resume);
     return () => {
-      stopped = true;
-      clearInterval(timer);
+      lease.stop();
       window.removeEventListener('pagehide', release);
       window.removeEventListener('pageshow', resume);
       document.removeEventListener('visibilitychange', resume);
@@ -550,7 +548,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
     const id = sessionId;
     if (!id) { return; }
     try {
-      await client.request('POST', `/v1/sessions/${encodeURIComponent(id)}/lease`, { takeover: true });
+      await takeOverSessionLease(client, id);
     } catch (error) {
       handleError(error);
       return;
@@ -759,7 +757,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
         navigate({ view: 'agent', profile: profileName, session: sid });
       }
 
-      try { await client.request('POST', `/v1/sessions/${encodeURIComponent(sid)}/lease`); }
+      try { await acquireSessionLease(client, sid); }
       catch (error) { setSessionBlocked(true); handleError(error); return false; }
 
       // Consume the pending attachments: chat images ride the request natively
