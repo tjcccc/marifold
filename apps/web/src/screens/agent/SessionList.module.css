@@ -112,7 +112,7 @@
 }
 
 .searchWrap:focus-within {
-  border-color: var(--brand);
+  border-color: var(--brand-fill);
   background: var(--surface);
 }
 
