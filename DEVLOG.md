@@ -9,7 +9,7 @@ Behavior-preserving splits of the files the health check left on the 800-line ra
 - `SessionResolver.ts` 1,292 → 983: the attachment, response-metrics, and display tables move to `SessionAttachmentsTable`, `ResponseMetricsTable`, and `SessionDisplayTables` (SQL text byte-identical; a legacy attachment schema migrates with identical output before and after).
 - `MemoryStore.ts` 1,252 → 463: helpers split by call graph into `MemoryText`, `MemoryConflicts`, `MemoryRecords`, `MemoryJsonl`, `MemoryRanking`, `MemoryMerge`, and `MemoryTypes`.
 - `SkillAppCompiler.ts` 1,016 → 640: `SkillAppCompilerSupport` (compile state and checks) and `SkillAppValidation`; the evaluator stays whole.
-- Web `state/thread.ts` 819 → 386: `runEvents`, `threadItems`, and `threadTypes`.
+- Web `state/thread.ts` 819 → 392: `runEvents`, `threadItems`, and `threadTypes`.
 - Web `AppsScreen.tsx` 1,238 → 627 and its CSS 826 → 369: `SkillAppLayout.tsx` with `SkillAppLayout.module.css`, and `skillAppHelpers.ts`. All 120 CSS rules keep their media/container context, no class is shared between the two modules, every `styles` reference resolves, and keyframes stay with their animations.
 - Web `useAgentController.ts` 1,272 → 1,147: the `/command` switch moves to `agentCommands.ts` behind the same `useCallback` dependencies, with a new controller test that fails if the command context is mis-wired.
 - Not split, with reasons in `TODO.md`: `AgentRunner.ts`, the rest of `MarifoldRuntime.ts`, and Web `sendMessage`.
