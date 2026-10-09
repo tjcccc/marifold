@@ -23,9 +23,6 @@ import {
   getSession,
   isSessionBusy,
   listSessions,
-  releaseSessionLease,
-  renewSessionLease,
-  takeOverSessionLease,
   updateSession,
 } from '../../api/sessions';
 import type {
@@ -55,6 +52,7 @@ import { withPendingSession } from '../../lib/sessionSummaries';
 import { RunFollowers } from '../../state/followers';
 import type { ThreadState, UserAttachment } from '../../state/thread';
 import { activeRun, createThreadState, threadReducer } from '../../state/thread';
+import { useSessionLease } from './useSessionLease';
 
 const RUN_SETTLE_POLL_MS = 75;
 const RUN_SETTLE_TIMEOUT_MS = 15_000;
@@ -163,10 +161,6 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
   const [sessionId, setSessionId] = useState<string | undefined>(route.session);
   const [sessionBlocked, setSessionBlocked] = useState(false);
   const [sendingBytes, setSendingBytes] = useState<number>();
-  // Bumping this restarts lease renewal after a takeover.
-  const [leaseEpoch, setLeaseEpoch] = useState(0);
-  // The renewal that a takeover replaces must not release the lease it just took.
-  const keepLeaseRef = useRef<string | undefined>(undefined);
   const [sessionLoading, setSessionLoading] = useState(Boolean(route.session));
   const sessionLoadRef = useRef(0);
   const [think, setThink] = useState(false);
@@ -514,49 +508,24 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
     // when the user reloads or reopens the session.
   });
 
-  useEffect(() => {
-    if (!sessionId) { return; }
-    const id = sessionId;
-    // loadSession already acquired the lease, so renewal starts an interval later.
-    const lease = renewSessionLease({
-      acquire: () => acquireSessionLease(client, id),
-      onLost: error => {
-        setSessionBlocked(true);
-        resetThread(id);
-        handleError(error);
-      },
-    });
-    const release = () => { void releaseSessionLease(client, id).catch(() => undefined); };
-    // Background tabs throttle timers below the renewal rate, and a page
-    // restored from the back/forward cache released its lease on pagehide.
-    // Renew as soon as the page is visible again.
-    const resume = () => { if (document.visibilityState === 'visible') { lease.renew(); } };
-    window.addEventListener('pagehide', release);
-    window.addEventListener('pageshow', resume);
-    document.addEventListener('visibilitychange', resume);
-    return () => {
-      lease.stop();
-      window.removeEventListener('pagehide', release);
-      window.removeEventListener('pageshow', resume);
-      document.removeEventListener('visibilitychange', resume);
-      if (keepLeaseRef.current === id) { keepLeaseRef.current = undefined; }
-      else { release(); }
-    };
-  }, [client, sessionId, handleError, resetThread, leaseEpoch]);
+  const onLeaseLost = useCallback((error: unknown, id: string) => {
+    setSessionBlocked(true);
+    resetThread(id);
+    handleError(error);
+  }, [handleError, resetThread]);
+  const { takeOver: takeOverLease } = useSessionLease(client, sessionId, onLeaseLost);
 
   const takeOverSession = useCallback(async () => {
     const id = sessionId;
     if (!id) { return; }
     try {
-      await takeOverSessionLease(client, id);
+      await takeOverLease(id);
     } catch (error) {
       handleError(error);
       return;
     }
-    keepLeaseRef.current = id;
-    setLeaseEpoch(epoch => epoch + 1);
     await loadSession(id);
-  }, [client, sessionId, handleError, loadSession]);
+  }, [takeOverLease, sessionId, handleError, loadSession]);
 
   const selectProfile = useCallback(
     (name: string) => {
