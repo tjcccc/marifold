@@ -311,6 +311,43 @@ describe('App run routing', () => {
     unmount();
   });
 
+  it.each([['T', 't'], ['Shift+Enter', '\x1b[13;2u']])('/resume shows titles, blocks Enter on a session in use, and %s takes it over', async (_name, keys) => {
+    const summary: SessionSummary = {
+      id: 'held-12345678', profileName: 'default', turnCount: 2,
+      createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+      title: 'Trip plan', preview: 'raw first message', inUse: true,
+    };
+    const detail: SessionDetail = {
+      ...summary,
+      turns: [
+        { role: 'user', content: 'Plan a trip', timestamp: summary.createdAt },
+        { role: 'assistant', content: 'Here is the plan', timestamp: summary.updatedAt },
+      ],
+    };
+    const { runtime } = makeRuntime({ sessions: [summary], sessionDetail: detail });
+    const acquireSession = vi.fn(async () => undefined);
+    const takeOverSession = vi.fn(async () => undefined);
+    Object.assign(runtime, { acquireSession, takeOverSession, releaseSession: vi.fn(async () => undefined) });
+    const { stdin, lastFrame, unmount } = render(<App runtime={runtime} loadedConfig={config} initial={initial('agent')} />);
+    await delay();
+    stdin.write('/resume');
+    await delay();
+    stdin.write('\r');
+    await vi.waitFor(() => expect(lastFrame()).toContain('[in use] Trip plan'), { timeout: 3000 });
+    expect(lastFrame()).not.toContain('raw first message');
+    expect(lastFrame()).toContain('Shift+Enter or T take over');
+    await delay();
+    stdin.write('\r');
+    await vi.waitFor(() => expect(lastFrame()!.replace(/\s+/g, ' ')).toContain('in use in another page or terminal. Press Shift+Enter or T to take it over.'));
+    expect(lastFrame()).toContain('Resume session');
+    expect(acquireSession).not.toHaveBeenCalledWith('held-12345678');
+    stdin.write(keys);
+    await vi.waitFor(() => expect(lastFrame()).toContain('Here is the plan'), { timeout: 3000 });
+    expect(takeOverSession).toHaveBeenCalledWith('held-12345678');
+    expect(lastFrame()).toContain('Took over session held-123');
+    unmount();
+  });
+
   it('/stop aborts the in-flight run', async () => {
     let captured: AbortSignal | undefined;
     const blockingRun = (call: RunnerCall) => {

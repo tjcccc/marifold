@@ -1,12 +1,13 @@
 import { sessionPromptHistory } from '../core/promptHistory.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Box, Text } from 'ink';
+import { Box, Text, useApp } from 'ink';
 import { createApiClient, startupWorkspaces, type ApiClientOptions } from '@marifold/client';
 import type { MarifoldRuntime } from '@marifold/core';
 import type { WorkspaceSummary, WorkspaceDevice, LoadedMarifoldConfig } from '@marifold/core';
 import { RemoteRuntime } from '../core/RemoteRuntime.js';
 import type { TuiRuntime } from '../core/TuiRuntime.js';
 import { App, type AppProps } from './App.js';
+import { sessionBusyText } from './appHelpers.js';
 
 interface Props {
   local: MarifoldRuntime;
@@ -28,6 +29,7 @@ interface Entry {
 }
 export function WorkspaceShell(props: Props) {
   const [entry, setEntry] = useState<Entry>();
+  const { exit } = useApp();
   const [notice, setNotice] = useState('Connecting to workspace…');
   const selected = useRef<string>('local');
   const execution = useRef<string | undefined>(undefined);
@@ -58,23 +60,38 @@ export function WorkspaceShell(props: Props) {
         runtime = remote;
         config = remote.loadedConfig;
       }
+      // A named session must exist here; it also selects its own profile
+      // unless --profile names one.
+      let requested;
+      if (typeof resume === 'string') {
+        requested = await findSession(runtime, resume);
+        if (!requested) { throw new Error(`Session ${resume} was not found in the ${name} workspace.`); }
+        if (props.profile && props.profile !== requested.profileName) {
+          throw new Error(`Session ${resume} belongs to profile "${requested.profileName}". Resume it without --profile or with --profile ${requested.profileName}.`);
+        }
+      }
+      const profile = props.profile ?? requested?.profileName;
       let settings;
       try {
-        settings = runtime.resolveSettings({ profile: props.profile });
+        settings = runtime.resolveSettings({ profile });
       } catch {
         if (id !== 'local') { throw new Error('Choose a profile with a configured model on this workspace.'); }
-        settings = { profile: config.config.default.profile, provider: '', model: '(configure a model)', think: false };
+        settings = { profile: profile ?? config.config.default.profile, provider: '', model: '(configure a model)', think: false };
       }
-      let sessionId: string | undefined;
-      if (typeof resume === 'string') { sessionId = resume; }
-      else if (resume === true) {
+      let sessionId = requested?.id;
+      if (resume === true) {
         sessionId = (await runtime.listSessions(1, settings.profile, { order: 'recent' }))[0]?.id;
       }
       if (sessionId) {
-        if (takeover) { await runtime.takeOverSession?.(sessionId); }
-        else { await runtime.acquireSession?.(sessionId); }
+        try {
+          if (takeover) { await runtime.takeOverSession?.(sessionId); }
+          else { await runtime.acquireSession?.(sessionId); }
+        } catch (error) {
+          throw new Error(sessionBusyText(error, sessionId));
+        }
       }
-      const session = sessionId ? await runtime.getSession(sessionId) : undefined;
+      // Read the transcript after acquiring, so a takeover sees the latest turns.
+      const session = sessionId ? await findSession(runtime, sessionId) : undefined;
       if (version !== serial.current) { return; }
       selected.current = id;
       execution.current = undefined;
@@ -108,21 +125,33 @@ export function WorkspaceShell(props: Props) {
   );
   useEffect(() => {
     let alive = true;
-    void startupWorkspaces<WorkspaceSummary>(localApi)
-      .then(async (result) => {
-        if (!alive) { return; }
+    void (async () => {
+      let target = 'local';
+      let fallback: string | undefined;
+      try {
+        const result = await startupWorkspaces<WorkspaceSummary>(localApi);
         const workspace = result.workspaces.find((w) => w.id === result.defaultId && w.online);
-        await load(workspace?.id ?? 'local', props.resume, props.takeover);
-        if (result.defaultId !== 'local' && !workspace) {
-          setNotice('Default workspace is offline. Opened Local for this launch.');
+        target = workspace?.id ?? 'local';
+        if (result.defaultId !== 'local' && !workspace) { fallback = 'Default workspace is offline. Opened Local for this launch.'; }
+      } catch {
+        fallback = 'Workspace service unavailable. Opened Local.';
+      }
+      if (!alive) { return; }
+      try {
+        try {
+          await load(target, props.resume, props.takeover);
+        } catch (error) {
+          // A resumed session opens exactly as asked or not at all: never an
+          // empty session, and never Local in place of the workspace.
+          if (props.resume !== undefined || target === 'local') { throw error; }
+          await load('local');
+          fallback = 'Workspace service unavailable. Opened Local.';
         }
-      })
-      .catch(async () => {
-        if (alive) {
-          await load('local', props.resume, props.takeover);
-          setNotice('Workspace service unavailable. Opened Local.');
-        }
-      });
+        if (alive && fallback) { setNotice(fallback); }
+      } catch (error) {
+        if (alive) { exit(error instanceof Error ? error : new Error(String(error))); }
+      }
+    })();
     return () => {
       alive = false;
       serial.current++;
@@ -222,4 +251,15 @@ export function WorkspaceShell(props: Props) {
       )}
     </Box>
   );
+}
+
+/** A session by id, or undefined when this runtime has none: the local
+ * runtime returns undefined, the service answers SESSION_NOT_FOUND. */
+async function findSession(runtime: TuiRuntime, id: string) {
+  try {
+    return await runtime.getSession(id);
+  } catch (error) {
+    if ((error as { code?: unknown } | undefined)?.code === 'SESSION_NOT_FOUND') { return undefined; }
+    throw error;
+  }
 }

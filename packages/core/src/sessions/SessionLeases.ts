@@ -56,6 +56,20 @@ export class SessionLeases {
     } finally { db.close(); }
   }
 
+  /** Mark the sessions another owner holds right now as `inUse`, for list views. */
+  markInUse<T extends { id: string; inUse?: boolean }>(sessions: T[], owner?: string): T[] {
+    if (sessions.length === 0 || !fs.existsSync(this.file)) { return sessions; }
+    const held = new Set<string>();
+    const db = this.open();
+    try {
+      const leases = db.prepare('SELECT session_id, owner FROM leases WHERE expires_at > ?').all(this.now()) as Array<{ session_id: string; owner: string }>;
+      for (const lease of leases) {
+        if (lease.owner !== owner) { held.add(lease.session_id); }
+      }
+    } finally { db.close(); }
+    return held.size === 0 ? sessions : sessions.map(session => held.has(session.id) ? { ...session, inUse: true } : session);
+  }
+
   /** Reserve a session for work started by `owner` until the returned function
    * is called, even if the owner's client disconnects or releases it meanwhile.
    * A lease the hold created is released at the end; an existing client lease

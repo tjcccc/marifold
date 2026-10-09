@@ -249,6 +249,9 @@ export interface SessionSummary {
   archived?: boolean;
   /** Client-only optimistic marker while the first exchange is not durable. */
   pending?: boolean;
+  /** Another page, terminal, or device holds the session; set by list calls
+   * relative to the caller's session owner. */
+  inUse?: boolean;
   /** First user message, whitespace-collapsed and truncated — the session's
    * fallback display title in list UIs. Absent for sessions without a user turn. */
   preview?: string;

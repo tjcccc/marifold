@@ -111,7 +111,7 @@ Status colors use named ANSI colors so they follow the terminal theme: `red` for
 - **Glyphs:** tool request `→` and result `←` (`✗` on error); plan steps `✓` done, `▶` in progress, `•` pending; `✓ verified` or `⚠ not verified` for verification.
 - **Activity:** a braille spinner with `· verb… (detail) · esc to cancel` in `ACCENT` and `DIM`.
 - **Status line:** `DIM` segments separated by ` | ` and ` · `.
-- **Overlays:** rounded boxes with horizontal padding. Selectors and questions use an `ACCENT` border with a bold `ACCENT` title; approvals use a `yellow` border and title, a `red` escalation reason, and a single `gray` bordered detail block. Key hints bracket the key letter, as in `[d]eny`, with the rest of the word in `DIM`.
+- **Overlays:** rounded boxes with horizontal padding. Selectors and questions use an `ACCENT` border with a bold `ACCENT` title; approvals use a `yellow` border and title, a `red` escalation reason, and a single `gray` bordered detail block. Key hints bracket the key letter, as in `[d]eny`, with the rest of the word in `DIM`. A list row may carry a bracketed `yellow` status badge before its label, such as `[in use]`.
 
 ## Cross-surface consistency
 

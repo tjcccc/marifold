@@ -1,7 +1,7 @@
 {
   "version": 1,
   "projnaviVersion": "0.5.0",
-  "generatedAt": "2026-10-09T05:10:11.586Z",
+  "generatedAt": "2026-10-09T05:18:33.992Z",
   "root": ".",
   "files": {
     ".claude/skills/projnavi/SKILL.md": {
@@ -670,8 +670,8 @@
       "category": "docs"
     },
     "DEVLOG.md": {
-      "hash": "395614bccb86cd78a786863eea5e4f65379a2d461b96932764e9f34db2e8960d",
-      "size": 205086,
+      "hash": "7866a661f1a100dc654499f047d6daae40204fb98aa4623598e3eb8927eff2e7",
+      "size": 206737,
       "category": "docs"
     },
     "docs/app.md": {
@@ -700,8 +700,8 @@
       "category": "docs"
     },
     "docs/service-api.md": {
-      "hash": "1c9fe3dedfbb1b524987fd9c9f26fc4967eda79e63d97b6b82134874cc3759a0",
-      "size": 50703,
+      "hash": "f14b945c2b9b8f5230382151fc91c6728291a3d4a5d0186b3bdaa17650bdc052",
+      "size": 50808,
       "category": "docs"
     },
     "docs/smoke.md": {
@@ -710,8 +710,8 @@
       "category": "docs"
     },
     "docs/tui.md": {
-      "hash": "c6899861387801b5ca9bb45fed67f98c8f32b3812d94d67cd4617f0b3b15849f",
-      "size": 16012,
+      "hash": "f8de9307250bde82465da09dc1a131339f2e152dd584c325e0f0d12ddf8b093a",
+      "size": 16889,
       "category": "docs"
     },
     "docs/vision.md": {
@@ -1410,8 +1410,8 @@
       "category": "source"
     },
     "packages/core/src/runtime/MarifoldRuntime.ts": {
-      "hash": "e6a75d2b42782866978a5b3b7e3050d8151c15e7c20b6b5c77bd57e7a36b28da",
-      "size": 46431,
+      "hash": "83c53ce71aecf9f8bcffbe4e1a9cc8937e343b2c2d72dbf77747e8ddae8179ea",
+      "size": 46076,
       "category": "source"
     },
     "packages/core/src/runtime/MarifoldTypes.ts": {
@@ -1520,8 +1520,8 @@
       "category": "source"
     },
     "packages/core/src/sessions/SessionLeases.ts": {
-      "hash": "b392033312dff8f6be094c77f2ea8d08ece182d4b3d9bee528a2b040d6b2d427",
-      "size": 6156,
+      "hash": "7b3a49e2c979e6318400d34e9b351e26df021529b0b4996cf3a8ebdcb9c0baf6",
+      "size": 6220,
       "category": "source"
     },
     "packages/core/src/sessions/SessionResolver.ts": {
@@ -2080,8 +2080,8 @@
       "category": "test"
     },
     "packages/service/tests/MarifoldService.test.ts": {
-      "hash": "e024dba4f3e9435e74a87bd4e96493540c86ac3687fa1ba1ca2cd4f05398bf38",
-      "size": 40624,
+      "hash": "2d0e3a726802d4c350245a0f437092e265d39d08a8230cb6e1bf67a225631275",
+      "size": 41938,
       "category": "test"
     },
     "packages/service/tests/MarifoldServiceConfigEditing.test.ts": {
@@ -2195,13 +2195,13 @@
       "category": "source"
     },
     "packages/tui/src/runTui.tsx": {
-      "hash": "5432d119c65524f695390ab89943053bafcf55ef6254272b9da5cd8f9bb1cfe1",
-      "size": 9734,
+      "hash": "7fc833ac4aa3e5d3d5afd4657f241add328dd6fcfc0b50c4980fb887bc265fc2",
+      "size": 10639,
       "category": "source"
     },
     "packages/tui/src/ui/App.tsx": {
-      "hash": "0ff2a608d7b914d3f62275bfedf7fedda811aa2bab414c6c1210e08b9ff325b8",
-      "size": 41249,
+      "hash": "3fe667aef912a0e76cc5c0e8985ba1bacdc5a8047aceca998cf095e10fb3e1c8",
+      "size": 41060,
       "category": "source"
     },
     "packages/tui/src/ui/appHelpers.ts": {
@@ -2260,8 +2260,13 @@
       "category": "source"
     },
     "packages/tui/src/ui/SelectList.tsx": {
-      "hash": "473ba8e4a23db952fb5ce27c42a379047d86a79a3959de5d0e17cfa5b5966082",
-      "size": 5088,
+      "hash": "2e28e3282e9fac958898696c20b27308a97889a9f0eb48fc9684270f2e2e8536",
+      "size": 5127,
+      "category": "source"
+    },
+    "packages/tui/src/ui/sessionItems.ts": {
+      "hash": "898afbe269a75efc40370d1ee4eb01c5d0886e44a6581a282522257a49b68216",
+      "size": 1394,
       "category": "source"
     },
     "packages/tui/src/ui/Spinner.tsx": {
@@ -2315,8 +2320,8 @@
       "category": "source"
     },
     "packages/tui/src/ui/WorkspaceShell.tsx": {
-      "hash": "1a7e258b43cc2d8fb6fbb150897901c93a0cf1450601551325e05835bab3a28f",
-      "size": 8547,
+      "hash": "e2a2a57ec66a7b3e31ccb45e31090261a213faf6837e3fc729c98f4bc65b8b38",
+      "size": 10379,
       "category": "source"
     },
     "packages/tui/tests/app.test.tsx": {
@@ -2325,8 +2330,8 @@
       "category": "test"
     },
     "packages/tui/tests/AppRuns.test.tsx": {
-      "hash": "3e9c950aa740091513de4d853e973793f5ca4a4db06b90f33b9fe1aba7d9bd09",
-      "size": 19241,
+      "hash": "c393eed41dd50fac9aef934acae8be26f1f58e7549f25e9d36d05c7a3df924b2",
+      "size": 21266,
       "category": "test"
     },
     "packages/tui/tests/components.test.tsx": {
@@ -2480,8 +2485,8 @@
       "category": "source"
     },
     "spec/ui.md": {
-      "hash": "7ab9e9c52c2467e11a15fe541f65cc0c3f9f03577a2953fc52bd960a3c6bcb7a",
-      "size": 11966,
+      "hash": "c18b58acddf82b46466f085a94be695f20a702b1835bb8b5871003b674976f8e",
+      "size": 12059,
       "category": "docs"
     },
     "TODO.md": {
@@ -3072,8 +3077,8 @@
       ]
     },
     "packages/core/src/runtime/MarifoldRuntime.ts": {
-      "hash": "e6a75d2b42782866978a5b3b7e3050d8151c15e7c20b6b5c77bd57e7a36b28da",
-      "size": 46431,
+      "hash": "83c53ce71aecf9f8bcffbe4e1a9cc8937e343b2c2d72dbf77747e8ddae8179ea",
+      "size": 46076,
       "category": "source",
       "claimIds": [
         "claim-add-agent-tool-001",
@@ -3140,8 +3145,8 @@
       "claimIds": []
     },
     "packages/core/src/sessions/SessionLeases.ts": {
-      "hash": "b392033312dff8f6be094c77f2ea8d08ece182d4b3d9bee528a2b040d6b2d427",
-      "size": 6156,
+      "hash": "7b3a49e2c979e6318400d34e9b351e26df021529b0b4996cf3a8ebdcb9c0baf6",
+      "size": 6220,
       "category": "source",
       "claimIds": [
         "claim-session-leases-001"
@@ -3472,8 +3477,8 @@
       ]
     },
     "packages/service/tests/MarifoldService.test.ts": {
-      "hash": "e024dba4f3e9435e74a87bd4e96493540c86ac3687fa1ba1ca2cd4f05398bf38",
-      "size": 40624,
+      "hash": "2d0e3a726802d4c350245a0f437092e265d39d08a8230cb6e1bf67a225631275",
+      "size": 41938,
       "category": "test",
       "claimIds": [
         "claim-service-routes-001"
@@ -3530,16 +3535,16 @@
       ]
     },
     "packages/tui/src/runTui.tsx": {
-      "hash": "5432d119c65524f695390ab89943053bafcf55ef6254272b9da5cd8f9bb1cfe1",
-      "size": 9734,
+      "hash": "7fc833ac4aa3e5d3d5afd4657f241add328dd6fcfc0b50c4980fb887bc265fc2",
+      "size": 10639,
       "category": "source",
       "claimIds": [
         "claim-tui-controller-001"
       ]
     },
     "packages/tui/src/ui/App.tsx": {
-      "hash": "0ff2a608d7b914d3f62275bfedf7fedda811aa2bab414c6c1210e08b9ff325b8",
-      "size": 41249,
+      "hash": "3fe667aef912a0e76cc5c0e8985ba1bacdc5a8047aceca998cf095e10fb3e1c8",
+      "size": 41060,
       "category": "source",
       "claimIds": [
         "claim-session-leases-001",
@@ -3572,8 +3577,8 @@
       ]
     },
     "packages/tui/src/ui/WorkspaceShell.tsx": {
-      "hash": "1a7e258b43cc2d8fb6fbb150897901c93a0cf1450601551325e05835bab3a28f",
-      "size": 8547,
+      "hash": "e2a2a57ec66a7b3e31ccb45e31090261a213faf6837e3fc729c98f4bc65b8b38",
+      "size": 10379,
       "category": "source",
       "claimIds": [
         "claim-tui-controller-001"
@@ -3588,8 +3593,8 @@
       ]
     },
     "packages/tui/tests/AppRuns.test.tsx": {
-      "hash": "3e9c950aa740091513de4d853e973793f5ca4a4db06b90f33b9fe1aba7d9bd09",
-      "size": 19241,
+      "hash": "c393eed41dd50fac9aef934acae8be26f1f58e7549f25e9d36d05c7a3df924b2",
+      "size": 21266,
       "category": "test",
       "claimIds": [
         "claim-tui-controller-001"
@@ -3613,7 +3618,7 @@
     }
   },
   "inventory": {
-    "summary": "Detected Node package @marifold/workspace. Indexed 498 relevant files. Detected 126 test files.",
+    "summary": "Detected Node package @marifold/workspace. Indexed 499 relevant files. Detected 126 test files.",
     "packageName": "@marifold/workspace",
     "packageScripts": [
       "agent-eval",
@@ -3637,7 +3642,7 @@
     ],
     "fileCounts": {
       "docs": 26,
-      "source": 323,
+      "source": 324,
       "config": 23,
       "test": 126
     },

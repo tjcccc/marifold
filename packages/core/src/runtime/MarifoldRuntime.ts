@@ -462,8 +462,8 @@ export class MarifoldRuntime {
     return { compacted: result.compacted };
   }
 
-  listSessions(limit?: number, profileName?: string, options?: SessionListOptions): SessionSummary[] {
-    return this.sessionResolver.list(limit, profileName, options);
+  listSessions(limit?: number, profileName?: string, options?: SessionListOptions & { sessionOwner?: string }): SessionSummary[] {
+    return this.sessionLeases.markInUse(this.sessionResolver.list(limit, profileName, options), options?.sessionOwner ?? this.sessionOwner);
   }
 
   /** Read-only integrity check of the session DB (for `marifold doctor`). Never throws. */

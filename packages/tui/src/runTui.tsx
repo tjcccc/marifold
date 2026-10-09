@@ -9,10 +9,11 @@ import { WorkspaceShell } from './ui/WorkspaceShell.js';
 import { RemoteRuntime } from './core/RemoteRuntime.js';
 import { readFileSync } from 'fs';
 import { Box, render, Text, type Instance } from 'ink';
-import { MarifoldRuntime } from '@marifold/core';
+import { MarifoldRuntime, stripTerminalControls } from '@marifold/core';
 import type { LoadedMarifoldConfig, MarifoldResolvedSettings, ProfileSummary } from '@marifold/core';
 import { App } from './ui/App.js';
 import { SelectList } from './ui/SelectList.js';
+import { errorText, sessionBusyText } from './ui/appHelpers.js';
 import type { TranscriptItemData } from './core/appState.js';
 
 /** This package's version, read from its own package.json at runtime so the
@@ -62,6 +63,8 @@ export async function runTui(options: RunTuiOptions): Promise<void> {
     const local = new MarifoldRuntime({ loadedConfig: options.loadedConfig, environment: { interface: 'terminal' } });
     try {
       await renderSession(<WorkspaceShell local={local} loadedConfig={options.loadedConfig} service={options.service} profile={options.profile} resume={options.resume} takeover={options.takeover} version={readVersion()} fullscreen={fullscreen} />, fullscreen);
+    } catch (error) {
+      failLaunch(errorText(error));
     } finally { local.close(); }
     await RemoteRuntime.settleReleases(1500);
     process.exit(process.exitCode ?? 0);
@@ -78,6 +81,16 @@ export async function runTui(options: RunTuiOptions): Promise<void> {
   const runtime = new MarifoldRuntime({ loadedConfig: options.loadedConfig, environment: { interface: 'terminal' } });
   try {
     let profile = options.profile;
+    // A named session must exist; it also selects its own profile unless
+    // --profile names one. Never open an empty session in its place.
+    const requested = typeof options.resume === 'string' ? runtime.getSession(options.resume) : undefined;
+    if (typeof options.resume === 'string') {
+      if (!requested) { return failLaunch(`Session ${options.resume} was not found.`); }
+      if (profile && profile !== requested.profileName) {
+        return failLaunch(`Session ${options.resume} belongs to profile "${requested.profileName}". Resume it without --profile or with --profile ${requested.profileName}.`);
+      }
+      profile = requested.profileName;
+    }
     let settings = tryResolve(runtime, profile);
 
     // No resolvable default and no explicit profile: let the user pick one.
@@ -96,28 +109,28 @@ export async function runTui(options: RunTuiOptions): Promise<void> {
     }
 
     // Resolve `--resume` to a concrete session before launch. A bare flag picks
-    // the most recent session for the resolved profile; an explicit id is looked
-    // up directly so a typo starts fresh with a clear message instead of
-    // silently creating an orphan session under the bad id. When a session is
-    // found, its turns seed the transcript so the prior conversation is shown.
+    // the most recent session for the resolved profile; an explicit id was
+    // checked above. When a session is found, its turns seed the transcript so
+    // the prior conversation is shown.
     let resumeSessionId: string | undefined;
     let resumeTranscript: TranscriptItemData[] | undefined;
     let resumeHistory: InputHistoryEntry[] | undefined;
     if (options.resume !== undefined) {
-      const id = typeof options.resume === 'string'
-        ? options.resume
-        : runtime.listSessions(1, settings.profile, { order: 'recent' })[0]?.id;
+      const id = requested?.id ?? runtime.listSessions(1, settings.profile, { order: 'recent' })[0]?.id;
       if (id) {
-        if (options.takeover) { runtime.takeOverSession(id); }
-        else { runtime.acquireSession(id); }
+        try {
+          if (options.takeover) { runtime.takeOverSession(id); }
+          else { runtime.acquireSession(id); }
+        } catch (error) {
+          return failLaunch(sessionBusyText(error, id));
+        }
       }
+      // Read the transcript after acquiring, so a takeover sees the latest turns.
       const detail = id ? runtime.getSession(id) : undefined;
       if (detail) {
         resumeSessionId = detail.id;
         resumeHistory = sessionPromptHistory(detail);
         resumeTranscript = detail.turns.map(turn => ({ kind: turn.role, text: turn.content }));
-      } else if (typeof options.resume === 'string') {
-        process.stderr.write(`Session not found: ${options.resume}. Starting a new session.\n`);
       } else {
         process.stderr.write(`No previous session for profile "${settings.profile}". Starting a new session.\n`);
       }
@@ -151,6 +164,12 @@ export async function runTui(options: RunTuiOptions): Promise<void> {
   // this the CLI hangs instead of returning to the shell. Terminal teardown and
   // runtime.close() have already run above, so exiting here is safe.
   process.exit(process.exitCode ?? 0);
+}
+
+/** Report why the TUI cannot open as asked, in the CLI's error format. */
+function failLaunch(message: string): void {
+  process.stderr.write(`Error: ${stripTerminalControls(message)}\n`);
+  process.exitCode = 1;
 }
 
 function tryResolve(runtime: MarifoldRuntime, profile?: string): MarifoldResolvedSettings | undefined {

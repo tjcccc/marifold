@@ -901,6 +901,29 @@ describe('MarifoldService', () => {
     }
   });
 
+  it('marks sessions another client holds as in use for the caller', async () => {
+    const dir = tempDir();
+    const loaded = fixtureLoadedConfig(dir);
+    const sessions = new SessionResolver(loaded.config.paths.sessionsDb);
+    await sessions.appendExchange('held', 'default', 'First question', 'First answer');
+    await sessions.appendExchange('free', 'default', 'Second question', 'Second answer');
+    sessions.close();
+    const server = createMarifoldService({ loadedConfig: loaded, scheduler: false });
+    try {
+      const page = { 'x-marifold-session-owner': `page-${'a'.repeat(24)}` };
+      const terminal = { 'x-marifold-session-owner': `terminal-${'b'.repeat(24)}` };
+      expect((await server.inject({ method: 'POST', url: '/v1/sessions/held/lease', headers: page, payload: {} })).statusCode).toBe(200);
+      const inUse = async (headers: Record<string, string>) => Object.fromEntries(
+        (await server.inject({ method: 'GET', url: '/v1/sessions', headers })).json().sessions
+          .map((session: { id: string; inUse?: boolean }) => [session.id, session.inUse === true]),
+      );
+      expect(await inUse(terminal)).toEqual({ held: true, free: false });
+      expect(await inUse(page)).toEqual({ held: false, free: false });
+    } finally {
+      await server.close();
+    }
+  });
+
   it('refuses to delete a session while its run is active', async () => {
     const realFetch = globalThis.fetch;
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {

@@ -36,7 +36,7 @@ const IMAGE_TOKEN = /\[image #\d+\]/g;
 const MOD_RETURN_XTERM = /\[27;\d+;13~/;
 const MOD_RETURN_CSIU = /\[13;\d+u/;
 
-function isModifiedReturn(input: string): boolean {
+export function isModifiedReturn(input: string): boolean {
   return MOD_RETURN_XTERM.test(input) || MOD_RETURN_CSIU.test(input);
 }
 

@@ -7,7 +7,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { expandHome } from '@marifold/core';
 import { renewSessionLease } from '@marifold/client';
-import type { LoadedMarifoldConfig, MarifoldRuntime, SessionSummary } from '@marifold/core';
+import type { LoadedMarifoldConfig, MarifoldRuntime } from '@marifold/core';
 import { appReducer, createInitialState, visibleTranscript, type Mode, type NoticeTone, type TranscriptItem, type TranscriptItemData } from '../core/appState.js';
 import { parseInput } from '../core/inputGrammar.js';
 import { listCommandCompletions, listCommands, runCommand, type CommandContext } from '../core/commands.js';
@@ -22,6 +22,7 @@ import { QuestionModal } from './QuestionModal.js';
 import { SelectList, type SelectItem } from './SelectList.js';
 import { useTerminalSize } from './useTerminalSize.js';
 import { useResizing } from './useResizing.js';
+import { sessionItem } from './sessionItems.js';
 import { useApprovals } from './useApprovals.js';
 import { useRuns } from './useRuns.js';
 import { useSkills } from './useSkills.js';
@@ -55,7 +56,8 @@ export interface AppProps {
 
 type SkillScope = 'global' | 'profile';
 type Overlay =
-  | { type: 'model' | 'profile' | 'sessions'; items: SelectItem[] }
+  | { type: 'model' | 'profile'; items: SelectItem[] }
+  | { type: 'sessions'; items: SelectItem[]; inUse: string[]; message?: string }
   | { type: 'skills'; scope: SkillScope; profile?: string; items: SelectItem[]; title: string; emptyHint: string[] };
 
 export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCommand, fullscreen = false, workspaceNotice }: AppProps): React.ReactElement {
@@ -271,9 +273,34 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
       return;
     }
     const currentSessionId = stateRef.current.sessionId;
-    const items = (await runtime.listSessions(20, stateRef.current.profile, { order: 'recent' }))
-      .map(sessionItem.bind(null, currentSessionId));
-    setOverlay({ type: 'sessions', items });
+    const sessions = await runtime.listSessions(20, stateRef.current.profile, { order: 'recent' });
+    setOverlay({
+      type: 'sessions',
+      items: sessions.map(session => sessionItem(currentSessionId, session)),
+      inUse: sessions.filter(session => session.inUse).map(session => session.id),
+    });
+  }, [runtime, notify]);
+
+  // Open a session from the /resume picker; `takeover` moves it here from the
+  // page or terminal that holds it.
+  const openSession = useCallback(async (value: string, takeover: boolean) => {
+    try {
+      setOverlay(null);
+      if (takeover) { await runtime.takeOverSession?.(value); }
+      else { await runtime.acquireSession?.(value); }
+      const detail = await runtime.getSession(value);
+      if (!detail) {
+        await runtime.releaseSession?.(value);
+        notify(`Session not found: ${value}`, 'error');
+        return;
+      }
+      dispatch({ type: 'new_session', sessionId: detail.id });
+      setHistory(sessionPromptHistory(detail));
+      for (const turn of detail.turns) {
+        dispatch({ type: 'add_item', item: { kind: turn.role === 'user' ? 'user' : 'assistant', text: turn.content } });
+      }
+      notify(`${takeover ? 'Took over' : 'Resumed'} session ${detail.id.slice(0, 8)} — your next message continues it.`, 'info');
+    } catch (error) { notify(sessionBusyText(error, value), 'error'); }
   }, [runtime, notify]);
 
   const showHelp = useCallback(() => {
@@ -721,29 +748,21 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
           title="Resume session"
           maxRows={overlayMaxRows}
           items={overlay.items}
-          onSelect={async value => {
-            try {
-            setOverlay(null);
-            await runtime.acquireSession?.(value);
-            const detail = await runtime.getSession(value);
-            if (!detail) {
-              await runtime.releaseSession?.(value);
-              notify(`Session not found: ${value}`, 'error');
+          message={overlay.message}
+          alternate={{ label: 'take over', key: 't', onSelect: value => void openSession(value, true) }}
+          onSelect={value => {
+            if (overlay.inUse.includes(value)) {
+              setOverlay({ ...overlay, message: 'This session is in use in another page or terminal. Press Shift+Enter or T to take it over.' });
               return;
             }
-            dispatch({ type: 'new_session', sessionId: detail.id });
-            setHistory(sessionPromptHistory(detail));
-            for (const turn of detail.turns) {
-              dispatch({ type: 'add_item', item: { kind: turn.role === 'user' ? 'user' : 'assistant', text: turn.content } });
-            }
-            notify(`Resumed session ${detail.id.slice(0, 8)} — your next message continues it.`, 'info');
-            } catch (error) { notify(sessionBusyText(error, value), 'error'); }
+            void openSession(value, false);
           }}
           onCancel={() => setOverlay(null)}
           emptyHint={['No saved sessions for this profile yet.']}
         />
       );
     }
+
     // skills (global by default, or explicitly scoped to one profile)
     if (overlay.type === 'skills') {
       const scope = overlay.scope;
@@ -899,27 +918,3 @@ function parseSkillInstallArgs(arg: string): {
 
 const BANNER_ID = '__banner__';
 type StaticEntry = { id: typeof BANNER_ID } | TranscriptItem;
-
-function sessionItem(currentSessionId: string | undefined, session: SessionSummary): SelectItem {
-  const current = session.id === currentSessionId ? 'current · ' : '';
-  const turns = `${session.turnCount} ${session.turnCount === 1 ? 'turn' : 'turns'}`;
-  return {
-    label: session.preview ?? session.id.slice(0, 8),
-    value: session.id,
-    hint: `${current}${turns} · ${relativeTime(session.updatedAt)} · ${session.id.slice(0, 8)}`,
-  };
-}
-
-function relativeTime(value: string, now = Date.now()): string {
-  const timestamp = Date.parse(value);
-  if (!Number.isFinite(timestamp)) { return value; }
-  const seconds = Math.max(0, Math.floor((now - timestamp) / 1000));
-  if (seconds < 60) { return 'just now'; }
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) { return `${minutes}m ago`; }
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) { return `${hours}h ago`; }
-  const days = Math.floor(hours / 24);
-  if (days < 30) { return `${days}d ago`; }
-  return new Date(timestamp).toLocaleDateString();
-}

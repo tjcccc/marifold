@@ -22,6 +22,8 @@ export function registerSessionRoutes(
       {
         archived: parseBooleanQuery(request.query.archived),
         ...(request.query.q?.trim() ? { search: request.query.q } : {}),
+        ...(typeof request.headers['x-marifold-session-owner'] === 'string'
+          ? { sessionOwner: request.headers['x-marifold-session-owner'] } : {}),
       },
     ),
   }));
