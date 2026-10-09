@@ -9,7 +9,6 @@ import type { RunStartInput, RunJournal } from '../runs/RunRegistry';
 import type { ImageInput, JSONValue, PriestRequest, PriestResponse, ToolDefinition, ToolExchangeTurn, UsageInfo } from '@priest-ai/core';
 import * as path from 'path';
 import { AgentRunner } from '../agent/AgentRunner';
-import type { RunFileInput } from '../agent/RunWorkspace';
 import { buildHistoryContext } from '../agent/AgentHistory';
 import { type ApprovalMode, type MarifoldAgentConfig, type ToolKind, resolveAgentConfig } from '../agent/ApprovalPolicy';
 import { DelegateTool } from '../agent/tools/DelegateTool';
@@ -77,12 +76,10 @@ import { buildSkillManagerGuide, mentionsSkills } from '../skill/BuiltInSkillMan
 import { getBuiltInSkill, listBuiltInSkills } from '../skill/BuiltInSkills';
 import { buildSkillAppBuilderGuide, mentionsSkillApps } from '../skill/BuiltInSkillAppBuilder';
 import { AppStore } from '../app/AppStore';
-import { resolveSkillAppOperation as resolveSkillAppOperationDefinition } from '../app/SkillAppResolver';
 import type {
   SkillAppDefinition,
   SkillAppAttachmentInput,
   SkillAppHistoryTurn,
-  SkillAppInstalledEffect,
   SkillAppResult,
   SkillAppStateValue,
 } from '../app/SkillAppSchema';
@@ -91,11 +88,12 @@ import {
   type SkillAppInteractionHandlers,
 } from '../app/SkillAppInstanceRegistry';
 import { TaskStore } from '../tasks/TaskStore';
-import { defaultAppsDir, defaultSchedulesDir, defaultSkillsDir, marifoldHome } from '../workspace/WorkspacePaths';
+import { defaultAppsDir, defaultSchedulesDir, defaultSkillsDir } from '../workspace/WorkspacePaths';
 import type { TaskCreateInput, TaskEventInput, TaskListOptions, TaskState, TaskSummary, TaskUpdateInput } from '../tasks/TaskStore';
 import type { MarifoldAskResponse, MarifoldProviderToolDefinition, MarifoldResolvedSettings, MarifoldRunRequest, MarifoldWebSearchMode } from './MarifoldTypes';
 import { isNativeWebSearchCapabilityError } from './NativeWebSearch';
 import { ProviderEngines } from './ProviderEngines';
+import { SkillAppOperations } from './SkillAppOperations';
 
 const CHAT_TOOL_MAX_ITERATIONS = 3;
 const EDIT_HISTORY_BUDGET_DEFAULT_CHARS = 16_000;
@@ -116,6 +114,7 @@ export class MarifoldRuntime {
   private readonly sessionOwner = leaseOwnerId();
   private readonly providerFactory: ProviderFactory;
   private readonly engines: ProviderEngines;
+  private readonly skillApps: SkillAppOperations;
   private readonly memoryStore: MemoryStore;
   private readonly taskStore: TaskStore;
   private searchBackend: SearchBackend;
@@ -130,6 +129,19 @@ export class MarifoldRuntime {
     this.sessionResolver = new SessionResolver(config.paths.sessionsDb);
     this.providerFactory = new ProviderFactory(config, configPath);
     this.engines = new ProviderEngines(options.loadedConfig, this.providerFactory, this.profileResolver, this.sessionResolver);
+    // Closures, not bound methods: spies installed on this runtime later still apply.
+    this.skillApps = new SkillAppOperations({
+      loadedConfig: options.loadedConfig,
+      engines: this.engines,
+      createAppStore: directory => this.createAppStore(directory),
+      resolveSettings: request => this.resolveSettings(request),
+      memoryForRequest: (profile, requestMemories, prompt, thinking) => this.memoryForRequest(profile, requestMemories, prompt, thinking),
+      resolveAgentConfigForProfile: profile => this.resolveAgentConfigForProfile(profile),
+      createAgentRunner: (profile, registry, agentConfig, runtimeOptions) => this.createAgentRunner(profile, registry, agentConfig, runtimeOptions),
+      listApps: () => this.listApps(),
+      listProfiles: () => this.listProfiles(),
+      listSkills: profile => this.listSkills(profile),
+    });
     this.memoryStore = new MemoryStore(config.paths.profilesDir);
     this.taskStore = new TaskStore(config.paths.tasksDir);
     this.searchBackendOverridden = options.searchBackend !== undefined;
@@ -1147,281 +1159,11 @@ export class MarifoldRuntime {
     attachments?: SkillAppAttachmentInput[],
     interactions?: SkillAppInteractionHandlers,
   ): Promise<SkillAppResult> {
-    const startedAt = Date.now();
-    try {
-      const store = this.createAppStore();
-      const definition = store.require(appName);
-      const operation = resolveSkillAppOperationDefinition(
-        store,
-        definition,
-        operationName,
-        state,
-      );
-      const declaredOperation = definition.operations.find(candidate => candidate.name === operationName)!;
-      let settings: MarifoldResolvedSettings;
-      let text: string;
-      let usage: UsageInfo | undefined;
-      let effects: SkillAppInstalledEffect[] | undefined;
-      if (operation.profile) {
-        settings = this.resolveSettings({
-          profile: operation.profile.profile,
-          ...(operation.profile.provider ? { provider: operation.profile.provider } : {}),
-          ...(operation.profile.model ? { model: operation.profile.model } : {}),
-          ...(operation.profile.think !== undefined ? { think: operation.profile.think } : {}),
-        });
-        const memory = this.memoryForRequest(
-          settings.profile,
-          operation.profile.memory,
-          operation.prompt,
-          settings.think,
-        );
-        const historyContext = operation.profile.history && history?.length
-          ? buildHistoryContext(history, 16_000)
-          : undefined;
-        const instructions = [
-          ...operation.instructions,
-          ...(historyContext ? [historyContext] : []),
-        ];
-        // Profile-backed App operations default to the product's single Agent
-        // path. An explicitly chat-mode Skill still uses the retained transport.
-        const mode = operation.mode ?? 'agent';
-        if (declaredOperation.interactive && mode !== 'agent') {
-          throw MarifoldError.appInvalid(
-            `Interactive SkillApp operation '${operationName}' must invoke an Agent Skill.`,
-          );
-        }
-        if (mode === 'agent') {
-          const run = await this.runProfileSkillAppAgent(
-            appName,
-            operation.operationName,
-            settings,
-            operation.prompt,
-            instructions,
-            memory,
-            operation.skillDirectory,
-            definition.permissions ?? [],
-            attachments,
-            signal,
-            interactions,
-            operation.name,
-          );
-          text = run.text;
-          usage = run.usage;
-          effects = run.effects;
-        } else {
-          if (attachments?.some(attachment => attachment.kind === 'file')) {
-            throw MarifoldError.appInvalid(
-              `SkillApp operation '${operationName}' needs Agent mode to inspect non-image attachments.`,
-            );
-          }
-          await this.engines.refreshCredentials(settings.provider);
-          const response = await this.engines.create(settings.provider, false).run({
-            config: this.engines.priestConfig(settings),
-            profile: settings.profile,
-            prompt: operation.prompt,
-            context: instructions,
-            ...(memory.length > 0 ? { memory } : {}),
-            ...(attachments?.some(attachment => attachment.kind === 'image') ? {
-              images: attachments
-                .filter(attachment => attachment.kind === 'image')
-                .map(attachment => ({ data: attachment.data, mediaType: attachment.mediaType })),
-            } : {}),
-          }, signal ? { signal } : undefined);
-          text = requireSkillAppResponseText(response, settings);
-          usage = response.usage;
-        }
-      } else {
-        if (!operation.model) {
-          throw MarifoldError.appInvalid(`SkillApp operation '${operationName}' has no model.`);
-        }
-        settings = {
-          profile: `skillapp-${appName}`,
-          provider: operation.model.provider,
-          model: operation.model.model,
-          think: operation.model.think,
-          mode: 'chat',
-        };
-        await this.engines.refreshCredentials(settings.provider);
-        const response = await this.engines.create(settings.provider, false, false).run({
-          config: this.engines.priestConfig(settings),
-          profile: settings.profile,
-          prompt: operation.prompt,
-          context: operation.instructions,
-        }, signal ? { signal } : undefined);
-        text = requireSkillAppResponseText(response, settings);
-        usage = response.usage;
-      }
-      text = stripMemoryControls(text).text;
-      text = operation.result.trim ? text.trim() : text;
-      return {
-        status: 'ok',
-        data: { text },
-        meta: {
-          engine: settings.provider,
-          model: settings.model,
-          durationMs: Date.now() - startedAt,
-          ...(usage ? { usage } : {}),
-        },
-        ...(effects && effects.length > 0 ? { effects } : {}),
-      };
-    } catch (error) {
-      if (signal?.aborted) { throw error; }
-      return {
-        status: 'error',
-        error: {
-          code: error instanceof MarifoldError ? error.code : 'APP_INVALID',
-          message: error instanceof Error ? error.message : String(error),
-        },
-      };
-    }
+    return this.skillApps.run(appName, operationName, state, signal, history, attachments, interactions);
   }
 
   createSkillAppInstanceRegistry(): SkillAppInstanceRegistry {
     return new SkillAppInstanceRegistry(this);
-  }
-
-  private async runProfileSkillAppAgent(
-    appName: string,
-    operationName: string,
-    settings: MarifoldResolvedSettings,
-    prompt: string,
-    instructions: string[],
-    memory: string[],
-    skillDirectory?: string,
-    permissions: NonNullable<SkillAppDefinition['permissions']> = [],
-    attachments: SkillAppAttachmentInput[] = [],
-    signal?: AbortSignal,
-    interactions?: SkillAppInteractionHandlers,
-    skillName?: string,
-  ): Promise<{ text: string; usage?: UsageInfo; effects?: SkillAppInstalledEffect[] }> {
-    const registry = new ToolRegistry();
-    if (interactions) { registry.register(new AskUserTool()); }
-    if (attachments.length > 0) {
-      registry.register(new InspectAttachmentTool());
-      registry.register(new ReadAttachmentTool());
-      registry.register(new SearchAttachmentTool());
-    }
-    if (skillDirectory || permissions.length > 0) {
-      registry.register(new ReadFileTool({ strictWorkspace: true }));
-    }
-    const effects: SkillAppInstalledEffect[] = [];
-    if (skillName === 'skillapp-builder') {
-      const { config } = this.options.loadedConfig;
-      const appsDir = config.paths.appsDir ?? defaultAppsDir();
-      registry.register(new SkillAppContextTool({
-        activeProfile: settings.profile,
-        appsDir,
-        listApps: () => this.listApps().map(definition => definition.app),
-        listProfiles: () => this.listProfiles(),
-        listSkills: profileName => this.listSkills(profileName),
-      }));
-      registry.register(new SkillAppManagementTool({
-        appsDir,
-        createStore: directory => this.createAppStore(directory),
-        onInstalled: effect => {
-          effects.push(effect);
-          interactions?.effectHandler?.(effect);
-        },
-      }));
-    }
-    const base = this.resolveAgentConfigForProfile(settings.profile);
-    const isolatedConfig: MarifoldAgentConfig = {
-      ...base,
-      approval: {
-        read: 'allow',
-        write: interactions && skillName === 'skillapp-builder' ? 'ask' : 'deny',
-        shell: 'deny',
-        network: 'deny',
-        delegate: 'deny',
-      },
-      trustedFolders: [],
-    };
-    const runner = this.createAgentRunner(
-      settings.profile,
-      registry,
-      isolatedConfig,
-      {
-        webSearch: false,
-        readOnlyFolders: [
-          ...(skillDirectory ? [skillDirectory] : []),
-          ...permissions.filter(permission => permission.kind === 'folder').map(permission => permission.path),
-        ],
-        readOnlyFiles: permissions
-          .filter(permission => permission.kind === 'file')
-          .map(permission => permission.path),
-        allowExternalReadOnlyFolders: true,
-      },
-    );
-    const images: ImageInput[] = attachments
-      .filter(attachment => attachment.kind === 'image')
-      .map(attachment => ({ data: attachment.data, mediaType: attachment.mediaType }));
-    const files: RunFileInput[] = attachments
-      .filter(attachment => attachment.kind === 'file')
-      .map(attachment => ({
-        name: attachment.name,
-        mediaType: attachment.mediaType,
-        data: attachment.data,
-        ...(attachment.inspectionText !== undefined ? { inspectionText: attachment.inspectionText } : {}),
-      }));
-    let finalText: string | undefined;
-    let failure: { code: string; message: string } | undefined;
-    let status: string | undefined;
-    let terminalSummary: string | undefined;
-    let lastBuilderValidationError: string | undefined;
-    let usage: UsageInfo | undefined;
-    for await (const event of runner.run({
-      objective: prompt,
-      profile: settings.profile,
-      provider: settings.provider,
-      model: settings.model,
-      think: settings.think,
-      lean: true,
-      instructions,
-      ...(images.length > 0 || files.length > 0 ? {
-        images,
-        files,
-      } : {}),
-      ...(memory.length > 0 ? { memory } : {}),
-      cwd: marifoldHome(),
-      tags: ['skillapp', appName, operationName],
-      ...(skillName === 'skillapp-builder' ? {
-        maxIterations: Math.min(isolatedConfig.maxIterations, 8),
-      } : {}),
-      signal,
-      ...(interactions ? {
-        approvalHandler: interactions.approvalHandler,
-        userInputHandler: interactions.userInputHandler,
-      } : {}),
-    })) {
-      if (event.type === 'text' && event.phase === 'final') { finalText = event.text; }
-      if (event.type === 'error') { failure = { code: event.code, message: event.message }; }
-      if (event.type === 'tool_result' && event.tool === 'manage_skill_app' && event.isError) {
-        lastBuilderValidationError = event.summary;
-      }
-      if (event.type === 'done') {
-        status = event.status;
-        terminalSummary = event.summary;
-        usage = event.usage;
-      }
-    }
-    if (status !== 'completed' || finalText === undefined) {
-      const terminalFailure = failure?.message
-        ?? terminalSummary
-        ?? `Profile Skill operation '${operationName}' did not produce a final response.`;
-      throw MarifoldError.providerError(
-        lastBuilderValidationError
-          ? `${terminalFailure} Last builder error: ${lastBuilderValidationError}`
-          : terminalFailure,
-        settings.provider,
-        settings.model,
-        failure?.code ?? 'APP_SKILL_FAILED',
-      );
-    }
-    return {
-      text: finalText,
-      ...(usage ? { usage } : {}),
-      ...(effects.length > 0 ? { effects } : {}),
-    };
   }
 
   createSchedule(input: ScheduleCreateInput): ScheduleState {
@@ -1730,29 +1472,6 @@ export class MarifoldRuntime {
     this.memoryStore.save(profile, extractPromptMemoryInputs(prompt), { sessionId });
     this.memoryStore.trimShortTerm(profile, this.options.loadedConfig.config.memory.sizeLimit);
   }
-}
-
-function requireSkillAppResponseText(
-  response: PriestResponse,
-  settings: Pick<MarifoldResolvedSettings, 'provider' | 'model'>,
-): string {
-  if (response.error) {
-    throw MarifoldError.providerError(
-      response.error.message,
-      settings.provider,
-      settings.model,
-      response.error.code,
-    );
-  }
-  if (response.text === undefined) {
-    throw MarifoldError.providerError(
-      `Provider '${settings.provider}' returned no text for model '${settings.model}'.`,
-      settings.provider,
-      settings.model,
-      'EMPTY_RESPONSE',
-    );
-  }
-  return response.text;
 }
 
 function completedResponseMetrics(
