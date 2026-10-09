@@ -1,122 +1,14 @@
-import type {
-  AgentEvent,
-  AgentToolKind,
-  AgentUsage,
-  ApprovalRequest,
-  RunRecord,
-  RunArtifact,
-  TaskStatus,
-  TaskStepStatus,
-  UserInputRequest,
-  UserInputResponse,
-} from '../api/types';
+import type { AgentEvent, AgentUsage, RunRecord } from '../api/types';
+import type { ResponseMetaState, RunCardState, ThreadItem, ThreadState, UserAttachment } from './threadTypes';
+import { append, emptyCard, findRunItem, insert, insertRunCard, markUserPersisted, updateRun } from './threadItems';
+import { applyRunEvent } from './runEvents';
+export type { ToolRowState, RunCardState, ResponseMetaState, UserAttachment, ThreadItem, ThreadState } from './threadTypes';
 
 /**
  * The conversation model: one thread per session, composed from replayed
  * session turns, live chat streams, and live agent runs (grouped into cards).
  * Pure reducer — no React, no fetch — so every transition is unit-testable.
  */
-
-export interface ToolRowState {
-  callId: string;
-  tool: string;
-  kind?: AgentToolKind;
-  summary: string;
-  phase: 'running' | 'done';
-  isError?: boolean;
-}
-
-export interface RunCardState {
-  runId: string;
-  status: TaskStatus;
-  taskId?: string;
-  lastSeq: number;
-  startedAt: string;
-  finishedAt?: string;
-  plan?: Array<{ id: string; text: string; status: TaskStepStatus }>;
-  rows: ToolRowState[];
-  /** Non-undefined → the approval sheet is up and the run is blocked. */
-  approval?: ApprovalRequest;
-  /** True while the answer POST is in flight (disables the sheet buttons). */
-  approvalBusy?: boolean;
-  /** Non-undefined → the agent is waiting for all clarification answers. */
-  userInput?: UserInputRequest;
-  /** True while the complete answer set is being submitted. */
-  userInputBusy?: boolean;
-  /** Resolved questions stay visible in the run history. */
-  inputResponses: Array<{ request: UserInputRequest; response: UserInputResponse }>;
-  steering: string[];
-  denials: string[];
-  errors: Array<{ code: string; message: string }>;
-  summary?: string;
-  usage?: AgentUsage;
-  artifacts: RunArtifact[];
-  /** Finished cards fold to the footer; toggled by "Show". */
-  collapsed: boolean;
-}
-
-export interface ResponseMetaState {
-  mode?: 'agent' | 'chat';
-  startedAt: string;
-  finishedAt?: string;
-  /** End-to-end service latency for this chat request. */
-  latencyMs?: number;
-  usage?: AgentUsage;
-}
-
-/** What the user bubble shows for an attachment; generic binary payloads are
- * deliberately turn-local and are staged only for the active agent run. */
-export interface UserAttachment {
-  kind: 'image' | 'text' | 'file';
-  name: string;
-  officeKind?: 'word' | 'spreadsheet' | 'presentation';
-  /** Retained locally/recovered from the durable inlined prompt so text and
-   * Office attachments survive historical edit/resend. Never rendered raw. */
-  content?: string;
-  truncated?: boolean;
-  /** data: URL thumbnail for images. */
-  previewUrl?: string;
-  /** Authenticated service path for a lazily loaded persisted image. */
-  sourcePath?: string;
-}
-
-export type ThreadItem =
-  | {
-      id: string;
-      kind: 'user';
-      text: string;
-      attachments?: UserAttachment[];
-      /** Zero-based ordinal among durable session user turns. Live attempts
-       * receive it only after their response is successfully persisted. */
-      sessionUserTurnIndex?: number;
-      /** An earlier persisted exchange is being regenerated in place. */
-      replacing?: boolean;
-    }
-  | {
-      id: string;
-      kind: 'assistant';
-      markdown: string;
-      streaming?: boolean;
-      runId?: string;
-      /** Safe reasoning summary, model commentary, or the completed answer. */
-      runPhase?: 'reasoning' | 'progress' | 'final';
-      /** Completion metadata for a plain chat turn. Agent turns resolve the
-       * equivalent data through their runId. */
-      responseMeta?: ResponseMetaState;
-    }
-  | { id: string; kind: 'run'; run: RunCardState }
-  | { id: string; kind: 'notice'; tone: 'info' | 'warn' | 'error'; text: string };
-
-export interface ThreadState {
-  sessionId?: string;
-  items: ThreadItem[];
-  /** Finished-while-away runs surfaced by the catch-up banner. */
-  catchUp: RunRecord[];
-  /** Finished run records removed by a retry/edit must not reappear in the
-   * catch-up banner while the service still retains them. */
-  discardedRunIds: string[];
-  seq: number;
-}
 
 export type ThreadAction =
   | { type: 'reset'; sessionId?: string }
@@ -398,208 +290,6 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
 
 // ── run-event folding ────────────────────────────────────────────────────────
 
-function applyRunEvent(state: ThreadState, runId: string, seq: number, event: AgentEvent): ThreadState {
-  // Auto-create the card for runs discovered mid-stream (catch-up "Show",
-  // runs started from another client).
-  let next = findRunItem(state, runId)
-    ? state
-    : insertRunCard(state, { kind: 'run', run: emptyCard(runId) });
-
-  const card = findRunItem(next, runId)!.run;
-  if (seq <= card.lastSeq) { return state; } // replay overlap — drop
-
-  switch (event.type) {
-    case 'status':
-      next = updateRun(next, runId, run => ({
-        ...run,
-        lastSeq: seq,
-        status: event.status,
-        taskId: run.taskId ?? event.taskId,
-      }));
-      break;
-
-    case 'plan':
-      next = updateRun(next, runId, run => ({
-        ...run,
-        lastSeq: seq,
-        plan: event.plan.map(step => ({ id: step.id, text: step.text, status: step.status })),
-      }));
-      break;
-
-    case 'step':
-      next = updateRun(next, runId, run => ({
-        ...run,
-        lastSeq: seq,
-        plan: run.plan?.map(step => (step.id === event.stepId ? { ...step, status: event.status } : step)),
-      }));
-      break;
-
-    case 'text': {
-      next = updateRun(next, runId, run => ({ ...run, lastSeq: seq }));
-      if (event.text.trim().length > 0) {
-        next = appendRunText(next, runId, event.text, event.phase ?? 'final');
-      }
-      break;
-    }
-
-    case 'reasoning': {
-      next = updateRun(next, runId, run => ({ ...run, lastSeq: seq }));
-      if (event.summary.trim().length > 0) {
-        next = appendRunText(next, runId, `Reasoning: ${event.summary}`, 'reasoning');
-      }
-      break;
-    }
-
-    case 'steering':
-      next = updateRun(next, runId, run => ({
-        ...run,
-        lastSeq: seq,
-        steering: [...run.steering, event.text],
-      }));
-      break;
-
-    case 'tool_request':
-      next = updateRun(next, runId, run => ({
-        ...run,
-        lastSeq: seq,
-        rows: [
-          ...run.rows,
-          {
-            callId: event.call.id,
-            tool: event.call.tool,
-            kind: event.call.kind,
-            summary: event.call.summary,
-            phase: 'running',
-          },
-        ],
-      }));
-      break;
-
-    case 'tool_result':
-      next = updateRun(next, runId, run => {
-        const matched = run.rows.some(row => row.callId === event.callId);
-        const rows: ToolRowState[] = matched
-          ? run.rows.map(row =>
-              row.callId === event.callId
-                ? { ...row, summary: event.summary, phase: 'done' as const, isError: event.isError }
-                : row,
-            )
-          : [
-              ...run.rows,
-              { callId: event.callId, tool: event.tool, summary: event.summary, phase: 'done' as const, isError: event.isError },
-            ];
-        return { ...run, lastSeq: seq, rows };
-      });
-      break;
-
-    case 'approval_request':
-      next = updateRun(next, runId, run => ({
-        ...run,
-        lastSeq: seq,
-        approval: event.request,
-        approvalBusy: false,
-      }));
-      break;
-
-    case 'approval_decision':
-      next = updateRun(next, runId, run => ({
-        ...run,
-        lastSeq: seq,
-        approval: undefined,
-        approvalBusy: false,
-        denials:
-          !event.approved && event.source === 'user' && event.reason
-            ? [...run.denials, event.reason]
-            : run.denials,
-      }));
-      break;
-
-    case 'user_input_request':
-      next = updateRun(next, runId, run => ({
-        ...run,
-        lastSeq: seq,
-        userInput: event.request,
-        userInputBusy: false,
-      }));
-      break;
-
-    case 'user_input_response':
-      next = updateRun(next, runId, run => {
-        const request = run.userInput;
-        return {
-          ...run,
-          lastSeq: seq,
-          userInput: undefined,
-          userInputBusy: false,
-          inputResponses: request && request.id === event.response.requestId
-            ? [...run.inputResponses, { request, response: event.response }]
-            : run.inputResponses,
-        };
-      });
-      break;
-
-    case 'error':
-      next = updateRun(next, runId, run => ({
-        ...run,
-        lastSeq: seq,
-        errors: [...run.errors, { code: event.code, message: event.message }],
-      }));
-      break;
-
-    case 'artifact':
-      next = updateRun(next, runId, run => ({
-        ...run,
-        lastSeq: seq,
-        artifacts: run.artifacts.some(artifact => artifact.id === event.artifact.id)
-          ? run.artifacts
-          : [...run.artifacts, event.artifact],
-      }));
-      break;
-
-    case 'done':
-      next = updateRun(next, runId, run => ({
-        ...run,
-        lastSeq: seq,
-        status: event.status,
-        taskId: run.taskId ?? event.taskId,
-        summary: event.summary,
-        usage: event.usage,
-        approval: undefined,
-        approvalBusy: false,
-        userInput: undefined,
-        userInputBusy: false,
-        finishedAt: new Date().toISOString(),
-        collapsed: true,
-      }));
-      next = updateStreamingRunText(next, runId);
-      if (event.status === 'completed') { next = markRunUserPersisted(next, runId); }
-      break;
-
-    default:
-      // Unknown event types are no-ops by contract (the union may grow).
-      next = updateRun(next, runId, run => ({ ...run, lastSeq: seq }));
-      break;
-  }
-  return next;
-}
-
-/** Each model turn lands after the run card as its own assistant item so
- * progress commentary can be muted without muting the final answer. */
-function appendRunText(
-  state: ThreadState,
-  runId: string,
-  text: string,
-  runPhase: 'reasoning' | 'progress' | 'final',
-): ThreadState {
-  const closed = updateStreamingRunText(state, runId);
-  const lastRunItem = closed.items.findLastIndex(
-    item => (item.kind === 'run' && item.run.runId === runId)
-      || (item.kind === 'assistant' && item.runId === runId),
-  );
-  const assistant = { kind: 'assistant' as const, markdown: text, streaming: true, runId, runPhase };
-  return lastRunItem === -1 ? append(closed, assistant) : insert(closed, lastRunItem + 1, assistant);
-}
-
 function updateChatReasoning(state: ThreadState, text: string): ThreadState {
   const answerIndex = state.items.findLastIndex(
     item => item.kind === 'assistant' && item.streaming && item.runId === undefined,
@@ -626,27 +316,6 @@ function updateChatReasoning(state: ThreadState, text: string): ThreadState {
   };
 }
 
-function updateStreamingRunText(state: ThreadState, runId: string): ThreadState {
-  return {
-    ...state,
-    items: state.items.map(item =>
-      item.kind === 'assistant' && item.runId === runId && item.streaming
-        ? { ...item, streaming: false }
-        : item,
-    ),
-  };
-}
-
-function markRunUserPersisted(state: ThreadState, runId: string): ThreadState {
-  const runIndex = state.items.findIndex(item => item.kind === 'run' && item.run.runId === runId);
-  if (runIndex === -1) { return state; }
-  for (let index = runIndex - 1; index >= 0; index -= 1) {
-    const item = state.items[index];
-    if (item.kind === 'user') { return markUserPersisted(state, item.id); }
-  }
-  return state;
-}
-
 function markLatestPendingUserPersisted(state: ThreadState): ThreadState {
   for (let index = state.items.length - 1; index >= 0; index -= 1) {
     const item = state.items[index];
@@ -655,67 +324,6 @@ function markLatestPendingUserPersisted(state: ThreadState): ThreadState {
     }
   }
   return state;
-}
-
-function markUserPersisted(state: ThreadState, itemId: string): ThreadState {
-  const item = state.items.find(candidate => candidate.id === itemId);
-  if (!item || item.kind !== 'user') { return state; }
-  if (item.sessionUserTurnIndex !== undefined) {
-    if (!item.replacing) { return state; }
-    return {
-      ...state,
-      items: state.items.map(candidate => candidate.id === itemId
-        ? { ...item, replacing: undefined }
-        : candidate),
-    };
-  }
-  const nextIndex = state.items.reduce(
-    (highest, candidate) => candidate.kind === 'user' && candidate.sessionUserTurnIndex !== undefined
-      ? Math.max(highest, candidate.sessionUserTurnIndex)
-      : highest,
-    -1,
-  ) + 1;
-  return {
-    ...state,
-    items: state.items.map(candidate => candidate.id === itemId
-      ? { ...item, sessionUserTurnIndex: nextIndex }
-      : candidate),
-  };
-}
-
-// ── helpers ──────────────────────────────────────────────────────────────────
-
-/** Omit distributed over the union (plain Omit collapses union members). */
-type NewThreadItem = { [K in ThreadItem['kind']]: Omit<Extract<ThreadItem, { kind: K }>, 'id'> }[ThreadItem['kind']];
-
-function append(state: ThreadState, item: NewThreadItem): ThreadState {
-  const seq = state.seq + 1;
-  return {
-    ...state,
-    seq,
-    items: [...state.items, { ...item, id: `item_${seq}` } as ThreadItem],
-  };
-}
-
-function insert(state: ThreadState, index: number, item: NewThreadItem): ThreadState {
-  const seq = state.seq + 1;
-  return {
-    ...state,
-    seq,
-    items: [
-      ...state.items.slice(0, index),
-      { ...item, id: `item_${seq}` } as ThreadItem,
-      ...state.items.slice(index),
-    ],
-  };
-}
-
-function insertRunCard(
-  state: ThreadState,
-  item: Extract<NewThreadItem, { kind: 'run' }>,
-): ThreadState {
-  const replacingIndex = state.items.findIndex(candidate => candidate.kind === 'user' && candidate.replacing);
-  return replacingIndex === -1 ? append(state, item) : insert(state, replacingIndex + 1, item);
 }
 
 const RUN_RESPONSE_MATCH_TOLERANCE_MS = 1_000;
@@ -756,25 +364,6 @@ function matchingDurableResponseIndex(state: ThreadState, run: RunRecord): numbe
   return bestIndex;
 }
 
-function findRunItem(state: ThreadState, runId: string): Extract<ThreadItem, { kind: 'run' }> | undefined {
-  return state.items.find(
-    (item): item is Extract<ThreadItem, { kind: 'run' }> => item.kind === 'run' && item.run.runId === runId,
-  );
-}
-
-function updateRun(
-  state: ThreadState,
-  runId: string,
-  update: (run: RunCardState) => RunCardState,
-): ThreadState {
-  return {
-    ...state,
-    items: state.items.map(item =>
-      item.kind === 'run' && item.run.runId === runId ? { ...item, run: update(item.run) } : item,
-    ),
-  };
-}
-
 function cardFromRecord(record: RunRecord): RunCardState {
   return {
     ...emptyCard(record.id),
@@ -787,22 +376,6 @@ function cardFromRecord(record: RunRecord): RunCardState {
     artifacts: [...(record.artifacts ?? [])],
     userInput: record.pendingUserInputs[0],
     collapsed: record.status !== 'running',
-  };
-}
-
-function emptyCard(runId: string): RunCardState {
-  return {
-    runId,
-    status: 'running',
-    lastSeq: 0,
-    startedAt: new Date().toISOString(),
-    rows: [],
-    artifacts: [],
-    inputResponses: [],
-    steering: [],
-    denials: [],
-    errors: [],
-    collapsed: false,
   };
 }
 

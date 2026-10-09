@@ -42,7 +42,6 @@
     "apps/web/src/screens/agent/useAgentController.ts": 1272,
     "apps/web/src/screens/apps/AppsScreen.module.css": 826,
     "apps/web/src/screens/apps/AppsScreen.tsx": 1238,
-    "apps/web/src/state/thread.ts": 819,
     "packages/core/src/agent/AgentRunner.ts": 1232,
     "packages/core/src/runtime/MarifoldRuntime.ts": 1032,
     "packages/core/src/sessions/SessionResolver.ts": 983,
