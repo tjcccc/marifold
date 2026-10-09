@@ -11,7 +11,7 @@
   "scripts": {
     "build": "pnpm -r build",
     "check:versions": "node scripts/check-versions.mjs",
-    "lint": "biome lint . && node scripts/markdown-wrap.mjs",
+    "lint": "biome lint . && node scripts/markdown-wrap.mjs && node scripts/check-file-sizes.mjs",
     "typecheck": "pnpm check:versions && pnpm -r typecheck",
     "test": "pnpm -r test",
     "command-test": "node scripts/test-commands.mjs",

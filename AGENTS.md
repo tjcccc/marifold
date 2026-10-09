@@ -71,6 +71,9 @@ The service defaults to loopback. Explicit non-loopback binds accept only direct
 
 - Every control-flow body has braces, including single statements: `if (done) { return; }`, never `if (done) return;`. The same applies to `else`, loops, and arrow-function bodies containing them. `pnpm lint` (Biome `useBlockStatements`, configured in `biome.json`) enforces it; `pnpm exec biome lint --write --unsafe .` applies the fix.
 
+- No explicit `any`, no import cycles, and type-only imports use `import type` (Biome `noExplicitAny`, `noImportCycles`, `useImportType`; `pnpm exec biome lint --write .` fixes import style).
+- Outside `apps/web/src/api/types.ts`, the Web UI must not import `@marifold/core` or `@marifold/service`; a `noRestrictedImports` override in `biome.json` enforces it.
+- File-size ratchet: source files stay at or below 800 lines. Files recorded in `.file-size-baseline.json` may shrink but not grow; after splitting one, run `node scripts/check-file-sizes.mjs --update` to lower its recorded size.
 - Markdown prose is not hard-wrapped: one paragraph or list item per source line. `pnpm lint` runs `scripts/markdown-wrap.mjs`; `node scripts/markdown-wrap.mjs --fix` joins wrapped lines. Code blocks, tables, and explicit hard breaks are kept.
 
 ## Validation

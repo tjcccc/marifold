@@ -1,17 +1,63 @@
 {
   "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
-  "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
-  "files": {
-    "includes": ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.mjs", "**/*.cjs", "!**/dist", "!**/node_modules", "!docs/design"]
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
   },
-  "formatter": { "enabled": false },
-  "assist": { "enabled": false },
+  "files": {
+    "includes": [
+      "**/*.ts",
+      "**/*.tsx",
+      "**/*.js",
+      "**/*.mjs",
+      "**/*.cjs",
+      "!**/dist",
+      "!**/node_modules",
+      "!docs/design"
+    ]
+  },
+  "formatter": {
+    "enabled": false
+  },
+  "assist": {
+    "enabled": false
+  },
   "linter": {
     "enabled": true,
     "rules": {
       "preset": "none",
-      "style": { "useBlockStatements": "error", "useImportType": "error" },
-      "suspicious": { "noExplicitAny": "error", "noImportCycles": "error" }
+      "style": {
+        "useBlockStatements": "error",
+        "useImportType": "error"
+      },
+      "suspicious": {
+        "noExplicitAny": "error",
+        "noImportCycles": "error"
+      }
     }
-  }
+  },
+  "overrides": [
+    {
+      "includes": [
+        "apps/web/src/**",
+        "!apps/web/src/api/types.ts"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "@marifold/core": "The Web UI talks to the service over HTTP. Only apps/web/src/api/types.ts may import @marifold/core, and only types (AGENTS.md).",
+                  "@marifold/service": "The Web UI talks to the service over HTTP and must not import it (AGENTS.md)."
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
 }
