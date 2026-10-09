@@ -3,44 +3,29 @@ import type { TuiRuntime } from '../core/TuiRuntime.js';
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { Box, Static, useApp, useInput, useStdout } from 'ink';
-import { randomUUID } from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
-import {
-  expandHome,
-  isInsideAny,
-  renderSkillPrompt,
-} from '@marifold/core';
+import { expandHome } from '@marifold/core';
 import { renewSessionLease } from '@marifold/client';
-import type {
-  AgentUsage,
-  ApprovalDecision,
-  ApprovalRequest,
-  ImageInput,
-  LoadedMarifoldConfig,
-  MarifoldRuntime,
-  MarifoldSkill,
-  SessionSummary,
-  ToolKind,
-  UserInputHandler,
-  UserInputSubmission,
-} from '@marifold/core';
+import type { LoadedMarifoldConfig, MarifoldRuntime, SessionSummary } from '@marifold/core';
 import { appReducer, createInitialState, visibleTranscript, type Mode, type NoticeTone, type TranscriptItem, type TranscriptItemData } from '../core/appState.js';
 import { parseInput } from '../core/inputGrammar.js';
 import { listCommandCompletions, listCommands, runCommand, type CommandContext } from '../core/commands.js';
-import { bindSkillArgs, skillUsage } from '../core/skills.js';
 import { FullScreen } from './FullScreen.js';
 import { Header } from './Header.js';
 import { TranscriptRow, topGap } from './Transcript.js';
 import { InputBox, type CompletionItem, type InputHistoryEntry } from './InputBox.js';
 import { StatusLine } from './StatusLine.js';
 import { RunStatus } from './RunStatus.js';
-import { ApprovalModal, trustTargetFolder, type ApprovalChoice } from './ApprovalModal.js';
+import { ApprovalModal } from './ApprovalModal.js';
 import { QuestionModal } from './QuestionModal.js';
 import { SelectList, type SelectItem } from './SelectList.js';
 import { useTerminalSize } from './useTerminalSize.js';
 import { useResizing } from './useResizing.js';
-import { copyToClipboard, errorText, runSummary, sessionBusyText, skillInvocation, unwrapPath } from './appHelpers.js';
+import { useApprovals } from './useApprovals.js';
+import { useRuns } from './useRuns.js';
+import { useSkills } from './useSkills.js';
+import { copyToClipboard, errorText, sessionBusyText, unwrapPath } from './appHelpers.js';
 
 const READ_FILE_CHAR_LIMIT = 100000;
 
@@ -73,13 +58,6 @@ type Overlay =
   | { type: 'model' | 'profile' | 'sessions'; items: SelectItem[] }
   | { type: 'skills'; scope: SkillScope; profile?: string; items: SelectItem[]; title: string; emptyHint: string[] };
 
-interface PendingSkill {
-  skill: MarifoldSkill;
-  supplied: Record<string, string>;
-  missing: string[];
-  index: number;
-}
-
 export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCommand, fullscreen = false, workspaceNotice }: AppProps): React.ReactElement {
   const { exit, suspendTerminal } = useApp();
   const [state, dispatch] = useReducer(
@@ -104,8 +82,6 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
   const [think, setThink] = useState(initial.think);
   // `/steps` arms a one-shot forced plan for the next model turn (then auto-disarms).
   const [planNext, setPlanNext] = useState(false);
-  const [steeringCount, setSteeringCount] = useState(0);
-  const [pendingSkill, setPendingSkill] = useState<PendingSkill | null>(null);
   const [history, setHistory] = useState<InputHistoryEntry[]>(() => initial.history ?? (initial.transcript ?? []).flatMap(item => item.kind === 'user' ? [item.text] : []));
   const [skillItems, setSkillItems] = useState<CompletionItem[]>(() => {
     try {
@@ -174,17 +150,6 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
     if (!fullscreen && !appendedOnly) { repaint(); }
   }, [transcript, repaint, fullscreen]);
 
-  // Mutable run plumbing (does not drive rendering directly).
-  const abortRef = useRef<AbortController | null>(null);
-  const approvalResolverRef = useRef<((decision: ApprovalDecision) => void) | null>(null);
-  const userInputResolverRef = useRef<((submission: UserInputSubmission | undefined) => void) | null>(null);
-  const sessionGrantsRef = useRef<Set<ToolKind>>(new Set());
-  const sessionTrustedFoldersRef = useRef<Set<string>>(new Set());
-  const steeringRef = useRef<string[]>([]);
-  const pendingContextRef = useRef<string[]>([]);
-  const pendingImagesRef = useRef<ImageInput[]>([]);
-  // Increments per agent run; a detached run's events no longer reach the view.
-  const runGenerationRef = useRef(0);
   const lastCtrlCRef = useRef(0);
 
   // Latest state for callbacks that must read current values without re-binding.
@@ -194,8 +159,6 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
   thinkRef.current = think;
   const planNextRef = useRef(planNext);
   planNextRef.current = planNext;
-  // Last plain-text prompt, for `/retry`.
-  const lastPromptRef = useRef<string | null>(null);
 
   // Exit: the conversation already lives in the terminal's native scrollback
   // (inline layout), so there's nothing to reprint — just unmount.
@@ -207,6 +170,16 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
   const notify = useCallback((text: string, tone: NoticeTone = 'info') => {
     dispatch({ type: 'notice', tone, text });
   }, []);
+
+  const {
+    approvalHandler, resolveApproval, userInputHandler, resolveUserInput, trustFolderForProfile, cancelPrompts,
+    sessionGrantsRef, sessionTrustedFoldersRef,
+  } = useApprovals({ runtime, dispatch, stateRef, notify });
+  const {
+    runAgent, runChat, startTextRun, retryLast, stop, steeringCount, setSteeringCount, steeringRef,
+    abortRef, runGenerationRef, pendingContextRef, pendingImagesRef,
+  } = useRuns({ runtime, dispatch, stateRef, thinkRef, planNextRef, setPlanNext, notify, approvalHandler, userInputHandler, cancelPrompts });
+  const { pendingSkill, runSkill, fillSkillVariable } = useSkills({ runtime, dispatch, stateRef, planNextRef, setPlanNext, notify, runAgent, runChat });
 
   // Confirm a `--resume` launch with a notice below the replayed turns, so the
   // boundary between prior history and the current session is clear.
@@ -253,341 +226,6 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
       setSkillItems([]);
     }
   }, [runtime]);
-
-  // --- Approvals -----------------------------------------------------------
-  const approvalHandler = useCallback((request: ApprovalRequest): Promise<ApprovalDecision> => {
-    // Auto-approve from this session's "Always" grants — the run's baked config
-    // can't see them, so the App layer applies them: a kind grant for ordinary
-    // calls, a trusted folder for escalated writes inside it.
-    if (!request.escalated && sessionGrantsRef.current.has(request.kind)) {
-      return Promise.resolve({ approved: true });
-    }
-    if (request.persistable !== false && request.escalated && request.escalatedPath
-        && isInsideAny(request.escalatedPath, [...sessionTrustedFoldersRef.current])) {
-      return Promise.resolve({ approved: true });
-    }
-    dispatch({ type: 'set_approval', request });
-    return new Promise<ApprovalDecision>(resolve => {
-      approvalResolverRef.current = resolve;
-    });
-  }, []);
-
-  const resolveApproval = useCallback((choice: ApprovalChoice, sudoResponse?: import('@marifold/core').SudoResponse) => {
-    const request = stateRef.current.approval;
-    const resolve = approvalResolverRef.current;
-    approvalResolverRef.current = null;
-    dispatch({ type: 'set_approval', request: undefined });
-    if (!request || !resolve) { return; }
-    if (choice === 'no') {
-      resolve({ approved: false, reason: 'denied by user' });
-      return;
-    }
-    if (choice === 'always' && request.persistable !== false) {
-      const folder = trustTargetFolder(request);
-      if (folder) { trustFolderForProfile(folder); }   // escalated write → trust the folder
-      else { persistApprovalKind(request.kind); }       // ordinary call → allow this kind
-    }
-    resolve({ approved: true, ...(sudoResponse ? { sudoResponse } : {}) });
-  }, []);
-
-  // --- Clarification questions --------------------------------------------
-  const userInputHandler = useCallback<UserInputHandler>(request => {
-    dispatch({ type: 'set_user_input', request });
-    return new Promise<UserInputSubmission | undefined>(resolve => {
-      userInputResolverRef.current = resolve;
-    });
-  }, []);
-
-  const resolveUserInput = useCallback((submission: UserInputSubmission | undefined) => {
-    const resolve = userInputResolverRef.current;
-    userInputResolverRef.current = null;
-    dispatch({ type: 'set_user_input', request: undefined });
-    resolve?.(submission);
-  }, []);
-
-  // "Always (allow <kind>)": persist to the active profile + grant for this session.
-  const persistApprovalKind = useCallback(async (kind: ToolKind) => {
-    const profile = stateRef.current.profile;
-    sessionGrantsRef.current.add(kind);
-    try {
-      await runtime.setProfileAgentApproval(profile, kind, 'allow');
-      notify(`Persisted approval: ${kind} = allow for ${profile}`, 'info');
-    } catch (error) {
-      notify(`Could not persist approval: ${errorText(error)}`, 'error');
-    }
-  }, [runtime, notify]);
-
-  // "Always (trust <folder>)" / `/trust-folder`: persist to the active profile +
-  // trust for this session (the running run can't re-read profile.toml).
-  const trustFolderForProfile = useCallback(async (folder: string) => {
-    const profile = stateRef.current.profile;
-    try {
-      const resolved = await runtime.addProfileTrustedFolder(profile, folder);
-      sessionTrustedFoldersRef.current.add(resolved);
-      notify(`Trusting ${resolved} for ${profile} (writes here won't ask).`, 'info');
-    } catch (error) {
-      notify(`Could not trust folder: ${errorText(error)}`, 'error');
-    }
-  }, [runtime, notify]);
-
-  // --- Runs ----------------------------------------------------------------
-  const runAgent = useCallback(async (objective: string, options: { instructions?: string[]; userTurn?: string; lean?: boolean; forcePlan?: boolean; originalImages?: boolean } = {}) => {
-    const controller = new AbortController();
-    abortRef.current = controller;
-    const generation = ++runGenerationRef.current;
-    steeringRef.current = [];
-    setSteeringCount(0);
-    const images = pendingImagesRef.current;
-    pendingImagesRef.current = [];
-    const current = stateRef.current;
-    // One conversation session shared with chat mode, so the agent remembers
-    // earlier turns. Skills pass their body via `instructions` (authoritative,
-    // not persisted) rather than isolating, so context-aware skills still see
-    // the conversation.
-    const sessionId = current.sessionId ?? randomUUID();
-    if (!current.sessionId) { dispatch({ type: 'set_session', sessionId }); }
-    dispatch({ type: 'set_running', running: true });
-    // Shown until the first run event: a large upload to a remote workspace
-    // can take a while before the host starts the task.
-    dispatch({ type: 'set_activity', activity: 'sending' });
-    const startedAt = Date.now();
-    let usage: AgentUsage | undefined;
-    let doneStatus: string | undefined;
-    try {
-      await runtime.acquireSession?.(sessionId);
-      const runner = runtime.createAgentRunner(current.profile);
-      for await (const event of runner.run({
-        objective,
-        think: thinkRef.current,
-        profile: current.profile,
-        provider: current.provider,
-        model: current.model,
-        sessionId,
-        ...(options.instructions ? { instructions: options.instructions } : {}),
-        ...(options.userTurn ? { userTurn: options.userTurn } : {}),
-        ...(options.lean ? { lean: true } : {}),
-        ...(options.forcePlan ? { forcePlan: true } : {}),
-        ...(options.originalImages ? { originalImages: true } : {}),
-        ...(images.length > 0 ? { images } : {}),
-        signal: controller.signal,
-        approvalHandler,
-        userInputHandler,
-        steering: () => {
-          const queued = steeringRef.current;
-          steeringRef.current = [];
-          setSteeringCount(0);
-          return queued;
-        },
-      })) {
-        // The session moved to another device; leave the task to it.
-        if (runGenerationRef.current !== generation) { break; }
-        if (event.type === 'done') {
-          usage = event.usage;
-          doneStatus = event.status;
-        }
-        dispatch({ type: 'agent_event', event });
-      }
-    } catch (error) {
-      if (!controller.signal.aborted && runGenerationRef.current === generation) { notify(errorText(error), 'error'); }
-    } finally {
-      if (runGenerationRef.current !== generation) { return; }
-      dispatch({ type: 'set_running', running: false });
-      abortRef.current = null;
-      if (usage?.inputTokens != null) { dispatch({ type: 'set_context_usage', tokens: usage.inputTokens }); }
-      if (controller.signal.aborted) {
-        notify('Cancelled.', 'warn');
-      } else {
-        const status = doneStatus ?? 'ended';
-        notify(`Task ${status}. ${runSummary(Date.now() - startedAt, usage)}`, status === 'completed' ? 'info' : 'warn');
-      }
-    }
-  }, [runtime, approvalHandler, userInputHandler, notify]);
-
-  const runChat = useCallback(async (
-    prompt: string,
-    extraContext: string[] = [],
-    options: {
-      instructions?: string[];
-      originalImages?: boolean;
-      userTurn?: string;
-      isolated?: boolean;
-    } = {},
-  ) => {
-    const controller = new AbortController();
-    abortRef.current = controller;
-    const current = stateRef.current;
-    const sessionId = current.sessionId ?? randomUUID();
-    if (!current.sessionId) { dispatch({ type: 'set_session', sessionId }); }
-    const userContext = [...extraContext, ...pendingContextRef.current];
-    pendingContextRef.current = [];
-    const images = pendingImagesRef.current;
-    pendingImagesRef.current = [];
-    dispatch({ type: 'set_running', running: true });
-    dispatch({ type: 'set_activity', activity: 'thinking' });
-    const startedAt = Date.now();
-    let usage: AgentUsage | undefined;
-    try {
-      await runtime.acquireSession?.(sessionId);
-      for await (const chunk of runtime.stream(
-        {
-          prompt,
-          profile: current.profile,
-          provider: current.provider,
-          model: current.model,
-          sessionId,
-          think: thinkRef.current,
-          ...(current.maxContextTokens != null ? { maxContextTokens: current.maxContextTokens } : {}),
-          userContext: userContext.length > 0 ? userContext : undefined,
-          ...(options.instructions ? { instructions: options.instructions } : {}),
-          ...(options.userTurn ? { userTurn: options.userTurn } : {}),
-          ...(options.isolated ? { isolated: true } : {}),
-          ...(options.originalImages ? { originalImages: true } : {}),
-          images: images.length > 0 ? images : undefined,
-          signal: controller.signal,
-        },
-        summary => { usage = summary.usage; },
-        text => { dispatch({ type: 'reasoning_delta', text }); },
-      )) {
-        if (controller.signal.aborted) { break; }
-        dispatch({ type: 'assistant_delta', text: chunk });
-      }
-    } catch (error) {
-      if (!controller.signal.aborted) { notify(errorText(error), 'error'); }
-    } finally {
-      dispatch({ type: 'end_assistant' });
-      dispatch({ type: 'set_running', running: false });
-      abortRef.current = null;
-      if (usage?.inputTokens != null) { dispatch({ type: 'set_context_usage', tokens: usage.inputTokens }); }
-      if (controller.signal.aborted) { notify('Cancelled.', 'warn'); }
-      else { notify(runSummary(Date.now() - startedAt, usage), 'info'); }
-    }
-  }, [runtime, notify]);
-
-  const startTextRun = useCallback((text: string, options: { originalImages?: boolean } = {}) => {
-    // Remember the last plain-text prompt so `/retry` can re-run it. Captured
-    // here (the sole text-run entry) rather than read from the transcript, which
-    // also records `/command` and `$skill` echoes as user items.
-    lastPromptRef.current = text;
-    dispatch({ type: 'add_user', text });
-    // `/steps` armed: run this turn as a planned agent turn (planning is an agent
-    // concept), then auto-disarm.
-    if (planNextRef.current) {
-      setPlanNext(false);
-      void runAgent(text, { ...options, forcePlan: true });
-      return;
-    }
-    if (stateRef.current.mode === 'chat') { void runChat(text, [], options); }
-    else { void runAgent(text, options); }
-  }, [runAgent, runChat]);
-
-  // Re-run the last plain-text message through the current profile/model/mode —
-  // handy for A/B-ing models (switch with /model, then /retry). Appends a new
-  // turn; does not re-invoke a `$skill` or re-attach prior images/context.
-  const retryLast = useCallback(() => {
-    if (stateRef.current.running) {
-      notify('A task is running. Use /btw to steer or /stop to cancel.', 'warn');
-      return;
-    }
-    const last = lastPromptRef.current;
-    if (!last) {
-      notify('Nothing to retry yet — send a message first.', 'warn');
-      return;
-    }
-    startTextRun(last);
-  }, [notify, startTextRun]);
-
-  const stop = useCallback(() => {
-    abortRef.current?.abort();
-    const resolve = approvalResolverRef.current;
-    if (resolve) {
-      approvalResolverRef.current = null;
-      dispatch({ type: 'set_approval', request: undefined });
-      resolve({ approved: false, reason: 'cancelled' });
-    }
-    if (userInputResolverRef.current) { resolveUserInput(undefined); }
-    if (stateRef.current.running) { notify('Cancelling…', 'warn'); }
-  }, [notify, resolveUserInput]);
-
-  // --- Skills --------------------------------------------------------------
-  const startSkillRun = useCallback((skill: MarifoldSkill, body: string, userInput: string, displayText: string) => {
-    dispatch({ type: 'add_user', text: displayText });
-    // Codex/Claude-style: the skill body is authoritative instructions (sent via
-    // `instructions`, top of the system prompt), and the user's typed input is
-    // the turn the model acts on. Direct skills do not receive prior session
-    // turns, but their typed invocation and final output still persist there.
-    const prompt = userInput.trim() || 'Follow the skill instructions above and produce the output.';
-    // `/steps` armed: force a planned agent run for this skill (then disarm).
-    const forcePlan = planNextRef.current;
-    if (forcePlan) { setPlanNext(false); }
-    // An undeclared mode follows the session: a skill invoked in an agent session
-    // runs agentically (with tools), so it can read its own bundled files. A
-    // forced plan always runs as an agent (planning needs the agent loop).
-    const mode = forcePlan ? 'agent' : (skill.mode ?? stateRef.current.mode);
-    if (mode === 'chat') {
-      void runChat(prompt, [], {
-        instructions: [body],
-        userTurn: displayText,
-        isolated: true,
-      });
-    } else {
-      // Tell the agent where the skill's bundled files live so it can read them
-      // (e.g. a vars.toml of `#name` fragments) with read_file, as the skill
-      // instructions direct — the agentic-tool model, like Codex/Claude.
-      const dir = skill.source?.replace(/\/SKILL\.md$/, '');
-      const instructions = dir
-        ? [body, `This skill's bundled files are in ${dir}. When the instructions reference files such as vars.toml, read them from there with read_file.`]
-        : [body];
-      // Persist the invocation the user typed (e.g. `$make-… #photo1 …`) as the
-      // resumable user turn, not the agent's internal objective. `lean` skips the
-      // optional planning and verbose framing — a skill is a single transform,
-      // so that's pure token overhead.
-      void runAgent(prompt, { instructions, userTurn: displayText, lean: true, ...(forcePlan ? { forcePlan: true } : {}) });
-    }
-  }, [runAgent, runChat]);
-
-  const runSkill = useCallback((name: string, argv: string[]) => {
-    let skill: MarifoldSkill | undefined;
-    try {
-      skill = runtime.getSkill(name, stateRef.current.profile);
-    } catch (error) {
-      notify(errorText(error), 'error');
-      return;
-    }
-    if (!skill) {
-      notify(`Unknown skill: $${name}. Use /skills to list installed skills.`, 'warn');
-      return;
-    }
-    const supplied = bindSkillArgs(skill, argv);
-    const { prompt, missing } = renderSkillPrompt(skill, supplied);
-    if (missing.length > 0) {
-      setPendingSkill({ skill, supplied, missing, index: 0 });
-      notify(`${skillUsage(skill)} — enter ${missing[0]}:`, 'info');
-      return;
-    }
-    startSkillRun(skill, prompt, argv.join(' '), skillInvocation(name, argv));
-  }, [runtime, notify, startSkillRun]);
-
-  const fillSkillVariable = useCallback((value: string) => {
-    setPendingSkill(current => {
-      if (!current) { return null; }
-      const supplied = { ...current.supplied, [current.missing[current.index]]: value };
-      const nextIndex = current.index + 1;
-      if (nextIndex < current.missing.length) {
-        notify(`Enter ${current.missing[nextIndex]}:`, 'info');
-        return { ...current, supplied, index: nextIndex };
-      }
-      const { prompt, missing } = renderSkillPrompt(current.skill, supplied);
-      if (missing.length > 0) {
-        notify(`Missing values for: ${missing.join(', ')}`, 'warn');
-        return null;
-      }
-      const args = current.skill.variables
-        .map(variable => supplied[variable.name])
-        .filter((value): value is string => typeof value === 'string' && value.length > 0);
-      startSkillRun(current.skill, prompt, args.join(' '), skillInvocation(current.skill.name, args));
-      return null;
-    });
-  }, [notify, startSkillRun]);
 
   // --- Overlays ------------------------------------------------------------
   const openModelPicker = useCallback(() => {
