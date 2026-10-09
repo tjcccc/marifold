@@ -7,3 +7,6 @@
 
 # style: import types with import type
 a56be9f358c014ae29fb09b8cfeb13009e4ea470
+
+# docs: unwrap hard-wrapped Markdown prose
+cb8b989bb23b9f3c053ccfe46accef0be9e1eedd
