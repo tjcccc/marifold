@@ -1,7 +1,7 @@
 {
   "version": 1,
   "projnaviVersion": "0.5.0",
-  "generatedAt": "2026-10-09T05:18:33.992Z",
+  "generatedAt": "2026-10-09T14:14:35.099Z",
   "root": ".",
   "files": {
     ".claude/skills/projnavi/SKILL.md": {
@@ -15,8 +15,8 @@
       "category": "source"
     },
     "AGENTS.md": {
-      "hash": "73eb078ab13c2454ec2f6be5c7170922a0adcd05c6543f6da3c797e237311f94",
-      "size": 6475,
+      "hash": "dd366457a48301134c0f3ba1d57563750e2cf4ed0084e3f4e9c7c92916558872",
+      "size": 6775,
       "category": "docs"
     },
     "apps/bridge/api/bridge.ts": {
@@ -30,7 +30,7 @@
       "category": "docs"
     },
     "apps/bridge/package.json": {
-      "hash": "d6c49557bdf4669dd7bc17723be99b218e05796bc057303f70777112cbc9bf39",
+      "hash": "9b2528fafedbae63addebb7306259ef8e03f546647e3d76e06284cd7c69329b7",
       "size": 537,
       "category": "config"
     },
@@ -80,7 +80,7 @@
       "category": "source"
     },
     "apps/web/package.json": {
-      "hash": "2d2ea3b7d2d95f5c775f1a65cccf86181f17c6ed32324b23ddec196e7bb93b58",
+      "hash": "133190cfef9f9dd096ce93d00d15555ba0b3074c4a458866676e21abe8bd756b",
       "size": 998,
       "category": "config"
     },
@@ -670,8 +670,8 @@
       "category": "docs"
     },
     "DEVLOG.md": {
-      "hash": "7866a661f1a100dc654499f047d6daae40204fb98aa4623598e3eb8927eff2e7",
-      "size": 206737,
+      "hash": "6b64dc939124106d0a943bc2205242edfe75b757af5010318d8c99f5e3f63ea4",
+      "size": 206731,
       "category": "docs"
     },
     "docs/app.md": {
@@ -695,8 +695,8 @@
       "category": "docs"
     },
     "docs/roadmap.md": {
-      "hash": "d0033d4effbdc164d35bc23147b1b7e354328347d14484c60eaa831bc992d341",
-      "size": 6014,
+      "hash": "7ce40b1369ab95b40d6e43fb57c81cb1d49d83824c8c4ba4e7c449630f03d5d1",
+      "size": 7108,
       "category": "docs"
     },
     "docs/service-api.md": {
@@ -715,8 +715,8 @@
       "category": "docs"
     },
     "docs/vision.md": {
-      "hash": "27a782d76efd6a2fddd4427ce135485095a1d0049c1a0e9ca3f64d47a8739cb5",
-      "size": 3354,
+      "hash": "df125a21da49220fc68d800a7fd4db90af4382caa3e2c933ef472949c95405ef",
+      "size": 3518,
       "category": "docs"
     },
     "docs/web-search.md": {
@@ -770,13 +770,13 @@
       "category": "docs"
     },
     "package.json": {
-      "hash": "9664802928a5b608759032627b60c65374c4a1e7cedecdb2c4bd1507f8a941fb",
-      "size": 1107,
+      "hash": "e36c4f4f7e71bb624f99e6fced1c7e041f2ebba6001e37abdc38acea61a81c28",
+      "size": 1272,
       "category": "config"
     },
     "packages/cli/package.json": {
-      "hash": "b80f825ce61ec21a88b1ac17f24a5138392c20ce43d8425a32ba47baab083f62",
-      "size": 886,
+      "hash": "a50633225bcee4e1b0eda65e72634ee4c3d5cf5fdd8122ee65aff0d2b99d9346",
+      "size": 948,
       "category": "config"
     },
     "packages/cli/scripts/stage-bridge.mjs": {
@@ -812,11 +812,6 @@
     "packages/cli/src/commands/channel.ts": {
       "hash": "f5620d9b2f4ed165ee99e69322b24479d1a68d13a36cc40765c4c4aaf530ceb0",
       "size": 5978,
-      "category": "source"
-    },
-    "packages/cli/src/commands/chat.ts": {
-      "hash": "f05abd13aaaf777e4e42d7918166c3999a91d68da2a7a8009cca0ff3cd985a9d",
-      "size": 13731,
       "category": "source"
     },
     "packages/cli/src/commands/config.ts": {
@@ -895,7 +890,7 @@
       "category": "source"
     },
     "packages/cli/src/index.ts": {
-      "hash": "27db9b24e85b2e7c63694d9668136e8625a065808bc5936eb5d9f7ef0ea53d1b",
+      "hash": "fc624a01378ebc80cbf78112658957ecdf67b14234031646da7c22a580775724",
       "size": 4710,
       "category": "source"
     },
@@ -1025,8 +1020,8 @@
       "category": "config"
     },
     "packages/client/package.json": {
-      "hash": "8b96ff0d5360430a532daf2037c8f3a11d6166f37867745f39b61c600ebe0e30",
-      "size": 389,
+      "hash": "494ee6e267a3dab6041b750a3ff7a0247421e91535ebdaca2483042211c74fbd",
+      "size": 451,
       "category": "config"
     },
     "packages/client/src/client.ts": {
@@ -1085,8 +1080,8 @@
       "category": "config"
     },
     "packages/core/package.json": {
-      "hash": "4fdacc6be0c5af3bf22deed007e2f133d509c01ef705993609b48532de23ffc3",
-      "size": 958,
+      "hash": "0b4c9491c0bb90ee47a3c6a43d537fd35544f64568a03090c973c47a8c18132a",
+      "size": 1020,
       "category": "config"
     },
     "packages/core/src/agent/AgentEvents.ts": {
@@ -1960,8 +1955,8 @@
       "category": "config"
     },
     "packages/service/package.json": {
-      "hash": "7dbb0bfed9c08b8c3863081fe1303fece642d7b104387f91da2fae761eeb5e98",
-      "size": 669,
+      "hash": "3803f706d478734767d2bb66720ef321a897584125bd2c7a5cebec222077dc87",
+      "size": 731,
       "category": "config"
     },
     "packages/service/scripts/stage-web.mjs": {
@@ -2120,8 +2115,8 @@
       "category": "config"
     },
     "packages/tui/package.json": {
-      "hash": "c157b8e3c96e56c8fb9e65db1e47b2340e9e39e2c9ececca8b6261493363e63f",
-      "size": 816,
+      "hash": "83069a80a2c3ba48d794a1a34830a2f4cabf96cf1461a23cc305763d9d33f6e8",
+      "size": 878,
       "category": "config"
     },
     "packages/tui/src/core/appState.ts": {
@@ -2335,8 +2330,8 @@
       "category": "test"
     },
     "packages/tui/tests/components.test.tsx": {
-      "hash": "176174f80e5158a08e1b3210128250bd73f0d2d42bd7cec0270a3509db84beb3",
-      "size": 10631,
+      "hash": "d13c455d5bdbd00aa9cd34fdc17a6f82da015c3914da1ac38fbdaaf1da6b686c",
+      "size": 11110,
       "category": "test"
     },
     "packages/tui/tests/core.test.ts": {
@@ -2390,8 +2385,8 @@
       "category": "config"
     },
     "packages/workspace-protocol/package.json": {
-      "hash": "04b1eb99667ad1d0093eaafaf9e5b42a12383f9d01bc200fe52f3e5e2413c962",
-      "size": 453,
+      "hash": "411036b1ad3069c370aec6b19c65db1d1dcb9e1c2ac490ea7503aed4e056bca5",
+      "size": 515,
       "category": "config"
     },
     "packages/workspace-protocol/src/identity.ts": {
@@ -2430,8 +2425,8 @@
       "category": "config"
     },
     "README.md": {
-      "hash": "e4f6ed9d5ad62c70462c3febcff10d1de1d8cf27c180ea791062eafff399dfb9",
-      "size": 55422,
+      "hash": "ff0436d181bddf810f4deb546346a3292f8107f2bc06224c996516b82890b839",
+      "size": 55613,
       "category": "docs"
     },
     "scripts/agent-eval.mjs": {
@@ -2457,6 +2452,11 @@
     "scripts/memory-eval.mjs": {
       "hash": "c3644c922972810d4de626a377779095822ff5e4165cd20750aa87edafaf94fa",
       "size": 15727,
+      "category": "source"
+    },
+    "scripts/release-check.mjs": {
+      "hash": "23289d1c6a3d417fb96b4940847fc895bf83b7e271f847b1007bd686a4fa38d5",
+      "size": 2291,
       "category": "source"
     },
     "scripts/search-agent-eval.mjs": {
@@ -2490,8 +2490,8 @@
       "category": "docs"
     },
     "TODO.md": {
-      "hash": "30d67d90cfc75a75cabdea1c69a36cbdacc5f0ac38c6452a9e328cb61d9e10e1",
-      "size": 25324,
+      "hash": "01822a62989c6bbd7704dcf267114981fbf3530492397b2c107adbd98051f548",
+      "size": 14381,
       "category": "docs"
     },
     "tsconfig.base.json": {
@@ -2517,8 +2517,8 @@
       "category": "note"
     },
     ".projnavi/modules/cli.md": {
-      "hash": "8b576faeed0bf1bfa5026f06cc8b8a34b39aab7ac1098739017364eec13a3fa0",
-      "size": 1987,
+      "hash": "430101a3310e0234e285291ad1e4b2451d4cc0a9f7ddaadd2d305351ba317617",
+      "size": 1813,
       "category": "note"
     },
     ".projnavi/modules/client.md": {
@@ -2748,7 +2748,7 @@
       ]
     },
     "packages/cli/src/index.ts": {
-      "hash": "27db9b24e85b2e7c63694d9668136e8625a065808bc5936eb5d9f7ef0ea53d1b",
+      "hash": "fc624a01378ebc80cbf78112658957ecdf67b14234031646da7c22a580775724",
       "size": 4710,
       "category": "source",
       "claimIds": [
@@ -3625,6 +3625,7 @@
       "build",
       "check:versions",
       "command-test",
+      "gate",
       "lint",
       "marifold",
       "memory-eval",

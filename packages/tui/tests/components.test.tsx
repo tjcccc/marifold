@@ -1,9 +1,7 @@
-import { createRequire } from 'node:module';
-const require = createRequire(import.meta.url);
-const { SudoCredentials } = require('../../core/dist/agent/SudoCredentials');
+import { constants, generateKeyPairSync, privateDecrypt, randomUUID } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 import { render } from 'ink-testing-library';
-import type { ApprovalRequest, UserInputRequest } from '@marifold/core';
+import type { ApprovalRequest, SudoChallenge, SudoResponse, UserInputRequest } from '@marifold/core';
 import { Transcript } from '../src/ui/Transcript.js';
 import { Markdown } from '../src/ui/Markdown.js';
 import { ApprovalModal } from '../src/ui/ApprovalModal.js';
@@ -74,8 +72,12 @@ describe('ApprovalModal', () => {
   const request: ApprovalRequest = { id: 'c', tool: 'write_note', kind: 'write', summary: 'write ./n.md', input: {}, escalated: false };
 
   it('masks sudo entry, encrypts on Enter, and never renders or forwards the password', async () => {
-    const vault = new SudoCredentials();
-    const sudo = vault.create('id -u');
+    // The host's challenge: a one-time RSA-OAEP key labeled with its id.
+    const { publicKey, privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+    const sudo: SudoChallenge = {
+      id: randomUUID(), expiresAt: Date.now() + 60_000, device: 'host', account: 'owner',
+      publicKey: publicKey.export({ type: 'spki', format: 'der' }).toString('base64'),
+    };
     const onResolve = vi.fn();
     const view = render(<ApprovalModal request={{ ...request, tool: 'sudo_exec', kind: 'shell', escalated: true, persistable: false, sudo }} onResolve={onResolve} />);
     await delay();
@@ -88,7 +90,9 @@ describe('ApprovalModal', () => {
     await delay();
     expect(onResolve).toHaveBeenCalledOnce();
     expect(JSON.stringify(onResolve.mock.calls)).not.toContain('terminal-secret-canary');
-    const bytes = vault.consume('id -u', onResolve.mock.calls[0][1]);
+    const response = onResolve.mock.calls[0][1] as SudoResponse;
+    expect(response.id).toBe(sudo.id);
+    const bytes = privateDecrypt({ key: privateKey, padding: constants.RSA_PKCS1_OAEP_PADDING, oaepHash: 'sha256', oaepLabel: Buffer.from(sudo.id) }, Buffer.from(response.ciphertext, 'base64'));
     expect(bytes.toString()).toBe('terminal-secret-canary');
     bytes.fill(0);
     view.unmount();
