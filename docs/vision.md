@@ -8,7 +8,8 @@ marifold should not try to become another all-round heavyweight agent like Codex
 
 marifold is the personal coordinator around AI work:
 
-- Native profiles handle lightweight chat, ask, memory, provider routing, and focused skills.
+- Native profiles handle everyday requests through one approval-aware agent path, with memory, provider routing, and focused skills.
+- Device-hosted workspaces connect the owner's own devices, so a conversation can continue and run tools on another machine.
 - Skill apps provide small GUI surfaces for repeatable tasks.
 - Workflows compose profiles, skills, models, and external agents.
 - External-agent aliases delegate heavyweight work to tools such as Codex or Claude Code.
