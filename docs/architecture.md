@@ -1,27 +1,56 @@
 # Architecture
 
-marifold v0.14.0 adds the TUI — an Ink/React terminal app (`packages/tui`) that is the primary interactive surface — on top of the v0.13.0 pre-TUI foundation: the basic agent loop (v0.11.0), chat parity (v0.12.0), the early declarative App spec, and scheduled task execution (v0.13.0). It provides a TypeScript CLI for lightweight profile chat, one-shot requests, an approval-aware agent loop, workspace initialization, chat resume behavior, saved model options, model validation, structured profile memory, thinking mode controls, OAuth provider setup, GitHub Copilot Responses API routing, config backup/import, local management commands, a default-loopback Fastify service API with authenticated opt-in remote binding, an ephemeral task-state subsystem, and the `marifold.skill.v0` skill primitive.
+marifold is a local-first, single-owner personal AI workspace: one person runs it on their own devices with their own provider credentials. This document is the project layer of the owner's `architecture-principles.md`: runtime pieces, package responsibilities and limits, dependency directions, trust boundaries, terms, and decisions. `AGENTS.md` holds the working rules; `DEVLOG.md` the dated history.
 
-## Current Scope
+## Runtime pieces
 
-The dependency direction is:
+- **CLI process** (`marifold …`): one-shot commands, `marifold agent`, and the TUI. Bare `marifold` loads the ESM TUI through a dynamic `import()` and runs it in the same process, either against a local `MarifoldRuntime` or against the local service as a remote runtime.
+- **Service process** (`marifold service`): the Fastify API, the static Web UI, the scheduler, the Telegram bridge, the run registry, and the workspace manager and executor. It binds to loopback by default; non-loopback binds accept only private-network peers.
+- **Web UI** (browser): a static React app served by the service; it reaches everything over the service HTTP/SSE API.
+- **Workspace bridge** (`apps/bridge`, a separate Node server, deployed with Redis): relays end-to-end encrypted messages between the devices of one workspace. It authenticates members and never sees message contents.
+- **Device job workers**: detached Node processes that run approved full-access and `sudo_exec` shell jobs and record their results on disk, so jobs survive disconnects and service restarts.
+- **Providers**: model APIs (Ollama, OpenAI-compatible, Anthropic, ChatGPT, xAI, Copilot) reached through `@priest-ai/core`.
 
-```text
-packages/cli -> packages/core -> @priest-ai/core -> provider
-packages/cli -> packages/service -> packages/core
-packages/cli -> packages/tui -> packages/core   (dynamic import; ESM)
-apps/web -> packages/service (HTTP only; types type-only from packages/core)
-```
+## Packages
 
-`packages/cli` owns command parsing, terminal input/output, and the interactive chat loop.
+Each package is imported only through its `src/index.ts` entry point.
 
-`packages/service` owns HTTP transport only. It starts a Fastify server, parses JSON requests, returns sanitized responses, streams chat chunks through SSE, and delegates behavior to `packages/core`.
-
-`packages/core` owns marifold runtime abstractions, workspace paths, TOML config loading, profile resolution, profile memory storage/selection/control-block application, the agent subsystem (`src/agent`), task-state persistence, session resolution, provider adapter creation, and the bridge to `@priest-ai/core`.
+- `packages/core` (`@marifold/core`): runtime, config, profiles, memory, sessions, the agent subsystem, runs, schedules, Skills and SkillApps, and the device-hosted workspace protocol implementation. Must not depend on any other marifold package except `workspace-protocol`, and must not format output for a renderer.
+- `packages/service` (`@marifold/service`): HTTP transport over core: security filtering, request validation, route modules (`RunRoutes`, `SessionRoutes`, `ConfigRoutes`, `ProfileRoutes`, `SkillAppRoutes`, `ChatRoutes`, `TaskRoutes`, `WorkspaceRoutes`), SSE, and error mapping (`ServiceErrors`). Must not hold business rules beyond request validation and response sanitizing.
+- `packages/client` (`@marifold/client`): the typed HTTP/SSE client shared by the TUI, CLI, and Web UI: requests with the session-owner header, SSE parsing, resumable `followRunEvents`, workspace startup selection, and composer token helpers. Must not depend on core at runtime.
+- `packages/tui` (`@marifold/tui`): the Ink terminal renderer of the `AgentEvent` contract, local or service-connected. Must not contain model-side logic.
+- `packages/cli` (`marifold`): command parsing and terminal output; launches the TUI and the service.
+- `packages/workspace-protocol` (`@marifold/workspace-protocol`): wire types, limits, identities, signing, membership certificates, and encryption shared by core and the bridge. Must stay free of runtime and transport code.
+- `apps/web` (`@marifold/web`): the browser renderer. Imports `@marifold/core` only for types, only in `src/api/types.ts`.
+- `apps/bridge` (`@marifold/bridge`): the relay server. Depends only on `workspace-protocol`.
+- `@priest-ai/core` (external, `../priest-typescript`): model-side primitives.
 
 `@priest-ai/core` remains marifold-agnostic. marifold depends on it; it does not know about marifold. Since 2.4 it carries the model-side agent primitives — native tool-call transport, the `runWithTools` loop helper, structured stream events, cancellation, and image input. In 2.8 it also owns the OpenAI Responses transport, provider-neutral reasoning configuration, safe reasoning summaries, opaque continuation, and cached/reasoning token accounting. marifold owns concrete tools, approval policy, task state, and rendering. Priest owns talking to models; marifold owns acting on the world.
 
-## Current Boundaries
+## Dependency directions
+
+```text
+packages/cli  -> packages/tui -> packages/client
+packages/cli  -> packages/service -> packages/core -> packages/workspace-protocol
+packages/tui  -> packages/core (local runtime and types)
+packages/core -> @priest-ai/core -> providers
+apps/web      -> packages/client (runtime); packages/core (types only)
+apps/bridge   -> packages/workspace-protocol
+packages/cli  -> apps/bridge (build-time only: staged for `marifold workspace bridge install`)
+```
+
+Enforcement: package manifests (pnpm resolves only declared dependencies), Biome `noImportCycles`, a `noRestrictedImports` override for `apps/web`, and the file-size ratchet in `pnpm lint`. `packages/core` has no dependency on the service, TUI, CLI, client, Web UI, or bridge.
+
+## Trust boundaries
+
+- **HTTP service edge** (`packages/service/src/Security.ts`, `Validation.ts`): the direct peer and `Host` header are filtered to loopback or private networks; an optional bearer token and a CORS allowlist apply. Route modules validate bodies and queries before calling core. Raw provider keys never leave the process; host file paths in system errors are shown only to local clients.
+- **Workspace bridge** (`apps/bridge`, `packages/core/src/workspace`): devices authenticate with membership certificates signed by the pinned host identity; messages are end-to-end encrypted, so the relay sees only routing headers. Forwarded API requests pass `workspaceApiPath`, and host-only settings (providers, service, credentials) are refused with 403. Paired devices must run the same release.
+- **Agent tools** (`packages/core/src/agent`): every effect goes through `ApprovalPolicy` and per-run `RunWorkspace` capability roots. Paths are assessed at their real destination (symlinks resolved); shell runs inside the platform sandbox in its own process group, with no unrestricted fallback. Sensitive account paths are approved one access at a time and never trusted persistently.
+- **Model, tool, and remote output**: treated as untrusted. CLI output strips terminal control sequences, the TUI drops device-control strings from every frame, and the Web UI renders Markdown without raw HTML.
+- **SkillApp templates** (`packages/core/src/app`): statically compiled; read permissions are declared, resolved to real paths, and refused for Marifold private state and sensitive account data.
+- **Device execution** (`DeviceExecution`, `DeviceExecutionWorker`): full access is a local opt-in per device; `sudo` passwords travel encrypted for one use and are never stored; durable jobs are scoped to the workspace that started them.
+
+## Core subsystems
 
 The runtime layer is thin. `MarifoldRuntime` resolves config/profile/session settings, selects profile memory with the current prompt and thinking mode, and delegates ask/stream execution to `PriestEngine`. `MarifoldRuntime.createAgentRunner()` wires the agent subsystem over the same engine factory, TaskStore, and config policy.
 
@@ -81,24 +110,33 @@ SQLite session continuity is reused from `@priest-ai/core`. marifold-owned metad
 
 Task state is stored as JSON files under `paths.tasks_dir`, defaulting to `~/.marifold/tasks`. Task state is generated working context: objective, status, plan, events, summary, next action, profile, and session references. It is separate from durable profile memory and is not promoted into profile memory by default.
 
-## Future Areas
+### Device-hosted workspaces
 
-These are planned areas, but they are not implemented in v0.10.0:
+`packages/core/src/workspace` turns one device into the host of a workspace that the owner's other devices join. `WorkspaceManager` owns pairing, invitations, revocation, and per-workspace `BridgePeer` connections (`workspace/bridge`); `WorkspaceStore` persists identities, memberships, and an idempotent request journal beside the config. The host routes runs to an execution device through `WorkspaceRuns`; a guest that enabled execution runs host-requested tools in `WorkspaceExecutor`, which builds its own capabilities and accepts only short-lived, call-specific grants. `DeviceDelegateTool` and `WorkspaceDevicesTool` let a host conversation delegate to a guest. Sessions are reserved per client through `SessionLeases` (shared with local TUI processes through a lease file); a running task holds its session until it ends, and `takeover` moves a session between the owner's clients. See `docs/workspaces.md` and `docs/device-execution.md`.
 
-```text
-apps/apple
-  Future SwiftUI macOS and iOS clients.
+## Glossary
 
-App expansion
-  Future richer components, typed artifacts, and approval-aware effectful actions.
+- **Profile**: a named identity with instructions, settings, memory, and Skills. Not a workspace.
+- **Session**: a persisted conversation, owned by one profile.
+- **Run**: one agent execution, streamed as `AgentEvent`s and tracked by `RunRegistry`; it may produce artifacts.
+- **Task**: ephemeral working state of a run (`TaskStore`), never promoted into memory.
+- **Skill**: a `marifold.skill.v0` prompt template invoked as `$name`.
+- **SkillApp**: a statically compiled `skillapp.ts` template that binds form state to Skills.
+- **Workspace**: a device-hosted space shared by the owner's devices. **Host**: the device that owns its data and credentials. **Guest**: a joined device. **Bridge**: the relay between them. **Executor**: a guest's opt-in tool execution for host runs.
+- **Lease**: a client's reservation of an open session; **takeover** moves it to another of the owner's clients.
+- **Attachment**: a user-supplied file staged read-only for a run. **Artifact**: a file a run produced in its output directory.
+- **Trusted folder**: a folder where a profile's writes are approved without asking (never home, root, or sensitive account data).
+- **Scoped / full access**: sandboxed shell inside run capabilities, versus an approved account-level job on the device.
 
-Workflow runtime
-  Future system for composing native profiles, skills, models, and external agents into multi-step runs.
+## Decisions
 
-External-agent aliases
-  Future alias profiles that launch, wrap, delegate to, or compose with Codex, Claude Code, and similar tools.
-```
+- 2026-06-12: `@priest-ai/core` owns talking to models; marifold owns acting on the world (tools, approval, task state, rendering).
+- 2026-06: one load-bearing TypeScript implementation; the TUI is Ink/React loaded by the CommonJS CLI through a dynamic `import()`.
+- 2026-08: the service stays single-owner: no multi-tenant accounts, credential pooling, or public-internet exposure (`AGENTS.md`).
+- 2026-09: workspaces are device-hosted with a relay bridge; a cloud-hosted workspace was rejected as too large.
+- 2026-10-08: a running task holds its session lease until it ends, so a client that leaves cannot lose the finished turn; 2026-10-09: the owner can take a session over from another client.
+- 2026-10-09: Biome enforces mechanical rules because typescript-eslint cannot use the TypeScript 7 native compiler; route bodies moved out of `MarifoldService` into route modules.
 
-Do not create empty future app directories until implementation begins.
+## Future areas
 
-For the product direction behind these future areas, see [vision.md](vision.md).
+Planned but not implemented: Apple SwiftUI clients (`apps/apple`), richer SkillApp components and effectful actions, a workflow runtime that composes profiles and Skills into multi-step runs (`docs/workflow-plan.md`), and external-agent aliases. Do not create empty directories for them before implementation begins. See `docs/vision.md` and `docs/roadmap.md`.

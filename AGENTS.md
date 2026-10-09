@@ -2,61 +2,27 @@
 
 ## Project
 
-marifold is a local-first personal AI workspace for profiles, chats, skills, mini apps, workflows, and external agents.
-
-v0.35.x implements the TypeScript CLI + TUI foundation, priests-style structured profile memory, an approval-aware agent loop (native tool calling plus a control-block fallback), chat tool parity (web search, file reading, images), markdown skills, scheduled unattended runs, the Telegram channel, and a loopback-only Fastify service API with optional bearer auth, a CORS origin allowlist, and live agent-run routes (SSE `AgentEvent` stream, approval/steer/cancel POSTs) documented in `docs/service-api.md`.
-
-v0.36–v0.39.x add the browser Web UI (`apps/web`, served statically by the service): agent chat with image/text-file attachments, session previews, collapsible sidebars, profile avatars and creation, and a three-column Config screen with provider/model management routes.
-
-v0.40–v0.44.x add the `xai` provider (SuperGrok subscription OAuth against `api.x.ai/v1`) and a uniform per-provider `proxy` config key (requires `@priest-ai/core` >= 2.7.0, which added the fetch dispatcher hook), plus Web UI composer parity with the TUI: avatar crop/compress (stored under `<profile>/assets/`), `$skill` inline highlight + autocomplete, a 15-command `/command` palette with two new service routes (profile memory add, session compact), and a two-row ChatGPT-style composer layout.
-
-v0.45.x adds lazy built-in `$skill-manager` guidance for ordinary agent prompts that mention skills, with multilingual detection and resolved profile/global paths shared across TUI, CLI, service, channels, and Web UI agent runs.
-
-v0.46.x adds shared image validation and request optimization across TUI, CLI, service, and Web UI paths, including conservative resizing/encoding, attachment limits, browser-side preprocessing, and the one-turn `/attach-original` bypass. v0.46.1 fixes Web UI Markdown tables, composer autocomplete caret alignment, and immediate/durable new-session sidebar updates. v0.47.x adds the macOS-style desktop shell, clean routes, progress/final response emphasis, caret-aware completion with existing arguments, explicit Markdown hard breaks, and submit-time transcript following.
-
-v0.48.x adds durable transcript image replay and galleries, response/code copying, IME-safe composer behavior, in-place historical prompt regeneration that preserves later exchanges, and persistent session rename/pin/delete controls.
-
-v0.49.x completes the desktop Web workspace with profile/session search, archive views, per-session drafts, authenticated lazy transcript images, global agent/web-search/appearance settings, accessible keyboard/dialog behavior, safe active-request deletion, and isolated Chromium regression coverage.
-
-v0.50.x adds local Web extraction for modern Word/Excel/PowerPoint attachments, bounded read-only original-file staging for agent runs, capability-scoped per-run workspaces, fail-closed macOS shell sandboxing, one-time approved `uv` package installation into disposable Python environments, and deterministic service shutdown/listen-failure cleanup.
-
-v0.51.x resolves direct `$skill` invocations in core with history-isolated execution and narrow read-only bundled-file access, and adds contact-style Web profile navigation with response previews/activity times, persistent profile pinning, and double-confirmed profile removal that retains conversation history.
-
-v0.52.x introduced the original App MVP. Model-driven SkillApps use restricted, statically compiled `~/.marifold/apps/<name>/skillapp.ts` templates. `marifold.skillapp.v1` remains app-local and profile-free; the additive `.v2` contract registers existing profiles and invokes their installed Skills with live profile docs, read-only bundled files and explicit static read capabilities, attachment-scoped inputs, optional read-only memory, and ephemeral App-instance history. The earlier profile-driven TOML runtime remains removed.
-
-v0.53.x enables bearer-protected non-loopback service binding for trusted LAN or tailnet access. The Web shell keeps named same-origin or remote marifold servers with independent tokens and remounts its data views when the active connection changes.
-
-v0.54.x adds optional model-authored clarification questions through one renderer-neutral interaction contract, with batched standalone question interfaces in the TUI and Web UI. It also restores normal user-home semantics for `~` and `$HOME` while retaining capability-scoped run isolation.
-
-v0.55–v0.57.x add interruptible runs and multi-select clarification answers, managed foreground/daemon service lifecycle with restartable safe launch options, idempotent empty-session creation, live signed-in ChatGPT model discovery, strict provider-error surfacing through `@priest-ai/core` 3.0.1, and private-network non-loopback access.
-
-v0.58.x adds lazy, attachment-scoped agent inspection for images, readable documents, and other staged uploads. An inspected image remains available through the rest of its run so Skills can resolve additional bundled inputs without losing visual context.
-
-v0.58.1 makes bearer authentication optional for private-network service access and removes the public-access override. Every non-loopback bind permanently filters direct peers and Host values to private LAN, link-local, Tailscale/CGNAT, and private IPv6 networks for single-owner access from personal devices, including a future iOS client.
-
-v0.61–v0.62.x add usable foreground/daemon service entry URLs, Web provider onboarding, native-first/fallback web search, `marifold update`, and ChatGPT subscription compatibility for unsupported Responses output-token fields.
-
-v0.63.x keeps original uploads staged read-only and out of Agent prompts. `inspect_attachment`, `read_attachment`, and `search_attachment` expose bounded model views; complete document operations use isolated local programs against the staged path. Regular files under the run output directory become renderer-neutral artifacts and authenticated Web downloads. Preserve this provider-independent resource boundary for Office files, PDFs, ebooks, archives, and future formats.
-
-The service defaults to loopback. Explicit non-loopback binds accept only direct private LAN, link-local, IPv6 ULA, and Tailscale peers. Same-origin hosted Web access needs no CORS entry.
+marifold is a local-first, single-owner personal AI workspace: profiles, conversations, Skills and SkillApps, scheduled runs, and device-hosted workspaces that connect the owner's devices. Every ordinary message runs through one approval-aware agent path, rendered by the TUI (primary surface), the CLI, and the Web UI. Read `docs/architecture.md` for runtime pieces, package responsibilities, trust boundaries, and terms, and the newest `DEVLOG.md` entries for recent history.
 
 ## Stack
 
-- TypeScript
-- pnpm workspace
-- Node.js
-- `@priest-ai/core` as the chat/runtime foundation
-- Fastify for the local HTTP service
+- TypeScript (TypeScript 7 native compiler), Node.js 24, pnpm 12.9.1 workspace
+- `@priest-ai/core` as the model/runtime foundation
+- Fastify for the HTTP service; Ink/React for the TUI; React and Vite for the Web UI
+- Biome for lint rules (`biome.json`); Vitest for tests
 
 ## Boundaries
 
 - `packages/core` contains runtime, workspace, config, profile, memory, agent (runner/tools/approval), task-state, and session logic.
-- `packages/service` contains the default-loopback Fastify API and its private-network remote binding. Keep it as a thin transport layer over `packages/core`.
-- `packages/cli` contains terminal commands and interactive CLI behavior.
+- `packages/service` contains the Fastify API, split into route modules. Keep it a thin transport layer over `packages/core`. It defaults to loopback; explicit non-loopback binds accept only direct private LAN, link-local, IPv6 ULA, and Tailscale peers, and same-origin hosted Web access needs no CORS entry.
+- `packages/cli` contains terminal commands and interactive CLI behavior; bare `marifold` launches `packages/tui`, the Ink renderer of the `AgentEvent` contract, which must hold no model-side logic.
+- `packages/client` is the typed HTTP/SSE client shared by the TUI, CLI, and Web UI; it must not depend on core at runtime.
+- `packages/workspace-protocol` holds wire types, identities, signing, and encryption shared by core and `apps/bridge`, the relay server; keep both free of marifold runtime logic. Workspace hosts keep credentials and data; guests never receive them, and paired devices must run the same release.
 - `@priest-ai/core` (../priest-typescript) owns model-side primitives: providers, tool-call transport, streaming, context assembly. Changes there must be synced to the priest spec repository.
 - The `AgentEvent` union in `packages/core/src/agent/AgentEvents.ts` is the render contract for all future clients; keep it renderer-agnostic.
 - Agent runs must not write profile memory; task state stays ephemeral.
 - `apps/web` contains the browser UI — a second renderer of the same contracts the TUI renders. All data flows over the service HTTP API; `src/api/types.ts` is the only file that may import from `@marifold/core`, and only with `import type`.
+- Uploads stay staged read-only and out of Agent prompts: `inspect_attachment`, `read_attachment`, and `search_attachment` expose bounded views, complete document operations run local programs against the staged path, and files under the run output directory become artifacts. Preserve this provider-independent resource boundary for Office files, PDFs, ebooks, archives, and future formats.
 - Raw provider `api_key` values never cross the wire: service routes expose env-var names and boolean presence flags only; key values are edited via the CLI or config file.
 - marifold is permanently a personal, single-owner BYOK/BYO-auth agent. Remote access connects that owner's devices; never add multi-tenant accounts, credential pooling, subscription/API relays, quota resale, or public-internet service exposure.
 - Preserve the documented SkillApp v1/v2 static compiler and capability boundary. Host paths require explicit static read declarations and stay server-only. The protected built-in SkillApp builder is the sole App-specific persistent mutation: it uses a dedicated approve-once tool to validate and atomically install one complete bundle. Do not add other effectful App actions, dynamic persistent grants, Workflow, Apple apps, external-agent aliases, or provider-owned model deletion until that area is explicitly in scope.
@@ -70,7 +36,6 @@ The service defaults to loopback. Explicit non-loopback binds accept only direct
 ## Code style
 
 - Every control-flow body has braces, including single statements: `if (done) { return; }`, never `if (done) return;`. The same applies to `else`, loops, and arrow-function bodies containing them. `pnpm lint` (Biome `useBlockStatements`, configured in `biome.json`) enforces it; `pnpm exec biome lint --write --unsafe .` applies the fix.
-
 - No explicit `any`, no import cycles, and type-only imports use `import type` (Biome `noExplicitAny`, `noImportCycles`, `useImportType`; `pnpm exec biome lint --write .` fixes import style).
 - Outside `apps/web/src/api/types.ts`, the Web UI must not import `@marifold/core` or `@marifold/service`; a `noRestrictedImports` override in `biome.json` enforces it.
 - File-size ratchet: source files stay at or below 800 lines. Files recorded in `.file-size-baseline.json` may shrink but not grow; after splitting one, run `node scripts/check-file-sizes.mjs --update` to lower its recorded size.
