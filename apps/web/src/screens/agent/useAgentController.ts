@@ -206,7 +206,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
         seenRuns.add(runId);
         reloadSessionRef.current();
       }
-    }),
+    }, () => refreshSessionsRef.current()),
     [client, seenRuns],
   );
   useEffect(() => () => followers.stopAll(), [followers]);

@@ -112,6 +112,7 @@ describe('RunFollowers', () => {
     const actions: unknown[] = [];
     let resolveDone!: () => void;
     const reachedDone = new Promise<void>(resolve => { resolveDone = resolve; });
+    const running: string[] = [];
     const followers = new RunFollowers(
       client,
       action => actions.push(action),
@@ -119,6 +120,8 @@ describe('RunFollowers', () => {
         expect(runId).toBe('run_1');
         resolveDone();
       },
+      // The session list refreshes as soon as the run reports running.
+      runId => running.push(runId),
     );
 
     followers.attach('run_1');
@@ -128,5 +131,6 @@ describe('RunFollowers', () => {
       { type: 'run_event', runId: 'run_1', seq: 1, event: status },
       { type: 'run_event', runId: 'run_1', seq: 2, event: done },
     ]);
+    expect(running).toEqual(['run_1']);
   });
 });

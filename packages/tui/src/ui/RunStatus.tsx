@@ -23,11 +23,13 @@ const VERBS = [
 export function RunStatus({
   startedAt,
   activity,
+  cancelling = false,
   think,
   steeringQueued,
 }: {
   startedAt: number;
   activity?: string;
+  cancelling?: boolean;
   think: boolean;
   steeringQueued: number;
 }): React.ReactElement {
@@ -38,7 +40,7 @@ export function RunStatus({
     return () => clearInterval(timer);
   }, []);
 
-  const verb = labelFor(activity, start);
+  const verb = cancelling ? 'Cancelling' : labelFor(activity, start);
   const detail = [formatElapsed(Date.now() - start), think ? 'thinking' : null]
     .filter(Boolean)
     .join(' · ');
@@ -49,7 +51,7 @@ export function RunStatus({
         <Text color={ACCENT}>· {verb}…</Text>
         <Text color={DIM}> ({detail})</Text>
         {steeringQueued > 0 ? <Text color={DIM}> · {steeringQueued} steering queued</Text> : null}
-        <Text color={DIM}> · esc to cancel</Text>
+        {cancelling ? null : <Text color={DIM}> · esc to cancel</Text>}
       </Text>
     </Box>
   );

@@ -2,6 +2,16 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-10-10 — v0.84.0 — Sessions saved on send, `/btw` side questions, agent-only TUI
+
+- A run saves its prompt when it starts (after reading the history it must not repeat, before it reports `running`) and its outcome when it ends, so a new session exists, and can be retried, before any answer. Switching away and back mid-run now shows the request above the live run card (it used to be missing until the session was reloaded after the run). An early failure (engine preparation, run workspace) still answers the saved prompt; a terminal run displaced by a takeover still saves its outcome; a prompt left unanswered by a stopped service gains its answer when regenerated, if it is the newest. Edits still replace their exchange only when they complete. The Web refreshes the session list when a run reports running.
+- TUI `/btw <question>`: a one-off, tool-less `ask` that sees the visible conversation (including a running task's progress) and is never saved; the answer opens in a panel below the run line (↑/↓ scroll, c copy, Esc close), whether or not a task is running. Plain text typed during a run now steers it. The conversation travels in the prompt because the service's `/v1/ask` has no `userContext`. The Web `/btw` still steers (side chat deferred in `TODO.md`).
+- The TUI is agent-only: the hidden chat mode, its run path, and the remote chat stream are removed; skills declaring `mode = "chat"` run as lean agent turns. `marifold ask` stays a one-shot chat call (no agent loop) and sets its answer off with blank lines in a terminal.
+- `/stop` shows "Cancelling…" in the status line until the run ends, then records "Cancelled." once. Web profile settings can remove the avatar.
+- TUI layout tests pin a 100×24 terminal; they failed under `pnpm gate` in tall terminals because Ink fell back to the real terminal size.
+- Refactor (separate commit): agent usage tallying moved to `agent/AgentUsageTally.ts` to make room in `AgentRunner.ts`.
+- Validation: lint, typecheck, build, and all suites in a 60-row PTY (core 544, service 98, TUI 139, Web 275, CLI 36). The user confirmed in the Web UI that a new session is listed on send and reopens after switching away (after restarting the service: a running service keeps its old code). Not checked live: the `/btw` panel, the cancelling status, and the avatar control.
+
 ## 2026-10-10 — v0.83.1 — `--resume` and `--sessions` against a remote default workspace
 
 - `marifold --resume <id> --takeover` now works when the session lives in a remote workspace. The host refuses to read a session another client holds, so the TUI launch takes it over first and then reads it (it used to fail with "in use"). With a mismatched `--profile`, the takeover happens before the profile refusal.

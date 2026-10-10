@@ -96,7 +96,7 @@ describe('AgentRunner', () => {
     const finished = makeRunner(new ScriptedEngine([response({ text: 'Done.' })]), [], {}, { holdSession, persistTurn });
     await collect(finished.runner.run({ objective: 'Answer.', cwd: tempDir(), sessionId: 'held' }));
     expect(holdSession).toHaveBeenCalledWith(expect.objectContaining({ sessionId: 'held' }));
-    expect(order).toEqual(['hold', 'persist', 'release']);
+    expect(order).toEqual(['hold', 'persist', 'persist', 'release']);
 
     order.length = 0;
     const stopped = makeRunner(new ScriptedEngine([response({ text: 'Done.' })]), [], {}, { holdSession });
@@ -179,7 +179,7 @@ describe('AgentRunner', () => {
     expect(engine.requests[2].context?.join(' ')).not.toContain('made no tool call');
     expect(events.filter(e => e.type === 'tool_request')).toHaveLength(3);
     expect(events.filter(e => e.type === 'text')).toEqual([{ type: 'text', phase: 'final', text: 'The proposal has benefits and tradeoffs. [Article](https://example.com/article "source")' }]);
-    expect(persistTurn.mock.calls[0]).toContain('The proposal has benefits and tradeoffs. [Article](https://example.com/article "source")');
+    expect(persistTurn.mock.calls.at(-1)).toContain('The proposal has benefits and tradeoffs. [Article](https://example.com/article "source")');
   });
 
   it.each([1, 5])('fails visibly on a repeated search promise within the iteration cap %s', async maxIterations => {
@@ -288,7 +288,8 @@ describe('AgentRunner', () => {
       { type: 'text', text: 'The source reports a forecast of 23–30°C.', phase: 'final' },
     ]);
     expect(events.at(-1)).toMatchObject({ type: 'done', status: 'completed', summary: 'The source reports a forecast of 23–30°C.' });
-    expect(persistTurn).toHaveBeenCalledTimes(1);
+    // Once for the prompt when the run starts, once for the answer.
+    expect(persistTurn).toHaveBeenCalledTimes(2);
   });
 
   it.each([1, 5])('fails visibly on empty output within an iteration limit of %s', async maxIterations => {
@@ -579,6 +580,16 @@ describe('AgentRunner', () => {
     );
   });
 
+  it('answers its saved prompt even after another client takes the session over', async () => {
+    let displaced = false;
+    const checkSession = vi.fn(() => { if (displaced) { throw new Error('This session is in use in another page, terminal, or app.'); } });
+    const persistTurn = vi.fn(async (_s: string, _p: string, userText?: string) => { if (userText) { displaced = true; } });
+    const { runner } = makeRunner(new ScriptedEngine([response({ text: 'Done anyway.' })]), [fakeTool()], {}, { persistTurn, checkSession });
+    const events = await collect(runner.run({ objective: 'Keep going.', sessionId: 'taken' }));
+    expect(events.at(-1)).toMatchObject({ type: 'done', status: 'completed' });
+    expect(persistTurn.mock.calls.map(call => [call[2], call[3]])).toEqual([['Keep going.', undefined], [undefined, 'Done anyway.']]);
+  });
+
   it('persists an ordinary failed run so its submitted prompt survives session resume', async () => {
     const engine = new ScriptedEngine([response({
       ok: false,
@@ -594,15 +605,11 @@ describe('AgentRunner', () => {
     }));
 
     expect(events.at(-1)).toMatchObject({ type: 'done', status: 'failed' });
-    expect(persistTurn).toHaveBeenCalledWith(
-      'sess-failed',
-      'default',
-      'Save these answers.',
-      'Run failed before a final response was produced.\n\nfetch failed',
-      undefined,
-      undefined,
-      undefined,
-    );
+    // The prompt is saved before the model is called, so it survives even a crash.
+    expect(persistTurn.mock.calls).toEqual([
+      ['sess-failed', 'default', 'Save these answers.', undefined, undefined],
+      ['sess-failed', 'default', undefined, 'Run failed before a final response was produced.\n\nfetch failed', undefined, undefined, undefined],
+    ]);
   });
 
   it('persists a cancelled ordinary run but preserves an existing exchange on failed regeneration', async () => {
@@ -622,15 +629,10 @@ describe('AgentRunner', () => {
       signal: controller.signal,
     }));
 
-    expect(persistCancelled).toHaveBeenCalledWith(
-      'sess-cancelled',
-      'default',
-      'Keep this cancelled prompt.',
-      'Run cancelled before a final response was produced.',
-      undefined,
-      undefined,
-      undefined,
-    );
+    expect(persistCancelled.mock.calls).toEqual([
+      ['sess-cancelled', 'default', 'Keep this cancelled prompt.', undefined, undefined],
+      ['sess-cancelled', 'default', undefined, 'Run cancelled before a final response was produced.', undefined, undefined, undefined],
+    ]);
 
     const persistReplacement = vi.fn(async () => undefined);
     const failedEngine = new ScriptedEngine([response({
@@ -862,12 +864,21 @@ describe('AgentRunner', () => {
     expect(prepareImages).toHaveBeenCalledWith(source === 'local' ? [{ path: '/tmp/original.png' }] : [{ data: 'source', mediaType: 'image/png' }], false);
     expect(engine.requests[0].images).toBeUndefined();
     expect(engine.requests[0].context?.join('\n')).toContain('attachment-1: image-1.png');
-    expect(persistTurn).toHaveBeenCalledWith(
+    expect(persistTurn).toHaveBeenNthCalledWith(
+      1,
       'image-session',
       'default',
       'Describe it.',
-      'I can see it.',
+      undefined,
       source === 'local' ? [{ path: '/tmp/original.png' }] : [{ data: 'prepared', mediaType: 'image/png' }],
+    );
+    expect(persistTurn).toHaveBeenNthCalledWith(
+      2,
+      'image-session',
+      'default',
+      undefined,
+      'I can see it.',
+      undefined,
       undefined,
       expect.objectContaining({
         mode: 'agent',

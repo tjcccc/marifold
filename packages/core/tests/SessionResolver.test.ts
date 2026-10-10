@@ -512,3 +512,27 @@ describe('SessionResolver response metrics', () => {
     resolver.close();
   });
 });
+
+describe('SessionResolver unanswered prompts', () => {
+  it('saves a prompt before its answer and lets the newest unanswered prompt be regenerated', async () => {
+    const resolver = new SessionResolver(tempDb());
+    await resolver.appendExchange('s', 'default', 'First', 'Answer 1');
+    await resolver.appendExchange('s', 'default', 'Second', undefined);
+    expect(resolver.get('s')?.turns.map(turn => [turn.role, turn.content])).toEqual([
+      ['user', 'First'], ['assistant', 'Answer 1'], ['user', 'Second'],
+    ]);
+
+    expect(resolver.replaceExchange('s', 1, 'Second again', 'Answer 2')).toEqual({ found: true, replaced: true });
+    expect(resolver.get('s')?.turns.map(turn => [turn.role, turn.content])).toEqual([
+      ['user', 'First'], ['assistant', 'Answer 1'], ['user', 'Second again'], ['assistant', 'Answer 2'],
+    ]);
+  });
+
+  it('refuses to answer an unanswered prompt that is followed by a later one', async () => {
+    const resolver = new SessionResolver(tempDb());
+    await resolver.appendExchange('s', 'default', 'Lost prompt', undefined);
+    await resolver.appendExchange('s', 'default', 'Next', 'Answer');
+    expect(resolver.replaceExchange('s', 0, 'Lost prompt', 'Late answer')).toEqual({ found: true, replaced: false });
+    expect(resolver.get('s')?.turns.map(turn => turn.content)).toEqual(['Lost prompt', 'Next', 'Answer']);
+  });
+});

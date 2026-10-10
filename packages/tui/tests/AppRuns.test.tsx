@@ -2,7 +2,6 @@ import { render } from 'ink-testing-library';
 import { describe, expect, it, vi } from 'vitest';
 import type { LoadedMarifoldConfig, MarifoldRuntime, SessionDetail, SessionSummary } from '@marifold/core';
 import { App } from '../src/ui/App.js';
-import type { Mode } from '../src/core/appState.js';
 
 // Run-routing coverage for the App controller. The companion App.test.tsx uses a
 // real runtime for code-only commands (which never call a model); these tests fake
@@ -24,7 +23,6 @@ function makeRuntime(opts: {
   skillsByProfile?: Record<string, Array<{ name: string; description: string }>>;
 } = {}) {
   const runSpy = vi.fn();
-  const streamSpy = vi.fn();
   const listSessionsSpy = vi.fn(() => opts.sessions ?? []);
   const listSkillsSpy = vi.fn((profile: string) => opts.skillsByProfile?.[profile] ?? []);
 
@@ -41,23 +39,16 @@ function makeRuntime(opts: {
     getProfile: (name: string) => ({ name, displayName: name === 'helper' ? 'Helper' : name }),
     listSessions: listSessionsSpy,
     getSession: (id: string) => opts.sessionDetail?.id === id ? opts.sessionDetail : undefined,
-    resolveSettings: ({ profile }: { profile: string }) => ({ profile, provider: 'p', model: 'm', mode: 'agent' as Mode, think: false }),
+    resolveSettings: ({ profile }: { profile: string }) => ({ profile, provider: 'p', model: 'm', mode: 'agent' as const, think: false }),
     createAgentRunner: () => ({
       run: (call: RunnerCall) => {
         runSpy(call);
         return (opts.agentRun ?? defaultRun)(call);
       },
     }),
-    stream: (request: { prompt: string }, onSummary?: (s: { usage?: unknown }) => void) => {
-      streamSpy(request);
-      return (async function* () {
-        yield 'hi';
-        onSummary?.({ usage: {} });
-      })();
-    },
   };
 
-  return { runtime: runtime as unknown as MarifoldRuntime, runSpy, streamSpy, listSessionsSpy, listSkillsSpy };
+  return { runtime: runtime as unknown as MarifoldRuntime, runSpy, listSessionsSpy, listSkillsSpy };
 }
 
 const config = {
@@ -71,8 +62,8 @@ const config = {
   },
 } as unknown as LoadedMarifoldConfig;
 
-function initial(mode: Mode) {
-  return { profile: 'default', provider: 'p', model: 'm', think: false, mode, cwd: '/tmp', version: '0.0.0-test' };
+function initial() {
+  return { profile: 'default', provider: 'p', model: 'm', think: false, cwd: '/tmp', version: '0.0.0-test' };
 }
 
 const delay = () => new Promise(resolve => setTimeout(resolve, 30));
@@ -88,7 +79,7 @@ describe('App run routing', () => {
         yield { type: 'done', taskId: 't', status: 'completed' };
       },
     });
-    const { stdin, lastFrame, unmount } = render(<App runtime={runtime} loadedConfig={config} initial={initial('agent')} />);
+    const { stdin, lastFrame, unmount } = render(<App runtime={runtime} loadedConfig={config} initial={initial()} />);
     await delay();
     stdin.write('describe this image');
     await delay();
@@ -122,7 +113,7 @@ describe('App run routing', () => {
       releaseSession: vi.fn(async () => undefined),
       takeOverSession: vi.fn(async () => { displaced = false; }),
     });
-    const { stdin, lastFrame, unmount } = render(<App runtime={runtime} loadedConfig={config} initial={{ ...initial('agent'), sessionId: 'shared' }} />);
+    const { stdin, lastFrame, unmount } = render(<App runtime={runtime} loadedConfig={config} initial={{ ...initial(), sessionId: 'shared' }} />);
     try {
       await delay();
       stdin.write('long task');
@@ -167,7 +158,7 @@ describe('App run routing', () => {
       yield { type: 'text', phase: 'final', text: 'completed answer' };
       yield { type: 'done', taskId: 't', status: 'completed' };
     } });
-    const { stdin, lastFrame, unmount } = render(<App runtime={runtime} loadedConfig={config} initial={initial('agent')} fullscreen={fullscreen} />);
+    const { stdin, lastFrame, unmount } = render(<App runtime={runtime} loadedConfig={config} initial={initial()} fullscreen={fullscreen} />);
     try {
       await delay();
       stdin.write('hello');
@@ -195,7 +186,7 @@ describe('App run routing', () => {
       },
     });
     const { stdin, lastFrame, unmount } = render(
-      <App runtime={runtime} loadedConfig={config} initial={initial('agent')} />,
+      <App runtime={runtime} loadedConfig={config} initial={initial()} />,
     );
     await delay();
 
@@ -213,7 +204,7 @@ describe('App run routing', () => {
   it('seeds the context gauge from the launch budget (inherited from config/profile)', async () => {
     const { runtime } = makeRuntime();
     const { lastFrame, unmount } = render(
-      <App runtime={runtime} loadedConfig={config} initial={{ ...initial('chat'), maxContextTokens: 16000 }} />,
+      <App runtime={runtime} loadedConfig={config} initial={{ ...initial(), maxContextTokens: 16000 }} />,
     );
     await delay();
     // The gauge shows the budget at launch, before any turn is measured.
@@ -222,8 +213,8 @@ describe('App run routing', () => {
   });
 
   it('routes a plain message to the agent in agent mode (no forced plan)', async () => {
-    const { runtime, runSpy, streamSpy } = makeRuntime();
-    const { stdin, unmount } = render(<App runtime={runtime} loadedConfig={config} initial={initial('agent')} />);
+    const { runtime, runSpy } = makeRuntime();
+    const { stdin, unmount } = render(<App runtime={runtime} loadedConfig={config} initial={initial()} />);
     await delay();
     stdin.write('hello');
     await delay();
@@ -231,26 +222,12 @@ describe('App run routing', () => {
     await vi.waitFor(() => expect(runSpy).toHaveBeenCalled());
     expect(runSpy.mock.calls[0][0]).toMatchObject({ objective: 'hello' });
     expect(runSpy.mock.calls[0][0].forcePlan).toBeUndefined();
-    expect(streamSpy).not.toHaveBeenCalled();
-    unmount();
-  });
-
-  it('routes a plain message to chat (stream) in chat mode', async () => {
-    const { runtime, runSpy, streamSpy } = makeRuntime();
-    const { stdin, unmount } = render(<App runtime={runtime} loadedConfig={config} initial={initial('chat')} />);
-    await delay();
-    stdin.write('hello');
-    await delay();
-    stdin.write('\r');
-    await vi.waitFor(() => expect(streamSpy).toHaveBeenCalled());
-    expect(streamSpy.mock.calls[0][0]).toMatchObject({ prompt: 'hello' });
-    expect(runSpy).not.toHaveBeenCalled();
     unmount();
   });
 
   it('/steps arms a one-shot forced plan for the next message', async () => {
     const { runtime, runSpy } = makeRuntime();
-    const { stdin, unmount } = render(<App runtime={runtime} loadedConfig={config} initial={initial('agent')} />);
+    const { stdin, unmount } = render(<App runtime={runtime} loadedConfig={config} initial={initial()} />);
     await delay();
     stdin.write('/steps');
     await delay();
@@ -265,26 +242,26 @@ describe('App run routing', () => {
   });
 
   it('/retry re-runs the last message (the prompt, not the "/retry" echo)', async () => {
-    const { runtime, streamSpy } = makeRuntime();
-    const { stdin, unmount } = render(<App runtime={runtime} loadedConfig={config} initial={initial('chat')} />);
+    const { runtime, runSpy } = makeRuntime();
+    const { stdin, unmount } = render(<App runtime={runtime} loadedConfig={config} initial={initial()} />);
     await delay();
     stdin.write('hello');
     await delay();
     stdin.write('\r');
-    await vi.waitFor(() => expect(streamSpy).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(runSpy).toHaveBeenCalledTimes(1));
     await delay(); // let the run settle so `running` clears before /retry
     stdin.write('/retry');
     await delay();
     stdin.write('\r');
-    await vi.waitFor(() => expect(streamSpy).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => expect(runSpy).toHaveBeenCalledTimes(2));
     // The re-run replays the prior prompt, not the command echo.
-    expect(streamSpy.mock.calls[1][0]).toMatchObject({ prompt: 'hello' });
+    expect(runSpy.mock.calls[1][0]).toMatchObject({ objective: 'hello' });
     unmount();
   });
 
   it('/attach-original sends its prompt with the one-turn image bypass', async () => {
     const { runtime, runSpy } = makeRuntime();
-    const { stdin, unmount } = render(<App runtime={runtime} loadedConfig={config} initial={initial('agent')} />);
+    const { stdin, unmount } = render(<App runtime={runtime} loadedConfig={config} initial={initial()} />);
     await delay();
     stdin.write('/attach-original inspect this');
     await delay();
@@ -308,7 +285,7 @@ describe('App run routing', () => {
       ],
     };
     const { runtime, listSessionsSpy } = makeRuntime({ sessions: [summary], sessionDetail: detail });
-    const { stdin, lastFrame, unmount } = render(<App runtime={runtime} loadedConfig={config} initial={initial('agent')} />);
+    const { stdin, lastFrame, unmount } = render(<App runtime={runtime} loadedConfig={config} initial={initial()} />);
     await delay();
     stdin.write('/resume');
     await delay();
@@ -343,7 +320,7 @@ describe('App run routing', () => {
     const acquireSession = vi.fn(async () => undefined);
     const takeOverSession = vi.fn(async () => undefined);
     Object.assign(runtime, { acquireSession, takeOverSession, releaseSession: vi.fn(async () => undefined) });
-    const { stdin, lastFrame, unmount } = render(<App runtime={runtime} loadedConfig={config} initial={initial('agent')} />);
+    const { stdin, lastFrame, unmount } = render(<App runtime={runtime} loadedConfig={config} initial={initial()} />);
     await delay();
     stdin.write('/resume');
     await delay();
@@ -367,13 +344,75 @@ describe('App run routing', () => {
     const now = new Date().toISOString();
     const summary: SessionSummary = { id: 'recent-12345678', profileName: 'default', title: 'Trip plan', createdAt: now, updatedAt: now, turnCount: 2 } as SessionSummary;
     const { runtime } = makeRuntime({ sessions: [summary] });
-    const { stdin, lastFrame, unmount } = render(<App runtime={runtime} loadedConfig={config} initial={{ ...initial('agent'), pickSession: true }} />);
+    const { stdin, lastFrame, unmount } = render(<App runtime={runtime} loadedConfig={config} initial={{ ...initial(), pickSession: true }} />);
     await vi.waitFor(() => expect(lastFrame()).toContain('Trip plan'), { timeout: 3000 });
     expect(lastFrame()).toContain('Resume session');
     await delay();
     stdin.write('\u001b');
     await vi.waitFor(() => expect(lastFrame()).not.toContain('Resume session'));
     unmount();
+  });
+
+  it('typing during a run steers it, and /btw answers aside without touching the run or the session', async () => {
+    let captured: RunnerCall | undefined;
+    const { runtime, runSpy } = makeRuntime({
+      agentRun: call => {
+        captured = call;
+        return (async function* (): AsyncGenerator<unknown> {
+          await new Promise<void>(resolve => call.signal.addEventListener('abort', () => resolve()));
+        })();
+      },
+    });
+    const ask = vi.fn(async (_request: Record<string, unknown>) => ({ ok: true, text: 'It is reading the config file.' }));
+    Object.assign(runtime, { ask });
+    const { stdin, lastFrame, unmount } = render(<App runtime={runtime} loadedConfig={config} initial={{ ...initial(), sessionId: 'main' }} />);
+    try {
+      await delay();
+      stdin.write('long task');
+      await delay();
+      stdin.write('\r');
+      await vi.waitFor(() => expect(runSpy).toHaveBeenCalledTimes(1));
+
+      stdin.write('also check the tests');
+      await delay();
+      stdin.write('\r');
+      await vi.waitFor(() => expect(lastFrame()).toContain('Queued steering: also check the tests'));
+      expect(runSpy).toHaveBeenCalledTimes(1);
+      expect((captured!.steering as () => string[])()).toEqual(['also check the tests']);
+
+      stdin.write('/btw what is it doing?');
+      await delay();
+      stdin.write('\r');
+      await vi.waitFor(() => expect(lastFrame()).toContain('It is reading the config file.'));
+      expect(lastFrame()).toContain('Esc to close');
+      expect(ask).toHaveBeenCalledTimes(1);
+      const request = ask.mock.calls[0]![0];
+      expect(request).not.toHaveProperty('sessionId');
+      expect(request.prompt).toMatch(/User: long task[\s\S]*Side question: what is it doing\?$/);
+      expect(captured!.signal.aborted).toBe(false);
+
+      stdin.write('\x1b');
+      await vi.waitFor(() => expect(lastFrame()).not.toContain('Esc to close'));
+      // The side question stays out of the transcript.
+      expect(lastFrame()).not.toContain('what is it doing?');
+      expect(captured!.signal.aborted).toBe(false);
+      expect(runSpy).toHaveBeenCalledTimes(1);
+    } finally { unmount(); }
+  });
+
+  it('/btw while idle answers aside instead of starting a run', async () => {
+    const { runtime, runSpy } = makeRuntime();
+    const ask = vi.fn(async () => ({ ok: true, text: 'Nothing has run yet.' }));
+    Object.assign(runtime, { ask });
+    const { stdin, lastFrame, unmount } = render(<App runtime={runtime} loadedConfig={config} initial={initial()} />);
+    try {
+      await delay();
+      stdin.write('/btw anything so far?');
+      await delay();
+      stdin.write('\r');
+      await vi.waitFor(() => expect(lastFrame()).toContain('Nothing has run yet.'));
+      expect(runSpy).not.toHaveBeenCalled();
+    } finally { unmount(); }
   });
 
   it('/stop aborts the in-flight run', async () => {
@@ -385,7 +424,7 @@ describe('App run routing', () => {
       })();
     };
     const { runtime, runSpy } = makeRuntime({ agentRun: blockingRun });
-    const { stdin, unmount } = render(<App runtime={runtime} loadedConfig={config} initial={initial('agent')} />);
+    const { stdin, unmount } = render(<App runtime={runtime} loadedConfig={config} initial={initial()} />);
     await delay();
     stdin.write('hello');
     await delay();
@@ -420,7 +459,7 @@ describe('App run routing', () => {
     })();
     const { runtime } = makeRuntime({ agentRun: questioningRun });
     const { stdin, lastFrame, unmount } = render(
-      <App runtime={runtime} loadedConfig={config} initial={initial('agent')} />,
+      <App runtime={runtime} loadedConfig={config} initial={initial()} />,
     );
     await delay();
     stdin.write('build a page');
@@ -448,7 +487,7 @@ describe('App run routing', () => {
       source: '/skills/essay/SKILL.md',
     };
     Object.assign(runtime, { getSkill: (name: string) => name === 'essay' ? skill : undefined });
-    const { stdin, lastFrame, unmount } = render(<App runtime={runtime} loadedConfig={config} initial={initial('agent')} />);
+    const { stdin, lastFrame, unmount } = render(<App runtime={runtime} loadedConfig={config} initial={initial()} />);
     await delay();
     stdin.write('$essay');
     await delay();
@@ -466,23 +505,18 @@ describe('App run routing', () => {
     unmount();
   });
 
-  it('runs a chat-mode $skill as an isolated stream with its body as instructions', async () => {
-    const { runtime, runSpy, streamSpy } = makeRuntime();
+  it('runs a $skill that declares chat mode as a lean agent run (the TUI is agent-only)', async () => {
+    const { runtime, runSpy } = makeRuntime();
     const skill = { name: 'tone', description: 'Rewrite tone', prompt: 'Rewrite politely.', variables: [], mode: 'chat' };
     Object.assign(runtime, { getSkill: () => skill });
-    const { stdin, unmount } = render(<App runtime={runtime} loadedConfig={config} initial={initial('agent')} />);
+    const { stdin, unmount } = render(<App runtime={runtime} loadedConfig={config} initial={initial()} />);
     await delay();
     stdin.write('$tone hey you');
     await delay();
     stdin.write('\r');
-    await vi.waitFor(() => expect(streamSpy).toHaveBeenCalledTimes(1));
-    expect(streamSpy.mock.calls[0][0]).toMatchObject({
-      prompt: 'hey you',
-      instructions: ['Rewrite politely.'],
-      userTurn: '$tone hey you',
-      isolated: true,
-    });
-    expect(runSpy).not.toHaveBeenCalled();
+    await vi.waitFor(() => expect(runSpy).toHaveBeenCalledTimes(1));
+    expect(runSpy.mock.calls[0][0]).toMatchObject({ objective: 'hey you', userTurn: '$tone hey you', lean: true });
+    expect((runSpy.mock.calls[0][0].instructions as string[])[0]).toBe('Rewrite politely.');
     unmount();
   });
 
@@ -495,7 +529,7 @@ describe('App run routing', () => {
         yield { type: 'done', taskId: 't', status: 'completed' };
       })(),
     });
-    const { stdin, lastFrame, unmount } = render(<App runtime={runtime} loadedConfig={config} initial={initial('agent')} />);
+    const { stdin, lastFrame, unmount } = render(<App runtime={runtime} loadedConfig={config} initial={initial()} />);
     await delay();
     stdin.write('save my notes');
     await delay();

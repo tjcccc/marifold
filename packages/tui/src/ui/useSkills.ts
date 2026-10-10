@@ -25,12 +25,11 @@ interface SkillOptions {
   setPlanNext: (planNext: boolean) => void;
   notify: (text: string, tone?: NoticeTone) => void;
   runAgent: Runs['runAgent'];
-  runChat: Runs['runChat'];
 }
 
 /** `$skill` invocations: binds arguments, asks for missing variables one at a
- * time, then runs the skill as a lean agent turn or an isolated chat turn. */
-export function useSkills({ runtime, dispatch, stateRef, planNextRef, setPlanNext, notify, runAgent, runChat }: SkillOptions) {
+ * time, then runs the skill as a lean agent turn (the TUI is agent-only). */
+export function useSkills({ runtime, dispatch, stateRef, planNextRef, setPlanNext, notify, runAgent }: SkillOptions) {
   const [pendingSkill, setPendingSkill] = useState<PendingSkill | null>(null);
 
   const startSkillRun = useCallback((skill: MarifoldSkill, body: string, userInput: string, displayText: string) => {
@@ -43,17 +42,6 @@ export function useSkills({ runtime, dispatch, stateRef, planNextRef, setPlanNex
     // `/steps` armed: force a planned agent run for this skill (then disarm).
     const forcePlan = planNextRef.current;
     if (forcePlan) { setPlanNext(false); }
-    // An undeclared mode follows the session: a skill invoked in an agent session
-    // runs agentically (with tools), so it can read its own bundled files. A
-    // forced plan always runs as an agent (planning needs the agent loop).
-    const mode = forcePlan ? 'agent' : (skill.mode ?? stateRef.current.mode);
-    if (mode === 'chat') {
-      void runChat(prompt, [], {
-        instructions: [body],
-        userTurn: displayText,
-        isolated: true,
-      });
-    } else {
       // Tell the agent where the skill's bundled files live so it can read them
       // (e.g. a vars.toml of `#name` fragments) with read_file, as the skill
       // instructions direct — the agentic-tool model, like Codex/Claude.
@@ -66,8 +54,7 @@ export function useSkills({ runtime, dispatch, stateRef, planNextRef, setPlanNex
       // optional planning and verbose framing — a skill is a single transform,
       // so that's pure token overhead.
       void runAgent(prompt, { instructions, userTurn: displayText, lean: true, ...(forcePlan ? { forcePlan: true } : {}) });
-    }
-  }, [runAgent, runChat]);
+  }, [runAgent]);
 
   const runSkill = useCallback((name: string, argv: string[]) => {
     let skill: MarifoldSkill | undefined;

@@ -645,14 +645,14 @@ export class SessionResolver {
           ${nextUser ? 'AND id < ?' : ''}
         ORDER BY id ASC
         LIMIT 1
-      `).get(...(nextUser
-        ? [sessionId, target.id, nextUser.id]
-        : [sessionId, target.id])) as { id: number } | undefined;
-      if (!assistant) { return { found: true, replaced: false }; }
-
+      `).get(...(nextUser ? [sessionId, target.id, nextUser.id] : [sessionId, target.id])) as { id: number } | undefined;
+      // An unanswered prompt (its run never finished) gains an answer only when newest.
+      if (!assistant && nextUser) { return { found: true, replaced: false }; }
       const transaction = db.transaction(() => {
         db.prepare('UPDATE turns SET content = ? WHERE id = ?').run(userText, target.id);
-        db.prepare('UPDATE turns SET content = ? WHERE id = ?').run(assistantText, assistant.id);
+        if (assistant) { db.prepare('UPDATE turns SET content = ? WHERE id = ?').run(assistantText, assistant.id); } else {
+          db.prepare("INSERT INTO turns (session_id, role, content, timestamp) VALUES (?, 'assistant', ?, strftime('%Y-%m-%dT%H:%M:%f000+00:00', 'now'))").run(sessionId, assistantText);
+        }
         if (images !== undefined) { replaceUserTurnAttachments(db, sessionId, userTurnIndex, images); }
         if (responseMetrics) {
           upsertResponseMetrics(db, sessionId, userTurnIndex, responseMetrics);
@@ -782,22 +782,21 @@ export class SessionResolver {
     }
   }
 
-  /** Append one clean user→assistant exchange to a session (creating it if
-   * needed). Agent runs use this to record the objective + final answer as a
-   * single tidy pair, instead of priest's raw per-iteration `Objective:`/tool
-   * framing that made resumed transcripts confusing. */
+  /** Append a clean user→assistant exchange, or either half, creating the session
+   * if needed. Agent runs record the objective at start and the answer at the end,
+   * never priest's raw per-iteration `Objective:`/tool framing. */
   async appendExchange(
     sessionId: string,
     profileName: string,
-    userText: string,
-    assistantText: string,
+    userText: string | undefined,
+    assistantText: string | undefined,
     images?: ImageInput[],
     responseMetrics?: ResponseMetrics,
   ): Promise<void> {
     const store = this.openStore();
     const session = (await store.get(sessionId)) ?? (await store.create(profileName, sessionId));
-    session.appendTurn('user', userText);
-    session.appendTurn('assistant', assistantText);
+    if (userText !== undefined) { session.appendTurn('user', userText); }
+    if (assistantText !== undefined) { session.appendTurn('assistant', assistantText); }
     await store.save(session);
     this.saveLastUserTurnAttachments(sessionId, images);
     if (responseMetrics) { this.saveLastResponseMetrics(sessionId, responseMetrics); }

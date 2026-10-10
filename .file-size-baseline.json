@@ -40,9 +40,9 @@
   ],
   "files": {
     "apps/web/src/screens/agent/useAgentController.ts": 1147,
-    "packages/core/src/agent/AgentRunner.ts": 1232,
-    "packages/core/src/runtime/MarifoldRuntime.ts": 1032,
-    "packages/core/src/sessions/SessionResolver.ts": 983,
-    "packages/tui/src/ui/App.tsx": 920
+    "packages/core/src/agent/AgentRunner.ts": 1217,
+    "packages/core/src/runtime/MarifoldRuntime.ts": 1011,
+    "packages/core/src/sessions/SessionResolver.ts": 982,
+    "packages/tui/src/ui/App.tsx": 895
   }
 }

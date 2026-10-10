@@ -17,6 +17,8 @@ export class RunFollowers {
     private readonly dispatch: (action: ThreadAction) => void,
     /** Runs after the terminal event has been folded into the thread. */
     private readonly onDone?: (runId: string) => void,
+    /** Runs when a run reports running; its session has saved the prompt by then. */
+    private readonly onRunning?: (runId: string) => void,
   ) {}
 
   /** Idempotent: attaching an already-followed run is a no-op. */
@@ -48,6 +50,7 @@ export class RunFollowers {
       for await (const { seq, event } of followRun(this.client, runId, { afterSeq, signal })) {
         this.dispatch({ type: 'run_event', runId, seq, event });
         if (event.type === 'done') { this.onDone?.(runId); }
+        if (event.type === 'status' && event.status === 'running') { this.onRunning?.(runId); }
       }
     } catch (error) {
       if (signal.aborted) { return; }

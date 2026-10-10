@@ -123,6 +123,16 @@ describe('ProfileSettingsPage', () => {
     expect(screen.getByRole('region', { name: 'Agent permissions' })).toBeTruthy();
   });
 
+  it('offers Remove avatar only when the profile has one', () => {
+    const onAvatarDelete = vi.fn();
+    renderPage({ detail: { ...detail, avatar: { mediaType: 'image/png' } }, onAvatarDelete }, false);
+    fireEvent.click(screen.getByRole('button', { name: 'Remove avatar' }));
+    expect(onAvatarDelete).toHaveBeenCalledOnce();
+    cleanup();
+    renderPage({ detail: { ...detail, avatar: undefined }, onAvatarDelete }, false);
+    expect(screen.queryByRole('button', { name: 'Remove avatar' })).toBeNull();
+  });
+
   it('shows the stable profile name and saves or clears the display-name override', () => {
     const unnamedDetail: ProfileDetail = {
       ...detail,

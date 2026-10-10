@@ -7,7 +7,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { expandHome } from '@marifold/core';
 import type { LoadedMarifoldConfig, MarifoldRuntime } from '@marifold/core';
-import { appReducer, createInitialState, visibleTranscript, type Mode, type NoticeTone, type TranscriptItem, type TranscriptItemData } from '../core/appState.js';
+import { appReducer, createInitialState, visibleTranscript, type NoticeTone, type TranscriptItem, type TranscriptItemData } from '../core/appState.js';
 import { parseInput } from '../core/inputGrammar.js';
 import { listCommandCompletions, listCommands, runCommand, type CommandContext } from '../core/commands.js';
 import { FullScreen } from './FullScreen.js';
@@ -25,6 +25,8 @@ import { sessionItem } from './sessionItems.js';
 import { useApprovals } from './useApprovals.js';
 import { useSessionLease } from './useSessionLease.js';
 import { useRuns } from './useRuns.js';
+import { useSideQuestion } from './useSideQuestion.js';
+import { SideQuestionPanel } from './SideQuestionPanel.js';
 import { useSkills } from './useSkills.js';
 import { copyToClipboard, errorText, sessionBusyText, sessionLostText, unwrapPath } from './appHelpers.js';
 
@@ -43,7 +45,6 @@ export interface AppProps {
     provider: string;
     model: string;
     think: boolean;
-    mode?: Mode;
     cwd: string;
     version: string;
     latestVersion?: string;
@@ -73,7 +74,6 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
       model: initial.model,
       cwd: initial.cwd,
       version: initial.version,
-      ...(initial.mode ? { mode: initial.mode } : {}),
       ...(initial.latestVersion ? { latestVersion: initial.latestVersion } : {}),
       ...(initial.sessionId ? { sessionId: initial.sessionId } : {}),
       ...(initial.maxContextTokens != null ? { maxContextTokens: initial.maxContextTokens } : {}),
@@ -182,10 +182,10 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
     sessionGrantsRef, sessionTrustedFoldersRef,
   } = useApprovals({ runtime, dispatch, stateRef, notify });
   const {
-    runAgent, runChat, startTextRun, retryLast, stop, steeringCount, setSteeringCount, steeringRef,
+    runAgent, startTextRun, retryLast, stop, steeringCount, setSteeringCount, steeringRef,
     abortRef, runGenerationRef, pendingContextRef, pendingImagesRef,
   } = useRuns({ runtime, dispatch, stateRef, thinkRef, planNextRef, setPlanNext, notify, approvalHandler, userInputHandler, cancelPrompts });
-  const { pendingSkill, runSkill, fillSkillVariable } = useSkills({ runtime, dispatch, stateRef, planNextRef, setPlanNext, notify, runAgent, runChat });
+  const { pendingSkill, runSkill, fillSkillVariable } = useSkills({ runtime, dispatch, stateRef, planNextRef, setPlanNext, notify, runAgent });
 
   // Confirm a `--resume` launch with a notice below the replayed turns, so the
   // boundary between prior history and the current session is clear.
@@ -198,6 +198,7 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
     }
   }, [notify, initial.sessionId]);
 
+  const sideQuestion = useSideQuestion({ runtime, stateRef });
   const { lostSessionRef, takeOver } = useSessionLease({ runtime, sessionId: state.sessionId, dispatch, stateRef, runGenerationRef, abortRef, notify });
 
   const refreshSkills = useCallback((profile = stateRef.current.profile) => {
@@ -469,22 +470,12 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
     notify(result.count === 0 ? 'No matching memories.' : `Deleted ${result.count} memory record(s).`, 'info');
   }, [runtime, notify]);
 
+  // Typing while a task runs queues the text for its next model turn.
   const steer = useCallback((text: string) => {
-    // Steering only has meaning inside the agent loop; chat is a single-turn
-    // request that never reads the steering queue, so a `/btw` there would be
-    // silently dropped. Reject it with a clear message instead.
-    if (stateRef.current.mode === 'chat') {
-      notify('/btw (steering) only applies in agent mode.', 'warn');
-      return;
-    }
-    if (stateRef.current.running) {
-      steeringRef.current.push(text);
-      setSteeringCount(count => count + 1);
-      notify(`Queued steering: ${text}`, 'info');
-    } else {
-      startTextRun(text);
-    }
-  }, [notify, startTextRun]);
+    steeringRef.current.push(text);
+    setSteeringCount(count => count + 1);
+    notify(`Queued steering: ${text}`, 'info');
+  }, [notify]);
 
   // Switch profile (from `/profile <name>` or the picker): starts a fresh
   // session and confirms in the transcript.
@@ -500,7 +491,6 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
         model: settings.model,
         maxContextTokens: settings.maxContextTokens ?? loadedConfig.config.default.maxContextTokens,
       });
-      dispatch({ type: 'set_mode', mode: 'agent' });
       // Adopt the new profile's thinking default (bare setter — selectProfile
       // emits its own notice; the wrapped ctx.setThink would add a spurious one).
       setThink(settings.think);
@@ -522,7 +512,7 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
     newSession: () => { dispatch({ type: 'new_session', sessionId: undefined }); notify('Started a new session.', 'info'); },
     clear: () => dispatch({ type: 'clear' }),
     stop,
-    steer,
+    sideQuestion: sideQuestion.ask,
     exit: quit,
     setThink: (on: boolean) => { setThink(on); notify(`Thinking ${on ? 'on' : 'off'}.`, 'info'); },
     toggleForcePlan: () => setPlanNext(armed => {
@@ -540,7 +530,7 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
     retryLast,
     sendOriginal: (text: string) => {
       if (stateRef.current.running) {
-        notify('A task is running. Use /btw to steer or /stop to cancel.', 'warn');
+        notify('A task is running. Type a message to steer it, /btw to ask aside, or /stop to cancel.', 'warn');
         return;
       }
       startTextRun(text, { originalImages: true });
@@ -592,7 +582,7 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
     },
     trustFolder: trustFolderForProfile,
   }), [
-    notify, stop, steer, exit, openModelPicker, openProfilePicker, selectProfile, openSkills,
+    notify, stop, sideQuestion.ask, exit, openModelPicker, openProfilePicker, selectProfile, openSkills,
     showPermissions, showHelp, showStatus, copyLast, retryLast, showSessions, runDoctor, installSkill,
     readFileCmd, setImage, remember, forget, deleteMemory, repaint, runtime, trustFolderForProfile, startTextRun, workspaceCommand, deviceCommand,
   ]);
@@ -619,7 +609,9 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
         return;
       }
       if (sendsMessage && stateRef.current.running) {
-        notify('A task is running. Use /btw to steer or /stop to cancel.', 'warn');
+        // Plain text steers the running task (queued for its next model turn).
+        if (parsed.kind === 'text' && attachedImages.length === 0) { setHistory(entries => [...entries, { text: raw.trim(), images: [] }]); steer(parsed.text); }
+        else { notify('A task is running. Type a message to steer it, /btw to ask aside, or /stop to cancel.', 'warn'); }
         return;
       }
       if (sendsMessage) {
@@ -634,8 +626,7 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
       }
       if (parsed.kind !== 'empty') { setHistory(entries => [...entries, { text: trimmed, images: [...attachedImages] }]); }
       // Dropped images (`[image #n]` tokens) attach to the message about to run.
-      // Both the chat path (runChat) and the agent path (runAgent) consume
-      // pendingImagesRef, so this works in either mode for a text/skill turn.
+      // The agent run consumes pendingImagesRef for a text or skill turn.
       if (attachedImages.length > 0) {
         if (parsed.kind === 'text' || parsed.kind === 'skill' || (parsed.kind === 'command' && parsed.name === 'attach-original')) {
           pendingImagesRef.current.push(...await resolvePromptImages(runtime, attachedImages));
@@ -647,9 +638,9 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
         case 'empty':
           return;
         case 'command':
-          // `/attach-original <prompt>` is a one-turn send action. Show the
-          // actual prompt once, not an extra command-echo row before it.
-          if (parsed.name === 'attach-original') {
+          // `/attach-original <prompt>` is a one-turn send action: show the actual
+          // prompt once. `/btw` lives in its own panel, outside the transcript.
+          if (parsed.name === 'attach-original' || parsed.name === 'btw') {
             runCommand(commandContext, parsed.name, parsed.args);
             return;
           }
@@ -661,23 +652,15 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
           }
           return;
         case 'skill':
-          if (stateRef.current.running) {
-            notify('A task is running. Use /btw to steer or /stop to cancel.', 'warn');
-            return;
-          }
           runSkill(parsed.name, parsed.argv);
           return;
         case 'text':
-          if (stateRef.current.running) {
-            notify('A task is running. Use /btw to steer or /stop to cancel.', 'warn');
-            return;
-          }
           startTextRun(parsed.text);
           return;
       }
     } catch (error) { notify(errorText(error), 'error'); }
     finally { submittingRef.current = false; }
-  }, [runtime, pendingSkill, fillSkillVariable, commandContext, notify, runSkill, startTextRun]);
+  }, [runtime, pendingSkill, fillSkillVariable, commandContext, notify, runSkill, startTextRun, steer]);
 
   const handleInterrupt = useCallback((reason: 'ctrl-c' | 'escape') => {
     if (stateRef.current.running) {
@@ -724,9 +707,10 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
         />
       );
     }
-    if (!overlay) { return null; }
     // Cap overlay height so it fits between the banner and status line.
     const overlayMaxRows = Math.max(4, rows - 9);
+    if (sideQuestion.view) { return <SideQuestionPanel view={sideQuestion.view} maxRows={overlayMaxRows} onClose={sideQuestion.close} />; }
+    if (!overlay) { return null; }
     if (overlay.type === 'model') {
       return <SelectList title="Select model" items={overlay.items} onSelect={onModelSelect} onCancel={() => setOverlay(null)} maxRows={overlayMaxRows} />;
     }
@@ -807,7 +791,7 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
   const footer = (
     <Box flexDirection="column">
       {(!resizing || fullscreen) && state.running ? (
-        <RunStatus startedAt={runStartedAt.current} activity={state.activity} think={think} steeringQueued={steeringCount} />
+        <RunStatus startedAt={runStartedAt.current} activity={state.activity} cancelling={state.cancelling} think={think} steeringQueued={steeringCount} />
       ) : null}
       {activeOverlay ?? (
         <InputBox

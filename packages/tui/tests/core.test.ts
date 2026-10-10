@@ -193,7 +193,7 @@ function fakeCtx(): { ctx: CommandContext; calls: Record<string, unknown[]> } {
   const record = (name: string) => (...args: unknown[]) => { calls[name] = args; };
   const ctx = {
     notify: record('notify'), newSession: record('newSession'),
-    clear: record('clear'), stop: record('stop'), steer: record('steer'), exit: record('exit'),
+    clear: record('clear'), stop: record('stop'), sideQuestion: record('sideQuestion'), exit: record('exit'),
     setThink: record('setThink'), openModelPicker: record('openModelPicker'), openProfilePicker: record('openProfilePicker'),
     openSkills: record('openSkills'), showPermissions: record('showPermissions'), showHelp: record('showHelp'),
     showSessions: record('showSessions'), takeOver: record('takeOver'), runDoctor: record('runDoctor'), installSkill: record('installSkill'),
@@ -212,7 +212,7 @@ describe('commands', () => {
     expect(runCommand(ctx, 'clear', '')).toBe(true);
     expect(calls.clear).toBeDefined();
     expect(runCommand(ctx, 'btw', 'focus here')).toBe(true);
-    expect(calls.steer).toEqual(['focus here']);
+    expect(calls.sideQuestion).toEqual(['focus here']);
     expect(runCommand(ctx, 'quit', '')).toBe(true); // alias of exit
     expect(calls.exit).toBeDefined();
     expect(runCommand(ctx, 'resume', '')).toBe(true);

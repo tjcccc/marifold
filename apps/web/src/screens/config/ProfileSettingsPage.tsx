@@ -149,8 +149,6 @@ export function ProfileSettingsPage(props: ProfileSettingsPageProps) {
             {detail.settings.think ? ' · thinking on' : ''}
           </div>
         </div>
-        {/* "Remove photo" hidden for now (per design); deletion stays available
-            via the runtime/CLI. Re-add a control here when wanted. */}
         {canEditAvatar ? (
           <input
             ref={avatarInputRef}
@@ -212,6 +210,20 @@ export function ProfileSettingsPage(props: ProfileSettingsPageProps) {
               ) : null}
             </div>
           </div>
+          {props.onAvatarDelete && detail.avatar ? (
+            <div className={styles.rowLine}>
+              <span className={styles.rowLabel}>Avatar</span>
+              <button
+                type="button"
+                className={styles.saveAction}
+                aria-label="Remove avatar"
+                disabled={busy}
+                onClick={props.onAvatarDelete}
+              >
+                Remove
+              </button>
+            </div>
+          ) : null}
         </div>
         <div className={styles.groupHint}>
           Profile names use letters, numbers, underscores, and hyphens only. Display names are shown throughout the Web UI; blank uses the profile name.

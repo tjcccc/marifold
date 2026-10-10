@@ -39,6 +39,7 @@ Shipped history lives in `DEVLOG.md` and the `docs/roadmap.md` ladder; this list
 - External-agent aliases: Codex and Claude Code wrappers, capability metadata, handoff summaries, result import, and write-conflict safeguards.
 - App and Workflow expansion: conditionals, repeaters, typed artifacts, richer previews/canvases, controlled file export, approval-aware effectful actions, and workflow composition across profiles, Skills, Apps, models, and external-agent aliases (`docs/workflow-plan.md`).
 - Web UI: a `/v1/events` push channel to replace run polling, and profile rename/delete.
+- Web UI side chat (deferred 2026-10-10): `/btw` (or Cmd/Ctrl+;) opens an ephemeral, multi-turn side chat modelled on the Claude desktop app's — a right panel on desktop, bottom sheet on mobile, each turn one tool-less `ask` that sees the main thread and is never saved. Until then the Web `/btw` still steers the running task, unlike the TUI's side question.
 - Bridge setup: fewer manual steps to bring a personal bridge online and pair devices.
 
 ### Platform

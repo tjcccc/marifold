@@ -144,9 +144,6 @@ export async function runTui(options: RunTuiOptions): Promise<void> {
       provider: settings.provider,
       model: settings.model,
       think: settings.think,
-      // The primary TUI is agent-only. Keep the internal mode machinery for
-      // explicit Skill compatibility without exposing a session toggle.
-      mode: 'agent' as const,
       cwd: process.cwd(),
       version: readVersion(),
       maxContextTokens: settings.maxContextTokens ?? options.loadedConfig.config.default.maxContextTokens,

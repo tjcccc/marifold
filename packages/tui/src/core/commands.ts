@@ -13,7 +13,8 @@ export interface CommandContext {
   newSession(): void | Promise<void>;
   clear(): void | Promise<void>;
   stop(): void | Promise<void>;
-  steer(text: string): void | Promise<void>;
+  /** Ask a quick side question about the conversation; never saved or steering. */
+  sideQuestion(text: string): void | Promise<void>;
   exit(): void | Promise<void>;
   setThink(on: boolean): void | Promise<void>;
   openModelPicker(): void | Promise<void>;
@@ -88,11 +89,11 @@ const COMMANDS: CommandSpec[] = [
   { name: 'stop', summary: 'Cancel the running task.', run: ctx => ctx.stop() },
   {
     name: 'btw',
-    summary: 'Steer the running task without cancelling it: /btw <text>.',
+    summary: 'Ask a quick side question without interrupting the task: /btw <question>.',
     run: (ctx, args) => {
       const text = args.trim();
-      if (!text) { ctx.notify('Usage: /btw <text>', 'warn'); }
-      else { return ctx.steer(text); }
+      if (!text) { ctx.notify('Usage: /btw <question>', 'warn'); }
+      else { return ctx.sideQuestion(text); }
     },
   },
   { name: 'model', summary: 'Pick the active model.', run: ctx => ctx.openModelPicker() },

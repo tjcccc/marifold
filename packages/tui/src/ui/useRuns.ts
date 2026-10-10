@@ -20,7 +20,7 @@ interface RunOptions {
 }
 
 /**
- * Agent and chat runs bound to the transcript: starting, steering, retrying,
+ * Agent runs bound to the transcript: starting, steering, retrying,
  * and cancelling them. Owns the run plumbing refs, which do not drive
  * rendering directly.
  */
@@ -56,8 +56,7 @@ export function useRuns({
     const images = pendingImagesRef.current;
     pendingImagesRef.current = [];
     const current = stateRef.current;
-    // One conversation session shared with chat mode, so the agent remembers
-    // earlier turns. Skills pass their body via `instructions` (authoritative,
+    // One conversation session, so the agent remembers earlier turns. Skills pass their body via `instructions` (authoritative,
     // not persisted) rather than isolating, so context-aware skills still see
     // the conversation.
     const sessionId = current.sessionId ?? randomUUID();
@@ -119,66 +118,6 @@ export function useRuns({
     }
   }, [runtime, approvalHandler, userInputHandler, notify]);
 
-  const runChat = useCallback(async (
-    prompt: string,
-    extraContext: string[] = [],
-    options: {
-      instructions?: string[];
-      originalImages?: boolean;
-      userTurn?: string;
-      isolated?: boolean;
-    } = {},
-  ) => {
-    const controller = new AbortController();
-    abortRef.current = controller;
-    const current = stateRef.current;
-    const sessionId = current.sessionId ?? randomUUID();
-    if (!current.sessionId) { dispatch({ type: 'set_session', sessionId }); }
-    const userContext = [...extraContext, ...pendingContextRef.current];
-    pendingContextRef.current = [];
-    const images = pendingImagesRef.current;
-    pendingImagesRef.current = [];
-    dispatch({ type: 'set_running', running: true });
-    dispatch({ type: 'set_activity', activity: 'thinking' });
-    const startedAt = Date.now();
-    let usage: AgentUsage | undefined;
-    try {
-      await runtime.acquireSession?.(sessionId);
-      for await (const chunk of runtime.stream(
-        {
-          prompt,
-          profile: current.profile,
-          provider: current.provider,
-          model: current.model,
-          sessionId,
-          think: thinkRef.current,
-          ...(current.maxContextTokens != null ? { maxContextTokens: current.maxContextTokens } : {}),
-          userContext: userContext.length > 0 ? userContext : undefined,
-          ...(options.instructions ? { instructions: options.instructions } : {}),
-          ...(options.userTurn ? { userTurn: options.userTurn } : {}),
-          ...(options.isolated ? { isolated: true } : {}),
-          ...(options.originalImages ? { originalImages: true } : {}),
-          images: images.length > 0 ? images : undefined,
-          signal: controller.signal,
-        },
-        summary => { usage = summary.usage; },
-        text => { dispatch({ type: 'reasoning_delta', text }); },
-      )) {
-        if (controller.signal.aborted) { break; }
-        dispatch({ type: 'assistant_delta', text: chunk });
-      }
-    } catch (error) {
-      if (!controller.signal.aborted) { notify(errorText(error), 'error'); }
-    } finally {
-      dispatch({ type: 'end_assistant' });
-      dispatch({ type: 'set_running', running: false });
-      abortRef.current = null;
-      if (usage?.inputTokens != null) { dispatch({ type: 'set_context_usage', tokens: usage.inputTokens }); }
-      if (controller.signal.aborted) { notify('Cancelled.', 'warn'); }
-      else { notify(runSummary(Date.now() - startedAt, usage), 'info'); }
-    }
-  }, [runtime, notify]);
-
   const startTextRun = useCallback((text: string, options: { originalImages?: boolean } = {}) => {
     // Remember the last plain-text prompt so `/retry` can re-run it. Captured
     // here (the sole text-run entry) rather than read from the transcript, which
@@ -192,11 +131,10 @@ export function useRuns({
       void runAgent(text, { ...options, forcePlan: true });
       return;
     }
-    if (stateRef.current.mode === 'chat') { void runChat(text, [], options); }
-    else { void runAgent(text, options); }
-  }, [runAgent, runChat]);
+    void runAgent(text, options);
+  }, [runAgent]);
 
-  // Re-run the last plain-text message through the current profile/model/mode —
+  // Re-run the last plain-text message through the current profile/model —
   // handy for A/B-ing models (switch with /model, then /retry). Appends a new
   // turn; does not re-invoke a `$skill` or re-attach prior images/context.
   const retryLast = useCallback(() => {
@@ -215,12 +153,13 @@ export function useRuns({
   const stop = useCallback(() => {
     abortRef.current?.abort();
     cancelPrompts();
-    if (stateRef.current.running) { notify('Cancelling…', 'warn'); }
-  }, [notify, cancelPrompts]);
+    // The status line shows "Cancelling…" until the run ends; then the
+    // transcript records "Cancelled." once.
+    if (stateRef.current.running) { dispatch({ type: 'set_cancelling' }); }
+  }, [dispatch, cancelPrompts]);
 
   return {
     runAgent,
-    runChat,
     startTextRun,
     retryLast,
     stop,

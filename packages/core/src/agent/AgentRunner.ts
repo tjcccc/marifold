@@ -150,13 +150,15 @@ export interface AgentRunnerDeps {
   prepareEngine: (settings: MarifoldResolvedSettings) => Promise<AgentEngineContext>;
   /** Normalize and optimize image inputs before the first provider request. */
   prepareImages?: (images: ImageInput[], optimize: boolean) => Promise<ImageInput[]>;
-  /** Persist one clean conversation turn (objective → terminal outcome) to
-   * the session, so resuming shows the result without the raw agent framing. */
+  /** Persist the clean conversation turns (objective, then terminal outcome)
+   * to the session, so resuming shows the result without the raw agent
+   * framing. A run saves the user turn when it starts (`assistantText`
+   * omitted) and the outcome when it ends (`userText` omitted). */
   persistTurn?: (
     sessionId: string,
     profile: string,
-    userText: string,
-    assistantText: string,
+    userText: string | undefined,
+    assistantText: string | undefined,
     images?: ImageInput[],
     replaceUserTurnIndex?: number,
     responseMetrics?: ResponseMetrics,
@@ -255,7 +257,41 @@ export class AgentRunner {
         images: await this.deps.prepareImages(runOptions.images, runOptions.originalImages !== true),
       };
     }
-    const preparedEngine = await this.deps.prepareEngine(settings);
+    // Bounded cross-objective memory: inject a window of the recent clean
+    // session pairs so a NON-lean task can reference prior turns ("save the
+    // above prompt"). Lean/skill runs stay stateless (isolated).
+    const recentTurns = !options.lean && options.sessionId && this.deps.loadRecentTurns
+      ? this.deps.loadRecentTurns(options.sessionId, options.replaceUserTurnIndex)
+      : [];
+    // Cap to the last N turns when the profile sets session_context_turns — the
+    // same turn window chat uses, so the knob means the same thing in both modes.
+    // The char budget (≈ the token budget) remains the secondary bound.
+    const windowedTurns = settings.sessionContextTurns != null
+      ? recentTurns.slice(Math.max(0, recentTurns.length - settings.sessionContextTurns))
+      : recentTurns;
+    const historyContext = buildHistoryContext(
+      windowedTurns,
+      settings.maxContextTokens ?? HISTORY_BUDGET_DEFAULT_CHARS,
+    );
+    // Save the prompt now (after reading the history it must not repeat), so
+    // the session exists, and can be retried, before the run reports running;
+    // the outcome follows at the end. An edit replaces its exchange only when done.
+    const sessionImages = runOptions.images?.map((image, index) => options.images?.[index]?.path ? options.images[index] : image);
+    let userTurnPersisted = false;
+    if (options.sessionId && this.deps.persistTurn && options.replaceUserTurnIndex === undefined) {
+      if (!held) { this.deps.checkSession?.(options); }
+      await this.deps.persistTurn(options.sessionId, settings.profile, options.userTurn ?? options.objective, undefined, sessionImages);
+      userTurnPersisted = true;
+    }
+    // A failure before the agent loop still answers the saved prompt.
+    const answerEarlyFailure = async (message: string): Promise<void> => {
+      if (userTurnPersisted) { await this.deps.persistTurn?.(options.sessionId!, settings.profile, undefined, failedSessionOutcome(message)).catch(() => undefined); }
+    };
+    let preparedEngine: AgentEngineContext;
+    try { preparedEngine = await this.deps.prepareEngine(settings); } catch (error) {
+      await answerEarlyFailure(error instanceof Error ? error.message : String(error));
+      throw error;
+    }
     const { engine: rawEngine } = preparedEngine;
     let config = preparedEngine.config;
     let webSearchMode = preparedEngine.webSearchMode ?? 'unavailable';
@@ -307,6 +343,7 @@ export class AgentRunner {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       yield { type: 'error', code: 'EXECUTION_UNAVAILABLE', message };
+      await answerEarlyFailure(message);
       yield* this.finish(task.id, options.signal?.aborted ? 'cancelled' : 'failed', undefined, message, usage);
       return;
     }
@@ -317,22 +354,6 @@ export class AgentRunner {
       signal: options.signal,
       outputLimit: agentConfig.toolOutputLimit,
     };
-    // Bounded cross-objective memory: inject a window of the recent clean
-    // session pairs so a NON-lean task can reference prior turns ("save the
-    // above prompt"). Lean/skill runs stay stateless (isolated).
-    const recentTurns = !options.lean && options.sessionId && this.deps.loadRecentTurns
-      ? this.deps.loadRecentTurns(options.sessionId, options.replaceUserTurnIndex)
-      : [];
-    // Cap to the last N turns when the profile sets session_context_turns — the
-    // same turn window chat uses, so the knob means the same thing in both modes.
-    // The char budget (≈ the token budget) remains the secondary bound.
-    const windowedTurns = settings.sessionContextTurns != null
-      ? recentTurns.slice(Math.max(0, recentTurns.length - settings.sessionContextTurns))
-      : recentTurns;
-    const historyContext = buildHistoryContext(
-      windowedTurns,
-      settings.maxContextTokens ?? HISTORY_BUDGET_DEFAULT_CHARS,
-    );
 
     const state: LoopState = {
       mode: requestedMode === 'auto' ? 'native' : requestedMode,
@@ -357,8 +378,8 @@ export class AgentRunner {
       if (outcome !== 'completed' && options.replaceUserTurnIndex !== undefined) { return; }
 
       // A held session stays this run's even after another device takes it
-      // over; the turn still belongs in the conversation.
-      if (!held) { this.deps.checkSession?.(options); }
+      // over, as does one that already saved this run's prompt: answer it.
+      if (!held && !userTurnPersisted) { this.deps.checkSession?.(options); }
       sessionTurnPersisted = true;
       let responseMetrics: ResponseMetrics | undefined;
       if (outcome === 'completed') {
@@ -379,9 +400,9 @@ export class AgentRunner {
         await this.deps.persistTurn(
           options.sessionId,
           settings.profile,
-          options.userTurn ?? options.objective,
+          userTurnPersisted ? undefined : options.userTurn ?? options.objective,
           assistantText,
-          runOptions.images?.map((image, index) => options.images?.[index]?.path ? options.images[index] : image),
+          userTurnPersisted ? undefined : sessionImages,
           options.replaceUserTurnIndex,
           responseMetrics,
         );

@@ -1,7 +1,6 @@
 import type { AgentEvent, AgentToolKind, ApprovalRequest, UserInputRequest } from '@marifold/core';
 import { agentEventToItems } from './eventView.js';
 
-export type Mode = 'agent' | 'chat';
 
 export type NoticeTone = 'info' | 'warn' | 'error';
 
@@ -22,7 +21,6 @@ export interface AppState {
   displayName: string;
   provider: string;
   model: string;
-  mode: Mode;
   cwd: string;
   /** This build's version, shown in the header banner. */
   version: string;
@@ -41,6 +39,8 @@ export interface AppState {
   userInput?: UserInputRequest;
   /** Short status-line activity label, e.g. "thinking" or "shell". */
   activity?: string;
+  /** A cancel was requested and the run has not ended yet. */
+  cancelling?: boolean;
   /** True while an assistant item is open and accepting streamed deltas. */
   streamingAssistant: boolean;
   exiting: boolean;
@@ -55,7 +55,6 @@ export interface InitialAppState {
   cwd: string;
   version: string;
   latestVersion?: string;
-  mode?: Mode;
   sessionId?: string;
   /** Conversation-context budget in tokens for the launch profile (undefined = off). */
   maxContextTokens?: number;
@@ -72,7 +71,6 @@ export function createInitialState(init: InitialAppState): AppState {
     displayName: init.displayName ?? init.profile,
     provider: init.provider,
     model: init.model,
-    mode: init.mode ?? 'agent',
     cwd: init.cwd,
     version: init.version,
     ...(init.latestVersion ? { latestVersion: init.latestVersion } : {}),
@@ -87,7 +85,6 @@ export function createInitialState(init: InitialAppState): AppState {
 }
 
 export type AppAction =
-  | { type: 'set_mode'; mode: Mode }
   | { type: 'set_model'; provider: string; model: string }
   | { type: 'set_profile'; profile: string; displayName?: string; provider: string; model: string; maxContextTokens?: number }
   | { type: 'add_user'; text: string }
@@ -97,6 +94,7 @@ export type AppAction =
   | { type: 'end_assistant' }
   | { type: 'set_running'; running: boolean }
   | { type: 'set_activity'; activity?: string }
+  | { type: 'set_cancelling' }
   | { type: 'set_approval'; request?: ApprovalRequest }
   | { type: 'set_user_input'; request?: UserInputRequest }
   | { type: 'agent_event'; event: AgentEvent }
@@ -138,8 +136,6 @@ export function visibleTranscript(state: AppState, showDetails = false): Transcr
  */
 export function appReducer(state: AppState, action: AppAction): AppState {
   switch (action.type) {
-    case 'set_mode':
-      return { ...state, mode: action.mode };
     case 'set_model':
       return { ...state, provider: action.provider, model: action.model };
     case 'set_profile':
@@ -186,7 +182,9 @@ export function appReducer(state: AppState, action: AppAction): AppState {
     case 'end_assistant':
       return { ...state, streamingAssistant: false };
     case 'set_running':
-      return { ...(action.running ? state : collapseRunDetails(state)), running: action.running, ...(action.running ? {} : { activity: undefined }) };
+      return { ...(action.running ? state : collapseRunDetails(state)), running: action.running, cancelling: undefined, ...(action.running ? {} : { activity: undefined }) };
+    case 'set_cancelling':
+      return state.running ? { ...state, cancelling: true } : state;
     case 'set_activity':
       return { ...state, activity: action.activity };
     case 'set_approval':

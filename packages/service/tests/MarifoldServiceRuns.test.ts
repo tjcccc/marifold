@@ -646,6 +646,42 @@ Transform {{text}} into the final prompt.
     }
   });
 
+  it('saves the prompt when the run starts, so the session exists before the answer', async () => {
+    stubProvider([toolCall('write_file', { path: 'early.txt', content: 'early' }), 'Wrote it.']);
+    const { server, base } = await startServer();
+    const tab = { 'x-marifold-session-owner': `tab-${'c'.repeat(24)}` };
+    try {
+      const created = await postJson(base, '/v1/runs', { objective: 'Write early.txt.', userTurn: '$writer early.txt', cwd: tempDir(), sessionId: 'early' }, tab);
+      const { run } = await created.json();
+      const frames = sseFrames(await fetch(`${base}/v1/runs/${run.id}/events`));
+      const { matched } = await pullFrames(frames, frame => frame.event === 'approval_request');
+      const turns = async () => (await (await fetch(`${base}/v1/sessions/early`, { headers: tab })).json()).session.turns
+        .map((turn: { role: string; content: string }) => [turn.role, turn.content]);
+      // Mid-run, paused on an approval: the session holds just the prompt.
+      expect(await turns()).toEqual([['user', '$writer early.txt']]);
+      const listed = await (await fetch(`${base}/v1/sessions`, { headers: tab })).json();
+      expect(listed.sessions.map((session: { id: string }) => session.id)).toContain('early');
+
+      await postJson(base, `/v1/runs/${run.id}/approvals/${(matched!.data as { request: { id: string } }).request.id}`, { action: 'once' }, tab);
+      await pullFrames(frames, frame => frame.event === 'done');
+      expect(await turns()).toEqual([['user', '$writer early.txt'], ['assistant', 'Wrote it.']]);
+    } finally {
+      await server.close();
+    }
+  });
+
+  it('answers a side question (/v1/ask without a session) without saving anything', async () => {
+    stubProvider(['A side answer.']);
+    const { server, base } = await startServer();
+    try {
+      const asked = await postJson(base, '/v1/ask', { prompt: 'Conversation so far: …\n\nSide question: why?', memories: false });
+      expect((await asked.json()).response).toMatchObject({ ok: true, text: 'A side answer.' });
+      expect((await (await fetch(`${base}/v1/sessions`)).json()).sessions).toEqual([]);
+    } finally {
+      await server.close();
+    }
+  });
+
   it('lets another device take over a session while its task keeps running and saves its turn', async () => {
     stubProvider([toolCall('write_file', { path: 'held.txt', content: 'held' }), 'Saved after takeover.']);
     const { server, base } = await startServer();

@@ -9,11 +9,14 @@ import {
 export class ConsolePrinter {
   printAskResponse(response: MarifoldAskResponse): void {
     if (response.ok) {
+      // In a terminal, set the answer off from the command and the next prompt;
+      // piped output stays the bare answer.
+      const spaced = process.stdout.isTTY === true;
       const text = stripTerminalControls(response.text);
-      process.stdout.write(text);
+      process.stdout.write(`${spaced ? '\n' : ''}${text}`);
       if (!text.endsWith('\n')) { process.stdout.write('\n'); }
       process.stderr.write(
-        `(${response.latencyMs ?? 0}ms · ${response.settings.provider}/${response.settings.model} · ${response.settings.profile})\n`,
+        `(${response.latencyMs ?? 0}ms · ${response.settings.provider}/${response.settings.model} · ${response.settings.profile})\n${spaced ? '\n' : ''}`,
       );
       return;
     }

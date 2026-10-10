@@ -603,36 +603,15 @@ export class MarifoldRuntime {
         };
       },
       prepareImages: async (images, optimize) => (await prepareImageInputs(images, { optimize })).images,
-      // Record the run as a single tidy user→assistant exchange so resuming the
-      // session shows the result, not the agent's internal framing.
-      persistTurn: async (
-        sessionId,
-        profile,
-        userText,
-        assistantText,
-        images,
-        replaceUserTurnIndex,
-        responseMetrics,
-      ) => {
+      // Record the run as a tidy user→assistant exchange (the prompt when the
+      // run starts, its outcome when it ends) so resuming the session shows the
+      // result, not the agent's internal framing. Edits replace in one step.
+      persistTurn: async (sessionId, profile, userText, assistantText, images, replaceUserTurnIndex, responseMetrics) => {
         if (replaceUserTurnIndex !== undefined) {
-          this.replaceEditedExchange(
-            sessionId,
-            replaceUserTurnIndex,
-            userText,
-            assistantText,
-            images,
-            responseMetrics,
-          );
+          this.replaceEditedExchange(sessionId, replaceUserTurnIndex, userText ?? '', assistantText ?? '', images, responseMetrics);
           return;
         }
-        await this.sessionResolver.appendExchange(
-          sessionId,
-          profile,
-          userText,
-          assistantText,
-          images,
-          responseMetrics,
-        );
+        await this.sessionResolver.appendExchange(sessionId, profile, userText, assistantText, images, responseMetrics);
       },
       // Bounded cross-objective memory for non-lean tasks: replay the clean
       // pairs (objective → answer) that persistTurn wrote, never raw framing.

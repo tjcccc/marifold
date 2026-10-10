@@ -81,6 +81,8 @@ export class RemoteRuntime implements TuiRuntime {
         `/v1/sessions?limit=${limit}${profile ? `&profile=${encodeURIComponent(profile)}` : ''}`,
       )
     ).sessions;
+  ask: TuiRuntime['ask'] = async ({ signal: _signal, ...request }) =>
+    (await this.api.request<{ response: Awaited<ReturnType<MarifoldRuntime['ask']>> }>('POST', '/v1/ask', request)).response;
   acquireSession = (id: string): Promise<void> => acquireSessionLease(this.api, id);
   readonly remote = true;
   takeOverSession = (id: string): Promise<void> => takeOverSessionLease(this.api, id);
@@ -186,27 +188,4 @@ export class RemoteRuntime implements TuiRuntime {
       signal?.removeEventListener('abort', cancel);
     }
   }
-  stream: TuiRuntime['stream'] = async function* (
-    this: RemoteRuntime,
-    request: Parameters<MarifoldRuntime['stream']>[0],
-    onSummary?: Parameters<MarifoldRuntime['stream']>[1],
-    onReasoning?: Parameters<MarifoldRuntime['stream']>[2],
-  ) {
-    for await (const event of this.run({
-      objective: request.prompt,
-      profile: request.profile,
-      provider: request.provider,
-      model: request.model,
-      sessionId: request.sessionId,
-      images: request.images,
-      think: request.think,
-      lean: true,
-      instructions: request.instructions,
-      userTurn: request.userTurn,
-      signal: request.signal,
-    })) {
-      if (event.type === 'text') { yield event.text; }
-      if (event.type === 'reasoning') { onReasoning?.(event.summary); }
-    }
-  }.bind(this);
 }

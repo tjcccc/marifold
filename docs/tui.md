@@ -1,6 +1,6 @@
 # marifold TUI
 
-The TUI is marifold's primary interactive surface (v0.14.0). Ordinary messages always use `AgentRunner.run` → `AgentEvent`; the retained `MarifoldRuntime.stream` path supports explicit compatibility consumers and chat-mode Skills. The TUI also provides an input grammar and command/skill registries. It lives in `packages/tui` (Ink + React), an ESM-only package the CommonJS CLI loads through a dynamic `import()`.
+The TUI is marifold's primary interactive surface (v0.14.0). Every message and `$skill` uses `AgentRunner.run` → `AgentEvent`: the TUI is agent-only, and the agent replies conversationally when no action is needed. A skill that declares `mode = "chat"` still runs as a lean agent turn here. `/btw` side questions use a one-off `ask` call. The TUI also provides an input grammar and command/skill registries. It lives in `packages/tui` (Ink + React), an ESM-only package the CommonJS CLI loads through a dynamic `import()`.
 
 ## Launch
 
@@ -66,9 +66,10 @@ The alternate screen restores the prior shell display on exit; its transcript is
 
 ## Commands
 
-`/help` `/exit` (`/quit`) `/new` `/model` `/profile` `/resume` `/takeover` `/think on|off` `/clear` `/stop` `/btw <text>` `/permissions` `/skills` `/install-skill [--profile <name>] <path|url>` `/doctor [--fix]`, plus chat carry-overs `/read` `/image` `/attach-original <prompt>` `/remember` `/forget` `/delete-memory`.
+`/help` `/exit` (`/quit`) `/new` `/model` `/profile` `/resume` `/takeover` `/think on|off` `/clear` `/stop` `/btw <question>` `/permissions` `/skills` `/install-skill [--profile <name>] <path|url>` `/doctor [--fix]`, plus chat carry-overs `/read` `/image` `/attach-original <prompt>` `/remember` `/forget` `/delete-memory`.
 
-- `/btw <text>` steers a **running** task without cancelling it: the text is queued and handed to the model on its next turn. With no run active, it is sent as a normal message.
+- Typing a plain message while a task runs **steers** it: the text is queued and handed to the model on its next turn (skills, `/attach-original`, and images wait until the task ends).
+- `/btw <question>` asks a quick side question, running or idle. It is a one-off, tool-less call that sees the visible conversation (including the running task's progress). The answer opens in a panel below the run line (↑/↓ scroll, c copy, Esc close); it neither interrupts nor steers the task and is never saved to the session.
 - `/stop` (or Esc / Ctrl+C while running) cancels the current run.
 - `/doctor` reports the active profile's instruction format without changing files. `/doctor --fix` backs up and consolidates its legacy split documents into `INSTRUCTIONS.md`.
 - `/think on|off` maps to Priest's provider-neutral reasoning configuration on Ollama, Anthropic, ChatGPT, and Responses-only GitHub Copilot models (with legacy provider options retained for Bailian-compatible endpoints). Safe provider summaries appear as muted `Reasoning:` rows before the answer; opaque continuation data is never rendered.

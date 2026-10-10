@@ -5,9 +5,9 @@ type Reads =
   | 'getProfile'
   | 'getSkill'
   | 'resolveSettings'
-  | 'resolveAgentConfigForProfile'
-  | 'stream';
+  | 'resolveAgentConfigForProfile';
 type AsyncMethods =
+  | 'ask'
   | 'listSessions'
   | 'getSession'
   | 'getSessionAttachment'
