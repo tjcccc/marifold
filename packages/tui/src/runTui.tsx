@@ -41,6 +41,8 @@ export interface RunTuiOptions {
   resume?: string | boolean;
   /** With `resume`: take the session over from another device or page. */
   takeover?: boolean;
+  /** Open on the recent-session picker; Esc exits the TUI. */
+  sessions?: boolean;
 }
 
 /**
@@ -62,7 +64,7 @@ export async function runTui(options: RunTuiOptions): Promise<void> {
   if (options.service) {
     const local = new MarifoldRuntime({ loadedConfig: options.loadedConfig, environment: { interface: 'terminal' } });
     try {
-      await renderSession(<WorkspaceShell local={local} loadedConfig={options.loadedConfig} service={options.service} profile={options.profile} resume={options.resume} takeover={options.takeover} version={readVersion()} fullscreen={fullscreen} />, fullscreen);
+      await renderSession(<WorkspaceShell local={local} loadedConfig={options.loadedConfig} service={options.service} profile={options.profile} resume={options.resume} takeover={options.takeover} sessions={options.sessions} version={readVersion()} fullscreen={fullscreen} />, fullscreen);
     } catch (error) {
       failLaunch(errorText(error));
     } finally { local.close(); }
@@ -151,6 +153,7 @@ export async function runTui(options: RunTuiOptions): Promise<void> {
       ...(resumeSessionId ? { sessionId: resumeSessionId } : {}),
       ...(resumeTranscript ? { transcript: resumeTranscript } : {}),
       ...(resumeHistory ? { history: resumeHistory } : {}),
+      ...(options.sessions ? { pickSession: true } : {}),
     };
     await renderSession(<App runtime={runtime} loadedConfig={options.loadedConfig} initial={initial} fullscreen={fullscreen} />, fullscreen);
   } finally {

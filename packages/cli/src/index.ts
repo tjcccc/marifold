@@ -37,6 +37,7 @@ const program = new Command()
     '--resume [id]',
     'Resume a session: bare --resume continues the most recent session for the profile; --resume <id> continues that specific session.',
   )
+  .option('--sessions', 'Open the TUI on a picker of recent sessions for the profile; Esc exits.')
   .option('--takeover', 'With --resume: open the session here even if another device or page has it open; it moves here.');
 
 registerInitCommand(program, printer);
@@ -73,7 +74,12 @@ program.action(async () => {
     process.exitCode = 1;
     return;
   }
-  const options = program.opts<{ profile?: string; resume?: string | boolean; fullscreen?: boolean; takeover?: boolean }>();
+  const options = program.opts<{ profile?: string; resume?: string | boolean; fullscreen?: boolean; takeover?: boolean; sessions?: boolean }>();
+  if (options.sessions && (options.resume !== undefined || options.takeover)) {
+    printer.printError(new Error('--sessions opens a picker; do not combine it with --resume or --takeover.'));
+    process.exitCode = 1;
+    return;
+  }
   if (options.takeover && options.resume === undefined) {
     printer.printError(new Error('--takeover needs --resume to name the session to open here.'));
     process.exitCode = 1;
@@ -89,6 +95,7 @@ program.action(async () => {
     ...(options.profile ? { profile: options.profile } : {}),
     ...(options.resume !== undefined ? { resume: options.resume } : {}),
     ...(options.takeover ? { takeover: true } : {}),
+    ...(options.sessions ? { sessions: true } : {}),
   });
 });
 

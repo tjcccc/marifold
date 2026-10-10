@@ -31,6 +31,8 @@ export interface CommandContext {
   /** Send one prompt with attached images preserved byte-for-byte. */
   sendOriginal(text: string): void | Promise<void>;
   showSessions(): void | Promise<void>;
+  /** Move this terminal's session back here after another client took it over. */
+  takeOver(): void | Promise<void>;
   runDoctor(fix?: boolean): void | Promise<void>;
   installSkill(arg: string): void | Promise<void>;
   readFile(path: string): void | Promise<void>;
@@ -109,6 +111,7 @@ const COMMANDS: CommandSpec[] = [
     summary: 'Resume a recent session from an interactive picker.',
     run: ctx => ctx.showSessions(),
   },
+  { name: 'takeover', summary: 'Reopen this session here after another page, terminal, or app took it over.', run: ctx => ctx.takeOver() },
   {
     name: 'think',
     summary: 'Toggle thinking: /think on|off.',

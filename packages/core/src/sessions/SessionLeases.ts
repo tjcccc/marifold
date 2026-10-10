@@ -129,6 +129,6 @@ export class SessionLeases {
   }
 
   private busy(): never {
-    throw new MarifoldError('SESSION_BUSY', 'This session is in use in another page or terminal. Close it there before opening it here.');
+    throw new MarifoldError('SESSION_BUSY', 'This session is in use in another page, terminal, or app. Close it there before opening it here.');
   }
 }

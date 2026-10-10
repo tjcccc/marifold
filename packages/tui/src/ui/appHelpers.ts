@@ -80,6 +80,17 @@ export async function copyTerminalSelection(text: string): Promise<void> {
 export function sessionBusyText(error: unknown, sessionId: string): string {
   const text = errorText(error);
   return isSessionBusy(error)
-    ? `${text} To open it here instead: marifold --resume ${sessionId} --takeover`
+    ? `${text}\nTo open it here instead in a terminal: marifold --resume ${sessionId} --takeover`
     : text;
+}
+
+/** Shown when this terminal's open session moved to another client: what
+ * happened and every way forward. Typing a message gets the same text. */
+export function sessionLostText(sessionId: string): string {
+  return [
+    'This session is in use in another page, terminal, or app. Close it there before opening it here.',
+    `To open it here instead in a terminal: marifold --resume ${sessionId} --takeover`,
+    'To open it again from here, use /takeover.',
+    'Or start a new session with /new, or pick another with /resume (/session).',
+  ].join('\n');
 }

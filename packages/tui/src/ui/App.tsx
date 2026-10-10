@@ -6,7 +6,6 @@ import { Box, Static, useApp, useInput, useStdout } from 'ink';
 import * as fs from 'fs';
 import * as path from 'path';
 import { expandHome } from '@marifold/core';
-import { renewSessionLease } from '@marifold/client';
 import type { LoadedMarifoldConfig, MarifoldRuntime } from '@marifold/core';
 import { appReducer, createInitialState, visibleTranscript, type Mode, type NoticeTone, type TranscriptItem, type TranscriptItemData } from '../core/appState.js';
 import { parseInput } from '../core/inputGrammar.js';
@@ -24,9 +23,10 @@ import { useTerminalSize } from './useTerminalSize.js';
 import { useResizing } from './useResizing.js';
 import { sessionItem } from './sessionItems.js';
 import { useApprovals } from './useApprovals.js';
+import { useSessionLease } from './useSessionLease.js';
 import { useRuns } from './useRuns.js';
 import { useSkills } from './useSkills.js';
-import { copyToClipboard, errorText, sessionBusyText, unwrapPath } from './appHelpers.js';
+import { copyToClipboard, errorText, sessionBusyText, sessionLostText, unwrapPath } from './appHelpers.js';
 
 const READ_FILE_CHAR_LIMIT = 100000;
 
@@ -51,6 +51,8 @@ export interface AppProps {
     maxContextTokens?: number;
     transcript?: TranscriptItemData[];
     history?: InputHistoryEntry[];
+    /** Launch on the session picker; cancelling it exits the TUI. */
+    pickSession?: boolean;
   };
 }
 
@@ -84,6 +86,10 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
   const [think, setThink] = useState(initial.think);
   // `/steps` arms a one-shot forced plan for the next model turn (then auto-disarms).
   const [planNext, setPlanNext] = useState(false);
+  // The session another page, terminal, or app took over. It stays open here
+  // read-only until `/takeover`, a new session, or another session replaces it.
+  // `--sessions` launches on the picker, so cancelling it has nothing to go back to.
+  const launchPickerRef = useRef(initial.pickSession === true);
   const [history, setHistory] = useState<InputHistoryEntry[]>(() => initial.history ?? (initial.transcript ?? []).flatMap(item => item.kind === 'user' ? [item.text] : []));
   const [skillItems, setSkillItems] = useState<CompletionItem[]>(() => {
     try {
@@ -194,32 +200,7 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
     }
   }, [notify, initial.sessionId]);
 
-  useEffect(() => {
-    const id = state.sessionId;
-    if (!id || !runtime.acquireSession) { return; }
-    const lease = renewSessionLease({
-      // Called on the runtime: the local MarifoldRuntime method needs its `this`.
-      acquire: () => runtime.acquireSession?.(id),
-      immediate: true,
-      onLost: error => {
-        if (stateRef.current.sessionId !== id) { return; }
-        // Another device took the session over. A service-hosted task keeps
-        // running there, so only stop following it; a task running inside
-        // this terminal process cannot move and is cancelled.
-        runGenerationRef.current += 1;
-        if (!runtime.remote) { abortRef.current?.abort(); }
-        abortRef.current = null;
-        dispatch({ type: 'set_running', running: false });
-        dispatch({ type: 'new_session' });
-        setHistory([]);
-        notify(sessionBusyText(error, id), 'error');
-      },
-    });
-    return () => {
-      lease.stop();
-      void Promise.resolve(runtime.releaseSession?.(id)).catch(() => undefined);
-    };
-  }, [runtime, state.sessionId, notify]);
+  const { lostSessionRef, takeOver } = useSessionLease({ runtime, dispatch, stateRef, runGenerationRef, abortRef, notify });
 
   const refreshSkills = useCallback((profile = stateRef.current.profile) => {
     try {
@@ -286,6 +267,7 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
   const openSession = useCallback(async (value: string, takeover: boolean) => {
     try {
       setOverlay(null);
+      launchPickerRef.current = false;
       if (takeover) { await runtime.takeOverSession?.(value); }
       else { await runtime.acquireSession?.(value); }
       const detail = await runtime.getSession(value);
@@ -302,6 +284,10 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
       notify(`${takeover ? 'Took over' : 'Resumed'} session ${detail.id.slice(0, 8)} — your next message continues it.`, 'info');
     } catch (error) { notify(sessionBusyText(error, value), 'error'); }
   }, [runtime, notify]);
+
+  useEffect(() => {
+    if (initial.pickSession) { void showSessions().catch(error => notify(errorText(error), 'error')); }
+  }, []);
 
   const showHelp = useCallback(() => {
     const lines = [
@@ -562,6 +548,7 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
       startTextRun(text, { originalImages: true });
     },
     showSessions,
+    takeOver,
     runDoctor,
     installSkill,
     readFile: readFileCmd,
@@ -627,6 +614,12 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
       }
       let parsed = parseInput(raw);
       const sendsMessage = parsed.kind === 'text' || parsed.kind === 'skill' || (parsed.kind === 'command' && parsed.name === 'attach-original');
+      const lostId = lostSessionRef.current;
+      const usesSession = sendsMessage || (parsed.kind === 'command' && ['retry', 'regenerate', 'compact'].includes(parsed.name));
+      if (usesSession && lostId && stateRef.current.sessionId === lostId) {
+        notify(sessionLostText(lostId), 'warn');
+        return;
+      }
       if (sendsMessage && stateRef.current.running) {
         notify('A task is running. Use /btw to steer or /stop to cancel.', 'warn');
         return;
@@ -757,7 +750,7 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
             }
             void openSession(value, false);
           }}
-          onCancel={() => setOverlay(null)}
+          onCancel={() => { if (launchPickerRef.current) { quit(); } else { setOverlay(null); } }}
           emptyHint={['No saved sessions for this profile yet.']}
         />
       );

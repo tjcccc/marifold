@@ -11,6 +11,7 @@ marifold --fullscreen    # alternate screen, mouse editing, and drag-to-copy
 marifold --resume        # continue the profile's most recent session
 marifold --resume <id>   # continue one session, under its own profile
 marifold --resume <id> --takeover  # continue it here although another page or terminal holds it
+marifold --sessions                # pick from recent sessions first; Esc exits
 ```
 
 `--resume <id>` opens exactly that session or nothing: a session that does not exist in the opened workspace, or that another page or terminal holds, ends the launch with an error and exit code 1 (the in-use message suggests `--takeover`); it never falls back to an empty session or to Local. Without `--profile`, the session opens under the profile it belongs to; a different `--profile` is an error.
@@ -65,14 +66,14 @@ The alternate screen restores the prior shell display on exit; its transcript is
 
 ## Commands
 
-`/help` `/exit` (`/quit`) `/new` `/model` `/profile` `/resume` `/think on|off` `/clear` `/stop` `/btw <text>` `/permissions` `/skills` `/install-skill [--profile <name>] <path|url>` `/doctor [--fix]`, plus chat carry-overs `/read` `/image` `/attach-original <prompt>` `/remember` `/forget` `/delete-memory`.
+`/help` `/exit` (`/quit`) `/new` `/model` `/profile` `/resume` `/takeover` `/think on|off` `/clear` `/stop` `/btw <text>` `/permissions` `/skills` `/install-skill [--profile <name>] <path|url>` `/doctor [--fix]`, plus chat carry-overs `/read` `/image` `/attach-original <prompt>` `/remember` `/forget` `/delete-memory`.
 
 - `/btw <text>` steers a **running** task without cancelling it: the text is queued and handed to the model on its next turn. With no run active, it is sent as a normal message.
 - `/stop` (or Esc / Ctrl+C while running) cancels the current run.
 - `/doctor` reports the active profile's instruction format without changing files. `/doctor --fix` backs up and consolidates its legacy split documents into `INSTRUCTIONS.md`.
 - `/think on|off` maps to Priest's provider-neutral reasoning configuration on Ollama, Anthropic, ChatGPT, and Responses-only GitHub Copilot models (with legacy provider options retained for Bailian-compatible endpoints). Safe provider summaries appear as muted `Reasoning:` rows before the answer; opaque continuation data is never rendered.
 - `/attach-original <prompt>` sends every image attached to that message with its original encoded bytes, then returns to default optimization for the next message. Validation, the four-image count limit, and the 16 MiB aggregate source limit still apply. Normal sends resize large images and choose a smaller high-fidelity encoding while preserving transparency and animation.
-- `/resume` opens a recent-session picker for the current profile; choose with Up/Down and Enter. Rows show the session's title (or its first message), and `[in use]` marks a session another page, terminal, or device holds: Enter on it only warns, while Shift+Enter (or T, for terminals that send Shift+Enter as Enter) takes it over. It is ordered strictly by conversation recency; Web UI session pins do not influence this TUI workflow. `/session` remains as a compatibility alias. Ordinary agent prompts remain in the session after a failed or cancelled run, paired with a short terminal outcome so the next resume does not silently lose the request. A failed historical regeneration leaves the prior successful exchange unchanged.
+- `/resume` opens a recent-session picker for the current profile; choose with Up/Down and Enter. Rows show the session's title (or its first message), and `[in use]` marks a session another page, terminal, or device holds: Enter on it only warns, while Shift+Enter (or T, for terminals that send Shift+Enter as Enter) takes it over. It is ordered strictly by conversation recency; Web UI session pins do not influence this TUI workflow. `/session` remains as a compatibility alias. If another page, terminal, or app takes over the session you have open, the TUI keeps its transcript, warns instead of sending messages, and `/takeover` moves the session back here (`/new` or `/resume` leave it). Ordinary agent prompts remain in the session after a failed or cancelled run, paired with a short terminal outcome so the next resume does not silently lose the request. A failed historical regeneration leaves the prior successful exchange unchanged.
 - `/skills` opens an arrow-key list: Enter runs the selected skill, Del removes it.
 ## Skills
 

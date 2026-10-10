@@ -61,7 +61,8 @@ export function TranscriptRow({ item }: { item: TranscriptItem }): React.ReactEl
     case 'assistant':
       return <Markdown text={item.text} muted={item.muted} />;
     case 'notice':
-      return <Text color={NOTICE_COLOR[item.tone]}>{item.text}</Text>;
+      // Warnings and errors get a blank line after, so repeats stay distinct.
+      return <Box marginBottom={item.tone === 'info' ? 0 : 1}><Text color={NOTICE_COLOR[item.tone]}>{item.text}</Text></Box>;
     case 'plan':
       return (
         <Box flexDirection="column">

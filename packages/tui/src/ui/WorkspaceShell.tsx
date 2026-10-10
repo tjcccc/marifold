@@ -17,6 +17,8 @@ interface Props {
   resume?: string | boolean;
   /** Take the resumed session over from another device or page. */
   takeover?: boolean;
+  /** Open the first session on the recent-session picker. */
+  sessions?: boolean;
   version: string;
   fullscreen?: boolean;
 }
@@ -36,7 +38,7 @@ export function WorkspaceShell(props: Props) {
   const localApi = useRef(createApiClient(props.service)).current;
   const serial = useRef(0);
   const load = useCallback(
-    async (id: string, resume?: string | boolean, takeover = false): Promise<void> => {
+    async (id: string, resume?: string | boolean, takeover = false, pickSession = false): Promise<void> => {
       const version = ++serial.current;
       let runtime: TuiRuntime = props.local;
       let config = props.loadedConfig;
@@ -117,6 +119,7 @@ export function WorkspaceShell(props: Props) {
           sessionId: session?.id,
           history: session ? sessionPromptHistory(session) : [],
           transcript: session?.turns.map((t) => ({ kind: t.role, text: t.content })),
+          ...(pickSession ? { pickSession: true } : {}),
         },
       });
       setNotice(`${name} workspace · /workspace list · /device list`);
@@ -139,7 +142,7 @@ export function WorkspaceShell(props: Props) {
       if (!alive) { return; }
       try {
         try {
-          await load(target, props.resume, props.takeover);
+          await load(target, props.resume, props.takeover, props.sessions);
         } catch (error) {
           // A resumed session opens exactly as asked or not at all: never an
           // empty session, and never Local in place of the workspace.

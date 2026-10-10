@@ -120,6 +120,7 @@ describe('App run routing', () => {
         if (displaced) { throw Object.assign(new Error('This session is in use in another page or terminal.'), { code: 'SESSION_BUSY' }); }
       }),
       releaseSession: vi.fn(async () => undefined),
+      takeOverSession: vi.fn(async () => { displaced = false; }),
     });
     const { stdin, lastFrame, unmount } = render(<App runtime={runtime} loadedConfig={config} initial={{ ...initial('agent'), sessionId: 'shared' }} />);
     try {
@@ -136,6 +137,20 @@ describe('App run routing', () => {
       finish();
       await delay();
       expect(lastFrame()).not.toContain('Answer after takeover');
+      // The session stays open: a message only warns, and /takeover reopens it.
+      expect(lastFrame()).toContain('long task');
+      const runsBefore = vi.mocked(runtime.takeOverSession!).mock.calls.length;
+      stdin.write('second message');
+      await delay();
+      stdin.write('\r');
+      await delay();
+      expect(lastFrame()).toContain('/takeover');
+      expect(lastFrame()).not.toContain('second message');
+      stdin.write('/takeover');
+      await delay();
+      stdin.write('\r');
+      await vi.waitFor(() => expect(lastFrame()).toContain('Took over session shared'));
+      expect(vi.mocked(runtime.takeOverSession!).mock.calls.length).toBe(runsBefore + 1);
     } finally {
       vi.useRealTimers();
       unmount();
@@ -345,6 +360,19 @@ describe('App run routing', () => {
     await vi.waitFor(() => expect(lastFrame()).toContain('Here is the plan'), { timeout: 3000 });
     expect(takeOverSession).toHaveBeenCalledWith('held-12345678');
     expect(lastFrame()).toContain('Took over session held-123');
+    unmount();
+  });
+
+  it('--sessions opens on the picker and Esc exits the TUI', async () => {
+    const now = new Date().toISOString();
+    const summary: SessionSummary = { id: 'recent-12345678', profileName: 'default', title: 'Trip plan', createdAt: now, updatedAt: now, turnCount: 2 } as SessionSummary;
+    const { runtime } = makeRuntime({ sessions: [summary] });
+    const { stdin, lastFrame, unmount } = render(<App runtime={runtime} loadedConfig={config} initial={{ ...initial('agent'), pickSession: true }} />);
+    await vi.waitFor(() => expect(lastFrame()).toContain('Trip plan'), { timeout: 3000 });
+    expect(lastFrame()).toContain('Resume session');
+    await delay();
+    stdin.write('\u001b');
+    await vi.waitFor(() => expect(lastFrame()).not.toContain('Resume session'));
     unmount();
   });
 

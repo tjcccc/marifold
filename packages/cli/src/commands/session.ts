@@ -20,7 +20,7 @@ interface SessionClearOptions {
 export function registerSessionCommand(program: Command, printer: ConsolePrinter): void {
   const session = program
     .command('session')
-    .description('Inspect Marifold chat sessions.');
+    .description('Inspect Marifold sessions.');
 
   session
     .command('list')

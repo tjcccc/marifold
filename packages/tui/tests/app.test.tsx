@@ -36,7 +36,7 @@ afterEach(() => {
 });
 
 describe('App', () => {
-  it('blocks a resumed session held by another runtime and clears its transcript', async () => {
+  it('keeps the transcript of a session held by another runtime and warns', async () => {
     const { runtime: owner, loadedConfig } = workspace();
     const second = new MarifoldRuntime({ loadedConfig });
     owner.acquireSession('occupied');
@@ -46,8 +46,9 @@ describe('App', () => {
       transcript: [{ kind: 'assistant', text: 'other client conversation' }],
     }} />);
     try {
-      await vi.waitFor(() => expect(lastFrame()).toContain('in use in another page or terminal'));
-      expect(lastFrame()).not.toContain('other client conversation');
+      await vi.waitFor(() => expect(lastFrame()).toContain('in use in another page, terminal, or app'));
+      expect(lastFrame()).toContain('other client conversation');
+      expect(lastFrame()).toContain('/takeover');
       expect(() => owner.acquireSession('occupied')).not.toThrow();
     } finally { unmount(); second.close(); owner.close(); }
   });
