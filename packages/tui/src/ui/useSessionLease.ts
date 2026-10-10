@@ -7,6 +7,7 @@ import { sessionBusyText, sessionLostText } from './appHelpers.js';
 
 interface SessionLeaseOptions {
   runtime: TuiRuntime;
+  sessionId: string | undefined;
   dispatch: Dispatch<AppAction>;
   stateRef: MutableRefObject<AppState>;
   runGenerationRef: MutableRefObject<number>;
@@ -19,8 +20,7 @@ interface SessionLeaseOptions {
  * session over, it stays open here read-only: `lostSessionRef` names it until
  * `takeOver` (the /takeover command) reclaims it or another session replaces it.
  */
-export function useSessionLease({ runtime, dispatch, stateRef, runGenerationRef, abortRef, notify }: SessionLeaseOptions) {
-  const sessionId = stateRef.current.sessionId;
+export function useSessionLease({ runtime, sessionId, dispatch, stateRef, runGenerationRef, abortRef, notify }: SessionLeaseOptions) {
   const [lostSessionId, setLostSessionId] = useState<string | undefined>(undefined);
   const lostSessionRef = useRef<string | undefined>(undefined);
   lostSessionRef.current = lostSessionId;

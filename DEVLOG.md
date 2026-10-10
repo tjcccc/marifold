@@ -2,12 +2,13 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
-## 2026-10-10 — v0.82.0 — TUI keeps a taken-over session; `--sessions`
+## 2026-10-10 — v0.83.0 — TUI keeps a taken-over session; `--sessions`
 
 - When another page, terminal, or app takes over the session open in a TUI, the TUI keeps its transcript and session instead of starting a fresh one. Messages (and `/retry`, `/compact`) only show a warning, and the new TUI-only `/takeover` moves the session back here; `/new` or `/resume` leave it. The warning now lists every way forward, and warn/error notices have a blank line after them.
 - `marifold --sessions` opens the TUI on the recent-session picker (Esc exits); it conflicts with `--resume`/`--takeover`. Bare `--resume` is unchanged.
 - The session-in-use message says "page, terminal, or app"; `marifold session` reads "Inspect Marifold sessions."
-- Validation: TUI tests (138) pass, including takeover warn-then-`/takeover` and the `--sessions` picker. Not checked live: the OrbStack guest was rebuilt before the final tone/spacing tweaks, and there was no two-client takeover run. No version bump (interim checkpoint).
+- Follow-up review: `--sessions` keeps its picker when the default workspace falls back to Local; `useSessionLease` takes the session id as a parameter instead of reading it from a ref during render.
+- Validation: typecheck clean and all package tests pass (core 541, service 96, web 274, tui 138, cli 36). Not checked live: no two-client takeover run in the OrbStack guest yet.
 
 ## 2026-10-10 — v0.82.0 — Splitting the large files
 

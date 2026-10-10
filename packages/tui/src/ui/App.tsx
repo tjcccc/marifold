@@ -86,8 +86,6 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
   const [think, setThink] = useState(initial.think);
   // `/steps` arms a one-shot forced plan for the next model turn (then auto-disarms).
   const [planNext, setPlanNext] = useState(false);
-  // The session another page, terminal, or app took over. It stays open here
-  // read-only until `/takeover`, a new session, or another session replaces it.
   // `--sessions` launches on the picker, so cancelling it has nothing to go back to.
   const launchPickerRef = useRef(initial.pickSession === true);
   const [history, setHistory] = useState<InputHistoryEntry[]>(() => initial.history ?? (initial.transcript ?? []).flatMap(item => item.kind === 'user' ? [item.text] : []));
@@ -200,7 +198,7 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
     }
   }, [notify, initial.sessionId]);
 
-  const { lostSessionRef, takeOver } = useSessionLease({ runtime, dispatch, stateRef, runGenerationRef, abortRef, notify });
+  const { lostSessionRef, takeOver } = useSessionLease({ runtime, sessionId: state.sessionId, dispatch, stateRef, runGenerationRef, abortRef, notify });
 
   const refreshSkills = useCallback((profile = stateRef.current.profile) => {
     try {

@@ -147,7 +147,7 @@ export function WorkspaceShell(props: Props) {
           // A resumed session opens exactly as asked or not at all: never an
           // empty session, and never Local in place of the workspace.
           if (props.resume !== undefined || target === 'local') { throw error; }
-          await load('local');
+          await load('local', undefined, false, props.sessions);
           fallback = 'Workspace service unavailable. Opened Local.';
         }
         if (alive && fallback) { setNotice(fallback); }
