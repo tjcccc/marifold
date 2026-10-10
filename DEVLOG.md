@@ -2,6 +2,13 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-10-10 — v0.83.1 — `--resume` and `--sessions` against a remote default workspace
+
+- `marifold --resume <id> --takeover` now works when the session lives in a remote workspace. The host refuses to read a session another client holds, so the TUI launch takes it over first and then reads it (it used to fail with "in use"). With a mismatched `--profile`, the takeover happens before the profile refusal.
+- The in-use error for a held session in a remote workspace now carries the `--takeover` hint.
+- When the default workspace is offline, `--resume` (with or without an id) and `--sessions` stop with `Workspace "<name>" is offline.` instead of opening Local; plain `marifold` still falls back to Local with a notice.
+- Validation: TUI tests (138) pass. New local, git-ignored harness `output/bridge-review-orbstack/run-tui-workspace.cjs` (+ `ptydrive.py`) drives the real TUI in a PTY against a remote "Home" through the OrbStack bridge: 12/12 checks pass (missing/held ids, `--takeover`, profiles, bare `--resume`, `--sessions`, takeover mid-use with `/takeover`, four offline cases). Rejoin 6/6 and 55/55 delegations pass. `expect` proved unreliable for driving the TUI here; use the PTY driver.
+
 ## 2026-10-10 — v0.83.0 — TUI keeps a taken-over session; `--sessions`
 
 - When another page, terminal, or app takes over the session open in a TUI, the TUI keeps its transcript and session instead of starting a fresh one. Messages (and `/retry`, `/compact`) only show a warning, and the new TUI-only `/takeover` moves the session back here; `/new` or `/resume` leave it. The warning now lists every way forward, and warn/error notices have a blank line after them.

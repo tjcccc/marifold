@@ -1,7 +1,7 @@
 import { sessionPromptHistory } from '../core/promptHistory.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Box, Text, useApp } from 'ink';
-import { createApiClient, startupWorkspaces, type ApiClientOptions } from '@marifold/client';
+import { createApiClient, isSessionBusy, startupWorkspaces, type ApiClientOptions } from '@marifold/client';
 import type { MarifoldRuntime } from '@marifold/core';
 import type { WorkspaceSummary, WorkspaceDevice, LoadedMarifoldConfig } from '@marifold/core';
 import { RemoteRuntime } from '../core/RemoteRuntime.js';
@@ -66,7 +66,14 @@ export function WorkspaceShell(props: Props) {
       // unless --profile names one.
       let requested;
       if (typeof resume === 'string') {
-        requested = await findSession(runtime, resume);
+        // A remote host refuses to read a session another client holds, so
+        // `--takeover` moves it here first and then reads it.
+        try { requested = await findSession(runtime, resume); }
+        catch (error) {
+          if (!takeover || !isSessionBusy(error)) { throw new Error(sessionBusyText(error, resume)); }
+          await runtime.takeOverSession?.(resume);
+          requested = await findSession(runtime, resume);
+        }
         if (!requested) { throw new Error(`Session ${resume} was not found in the ${name} workspace.`); }
         if (props.profile && props.profile !== requested.profileName) {
           throw new Error(`Session ${resume} belongs to profile "${requested.profileName}". Resume it without --profile or with --profile ${requested.profileName}.`);
@@ -131,23 +138,33 @@ export function WorkspaceShell(props: Props) {
     void (async () => {
       let target = 'local';
       let fallback: string | undefined;
+      let offline: WorkspaceSummary | undefined;
       try {
         const result = await startupWorkspaces<WorkspaceSummary>(localApi);
         const workspace = result.workspaces.find((w) => w.id === result.defaultId && w.online);
         target = workspace?.id ?? 'local';
-        if (result.defaultId !== 'local' && !workspace) { fallback = 'Default workspace is offline. Opened Local for this launch.'; }
+        if (result.defaultId !== 'local' && !workspace) {
+          offline = result.workspaces.find((w) => w.id === result.defaultId);
+          fallback = 'Default workspace is offline. Opened Local for this launch.';
+        }
       } catch {
         fallback = 'Workspace service unavailable. Opened Local.';
       }
       if (!alive) { return; }
+      // `--resume` and `--sessions` ask for the default workspace's sessions;
+      // Local's sessions are not a stand-in for them.
+      if (offline && (props.resume !== undefined || props.sessions)) {
+        exit(new Error(`Workspace "${offline.name}" is offline. Try again when its host is online.`));
+        return;
+      }
       try {
         try {
           await load(target, props.resume, props.takeover, props.sessions);
         } catch (error) {
-          // A resumed session opens exactly as asked or not at all: never an
-          // empty session, and never Local in place of the workspace.
-          if (props.resume !== undefined || target === 'local') { throw error; }
-          await load('local', undefined, false, props.sessions);
+          // A resumed session or the session picker opens exactly as asked or
+          // not at all: never an empty session, and never Local in place of the workspace.
+          if (props.resume !== undefined || props.sessions || target === 'local') { throw error; }
+          await load('local');
           fallback = 'Workspace service unavailable. Opened Local.';
         }
         if (alive && fallback) { setNotice(fallback); }

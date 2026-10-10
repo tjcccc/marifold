@@ -81,7 +81,7 @@ marifold ask --workspace Home "Hello"
 marifold schedule --workspace Home list
 ```
 
-Without `--workspace`, these use the configured startup default. Other standalone CLI configuration/profile commands retain their local behavior; shared profile, Skill and configuration management is available in the paired Web UI and TUI. A new guest needs no local provider authentication to use a configured host model. Local remains the fallback when the default workspace is unavailable at startup. Clients briefly allow connections to initialize first. An explicitly selected offline workspace reports an error. A disconnected active conversation stays in its workspace, including its draft, and never silently submits work to Local.
+Without `--workspace`, these use the configured startup default. Other standalone CLI configuration/profile commands retain their local behavior; shared profile, Skill and configuration management is available in the paired Web UI and TUI. A new guest needs no local provider authentication to use a configured host model. Local remains the fallback when the default workspace is unavailable at startup, except that `marifold --resume` and `marifold --sessions` stop with an error instead: Local's sessions are not a stand-in for the default workspace's. Clients briefly allow connections to initialize first. An explicitly selected offline workspace reports an error. A disconnected active conversation stays in its workspace, including its draft, and never silently submits work to Local.
 
 ## Bridge proxy settings (planned)
 

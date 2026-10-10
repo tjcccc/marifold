@@ -14,7 +14,7 @@ marifold --resume <id> --takeover  # continue it here although another page or t
 marifold --sessions                # pick from recent sessions first; Esc exits
 ```
 
-`--resume <id>` opens exactly that session or nothing: a session that does not exist in the opened workspace, or that another page or terminal holds, ends the launch with an error and exit code 1 (the in-use message suggests `--takeover`); it never falls back to an empty session or to Local. Without `--profile`, the session opens under the profile it belongs to; a different `--profile` is an error.
+`--resume <id>` opens exactly that session or nothing: a session that does not exist in the opened workspace, or that another page or terminal holds, ends the launch with an error and exit code 1 (the in-use message suggests `--takeover`); it never falls back to an empty session or to Local. The same holds for bare `--resume` and for `--sessions`: when the default workspace is offline they end with `Workspace "<name>" is offline.` instead of opening Local. Without `--profile`, the session opens under the profile it belongs to; a different `--profile` is an error.
 
 Bare `marifold` (no subcommand) launches the TUI. `marifold agent` remains the scriptable Agent surface. When stdout is not a TTY (piped/non-interactive), the TUI prints a hint and exits instead of starting Ink.
 
