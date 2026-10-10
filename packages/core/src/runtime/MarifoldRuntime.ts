@@ -37,6 +37,7 @@ import { getProviderRegistryEntry } from '../config/ProviderRegistry';
 import { MarifoldError } from '../errors/MarifoldError';
 import { prepareImageInputs } from '../images/ImageOptimizer';
 import { MemoryStore } from '../memory/MemoryStore';
+import { withProfileActivity } from '../profiles/ProfileActivity';
 import type { MemoryEntry, MemoryKind, MemoryMutationResult, MemoryRememberResult, MemoryScaffoldFile } from '../memory/MemoryStore';
 import { ProfileResolver } from '../profiles/ProfileResolver';
 import { ProfileManager } from '../profiles/ProfileManager';
@@ -223,25 +224,7 @@ export class MarifoldRuntime {
   }
 
   listProfiles(): ProfileSummary[] {
-    const activity = new Map(
-      this.sessionResolver.profileActivity().map(item => [item.profileName, item]),
-    );
-    return this.profileResolver.list()
-      .map(profile => {
-        const recent = activity.get(profile.name);
-        return recent ? {
-          ...profile,
-          ...(recent.pinned ? { pinned: true } : {}),
-          ...(recent.updatedAt ? { updatedAt: recent.updatedAt } : {}),
-          ...(recent.preview ? { preview: recent.preview } : {}),
-        } : profile;
-      })
-      .sort((a, b) => {
-        const pinOrder = Number(Boolean(b.pinned)) - Number(Boolean(a.pinned));
-        if (pinOrder !== 0) { return pinOrder; }
-        const activityOrder = (b.updatedAt ?? '').localeCompare(a.updatedAt ?? '');
-        return activityOrder !== 0 ? activityOrder : a.name.localeCompare(b.name);
-      });
+    return withProfileActivity(this.profileResolver.list(), this.sessionResolver.profileActivity());
   }
 
   getProfile(name: string): ProfileDetail {
