@@ -38,6 +38,8 @@ import { MarifoldError } from '../errors/MarifoldError';
 import { prepareImageInputs } from '../images/ImageOptimizer';
 import { MemoryStore } from '../memory/MemoryStore';
 import { withProfileActivity } from '../profiles/ProfileActivity';
+import { applyTurnMemory } from '../memory/TurnMemory';
+import { sessionImageAccess } from '../agent/EarlierImages';
 import type { MemoryEntry, MemoryKind, MemoryMutationResult, MemoryRememberResult, MemoryScaffoldFile } from '../memory/MemoryStore';
 import { ProfileResolver } from '../profiles/ProfileResolver';
 import { ProfileManager } from '../profiles/ProfileManager';
@@ -91,6 +93,8 @@ export interface MarifoldRuntimeOptions {
   loadedConfig: LoadedMarifoldConfig;
   /** Override the web search backend (tests, alternative engines). */
   searchBackend?: SearchBackend;
+  /** Lease owner for calls that name none, e.g. `local.terminal` for an in-process TUI. */
+  sessionOwner?: string;
 }
 
 export class MarifoldRuntime {
@@ -98,7 +102,7 @@ export class MarifoldRuntime {
   private readonly profileManager: ProfileManager;
   private readonly sessionResolver: SessionResolver;
   private readonly sessionLeases: SessionLeases;
-  private readonly sessionOwner = leaseOwnerId();
+  private readonly sessionOwner: string;
   private readonly providerFactory: ProviderFactory;
   private readonly engines: ProviderEngines;
   private readonly skillApps: SkillAppOperations;
@@ -110,6 +114,7 @@ export class MarifoldRuntime {
   private readonly scheduleStore: ScheduleStore;
 
   constructor(private readonly options: MarifoldRuntimeOptions) {
+    this.sessionOwner = options.sessionOwner ?? leaseOwnerId();
     const { config, configPath } = options.loadedConfig;
     this.sessionLeases = new SessionLeases(`${config.paths.sessionsDb}.leases`);
     this.profileResolver = new ProfileResolver(config.paths.profilesDir);
@@ -133,6 +138,7 @@ export class MarifoldRuntime {
       searchBackend: () => this.searchBackend,
       resolveSettings: request => this.resolveSettings(request),
       assertSessionAvailable: (sessionId, owner) => this.assertSessionAvailable(sessionId, owner),
+      assertSessionWritable: sessionId => this.assertSessionWritable(sessionId),
       memoryEnabled: (profile, requestMemories) => this.memoryEnabled(profile, requestMemories),
       memoryForRequest: (profile, requestMemories, prompt, thinking) => this.memoryForRequest(profile, requestMemories, prompt, thinking),
       resolveAgentConfigForProfile: profile => this.resolveAgentConfigForProfile(profile),
@@ -192,13 +198,9 @@ export class MarifoldRuntime {
     return formatSearchResults(query, results);
   }
 
-  rememberMemory(
-    profile: string,
-    kind: MemoryKind,
-    text: string,
-    sessionId?: string,
-  ): MemoryRememberResult {
-    return this.memoryStore.remember(profile, kind, text, { sessionId });
+  /** `/remember` (kind auto_short) classifies the text so a new value replaces an old one. */
+  rememberMemory(profile: string, kind: MemoryKind, text: string, sessionId?: string): MemoryRememberResult {
+    return kind === 'auto_short' ? this.memoryStore.rememberStatement(profile, text, { sessionId }) : this.memoryStore.remember(profile, kind, text, { sessionId });
   }
 
   forgetMemories(profile: string, query: string): MemoryMutationResult {
@@ -227,9 +229,7 @@ export class MarifoldRuntime {
     return withProfileActivity(this.profileResolver.list(), this.sessionResolver.profileActivity());
   }
 
-  getProfile(name: string): ProfileDetail {
-    return this.profileResolver.detail(name);
-  }
+  getProfile(name: string): ProfileDetail { return this.profileResolver.detail(name); }
 
   setProfilePinned(name: string, pinned: boolean): ProfileSummary[] {
     this.getProfile(name);
@@ -423,15 +423,10 @@ export class MarifoldRuntime {
     new ConfigManager(this.options.loadedConfig).setDefaultModel(model, provider);
   }
 
-  /** Supersede exactly one memory entry by id (per-row Forget — recoverable). */
-  forgetMemoryById(profile: string, id: string): MemoryMutationResult {
-    return this.memoryStore.forgetById(profile, id);
-  }
-
-  /** Permanently remove exactly one memory entry by id (per-row Delete). */
-  deleteMemoryById(profile: string, id: string): MemoryMutationResult {
-    return this.memoryStore.deleteById(profile, id);
-  }
+  // Per-row memory actions: Forget supersedes (Restore brings it back); Delete removes for good.
+  forgetMemoryById(profile: string, id: string): MemoryMutationResult { return this.memoryStore.forgetById(profile, id); }
+  restoreMemoryById(profile: string, id: string): MemoryMutationResult { return this.memoryStore.restoreById(profile, id); }
+  deleteMemoryById(profile: string, id: string): MemoryMutationResult { return this.memoryStore.deleteById(profile, id); }
 
   /** Manually compact a session now (the /compact command). Returns whether anything was folded. */
   async compactSession(
@@ -473,6 +468,11 @@ export class MarifoldRuntime {
 
   releaseSession(sessionId: string, owner: string = this.sessionOwner): void {
     this.sessionLeases.release(sessionId, owner);
+  }
+
+  /** An archived session can be read but takes no new turns until it is unarchived. */
+  assertSessionWritable(sessionId: string): void {
+    if (this.sessionResolver.get(sessionId)?.archived) { throw new MarifoldError('SESSION_ARCHIVED', 'This session has been archived. Unarchive it to continue.', { sessionId }); }
   }
 
   assertSessionAvailable(sessionId: string, owner: string = this.sessionOwner): void {
@@ -554,7 +554,7 @@ export class MarifoldRuntime {
     } = {},
   ): AgentRunner {
     return new AgentRunner({
-      checkSession: options => { if (options.sessionId) { this.assertSessionAvailable(options.sessionId, options.sessionOwner); } },
+      checkSession: options => { if (options.sessionId) { this.assertSessionAvailable(options.sessionId, options.sessionOwner); this.assertSessionWritable(options.sessionId); } },
       holdSession: options => options.sessionId
         ? this.sessionLeases.hold(options.sessionId, options.sessionOwner ?? this.sessionOwner)
         : undefined,
@@ -586,6 +586,13 @@ export class MarifoldRuntime {
         };
       },
       prepareImages: async (images, optimize) => (await prepareImageInputs(images, { optimize })).images,
+      // A run on another device inspects there; host session images are not reachable.
+      sessionImages: runtimeOptions.createWorkspace ? undefined : sessionImageAccess(this.sessionResolver),
+      memory: {
+        enabled: memoryProfile => this.memoryEnabled(memoryProfile),
+        load: (memoryProfile, objective, thinking) => this.memoryForRequest(memoryProfile, true, objective, thinking),
+        apply: (memoryProfile, objective, controls, sessionId) => applyTurnMemory(this.memoryStore, memoryProfile, objective, controls, { sessionId, sizeLimit: this.options.loadedConfig.config.memory.sizeLimit, promptForgets: false }),
+      },
       // Record the run as a tidy user→assistant exchange (the prompt when the
       // run starts, its outcome when it ends) so resuming the session shows the
       // result, not the agent's internal framing. Edits replace in one step.

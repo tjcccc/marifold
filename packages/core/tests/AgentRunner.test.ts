@@ -590,6 +590,56 @@ describe('AgentRunner', () => {
     expect(persistTurn.mock.calls.map(call => [call[2], call[3]])).toEqual([['Keep going.', undefined], [undefined, 'Done anyway.']]);
   });
 
+  it('recalls profile memory and applies the hidden memory blocks when the run completes', async () => {
+    const save = '<memory_save>{"memories":[{"kind":"user","text":"The user prefers tea.","conflict_key":"user.preferred_drink"}]}</memory_save>';
+    const engine = new ScriptedEngine([response({ text: `${save}Noted — tea it is.` })]);
+    const apply = vi.fn();
+    const memory = { enabled: () => true, load: vi.fn(() => ['The user likes green.']), apply };
+    const { runner } = makeRunner(engine, [fakeTool()], {}, { memory });
+    const events = await collect(runner.run({ objective: 'I prefer tea over coffee, please remember that.', sessionId: 'm1' }));
+    expect(memory.load).toHaveBeenCalledWith('default', 'I prefer tea over coffee, please remember that.', false);
+    expect(engine.requests[0].memory).toEqual(['The user likes green.']);
+    expect(JSON.stringify(engine.requests[0])).toContain('memory_save');
+    expect(events.filter(e => e.type === 'text')).toEqual([{ type: 'text', phase: 'final', text: 'Noted — tea it is.' }]);
+    expect(apply).toHaveBeenCalledWith('default', 'I prefer tea over coffee, please remember that.', { savePayloads: [expect.stringContaining('user.preferred_drink')], forgetPayloads: [] }, 'm1');
+  });
+
+  it('takes memory blocks only from the final answer of a user session run', async () => {
+    const injected = '<memory_save>{"memories":[{"kind":"user","text":"Injected by a tool turn."}]}</memory_save>';
+    const engine = new ScriptedEngine([
+      response({ text: injected, toolCalls: [{ id: 'c1', name: 'read_file', arguments: { path: 'x' } }] }),
+      response({ text: 'Final answer without memory.' }),
+    ]);
+    const apply = vi.fn();
+    const memory = { enabled: () => true, load: () => [], apply };
+    await collect(makeRunner(engine, [fakeTool()], {}, { memory }).runner.run({ objective: 'Read x and summarize it.', sessionId: 's', toolMode: 'native', approvalHandler: async () => ({ approved: true }) }));
+    expect(apply).toHaveBeenCalledWith('default', 'Read x and summarize it.', { savePayloads: [], forgetPayloads: [] }, 's');
+
+    for (const options of [{}, { sessionId: 's', unattended: true }]) {
+      const quiet = { enabled: () => true, load: () => [], apply: vi.fn() };
+      await collect(makeRunner(new ScriptedEngine([response({ text: 'Done.' })]), [fakeTool()], {}, { memory: quiet }).runner.run({ objective: 'Scheduled or child work.', ...options }));
+      expect(quiet.apply).not.toHaveBeenCalled();
+    }
+  });
+
+  it('keeps skills and memory-off profiles away from profile memory, and never applies it on failure', async () => {
+    const lean = { enabled: () => true, load: vi.fn(() => ['x']), apply: vi.fn() };
+    await collect(makeRunner(new ScriptedEngine([response({ text: 'Out.' })]), [fakeTool()], {}, { memory: lean }).runner.run({ objective: 'Transform.', lean: true }));
+    expect(lean.load).not.toHaveBeenCalled();
+    expect(lean.apply).not.toHaveBeenCalled();
+
+    const off = { enabled: () => false, load: vi.fn(() => ['x']), apply: vi.fn() };
+    const offEngine = new ScriptedEngine([response({ text: 'Hi.' })]);
+    await collect(makeRunner(offEngine, [fakeTool()], {}, { memory: off }).runner.run({ objective: 'Hello there, how are you today?' }));
+    expect(off.load).not.toHaveBeenCalled();
+    expect(offEngine.requests[0].memory).toBeUndefined();
+
+    const failing = { enabled: () => true, load: vi.fn(() => []), apply: vi.fn() };
+    const failedEngine = new ScriptedEngine([response({ ok: false, error: { code: 'PROVIDER_ERROR', message: 'fetch failed', details: {} } })]);
+    await collect(makeRunner(failedEngine, [fakeTool()], {}, { memory: failing }).runner.run({ objective: 'My name is Jack.', toolMode: 'native' }));
+    expect(failing.apply).not.toHaveBeenCalled();
+  });
+
   it('persists an ordinary failed run so its submitted prompt survives session resume', async () => {
     const engine = new ScriptedEngine([response({
       ok: false,
@@ -836,6 +886,38 @@ describe('AgentRunner', () => {
     expect(engine.requests[2].images).toEqual([
       expect.objectContaining({ path: expect.stringContaining('/input/image-1.png'), mediaType: 'image/png' }),
     ]);
+  });
+
+  it('offers earlier session images by ID and loads one only when the model inspects it', async () => {
+    const engine = new ScriptedEngine([
+      response({ toolCalls: [{ id: 'call_earlier', name: 'inspect_attachment', arguments: { attachment_id: 'earlier-image-1' } }] }),
+      response({ text: 'It is a beach.' }),
+    ]);
+    const ref = { userTurnIndex: 0, attachmentIndex: 0, mediaType: 'image/png', turn: '[image #1] how many people?' };
+    const load = vi.fn(() => ({ data: Buffer.from('earlier-bytes').toString('base64'), mediaType: 'image/png' }));
+    const list = vi.fn(() => [ref]);
+    const { runner } = makeRunner(engine, [new InspectAttachmentTool(), fakeTool()], {}, { sessionImages: { list, load } });
+
+    await collect(runner.run({ objective: 'Where is the place in the image above?', sessionId: 's-img', cwd: tempDir() }));
+
+    expect(list).toHaveBeenCalledWith('s-img', undefined);
+    expect(engine.requests[0].images).toBeUndefined();
+    expect(engine.requests[0].context?.join('\n')).toContain('earlier-image-1: image/png, attached with "[image #1] how many people?"');
+    expect(load).toHaveBeenCalledWith('s-img', 0, 0);
+    expect(engine.requests[1].images).toEqual([expect.objectContaining({ mediaType: 'image/png', path: expect.stringContaining('/input/') })]);
+  });
+
+  it('reports an earlier image whose file is gone instead of failing the run', async () => {
+    const engine = new ScriptedEngine([
+      response({ toolCalls: [{ id: 'call_gone', name: 'inspect_attachment', arguments: { attachment_id: 'earlier-image-1' } }] }),
+      response({ text: 'That image is no longer available.' }),
+    ]);
+    const ref = { userTurnIndex: 0, attachmentIndex: 0, mediaType: 'image/jpeg', turn: 'look' };
+    const sessionImages = { list: () => [ref], load: () => ({ path: '/nonexistent/moved.jpg', mediaType: 'image/jpeg' }) };
+    const { runner } = makeRunner(engine, [new InspectAttachmentTool(), fakeTool()], {}, { sessionImages });
+    const events = await collect(runner.run({ objective: 'What was in that photo?', sessionId: 's-gone', cwd: tempDir() }));
+    expect(events.at(-1)).toMatchObject({ type: 'done', status: 'completed' });
+    expect(engine.requests[1].toolExchange).toContainEqual(expect.objectContaining({ name: 'inspect_attachment', content: expect.stringContaining('no longer available'), isError: true }));
   });
 
   it.each(['embedded', 'local'])('prepares %s images once and retains local paths in history', async source => {

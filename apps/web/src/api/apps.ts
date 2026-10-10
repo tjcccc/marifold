@@ -4,18 +4,25 @@ import type {
   SkillAppDefinition,
   SkillAppAttachmentInput,
   SkillAppInstanceSnapshot,
+  SkillAppInvalidEntry,
   SkillAppMutationResult,
   UserInputSubmission,
 } from './types';
 
+export interface AppCatalogPayload {
+  apps: SkillAppDefinition[];
+  /** Bundles that failed to load; older services omit the field. */
+  invalidApps: SkillAppInvalidEntry[];
+}
+
 export async function listApps(
   client: ApiClient,
-): Promise<SkillAppDefinition[]> {
-  const payload = await client.request<{ ok: true; apps: SkillAppDefinition[] }>(
+): Promise<AppCatalogPayload> {
+  const payload = await client.request<{ ok: true; apps: SkillAppDefinition[]; invalidApps?: SkillAppInvalidEntry[] }>(
     'GET',
     '/v1/apps',
   );
-  return payload.apps;
+  return { apps: payload.apps, invalidApps: payload.invalidApps ?? [] };
 }
 
 export async function createSkillAppInstance(
@@ -53,14 +60,18 @@ export async function updateSkillAppState(
   return payload;
 }
 
-export async function runSkillAppOperation(
+/** Start a button-bound operation as a cancellable execution. `values` are
+ * the latest editable inputs, applied before the run reads state. */
+export async function startSkillAppExecution(
   client: ApiClient,
   instanceId: string,
   operationName: string,
+  values: Record<string, string>,
 ): Promise<SkillAppMutationResult> {
   const payload = await client.request<{ ok: true } & SkillAppMutationResult>(
     'POST',
-    `/v1/app-instances/${encodeURIComponent(instanceId)}/operations/${encodeURIComponent(operationName)}`,
+    `/v1/app-instances/${encodeURIComponent(instanceId)}/executions`,
+    { operation: operationName, values },
   );
   return payload;
 }

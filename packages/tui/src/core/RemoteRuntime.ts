@@ -74,13 +74,17 @@ export class RemoteRuntime implements TuiRuntime {
   resolveAgentConfigForProfile: TuiRuntime['resolveAgentConfigForProfile'] = (name) => this.entry(name).agent;
   listSkills: TuiRuntime['listSkills'] = (profile, scope) => this.entry(profile).skills[scope ?? 'all'];
   getSkill: TuiRuntime['getSkill'] = (name, profile) => this.listSkills(profile).find((s) => s.name === name);
-  listSessions: TuiRuntime['listSessions'] = async (limit = 20, profile) =>
+  listSessions: TuiRuntime['listSessions'] = async (limit = 20, profile, options) =>
     (
       await this.api.request<{ sessions: Awaited<ReturnType<MarifoldRuntime['listSessions']>> }>(
         'GET',
-        `/v1/sessions?limit=${limit}${profile ? `&profile=${encodeURIComponent(profile)}` : ''}`,
+        `/v1/sessions?limit=${limit}${profile ? `&profile=${encodeURIComponent(profile)}` : ''}${options?.archived ? '&archived=true' : ''}`,
       )
     ).sessions;
+  updateSessionDisplay: TuiRuntime['updateSessionDisplay'] = async (id, update) => {
+    await this.api.request('PATCH', `/v1/sessions/${encodeURIComponent(id)}`, update);
+    return true;
+  };
   ask: TuiRuntime['ask'] = async ({ signal: _signal, ...request }) =>
     (await this.api.request<{ response: Awaited<ReturnType<MarifoldRuntime['ask']>> }>('POST', '/v1/ask', request)).response;
   acquireSession = (id: string): Promise<void> => acquireSessionLease(this.api, id);

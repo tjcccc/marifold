@@ -200,6 +200,14 @@ export function registerProfileRoutes(
     };
   });
 
+  // Bring back a forgotten or replaced memory; one value per conflict key stays active.
+  server.post<{ Params: { name: string; id: string } }>('/v1/profiles/:name/memories/:id/restore', async request => {
+    const name = request.params.name;
+    runtime.getProfile(name);
+    const result = runtime.restoreMemoryById(name, request.params.id);
+    return { ok: true, profile: name, restored: result.count > 0, memories: runtime.listMemories(name, false) };
+  });
+
   // Save a memory (the /remember command). Mirrors the memory-DELETE route's
   // auth + phantom-profile guard.
   server.post<{ Params: { name: string } }>('/v1/profiles/:name/memories', async request => {

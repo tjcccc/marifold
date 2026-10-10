@@ -17,6 +17,7 @@ import { isInsideWorkspace, WriteFileTool } from '../src/agent/tools/WriteFileTo
 import { SkillManagementTool } from '../src/agent/tools/SkillManagementTool';
 import { SkillAppContextTool, SkillAppManagementTool } from '../src/agent/tools/SkillAppTools';
 import { AppStore } from '../src/app/AppStore';
+import { compileSkillApp } from '../src/app/SkillAppCompiler';
 import { createRunWorkspace } from '../src/agent/RunWorkspace';
 import { capToolOutput, type ToolExecutionContext, ToolRegistry } from '../src/agent/ToolRegistry';
 import { SkillStore } from '../src/skill/SkillStore';
@@ -187,6 +188,11 @@ describe('SkillAppContextTool', () => {
     expect(result.contract.templates.v1).toContain("Download('Download result', result");
     expect(result.contract.templates.v1Skill).toContain('{{request}}');
     expect(result.contract.templates.v2).toContain("registerProfile('profile-name'");
+    // The builder must only ever be taught templates that compile.
+    for (const template of [result.contract.templates.v1, result.contract.templates.v2]) {
+      expect(compileSkillApp(template, 'app-name/skillapp.ts').layout[0]!.children)
+        .toContainEqual(expect.objectContaining({ component: 'row', align: 'center' }));
+    }
     expect(result.contract.bundle.v1).toContain('include skills/<skill-name>/SKILL.md whose frontmatter name matches registerSkill');
     expect(result.contract.bundle.v2).toContain('do not copy the profile Skill into the App bundle');
   });

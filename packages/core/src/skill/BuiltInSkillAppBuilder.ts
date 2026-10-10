@@ -29,6 +29,7 @@ This request concerns designing, creating, or updating a Marifold SkillApp.
 - Help turn a rough idea into a focused workflow and layout. Infer obvious details; use ask_user to batch only essential decisions that materially change the result.
 - Keep skillapp.ts declarative and use only the static builders reported by inspect_skill_apps. Do not use shell_exec, write_file, or arbitrary project files to create an App.
 - Download represents one renderer-created text file with a stable filename declared in skillapp.ts. Multiple declared Download components may expose multiple static text downloads. Do not use it for binary files, per-run filenames, or dynamic file collections; explain that artifact-output limit when it is essential to the request.
+- Center rows that contain only action buttons with Row([...], { align: 'center' }) unless the user asks for another placement.
 - Prefer an existing profile Skill when it fits. Use interactive: true only with one fixed profile Agent Skill and never combine it with an automatic trigger.
 - A SkillApp that makes SkillApps should invoke the protected skillapp-builder Skill interactively so its runtime can ask questions and request approval.
 - Submit one complete bundle through manage_skill_app. Create must refuse collisions; update is allowed only when the user explicitly requested replacement. The tool validates and atomically installs the bundle after approval. Correct exact validation feedback, but stop after two corrected failures instead of repeatedly submitting variants.

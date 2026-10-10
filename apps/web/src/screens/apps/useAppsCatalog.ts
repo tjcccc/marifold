@@ -3,11 +3,15 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { listApps } from '../../api/apps';
 import type { ApiClient } from '../../api/client';
 import { MarifoldApiError } from '../../api/client';
-import type { SkillAppDefinition } from '../../api/types';
+import type { SkillAppDefinition, SkillAppInvalidEntry } from '../../api/types';
 
 export interface AppsCatalog {
   apps: SkillAppDefinition[];
+  /** Bundles the service could not load, with their exact error. */
+  invalidApps: SkillAppInvalidEntry[];
   selected?: SkillAppDefinition;
+  /** Set instead of `selected` when the requested App failed to load. */
+  selectedInvalid?: SkillAppInvalidEntry;
   selectedName?: string;
   loading: boolean;
   error?: string;
@@ -21,6 +25,7 @@ export function useAppsCatalog(
   requestedName?: string,
 ): AppsCatalog {
   const [apps, setApps] = useState<SkillAppDefinition[]>([]);
+  const [invalidApps, setInvalidApps] = useState<SkillAppInvalidEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>();
 
@@ -29,10 +34,11 @@ export function useAppsCatalog(
     try {
       const next = await listApps(client);
       // Workspace changes include unrelated activity; preserve the active form.
-      setApps(current => next.map(app => {
+      setApps(current => next.apps.map(app => {
         const previous = current.find(candidate => candidate.app.name === app.app.name);
         return previous && JSON.stringify(previous) === JSON.stringify(app) ? previous : app;
       }));
+      setInvalidApps(current => JSON.stringify(current) === JSON.stringify(next.invalidApps) ? current : next.invalidApps);
     } catch (reason) {
       if (reason instanceof MarifoldApiError && reason.code === 'UNAUTHORIZED') { onUnauthorized(); }
       setError(reason instanceof Error ? reason.message : String(reason));
@@ -42,12 +48,14 @@ export function useAppsCatalog(
   useEffect(() => {
     let live = true;
     setApps([]);
+    setInvalidApps([]);
     setError(undefined);
     setLoading(true);
     void listApps(client)
       .then(next => {
         if (!live) { return; }
-        setApps(next);
+        setApps(next.apps);
+        setInvalidApps(next.invalidApps);
       })
       .catch(reason => {
         if (!live) { return; }
@@ -64,15 +72,23 @@ export function useAppsCatalog(
 
   useWorkspaceChanges(client, () => { void refresh(); });
 
+  const selectedInvalid = useMemo(
+    () => apps.some(app => app.app.name === requestedName)
+      ? undefined
+      : invalidApps.find(entry => entry.name === requestedName) ?? (apps.length === 0 ? invalidApps[0] : undefined),
+    [apps, invalidApps, requestedName],
+  );
   const selected = useMemo(
-    () => apps.find(app => app.app.name === requestedName) ?? apps[0],
-    [apps, requestedName],
+    () => selectedInvalid ? undefined : apps.find(app => app.app.name === requestedName) ?? apps[0],
+    [apps, requestedName, selectedInvalid],
   );
 
   return {
     apps,
+    invalidApps,
     selected,
-    selectedName: selected?.app.name,
+    selectedInvalid,
+    selectedName: selectedInvalid?.name ?? selected?.app.name,
     loading,
     error,
     refresh,

@@ -22,8 +22,7 @@ export function registerSessionRoutes(
       {
         archived: parseBooleanQuery(request.query.archived),
         ...(request.query.q?.trim() ? { search: request.query.q } : {}),
-        ...(typeof request.headers['x-marifold-session-owner'] === 'string'
-          ? { sessionOwner: request.headers['x-marifold-session-owner'] } : {}),
+        ...(request.sessionOwner ? { sessionOwner: request.sessionOwner } : {}),
       },
     ),
   }));
@@ -44,16 +43,15 @@ export function registerSessionRoutes(
   });
 
   server.post<{ Params: { id: string } }>('/v1/sessions/:id/lease', async request => {
-    const owner = request.headers['x-marifold-session-owner'];
-    if (typeof owner !== 'string' || !/^[a-zA-Z0-9-]{20,100}$/.test(owner)) { throw MarifoldError.configInvalid('A session owner identifier is required.'); }
-    // `takeover` moves a session held by another of the owner's devices here.
+    const owner = request.sessionOwner;
+    if (!owner) { throw MarifoldError.configInvalid('The client app (x-marifold-session-owner) is required.'); }
+    // `takeover` moves a session held by another app or device here.
     if ((request.body as { takeover?: unknown } | undefined)?.takeover === true) { runtime.takeOverSession(request.params.id, owner); }
     else { runtime.acquireSession(request.params.id, owner); }
     return { ok: true };
   });
   server.delete<{ Params: { id: string } }>('/v1/sessions/:id/lease', async request => {
-    const owner = request.headers['x-marifold-session-owner'];
-    if (typeof owner === 'string') { runtime.releaseSession(request.params.id, owner); }
+    if (request.sessionOwner) { runtime.releaseSession(request.params.id, request.sessionOwner); }
     return { ok: true };
   });
   server.addHook('preHandler', async request => {
@@ -63,8 +61,7 @@ export function registerSessionRoutes(
       ? body.sessionId
       : route.startsWith('/v1/sessions/:id') && !route.endsWith('/lease') ? (request.params as { id: string }).id : undefined;
     if (sessionId) {
-      const owner = request.headers['x-marifold-session-owner'];
-      runtime.assertSessionAvailable(sessionId, typeof owner === 'string' ? owner : 'unclaimed-request');
+      runtime.assertSessionAvailable(sessionId, request.sessionOwner ?? 'unclaimed-request');
     }
   });
 

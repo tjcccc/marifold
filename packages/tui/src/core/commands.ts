@@ -31,7 +31,9 @@ export interface CommandContext {
   retryLast(): void | Promise<void>;
   /** Send one prompt with attached images preserved byte-for-byte. */
   sendOriginal(text: string): void | Promise<void>;
-  showSessions(): void | Promise<void>;
+  showSessions(archived?: boolean): void | Promise<void>;
+  /** Archive or unarchive the open session. */
+  setArchived(archived: boolean): void | Promise<void>;
   /** Move this terminal's session back here after another client took it over. */
   takeOver(): void | Promise<void>;
   runDoctor(fix?: boolean): void | Promise<void>;
@@ -109,9 +111,11 @@ const COMMANDS: CommandSpec[] = [
   {
     name: 'resume',
     aliases: ['session'],
-    summary: 'Resume a recent session from an interactive picker.',
-    run: ctx => ctx.showSessions(),
+    summary: 'Resume a recent session from a picker: /resume [--archived].',
+    run: (ctx, args) => ctx.showSessions(args.trim() === '--archived'),
   },
+  { name: 'archive', summary: 'Archive this session (hidden from /resume until unarchived).', run: ctx => ctx.setArchived(true) },
+  { name: 'unarchive', summary: 'Unarchive this session so it can continue.', run: ctx => ctx.setArchived(false) },
   { name: 'takeover', summary: 'Reopen this session here after another page, terminal, or app took it over.', run: ctx => ctx.takeOver() },
   {
     name: 'think',

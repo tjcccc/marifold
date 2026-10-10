@@ -123,6 +123,16 @@ describe('ProfileSettingsPage', () => {
     expect(screen.getByRole('region', { name: 'Agent permissions' })).toBeTruthy();
   });
 
+  it('lists forgotten memories behind a toggle and restores one', () => {
+    const forgotten = { ...memory, id: 'old-1', text: 'The user prefers tea.', status: 'superseded' as const };
+    const handlers = renderPage({ memories: [memory, forgotten] });
+    expect(screen.queryByText('The user prefers tea.')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Show forgotten (1)' }));
+    expect(screen.getByText('The user prefers tea.')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Restore' }));
+    expect(handlers.onMemoryAction).toHaveBeenCalledWith('old-1', 'restore');
+  });
+
   it('offers Remove avatar only when the profile has one', () => {
     const onAvatarDelete = vi.fn();
     renderPage({ detail: { ...detail, avatar: { mediaType: 'image/png' } }, onAvatarDelete }, false);

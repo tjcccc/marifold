@@ -40,7 +40,7 @@ describe('commandSyntax', () => {
   it('exposes the wired web command set', () => {
     expect(WEB_COMMANDS.map(command => command.name)).toEqual([
       'help', 'status', 'copy', 'retry', 'attach-original', 'new', 'think',
-      'model', 'btw', 'stop', 'remember', 'forget', 'context-window', 'compact',
+      'model', 'stop', 'remember', 'forget', 'context-window', 'compact',
     ]);
   });
 });

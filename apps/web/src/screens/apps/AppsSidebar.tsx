@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent, ReactNode } from 'react';
 import type { ApiClient } from '../../api/client';
-import type { SkillAppDefinition } from '../../api/types';
+import type { SkillAppDefinition, SkillAppInvalidEntry } from '../../api/types';
 import { Avatar } from '../../components/Avatar';
 import { WorkspaceSidebar } from '../agent/WorkspaceSidebar';
 import styles from '../agent/ProfileSidebar.module.css';
@@ -10,6 +10,8 @@ import appStyles from './AppsSidebar.module.css';
 export interface AppsSidebarProps {
   client: ApiClient;
   apps: SkillAppDefinition[];
+  /** Bundles that failed to load; listed with a warning so they never vanish silently. */
+  invalidApps?: SkillAppInvalidEntry[];
   selected?: string;
   busy?: boolean;
   loading?: boolean;
@@ -33,6 +35,7 @@ export type AppsSidebarContentProps = Omit<AppsSidebarProps, 'footer'>;
 export function AppsSidebarContent({
   client,
   apps,
+  invalidApps = [],
   selected,
   busy = false,
   loading = false,
@@ -52,6 +55,10 @@ export function AppsSidebarContent({
       return terms.every(term => haystack.includes(term));
     });
   }, [apps, search]);
+  const filteredInvalidApps = useMemo(() => {
+    const terms = normalizeSearch(search).split(' ').filter(Boolean);
+    return invalidApps.filter(entry => terms.every(term => normalizeSearch(entry.name).includes(term)));
+  }, [invalidApps, search]);
 
   function handleSearchKeyDown(event: KeyboardEvent<HTMLInputElement>): void {
     if (event.key === 'Escape' && search) {
@@ -86,9 +93,9 @@ export function AppsSidebarContent({
       </div>
       <div className={styles.header}>Apps</div>
       <div ref={listRef} id="app-list" className={styles.list}>
-        {filteredApps.length === 0 ? (
+        {filteredApps.length === 0 && filteredInvalidApps.length === 0 ? (
           <div className={styles.empty} role="status">
-            {loading ? 'Loading apps…' : apps.length === 0 ? 'No apps yet.' : 'No matching apps.'}
+            {loading ? 'Loading apps…' : apps.length + invalidApps.length === 0 ? 'No apps yet.' : 'No matching apps.'}
           </div>
         ) : null}
         {filteredApps.map(app => (
@@ -109,6 +116,31 @@ export function AppsSidebarContent({
                   <span className={styles.name}>{app.app.title}</span>
                 </span>
                 <span className={styles.sub}>{app.app.description ?? app.app.name}</span>
+              </span>
+            </button>
+          </div>
+        ))}
+        {filteredInvalidApps.map(entry => (
+          <div
+            key={`invalid-${entry.name}`}
+            className={entry.name === selected ? styles.rowSelected : styles.row}
+          >
+            <button
+              data-app-row
+              aria-label={`${entry.name}, cannot load`}
+              className={`${styles.rowMain} ${appStyles.rowMain}`}
+              disabled={busy}
+              onClick={() => onSelect(entry.name)}
+              title={entry.message}
+              type="button"
+            >
+              <Avatar client={client} name={entry.name} hasAvatar={false} size={40} />
+              <span className={styles.meta}>
+                <span className={styles.nameLine}>
+                  <span className={styles.name}>{entry.name}</span>
+                  <span className={appStyles.invalidBadge}>Error</span>
+                </span>
+                <span className={`${styles.sub} ${appStyles.invalidSub}`}>Cannot load this App</span>
               </span>
             </button>
           </div>

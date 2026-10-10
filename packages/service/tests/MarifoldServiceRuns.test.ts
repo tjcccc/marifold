@@ -619,8 +619,8 @@ Transform {{text}} into the final prompt.
   it('keeps a running task\'s session reserved after its client releases the lease', async () => {
     stubProvider([toolCall('write_file', { path: 'held.txt', content: 'held' }), 'Saved the file.']);
     const { server, base } = await startServer();
-    const tab = { 'x-marifold-session-owner': `tab-${'a'.repeat(24)}` };
-    const terminal = { 'x-marifold-session-owner': `terminal-${'b'.repeat(24)}` };
+    const tab = { 'x-marifold-session-owner': 'web' };
+    const terminal = { 'x-marifold-session-owner': 'terminal' };
     try {
       expect((await postJson(base, '/v1/sessions/held/lease', {}, tab)).status).toBe(200);
       const created = await postJson(base, '/v1/runs', { objective: 'Write held.txt.', cwd: tempDir(), sessionId: 'held' }, tab);
@@ -649,7 +649,7 @@ Transform {{text}} into the final prompt.
   it('saves the prompt when the run starts, so the session exists before the answer', async () => {
     stubProvider([toolCall('write_file', { path: 'early.txt', content: 'early' }), 'Wrote it.']);
     const { server, base } = await startServer();
-    const tab = { 'x-marifold-session-owner': `tab-${'c'.repeat(24)}` };
+    const tab = { 'x-marifold-session-owner': 'web' };
     try {
       const created = await postJson(base, '/v1/runs', { objective: 'Write early.txt.', userTurn: '$writer early.txt', cwd: tempDir(), sessionId: 'early' }, tab);
       const { run } = await created.json();
@@ -670,6 +670,52 @@ Transform {{text}} into the final prompt.
     }
   });
 
+  it('lets another tab or a reloaded page of the same app open a running session, but not another app', async () => {
+    stubProvider([toolCall('write_file', { path: 'r.txt', content: 'r' }), 'Done.']);
+    const { server, base } = await startServer();
+    const web = { 'x-marifold-session-owner': 'web' };
+    const terminal = { 'x-marifold-session-owner': 'terminal' };
+    try {
+      expect((await postJson(base, '/v1/sessions/reload/lease', {}, web)).status).toBe(200);
+      const { run } = await (await postJson(base, '/v1/runs', { objective: 'Write r.txt.', cwd: tempDir(), sessionId: 'reload' }, web)).json();
+      const frames = sseFrames(await fetch(`${base}/v1/runs/${run.id}/events`));
+      const { matched } = await pullFrames(frames, frame => frame.event === 'approval_request');
+      // The page reloads: its old lease is released (deferred while the run holds it), the new page acquires.
+      await fetch(`${base}/v1/sessions/reload/lease`, { method: 'DELETE', headers: web });
+      expect((await postJson(base, '/v1/sessions/reload/lease', {}, web)).status).toBe(200);
+      expect((await fetch(`${base}/v1/sessions/reload`, { headers: web })).status).toBe(200);
+      expect((await postJson(base, '/v1/sessions/reload/lease', {}, terminal)).status).toBe(409);
+      await postJson(base, `/v1/runs/${run.id}/approvals/${(matched!.data as { request: { id: string } }).request.id}`, { action: 'once' }, web);
+      await pullFrames(frames, frame => frame.event === 'done');
+      // The reloaded page still holds the session after the run.
+      expect((await postJson(base, '/v1/sessions/reload/lease', {}, terminal)).status).toBe(409);
+    } finally {
+      await server.close();
+    }
+  });
+
+  it('refuses new turns in an archived session until it is unarchived', async () => {
+    stubProvider(['First answer.', 'Second answer.']);
+    const { server, base } = await startServer();
+    const web = { 'x-marifold-session-owner': 'web' };
+    try {
+      const { run } = await (await postJson(base, '/v1/runs', { objective: 'Hello.', cwd: tempDir(), sessionId: 'shelf' }, web)).json();
+      await pullFrames(sseFrames(await fetch(`${base}/v1/runs/${run.id}/events`)), frame => frame.event === 'done');
+      const patch = (archived: boolean) => fetch(`${base}/v1/sessions/shelf`, { method: 'PATCH', headers: { ...web, 'content-type': 'application/json' }, body: JSON.stringify({ archived }) });
+      expect((await patch(true)).status).toBe(200);
+      const refused = await postJson(base, '/v1/runs', { objective: 'Again.', cwd: tempDir(), sessionId: 'shelf' }, web);
+      expect(refused.status).toBe(409);
+      expect((await refused.json()).error).toMatchObject({ code: 'SESSION_ARCHIVED', message: expect.stringContaining('Unarchive it to continue') });
+      expect((await postJson(base, '/v1/ask', { prompt: 'Again.', sessionId: 'shelf' }, web)).status).toBe(409);
+      // Reading an archived session still works.
+      expect((await fetch(`${base}/v1/sessions/shelf`, { headers: web })).status).toBe(200);
+      expect((await patch(false)).status).toBe(200);
+      expect((await postJson(base, '/v1/runs', { objective: 'Again.', cwd: tempDir(), sessionId: 'shelf' }, web)).status).toBe(201);
+    } finally {
+      await server.close();
+    }
+  });
+
   it('answers a side question (/v1/ask without a session) without saving anything', async () => {
     stubProvider(['A side answer.']);
     const { server, base } = await startServer();
@@ -685,8 +731,8 @@ Transform {{text}} into the final prompt.
   it('lets another device take over a session while its task keeps running and saves its turn', async () => {
     stubProvider([toolCall('write_file', { path: 'held.txt', content: 'held' }), 'Saved after takeover.']);
     const { server, base } = await startServer();
-    const office = { 'x-marifold-session-owner': `office-${'a'.repeat(24)}` };
-    const home = { 'x-marifold-session-owner': `home-${'b'.repeat(24)}` };
+    const office = { 'x-marifold-session-owner': 'web' };
+    const home = { 'x-marifold-session-owner': 'terminal' };
     try {
       expect((await postJson(base, '/v1/sessions/moved/lease', {}, office)).status).toBe(200);
       const created = await postJson(base, '/v1/runs', { objective: 'Write held.txt.', cwd: tempDir(), sessionId: 'moved' }, office);

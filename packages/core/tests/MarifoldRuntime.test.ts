@@ -371,6 +371,44 @@ describe('MarifoldRuntime', () => {
     }
   });
 
+  it('gives agent runs profile memory and saves what they learn', async () => {
+    const dir = tempDir();
+    const config: MarifoldConfig = {
+      default: { provider: 'ollama', model: 'gemma4:e4b', profile: 'default', think: false },
+      models: { options: ['ollama/gemma4:e4b'] },
+      memory: { sizeLimit: 50000, contextLimit: 2400 },
+      paths: { profilesDir: path.join(dir, 'profiles'), sessionsDb: path.join(dir, 'sessions.db'), tasksDir: path.join(dir, 'tasks') },
+      providers: { ollama: { type: 'ollama', baseUrl: 'http://localhost:11434' } },
+    };
+    const requests: string[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      requests.push(String(init?.body));
+      return ollamaStreamResponse([
+        '<memory_save>{"memories":[{"kind":"user","text":"The user\'s favorite color is green.","priority":1,"confidence":1,"stability":"stable","source":"user_direct","conflict_key":"user.favorite_color"}]}</memory_save>',
+        'Green — got it.',
+      ]);
+    }));
+    const runtime = new MarifoldRuntime({ loadedConfig: { config, configPath: path.join(dir, 'config.toml'), foundConfig: true } });
+    try {
+      runtime.ensureProfileMemoryFiles('default');
+      runtime.rememberMemory('default', 'auto_short', 'I prefer tea');
+      const runner = runtime.createAgentRunner('default');
+      const events = [];
+      for await (const event of runner.run({ objective: 'My favorite color is green, by the way.', sessionId: 'agent-memory', cwd: dir })) { events.push(event); }
+      expect(events.at(-1)).toMatchObject({ type: 'done', status: 'completed' });
+      // Recalled: the remembered preference reaches the agent's model request.
+      expect(requests[0]).toContain('The user prefers tea.');
+      expect(requests[0]).toContain('Memory policy for Marifold');
+      // Saved: the hidden block becomes a profile memory and never reaches the session.
+      expect(readMemoryRows(config.paths.profilesDir, 'default', 'user.jsonl')).toMatchObject([
+        { text: "The user's favorite color is green.", status: 'active', conflict_key: 'user.favorite_color' },
+      ]);
+      expect(runtime.getSession('agent-memory')?.turns.at(-1)?.content).toBe('Green — got it.');
+    } finally {
+      runtime.close();
+    }
+  });
+
   it('applies prompt memory fallback when the model does not emit a save block', async () => {
     const dir = tempDir();
     const config: MarifoldConfig = {

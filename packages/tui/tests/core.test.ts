@@ -196,7 +196,7 @@ function fakeCtx(): { ctx: CommandContext; calls: Record<string, unknown[]> } {
     clear: record('clear'), stop: record('stop'), sideQuestion: record('sideQuestion'), exit: record('exit'),
     setThink: record('setThink'), openModelPicker: record('openModelPicker'), openProfilePicker: record('openProfilePicker'),
     openSkills: record('openSkills'), showPermissions: record('showPermissions'), showHelp: record('showHelp'),
-    showSessions: record('showSessions'), takeOver: record('takeOver'), runDoctor: record('runDoctor'), installSkill: record('installSkill'),
+    showSessions: record('showSessions'), takeOver: record('takeOver'), setArchived: record('setArchived'), runDoctor: record('runDoctor'), installSkill: record('installSkill'),
     sendOriginal: record('sendOriginal'),
     readFile: record('readFile'), setImage: record('setImage'),
     remember: record('remember'), forget: record('forget'), deleteMemory: record('deleteMemory'),
@@ -219,6 +219,10 @@ describe('commands', () => {
     expect(calls.showSessions).toBeDefined();
     expect(runCommand(ctx, 'session', '')).toBe(true); // compatibility alias
     expect(runCommand(ctx, 'takeover', '')).toBe(true);
+    expect(runCommand(ctx, 'resume', '--archived')).toBe(true);
+    expect(calls.showSessions).toEqual([true]);
+    expect(runCommand(ctx, 'unarchive', '')).toBe(true);
+    expect(calls.setArchived).toEqual([false]);
     expect(calls.takeOver).toBeDefined();
     expect(runCommand(ctx, 'attach-original', 'inspect this')).toBe(true);
     expect(calls.sendOriginal).toEqual(['inspect this']);
@@ -228,7 +232,7 @@ describe('commands', () => {
   it('includes compatibility aliases in command completion', () => {
     expect(listCommandCompletions()).toContainEqual({
       name: 'session',
-      hint: 'Alias for /resume. Resume a recent session from an interactive picker.',
+      hint: 'Alias for /resume. Resume a recent session from a picker: /resume [--archived].',
     });
   });
 

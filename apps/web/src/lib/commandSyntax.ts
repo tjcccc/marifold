@@ -84,7 +84,6 @@ export const WEB_COMMANDS: Suggestion[] = [
   { name: 'new', usage: '/new', description: 'Start a fresh session.' },
   { name: 'think', usage: '/think', description: 'Toggle thinking mode.' },
   { name: 'model', usage: '/model <id>', description: 'Set the session model, e.g. /model xai/grok-4.5.' },
-  { name: 'btw', usage: '/btw <text>', description: 'Steer the running task without cancelling it.' },
   { name: 'stop', usage: '/stop', description: 'Cancel the running task.' },
   { name: 'remember', usage: '/remember <text>', description: 'Save a memory for this profile.' },
   { name: 'forget', usage: '/forget <query>', description: 'Forget memories matching a query.' },

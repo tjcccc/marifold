@@ -26,3 +26,28 @@ export function SessionBlockedBanner({ onTakeOver }: SessionBlockedBannerProps) 
     </div>
   );
 }
+
+export interface SessionArchivedBannerProps {
+  onUnarchive: () => Promise<unknown>;
+}
+
+/** Shown in place of sending for an archived session: it can be read, and
+ * continues once unarchived. */
+export function SessionArchivedBanner({ onUnarchive }: SessionArchivedBannerProps) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <div className={styles.banner} role="status">
+      <span className={styles.text}>This session has been archived. Unarchive it to continue.</span>
+      <button
+        className={styles.action}
+        disabled={busy}
+        onClick={() => {
+          setBusy(true);
+          void onUnarchive().finally(() => setBusy(false));
+        }}
+      >
+        {busy ? 'Unarchiving…' : 'Unarchive'}
+      </button>
+    </div>
+  );
+}

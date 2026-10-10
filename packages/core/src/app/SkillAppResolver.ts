@@ -24,6 +24,8 @@ export interface ResolvedSkillAppOperation extends ResolvedSkillInvocation {
   result: SkillAppSkillDefinition['result'];
   /** Exact selected Skill folder mounted read-only for profile Agent runs. */
   skillDirectory?: string;
+  /** Selected profile Skill's declared `reads:` paths, still unresolved. */
+  skillReads?: string[];
 }
 
 export function resolveSkillAppOperation(
@@ -116,6 +118,7 @@ export function resolveSkillAppOperation(
     ...(model ? { model } : {}),
     ...(profile ? { profile } : {}),
     ...(profile && source ? { skillDirectory: path.dirname(source) } : {}),
+    ...(profile && skill.reads?.length ? { skillReads: [...skill.reads] } : {}),
     result,
   };
 }

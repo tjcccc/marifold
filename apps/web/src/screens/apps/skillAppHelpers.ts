@@ -153,3 +153,24 @@ export function formatSeconds(milliseconds: number): string {
 export function formatTokens(tokens: number): string {
   return tokens >= 1000 ? `${(tokens / 1000).toFixed(1).replace(/\.0$/, '')}k` : String(tokens);
 }
+
+/** Client-editable state: every declared state that is not an operation output. */
+export function editableValues(app: SkillAppDefinition, values: Record<string, string>): Record<string, string> {
+  const outputs = new Set(app.operations.map(operation => operation.output));
+  return Object.fromEntries(app.states
+    .filter(state => !outputs.has(state.name))
+    .map(state => [state.name, values[state.name] ?? state.initial]));
+}
+
+/** Operations whose automatic trigger a state update will start. */
+export function triggeredOperations(
+  app: SkillAppDefinition,
+  changed: string[],
+  values: Record<string, string>,
+): string[] {
+  return app.triggers
+    .filter(trigger => trigger.onChange.some(name => changed.includes(name)))
+    .map(trigger => app.operations.find(operation => operation.name === trigger.operation))
+    .filter(operation => operation !== undefined && isOperationRunnable(operation.requiredInputs, values))
+    .map(operation => operation!.name);
+}

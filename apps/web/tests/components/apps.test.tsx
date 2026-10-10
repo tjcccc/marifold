@@ -89,6 +89,7 @@ function AppsHarness({ client }: { client: ApiClient }) {
         <AppsSidebar
           client={client}
           apps={catalog.apps}
+          invalidApps={catalog.invalidApps}
           selected={catalog.selectedName}
           busy={busy}
           loading={catalog.loading}
@@ -99,12 +100,17 @@ function AppsHarness({ client }: { client: ApiClient }) {
         client={client}
         onUnauthorized={noop}
         app={catalog.selected}
+        invalidApp={catalog.selectedInvalid}
         loading={catalog.loading}
         loadError={catalog.error}
         onBusyChange={setBusy}
       />
     </div>
   );
+}
+
+function runningExecution(id: string) {
+  return { id, operation: 'translate', phase: 'running' as const, startedAt: new Date().toISOString(), cancellable: true };
 }
 
 describe('AppsScreen', () => {
@@ -191,6 +197,8 @@ describe('AppsScreen', () => {
   it('runs a SkillApp, preserves stale output, and keeps metrics in Activity', async () => {
     let state = { source: '', targetLanguage: 'English', result: '' };
     let staleOutputs: string[] | undefined;
+    let runs = 0;
+    let finished: Record<string, unknown> | undefined;
     const request = vi.fn(async (method: string, path: string, body?: unknown) => {
       if (method === 'GET' && path === '/v1/apps') { return { ok: true, apps: [skillTranslator] }; }
       if (method === 'POST' && path === '/v1/apps/translator/instances') {
@@ -210,34 +218,38 @@ describe('AppsScreen', () => {
         }
         return { ok: true, status: 'idle', instance: { id: 'app_test', appName: 'translator', state, staleOutputs } };
       }
-      if (method === 'POST' && path === '/v1/app-instances/app_test/operations/translate') {
-        state = { ...state, result: '' };
+      if (method === 'POST' && path === '/v1/app-instances/app_test/executions') {
+        state = { ...state, ...((body as { values: Partial<typeof state> }).values), result: '' };
         staleOutputs = undefined;
-        if (state.source === 'Bad') {
-          return {
-            ok: true,
-            status: 'completed',
-            operation: 'translate',
-            instance: { id: 'app_test', appName: 'translator', state, staleOutputs },
-            result: {
-              status: 'error',
-              error: { code: 'PROVIDER_ERROR', message: 'Model unavailable.' },
-            },
-          };
-        }
-        state = { ...state, result: 'おはよう' };
-        staleOutputs = undefined;
-        return {
-          ok: true,
-          status: 'completed',
-          operation: 'translate',
-          instance: { id: 'app_test', appName: 'translator', state },
-          result: {
-            status: 'ok',
-            data: { text: 'おはよう' },
-            meta: { engine: 'ollama', model: 'maternion/hy-mt2:1.8b', durationMs: 830, usage: { totalTokens: 12 } },
+        const execution = runningExecution(`app_run_${++runs}`);
+        const bad = state.source === 'Bad';
+        finished = {
+          id: 'app_test',
+          appName: 'translator',
+          state: { ...state, result: bad ? '' : 'おはよう' },
+          execution: {
+            ...execution,
+            phase: bad ? 'failed' : 'completed',
+            cancellable: false,
+            result: bad
+              ? { status: 'error', error: { code: 'PROVIDER_ERROR', message: 'Model unavailable.' } }
+              : {
+                status: 'ok',
+                data: { text: 'おはよう' },
+                meta: { engine: 'ollama', model: 'maternion/hy-mt2:1.8b', durationMs: 830, usage: { totalTokens: 12 } },
+              },
           },
         };
+        return {
+          ok: true,
+          status: 'running',
+          operation: 'translate',
+          instance: { id: 'app_test', appName: 'translator', state, execution },
+        };
+      }
+      if (method === 'GET' && path === '/v1/app-instances/app_test' && finished) {
+        state = finished.state as typeof state;
+        return { ok: true, instance: finished };
       }
       if (method === 'DELETE' && path === '/v1/app-instances/app_test') { return { ok: true, deleted: true }; }
       throw new Error(`Unexpected request: ${method} ${path}`);
@@ -284,7 +296,9 @@ describe('AppsScreen', () => {
     expect(screen.getByText('0.8s · 12 tokens')).toBeTruthy();
     expect(request).toHaveBeenCalledWith(
       'POST',
-      '/v1/app-instances/app_test/operations/translate',
+      '/v1/app-instances/app_test/executions',
+      // The acknowledged edit is not resent; only unsynced values ride along.
+      { operation: 'translate', values: {} },
     );
 
     fireEvent.change(source, { target: { value: '' } });
@@ -300,7 +314,8 @@ describe('AppsScreen', () => {
     expect(result.value).toBe('');
     expect(result.placeholder).toBe('Generating…');
     expect(screen.queryByRole('status', { name: 'Based on previous inputs' })).toBeNull();
-    expect(await screen.findByText('Model unavailable.')).toBeTruthy();
+    expect((await screen.findByRole('alert')).textContent).toBe('Model unavailable.');
+    expect(screen.getAllByText('Model unavailable.')).toHaveLength(2);
     expect(result.value).toBe('');
     expect(result.placeholder).toBe('');
     expect(screen.queryByRole('status', { name: 'Based on previous inputs' })).toBeNull();
@@ -308,7 +323,7 @@ describe('AppsScreen', () => {
     expect(screen.getByText('Translate completed')).toBeTruthy();
   });
 
-  it('keeps field focus while an ordinary state update is pending', async () => {
+  it('keeps fields and actions steady while an ordinary state update is pending', async () => {
     let finishPatch: ((value: unknown) => void) | undefined;
     const patchResponse = new Promise<unknown>(resolve => {
       finishPatch = resolve;
@@ -341,9 +356,14 @@ describe('AppsScreen', () => {
 
     render(<AppsScreen client={client} onUnauthorized={noop} app={skillTranslator} />);
     const input = await screen.findByLabelText('Input') as HTMLTextAreaElement;
+    const translate = screen.getByRole('button', { name: 'Translate' }) as HTMLButtonElement;
+    await waitFor(() => expect((screen.getByRole('button', { name: 'Reset' }) as HTMLButtonElement).disabled).toBe(false));
     input.focus();
     fireEvent.change(input, { target: { value: 'a' } });
-    expect(await screen.findByText('Updating…')).toBeTruthy();
+    await waitFor(() => expect(request).toHaveBeenCalledWith('PATCH', '/v1/app-instances/app_focus/state', { values: { source: 'a' } }));
+    expect(screen.queryByText('Updating…')).toBeNull();
+    expect(translate.disabled).toBe(false);
+    expect((screen.getByRole('button', { name: 'Reset' }) as HTMLButtonElement).disabled).toBe(false);
     expect(input.disabled).toBe(false);
     expect(document.activeElement).toBe(input);
 
@@ -356,7 +376,7 @@ describe('AppsScreen', () => {
         state: { source: 'a', targetLanguage: 'English', result: '' },
       },
     });
-    await waitFor(() => expect(screen.queryByText('Updating…')).toBeNull());
+    await waitFor(() => expect(input.value).toBe('a'));
     expect(document.activeElement).toBe(input);
   });
 
@@ -378,17 +398,22 @@ describe('AppsScreen', () => {
           },
         };
       }
-      if (method === 'POST' && path === '/v1/app-instances/app_reset_old/operations/translate') {
+      if (method === 'POST' && path === '/v1/app-instances/app_reset_old/executions') {
         return {
           ok: true,
-          status: 'completed',
+          status: 'running',
           operation: 'translate',
           instance: {
             id: 'app_reset_old',
             appName: 'translator',
-            state: { source: 'Saved idea', targetLanguage: 'English', result: 'Generated result' },
+            state: { source: 'Saved idea', targetLanguage: 'English', result: '' },
+            execution: {
+              ...runningExecution('app_run_reset'),
+              phase: 'failed',
+              cancellable: false,
+              result: { status: 'error', error: { code: 'PROVIDER_ERROR', message: 'Temporary failure.' } },
+            },
           },
-          result: { status: 'error', error: { code: 'PROVIDER_ERROR', message: 'Temporary failure.' } },
         };
       }
       if (method === 'DELETE' && path === '/v1/app-instances/app_reset_old') {
@@ -410,13 +435,14 @@ describe('AppsScreen', () => {
     expect(reset.compareDocumentPosition(activity) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'Translate' }));
-    expect(await screen.findByText('Temporary failure.')).toBeTruthy();
+    expect((await screen.findByRole('alert')).textContent).toBe('Temporary failure.');
     expect(screen.getByRole('button', { name: 'Activity (2)' })).toBeTruthy();
 
     fireEvent.click(reset);
     await waitFor(() => expect((screen.getByLabelText('Input') as HTMLTextAreaElement).value).toBe(''));
     expect((screen.getAllByRole('textbox')[1] as HTMLTextAreaElement).value).toBe('');
     expect(screen.queryByRole('region', { name: 'App activity' })).toBeNull();
+    expect(screen.queryByRole('alert')).toBeNull();
     expect(screen.getByRole('button', { name: 'Activity' })).toBeTruthy();
     await waitFor(() => expect(request).toHaveBeenCalledWith('DELETE', '/v1/app-instances/app_reset_old'));
   });
@@ -621,7 +647,7 @@ describe('AppsScreen', () => {
           },
         };
       }
-      if (method === 'POST' && path === '/v1/app-instances/app_builder/operations/translate') {
+      if (method === 'POST' && path === '/v1/app-instances/app_builder/executions') {
         return { ok: true, status: 'running', operation: 'translate', instance: snapshot() };
       }
       if (method === 'POST' && path === '/v1/app-instances/app_builder/executions/app_run_1/input') {
@@ -762,6 +788,10 @@ describe('AppsScreen', () => {
     expect(screen.getByDisplayValue('Existing prompt')).toBeTruthy();
     expect(screen.getByRole('status', { name: 'Based on previous inputs' })).toBeTruthy();
     expect(input.parentElement?.querySelector('img')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Preview very-long-reference-image-name.png' }));
+    expect(screen.getByRole('dialog', { name: 'very-long-reference-image-name.png preview' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Close image preview' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
     await waitFor(() => expect(request).toHaveBeenCalledWith(
       'PUT',
       '/v1/app-instances/app_attachments/attachments/references',
@@ -785,6 +815,117 @@ describe('AppsScreen', () => {
         attachments: [expect.objectContaining({ name: 'very-long-reference-image-name.png' })],
       }),
     ));
+  });
+
+  it('cancels an ordinary run and keeps its outputs locked while it generates', async () => {
+    const article = '# Earlier article';
+    const articleApp: SkillAppDefinition = {
+      ...skillTranslator,
+      states: skillTranslator.states.map(state => state.name === 'result' ? { ...state, initial: article } : state),
+      layout: [
+        { component: 'textarea', label: 'Input', bind: 'source', editable: true },
+        { component: 'row', align: 'center', children: [{ component: 'button', label: 'Translate', trigger: 'translate', emphasis: 'primary' }] },
+        { component: 'markdown', label: 'Article', bind: 'result', copyable: true, sourceToggle: true },
+        { component: 'download', label: 'Download article', bind: 'result', filename: 'article.md' },
+      ],
+    };
+    const base = { id: 'app_cancel', appName: 'translator' };
+    const request = vi.fn(async (method: string, path: string) => {
+      if (method === 'POST' && path === '/v1/apps/translator/instances') {
+        return { ok: true, instance: { ...base, state: { source: 'Write', targetLanguage: 'English', result: article } } };
+      }
+      if (method === 'POST' && path === '/v1/app-instances/app_cancel/executions') {
+        return {
+          ok: true,
+          status: 'running',
+          operation: 'translate',
+          instance: { ...base, state: { source: 'Write', targetLanguage: 'English', result: '' }, execution: runningExecution('app_run_cancel') },
+        };
+      }
+      if (method === 'GET' && path === '/v1/app-instances/app_cancel') {
+        return {
+          ok: true,
+          instance: { ...base, state: { source: 'Write', targetLanguage: 'English', result: '' }, execution: runningExecution('app_run_cancel') },
+        };
+      }
+      if (method === 'POST' && path === '/v1/app-instances/app_cancel/executions/app_run_cancel/cancel') {
+        return {
+          ok: true,
+          instance: {
+            ...base,
+            state: { source: 'Write', targetLanguage: 'English', result: '' },
+            execution: { ...runningExecution('app_run_cancel'), phase: 'cancelled', cancellable: false },
+          },
+        };
+      }
+      if (method === 'DELETE' && path === '/v1/app-instances/app_cancel') { return { ok: true, deleted: true }; }
+      throw new Error(`Unexpected request: ${method} ${path}`);
+    });
+    const client = { baseUrl: '', request } as unknown as ApiClient;
+    render(<AppsScreen client={client} onUnauthorized={noop} app={articleApp} />);
+    const toggle = await screen.findByRole('button', { name: 'View source' }) as HTMLButtonElement;
+    await waitFor(() => expect(toggle.disabled).toBe(false));
+    const translate = screen.getByRole('button', { name: 'Translate' });
+    expect(translate.parentElement?.parentElement?.className).toMatch(/rowAlign_center/);
+
+    fireEvent.click(translate);
+    const cancel = await screen.findByRole('button', { name: 'Cancel' });
+    expect(toggle.disabled).toBe(true);
+    expect((screen.getByLabelText('Input') as HTMLTextAreaElement).disabled).toBe(true);
+    fireEvent.click(cancel);
+
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull());
+    expect((screen.getByLabelText('Input') as HTMLTextAreaElement).disabled).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: /^Activity/ }));
+    expect(screen.getByText('Translate cancelled')).toBeTruthy();
+    expect(request).toHaveBeenCalledWith('POST', '/v1/app-instances/app_cancel/executions/app_run_cancel/cancel');
+  });
+
+  it('locks fields from the click until the started execution arrives', async () => {
+    let respond: (value: unknown) => void = () => {};
+    const base = { id: 'app_race', appName: 'translator' };
+    const running = { ...base, state: { source: 'Hello', targetLanguage: 'English', result: '' }, execution: runningExecution('app_run_race') };
+    const request = vi.fn(async (method: string, path: string) => {
+      if (method === 'POST' && path === '/v1/apps/translator/instances') {
+        return { ok: true, instance: { ...base, state: { source: 'Hello', targetLanguage: 'English', result: '' } } };
+      }
+      if (method === 'POST' && path === '/v1/app-instances/app_race/executions') {
+        return new Promise(resolve => { respond = resolve; });
+      }
+      if (method === 'GET' && path === '/v1/app-instances/app_race') { return { ok: true, instance: running }; }
+      if (method === 'DELETE' && path === '/v1/app-instances/app_race') { return { ok: true, deleted: true }; }
+      throw new Error(`Unexpected request: ${method} ${path}`);
+    });
+    render(<AppsScreen client={{ baseUrl: '', request } as unknown as ApiClient} onUnauthorized={noop} app={skillTranslator} />);
+    const input = await screen.findByLabelText('Input') as HTMLTextAreaElement;
+    const translate = screen.getByRole('button', { name: 'Translate' }) as HTMLButtonElement;
+    await waitFor(() => expect(translate.disabled).toBe(false));
+    fireEvent.click(translate);
+    expect(input.disabled).toBe(true);
+    await act(async () => { respond({ ok: true, status: 'running', operation: 'translate', instance: running }); });
+    expect(await screen.findByRole('button', { name: 'Cancel' })).toBeTruthy();
+    expect(input.disabled).toBe(true);
+  });
+
+  it('lists Apps that fail to load and shows their exact error', async () => {
+    const message = "SkillApp operation 'makePrompt' references missing Skill 'make-old-prompt'.";
+    const request = vi.fn(async (method: string, path: string) => {
+      if (method === 'GET' && path === '/v1/apps') {
+        return { ok: true, apps: [skillTranslator], invalidApps: [{ name: 'broken-app', code: 'SKILL_NOT_FOUND', message }] };
+      }
+      if (method === 'POST' && path === '/v1/apps/translator/instances') {
+        return { ok: true, instance: { id: 'app_valid', appName: 'translator', state: { source: '', targetLanguage: 'English', result: '' } } };
+      }
+      if (method === 'DELETE' && path === '/v1/app-instances/app_valid') { return { ok: true, deleted: true }; }
+      throw new Error(`Unexpected request: ${method} ${path}`);
+    });
+    render(<AppsHarness client={{ baseUrl: '', request } as unknown as ApiClient} />);
+    const broken = await screen.findByRole('button', { name: 'broken-app, cannot load' });
+    expect(screen.getByText('Error')).toBeTruthy();
+    await waitFor(() => expect((broken as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(broken);
+    expect(await screen.findByText('Cannot load broken-app')).toBeTruthy();
+    expect(screen.getByRole('alert').textContent).toContain(message);
   });
 
   it('swaps only the catalog body while keeping shared sidebar chrome mounted', () => {

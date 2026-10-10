@@ -1,3 +1,17 @@
 .rowMain {
   padding-right: 8px;
 }
+
+.invalidBadge {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: 999px;
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  font-size: 10.5px;
+  font-weight: 650;
+}
+
+.invalidSub {
+  color: var(--danger);
+}

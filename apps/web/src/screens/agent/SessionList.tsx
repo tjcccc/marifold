@@ -231,18 +231,22 @@ export function SessionListContent({
         <span className={styles.profileName}>{profileDisplayName}</span>
       </div>
       <div className={styles.header}>
-        <button
-          className={showArchived ? styles.archiveFilterActive : styles.archiveFilter}
-          type="button"
-          aria-pressed={showArchived}
-          title={showArchived ? 'Show active sessions' : 'Show archived sessions'}
-          onClick={() => onShowArchivedChange(!showArchived)}
-        >
-          {showArchived ? 'Archived' : 'Sessions'}
-        </button>
-        <button className={styles.newButton} onClick={onNew} title="New session">
-          +
-        </button>
+        <span>{showArchived ? 'Archived' : 'Sessions'}</span>
+        <span className={styles.headerActions}>
+          <button
+            className={showArchived ? styles.iconButtonActive : styles.newButton}
+            type="button"
+            aria-pressed={showArchived}
+            aria-label={showArchived ? 'Show active sessions' : 'Show archived sessions'}
+            title={showArchived ? 'Show active sessions' : 'Show archived sessions'}
+            onClick={() => onShowArchivedChange(!showArchived)}
+          >
+            <ArchiveGlyph />
+          </button>
+          <button className={styles.newButton} onClick={onNew} title="New session">
+            +
+          </button>
+        </span>
       </div>
       <div className={styles.searchWrap}>
         <SearchGlyph />

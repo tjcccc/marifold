@@ -7,6 +7,7 @@ import {
   type ToolRiskAssessment,
 } from '../ToolRegistry';
 import { AttachmentResource } from '../AttachmentResources';
+import { openEarlierImage } from '../EarlierImages';
 
 /** Attachment-scoped, read-only inspection. The model supplies an opaque ID,
  * never a host path; the run workspace resolves that ID to the exact upload. */
@@ -25,7 +26,7 @@ export class InspectAttachmentTool implements AgentTool {
       properties: {
         attachment_id: {
           type: 'string',
-          description: 'Opaque ID from the current run attachment manifest, such as attachment-1.',
+          description: 'Opaque ID from the current run attachment manifest (such as attachment-1) or an earlier session image (such as earlier-image-1).',
         },
       },
       required: ['attachment_id'],
@@ -37,17 +38,24 @@ export class InspectAttachmentTool implements AgentTool {
   }
 
   assessRisk(): ToolRiskAssessment {
-    // The ID can resolve only inside the current run manifest. Uploading the
-    // attachment is the user's explicit grant to inspect it; no host path can
-    // be smuggled through this tool.
+    // The ID can resolve only inside the current run manifest or this
+    // session's earlier images. Uploading an image is the user's explicit
+    // grant to inspect it within its conversation; no host path can be
+    // smuggled through this tool.
     return { escalate: false, trusted: true };
   }
 
   async execute(input: Record<string, JSONValue>, ctx: ToolExecutionContext): Promise<ToolExecutionResult> {
     const id = requireStringInput(input, 'attachment_id', 'inspect_attachment');
-    const attachment = ctx.workspace?.attachments.find(candidate => candidate.id === id);
+    const earlier = ctx.workspace?.earlierImages?.find(candidate => candidate.id === id);
+    const attachment = earlier && ctx.workspace
+      ? await openEarlierImage(ctx.workspace, earlier)
+      : ctx.workspace?.attachments.find(candidate => candidate.id === id);
+    if (earlier && !attachment) {
+      return { content: `Earlier image '${id}' is no longer available (its file may have been moved or deleted).`, summary: `earlier image ${id} unavailable`, isError: true };
+    }
     if (!attachment) {
-      const available = ctx.workspace?.attachments.map(candidate => candidate.id).join(', ') || '(none)';
+      const available = [...(ctx.workspace?.attachments ?? []), ...(ctx.workspace?.earlierImages ?? [])].map(candidate => candidate.id).join(', ') || '(none)';
       return {
         content: `Attachment '${id}' is not available in this run. Available attachment IDs: ${available}.`,
         summary: `attachment ${id} not found`,

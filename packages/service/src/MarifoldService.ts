@@ -3,6 +3,7 @@ import { remoteArtifactDownload } from './RemoteArtifactDownload';
 import { requestEnvironment, requestOrigin } from './RequestEnvironment';
 import { registerWorkspaceScheduleRoutes } from './WorkspaceScheduleRoutes';
 import * as path from 'node:path';
+import { registerSessionOwners } from './SessionOwner';
 import { WorkspaceRequestContext } from './WorkspaceRequestContext';
 import fastify, { type FastifyInstance } from 'fastify';
 import {
@@ -114,6 +115,7 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
   const workspaceExecutor = new WorkspaceExecutor(() => runtime.resolveAgentConfigForProfile(), path.join(workspaceManager.store.directory, 'runs'), [options.loadedConfig.configPath, ...Object.values(options.loadedConfig.config.paths).filter((value): value is string => typeof value === 'string'), path.dirname(workspaceManager.store.directory)], artifactTransfers, new DeviceExecution(options.loadedConfig.configPath));
   const workspaceRuns = new WorkspaceRuns(runtime, workspaceManager);
   const workspaceContext = new WorkspaceRequestContext();
+  registerSessionOwners(server, workspaceContext);
   const runRegistry = runtime.createRunRegistry(message => server.log.info(message), input => workspaceRuns.createRunner(input), workspaceManager.store.runJournal);
   workspaceManager.onMembershipRemoved = (workspaceId, deviceId) => {
     artifactTransfers.cancelWorkspace(workspaceId);
@@ -169,7 +171,9 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
     },
     resolve: (input, body, request) => {
       if (input.sessionId && activeSessionRequests.has(input.sessionId)) { throw new MarifoldError('SESSION_BUSY', 'Session already has an active request.', { sessionId: input.sessionId }); }
-      return workspaceRuns.resolve({ ...input, sessionOwner: typeof request.headers['x-marifold-session-owner'] === 'string' ? request.headers['x-marifold-session-owner'] : undefined, environment: requestEnvironment(request, workspaceContext.resolve(request.headers)) }, {
+      // Refuse up front (409) instead of failing the run after it starts.
+      if (input.sessionId) { runtime.assertSessionWritable(input.sessionId); }
+      return workspaceRuns.resolve({ ...input, sessionOwner: request.sessionOwner, environment: requestEnvironment(request, workspaceContext.resolve(request.headers)) }, {
       workspaceId: typeof body.workspaceId === 'string' ? body.workspaceId : undefined,
       executionDeviceId: typeof body.executionDeviceId === 'string' ? body.executionDeviceId : undefined,
     }, workspaceContext.resolve(request.headers)); },
@@ -221,6 +225,11 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
   server.setErrorHandler((error, request, reply) => {
     const normalized = normalizeError(error, requestOrigin(request, workspaceContext.resolve(request.headers)) === 'local');
     if (normalized.statusCode >= 500) { request.log.error(error); }
+    // A file download may fail after it set its headers (e.g. its device went
+    // offline); the error itself is always JSON.
+    reply.removeHeader('content-disposition');
+    reply.removeHeader('content-length');
+    reply.type('application/json; charset=utf-8');
     reply.status(normalized.statusCode).send({
       ok: false,
       error: normalized.error,

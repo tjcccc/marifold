@@ -50,6 +50,11 @@ export interface RunTuiOptions {
  * or non-interactive), so `marifold | cat` never tries to drive Ink. When no
  * profile resolves a provider/model, shows a profile picker before launching.
  */
+/** Terminals on this device share one session owner, the same one the
+ * service derives for its terminal clients: several terminals may open a
+ * session, while the Web UI or another device sees it as in use. */
+const TERMINAL_SESSION_OWNER = 'local.terminal';
+
 export async function runTui(options: RunTuiOptions): Promise<void> {
   if (!process.stdout.isTTY) {
     process.stderr.write(
@@ -62,7 +67,7 @@ export async function runTui(options: RunTuiOptions): Promise<void> {
   const fullscreen = resolveFullscreen(options.fullscreen, options.loadedConfig.config.tui);
 
   if (options.service) {
-    const local = new MarifoldRuntime({ loadedConfig: options.loadedConfig, environment: { interface: 'terminal' } });
+    const local = new MarifoldRuntime({ loadedConfig: options.loadedConfig, environment: { interface: 'terminal' }, sessionOwner: TERMINAL_SESSION_OWNER });
     try {
       await renderSession(<WorkspaceShell local={local} loadedConfig={options.loadedConfig} service={options.service} profile={options.profile} resume={options.resume} takeover={options.takeover} sessions={options.sessions} version={readVersion()} fullscreen={fullscreen} />, fullscreen);
     } catch (error) {
@@ -80,7 +85,7 @@ export async function runTui(options: RunTuiOptions): Promise<void> {
     return;
   }
 
-  const runtime = new MarifoldRuntime({ loadedConfig: options.loadedConfig, environment: { interface: 'terminal' } });
+  const runtime = new MarifoldRuntime({ loadedConfig: options.loadedConfig, environment: { interface: 'terminal' }, sessionOwner: TERMINAL_SESSION_OWNER });
   try {
     let profile = options.profile;
     // A named session must exist; it also selects its own profile unless
@@ -115,6 +120,7 @@ export async function runTui(options: RunTuiOptions): Promise<void> {
     // checked above. When a session is found, its turns seed the transcript so
     // the prior conversation is shown.
     let resumeSessionId: string | undefined;
+    let resumeArchived = false;
     let resumeTranscript: TranscriptItemData[] | undefined;
     let resumeHistory: InputHistoryEntry[] | undefined;
     if (options.resume !== undefined) {
@@ -131,6 +137,7 @@ export async function runTui(options: RunTuiOptions): Promise<void> {
       const detail = id ? runtime.getSession(id) : undefined;
       if (detail) {
         resumeSessionId = detail.id;
+        resumeArchived = detail.archived === true;
         resumeHistory = sessionPromptHistory(detail);
         resumeTranscript = detail.turns.map(turn => ({ kind: turn.role, text: turn.content }));
       } else {
@@ -148,6 +155,7 @@ export async function runTui(options: RunTuiOptions): Promise<void> {
       version: readVersion(),
       maxContextTokens: settings.maxContextTokens ?? options.loadedConfig.config.default.maxContextTokens,
       ...(resumeSessionId ? { sessionId: resumeSessionId } : {}),
+      ...(resumeArchived ? { sessionArchived: true } : {}),
       ...(resumeTranscript ? { transcript: resumeTranscript } : {}),
       ...(resumeHistory ? { history: resumeHistory } : {}),
       ...(options.sessions ? { pickSession: true } : {}),

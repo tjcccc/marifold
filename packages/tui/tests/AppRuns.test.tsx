@@ -295,7 +295,7 @@ describe('App run routing', () => {
     // input in an effect, so yield once more before pressing Enter.
     await vi.waitFor(() => expect(lastFrame()).toContain('Earlier question about Fedo'), { timeout: 3000 });
     expect(lastFrame()).toContain('Resume session');
-    expect(listSessionsSpy).toHaveBeenCalledWith(20, 'default', { order: 'recent' });
+    expect(listSessionsSpy).toHaveBeenCalledWith(20, 'default', { order: 'recent', archived: false });
     await delay();
     stdin.write('\r');
     await vi.waitFor(() => expect(lastFrame()).toContain('Earlier answer'), { timeout: 3000 });
@@ -411,6 +411,39 @@ describe('App run routing', () => {
       await delay();
       stdin.write('\r');
       await vi.waitFor(() => expect(lastFrame()).toContain('Nothing has run yet.'));
+      expect(runSpy).not.toHaveBeenCalled();
+    } finally { unmount(); }
+  });
+
+  it('/archive blocks messages in the session until /unarchive', async () => {
+    const { runtime, runSpy } = makeRuntime();
+    const updateSessionDisplay = vi.fn(async () => true);
+    Object.assign(runtime, { updateSessionDisplay });
+    const { stdin, lastFrame, unmount } = render(<App runtime={runtime} loadedConfig={config} initial={{ ...initial(), sessionId: 'kept' }} />);
+    try {
+      const send = async (text: string) => { stdin.write(text); await delay(); stdin.write('\r'); await delay(); };
+      await delay();
+      await send('/archive');
+      await vi.waitFor(() => expect(updateSessionDisplay).toHaveBeenCalledWith('kept', { archived: true }));
+      await send('hello');
+      await vi.waitFor(() => expect(lastFrame()).toContain('This session has been archived'));
+      expect(runSpy).not.toHaveBeenCalled();
+      await send('/unarchive');
+      await vi.waitFor(() => expect(updateSessionDisplay).toHaveBeenCalledWith('kept', { archived: false }));
+      await send('hello');
+      await vi.waitFor(() => expect(runSpy).toHaveBeenCalledTimes(1));
+    } finally { unmount(); }
+  });
+
+  it('opens on the archived-session notice when launched into an archived session', async () => {
+    const { runtime, runSpy } = makeRuntime();
+    const { stdin, lastFrame, unmount } = render(<App runtime={runtime} loadedConfig={config} initial={{ ...initial(), sessionId: 'old', sessionArchived: true }} />);
+    try {
+      await vi.waitFor(() => expect(lastFrame()).toContain('This session has been archived'));
+      stdin.write('hi');
+      await delay();
+      stdin.write('\r');
+      await delay();
       expect(runSpy).not.toHaveBeenCalled();
     } finally { unmount(); }
   });

@@ -1,3 +1,4 @@
+import * as path from 'path';
 import type { ImageInput, PriestResponse, UsageInfo } from '@priest-ai/core';
 import { buildHistoryContext } from '../agent/AgentHistory';
 import type { AgentRunner } from '../agent/AgentRunner';
@@ -11,6 +12,7 @@ import { ReadFileTool } from '../agent/tools/ReadFileTool';
 import { SearchAttachmentTool } from '../agent/tools/SearchAttachmentTool';
 import { SkillAppContextTool, SkillAppManagementTool } from '../agent/tools/SkillAppTools';
 import type { AppStore } from '../app/AppStore';
+import { resolveHostReadGrant } from '../app/HostReadGrants';
 import type { SkillAppInteractionHandlers } from '../app/SkillAppInstanceRegistry';
 import { resolveSkillAppOperation as resolveSkillAppOperationDefinition } from '../app/SkillAppResolver';
 import type {
@@ -107,6 +109,12 @@ export class SkillAppOperations {
           );
         }
         if (mode === 'agent') {
+          const skillReads = resolveSkillReads(operation.name, operation.skillReads, operation.skillDirectory);
+          if (skillReads.length > 0) {
+            instructions.push(
+              `The selected Skill declares these read-only files; read them with read_file when needed: ${skillReads.join(', ')}`,
+            );
+          }
           const run = await this.runProfileAgent(
             appName,
             operation.operationName,
@@ -115,7 +123,10 @@ export class SkillAppOperations {
             instructions,
             memory,
             operation.skillDirectory,
-            definition.permissions ?? [],
+            [
+              ...(definition.permissions ?? []),
+              ...skillReads.map(file => ({ kind: 'file' as const, path: file, access: 'read' as const })),
+            ],
             attachments,
             signal,
             interactions,
@@ -335,6 +346,20 @@ export class SkillAppOperations {
       ...(effects.length > 0 ? { effects } : {}),
     };
   }
+}
+
+/** Resolve the selected Skill's declared reads through the same boundary as
+ * static App permissions. Exact files only; a bad declaration fails the run. */
+function resolveSkillReads(skillName: string, declared: string[] | undefined, skillDirectory?: string): string[] {
+  return [...new Set((declared ?? []).map(file => resolveHostReadGrant({
+    declared: file,
+    kind: 'file',
+    label: `Skill '${skillName}' declared`,
+    noun: 'read',
+    // A skill may declare its own bundled files, even under Marifold's skills folders.
+    ...(skillDirectory ? { allowedPrivateRoot: skillDirectory } : {}),
+    ...(skillDirectory ? { source: path.join(skillDirectory, 'SKILL.md') } : {}),
+  })))];
 }
 
 function requireSkillAppResponseText(

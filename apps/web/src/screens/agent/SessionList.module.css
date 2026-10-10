@@ -81,21 +81,10 @@
   color: var(--text-3);
 }
 
-.archiveFilter,
-.archiveFilterActive {
-  padding: 3px 5px;
-  margin-left: -5px;
-  border-radius: 6px;
-  color: inherit;
-  font: inherit;
-  letter-spacing: inherit;
-  text-transform: inherit;
-}
-
-.archiveFilter:hover,
-.archiveFilterActive {
-  color: var(--text-2);
-  background: var(--separator-soft);
+.headerActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
 }
 
 .searchWrap {
@@ -141,9 +130,19 @@
   justify-content: center;
 }
 
-.newButton:hover {
+.newButton:hover,
+.iconButtonActive {
   background: var(--separator-soft);
   color: var(--text);
+}
+
+.iconButtonActive {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .list {

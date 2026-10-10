@@ -35,7 +35,7 @@ export function WorkspaceShell(props: Props) {
   const [notice, setNotice] = useState('Connecting to workspace…');
   const selected = useRef<string>('local');
   const execution = useRef<string | undefined>(undefined);
-  const localApi = useRef(createApiClient(props.service)).current;
+  const localApi = useRef(createApiClient({ ...props.service, interface: 'terminal' })).current;
   const serial = useRef(0);
   const load = useCallback(
     async (id: string, resume?: string | boolean, takeover = false, pickSession = false): Promise<void> => {
@@ -124,6 +124,7 @@ export function WorkspaceShell(props: Props) {
           version: props.version,
           cwd: id === 'local' ? process.cwd() : `Workspace: ${name}`,
           sessionId: session?.id,
+          ...(session?.archived ? { sessionArchived: true } : {}),
           history: session ? sessionPromptHistory(session) : [],
           transcript: session?.turns.map((t) => ({ kind: t.role, text: t.content })),
           ...(pickSession ? { pickSession: true } : {}),

@@ -1,12 +1,11 @@
 import * as fs from 'fs';
-import * as os from 'os';
 import * as path from 'path';
 import { MarifoldError } from '../errors/MarifoldError';
-import { sensitiveHostRoots } from '../agent/RunWorkspace';
 import { parseSkill } from '../skill/SkillValidator';
 import type { MarifoldSkill } from '../skill/SkillSchema';
+import { resolveHostReadGrant } from './HostReadGrants';
 import { compileSkillApp } from './SkillAppCompiler';
-import type { SkillAppDefinition, SkillAppOperationDefinition } from './SkillAppSchema';
+import type { SkillAppCatalog, SkillAppDefinition, SkillAppOperationDefinition } from './SkillAppSchema';
 
 const SAFE_APP_NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const SKILL_APP_DEFINITION_FILE = 'skillapp.ts';
@@ -18,7 +17,7 @@ export interface AppStoreOptions {
 }
 
 /** Global App bundles under `<appsDir>/<name>/skillapp.ts`. Invalid bundles
- * are skipped by list(); get() reports their exact validation failure. */
+ * are skipped by list(); listCatalog() and get() report their exact failure. */
 export class AppStore {
   constructor(
     private readonly directory: string,
@@ -26,18 +25,31 @@ export class AppStore {
   ) {}
 
   list(): SkillAppDefinition[] {
-    if (!fs.existsSync(this.directory)) { return []; }
-    const apps: SkillAppDefinition[] = [];
+    return this.listCatalog().apps;
+  }
+
+  /** Valid definitions plus every bundle that failed to load, so renderers can
+   * show why an App is unavailable instead of silently hiding it. */
+  listCatalog(): SkillAppCatalog {
+    if (!fs.existsSync(this.directory)) { return { apps: [], invalid: [] }; }
+    const catalog: SkillAppCatalog = { apps: [], invalid: [] };
     for (const entry of fs.readdirSync(this.directory, { withFileTypes: true })) {
       if (!entry.isDirectory() || !SAFE_APP_NAME.test(entry.name)) { continue; }
       try {
         const app = this.get(entry.name);
-        if (app) { apps.push(app); }
-      } catch {
+        if (app) { catalog.apps.push(app); }
+      } catch (error) {
         // A catalog stays usable when one local definition is malformed.
+        catalog.invalid.push({
+          name: entry.name,
+          code: error instanceof MarifoldError ? error.code : 'APP_INVALID',
+          message: error instanceof Error ? error.message : String(error),
+        });
       }
     }
-    return apps.sort((a, b) => a.app.title.localeCompare(b.app.title));
+    catalog.apps.sort((a, b) => a.app.title.localeCompare(b.app.title));
+    catalog.invalid.sort((a, b) => a.name.localeCompare(b.name));
+    return catalog;
   }
 
   get(name: string): SkillAppDefinition | undefined {
@@ -189,60 +201,18 @@ function resolvePermissions(
   permissions: NonNullable<SkillAppDefinition['permissions']>,
   source: string,
 ): NonNullable<SkillAppDefinition['permissions']> {
-  const userHome = fs.realpathSync(os.homedir());
-  const privateAppHome = path.join(userHome, '.marifold');
-  const bundleRoot = fs.realpathSync(bundle);
-  return permissions.map(permission => {
-    const requested = permission.path === '~'
-      ? userHome
-      : permission.path.startsWith('~/')
-        ? path.join(userHome, permission.path.slice(2))
-        : path.isAbsolute(permission.path)
-          ? permission.path
-          : path.join(bundle, permission.path);
-    let resolved: string;
-    let stat: fs.Stats;
-    try {
-      resolved = fs.realpathSync(requested);
-      stat = fs.statSync(resolved);
-    } catch (error) {
-      throw MarifoldError.appInvalid(
-        `Declared ${permission.kind} permission '${permission.path}' cannot be resolved: ${error instanceof Error ? error.message : String(error)}`,
-        source,
-      );
-    }
-    if (permission.kind === 'file' && !stat.isFile()) {
-      throw MarifoldError.appInvalid(`Declared file permission '${permission.path}' is not a regular file.`, source);
-    }
-    if (permission.kind === 'folder' && !stat.isDirectory()) {
-      throw MarifoldError.appInvalid(`Declared folder permission '${permission.path}' is not a directory.`, source);
-    }
-    if (permission.kind === 'folder' && isBroadPermissionRoot(resolved, userHome, privateAppHome)) {
-      throw MarifoldError.appInvalid(`Declared folder permission '${permission.path}' is too broad or sensitive.`, source);
-    }
-    if (isInside(resolved, privateAppHome) && !isInside(resolved, bundleRoot)) {
-      throw MarifoldError.appInvalid(`Declared permission '${permission.path}' cannot expose Marifold private state.`, source);
-    }
-    // SkillApp reads are auto-approved, so they never reach account secrets
-    // that ordinary runs must approve one access at a time.
-    const sensitive = sensitiveHostRoots(userHome).filter(root => root !== privateAppHome);
-    if (sensitive.some(root => isInside(resolved, root) || isInside(root, resolved))) {
-      throw MarifoldError.appInvalid(`Declared permission '${permission.path}' would expose sensitive account data.`, source);
-    }
-    return { ...permission, path: resolved };
-  });
-}
-
-function isBroadPermissionRoot(target: string, userHome: string, privateAppHome: string): boolean {
-  return target === path.parse(target).root
-    || target === userHome
-    || target === privateAppHome
-    || isInside(privateAppHome, target);
-}
-
-function isInside(target: string, root: string): boolean {
-  const relative = path.relative(root, target);
-  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+  return permissions.map(permission => ({
+    ...permission,
+    path: resolveHostReadGrant({
+      declared: permission.path,
+      kind: permission.kind,
+      relativeTo: bundle,
+      allowedPrivateRoot: bundle,
+      label: 'Declared',
+      noun: 'permission',
+      source,
+    }),
+  }));
 }
 
 function requireConfinedFile(bundle: string, source: string, label: string): string {

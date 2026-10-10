@@ -13,13 +13,12 @@ import { prepareImageInputs } from '../images/ImageOptimizer';
 import {
   MemoryControlStripper,
   buildMemoryInstructions,
-  extractPromptForgetQueries,
-  extractPromptMemoryInputs,
   shouldInjectMemoryInstructions,
   stripMemoryControls,
 } from '../memory/MemoryControls';
 import type { MemoryControlPayloads } from '../memory/MemoryControls';
 import type { MemoryStore } from '../memory/MemoryStore';
+import { applyTurnMemory } from '../memory/TurnMemory';
 import type { SearchBackend } from '../search/SearchBackend';
 import { WebPageReader } from '../search/WebPageReader';
 import { WEB_ANSWER_STYLE, webResearchGuidance } from '../search/WebResearchGuidance';
@@ -46,6 +45,7 @@ export interface ChatTurnHost {
   searchBackend(): SearchBackend;
   resolveSettings(request: Pick<MarifoldRunRequest, 'profile' | 'provider' | 'model' | 'think' | 'maxContextTokens'>): MarifoldResolvedSettings;
   assertSessionAvailable(sessionId: string, owner?: string): void;
+  assertSessionWritable(sessionId: string): void;
   memoryEnabled(profile: string, requestMemories?: boolean): boolean;
   memoryForRequest(profile: string, requestMemories?: boolean, prompt?: string, thinking?: boolean): string[];
   resolveAgentConfigForProfile(profile?: string): MarifoldAgentConfig;
@@ -77,7 +77,7 @@ export class ChatTurns {
   constructor(private readonly host: ChatTurnHost) {}
 
   async ask(request: MarifoldRunRequest): Promise<MarifoldAskResponse> {
-    if (request.sessionId) { this.host.assertSessionAvailable(request.sessionId, request.sessionOwner); }
+    if (request.sessionId) { this.host.assertSessionAvailable(request.sessionId, request.sessionOwner); this.host.assertSessionWritable(request.sessionId); }
     const startedAtMs = Date.now();
     const startedAt = new Date(startedAtMs).toISOString();
     const settings = this.host.resolveSettings(request);
@@ -233,7 +233,7 @@ export class ChatTurns {
     onComplete?: (summary: { usage?: UsageInfo; latencyMs?: number }) => void,
     onReasoningSummary?: (text: string) => void,
   ): AsyncGenerator<string, void, unknown> {
-    if (request.sessionId) { this.host.assertSessionAvailable(request.sessionId, request.sessionOwner); }
+    if (request.sessionId) { this.host.assertSessionAvailable(request.sessionId, request.sessionOwner); this.host.assertSessionWritable(request.sessionId); }
     const startedAtMs = Date.now();
     const startedAt = new Date(startedAtMs).toISOString();
     const settings = this.host.resolveSettings(request);
@@ -528,13 +528,7 @@ export class ChatTurns {
     controls: MemoryControlPayloads,
     sessionId?: string,
   ): void {
-    this.host.memoryStore.applySavePayloads(profile, controls.savePayloads, { sessionId });
-    this.host.memoryStore.applyForgetPayloads(profile, controls.forgetPayloads);
-    for (const query of extractPromptForgetQueries(prompt)) {
-      this.host.memoryStore.forget(profile, query);
-    }
-    this.host.memoryStore.save(profile, extractPromptMemoryInputs(prompt), { sessionId });
-    this.host.memoryStore.trimShortTerm(profile, this.host.loadedConfig.config.memory.sizeLimit);
+    applyTurnMemory(this.host.memoryStore, profile, prompt, controls, { sessionId, sizeLimit: this.host.loadedConfig.config.memory.sizeLimit });
   }
 }
 

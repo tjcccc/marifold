@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef, useState } from 'react';
 import type { SkillAppDefinition, SkillAppLayoutItem } from '../../api/types';
 import type { PreparedAttachment } from '../../lib/attachments';
 import { CopyButton } from '../../components/CopyButton';
+import { ImagePreviewDialog, type PreviewImage } from '../../components/ImagePreviewDialog';
 import { Markdown as MarkdownView } from '../../components/Markdown';
 import styles from './SkillAppLayout.module.css';
 import { isOperationRunnable } from './skillAppHelpers';
@@ -18,9 +19,10 @@ export function SkillLayoutItem({
   onOperation,
   onChange,
   onRemoveAttachment,
+  outputErrors,
   path,
   ready,
-  runningOutput,
+  runningOutputs,
   staleOutputs,
   values,
 }: {
@@ -33,22 +35,30 @@ export function SkillLayoutItem({
   onOperation: (name: string) => void;
   onChange: (name: string, value: string) => void;
   onRemoveAttachment: (name: string, index: number) => void;
+  /** Latest run failure per output state, shown inline beside that output. */
+  outputErrors: Record<string, string>;
   path: string;
   ready: boolean;
-  runningOutput?: string;
+  /** Output states an active button run or automatic trigger is generating. */
+  runningOutputs: Set<string>;
   staleOutputs: Set<string>;
   values: Record<string, string>;
 }) {
   const value = item.bind ? values[item.bind] ?? '' : '';
+  const generating = item.bind !== undefined && runningOutputs.has(item.bind);
+  const error = item.bind ? outputErrors[item.bind] : undefined;
   const containerClass = item.component === 'row'
     ? `${styles.row} ${item.responsive === 'stack' ? styles.stackResponsive : ''}`
     : styles.column;
   if (item.component === 'row' || item.component === 'column') {
+    const alignClass = item.align ? styles[`${item.component}Align_${item.align}`] ?? '' : '';
     return (
-      <div className={`${containerClass} ${styles[`gap_${item.gap ?? 'medium'}`]}`}>
+      <div className={`${containerClass} ${alignClass} ${styles[`gap_${item.gap ?? 'medium'}`]}`}>
         {item.children?.map((child, index) => (
           <div
-            className={child.grow || child.component === 'spacer' ? styles.grow : undefined}
+            className={child.grow || child.component === 'spacer'
+              ? styles.grow
+              : child.component === 'button' ? styles.intrinsic : undefined}
             key={`${child.component}-${index}`}
           >
             <SkillLayoutItem
@@ -62,8 +72,9 @@ export function SkillLayoutItem({
                 onOperation,
                 onChange,
                 onRemoveAttachment,
+                outputErrors,
                 ready,
-                runningOutput,
+                runningOutputs,
                 staleOutputs,
                 values,
               }}
@@ -119,8 +130,7 @@ export function SkillLayoutItem({
   if (item.component === 'textarea') {
     return (
       <SkillTextarea
-        {...{ item, locked, onChange, path, ready, value }}
-        generating={item.bind === runningOutput}
+        {...{ error, generating, item, locked, onChange, path, ready, value }}
         stale={staleOutputs.has(item.bind) && Boolean(value.trim())}
       />
     );
@@ -128,8 +138,9 @@ export function SkillLayoutItem({
   if (item.component === 'markdown') {
     return (
       <SkillMarkdown
+        error={error}
         item={item}
-        generating={item.bind === runningOutput}
+        generating={generating}
         locked={locked}
         stale={staleOutputs.has(item.bind) && Boolean(value.trim())}
         value={value}
@@ -137,7 +148,7 @@ export function SkillLayoutItem({
     );
   }
   if (item.component === 'download') {
-    return <SkillDownload generating={item.bind === runningOutput} item={item} locked={locked} value={value} />;
+    return <SkillDownload error={error} generating={generating} item={item} locked={locked} value={value} />;
   }
   if (item.component === 'attachments') {
     return (
@@ -171,7 +182,15 @@ export function SkillAttachments({
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragActive, setDragActive] = useState(false);
+  const [previewIndex, setPreviewIndex] = useState<number>();
   const inputId = `skillapp-${item.bind}-${path}`;
+  // Previewing never changes the bound attachments, so it stays available
+  // while a run is active; adding or removing would cancel that run.
+  const previewImages: PreviewImage[] = attachments.flatMap(attachment =>
+    attachment.kind === 'image'
+      ? [{ src: `data:${attachment.mediaType};base64,${attachment.data}`, alt: attachment.name }]
+      : [],
+  );
 
   function acceptFiles(files: FileList | File[]): void {
     if (!busy && files.length > 0) { onAttachFiles([...files]); }
@@ -230,11 +249,20 @@ export function SkillAttachments({
             {attachments.map((attachment, index) => (
               <span className={styles.attachmentChip} key={`${attachment.name}-${index}`} title={attachment.name}>
                 {attachment.kind === 'image' ? (
-                  <img
-                    alt=""
-                    className={styles.attachmentThumbnail}
-                    src={`data:${attachment.mediaType};base64,${attachment.data}`}
-                  />
+                  <button
+                    aria-label={`Preview ${attachment.name}`}
+                    className={styles.attachmentPreviewButton}
+                    onClick={() => setPreviewIndex(
+                      attachments.slice(0, index + 1).filter(candidate => candidate.kind === 'image').length - 1,
+                    )}
+                    type="button"
+                  >
+                    <img
+                      alt=""
+                      className={styles.attachmentThumbnail}
+                      src={`data:${attachment.mediaType};base64,${attachment.data}`}
+                    />
+                  </button>
                 ) : (
                   <span aria-hidden className={styles.attachmentFileIcon}>▤</span>
                 )}
@@ -253,17 +281,31 @@ export function SkillAttachments({
           </div>
         ) : null}
       </div>
+      {previewIndex !== undefined ? (
+        <ImagePreviewDialog
+          images={previewImages}
+          initialIndex={previewIndex}
+          onClose={() => setPreviewIndex(undefined)}
+        />
+      ) : null}
     </div>
   );
 }
 
+/** Inline run failure beside the output it was meant to fill. */
+function OutputError({ message }: { message?: string }) {
+  return message ? <p className={styles.outputError} role="alert">{message}</p> : null;
+}
+
 export function SkillMarkdown({
+  error,
   generating,
   item,
   locked,
   stale,
   value,
 }: {
+  error?: string;
   generating: boolean;
   item: SkillAppLayoutItem;
   locked: boolean;
@@ -284,7 +326,7 @@ export function SkillMarkdown({
           {item.sourceToggle ? (
             <button
               className={styles.copyButton}
-              disabled={locked}
+              disabled={locked || generating || !value}
               onClick={() => setShowSource(current => !current)}
               type="button"
             >
@@ -311,16 +353,19 @@ export function SkillMarkdown({
           </span>
         )}
       </div>
+      <OutputError message={error} />
     </section>
   );
 }
 
 export function SkillDownload({
+  error,
   generating,
   item,
   locked,
   value,
 }: {
+  error?: string;
   generating: boolean;
   item: SkillAppLayoutItem;
   locked: boolean;
@@ -343,7 +388,7 @@ export function SkillDownload({
             </span>
             <button
               className={styles.downloadButton}
-              disabled={locked}
+              disabled={locked || generating}
               onClick={() => downloadText(value, filename, mediaType)}
               type="button"
             >
@@ -356,11 +401,13 @@ export function SkillDownload({
           </span>
         )}
       </div>
+      <OutputError message={error} />
     </section>
   );
 }
 
 export function SkillTextarea({
+  error,
   generating,
   item,
   locked,
@@ -370,6 +417,7 @@ export function SkillTextarea({
   stale,
   value,
 }: {
+  error?: string;
   generating: boolean;
   item: SkillAppLayoutItem;
   locked: boolean;
@@ -423,6 +471,7 @@ export function SkillTextarea({
         rows={item.rows}
         value={value}
       />
+      <OutputError message={error} />
     </div>
   );
 }

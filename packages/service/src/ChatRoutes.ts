@@ -24,7 +24,7 @@ export function registerChatRoutes(
   beginSessionRequest: (sessionId?: string, profile?: string) => () => void,
 ): void {
   server.post('/v1/ask', async request => {
-    const input = { ...parseRunRequest(request.body), sessionOwner: typeof request.headers['x-marifold-session-owner'] === 'string' ? request.headers['x-marifold-session-owner'] : undefined, environment: requestEnvironment(request, workspaceContext.resolve(request.headers)) };
+    const input = { ...parseRunRequest(request.body), sessionOwner: request.sessionOwner, environment: requestEnvironment(request, workspaceContext.resolve(request.headers)) };
     const endRequest = beginSessionRequest(
       input.sessionId,
       input.profile ?? options.loadedConfig.config.default.profile,
@@ -40,7 +40,7 @@ export function registerChatRoutes(
   });
 
   server.post('/v1/chat/stream', async (request, reply) => {
-    const input = { ...parseRunRequest(request.body), sessionOwner: typeof request.headers['x-marifold-session-owner'] === 'string' ? request.headers['x-marifold-session-owner'] : undefined, environment: requestEnvironment(request, workspaceContext.resolve(request.headers)) };
+    const input = { ...parseRunRequest(request.body), sessionOwner: request.sessionOwner, environment: requestEnvironment(request, workspaceContext.resolve(request.headers)) };
     const endRequest = beginSessionRequest(
       input.sessionId,
       input.profile ?? options.loadedConfig.config.default.profile,

@@ -16,7 +16,7 @@ import { AppsScreen } from '../apps/AppsScreen';
 import { AppsSidebarContent } from '../apps/AppsSidebar';
 import { useAppsCatalog } from '../apps/useAppsCatalog';
 import { CatchUpBanner } from './CatchUpBanner';
-import { SessionBlockedBanner } from './SessionBlockedBanner';
+import { SessionArchivedBanner, SessionBlockedBanner } from './SessionBlockedBanner';
 import { InputBar } from './InputBar';
 import { ProfileSidebarContent } from './ProfileSidebar';
 import { SessionListContent, sessionTitle } from './SessionList';
@@ -126,8 +126,9 @@ export function AgentScreen(props: AgentScreenProps) {
   }, [controller.steeringRun, controller.profileName]);
 
   const currentSession = controller.sessions.find(session => session.id === controller.sessionId);
+  const sessionArchived = currentSession?.archived === true;
   const mobileWorkspaceOpen = appsView
-    ? mobileAppOpen && appsCatalog.selected !== undefined
+    ? mobileAppOpen && appsCatalog.selectedName !== undefined
     : controller.profileName !== undefined && mobileConversationOpen;
   const sidebarFooter = mobile ? (
     <MobileWorkspaceNavigation
@@ -165,6 +166,7 @@ export function AgentScreen(props: AgentScreenProps) {
         <AppsSidebarContent
           client={props.client}
           apps={appsCatalog.apps}
+          invalidApps={appsCatalog.invalidApps}
           selected={appsCatalog.selectedName}
           busy={appBusy}
           loading={appsCatalog.loading}
@@ -263,7 +265,7 @@ export function AgentScreen(props: AgentScreenProps) {
         {mobile ? (
           <MobileNavigationBar
             title={appsView
-              ? appsCatalog.selected?.app.title ?? 'Apps'
+              ? appsCatalog.selected?.app.title ?? appsCatalog.selectedInvalid?.name ?? 'Apps'
               : currentSession ? sessionTitle(currentSession) : 'New session'}
             backLabel={appsView ? 'Apps' : 'Sessions'}
             onBack={() => {
@@ -295,6 +297,7 @@ export function AgentScreen(props: AgentScreenProps) {
               client={props.client}
               onUnauthorized={props.onUnauthorized}
               app={appsCatalog.selected}
+              invalidApp={appsCatalog.selectedInvalid}
               loading={appsCatalog.loading}
               loadError={appsCatalog.error}
               onBusyChange={setAppBusy}
@@ -326,11 +329,14 @@ export function AgentScreen(props: AgentScreenProps) {
             {controller.sessionBlocked && controller.sessionId ? (
               <SessionBlockedBanner onTakeOver={controller.takeOverSession} />
             ) : null}
+            {sessionArchived && controller.sessionId ? (
+              <SessionArchivedBanner onUnarchive={() => controller.setSessionArchived(controller.sessionId!, false)} />
+            ) : null}
             <InputBar
               draftKey={`${props.connectionId}:${controller.profileName}:${controller.sessionId ?? 'new'}`}
               steering={controller.steeringRun !== undefined}
               responding={controller.responding}
-              disabled={controller.sending || controller.sessionLoading || controller.sessionBlocked}
+              disabled={controller.sending || controller.sessionLoading || controller.sessionBlocked || sessionArchived}
               think={controller.think}
               onToggleThink={() => controller.setThink(!controller.think)}
               modelOptions={controller.modelOptions}

@@ -290,6 +290,8 @@ function extractName(body: string): string {
 function cleanName(raw: string): string {
   const value = raw
     .split(/[.!?,;:\n\r]/)[0]
+    // "my name is Jack and I'm on project Atlas": the name ends at the next clause.
+    .split(/\s+(?:and|but|or|so|because|who|which)\s+/i)[0]
     .replace(/\s+/g, ' ')
     .trim()
     .replace(/^['"]|['"]$/g, '');
@@ -345,7 +347,7 @@ function extractPreferenceInput(prompt: string, body: string): MemorySaveInput |
     stability: 'evolving',
     source: 'user_direct',
     sourceType: 'user',
-    conflictKey: looksResponsePreference(body) ? 'preferences.reply_style' : undefined,
+    conflictKey: looksResponsePreference(body) ? 'preferences.reply_style' : preferenceSlot(preference),
     evidence: prompt,
     reason: 'Runtime fallback extracted an explicit user preference.',
   };
@@ -397,6 +399,19 @@ function slotKey(value: string): string {
   key = key.replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').replace(/_+/g, '_');
   if (key.startsWith('fav_')) { key = `favorite_${key.slice(4)}`; }
   return key.slice(0, 40).replace(/^_+|_+$/g, '');
+}
+
+const DRINKS = new Set([
+  'tea', 'green tea', 'black tea', 'milk tea', 'matcha', 'coffee', 'espresso', 'latte', 'cappuccino', 'americano',
+  'beer', 'wine', 'red wine', 'white wine', 'sake', 'whisky', 'whiskey', 'cocktails', 'water', 'sparkling water',
+  'milk', 'juice', 'orange juice', 'soda', 'cola', 'lemonade', 'kombucha', 'hot chocolate',
+]);
+
+/** A bare single-value preference ("tea", "coffee over tea") gets a slot so a
+ * later one replaces it; anything qualified ("tea in the morning") stays separate. */
+function preferenceSlot(preference: string): string | undefined {
+  const value = normalizeText(preference.split(/\s+(?:over|to|rather than)\s+/i)[0] ?? '');
+  return DRINKS.has(value) ? 'preferences.drink' : undefined;
 }
 
 function looksResponsePreference(text: string): boolean {

@@ -116,3 +116,44 @@ it('moves a session and its running work to the device that takes it over', () =
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+it('lets one owner open a session in several processes but run work in only one at a time', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'marifold-leases-'));
+  const first = new SessionLeases(path.join(dir, 'leases.db'));
+  const second = new SessionLeases(path.join(dir, 'leases.db'));
+  try {
+    const done = first.hold('session', 'local.terminal');
+    expect(() => second.acquire('session', 'local.terminal')).not.toThrow();
+    expect(() => second.hold('session', 'local.terminal')).toThrow('already running');
+    expect(() => second.acquire('session', 'local.web')).toThrow('in use');
+    done();
+    const again = second.hold('session', 'local.terminal');
+    again();
+  } finally { first.close(); second.close(); fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+it('applies a release refused while work ran once that work ends', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'marifold-leases-'));
+  const leases = new SessionLeases(path.join(dir, 'leases.db'));
+  const other = new SessionLeases(path.join(dir, 'leases.db'));
+  try {
+    leases.acquire('session', 'local.web');
+    const done = leases.hold('session', 'local.web');
+    leases.release('session', 'local.web');
+    expect(() => other.acquire('session', 'local.terminal')).toThrow('in use');
+    done();
+    expect(() => other.acquire('session', 'local.terminal')).not.toThrow();
+  } finally { leases.close(); other.close(); fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+it('keeps a lease taken over during work when that work ends', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'marifold-leases-'));
+  const leases = new SessionLeases(path.join(dir, 'leases.db'));
+  const other = new SessionLeases(path.join(dir, 'leases.db'));
+  try {
+    const done = leases.hold('session', 'local.web');
+    leases.takeover('session', 'device-b.web');
+    done();
+    expect(() => other.acquire('session', 'local.terminal')).toThrow('in use');
+  } finally { leases.close(); other.close(); fs.rmSync(dir, { recursive: true, force: true }); }
+});

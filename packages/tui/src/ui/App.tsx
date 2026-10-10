@@ -21,11 +21,12 @@ import { QuestionModal } from './QuestionModal.js';
 import { SelectList, type SelectItem } from './SelectList.js';
 import { useTerminalSize } from './useTerminalSize.js';
 import { useResizing } from './useResizing.js';
-import { sessionItem } from './sessionItems.js';
+import { useSessionPicker, type SessionsOverlay } from './useSessionPicker.js';
 import { useApprovals } from './useApprovals.js';
 import { useSessionLease } from './useSessionLease.js';
 import { useRuns } from './useRuns.js';
 import { useSideQuestion } from './useSideQuestion.js';
+import { ARCHIVED_SESSION_TEXT, useSessionArchive } from './useSessionArchive.js';
 import { SideQuestionPanel } from './SideQuestionPanel.js';
 import { useSkills } from './useSkills.js';
 import { copyToClipboard, errorText, sessionBusyText, sessionLostText, unwrapPath } from './appHelpers.js';
@@ -54,13 +55,15 @@ export interface AppProps {
     history?: InputHistoryEntry[];
     /** Launch on the session picker; cancelling it exits the TUI. */
     pickSession?: boolean;
+    /** The resumed session is archived: readable, but messages only warn. */
+    sessionArchived?: boolean;
   };
 }
 
 type SkillScope = 'global' | 'profile';
 type Overlay =
   | { type: 'model' | 'profile'; items: SelectItem[] }
-  | { type: 'sessions'; items: SelectItem[]; inUse: string[]; message?: string }
+  | SessionsOverlay
   | { type: 'skills'; scope: SkillScope; profile?: string; items: SelectItem[]; title: string; emptyHint: string[] };
 
 export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCommand, fullscreen = false, workspaceNotice }: AppProps): React.ReactElement {
@@ -86,8 +89,6 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
   const [think, setThink] = useState(initial.think);
   // `/steps` arms a one-shot forced plan for the next model turn (then auto-disarms).
   const [planNext, setPlanNext] = useState(false);
-  // `--sessions` launches on the picker, so cancelling it has nothing to go back to.
-  const launchPickerRef = useRef(initial.pickSession === true);
   const [history, setHistory] = useState<InputHistoryEntry[]>(() => initial.history ?? (initial.transcript ?? []).flatMap(item => item.kind === 'user' ? [item.text] : []));
   const [skillItems, setSkillItems] = useState<CompletionItem[]>(() => {
     try {
@@ -199,6 +200,8 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
   }, [notify, initial.sessionId]);
 
   const sideQuestion = useSideQuestion({ runtime, stateRef });
+  const { isArchived, markArchived, setArchived } = useSessionArchive({ runtime, stateRef, notify });
+  useEffect(() => { if (initial.sessionId && initial.sessionArchived) { markArchived(initial.sessionId, true); } }, []);
   const { lostSessionRef, takeOver } = useSessionLease({ runtime, sessionId: state.sessionId, dispatch, stateRef, runGenerationRef, abortRef, notify });
 
   const refreshSkills = useCallback((profile = stateRef.current.profile) => {
@@ -247,47 +250,9 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
     setOverlay({ type: 'skills', scope, ...(scope === 'profile' ? { profile } : {}), items, title, emptyHint });
   }, [runtime, notify]);
 
-  const showSessions = useCallback(async () => {
-    if (stateRef.current.running) {
-      notify('Stop the running task before switching sessions.', 'warn');
-      return;
-    }
-    const currentSessionId = stateRef.current.sessionId;
-    const sessions = await runtime.listSessions(20, stateRef.current.profile, { order: 'recent' });
-    setOverlay({
-      type: 'sessions',
-      items: sessions.map(session => sessionItem(currentSessionId, session)),
-      inUse: sessions.filter(session => session.inUse).map(session => session.id),
-    });
-  }, [runtime, notify]);
-
-  // Open a session from the /resume picker; `takeover` moves it here from the
-  // page or terminal that holds it.
-  const openSession = useCallback(async (value: string, takeover: boolean) => {
-    try {
-      setOverlay(null);
-      launchPickerRef.current = false;
-      if (takeover) { await runtime.takeOverSession?.(value); }
-      else { await runtime.acquireSession?.(value); }
-      const detail = await runtime.getSession(value);
-      if (!detail) {
-        await runtime.releaseSession?.(value);
-        notify(`Session not found: ${value}`, 'error');
-        return;
-      }
-      dispatch({ type: 'new_session', sessionId: detail.id });
-      setHistory(sessionPromptHistory(detail));
-      for (const turn of detail.turns) {
-        dispatch({ type: 'add_item', item: { kind: turn.role === 'user' ? 'user' : 'assistant', text: turn.content } });
-      }
-      notify(`${takeover ? 'Took over' : 'Resumed'} session ${detail.id.slice(0, 8)} — your next message continues it.`, 'info');
-    } catch (error) { notify(sessionBusyText(error, value), 'error'); }
-  }, [runtime, notify]);
-
-  useEffect(() => {
-    if (initial.pickSession) { void showSessions().catch(error => notify(errorText(error), 'error')); }
-  }, []);
-
+  const { showSessions, openSession, launchPickerRef } = useSessionPicker({
+    runtime, dispatch, stateRef, setOverlay, setHistory, notify, markArchived, pickOnLaunch: initial.pickSession === true,
+  });
   const showHelp = useCallback(() => {
     const lines = [
       'Plain text → talk to the agent.',
@@ -537,6 +502,7 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
     },
     showSessions,
     takeOver,
+    setArchived,
     runDoctor,
     installSkill,
     readFile: readFileCmd,
@@ -604,6 +570,7 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
       const sendsMessage = parsed.kind === 'text' || parsed.kind === 'skill' || (parsed.kind === 'command' && parsed.name === 'attach-original');
       const lostId = lostSessionRef.current;
       const usesSession = sendsMessage || (parsed.kind === 'command' && ['retry', 'regenerate', 'compact'].includes(parsed.name));
+      if (usesSession && isArchived()) { notify(ARCHIVED_SESSION_TEXT, 'warn'); return; }
       if (usesSession && lostId && stateRef.current.sessionId === lostId) {
         notify(sessionLostText(lostId), 'warn');
         return;
@@ -720,7 +687,7 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
     if (overlay.type === 'sessions') {
       return (
         <SelectList
-          title="Resume session"
+          title={overlay.title ?? 'Resume session'}
           maxRows={overlayMaxRows}
           items={overlay.items}
           message={overlay.message}

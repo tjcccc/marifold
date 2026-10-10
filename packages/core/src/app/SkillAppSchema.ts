@@ -14,6 +14,9 @@ export type SkillAppConcurrency = 'latest';
 export type SkillAppButtonEmphasis = 'primary' | 'secondary';
 export type SkillAppLayoutGap = 'none' | 'small' | 'medium' | 'large';
 export type SkillAppResponsiveBehavior = 'stack';
+/** Row: main-axis distribution (justify-content). Column: cross-axis
+ * alignment of children; `between` is Row-only. */
+export type SkillAppLayoutAlign = 'start' | 'center' | 'end' | 'between';
 
 export interface SkillAppInfo {
   name: string;
@@ -143,6 +146,7 @@ export interface SkillAppLayoutItem {
   showLabel?: boolean;
   gap?: SkillAppLayoutGap;
   responsive?: SkillAppResponsiveBehavior;
+  align?: SkillAppLayoutAlign;
   grow?: boolean;
   editable?: boolean;
   copyable?: boolean;
@@ -173,6 +177,19 @@ export interface SkillAppDefinition {
   operations: SkillAppOperationDefinition[];
   triggers: SkillAppTriggerDefinition[];
   layout: SkillAppLayoutItem[];
+}
+
+/** One App bundle that failed to compile or validate. */
+export interface SkillAppInvalidEntry {
+  /** Bundle folder name; there is no trustworthy title for an invalid App. */
+  name: string;
+  code: string;
+  message: string;
+}
+
+export interface SkillAppCatalog {
+  apps: SkillAppDefinition[];
+  invalid: SkillAppInvalidEntry[];
 }
 
 export interface SkillAppHistoryTurn {
@@ -219,8 +236,10 @@ export type SkillAppExecutionPhase =
   | 'failed'
   | 'cancelled';
 
-/** Service-owned lifecycle for one exclusive interactive operation. Template
- * authors never declare or bind this state; every renderer applies it. */
+/** Service-owned lifecycle for one exclusive button-started operation.
+ * Ordinary runs only move from `running` to a terminal phase; interactive runs
+ * may also wait for input or approval. Template authors never declare or bind
+ * this state; every renderer applies it. */
 export interface SkillAppExecutionSnapshot {
   id: string;
   operation: string;

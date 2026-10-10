@@ -1,3 +1,4 @@
+import * as path from 'path';
 import { parse as parseYaml } from 'yaml';
 import { MarifoldError } from '../errors/MarifoldError';
 import {
@@ -10,6 +11,7 @@ import {
 
 const SAFE_SKILL_NAME = /^[a-z0-9][a-z0-9_-]*$/;
 const SAFE_VARIABLE_NAME = /^[a-zA-Z0-9_]+$/;
+const MAX_SKILL_READS = 32;
 // A markdown skill: a YAML frontmatter block, then the prompt body.
 const FRONTMATTER = /^---\n([\s\S]*?)\n---\n?([\s\S]*)$/;
 
@@ -66,6 +68,7 @@ export function validateSkill(raw: RawRecord, source?: string): MarifoldSkill {
 
   const mode = normalizeMode(raw.mode, source);
   const variables = normalizeVariables(raw.variables, source);
+  const reads = normalizeReads(raw.reads, source);
 
   // Every variable referenced in the prompt must be declared, so the TUI and a
   // graphical App resolve the same set before running the skill.
@@ -85,8 +88,34 @@ export function validateSkill(raw: RawRecord, source?: string): MarifoldSkill {
     prompt,
     mode,
     variables,
+    ...(reads.length > 0 ? { reads } : {}),
     ...(source ? { source } : {}),
   };
+}
+
+/** Declared exact-file reads. Only syntax is checked here; existence, file
+ * type, and the sensitive/private-state boundary are enforced at run time. */
+function normalizeReads(value: unknown, source?: string): string[] {
+  if (value === undefined) { return []; }
+  if (!Array.isArray(value)) {
+    throw MarifoldError.skillInvalid('Expected "reads" to be a list of file paths.', source);
+  }
+  if (value.length > MAX_SKILL_READS) {
+    throw MarifoldError.skillInvalid(`A skill may declare at most ${MAX_SKILL_READS} reads.`, source);
+  }
+  return [...new Set(value.map((entry, index) => {
+    const declared = requireString(entry, `reads[${index}]`, source).trim();
+    if (!path.isAbsolute(declared) && !declared.startsWith('~/')) {
+      throw MarifoldError.skillInvalid(
+        `reads[${index}] '${declared}' must be an absolute or ~/ file path.`,
+        source,
+      );
+    }
+    if (declared.includes('\0') || declared.endsWith('/')) {
+      throw MarifoldError.skillInvalid(`reads[${index}] '${declared}' must name one file.`, source);
+    }
+    return declared;
+  }))];
 }
 
 function normalizeMode(value: unknown, source?: string): SkillMode | undefined {

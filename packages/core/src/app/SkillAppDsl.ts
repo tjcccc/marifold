@@ -2,6 +2,7 @@ import type {
   SkillAppButtonEmphasis,
   SkillAppConcurrency,
   SkillAppInfo,
+  SkillAppLayoutAlign,
   SkillAppLayoutGap,
   SkillAppResponsiveBehavior,
   SkillAppSelectOption,
@@ -208,14 +209,14 @@ export function App(children: readonly ComponentReference[]): ComponentReference
 
 export function Row(
   children: readonly ComponentReference[],
-  options: { gap?: SkillAppLayoutGap; responsive?: SkillAppResponsiveBehavior } = {},
+  options: { gap?: SkillAppLayoutGap; responsive?: SkillAppResponsiveBehavior; align?: SkillAppLayoutAlign } = {},
 ): ComponentReference {
   return component('row', children, undefined, options);
 }
 
 export function Column(
   children: readonly ComponentReference[],
-  options: { gap?: SkillAppLayoutGap } = {},
+  options: { gap?: SkillAppLayoutGap; align?: Exclude<SkillAppLayoutAlign, 'between'> } = {},
 ): ComponentReference {
   return component('column', children, undefined, options);
 }

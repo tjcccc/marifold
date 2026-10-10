@@ -179,6 +179,15 @@ export async function deleteMemory(
   return body.memories;
 }
 
+/** Bring back a forgotten (superseded) memory. Returns the fresh active list. */
+export async function restoreMemory(client: ApiClient, profile: string, id: string): Promise<MemoryEntry[]> {
+  const body = await client.request<{ memories: MemoryEntry[] }>(
+    'POST',
+    `/v1/profiles/${encodeURIComponent(profile)}/memories/${encodeURIComponent(id)}/restore`,
+  );
+  return body.memories;
+}
+
 /** Save a memory for a profile (the /remember command). */
 export async function rememberMemory(client: ApiClient, profile: string, text: string): Promise<MemoryEntry[]> {
   const body = await client.request<{ memories: MemoryEntry[] }>(

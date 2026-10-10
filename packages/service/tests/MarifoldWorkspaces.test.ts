@@ -90,8 +90,8 @@ describe('device-hosted workspaces', () => {
       return new Response(JSON.stringify({ message: { content: 'Hello.' }, done: true, done_reason: 'stop' }),
         { headers: { 'content-type': 'application/json' } });
     }));
-    const owner = { 'x-marifold-session-owner': '11111111-1111-4111-8111-111111111111' };
-    const other = { 'x-marifold-session-owner': '22222222-2222-4222-8222-222222222222' };
+    const owner = { 'x-marifold-session-owner': 'web' };
+    const other = { 'x-marifold-session-owner': 'terminal' };
     const session = `${p.prefix}/v1/sessions/owned-session`;
     const lease = `${session}/lease`;
     for (let renewal = 0; renewal < 2; renewal++) {
@@ -236,8 +236,8 @@ describe('device-hosted workspaces', () => {
   });
   it('moves a session to a paired device that takes it over through the bridge', async () => {
     const p = await paired();
-    const host = { 'x-marifold-session-owner': `host-tab-${'a'.repeat(24)}` };
-    const guest = { 'x-marifold-session-owner': `guest-tab-${'b'.repeat(24)}` };
+    const host = { 'x-marifold-session-owner': 'web' };
+    const guest = { 'x-marifold-session-owner': 'web' };
     expect((await p.host.inject({ method: 'POST', url: '/v1/sessions/shared/lease', headers: host })).statusCode).toBe(200);
     const blocked = await p.guest.inject({ method: 'POST', url: `${p.prefix}/v1/sessions/shared/lease`, headers: guest });
     expect(blocked.statusCode).toBe(409);

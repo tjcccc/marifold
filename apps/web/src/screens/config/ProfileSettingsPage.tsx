@@ -19,7 +19,7 @@ export interface ProfileSettingsPageProps {
   onSaveFile: (file: ProfileFileKind, content: string) => void;
   onAddTrustedFolder: (folder: string) => void;
   onRemoveTrustedFolder: (folder: string) => void;
-  onMemoryAction: (id: string, mode: 'forget' | 'delete') => void;
+  onMemoryAction: (id: string, mode: 'forget' | 'delete' | 'restore') => void;
   onDelete?: () => void;
   deleteDisabledReason?: string;
   /** Rendered avatar (the screen owns client wiring); falls back to initials. */
@@ -43,6 +43,7 @@ export function ProfileSettingsPage(props: ProfileSettingsPageProps) {
   const { detail, memories, globalAgent, modelOptions, busy } = props;
   const effective = resolveEffectivePermissions(globalAgent, detail.settings.agent);
   const active = memories.filter(entry => entry.status === 'active');
+  const forgotten = memories.filter(entry => entry.status !== 'active');
   const profileFolders = detail.settings.agent?.trustedFolders ?? [];
   const inheritedFolders = effective.trustedFolders.filter(folder => !profileFolders.includes(folder));
   const modelValue = detail.settings.provider && detail.settings.model
@@ -52,6 +53,7 @@ export function ProfileSettingsPage(props: ProfileSettingsPageProps) {
   const [displayName, setDisplayName] = useState(detail.settings.displayName ?? '');
   const [cropFile, setCropFile] = useState<File | undefined>();
   const [removeOpen, setRemoveOpen] = useState(false);
+  const [forgottenOpen, setForgottenOpen] = useState(false);
   const [removeName, setRemoveName] = useState('');
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement>(null);
@@ -348,8 +350,43 @@ export function ProfileSettingsPage(props: ProfileSettingsPageProps) {
                 </div>
               ))}
             </div>
+            {forgotten.length > 0 ? (
+              <button type="button" className={styles.linkButton} aria-expanded={forgottenOpen} onClick={() => setForgottenOpen(open => !open)}>
+                {forgottenOpen ? 'Hide' : 'Show'} forgotten ({forgotten.length})
+              </button>
+            ) : null}
+            {forgottenOpen && forgotten.length > 0 ? (
+              <div className={styles.card} aria-label="Forgotten memories">
+                {forgotten.map(entry => (
+                  <div key={entry.id} className={styles.memoryRow}>
+                    <div className={styles.memoryBody}>
+                      <div className={styles.memoryTextMuted}>{entry.text}</div>
+                      <div className={styles.memoryMeta}>
+                        {entry.kind} · forgotten or replaced {formatRelativeTime(entry.updated_at)}
+                      </div>
+                    </div>
+                    <div className={styles.memoryActions}>
+                      <button className={styles.smallButton} disabled={busy} onClick={() => props.onMemoryAction(entry.id, 'restore')}>
+                        Restore
+                      </button>
+                      <button
+                        className={styles.smallButtonDanger}
+                        disabled={busy}
+                        onClick={() => {
+                          if (window.confirm('Permanently delete this memory?')) {
+                            props.onMemoryAction(entry.id, 'delete');
+                          }
+                        }}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
             <div className={styles.groupHint}>
-              Forget supersedes an entry (recoverable); Delete removes it for good. New memories still come from conversations.
+              Forget hides an entry (Show forgotten → Restore brings it back); Delete removes it for good. New memories come from conversations and /remember.
             </div>
           </section>
 

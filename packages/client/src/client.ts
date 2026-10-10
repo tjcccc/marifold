@@ -53,7 +53,8 @@ export function createApiClient(options: ApiClientOptions = {}): ApiClient {
     ? `${localBase}/v1/workspaces/${encodeURIComponent(options.workspaceId)}/api`
     : localBase;
   const token = options.token;
-  const sessionOwner = Array.from(globalThis.crypto.getRandomValues(new Uint8Array(24)), byte => byte.toString(16).padStart(2, '0')).join('');
+  // The service owns session leases per app and device; the client names only its app.
+  const sessionOwner = options.interface ?? 'client';
 
   function headers(extra: Record<string, string> = {}): Record<string, string> {
     return {

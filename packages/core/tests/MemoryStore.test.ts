@@ -269,3 +269,51 @@ describe('MemoryStore', () => {
     expect(entries.length).toBeLessThan(21);
   });
 });
+
+describe('MemoryStore /remember statements and restore', () => {
+  const active = (store: MemoryStore) => store.listEntries('default').filter(entry => entry.status === 'active').map(entry => entry.text);
+
+  it('replaces an earlier value for the same fact and keeps unrecognized text verbatim', () => {
+    const store = new MemoryStore(tempDir());
+    store.rememberStatement('default', 'I prefer tea');
+    store.rememberStatement('default', 'I prefer coffee');
+    store.rememberStatement('default', 'my favorite color is green');
+    store.rememberStatement('default', 'my favorite color is blue');
+    store.rememberStatement('default', 'I prefer tea in the morning');
+    store.rememberStatement('default', 'The garage code is 4412');
+    expect(active(store).sort()).toEqual([
+      'The garage code is 4412',
+      'The user prefers coffee.',
+      'The user prefers tea in the morning.',
+      "The user's favorite color is blue.",
+    ]);
+  });
+
+  it('keeps the whole text when a statement says more than the extracted fact', () => {
+    const store = new MemoryStore(tempDir());
+    store.rememberStatement('default', "my name is Jack and I'm on project Atlas");
+    expect(active(store).sort()).toEqual(["The user's name is Jack.", "my name is Jack and I'm on project Atlas"]);
+  });
+
+  it('restores a forgotten entry and supersedes the value that replaced it', () => {
+    const store = new MemoryStore(tempDir());
+    const tea = store.rememberStatement('default', 'I prefer tea').entry;
+    store.rememberStatement('default', 'I prefer coffee');
+    expect(active(store)).toEqual(['The user prefers coffee.']);
+    expect(store.restoreById('default', tea.id).count).toBe(1);
+    expect(active(store)).toEqual(['The user prefers tea.']);
+  });
+});
+
+describe('turn memory for agent objectives', () => {
+  it('does not read forgets out of task wording', async () => {
+    const { applyTurnMemory } = await import('../src/memory/TurnMemory');
+    const store = new MemoryStore(tempDir());
+    store.rememberStatement('default', 'My name is Jack.');
+    const none = { savePayloads: [], forgetPayloads: [] };
+    applyTurnMemory(store, 'default', 'Remove the name column from data.csv.', none, { sizeLimit: 50000, promptForgets: false });
+    expect(store.listEntries('default').filter(entry => entry.status === 'active').map(entry => entry.text)).toContain("The user's name is Jack.");
+    applyTurnMemory(store, 'default', 'Remove the name column from data.csv.', none, { sizeLimit: 50000 });
+    expect(store.listEntries('default').filter(entry => entry.status === 'active').map(entry => entry.text)).not.toContain("The user's name is Jack.");
+  });
+});

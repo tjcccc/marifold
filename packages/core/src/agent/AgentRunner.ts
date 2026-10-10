@@ -16,7 +16,9 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { isDeepStrictEqual } from 'node:util';
-import { stripMemoryControls } from '../memory/MemoryControls';
+import { stripMemoryControls, type MemoryControlPayloads } from '../memory/MemoryControls';
+import { agentMemoryInstructions, type AgentMemoryAccess } from './AgentMemory';
+import { EARLIER_IMAGE_LIMIT, earlierImageContext, type SessionImageAccess } from './EarlierImages';
 import { buildHistoryContext, type HistoryTurn } from './AgentHistory';
 import type { MarifoldProviderToolDefinition, MarifoldResolvedSettings, MarifoldRunRequest, MarifoldWebSearchMode } from '../runtime/MarifoldTypes';
 import type { TaskState, TaskStatus, TaskStore } from '../tasks/TaskStore';
@@ -99,8 +101,8 @@ export interface AgentRunOptions {
   /** Authoritative instructions (e.g. a skill body) injected at the top of the
    * system prompt for every loop turn, so the run is guided by them. */
   instructions?: string[];
-  /** Read-only dynamic memory supplied by an embedding surface. Agent output
-   * never mutates profile memory, even when this context is present. */
+  /** Read-only dynamic memory supplied by an embedding surface. When set, the
+   * run uses it as is and never mutates profile memory. */
   memory?: string[];
   /** Resolves 'ask' approvals. Absent (unattended runs): 'ask' degrades to deny. */
   approvalHandler?: ApprovalHandler;
@@ -164,6 +166,11 @@ export interface AgentRunnerDeps {
     replaceUserTurnIndex?: number,
     responseMetrics?: ResponseMetrics,
   ) => Promise<void>;
+  /** Profile memory for non-lean runs: recalled into context, and updated from
+   * the model's hidden memory blocks and the prompt when the run completes. */
+  memory?: AgentMemoryAccess;
+  /** Earlier images in the session: listed for non-lean runs, loaded on inspect. */
+  sessionImages?: SessionImageAccess;
   /** Load the session's clean turns (objective → answer pairs) for bounded
    * cross-objective memory on NON-lean runs. Lean/skill runs stay stateless. */
   loadRecentTurns?: (sessionId: string, beforeUserTurnIndex?: number) => HistoryTurn[];
@@ -202,6 +209,8 @@ interface LoopState {
    * losing visual context while it resolves another required input. */
   activeImages: ImageInput[];
   deniedCalls: Pick<ToolCall, 'name' | 'arguments'>[];
+  /** Hidden memory_save / memory_forget payloads, applied when the run completes. */
+  memoryControls: MemoryControlPayloads;
   webSourceUrls?: string[];
   webPageAttempted?: boolean;
   emptyResponseFollowup?: string;
@@ -249,8 +258,11 @@ export class AgentRunner {
       ? []
       : (this.deps.resolveBuiltInInstructions?.(options.objective, settings.profile) ?? []);
     const environment = { ...this.deps.environment, ...options.environment };
-    const instructions = [environmentContext(environment, new Date(startedAtMs), settings), artifactPresentation(environment), ...(this.deps.contextInstructions ?? []), ...builtInInstructions, ...(options.instructions ?? [])];
-    let runOptions: AgentRunOptions = { ...options, environment, instructions };
+    // Profile memory: ordinary runs recall it and may update it; skills and
+    // runs given memory by their caller stay read-only.
+    const memoryAccess = !options.lean && options.memory === undefined && this.deps.memory?.enabled(settings.profile) ? this.deps.memory : undefined;
+    const instructions = [environmentContext(environment, new Date(startedAtMs), settings), artifactPresentation(environment), ...(this.deps.contextInstructions ?? []), ...builtInInstructions, ...(memoryAccess ? agentMemoryInstructions(options.objective) : []), ...(options.instructions ?? [])];
+    let runOptions: AgentRunOptions = { ...options, environment, instructions, ...(memoryAccess ? { memory: memoryAccess.load(settings.profile, options.objective, settings.think) } : {}) };
     if (runOptions.images && this.deps.prepareImages) {
       runOptions = {
         ...runOptions,
@@ -273,6 +285,9 @@ export class AgentRunner {
       windowedTurns,
       settings.maxContextTokens ?? HISTORY_BUDGET_DEFAULT_CHARS,
     );
+    // Earlier session images, offered by ID and loaded only if inspected.
+    const earlierImageRefs = !options.lean && options.sessionId && this.deps.sessionImages
+      ? this.deps.sessionImages.list(options.sessionId, options.replaceUserTurnIndex).slice(-EARLIER_IMAGE_LIMIT) : [];
     // Save the prompt now (after reading the history it must not repeat), so
     // the session exists, and can be retried, before the run reports running;
     // the outcome follows at the end. An edit replaces its exchange only when done.
@@ -347,6 +362,10 @@ export class AgentRunner {
       yield* this.finish(task.id, options.signal?.aborted ? 'cancelled' : 'failed', undefined, message, usage);
       return;
     }
+    workspace.earlierImages = earlierImageRefs.map((ref, index) => ({ id: `earlier-image-${index + 1}`, ref, load: async () => {
+      const image = this.deps.sessionImages?.load(options.sessionId!, ref.userTurnIndex, ref.attachmentIndex);
+      return image && this.deps.prepareImages ? (await this.deps.prepareImages([image], true))[0] : image;
+    } }));
     const toolContext: ToolExecutionContext = {
       cwd: workspace.cwd,
       trustedFolders: [...agentConfig.trustedFolders, ...(options.trustedFolders ?? [])],
@@ -365,6 +384,7 @@ export class AgentRunner {
       steeringNotes: [],
       activeImages: [],
       deniedCalls: [],
+      memoryControls: { savePayloads: [], forgetPayloads: [] },
     };
 
     let sessionTurnPersisted = false;
@@ -601,6 +621,12 @@ export class AgentRunner {
       // Persist a single clean turn pair (objective → final answer) so resuming
       // the session shows the result, not the raw `Objective:`/tool framing.
       await persistSessionTurn(finalText, 'completed');
+      // Only a user's own conversation writes memory: not delegated, child, or scheduled runs.
+      if (memoryAccess && options.sessionId && !options.unattended) {
+        try { memoryAccess.apply(settings.profile, options.objective, state.memoryControls, options.sessionId); } catch (error) {
+          this.deps.taskStore.appendEvent(task.id, { kind: 'note', message: `Could not update profile memory: ${truncate(error instanceof Error ? error.message : String(error), 500)}` });
+        }
+      }
 
       // Complete. No verification phase: a separate self-grading model call was
       // non-actionable (a failed grade didn't retry or fix anything) and models
@@ -975,7 +1001,7 @@ export class AgentRunner {
       `Working directory: ${workspace.cwd}. Relative tool paths resolve against it.`,
       `User home: ${workspace.userHome}. In tool paths and shell commands, ~ refers to this directory.`,
       `Isolated run directory: ${workspace.rootDir}. Its internal runtime home is ${workspace.homeDir}.`,
-      `${attachments}\nHonor explicit destination paths from the user; otherwise write generated deliverables to ${workspace.outputDir}. Regular output files are published to clients automatically. Follow the interface-specific file presentation guidance; never invent sandbox: or file: download URLs. Temporary scripts and environments belong in ${workspace.workDir}.`,
+      `${[attachments, ...earlierImageContext(workspace.earlierImages)].join('\n')}\nHonor explicit destination paths from the user; otherwise write generated deliverables to ${workspace.outputDir}. Regular output files are published to clients automatically. Follow the interface-specific file presentation guidance; never invent sandbox: or file: download URLs. Temporary scripts and environments belong in ${workspace.workDir}.`,
       ...(this.deps.registry.get('ask_user')?.kind === 'interaction' ? [
         'ask_user is optional. Use it only when essential information is missing and a reasonable assumption could materially change the result. Otherwise proceed. Batch all currently known questions into one call, and call it without other tools in that response.',
       ] : []),
@@ -1039,16 +1065,14 @@ export class AgentRunner {
   }
 
   private extractTurn(response: PriestResponse, state: LoopState): { text: string; calls: ToolCall[] } {
-    // Memory control blocks are stripped and their payloads discarded — agent
-    // runs never write profile memory (see docs/architecture.md).
+    // Memory control blocks never reach the user. Only a final answer may carry
+    // them: a turn that calls tools can be steered by tool or web output.
     const stripped = stripMemoryControls(response.text ?? '');
-    if (state.mode === 'native') {
-      return { text: stripped.text.trim(), calls: response.toolCalls ?? [] };
-    }
-    const parsed = parseControlBlockCalls(stripped.text);
-    // Re-id calls so they stay unique across loop iterations.
-    const calls = parsed.calls.map(call => ({ ...call, id: `call_${crypto.randomBytes(4).toString('hex')}` }));
-    return { text: parsed.visibleText, calls };
+    const parsed = state.mode === 'native' ? undefined : parseControlBlockCalls(stripped.text);
+    // Re-id control-block calls so they stay unique across loop iterations.
+    const calls = parsed ? parsed.calls.map(call => ({ ...call, id: `call_${crypto.randomBytes(4).toString('hex')}` })) : (response.toolCalls ?? []);
+    if (calls.length === 0) { state.memoryControls = { savePayloads: stripped.savePayloads, forgetPayloads: stripped.forgetPayloads }; }
+    return { text: parsed ? parsed.visibleText : stripped.text.trim(), calls };
   }
 
   private shouldFallBackToControlBlocks(response: PriestResponse, state: LoopState): boolean {

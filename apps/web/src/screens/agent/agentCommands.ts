@@ -1,7 +1,6 @@
 import type { Dispatch, MutableRefObject } from 'react';
 import type { ApiClient } from '../../api/client';
 import { deleteMemory, listMemories, rememberMemory } from '../../api/profiles';
-import { steerRun } from '../../api/runs';
 import { compactSession } from '../../api/sessions';
 import type { ProfileDetail } from '../../api/types';
 import { WEB_COMMANDS } from '../../lib/commandSyntax';
@@ -88,13 +87,6 @@ export async function runAgentCommand(context: AgentCommandContext, { name, args
         notify('Usage: /model <provider/model>, e.g. /model xai/grok-4.5', 'warn');
       }
       break;
-    case 'btw': {
-      if (!args) { notify('Usage: /btw <text>', 'warn'); break; }
-      const active = activeRun(threadRef.current);
-      if (active) { await steerRun(client, active.runId, args).catch(handleError); }
-      else { notify('No task is running to steer.'); }
-      break;
-    }
     case 'stop': {
       if (!await stop()) { notify('No task is running.'); }
       break;

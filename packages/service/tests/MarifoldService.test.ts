@@ -39,8 +39,8 @@ describe('MarifoldService', () => {
     const loadedConfig = fixtureLoadedConfig(tempDir());
     const local = new (await import('@marifold/core')).MarifoldRuntime({ loadedConfig });
     const server = createMarifoldService({ loadedConfig, scheduler: false });
-    const owner = '11111111-1111-4111-8111-111111111111';
-    const other = '22222222-2222-4222-8222-222222222222';
+    const owner = 'web';
+    const other = 'terminal';
     try {
       local.acquireSession('occupied');
       const blocked = await server.inject({ method: 'POST', url: '/v1/sessions/occupied/lease', headers: { 'x-marifold-session-owner': owner } });
@@ -171,6 +171,8 @@ describe('MarifoldService', () => {
       path.resolve(process.cwd(), '../../examples/apps/translator/skills/translate/SKILL.md'),
       path.join(appDir, 'skills', 'translate', 'SKILL.md'),
     );
+    fs.mkdirSync(path.join(dir, 'apps', 'broken-app'));
+    fs.writeFileSync(path.join(dir, 'apps', 'broken-app', 'skillapp.ts'), 'export default 42;\n');
 
     const providerBodies: Array<{ model?: string; messages?: Array<{ content?: string }>; think?: boolean }> = [];
     vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
@@ -198,6 +200,10 @@ describe('MarifoldService', () => {
         models: [{ provider: 'ollama', model: 'maternion/hy-mt2:1.8b' }],
         operations: [{ name: 'translate', requiredInputs: ['source', 'targetLanguage'], output: 'result' }],
       });
+      expect(listed.json().apps).toHaveLength(1);
+      expect(listed.json().invalidApps).toEqual([
+        { name: 'broken-app', code: 'APP_INVALID', message: expect.any(String) },
+      ]);
 
       const created = await server.inject({
         method: 'POST',
@@ -234,7 +240,27 @@ describe('MarifoldService', () => {
       expect(manual.statusCode).toBe(200);
       expect(manual.json()).toMatchObject({ status: 'completed', result: { status: 'ok' } });
 
-      expect(providerBodies).toHaveLength(2);
+      const started = await server.inject({
+        method: 'POST',
+        url: `/v1/app-instances/${instanceId}/executions`,
+        payload: { operation: 'translate', values: { targetLanguage: 'Japanese' } },
+      });
+      expect(started.json()).toMatchObject({
+        status: 'running',
+        instance: {
+          state: { targetLanguage: 'Japanese', result: '' },
+          execution: { operation: 'translate', phase: 'running', cancellable: true },
+        },
+      });
+      await vi.waitFor(async () => {
+        const polled = await server.inject({ method: 'GET', url: `/v1/app-instances/${instanceId}` });
+        expect(polled.json().instance).toMatchObject({
+          state: { result: 'Good morning' },
+          execution: { phase: 'completed', result: { status: 'ok' } },
+        });
+      });
+
+      expect(providerBodies).toHaveLength(3);
       expect(providerBodies[0]).toMatchObject({ model: 'maternion/hy-mt2:1.8b', think: false });
       const context = providerBodies[0].messages?.map(message => message.content ?? '').join('\n') ?? '';
       expect(context).toContain('Translate the following text into English.');
@@ -255,7 +281,7 @@ describe('MarifoldService', () => {
           staleOutputs: ['result'],
         },
       });
-      expect(providerBodies).toHaveLength(2);
+      expect(providerBodies).toHaveLength(3);
 
       const removed = await server.inject({
         method: 'DELETE',
@@ -287,9 +313,11 @@ describe('MarifoldService', () => {
       '---\nname: make-prompt\n---\nTurn the user idea into a production image prompt.\n',
     );
     fs.writeFileSync(path.join(skillDir, 'vars.toml'), 'look = "cinematic"\n');
+    const declaredRead = path.join(dir, 'declared-look.toml');
+    fs.writeFileSync(declaredRead, 'look = "declared"\n');
     fs.writeFileSync(
       path.join(otherSkillDir, 'SKILL.md'),
-      '---\nname: make-other-prompt\n---\nCreate the selected alternate prompt format.\n',
+      `---\nname: make-other-prompt\nreads:\n  - ${declaredRead}\n---\nCreate the selected alternate prompt format.\n`,
     );
     fs.writeFileSync(path.join(otherSkillDir, 'vars.toml'), 'look = "alternate"\n');
     fs.writeFileSync(path.join(appDir, 'skillapp.ts'), `
@@ -419,6 +447,7 @@ describe('MarifoldService', () => {
       expect(context).toContain('Painter rules from RULES.md.');
       expect(context).toContain('Painter custom context.');
       expect(context).toContain('Create the selected alternate prompt format.');
+      expect(context).toContain(`declares these read-only files; read them with read_file when needed: ${fs.realpathSync(declaredRead)}`);
       expect(context).not.toContain('Turn the user idea into a production image prompt.');
       expect(context).toContain('vars.toml');
       expect(context).toContain('A lighthouse in a storm');
@@ -466,6 +495,43 @@ describe('MarifoldService', () => {
         payload: { text: '   ' },
       });
       expect(empty.statusCode).toBe(400);
+    } finally {
+      await server.close();
+    }
+  });
+
+  it('treats every browser on this service as its one Web app, wherever it connects from', async () => {
+    const server = createMarifoldService({ loadedConfig: fixtureLoadedConfig(tempDir()), scheduler: false });
+    try {
+      const lease = (app: string, remoteAddress?: string) => server.inject({
+        method: 'POST', url: '/v1/sessions/home/lease', headers: { 'x-marifold-session-owner': app }, ...(remoteAddress ? { remoteAddress } : {}),
+      });
+      expect((await lease('web')).statusCode).toBe(200);
+      // The same Web UI opened from another machine (e.g. http://<home-ip>:32140) is not "in use".
+      const remote = await lease('web', '100.64.0.7');
+      expect(remote.statusCode, remote.body).toBe(200);
+      expect((await lease('terminal', '100.64.0.7')).statusCode).toBe(409);
+    } finally {
+      await server.close();
+    }
+  });
+
+  it('/remember replaces an earlier value, and restore brings the old one back', async () => {
+    const server = createMarifoldService({ loadedConfig: fixtureLoadedConfig(tempDir()), scheduler: false });
+    try {
+      const remember = (text: string) => server.inject({ method: 'POST', url: '/v1/profiles/default/memories', payload: { text } });
+      await remember('I prefer tea');
+      const after = (await remember('I prefer coffee')).json().memories.map((memory: { text: string }) => memory.text);
+      expect(after).toContain('The user prefers coffee.');
+      expect(after).not.toContain('The user prefers tea.');
+
+      const all = (await server.inject({ method: 'GET', url: '/v1/profiles/default/memories?all=true' })).json().memories;
+      const tea = all.find((memory: { text: string }) => memory.text === 'The user prefers tea.');
+      const restored = await server.inject({ method: 'POST', url: `/v1/profiles/default/memories/${tea.id}/restore` });
+      expect(restored.json()).toMatchObject({ ok: true, restored: true });
+      const active = restored.json().memories.map((memory: { text: string }) => memory.text);
+      expect(active).toContain('The user prefers tea.');
+      expect(active).not.toContain('The user prefers coffee.');
     } finally {
       await server.close();
     }
@@ -910,8 +976,8 @@ describe('MarifoldService', () => {
     sessions.close();
     const server = createMarifoldService({ loadedConfig: loaded, scheduler: false });
     try {
-      const page = { 'x-marifold-session-owner': `page-${'a'.repeat(24)}` };
-      const terminal = { 'x-marifold-session-owner': `terminal-${'b'.repeat(24)}` };
+      const page = { 'x-marifold-session-owner': 'web' };
+      const terminal = { 'x-marifold-session-owner': 'terminal' };
       expect((await server.inject({ method: 'POST', url: '/v1/sessions/held/lease', headers: page, payload: {} })).statusCode).toBe(200);
       const inUse = async (headers: Record<string, string>) => Object.fromEntries(
         (await server.inject({ method: 'GET', url: '/v1/sessions', headers })).json().sessions
@@ -937,7 +1003,7 @@ describe('MarifoldService', () => {
     sessions.close();
     const server = createMarifoldService({ loadedConfig: loaded, scheduler: false });
     try {
-      const owner = { 'x-marifold-session-owner': `owner-${'a'.repeat(24)}` };
+      const owner = { 'x-marifold-session-owner': 'web' };
       const started = await server.inject({
         method: 'POST',
         url: '/v1/runs',

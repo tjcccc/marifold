@@ -71,7 +71,7 @@ function statusCodeForError(error: MarifoldError): number {
   if (error.code === 'UNAUTHORIZED') { return 401; }
   if (error.code === 'NETWORK_FORBIDDEN' || error.code === 'ORIGIN_FORBIDDEN') { return 403; }
   if (error.code === 'RUN_LIMIT_EXCEEDED') { return 429; }
-  if (error.code === 'SESSION_BUSY' || error.code === 'WORKSPACE_CONFLICT') { return 409; }
+  if (error.code === 'SESSION_BUSY' || error.code === 'SESSION_ARCHIVED' || error.code === 'WORKSPACE_CONFLICT') { return 409; }
   if (error.code === 'WORKSPACE_INVALID') { return 400; }
   if (error.code === 'WORKSPACE_OFFLINE') { return 503; }
   if (error.code === 'WORKSPACE_TIMEOUT') { return 504; }

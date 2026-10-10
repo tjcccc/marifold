@@ -186,7 +186,7 @@ export function copyBoolean(
 
 export function copyString(
   source: Record<string, Evaluated>,
-  key: 'placeholder' | 'filename' | 'mediaType' | 'description' | 'gap' | 'responsive' | 'emphasis',
+  key: 'placeholder' | 'filename' | 'mediaType' | 'description' | 'gap' | 'responsive' | 'align' | 'emphasis',
   target: SkillAppLayoutItem,
   state: CompilationState,
   sourcePath: string,

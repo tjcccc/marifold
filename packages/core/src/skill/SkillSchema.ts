@@ -30,6 +30,10 @@ export interface MarifoldSkill {
    * session runs as a plain turn. A skill pins a mode by declaring `mode:`. */
   mode?: SkillMode;
   variables: SkillVariable[];
+  /** Extra host files (absolute or `~/` paths) this skill reads. Exact-file,
+   * read-only grants applied only when a SkillApp runs this skill; each is
+   * re-validated against the App host-read boundary at run time. */
+  reads?: string[];
   /** Absolute path the skill was loaded from (set by the loader). */
   source?: string;
   /** Where the skill came from: compiled core, shared skills, or a profile's skills/. */

@@ -21,6 +21,7 @@ type AsyncMethods =
   | 'deleteMemories'
   | 'setProfileMaxContextTokens'
   | 'compactSession'
+  | 'updateSessionDisplay'
   | 'removeSkill';
 export type TuiRuntime = Pick<MarifoldRuntime, Reads> & {
   [K in AsyncMethods]: (

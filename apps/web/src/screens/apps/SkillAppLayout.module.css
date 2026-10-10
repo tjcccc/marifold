@@ -8,6 +8,17 @@
   flex-direction: column;
 }
 
+.rowAlign_start { justify-content: flex-start; }
+.rowAlign_center { justify-content: center; }
+.rowAlign_end { justify-content: flex-end; }
+.rowAlign_between { justify-content: space-between; }
+
+/* Column alignment positions intrinsic-width children such as buttons;
+   fields and nested rows keep the full column width. */
+.columnAlign_start > .intrinsic { align-self: flex-start; }
+.columnAlign_center > .intrinsic { align-self: center; }
+.columnAlign_end > .intrinsic { align-self: flex-end; }
+
 .gap_none { gap: 0; }
 .gap_small { gap: 8px; }
 .gap_medium { gap: 16px; }
@@ -180,6 +191,21 @@
   pointer-events: auto;
 }
 
+.attachmentPreviewButton {
+  flex: none;
+  display: block;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  cursor: zoom-in;
+}
+
+.attachmentPreviewButton:focus-visible {
+  outline: 2px solid var(--brand-fill);
+  outline-offset: 2px;
+}
+
 .attachmentThumbnail,
 .attachmentFileIcon {
   width: 36px;
@@ -271,6 +297,14 @@
 .field textarea:focus {
   border-color: var(--brand-text);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--brand-fill) 16%, transparent);
+}
+
+.outputError {
+  margin: 0;
+  color: var(--danger);
+  font-size: 12.5px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 
 .previewEmpty {

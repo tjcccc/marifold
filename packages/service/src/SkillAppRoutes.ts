@@ -38,10 +38,15 @@ export function registerSkillAppRoutes(
 
   // SkillApp source stays server-owned. Every renderer receives the same
   // statically compiled JSON contract and can only submit typed state.
-  server.get('/v1/apps', async () => ({
-    ok: true,
-    apps: runtime.listApps().map(publicSkillAppDefinition),
-  }));
+  // Bundles that fail to load are listed separately with their exact error.
+  server.get('/v1/apps', async () => {
+    const catalog = runtime.createAppStore().listCatalog();
+    return {
+      ok: true,
+      apps: catalog.apps.map(publicSkillAppDefinition),
+      invalidApps: catalog.invalid,
+    };
+  });
 
   server.get<{
     Params: { name: string };
@@ -105,12 +110,30 @@ export function registerSkillAppRoutes(
     };
   });
 
+  // Blocking compatibility route: ordinary operations answer when finished;
+  // interactive ones return `running` with the execution snapshot.
   server.post<{
     Params: { id: string; operation: string };
   }>('/v1/app-instances/:id/operations/:operation', async request => ({
     ok: true,
     ...(await skillAppInstances.run(request.params.id, request.params.operation)),
   }));
+
+  // Start any button-bound operation as a cancellable execution and return at
+  // once; renderers poll the instance snapshot until it reaches a terminal phase.
+  server.post<{
+    Params: { id: string };
+  }>('/v1/app-instances/:id/executions', async request => {
+    const body = objectBody(request.body);
+    return {
+      ok: true,
+      ...skillAppInstances.start(
+        request.params.id,
+        requiredString(body.operation, 'operation'),
+        body.values === undefined ? {} : objectBody(body.values),
+      ),
+    };
+  });
 
   server.post<{
     Params: { id: string; executionId: string };

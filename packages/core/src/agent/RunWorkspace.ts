@@ -5,6 +5,7 @@ import type { ImageInput } from '@priest-ai/core';
 import { MarifoldError } from '../errors/MarifoldError';
 import { listRunArtifacts } from './RunArtifacts';
 import { marifoldHome } from '../workspace/WorkspacePaths';
+import type { EarlierRunImage } from './EarlierImages';
 
 export const MAX_RUN_INPUT_BYTES = 16 * 1024 * 1024;
 export const MAX_RUN_INSPECTION_TEXT_BYTES = 256 * 1024;
@@ -75,6 +76,8 @@ export interface RunWorkspace {
   externalRoots: string[];
   files: StagedRunFile[];
   attachments: StagedRunAttachment[];
+  /** Images from earlier session turns, staged only when inspected. */
+  earlierImages?: EarlierRunImage[];
 }
 
 export interface CreateRunWorkspaceOptions {
@@ -275,6 +278,9 @@ export function sensitiveHostRoots(userHome: string): string[] {
     path.join(userHome, '.gnupg'),
     path.join(userHome, '.marifold'),
     path.join(userHome, 'Library', 'Keychains'),
+    // Common credential stores.
+    ...['.aws', '.azure', '.kube', '.docker', '.netrc', '.git-credentials', '.npmrc', '.pypirc'].map(name => path.join(userHome, name)),
+    ...[['gh'], ['gcloud'], ['hub']].map(parts => path.join(userHome, '.config', ...parts)),
   ];
 }
 

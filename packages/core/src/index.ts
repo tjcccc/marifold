@@ -340,6 +340,7 @@ export type {
 export { SKILL_APP_PROFILE_SCHEMA, SKILL_APP_SCHEMA } from './app/SkillAppSchema';
 export type {
   SkillAppButtonEmphasis,
+  SkillAppCatalog,
   SkillAppAttachmentInput,
   SkillAppAttachmentStateDefinition,
   SkillAppAttachmentSummary,
@@ -354,7 +355,9 @@ export type {
   SkillAppInstanceSnapshot,
   SkillAppInfo,
   SkillAppInstalledEffect,
+  SkillAppInvalidEntry,
   SkillAppHistoryTurn,
+  SkillAppLayoutAlign,
   SkillAppLayoutGap,
   SkillAppLayoutItem,
   SkillAppModelDefinition,

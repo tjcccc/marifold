@@ -23,6 +23,7 @@ import {
   deleteProfile,
   getProfile,
   listMemories,
+  restoreMemory,
   listProfiles,
   putAvatar,
   putProfileFile,
@@ -199,7 +200,7 @@ export function ConfigScreen({
       try {
         const [profileDetail, memoryEntries] = await Promise.all([
           getProfile(client, item),
-          listMemories(client, item),
+          listMemories(client, item, { all: true }),
         ]);
         if (cancelled) { return; }
         setDetail(profileDetail);
@@ -600,7 +601,9 @@ export function ConfigScreen({
               onMemoryAction={(id, mode) => {
                 if (!item) { return; }
                 setBusy(true);
-                deleteMemory(client, item, id, mode)
+                (mode === 'restore' ? restoreMemory(client, item, id) : deleteMemory(client, item, id, mode))
+                  // Reload with forgotten entries too, so the Forgotten list stays current.
+                  .then(() => listMemories(client, item, { all: true }))
                   .then(fresh => {
                     setMemories(fresh);
                     setProblem(undefined);

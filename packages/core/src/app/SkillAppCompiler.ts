@@ -490,7 +490,7 @@ function evaluateCall(
       const children = requireArray(args[0], `${name} children`, node, state, sourcePath);
       children.forEach(value => requireTagged(value, 'component', node, state, sourcePath));
       const options = args[1] === undefined ? {} : requireObject(args[1], `${name} options`, node, state, sourcePath);
-      const allowed = name === 'Row' ? ['gap', 'responsive'] : name === 'Column' ? ['gap'] : [];
+      const allowed = name === 'Row' ? ['gap', 'responsive', 'align'] : name === 'Column' ? ['gap', 'align'] : [];
       rejectUnknown(options, allowed, name, node, state, sourcePath);
       return { __kind: 'component', component: name.toLowerCase(), children, options };
     }
@@ -617,6 +617,7 @@ function normalizeComponent(
   copyString(options, 'description', item, state, sourcePath);
   copyString(options, 'gap', item, state, sourcePath);
   copyString(options, 'responsive', item, state, sourcePath);
+  copyString(options, 'align', item, state, sourcePath);
   copyString(options, 'emphasis', item, state, sourcePath);
   if (options.options !== undefined) {
     item.options = requireArray(options.options, 'Select options', state.sourceFile, state, sourcePath)
@@ -629,6 +630,10 @@ function normalizeComponent(
   }
   if (item.responsive !== undefined && item.responsive !== 'stack') {
     throw MarifoldError.appInvalid(`Invalid responsive behavior '${item.responsive}'.`, sourcePath);
+  }
+  const alignments = item.component === 'column' ? ['start', 'center', 'end'] : ['start', 'center', 'end', 'between'];
+  if (item.align !== undefined && !alignments.includes(item.align)) {
+    throw MarifoldError.appInvalid(`Invalid ${item.component} alignment '${item.align}'.`, sourcePath);
   }
   if (item.emphasis !== undefined && !['primary', 'secondary'].includes(item.emphasis)) {
     throw MarifoldError.appInvalid(`Invalid button emphasis '${item.emphasis}'.`, sourcePath);

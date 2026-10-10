@@ -8,6 +8,7 @@ import { DEFAULT_PRIORITY, entryFromRecord, manualPriority, manualReason, manual
 import { readJsonlLines, serializedJsonlLength, writeJsonlLines } from './MemoryJsonl';
 import { compareMemoryRank, compareTrimRank, dedupeEntries, entryMatchesQuery, renderPromptMemory } from './MemoryRanking';
 import { mergeEntry } from './MemoryMerge';
+import { extractPromptMemoryInputs } from './MemoryControls';
 
 export type {
   MemoryKind,
@@ -119,6 +120,20 @@ export class MemoryStore {
     };
   }
 
+  /** `/remember <text>`: a recognizable fact (name, favorite, preference,
+   * meeting) is saved with its conflict key, so it replaces the older value;
+   * anything else is kept verbatim as short-term memory. */
+  rememberStatement(profile: string, text: string, options: Pick<MemoryRememberOptions, 'sessionId'> = {}): MemoryRememberResult {
+    const inputs = extractPromptMemoryInputs(text);
+    if (inputs.length === 0) { return this.remember(profile, 'auto_short', text, options); }
+    const result = this.save(profile, inputs, options);
+    const entry = result.entries[0];
+    if (!entry) { return this.remember(profile, 'auto_short', text, options); }
+    // More than one statement ("my name is Jack and I'm on project Atlas"): keep the whole text too.
+    if (/[;!?]\s*\S|\.\s+\S|,\s*\S|\band\b|\balso\b/i.test(text.trim())) { this.remember(profile, 'auto_short', text, options); }
+    return { profile, kind: entry.kind, path: this.jsonlPath(profile, entry.kind), entry, created: result.created > 0 };
+  }
+
   save(profile: string, inputs: MemorySaveInput[], options: Pick<MemoryRememberOptions, 'sessionId' | 'taskId'> = {}): MemorySaveResult {
     this.assertSafeProfileName(profile);
     let created = 0;
@@ -225,6 +240,18 @@ export class MemoryStore {
 
   /** Supersede exactly one entry by id (a per-row Forget — no fuzzy matching,
    * unlike `forget`'s query semantics). */
+  /** Bring back a forgotten (superseded) entry. An active entry holding the
+   * same conflict key is forgotten in its place, so one value stays current. */
+  restoreById(profile: string, id: string): MemoryMutationResult {
+    const target = this.listEntries(profile).find(entry => entry.id === id);
+    if (target?.conflict_key) {
+      for (const other of this.listEntries(profile)) {
+        if (other.id !== id && other.status === 'active' && other.conflict_key === target.conflict_key) { this.forgetById(profile, other.id); }
+      }
+    }
+    return this.mutateById(profile, id, entry => ({ ...entry, status: 'active', updated_at: utcNow() }));
+  }
+
   forgetById(profile: string, id: string): MemoryMutationResult {
     return this.mutateById(profile, id, entry => ({
       ...entry,

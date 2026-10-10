@@ -503,6 +503,47 @@ describe('SkillApp', () => {
     registry.close();
   });
 
+  it('answers a trigger that replaced a cancelled, still-running one', async () => {
+    const definition = compileSkillApp(translatorSource().replace('debounce: 1_000', 'debounce: 5'), 'skillapp.ts');
+    definition.operations[0].requiredInputs = ['source'];
+    const runtime: SkillAppInstanceRuntime = {
+      getApp: () => definition,
+      runSkillAppOperation: (_app, _operation, state, signal): Promise<SkillAppResult> => new Promise((resolve, reject) => {
+        // The first run is in flight when the user types again; its abort rejects late.
+        if (state.source === 'first') { signal?.addEventListener('abort', () => setTimeout(() => reject(new Error('aborted')), 5)); return; }
+        setTimeout(() => resolve({ status: 'ok', data: { text: state.source.toUpperCase() }, meta: { engine: 'test', model: 'test', durationMs: 1 } }), 20);
+      }),
+    };
+    const registry = new SkillAppInstanceRegistry(runtime);
+    const instance = registry.create('translator');
+    const first = registry.update(instance.id, { source: 'first' });
+    await new Promise(resolve => setTimeout(resolve, 20));
+    const second = registry.update(instance.id, { source: 'second' });
+    expect((await first).status).toBe('superseded');
+    const completed = await second;
+    expect(completed).toMatchObject({ status: 'completed', instance: { state: { result: 'SECOND' } } });
+    registry.close();
+  });
+
+  it('runs the automatic triggers owed by edits a button start carried, after it ends', async () => {
+    const definition = compileSkillApp(translatorSource().replace('debounce: 1_000', 'debounce: 1'), 'skillapp.ts');
+    definition.operations[0].requiredInputs = ['source'];
+    // A second, button-only operation over the same input.
+    definition.states.push({ name: 'shouted', initial: '' });
+    definition.operations.push({ ...definition.operations[0], name: 'shout', output: 'shouted' });
+    const runtime: SkillAppInstanceRuntime = {
+      getApp: () => definition,
+      runSkillAppOperation: async (_app, operation, state): Promise<SkillAppResult> => ({
+        status: 'ok', data: { text: `${operation}:${state.source}` }, meta: { engine: 'test', model: 'test', durationMs: 1 },
+      }),
+    };
+    const registry = new SkillAppInstanceRegistry(runtime);
+    const instance = registry.create('translator');
+    registry.start(instance.id, 'shout', { source: 'hi' });
+    await vi.waitFor(() => expect(registry.get(instance.id).state).toMatchObject({ shouted: 'shout:hi', result: 'translate:hi' }));
+    registry.close();
+  });
+
   it('owns an exclusive interactive lifecycle and resumes after user input', async () => {
     const definition = compileSkillApp(
       painersRoomSource()

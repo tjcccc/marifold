@@ -1,3 +1,4 @@
+import { SESSION_APP_HEADER, sessionApp } from './SessionOwner';
 import { remoteArtifactDownload } from './RemoteArtifactDownload';
 import type { ArtifactWebRtc } from '@marifold/core';
 import { requestOrigin } from './RequestEnvironment';
@@ -155,8 +156,10 @@ export function registerWorkspaceRoutes(
         headers: {
           ...provenance,
           ...(token ? { authorization: `Bearer ${token}` } : {}),
-          ...(typeof body.sessionOwner === 'string' && /^[a-zA-Z0-9-]{20,100}$/.test(body.sessionOwner)
-            ? { 'x-marifold-session-owner': body.sessionOwner } : {}),
+          // The guest forwards only its client's app name; the owner is derived
+          // here from the bridge-authenticated device (see SessionOwner).
+          ...(typeof body.sessionOwner === 'string' && /^[a-z][a-z0-9-]{0,31}$/.test(body.sessionOwner)
+            ? { [SESSION_APP_HEADER]: body.sessionOwner } : {}),
           ...(body.body !== undefined ? { 'content-type': 'application/json' } : {}),
         },
         ...(body.body !== undefined ? { payload: JSON.stringify(body.body) } : {}),
@@ -320,8 +323,7 @@ export function registerWorkspaceRoutes(
       request.params.id,
       'api',
       { method: request.method, path: suffix, remoteRequest: requestOrigin(request) === 'remote',
-        ...(typeof request.headers['x-marifold-session-owner'] === 'string'
-          ? { sessionOwner: request.headers['x-marifold-session-owner'] } : {}),
+        ...(sessionApp(request) ? { sessionOwner: sessionApp(request) } : {}),
         ...(request.body !== undefined ? { body: request.body } : {}) },
       typeof request.headers['idempotency-key'] === 'string' ? request.headers['idempotency-key'] : undefined,
     )) as { status: number; contentType?: string; disposition?: string; body: string };

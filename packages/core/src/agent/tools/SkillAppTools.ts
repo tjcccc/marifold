@@ -19,7 +19,7 @@ const MAX_FILES = 32;
 const MAX_TOTAL_BYTES = 512 * 1024;
 
 const V1_TEMPLATE = `import {
-  App, Button, Column, Download, Markdown, State, Textarea, TextResult,
+  App, Button, Column, Download, Markdown, Row, State, Textarea, TextResult,
   defineSkillApp, registerModel, registerSkill, useSkill,
 } from '@marifold/core';
 
@@ -39,14 +39,14 @@ export default defineSkillApp({
   app: { name: 'app-name', title: 'App title', version: '1.0.0', description: 'Focused purpose.' },
   ui: App([Column([
     Textarea('Input', input),
-    Button('Run', { trigger: run, emphasis: 'primary' }),
+    Row([Button('Run', { trigger: run, emphasis: 'primary' })], { align: 'center' }),
     Markdown('Result', result),
     Download('Download result', result, { filename: 'result.md', mediaType: 'text/markdown;charset=utf-8' }),
   ])]),
 });`;
 
 const V2_TEMPLATE = `import {
-  App, Button, Column, State, Textarea, TextResult,
+  App, Button, Column, Row, State, Textarea, TextResult,
   defineSkillApp, registerProfile, useProfileSkill,
 } from '@marifold/core';
 
@@ -63,7 +63,7 @@ export default defineSkillApp({
   app: { name: 'app-name', title: 'App title', version: '1.0.0', description: 'Focused purpose.' },
   ui: App([Column([
     Textarea('Input', input),
-    Button('Run', { trigger: run, emphasis: 'primary' }),
+    Row([Button('Run', { trigger: run, emphasis: 'primary' })], { align: 'center' }),
     Textarea('Result', result, { editable: false, copyable: true }),
   ])]),
 });`;
@@ -140,7 +140,12 @@ export class SkillAppContextTool implements AgentTool {
             "registerSkill('skill-name', { result: TextResult({ trim? }) })",
             'TextResult({ trim? })',
           ],
-          layout: ['App', 'Row', 'Column', 'Spacer'],
+          layout: [
+            'App(children)',
+            "Row(children, { gap?, responsive?: 'stack', align?: 'start' | 'center' | 'end' | 'between' })",
+            "Column(children, { gap?, align?: 'start' | 'center' | 'end' })",
+            'Spacer()',
+          ],
           form: ['Textarea', 'Select'],
           resources: ['Attachments'],
           outputs: [
@@ -177,7 +182,8 @@ export class SkillAppContextTool implements AgentTool {
           constraints: [
             'skillapp.ts is statically compiled and never executed',
             'no functions, callbacks, conditions, loops, arbitrary imports, HTML, CSS, network calls, or direct filesystem writes',
-            'one interactive operation runs exclusively per App instance',
+            'one button-started operation runs at a time per App instance and the user can cancel it',
+            "center a row that holds only action buttons with Row([...], { align: 'center' }) unless the user asks otherwise",
             'interactive operations cannot use automatic triggers',
             'Markdown and Download may bind the same text output State; Download creates the file in the renderer without filesystem access',
             'each Download is one text file with a static filename; multiple components make multiple static downloads, while binary files, per-run filenames, and dynamic file collections are unsupported',
