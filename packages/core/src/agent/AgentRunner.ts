@@ -39,6 +39,7 @@ import type { EffectfulAgentTool, ToolExecutionContext, UserInputAgentTool } fro
 import type { UserInputHandler } from './UserInput';
 import type { ResponseMetrics } from '../sessions/ResponseMetrics';
 import { hasUsage, withUsageTally } from './AgentUsageTally';
+import { compactControlBlockTranscript, compactNativeToolExchange } from './AgentTranscriptCompaction';
 import { isNativeWebSearchCapabilityError } from '../runtime/NativeWebSearch';
 
 const PLAN_SCHEMA = {
@@ -185,7 +186,6 @@ const HISTORY_BUDGET_DEFAULT_CHARS = 16000;
  * result and the accumulated turn-local exchange independently so several
  * successful reads cannot overflow the next provider request. */
 const MODEL_TOOL_RESULT_MAX_CHARS = 24_000;
-const MODEL_TOOL_EXCHANGE_MAX_CHARS = 64_000;
 
 interface LoopState {
   mode: Exclude<AgentToolMode, 'auto'>;
@@ -1128,33 +1128,6 @@ export class AgentRunner {
 
   private assertNotAborted(signal?: AbortSignal): void {
     if (signal?.aborted) { throw new AbortedError(); }
-  }
-}
-
-function compactNativeToolExchange(exchange: ToolExchangeTurn[]): void {
-  let total = exchange.reduce((sum, turn) => (
-    sum + (turn.kind === 'tool_result' ? turn.content.length : (turn.text?.length ?? 0))
-  ), 0);
-  if (total <= MODEL_TOOL_EXCHANGE_MAX_CHARS) { return; }
-
-  for (let index = 0; index < exchange.length && total > MODEL_TOOL_EXCHANGE_MAX_CHARS; index += 1) {
-    const turn = exchange[index];
-    if (turn.kind !== 'tool_result' || turn.content.startsWith('[Earlier tool result compacted')) { continue; }
-    const replacement = `[Earlier tool result compacted: ${turn.name}; ${turn.content.length.toLocaleString('en-US')} characters omitted. Re-run a bounded read or search if the details are still needed.]`;
-    total -= turn.content.length - replacement.length;
-    exchange[index] = { ...turn, content: replacement };
-  }
-}
-
-function compactControlBlockTranscript(transcript: string[]): void {
-  let total = transcript.reduce((sum, turn) => sum + turn.length, 0);
-  if (total <= MODEL_TOOL_EXCHANGE_MAX_CHARS) { return; }
-  for (let index = 0; index < transcript.length - 1 && total > MODEL_TOOL_EXCHANGE_MAX_CHARS; index += 1) {
-    const turn = transcript[index];
-    if (turn.startsWith('[Earlier control-block turn compacted')) { continue; }
-    const replacement = `[Earlier control-block turn compacted; ${turn.length.toLocaleString('en-US')} characters omitted.]`;
-    total -= turn.length - replacement.length;
-    transcript[index] = replacement;
   }
 }
 
