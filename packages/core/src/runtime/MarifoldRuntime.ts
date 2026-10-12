@@ -648,10 +648,7 @@ export class MarifoldRuntime {
   createHostContextTools(profile?: string): ToolRegistry {
     const registry = new ToolRegistry();
     for (const tool of this.createDefaultToolRegistry(profile).list()) {
-      // The agent computer belongs to this host; a device run can use it, but
-      // "the user's device" for computer_put would be ambiguous there.
-      const computer = tool.definition.name.startsWith('computer_') && tool.definition.name !== 'computer_put';
-      if (tool.kind === 'interaction' || computer || ['web_search', 'read_web_page', 'delegate'].includes(tool.definition.name)) { registry.register(tool); }
+      if (tool.kind === 'interaction' || ['web_search', 'read_web_page', 'delegate'].includes(tool.definition.name)) { registry.register(tool); }
     }
     return registry;
   }

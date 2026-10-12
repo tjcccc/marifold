@@ -2,6 +2,12 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-10-13 — v0.89.1 — Agent computer fixes from review
+
+- In a workspace, Automatic now sends requests that mention the agent's computer ("use your computer…", "on your own Linux machine", "用你的电脑…") to the host, and runs executing on other devices no longer get the `computer_*` tools (they are told to delegate to the host). In v0.89.0 a guest-executed run could call `computer_get`, whose file landed on the host where the guest's run could not serve it.
+- The egress proxy container is replaced whenever it is not running the current image, so an upgrade cannot leave an older proxy in front of the computers; removing everything also removes older images. `PUT /v1/agent-computer/settings` keeps fields that are left out (an empty string clears).
+- Validation: core (593), service (102), Web (280). Live harness `run-agent-computer.cjs` with `WORKSPACE=1`: 18/18, adding the image build through a loopback proxy (apt traffic seen at the stand-in), settings merge, direct mode after clearing the proxy with the egress recreated on use, and a guest-sent "use your computer" request running on the host with its result downloaded on the guest.
+
 ## 2026-10-13 — v0.89.0 — The agent computer
 
 - Settings → **Agent computer** gives each profile its own Linux computer: a Docker container (OrbStack, Docker Desktop, Colima, or Docker; Ubuntu 24.04 with Python, Node, git and build tools) where the agent works without approval prompts as `agent` with passwordless `sudo`. The page detects Docker, takes an optional proxy (`http://127.0.0.1:7890` becomes `host.docker.internal:7890` for the containers) and base image, and creates, rebuilds, or removes each profile's computer. Service routes `/v1/agent-computer/*` are device-local, never forwarded through a workspace.

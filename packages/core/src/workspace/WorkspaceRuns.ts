@@ -13,6 +13,7 @@ import {
 } from '../agent/ToolRegistry';
 import type { MarifoldRuntime } from '../runtime/MarifoldRuntime';
 import { mentionsSkillManagement } from '../skill/BuiltInSkillManager';
+import { mentionsAgentComputer } from '../computer/ComputerTools';
 import type { RunStartInput } from '../runs/RunRegistry';
 import { SkillManagementTool } from '../agent/tools/SkillManagementTool';
 import { executionTools } from './WorkspaceExecutor';
@@ -58,9 +59,10 @@ export class WorkspaceRuns {
     const originId = origin?.senderDeviceId ?? connection.deviceId;
     const devices = this.manager.devices(connection.id);
     const skill = input.lean || /^\s*\$[\w-]+/.test(input.userTurn ?? input.objective);
-    // Skills are installed on the host, so Automatic sends management there too.
+    // Skills are installed on the host, so Automatic sends management there too;
+    // likewise work on the agent computer, which the host drives.
     const management = mentionsSkillManagement(input.userTurn ?? input.objective);
-    const hostOwned = skill || management;
+    const hostOwned = skill || management || mentionsAgentComputer(input.userTurn ?? input.objective);
     const mentioned = mention?.[2] ?? mention?.[3];
     const find = (value: string) => devices.filter(d => d.id === value || d.name.toLowerCase() === value.toLowerCase());
     // Accept a possessive ("@office's folder") when no device carries that exact name.
@@ -99,6 +101,7 @@ export class WorkspaceRuns {
     const devices = this.manager.devices(workspaceId);
     const management = mentionsSkillManagement(input.userTurn ?? input.objective);
     const guestSkillManagement = executionDeviceId !== host.hostDeviceId && management;
+    const guestComputer = executionDeviceId !== host.hostDeviceId && mentionsAgentComputer(input.userTurn ?? input.objective);
     const deviceName = (id: string) => devices.find(d => d.id === id)?.name ?? id;
     const requesting = deviceName(execution.originDeviceId);
     const contextInstructions = [
@@ -108,6 +111,9 @@ export class WorkspaceRuns {
         : []),
       ...(guestSkillManagement
         ? ['Marifold skills are installed, updated, removed, and configured on the workspace host with its manage_skill tool, which this device run does not have. Use delegate_device with host for that work instead of searching Marifold directories on this device; if the source is on this device, name this device in the objective as the source device.']
+        : []),
+      ...(guestComputer
+        ? ['The agent computer belongs to the workspace host and its computer_* tools run only there. Use delegate_device with host for work on it.']
         : []),
       ...(management && executionDeviceId === host.hostDeviceId
         ? [`Skill sources: when the user names no device, the source path is on the workspace host "${deviceName(host.hostDeviceId)}"; omit source_device. When the user names a device (an @device mention, a device name, or "my current device"), pass it as manage_skill source_device. Say which device the source was read from.`]

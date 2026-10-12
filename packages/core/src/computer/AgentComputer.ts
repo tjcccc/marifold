@@ -76,16 +76,14 @@ export class AgentComputer {
     return this.read().settings;
   }
 
+  /** A field left out keeps its value; an empty string clears it. */
   async updateSettings(next: AgentComputerSettings): Promise<AgentComputerSettings> {
-    const settings: AgentComputerSettings = {};
-    if (next.proxy?.trim()) {
-      upstreamFor(next.proxy);
-      settings.proxy = next.proxy.trim();
-    }
-    if (next.baseImage?.trim()) {
-      if (!/^[a-z0-9][a-z0-9._/:@-]{0,200}$/i.test(next.baseImage.trim())) { throw MarifoldError.configInvalid('Invalid base image name.'); }
-      settings.baseImage = next.baseImage.trim();
-    }
+    const current = this.read().settings;
+    const proxy = next.proxy === undefined ? current.proxy : next.proxy.trim() || undefined;
+    const baseImage = next.baseImage === undefined ? current.baseImage : next.baseImage.trim() || undefined;
+    if (proxy) { upstreamFor(proxy); }
+    if (baseImage && !/^[a-z0-9][a-z0-9._/:@-]{0,200}$/i.test(baseImage)) { throw MarifoldError.configInvalid('Invalid base image name.'); }
+    const settings: AgentComputerSettings = { ...(proxy ? { proxy } : {}), ...(baseImage ? { baseImage } : {}) };
     this.write({ ...this.read(), settings });
     // A running egress container picks up a new proxy only when recreated.
     if (Object.keys(this.read().computers).length > 0 && (await this.dockerEnvironment()).available) {
@@ -185,14 +183,17 @@ export class AgentComputer {
     const ids = (await this.cli().check(['ps', '-aq', '--filter', `label=${LABEL}.instance=${this.instance}`])).split('\n').filter(Boolean);
     if (ids.length > 0) { await this.cli().run(['rm', '-f', ...ids], { timeoutMs: 120_000 }); }
     await this.cli().run(['network', 'rm', this.networkName]);
-    await this.cli().run(['image', 'rm', this.imageTag]);
+    const images = (await this.cli().check(['images', '-q', '--filter', `reference=marifold-agent-computer-${this.instance}:*`])).split('\n').filter(Boolean);
+    if (images.length > 0) { await this.cli().run(['image', 'rm', '-f', ...new Set(images)], { timeoutMs: 120_000 }); }
   }
 
   /** Make sure a profile's computer and its egress are running before use. */
   async ready(profile: string): Promise<string> {
     if (!this.has(profile)) { throw new Error(`The ${profile} profile has no agent computer. Create it in Settings → Agent computer.`); }
     const name = this.containerName(profile);
-    await this.cli().run(['start', this.egressName], { timeoutMs: 60_000 });
+    // After an upgrade the current image may not exist yet (built once, then fast).
+    await this.ensureImage(false);
+    await this.ensureEgress();
     const started = await this.cli().run(['start', name], { timeoutMs: 60_000 });
     if (started.code !== 0) { throw new Error(`The ${profile} computer is unavailable: ${started.stderr.trim() || 'not found'}. Recreate it in Settings → Agent computer.`); }
     return name;
@@ -223,11 +224,15 @@ export class AgentComputer {
   }
 
   private async ensureEgress(): Promise<void> {
-    const inspect = await this.cli().run(['inspect', '--format', '{{.State.Running}}', this.egressName]);
-    if (inspect.code === 0) {
-      if (inspect.stdout.toString().trim() !== 'true') { await this.cli().check(['start', this.egressName]); }
+    // The egress proxy is the security boundary: after an upgrade, replace it
+    // rather than keep running an older proxy.
+    const inspect = await this.cli().run(['inspect', '--format', '{{.Config.Image}} {{.State.Running}}', this.egressName]);
+    const [image, running] = inspect.stdout.toString().trim().split(' ');
+    if (inspect.code === 0 && image === this.imageTag) {
+      if (running !== 'true') { await this.cli().check(['start', this.egressName]); }
       return;
     }
+    if (inspect.code === 0) { await this.cli().run(['rm', '-f', this.egressName]); }
     const proxy = this.settings().proxy;
     await this.cli().check([
       'run', '-d', '--name', this.egressName, '--restart', 'unless-stopped', '--user', 'nobody',

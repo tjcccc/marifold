@@ -94,6 +94,9 @@ This is a design requirement, **not an available option yet**. Current workspace
 
 ## Execution and paths
 
+Requests about the agent's own computer ("use your computer…") run on the host, which drives it; see `docs/agent-computer.md`.
+
+
 The host owns each model call and conversation. Every ordinary agent run records three independent identities:
 
 ```json

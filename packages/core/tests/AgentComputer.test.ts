@@ -4,7 +4,7 @@ import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { RunWorkspace } from '../src/agent/RunWorkspace';
 import { AgentComputer, upstreamFor } from '../src/computer/AgentComputer';
-import { agentComputerTools, ComputerPutTool } from '../src/computer/ComputerTools';
+import { agentComputerTools, ComputerPutTool, mentionsAgentComputer } from '../src/computer/ComputerTools';
 
 const dirs: string[] = [];
 afterEach(() => { for (const dir of dirs.splice(0)) { fs.rmSync(dir, { recursive: true, force: true }); } });
@@ -32,6 +32,15 @@ describe('agent computer', () => {
     expect(agentComputerTools(computer, 'writer').map(tool => tool.definition.name)).toEqual(['computer_exec', 'computer_write_file', 'computer_put', 'computer_get']);
     expect(agentComputerTools(computer, 'painter')).toEqual([]);
     expect(() => computer.containerName('Bad Name')).toThrow();
+  });
+
+  it('recognizes requests about the agent computer, not the user\'s', () => {
+    for (const text of ['install ffmpeg on your computer', 'use your own linux machine to build it', 'run it on the agent computer', 'in your sandbox', '用你的电脑跑一下', '在你自己的虚拟机里安装']) {
+      expect(mentionsAgentComputer(text), text).toBe(true);
+    }
+    for (const text of ['restart tailscale on my computer', 'computer science homework', 'check the office computer', '我的电脑']) {
+      expect(mentionsAgentComputer(text), text).toBe(false);
+    }
   });
 
   it('never sends credentials or Marifold state, even with approval', () => {

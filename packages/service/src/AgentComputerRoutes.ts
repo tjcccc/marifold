@@ -23,7 +23,9 @@ export function registerAgentComputerRoutes(server: FastifyInstance, runtime: Ma
       if (value !== undefined && value !== null && typeof value !== 'string') { throw MarifoldError.configInvalid(`${key} must be a string.`); }
       return typeof value === 'string' ? value : undefined;
     };
-    return { ok: true, settings: await computer.updateSettings({ proxy: text('proxy'), baseImage: text('baseImage') }) };
+    const proxy = text('proxy');
+    const baseImage = text('baseImage');
+    return { ok: true, settings: await computer.updateSettings({ ...(proxy !== undefined ? { proxy } : {}), ...(baseImage !== undefined ? { baseImage } : {}) }) };
   });
 
   // Creating builds an image on first use, which takes minutes: start it and

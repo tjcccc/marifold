@@ -1,7 +1,7 @@
 {
   "version": 1,
   "projnaviVersion": "0.5.0",
-  "generatedAt": "2026-10-12T18:15:57.208Z",
+  "generatedAt": "2026-10-12T18:24:35.482Z",
   "root": ".",
   "files": {
     ".claude/skills/projnavi/SKILL.md": {
@@ -30,7 +30,7 @@
       "category": "docs"
     },
     "apps/bridge/package.json": {
-      "hash": "397800dd7cf026d3de64f3cb625034beb1d9ea77fddf6ae4cfc143392457a897",
+      "hash": "68c86376257f45daf0a6accfb3b356925cf30f057bf750d4e066aba5a0355c34",
       "size": 537,
       "category": "config"
     },
@@ -80,7 +80,7 @@
       "category": "source"
     },
     "apps/web/package.json": {
-      "hash": "ce409aec30d855ffa4240db84fe4bed277196c14dbeb2c7604d6768fe726508d",
+      "hash": "0321e2ba42cfa0897f7137814282b8e654f2940e3ebfbc5b58d35781f0d54b7b",
       "size": 998,
       "category": "config"
     },
@@ -720,13 +720,13 @@
       "category": "docs"
     },
     "DEVLOG.md": {
-      "hash": "42b139a4b9c8994d9b15e5d24c59406804c0ab8886c7e610bc155e5e8d3db709",
-      "size": 222084,
+      "hash": "b9c92a5dbba1729692d7a6f4c01e0276aed363d5c17b5e1a1ac089645ede8402",
+      "size": 225736,
       "category": "docs"
     },
     "docs/agent-computer.md": {
-      "hash": "4a52fc2b7131a11ca5f6fb633a2435127e9e4853812e7ef48710912233ccd43b",
-      "size": 4963,
+      "hash": "0dc266389bfaabe93a9aaa976ae2be702dee48b04e94af0c8a1d0489ce3fee9e",
+      "size": 5240,
       "category": "docs"
     },
     "docs/app.md": {
@@ -755,8 +755,8 @@
       "category": "docs"
     },
     "docs/service-api.md": {
-      "hash": "3609de9f56525ff720986a93cd612994bed26cd81e3a644cc33d97d1a17eb64b",
-      "size": 54875,
+      "hash": "39ec3e185fee99415e846384492b0a0343817b35ecf8763714bf173736d0e551",
+      "size": 54913,
       "category": "docs"
     },
     "docs/smoke.md": {
@@ -785,8 +785,8 @@
       "category": "docs"
     },
     "docs/workspaces.md": {
-      "hash": "635316e7a97542d4c3f7c397beccc519d0a25e9582765517af5b275467916983",
-      "size": 27584,
+      "hash": "3d39f08b45cd0e4198e4c1e0fe64221344fbbe192915ab49d6387a43ebad2feb",
+      "size": 27715,
       "category": "docs"
     },
     "examples/apps/painers-room/skillapp.ts": {
@@ -825,12 +825,12 @@
       "category": "docs"
     },
     "package.json": {
-      "hash": "3c06f2659451943aeee3fd31a2608cc6517d55ccc91993db2139b75ae17a7d5f",
+      "hash": "65b406a5ec7bd5a14d9151090a1db1f6e1762c67f283e71b4f018831257a3d07",
       "size": 1272,
       "category": "config"
     },
     "packages/cli/package.json": {
-      "hash": "7fa59f4b920870ea21b412535abe262c1d723fda309366cef1ebadb61de12c25",
+      "hash": "846982c0be802ad46e982118facafec93993806b2a8ded3ce742933f0ca797e0",
       "size": 948,
       "category": "config"
     },
@@ -945,7 +945,7 @@
       "category": "source"
     },
     "packages/cli/src/index.ts": {
-      "hash": "0d5650e2f39c7f7b04423fca13be9488a0583e01de026d4727f29ae9177cf881",
+      "hash": "9f4e2f46a94f0a9609275866a0c4e71bc37069799a70cf9ea86cf21ab5b7a0d0",
       "size": 5116,
       "category": "source"
     },
@@ -1075,7 +1075,7 @@
       "category": "config"
     },
     "packages/client/package.json": {
-      "hash": "2ec93b1d606e928364e50884898ba1e032e88ee1e02279a42208d51dd3fd5440",
+      "hash": "875362007ae461c265aa38549e6096309f5415f716a39b45669eb74ee4a2be6c",
       "size": 451,
       "category": "config"
     },
@@ -1135,7 +1135,7 @@
       "category": "config"
     },
     "packages/core/package.json": {
-      "hash": "1b710bc2c77dc418ca4c15d2b8d882bc5e039792297dff8020de43552e0ccca5",
+      "hash": "6ee3e304622e95093d06f36c89a0f43a49e4e2d0232fcd6c8f472171b5f3f658",
       "size": 1020,
       "category": "config"
     },
@@ -1375,8 +1375,8 @@
       "category": "source"
     },
     "packages/core/src/computer/AgentComputer.ts": {
-      "hash": "10d4121f57fcca5fb01e49987830b07c7f1b0a6c3b0fce6b19d07c4baae168b9",
-      "size": 14270,
+      "hash": "4802315a7fc338fdb4314c42879394ce832b08a6f2dc2cc4ffe24765cf3e70da",
+      "size": 15090,
       "category": "source"
     },
     "packages/core/src/computer/AgentComputerFiles.ts": {
@@ -1390,8 +1390,8 @@
       "category": "source"
     },
     "packages/core/src/computer/ComputerTools.ts": {
-      "hash": "65033c4ad58fd5d6095627e52ce8b1726b091eaaa633a078efe2e1d7c368e13b",
-      "size": 10139,
+      "hash": "6f625fde0526c4c8ba57666345712ad8888079880a89b985de4b6c40eed57d65",
+      "size": 10651,
       "category": "source"
     },
     "packages/core/src/computer/DockerCli.ts": {
@@ -1580,8 +1580,8 @@
       "category": "source"
     },
     "packages/core/src/runtime/MarifoldRuntime.ts": {
-      "hash": "40ab0c27a838b80612155a387f0981733fd6cf8d878cc0f9936a5693c8e59896",
-      "size": 47486,
+      "hash": "b79df8978e2e42ffc18f46cfd8c3d289cd8b7a25ed2a5083990f8863372601fb",
+      "size": 47211,
       "category": "source"
     },
     "packages/core/src/runtime/MarifoldTypes.ts": {
@@ -1855,8 +1855,8 @@
       "category": "source"
     },
     "packages/core/src/workspace/WorkspaceRuns.ts": {
-      "hash": "b70c7a1e4546a41e045ba2b5492d24d19173e9bf9447c67f6e6ba950bfeb08d8",
-      "size": 14723,
+      "hash": "7860b1b10413b49e31175f8c153cf253b8a21dd8d4c367e9693781d733d5ceab",
+      "size": 15233,
       "category": "source"
     },
     "packages/core/src/workspace/WorkspaceStore.ts": {
@@ -1870,8 +1870,8 @@
       "category": "source"
     },
     "packages/core/tests/AgentComputer.test.ts": {
-      "hash": "4192584f60b6ed3f2a37c211c8c7bad3aae8c77cf8142971b0e0e34a2bcee65d",
-      "size": 2943,
+      "hash": "74310d8b7ef5e476ba1d86184f28dddb99c7374c1321ace66b20e72906863044",
+      "size": 3541,
       "category": "test"
     },
     "packages/core/tests/AgentHistory.test.ts": {
@@ -2185,7 +2185,7 @@
       "category": "config"
     },
     "packages/service/package.json": {
-      "hash": "883f6154e71105b6cc9aa2479b36d17dc31d0541b6139b30f0653c85b46c307f",
+      "hash": "775e517738ca39f918f76861918137f219b7240916fe44b994d4c8c95c1e62be",
       "size": 731,
       "category": "config"
     },
@@ -2195,8 +2195,8 @@
       "category": "source"
     },
     "packages/service/src/AgentComputerRoutes.ts": {
-      "hash": "e96b3357a6ed43c817d4ba6c19158ed28278298833f67bf28f6a5e66f26626c5",
-      "size": 2383,
+      "hash": "4ae634bfdf5616a3d866d3b996a9cb4347714f065efdddf42c55371247e412bd",
+      "size": 2499,
       "category": "source"
     },
     "packages/service/src/ArtifactTickets.ts": {
@@ -2355,7 +2355,7 @@
       "category": "config"
     },
     "packages/tui/package.json": {
-      "hash": "aceb8b92a623a02cea7ac88375377004b1834c116256bd6948879741b11db9e8",
+      "hash": "b9118ea2708799df1ec60432bcb85f7b13b92f77aa642bb62df96d6c286c50b7",
       "size": 878,
       "category": "config"
     },
@@ -2650,7 +2650,7 @@
       "category": "config"
     },
     "packages/workspace-protocol/package.json": {
-      "hash": "48859bc03ee71401a8bbfbd2109263c62b85ebcc091c0fb530a0d55190de5bee",
+      "hash": "3b4c1e3103e55cbcc3df1127040b149833acc1b938beddcd088cbb268358c689",
       "size": 515,
       "category": "config"
     },
@@ -2998,8 +2998,8 @@
       ]
     },
     "docs/workspaces.md": {
-      "hash": "635316e7a97542d4c3f7c397beccc519d0a25e9582765517af5b275467916983",
-      "size": 27584,
+      "hash": "3d39f08b45cd0e4198e4c1e0fe64221344fbbe192915ab49d6387a43ebad2feb",
+      "size": 27715,
       "category": "docs",
       "claimIds": [
         "claim-workspaces-001"
@@ -3022,7 +3022,7 @@
       ]
     },
     "packages/cli/src/index.ts": {
-      "hash": "0d5650e2f39c7f7b04423fca13be9488a0583e01de026d4727f29ae9177cf881",
+      "hash": "9f4e2f46a94f0a9609275866a0c4e71bc37069799a70cf9ea86cf21ab5b7a0d0",
       "size": 5116,
       "category": "source",
       "claimIds": [
@@ -3351,8 +3351,8 @@
       ]
     },
     "packages/core/src/runtime/MarifoldRuntime.ts": {
-      "hash": "40ab0c27a838b80612155a387f0981733fd6cf8d878cc0f9936a5693c8e59896",
-      "size": 47486,
+      "hash": "b79df8978e2e42ffc18f46cfd8c3d289cd8b7a25ed2a5083990f8863372601fb",
+      "size": 47211,
       "category": "source",
       "claimIds": [
         "claim-add-agent-tool-001",
@@ -3482,8 +3482,8 @@
       ]
     },
     "packages/core/src/workspace/WorkspaceRuns.ts": {
-      "hash": "b70c7a1e4546a41e045ba2b5492d24d19173e9bf9447c67f6e6ba950bfeb08d8",
-      "size": 14723,
+      "hash": "7860b1b10413b49e31175f8c153cf253b8a21dd8d4c367e9693781d733d5ceab",
+      "size": 15233,
       "category": "source",
       "claimIds": [
         "claim-workspaces-001"

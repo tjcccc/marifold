@@ -22,7 +22,9 @@ A profile with a computer gets four tools; profiles without one do not see them.
 - `computer_put`: copy a file or folder from the user's device into the computer (default `/home/agent/inbox/`). Reading the source follows the device's ordinary read approvals and run-scoped grants. Credential stores (`~/.ssh`, `~/.aws`, `~/.config/gh`, …), Marifold state, and any folder containing them are refused, even with approval. Limits: 512 MB and 20,000 files.
 - `computer_get`: bring one file back as a downloadable run result (archive folders first).
 
-Nothing inside the computer asks for approval. Everything that touches the user's devices still does. Runs that execute on another workspace device can use the host's computer too, except `computer_put` (whose "user's device" would be ambiguous there).
+Nothing inside the computer asks for approval. Everything that touches the user's devices still does.
+
+The computer belongs to the device that hosts the profiles. In a workspace, a request that mentions the agent's computer ("use your computer…", "on your own Linux machine", "用你的电脑…") runs on the host under Automatic, even when sent from another device, and its results download on that device as usual. Runs that execute on another device do not get the `computer_*` tools; they are told to delegate to the host.
 
 ## Isolation
 

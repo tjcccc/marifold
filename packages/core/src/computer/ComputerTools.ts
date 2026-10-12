@@ -170,6 +170,13 @@ export class ComputerGetTool implements AgentTool {
   }
 }
 
+/** "Your computer", "the agent computer", "你的电脑": the agent's own computer,
+ * not the user's device ("my computer"). Such requests run on the host. */
+export function mentionsAgentComputer(text: string): boolean {
+  return /\b(?:your|its|own|agent['’]?s?)\s+(?:own\s+)?(?:linux\s+)?(?:computer|machine|vm|sandbox)\b|\bcomputer_(?:exec|put|get|write_file)\b/i.test(text)
+    || /(?:你的|你自己的|自己的|智能体的?|代理的?)\s*(?:电脑|计算机|机器|虚拟机|沙盒)/.test(text);
+}
+
 /** The tools for a profile's computer, or none when it has no computer. */
 export function agentComputerTools(computer: AgentComputer, profile: string): AgentTool[] {
   if (!computer.has(profile)) { return []; }
