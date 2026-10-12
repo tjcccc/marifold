@@ -11,6 +11,7 @@ import {
 } from '@marifold/workspace-protocol';
 import type {
   Invitation,
+  MemberAccess,
   SignedMembership,
   WorkspaceSummary,
   WorkspaceRequest,
@@ -58,7 +59,7 @@ export class WorkspaceManager {
   list(): WorkspaceSummary[] {
     return this.store
       .list()
-      .map(({ id, name, role, bridgeUrl, deviceId, hostDeviceId, executor }) => ({
+      .map(({ id, name, role, bridgeUrl, deviceId, hostDeviceId, executor, certificate }) => ({
         id,
         name,
         role,
@@ -66,6 +67,7 @@ export class WorkspaceManager {
         deviceId,
         hostDeviceId,
         executor,
+        ...(certificate.membership.access ? { access: certificate.membership.access } : {}),
         online: role === 'host' ? Boolean(this.peers.get(id)?.online) : this.hostStatus.get(id) === true,
         ...(this.versionErrors.has(id) ? { versionError: this.versionErrors.get(id) } : {}),
       }));
@@ -161,7 +163,8 @@ export class WorkspaceManager {
         identity,
         host: invitation.host,
         certificate,
-        executor,
+        // An executor-only device exists to execute; its pairing turns the executor on.
+        executor: executor || certificate.membership.access === 'executor',
       };
       if (existing) { this.onMembershipRemoved?.(c.id); }
       this.store.save(c);
@@ -193,6 +196,7 @@ export class WorkspaceManager {
           architecture: host ? os.arch() : (p?.architecture ?? ''),
           executor: host || p?.executor === true,
           online: host || Boolean(p && Date.now() - p.seen < 35000),
+          ...(m.access ? { access: m.access } : {}),
         };
       });
   }
@@ -359,6 +363,9 @@ export class WorkspaceManager {
       this.hostStatus.set(c.id, false);
     }
   }
+  private memberAccess(workspaceId: string, deviceId: string): MemberAccess | undefined {
+    return this.store.devices(workspaceId).find(d => d.certificate.membership.deviceId === deviceId)?.certificate.membership.access;
+  }
   private async dispatch(
     c: WorkspaceConnection,
     request: WorkspaceRequest,
@@ -400,6 +407,11 @@ export class WorkspaceManager {
       });
       return { name: this.store.get(c.id).name, hostDeviceId: c.hostDeviceId, version: MARIFOLD_VERSION };
     }
+    // Deny by default: an executor-only member may report status and leave, nothing
+    // else. Its access comes from the host's own device record, not the bridge.
+    if (this.memberAccess(c.id, sender.id) === 'executor' && request.operation !== 'leave') {
+      throw new Error('This device is paired as an executor only; it cannot use the workspace.');
+    }
     if (sender.certificate && ['run.events', 'artifact.read'].includes(request.operation)) {
       return this.remoteHandler!(request.operation, request.input, context);
     }
@@ -426,7 +438,10 @@ export class WorkspaceManager {
           };
         }
         if (!sender.certificate) { throw new Error('Workspace membership required.'); }
-        if (request.operation === 'invite') { return { invitation: this.store.invite(c.id) }; }
+        if (request.operation === 'invite') {
+          if (input.access !== undefined && input.access !== 'executor') { throw new Error('Invalid invitation access.'); }
+          return { invitation: this.store.invite(c.id, input.access as MemberAccess | undefined) };
+        }
         if (request.operation === 'rename') {
           this.store.rename(c.id, String(input.name));
           return { name: this.store.get(c.id).name };

@@ -15,6 +15,7 @@ import {
 } from '@marifold/workspace-protocol';
 import type {
   Invitation,
+  MemberAccess,
   PrivateIdentity,
   PublicIdentity,
   SignedMembership,
@@ -79,6 +80,10 @@ export class WorkspaceStore {
       CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS requests (workspace TEXT NOT NULL, sender TEXT NOT NULL, id TEXT NOT NULL, hash TEXT NOT NULL, state TEXT NOT NULL, result TEXT, created INTEGER NOT NULL, PRIMARY KEY(workspace,sender,id));
     `);
+      const invitationColumns = this.db.prepare('PRAGMA table_info(invitations)').all() as Array<{ name: string }>;
+      if (!invitationColumns.some(column => column.name === 'access')) {
+        this.db.exec('ALTER TABLE invitations ADD COLUMN access TEXT');
+      }
     } catch (error) {
       this.releaseLock();
       throw error;
@@ -263,16 +268,17 @@ export class WorkspaceStore {
     this.addDevice(certificate);
     return connection;
   }
-  invite(id: string): string {
+  invite(id: string, access?: MemberAccess): string {
     const c = this.get(id);
     if (c.role !== 'host') { throw new Error('Invitations must be issued by the host.'); }
+    if (access !== undefined && access !== 'executor') { throw new Error('Invalid invitation access.'); }
     const secret = randomBytes(32).toString('base64url');
     const expiresAt = Date.now() + INVITATION_TTL_MS;
     this.db
       .prepare(
-        'INSERT INTO invitations VALUES (?,?,?) ON CONFLICT(workspace) DO UPDATE SET verifier=excluded.verifier,expires=excluded.expires',
+        'INSERT INTO invitations (workspace,verifier,expires,access) VALUES (?,?,?,?) ON CONFLICT(workspace) DO UPDATE SET verifier=excluded.verifier,expires=excluded.expires,access=excluded.access',
       )
-      .run(c.id, digest(secret), expiresAt);
+      .run(c.id, digest(secret), expiresAt, access ?? null);
     const invitation: Invitation = {
       version: 1,
       appVersion: MARIFOLD_VERSION,
@@ -281,6 +287,7 @@ export class WorkspaceStore {
       host: c.host,
       secret,
       expiresAt,
+      ...(access ? { access } : {}),
     };
     return Buffer.from(JSON.stringify(invitation)).toString('base64url');
   }
@@ -302,8 +309,8 @@ export class WorkspaceStore {
     const c = this.get(id);
     if (c.role !== 'host') { throw new Error('Only a host may enroll a device.'); }
     return this.db.transaction(() => {
-      const invitation = this.db.prepare('SELECT verifier,expires FROM invitations WHERE workspace=?').get(c.id) as
-        | { verifier: string; expires: number }
+      const invitation = this.db.prepare('SELECT verifier,expires,access FROM invitations WHERE workspace=?').get(c.id) as
+        | { verifier: string; expires: number; access: string | null }
         | undefined;
       if (
         !invitation ||
@@ -320,6 +327,8 @@ export class WorkspaceStore {
         identity,
         host: c.host,
         issuedAt: Date.now(),
+        // Access comes only from the host's own invitation record, never the join request.
+        ...(invitation.access === 'executor' ? { access: 'executor' as const } : {}),
       });
       this.addDevice(certificate);
       this.db.prepare('DELETE FROM invitations WHERE workspace=?').run(c.id);

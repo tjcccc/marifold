@@ -271,7 +271,7 @@ export function WorkspacePopover(props: Props) {
                           <div role="listitem" key={d.id} className={`${styles.deviceRow} ${d.host ? styles.hostRow : ''}`}>
                             <span className={`${styles.hint} ${d.online ? styles.deviceOnline : ''}`}>
                               {d.host ? <strong className={styles.hostName}>{d.name}</strong> : d.name}{' '}
-                              {d.host ? '(host)' : d.id === workspace.deviceId ? '(this device)' : ''} · {d.online ? 'online' : 'offline'}
+                              {d.host ? '(host)' : d.id === workspace.deviceId ? '(this device)' : ''}{d.access === 'executor' ? ' · executor only' : ''} · {d.online ? 'online' : 'offline'}
                             </span>
                             {!d.host && (
                               <button

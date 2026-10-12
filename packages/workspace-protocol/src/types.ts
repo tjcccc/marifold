@@ -12,8 +12,12 @@ export interface PrivateIdentity extends PublicIdentity {
   signingPrivateKey: string;
   encryptionPrivateKey: JsonWebKey;
 }
+/** A member's bridge access. Absent means a full member; `executor` devices
+ * only answer the host's execution requests (the agent's own computer). */
+export type MemberAccess = 'executor';
 export interface Membership {
   version: 1;
+  access?: MemberAccess;
   workspaceId: string;
   deviceId: string;
   name: string;
@@ -33,6 +37,8 @@ export interface Invitation {
   host: PublicIdentity;
   secret: string;
   expiresAt: number;
+  /** Informational for the joining device; the host enforces its own record. */
+  access?: MemberAccess;
 }
 export interface WorkspaceDevice {
   id: string;
@@ -43,9 +49,11 @@ export interface WorkspaceDevice {
   architecture: string;
   executor: boolean;
   online: boolean;
+  access?: MemberAccess;
 }
 export interface WorkspaceSummary {
   executor?: boolean;
+  access?: MemberAccess;
   id: string;
   name: string;
   role: 'host' | 'guest';

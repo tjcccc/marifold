@@ -123,7 +123,7 @@ Task state is stored as JSON files under `paths.tasks_dir`, defaulting to `~/.ma
 - **Task**: ephemeral working state of a run (`TaskStore`), never promoted into memory.
 - **Skill**: a `marifold.skill.v0` prompt template invoked as `$name`.
 - **SkillApp**: a statically compiled `skillapp.ts` template that binds form state to Skills.
-- **Workspace**: a device-hosted space shared by the owner's devices. **Host**: the device that owns its data and credentials. **Guest**: a joined device. **Bridge**: the relay between them. **Executor**: a guest's opt-in tool execution for host runs.
+- **Workspace**: a device-hosted space shared by the owner's devices. **Host**: the device that owns its data and credentials. **Guest**: a joined device. **Bridge**: the relay between them. **Executor**: a guest's opt-in tool execution for host runs. **Executor-only member**: a guest paired with `access: "executor"` in its host-signed membership; it answers execution requests and may only report status or leave.
 - **Lease**: an app's reservation of an open session (owner = device + app: every browser/tab on a service's Web UI shares it, its terminals share theirs, and a workspace device going through the bridge is its own device); **takeover** moves it to another app or device.
 - **Attachment**: a user-supplied file staged read-only for a run. **Artifact**: a file a run produced in its output directory.
 - **Trusted folder**: a folder where a profile's writes are approved without asking (never home, root, or sensitive account data).
@@ -136,6 +136,7 @@ Task state is stored as JSON files under `paths.tasks_dir`, defaulting to `~/.ma
 - 2026-08: the service stays single-owner: no multi-tenant accounts, credential pooling, or public-internet exposure (`AGENTS.md`).
 - 2026-09: workspaces are device-hosted with a relay bridge; a cloud-hosted workspace was rejected as too large.
 - 2026-10-08: a running task holds its session lease until it ends, so a client that leaves cannot lose the finished turn; 2026-10-09: the owner can take a session over from another client; 2026-10-10: lease owners are derived by the service as device + app (a reload or another tab of the same app is not "in use", matching Claude Code's terminals), and a cross-process run claim keeps two runs out of one session.
+- 2026-10-13: workspace members are full by default; an executor-only invitation pairs a device that can only execute (meant for the agent's own computer, whose key any sudo-capable process could read). The host enforces it from its own device record on every bridge operation, deny by default; the membership format stays version 1 with an optional `access` field.
 - 2026-10-09: Biome enforces mechanical rules because typescript-eslint cannot use the TypeScript 7 native compiler; route bodies moved out of `MarifoldService` into route modules.
 
 ## Future areas

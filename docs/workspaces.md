@@ -49,6 +49,7 @@ CLI management:
 marifold workspace list
 marifold workspace rename --id <workspace_id> "Home studio"
 marifold workspace invite <name_or_id>
+marifold workspace invite <name_or_id> --executor-only
 marifold workspace devices <name_or_id>
 marifold workspace executor <name_or_id> on
 marifold workspace executor <name_or_id> off
@@ -132,7 +133,9 @@ State lives below `<config directory>/workspaces/<config filename hash>/`:
 - `runs/`: isolated guest execution directories and output files.
 - `service.lock`: prevents two live services from coordinating the same config. A dead process's lock is recovered; a live process's lock is not replaced.
 
-An invitation embeds the bridge URL and pinned host public identity plus a random 32-byte secret. Only its verifier is stored by the host. It expires in 15 minutes and is consumed by successful pairing. Creating another invitation invalidates unused prior invitations, without changing already-paired device keys. Each paired device receives its own host-signed membership. Use `revoke` to invalidate that device separately. Recover lost device keys by revoking and re-pairing; there is no shared permanent guest token. A revoked device retains its saved workspace; use **Rejoin workspace** with a fresh host invitation to replace the unavailable pairing without disconnecting it first. Revoking the current device in the Web UI opens the invitation form automatically. Invalid invitations leave the saved pairing intact; an active pairing or a locally hosted workspace cannot be replaced by joining. All paired devices belong to the same owner and can manage the shared workspace. Permission roles are deferred.
+An invitation embeds the bridge URL and pinned host public identity plus a random 32-byte secret. Only its verifier is stored by the host. It expires in 15 minutes and is consumed by successful pairing. Creating another invitation invalidates unused prior invitations, without changing already-paired device keys. Each paired device receives its own host-signed membership. Use `revoke` to invalidate that device separately. Recover lost device keys by revoking and re-pairing; there is no shared permanent guest token. A revoked device retains its saved workspace; use **Rejoin workspace** with a fresh host invitation to replace the unavailable pairing without disconnecting it first. Revoking the current device in the Web UI opens the invitation form automatically. Invalid invitations leave the saved pairing intact; an active pairing or a locally hosted workspace cannot be replaced by joining. All paired devices belong to the same owner and can manage the shared workspace, except executor-only devices.
+
+An executor-only invitation (`invite --executor-only`, or `{"access":"executor"}` on the `invite` operation) pairs a device that only runs work the host sends it, for the agent's own computer, where any sudo-capable process could read the device key. The access is stored in the host-signed membership and taken from the host's invitation record, never from the joining device. The host refuses every bridge operation from that device except status and leaving: it cannot read sessions, runs or files, start runs, invite, rename, revoke, or list devices, even with its own key. Its executor is on from pairing. The device list labels it "executor only". A host run executing on it still has the host's tools, including `delegate_device`. Other permission roles are deferred.
 
 Do not copy live workspace state between Macs: it would duplicate device identity and undermine delivery coordination. Back up the host's data and credential files securely for disaster recovery; pair additional devices instead of cloning them.
 

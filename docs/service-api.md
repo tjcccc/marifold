@@ -459,7 +459,7 @@ Workspace management is local to the service receiving the request. The service'
 | PUT | `/v1/workspaces/default` | `{id}`; `local` or saved workspace ID/name |
 | PUT | `/v1/workspaces/:id/executor` | `{enabled}`; local guest opt-in/out |
 | DELETE | `/v1/workspaces/:id` | Stop sharing/disconnect; preserve local application data |
-| POST | `/v1/workspaces/:id/manage/:operation` | `rename` (`{name}`), `invite`, `devices`, `revoke` (`{deviceId}`) |
+| POST | `/v1/workspaces/:id/manage/:operation` | `rename` (`{name}`), `invite` (`{access?: "executor"}` for an executor-only device), `devices`, `revoke` (`{deviceId}`) |
 | * | `/v1/workspaces/:id/api/v1/...` | Allowlisted host application operations |
 | GET | `/v1/changes` | Process generation + change revision for refreshing shared views |
 

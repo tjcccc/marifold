@@ -2,6 +2,12 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-10-13 — v0.88.0 — Executor-only workspace devices
+
+- `marifold workspace invite <ws> --executor-only` (or `{"access":"executor"}` on the `invite` operation) pairs a device that only runs work the host sends it, meant for the agent's own computer, where any sudo-capable process could read the device key. The access is an optional field in the host-signed membership (still version 1, so deployed bridges accept it), taken from the host's own invitation record, never the join request. The host refuses every bridge operation from that device except status and leaving, deny by default: no sessions, runs, files, starting runs, invites, renames, revokes, or device lists, even with its own key. Its executor is on from pairing; device lists show "executor only". Existing pairings stay full members.
+- Isolation spike for the agent's computer (plan step 4): an OrbStack machine with `--isolated --isolate-network` still reaches the Mac's LAN address and other machines; a Docker container on an internal network behind a filtering egress proxy does not. The agent computer will be built on containers.
+- Validation: lint, typecheck, core (585), service (102), CLI (36), Web (280), bridge and protocol tests. Live OrbStack harness `run-executor-access.cjs`: 7/7 (the guest's own service is refused on sessions, runs, starting a run, devices, invite and rename; the host's state is unchanged; a host run on the guest completes and its artifact downloads; the guest can still leave); `run-run-grants.cjs` 5/5 for full guests. All devices need 0.88.0.
+
 ## 2026-10-13 — v0.87.0 — Folder approvals for one run, unanswered approvals stop the run
 
 - Approvals gain a `run` answer ("Allow folder for this run" in the Web sheet, `r` in the TUI): read and write tools propose the file's parent folder inside home (never home itself, sensitive or denied roots, or a folder containing them; the run's own folder for paths inside it), and later calls in that folder skip the prompt until the run ends. Grants live in memory on the run that answered, a write grant covers reads, and a delegated child run has its own grants, so a grant never covers another device. Guest executor calls carry the folder too. Shell, sudo, and full access still ask per command.

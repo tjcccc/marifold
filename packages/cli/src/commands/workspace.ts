@@ -185,15 +185,23 @@ export function registerWorkspaceCommand(program: Command, printer: ConsolePrint
       show(await api.request('PUT', '/v1/workspaces/default', { id }));
     }),
   );
-  for (const operation of ['invite', 'devices']) {
-    group.command(`${operation} <nameOrId>`).action(
-      action(async (name: string) => {
+  group
+    .command('invite <nameOrId>')
+    .option('--executor-only', 'The new device only runs work the host sends it (for the agent’s own computer).')
+    .action(
+      action(async (name: string, options: { executorOnly?: boolean }) => {
         const api = client();
         const w = await resolve(api, name);
-        show(await api.request('POST', `/v1/workspaces/${w.id}/manage/${operation}`, {}));
+        show(await api.request('POST', `/v1/workspaces/${w.id}/manage/invite`, options.executorOnly ? { access: 'executor' } : {}));
       }),
     );
-  }
+  group.command('devices <nameOrId>').action(
+    action(async (name: string) => {
+      const api = client();
+      const w = await resolve(api, name);
+      show(await api.request('POST', `/v1/workspaces/${w.id}/manage/devices`, {}));
+    }),
+  );
   group.command('revoke <nameOrId> <deviceId>').action(
     action(async (name: string, deviceId: string) => {
       const api = client();
