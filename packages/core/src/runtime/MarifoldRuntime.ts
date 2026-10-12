@@ -86,6 +86,8 @@ import type { MarifoldAskResponse, MarifoldProviderToolDefinition, MarifoldResol
 import { ProviderEngines } from './ProviderEngines';
 import { ChatTurns } from './ChatTurns';
 import { SkillAppOperations } from './SkillAppOperations';
+import { AgentComputer } from '../computer/AgentComputer';
+import { agentComputerTools } from '../computer/ComputerTools';
 
 
 export interface MarifoldRuntimeOptions {
@@ -112,6 +114,7 @@ export class MarifoldRuntime {
   private searchBackend: SearchBackend;
   private readonly searchBackendOverridden: boolean;
   private readonly scheduleStore: ScheduleStore;
+  readonly agentComputer: AgentComputer;
 
   constructor(private readonly options: MarifoldRuntimeOptions) {
     this.sessionOwner = options.sessionOwner ?? leaseOwnerId();
@@ -128,6 +131,7 @@ export class MarifoldRuntime {
     this.searchBackend = options.searchBackend
       ?? createSearchBackend(resolveWebSearchConfig(config.webSearch));
     this.scheduleStore = new ScheduleStore(config.paths.schedulesDir ?? defaultSchedulesDir());
+    this.agentComputer = new AgentComputer(configPath);
     // Closures, not bound methods: spies installed on this runtime later still apply.
     this.chat = new ChatTurns({
       loadedConfig: options.loadedConfig,
@@ -644,7 +648,10 @@ export class MarifoldRuntime {
   createHostContextTools(profile?: string): ToolRegistry {
     const registry = new ToolRegistry();
     for (const tool of this.createDefaultToolRegistry(profile).list()) {
-      if (tool.kind === 'interaction' || ['web_search', 'read_web_page', 'delegate'].includes(tool.definition.name)) { registry.register(tool); }
+      // The agent computer belongs to this host; a device run can use it, but
+      // "the user's device" for computer_put would be ambiguous there.
+      const computer = tool.definition.name.startsWith('computer_') && tool.definition.name !== 'computer_put';
+      if (tool.kind === 'interaction' || computer || ['web_search', 'read_web_page', 'delegate'].includes(tool.definition.name)) { registry.register(tool); }
     }
     return registry;
   }
@@ -664,6 +671,7 @@ export class MarifoldRuntime {
     registry.register(new SudoExecTool(deviceExecution));
     registry.register(new ShellJobStatusTool(deviceExecution));
     registry.register(new PythonPackageTool());
+    for (const tool of agentComputerTools(this.agentComputer, resolvedProfile)) { registry.register(tool); }
     registry.register(new SkillManagementTool({
       store: this.createSkillStore(resolvedProfile),
       profile: resolvedProfile,

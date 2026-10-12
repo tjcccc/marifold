@@ -22,6 +22,7 @@ import { registerConfigRoutes } from './ConfigRoutes';
 import { normalizeError } from './ServiceErrors';
 import { registerSessionRoutes } from './SessionRoutes';
 import { registerSkillAppRoutes } from './SkillAppRoutes';
+import { registerAgentComputerRoutes } from './AgentComputerRoutes';
 import { registerTaskRoutes } from './TaskRoutes';
 import { ArtifactTickets, artifactHeaders } from './ArtifactTickets';
 import { registerRunRoutes } from './RunRoutes';
@@ -304,6 +305,7 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
   });
 
   registerTaskRoutes(server, runtime);
+  registerAgentComputerRoutes(server, runtime);
 
   return server;
 }

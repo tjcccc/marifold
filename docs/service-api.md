@@ -425,6 +425,18 @@ The generic task-event kind `verification` is reserved for explicit evidence att
 
 Managed via `marifold schedule ...`; schedules fire only while the service runs.
 
+### Agent computer (device-local)
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/v1/agent-computer` | Docker detection, settings (`proxy`, `baseImage`, and the `upstream` the containers use), image, egress, and each profile's computer state (`running`, `stopped`, `missing`, `creating`, `failed` with `error`) |
+| PUT | `/v1/agent-computer/settings` | `{proxy?, baseImage?}`; empty strings clear them. A proxy must be `http://host:port`; changing it recreates the egress container |
+| POST | `/v1/agent-computer/computers/:profile` | `{rebuildImage?}`; returns 202 and creates in the background (poll `GET`). Recreating discards the computer's files |
+| DELETE | `/v1/agent-computer/computers/:profile` | Removes that computer; the network and egress go with the last one |
+| DELETE | `/v1/agent-computer` | Removes every container, network, and image this configuration created |
+
+Never forwarded through a workspace bridge. See `docs/agent-computer.md`.
+
 ## Client recipes
 
 Follow a run with fetch-based SSE (header auth, manual resume):

@@ -1,14 +1,14 @@
 /** Small dependency-free route model for the desktop Web UI. Pure path
  * parsing/formatting lives here; browser History API glue lives in screens. */
 
-export type ConfigSection = 'profiles' | 'providers' | 'models' | 'agent' | 'web-search' | 'appearance' | 'service';
+export type ConfigSection = 'profiles' | 'providers' | 'models' | 'agent' | 'web-search' | 'appearance' | 'service' | 'agent-computer';
 
 export type Route =
   | { view: 'agent'; profile?: string; session?: string }
   | { view: 'apps'; app?: string }
   | { view: 'config'; section: ConfigSection; item?: string };
 
-const CONFIG_SECTIONS: ConfigSection[] = ['profiles', 'providers', 'models', 'agent', 'web-search', 'appearance', 'service'];
+const CONFIG_SECTIONS: ConfigSection[] = ['profiles', 'providers', 'models', 'agent', 'web-search', 'appearance', 'service', 'agent-computer'];
 const LEGACY_HASH_ROUTE = /^#\/(?:agent|apps|config)(?:\/|$)/;
 
 export function parsePath(pathname: string): Route {

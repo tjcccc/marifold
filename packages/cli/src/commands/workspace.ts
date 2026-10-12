@@ -187,7 +187,7 @@ export function registerWorkspaceCommand(program: Command, printer: ConsolePrint
   );
   group
     .command('invite <nameOrId>')
-    .option('--executor-only', 'The new device only runs work the host sends it (for the agent’s own computer).')
+    .option('--executor-only', 'The new device only runs work the host sends it (for a headless machine).')
     .action(
       action(async (name: string, options: { executorOnly?: boolean }) => {
         const api = client();

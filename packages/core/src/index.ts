@@ -418,6 +418,8 @@ export {
   marifoldHome,
   resolveUserPath,
 } from './workspace/WorkspacePaths';
+export { AgentComputer, upstreamFor } from './computer/AgentComputer';
+export type { AgentComputerInfo, AgentComputerSettings, AgentComputerStatus, DockerEnvironment } from './computer/AgentComputer';
 export { WorkspaceManager } from './workspace/WorkspaceManager';
 export { artifactReadLength, workspaceArtifactStream } from './workspace/WorkspaceArtifactTransfer';
 export type { ArtifactChunk } from './workspace/WorkspaceArtifactTransfer';

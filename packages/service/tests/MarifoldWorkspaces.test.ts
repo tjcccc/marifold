@@ -124,6 +124,8 @@ describe('device-hosted workspaces', () => {
     expect(response.statusCode, response.body).toBe(200);
     expect(response.json().devices.map((d: { id: string }) => d.id)).toEqual(expect.arrayContaining([p.hostDevice, p.device]));
     expect(workspaceApiPath('POST', '/v1/execution-devices')).toBe(false);
+    // The agent computer is this device's own; another device must not create or remove it.
+    for (const method of ['GET', 'PUT', 'POST', 'DELETE']) { expect(workspaceApiPath(method, '/v1/agent-computer/computers/default')).toBe(false); }
   });
   it('preserves a remote browser origin through the host-local workspace facade', async () => {
     const p = await paired();

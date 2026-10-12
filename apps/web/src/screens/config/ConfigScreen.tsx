@@ -49,6 +49,7 @@ import { AppearancePage } from './AppearancePage';
 import { ProfileSettingsPage } from './ProfileSettingsPage';
 import { ProvidersPage } from './ProvidersPage';
 import { ServicePage } from './ServicePage';
+import { AgentComputerPage } from './AgentComputerPage';
 import { WebSearchPage } from './WebSearchPage';
 import styles from './ConfigScreen.module.css';
 
@@ -60,6 +61,7 @@ const SECTIONS: Array<{ id: ConfigSection; label: string }> = [
   { id: 'web-search', label: 'Web search' },
   { id: 'appearance', label: 'Appearance' },
   { id: 'service', label: 'Service' },
+  { id: 'agent-computer', label: 'Agent computer' },
 ];
 
 type MobileConfigLevel = 'sections' | 'items' | 'detail';
@@ -699,6 +701,8 @@ export function ConfigScreen({
             onSave={(key, value) => void writeConfig(`service.${key}`, value)}
           />
         ) : null}
+
+        {section === 'agent-computer' ? <AgentComputerPage client={client} /> : null}
 
         {section === 'web-search' ? (
           <WebSearchPage

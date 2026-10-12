@@ -13,7 +13,7 @@ export interface PrivateIdentity extends PublicIdentity {
   encryptionPrivateKey: JsonWebKey;
 }
 /** A member's bridge access. Absent means a full member; `executor` devices
- * only answer the host's execution requests (the agent's own computer). */
+ * only answer the host's execution requests (headless machines). */
 export type MemberAccess = 'executor';
 export interface Membership {
   version: 1;

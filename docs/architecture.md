@@ -16,7 +16,7 @@ marifold is a local-first, single-owner personal AI workspace: one person runs i
 Each package is imported only through its `src/index.ts` entry point.
 
 - `packages/core` (`@marifold/core`): runtime, config, profiles, memory, sessions, the agent subsystem, runs, schedules, Skills and SkillApps, and the device-hosted workspace protocol implementation. Must not depend on any other marifold package except `workspace-protocol`, and must not format output for a renderer.
-- `packages/service` (`@marifold/service`): HTTP transport over core: security filtering, request validation, route modules (`RunRoutes`, `SessionRoutes`, `ConfigRoutes`, `ProfileRoutes`, `SkillAppRoutes`, `ChatRoutes`, `TaskRoutes`, `WorkspaceRoutes`), SSE, and error mapping (`ServiceErrors`). Must not hold business rules beyond request validation and response sanitizing.
+- `packages/service` (`@marifold/service`): HTTP transport over core: security filtering, request validation, route modules (`RunRoutes`, `SessionRoutes`, `ConfigRoutes`, `ProfileRoutes`, `SkillAppRoutes`, `ChatRoutes`, `TaskRoutes`, `WorkspaceRoutes`, `AgentComputerRoutes`), SSE, and error mapping (`ServiceErrors`). Must not hold business rules beyond request validation and response sanitizing.
 - `packages/client` (`@marifold/client`): the typed HTTP/SSE client shared by the TUI, CLI, and Web UI: requests with the session-owner header, SSE parsing, resumable `followRunEvents`, session lease routes and the renewal loop that terminal and browser clients share, workspace startup selection, and composer token helpers. Must not depend on core at runtime.
 - `packages/tui` (`@marifold/tui`): the Ink terminal renderer of the `AgentEvent` contract, local or service-connected. Must not contain model-side logic.
 - `packages/cli` (`marifold`): command parsing and terminal output; launches the TUI and the service.
@@ -48,6 +48,7 @@ Enforcement: package manifests (pnpm resolves only declared dependencies), Biome
 - **Agent tools** (`packages/core/src/agent`): every effect goes through `ApprovalPolicy` and per-run `RunWorkspace` capability roots. Paths are assessed at their real destination (symlinks resolved); shell runs inside the platform sandbox in its own process group, with no unrestricted fallback. Sensitive account paths are approved one access at a time and never trusted persistently.
 - **Model, tool, and remote output**: treated as untrusted. CLI output strips terminal control sequences, the TUI drops device-control strings from every frame, and the Web UI renders Markdown without raw HTML.
 - **SkillApp templates** (`packages/core/src/app`): statically compiled; read permissions are declared, resolved to real paths, and refused for Marifold private state and sensitive account data. A selected profile Skill's `reads:` files pass the same `HostReadGrants` check before joining a SkillApp run's exact-file grants.
+- **Agent computer** (`packages/core/src/computer`): Docker containers on an internal network, driven with `docker exec` argument arrays; no mounts, socket, privilege, or Marifold credentials inside. Their only exit is `EgressProxy`, which refuses local and private destinations. Files enter only through `computer_put`, which follows the device's read approvals and refuses credential stores and Marifold state. See `docs/agent-computer.md`.
 - **Device execution** (`DeviceExecution`, `DeviceExecutionWorker`): full access is a local opt-in per device; `sudo` passwords travel encrypted for one use and are never stored; durable jobs are scoped to the workspace that started them.
 
 ## Core subsystems
@@ -115,6 +116,10 @@ Task state is stored as JSON files under `paths.tasks_dir`, defaulting to `~/.ma
 
 `packages/core/src/workspace` turns one device into the host of a workspace that the owner's other devices join. `WorkspaceManager` owns pairing, invitations, revocation, and per-workspace `BridgePeer` connections (`workspace/bridge`); `WorkspaceStore` persists identities, memberships, and an idempotent request journal beside the config. The host routes runs to an execution device through `WorkspaceRuns`; a guest that enabled execution runs host-requested tools in `WorkspaceExecutor`, which builds its own capabilities and accepts only short-lived, call-specific grants. `DeviceDelegateTool` and `WorkspaceDevicesTool` let a host conversation delegate to a guest. Sessions are reserved per client through `SessionLeases` (shared with local TUI processes through a lease file); a running task holds its session until it ends, and `takeover` moves a session between the owner's clients. See `docs/workspaces.md` and `docs/device-execution.md`.
 
+### Agent computer
+
+`packages/core/src/computer` gives each profile its own Linux container. `AgentComputer` owns settings, Docker detection, and the container lifecycle (image, internal network, egress container, one computer per profile); `AgentComputerFiles` runs commands and moves files with `docker exec`; `ComputerTools` exposes `computer_exec`, `computer_write_file`, `computer_put`, and `computer_get` to profiles that have a computer; `EgressFilter`/`EgressProxy` are dependency-free so they can be copied into the image. The service exposes it at `/v1/agent-computer` (device-local). See `docs/agent-computer.md`.
+
 ## Glossary
 
 - **Profile**: a named identity with instructions, settings, memory, and Skills. Not a workspace.
@@ -126,6 +131,7 @@ Task state is stored as JSON files under `paths.tasks_dir`, defaulting to `~/.ma
 - **Workspace**: a device-hosted space shared by the owner's devices. **Host**: the device that owns its data and credentials. **Guest**: a joined device. **Bridge**: the relay between them. **Executor**: a guest's opt-in tool execution for host runs. **Executor-only member**: a guest paired with `access: "executor"` in its host-signed membership; it answers execution requests and may only report status or leave.
 - **Lease**: an app's reservation of an open session (owner = device + app: every browser/tab on a service's Web UI shares it, its terminals share theirs, and a workspace device going through the bridge is its own device); **takeover** moves it to another app or device.
 - **Attachment**: a user-supplied file staged read-only for a run. **Artifact**: a file a run produced in its output directory.
+- **Agent computer**: a profile's own Linux container, driven by Marifold on the host with no approval prompts inside, isolated from the user's devices and network.
 - **Trusted folder**: a folder where a profile's writes are approved without asking (never home, root, or sensitive account data).
 - **Scoped / full access**: sandboxed shell inside run capabilities, versus an approved account-level job on the device.
 
@@ -136,7 +142,8 @@ Task state is stored as JSON files under `paths.tasks_dir`, defaulting to `~/.ma
 - 2026-08: the service stays single-owner: no multi-tenant accounts, credential pooling, or public-internet exposure (`AGENTS.md`).
 - 2026-09: workspaces are device-hosted with a relay bridge; a cloud-hosted workspace was rejected as too large.
 - 2026-10-08: a running task holds its session lease until it ends, so a client that leaves cannot lose the finished turn; 2026-10-09: the owner can take a session over from another client; 2026-10-10: lease owners are derived by the service as device + app (a reload or another tab of the same app is not "in use", matching Claude Code's terminals), and a cross-process run claim keeps two runs out of one session.
-- 2026-10-13: workspace members are full by default; an executor-only invitation pairs a device that can only execute (meant for the agent's own computer, whose key any sudo-capable process could read). The host enforces it from its own device record on every bridge operation, deny by default; the membership format stays version 1 with an optional `access` field.
+- 2026-10-13: the agent computer is a Docker container driven by the host with `docker exec`, not an OrbStack machine paired as a workspace device: an isolated OrbStack machine still reached the Mac's LAN address, and driving it from the host keeps every key outside the computer and keeps runs (and their approvals for the user's devices) on the host.
+- 2026-10-13: workspace members are full by default; an executor-only invitation pairs a device that can only execute (for headless machines whose key untrusted software could read). The host enforces it from its own device record on every bridge operation, deny by default; the membership format stays version 1 with an optional `access` field.
 - 2026-10-09: Biome enforces mechanical rules because typescript-eslint cannot use the TypeScript 7 native compiler; route bodies moved out of `MarifoldService` into route modules.
 
 ## Future areas
