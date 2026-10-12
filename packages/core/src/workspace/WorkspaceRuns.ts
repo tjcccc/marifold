@@ -12,7 +12,9 @@ import {
   type ToolRiskAssessment,
 } from '../agent/ToolRegistry';
 import type { MarifoldRuntime } from '../runtime/MarifoldRuntime';
+import { mentionsSkillManagement } from '../skill/BuiltInSkillManager';
 import type { RunStartInput } from '../runs/RunRegistry';
+import { SkillManagementTool } from '../agent/tools/SkillManagementTool';
 import { executionTools } from './WorkspaceExecutor';
 import type { WorkspaceManager, WorkspaceOperationContext } from './WorkspaceManager';
 
@@ -56,15 +58,28 @@ export class WorkspaceRuns {
     const originId = origin?.senderDeviceId ?? connection.deviceId;
     const devices = this.manager.devices(connection.id);
     const skill = input.lean || /^\s*\$[\w-]+/.test(input.userTurn ?? input.objective);
-    const name = mention?.[2] ?? mention?.[3];
-    const matches = name ? devices.filter(d => d.id === name || d.name.toLowerCase() === name.toLowerCase()) : [];
+    // Skills are installed on the host, so Automatic sends management there too.
+    const management = mentionsSkillManagement(input.userTurn ?? input.objective);
+    const hostOwned = skill || management;
+    const mentioned = mention?.[2] ?? mention?.[3];
+    const find = (value: string) => devices.filter(d => d.id === value || d.name.toLowerCase() === value.toLowerCase());
+    // Accept a possessive ("@office's folder") when no device carries that exact name.
+    const possessive = mentioned?.replace(/['’]s$/i, '');
+    const name = mentioned && possessive !== mentioned && find(mentioned).length === 0 ? possessive : mentioned;
+    const matches = name ? find(name) : [];
     if (name && matches.length !== 1) { throw new Error('The mentioned device is unknown or ambiguous. Select a device from the @ menu.'); }
-    const explicit = name ? matches[0]!.id : selection.executionDeviceId;
+    // "install abc from @office's ~/x": the mention names where the source is and
+    // the run stays on the host. Any other @device still routes the run there.
+    const sourceMention = mention !== undefined && management && isSkillSourceMention(
+      input.objective.slice(0, mention.index! + mention[1].length),
+      input.objective,
+    );
+    const explicit = name && !sourceMention ? matches[0]!.id : selection.executionDeviceId;
     const executionDeviceId =
       explicit === 'host'
         ? connection.hostDeviceId
         : (explicit ??
-          (skill
+          (hostOwned
             ? connection.hostDeviceId
             : (devices.find((d) => d.id === originId && d.executor)?.id ?? connection.hostDeviceId)));
     if (skill && executionDeviceId !== connection.hostDeviceId) {
@@ -82,14 +97,47 @@ export class WorkspaceRuns {
     const { workspaceId, executionDeviceId } = execution;
     const host = this.manager.store.get(workspaceId);
     const devices = this.manager.devices(workspaceId);
+    const management = mentionsSkillManagement(input.userTurn ?? input.objective);
+    const guestSkillManagement = executionDeviceId !== host.hostDeviceId && management;
+    const deviceName = (id: string) => devices.find(d => d.id === id)?.name ?? id;
+    const requesting = deviceName(execution.originDeviceId);
     const contextInstructions = [
       `Tools and paths belong to ${executionDeviceId === host.hostDeviceId ? 'the workspace host' : 'the selected execution device'}. For a named-device or host task, use list_devices to resolve the target and delegate_device if needed. For an existing file, use its published reference; do not recapture or recreate it merely to deliver it.`,
+      ...(execution.originDeviceId !== executionDeviceId
+        ? [`This request came from the device "${requesting}"; "my current device" or "this computer" means it.`]
+        : []),
+      ...(guestSkillManagement
+        ? ['Marifold skills are installed, updated, removed, and configured on the workspace host with its manage_skill tool, which this device run does not have. Use delegate_device with host for that work instead of searching Marifold directories on this device; if the source is on this device, name this device in the objective as the source device.']
+        : []),
+      ...(management && executionDeviceId === host.hostDeviceId
+        ? [`Skill sources: when the user names no device, the source path is on the workspace host "${deviceName(host.hostDeviceId)}"; omit source_device. When the user names a device (an @device mention, a device name, or "my current device"), pass it as manage_skill source_device. Say which device the source was read from.`]
+        : []),
       'Device delegation uses the workspace bridge connection, not SSH or Tailscale, and does not require shell network access or device login credentials. Check list_devices before claiming a device is unavailable. Guest execution requires its executor opt-in and once-only approvals; shell_exec defaults to scoped access. Check shell_job_status on the execution device: when full access is locally enabled, shell_exec access=full has that device account’s normal filesystem, network, process and application permissions. For administrator commands that need a password, use sudo_exec: its secure approval prompts on the requesting device, not the execution device. Never collect passwords in chat, ask_user, shell arguments or files. macOS privacy permissions still depend on the device. Full-access jobs continue after disconnect/cancellation; retrieve their status rather than repeating uncertain commands. For permission questions, explain these capabilities and limits without starting work.',
     ];
     const registry =
       executionDeviceId === host.hostDeviceId
         ? this.runtime.createDefaultToolRegistry(input.profile)
         : this.runtime.createHostContextTools(input.profile);
+    const skills = registry.get('manage_skill');
+    if (skills instanceof SkillManagementTool) {
+      skills.useSourceDevices({
+        hostName: deviceName(host.hostDeviceId),
+        resolve: (reference) => {
+          const wanted = reference.toLowerCase();
+          const matches = this.manager.devices(workspaceId).filter(d =>
+            d.id === reference || d.name.toLowerCase() === wanted || (wanted === 'host' && d.host));
+          if (matches.length !== 1) { throw new Error(`Device "${reference}" is unknown or ambiguous; use a name or ID from list_devices.`); }
+          return { id: matches[0]!.id, name: matches[0]!.name, host: matches[0]!.id === host.hostDeviceId };
+        },
+        fetch: async (deviceId, source) => {
+          const device = this.manager.devices(workspaceId).find(d => d.id === deviceId);
+          if (!device?.online || !device.executor) {
+            throw new Error(`Device "${device?.name ?? deviceId}" is offline or has not enabled execution.`);
+          }
+          return this.manager.execute(workspaceId, deviceId, 'executor.skillBundle', { path: source });
+        },
+      });
+    }
     registry.register(new WorkspaceDevicesTool(() => ({
       workspace: { id: workspaceId, name: host.name, hostDeviceId: host.hostDeviceId },
       executionDeviceId,
@@ -198,4 +246,10 @@ export class WorkspaceRuns {
       },
     });
   }
+}
+
+/** True when an @device mention follows "from"/从 in an install or update request. */
+function isSkillSourceMention(beforeMention: string, objective: string): boolean {
+  return /(?:\bfrom|从)\s*$/i.test(beforeMention)
+    && /\b(?:install|reinstall|update|upgrade)\b|安装|更新|升级/i.test(objective);
 }

@@ -6,10 +6,20 @@ import type { ArtifactWebRtc } from './ArtifactWebRtc';
 import { createArtifactPreview, artifactPreviewVariant } from '../agent/ArtifactPreview';
 import { artifactReadLength } from './WorkspaceArtifactTransfer';
 import * as fs from 'node:fs';
+import * as os from 'node:os';
 import * as path from 'node:path';
 import { digest, identifier, randomId, record } from '@marifold/workspace-protocol';
 import type { JSONValue } from '@priest-ai/core';
-import { createRunWorkspace, MAX_RUN_INPUT_BYTES, type RunWorkspace } from '../agent/RunWorkspace';
+import {
+  canonicalPath,
+  createRunWorkspace,
+  isInside,
+  isInsideAnyRoot,
+  MAX_RUN_INPUT_BYTES,
+  type RunWorkspace,
+  sensitiveHostRoots,
+} from '../agent/RunWorkspace';
+import { readSkillBundle, type SkillBundle } from '../skill/SkillBundle';
 import { listRunArtifacts, resolveRunArtifact } from '../agent/RunArtifacts';
 import { ToolRegistry, type AgentTool, type ToolExecutionContext } from '../agent/ToolRegistry';
 import { InspectAttachmentTool } from '../agent/tools/InspectAttachmentTool';
@@ -18,7 +28,7 @@ import { SearchAttachmentTool } from '../agent/tools/SearchAttachmentTool';
 import { ReadFileTool } from '../agent/tools/ReadFileTool';
 import { WriteFileTool } from '../agent/tools/WriteFileTool';
 import { ShellExecTool } from '../agent/tools/ShellExecTool';
-import { marifoldHome } from './WorkspacePaths';
+import { expandHome, marifoldHome } from './WorkspacePaths';
 import type { WorkspaceOperationContext } from './WorkspaceManager';
 import type { MarifoldAgentConfig } from '../agent/ApprovalPolicy';
 
@@ -81,6 +91,7 @@ export class WorkspaceExecutor {
   }
   async handle(operation: string, value: unknown, context: WorkspaceOperationContext): Promise<unknown> {
     const b = record(value);
+    if (operation === 'executor.skillBundle') { return this.skillBundle(b.path); }
     const runId = identifier(b.runId);
     const key = `${context.workspaceId}:${runId}`;
     // Completed output is read-only and recoverable after a guest restart. Never
@@ -224,5 +235,20 @@ export class WorkspaceExecutor {
       }
     });
     return { ...result, images };
+  }
+  /** Read one skill source for the host's manage_skill. The user approves the
+   * install in the requesting conversation; this device still applies its own
+   * read policy and never serves Marifold state or credential stores. */
+  private skillBundle(value: unknown): SkillBundle {
+    if (this.config().approval.read === 'deny') { throw new Error('This device denies file reads.'); }
+    if (typeof value !== 'string' || !value.trim() || value.includes('\0')) { throw new Error('Invalid skill source path.'); }
+    const home = os.homedir();
+    const source = canonicalPath(path.resolve(home, expandHome(value)));
+    const protectedRoots = [...this.protectedPaths, ...sensitiveHostRoots(home)];
+    // A folder that contains protected state (such as home itself) is refused too.
+    if (isInsideAnyRoot(source, protectedRoots) || protectedRoots.some(root => isInside(root, source))) {
+      throw new Error('This path contains device-local or protected state.');
+    }
+    return readSkillBundle(source);
   }
 }

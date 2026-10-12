@@ -379,7 +379,7 @@ export class WorkspaceManager {
       }
       if (!this.executorHandler) { throw new Error('Executor unavailable.'); }
       if (
-        ['executor.lease', 'executor.assess', 'executor.artifact', 'executor.artifacts', 'executor.cancel'].includes(
+        ['executor.lease', 'executor.assess', 'executor.artifact', 'executor.artifacts', 'executor.cancel', 'executor.skillBundle'].includes(
           request.operation,
         )
       ) {

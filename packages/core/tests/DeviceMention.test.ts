@@ -42,3 +42,31 @@ it('routes inline device mentions and rejects conflicting targets', async () => 
   await expect(fixture().resolve({ objective: 'Close on @missing' }, {})).rejects.toThrow('unknown');
   expect((await fixture().resolve({ objective: 'Email me@example.com' }, {})).execution?.executionDeviceId).toBe('home');
 });
+
+describe('skill management routing', () => {
+  const guestOrigin = { workspaceId: 'workspace', senderDeviceId: 'guest', hostDeviceId: 'home' };
+  it('sends Automatic skill management from a guest to the host', async () => {
+    for (const objective of [
+      'install make-qwen-image-prompt skill from `jack-ai-lab/skills/` and set the vars file like others',
+      '把 jack-ai-lab 里的 make-qwen-image-prompt 技能安装到 painter',
+      '$skill-installer install ~/skills/translate',
+    ]) {
+      expect((await fixture().resolve({ objective }, {}, guestOrigin)).execution?.executionDeviceId).toBe('home');
+    }
+  });
+  it('keeps skill use and explicit selections on the guest', async () => {
+    expect((await fixture().resolve({ objective: 'use my translate skill on this file' }, {}, guestOrigin))
+      .execution?.executionDeviceId).toBe('guest');
+    expect((await fixture().resolve({ objective: 'install the translate skill' }, { executionDeviceId: 'guest' }, guestOrigin))
+      .execution?.executionDeviceId).toBe('guest');
+  });
+  it('treats @device in skill management as the source and keeps the run on the host', async () => {
+    const result = await fixture().resolve({ objective: "install the abc skill from @guest's ~/skills/abc" }, {}, guestOrigin);
+    expect(result.execution?.executionDeviceId).toBe('home');
+    expect(result.objective).toContain('@guest');
+    expect((await fixture().resolve({ objective: '@guest restart tailscale' }, {}, guestOrigin)).execution?.executionDeviceId).toBe('guest');
+    expect((await fixture().resolve({ objective: '从 @guest 的 ~/skills/abc 安装 abc 技能' }, {}, guestOrigin)).execution?.executionDeviceId).toBe('home');
+    expect((await fixture().resolve({ objective: '@guest update the skills section of resume.docx' }, {}, guestOrigin)).execution?.executionDeviceId).toBe('guest');
+    expect((await fixture().resolve({ objective: 'install the abc skill on @guest' }, {}, guestOrigin)).execution?.executionDeviceId).toBe('guest');
+  });
+});

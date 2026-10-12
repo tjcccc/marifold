@@ -2,6 +2,14 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-10-12 — v0.86.0 — Skill management across workspace devices
+
+- A skill install, update, removal, or configuration sent from a guest device now runs on the workspace host, where skills live (Automatic only: a skill keyword plus a management verb, including Chinese verbs). Using a skill stays on the requesting device; an explicit device selection wins.
+- Source paths default to the host. "Install abc from @office's ~/x" (`@device` after "from"/从 in an install or update request, or "my current device") still installs on the host but reads the bundle on that device: `manage_skill` `source_device` plus a new `executor.skillBundle` operation (executor opt-in, the device's own read policy, 100 regular files / 2 MB, no symlinks, never Marifold state, credential stores, or a folder containing them). Results name the device read from; runs are told which device sent the request. Possessive mentions (`@office's`) resolve. Other `@device` requests still run on that device.
+- `manage_skill` gains `inspect` (lists installed skills and files, no prompt) and `configure` (writes one skill-local dotfile or `*.toml`, e.g. `.vars-path.toml`, optionally copied from another skill). A guest run asked to manage skills is told to delegate to the host.
+- Cause: on 2026-10-12 an install requested from the office guest ran on the guest, which has no `manage_skill`, explored for 20 iterations, and prompted per file read.
+- Validation: lint, typecheck, core (578) and service (102) tests. Live OrbStack harness `output/bridge-review-orbstack/run-skill-routing.cjs` (temp `HOME`, mocked model): 12/12, including guest-sent install + configure with two approvals, an `@guest` source installed on the host with one approval, and a 450 KB binary bundle intact across the bridge. All devices need 0.86.0: the guest executor operation is new. Plan: `jack-ai-lab/plans/marifold/2026-10-12-workspace-trust-and-agent-computer.md`.
+
 ## 2026-10-10 — v0.85.0 — Memory in agent runs, session owners, archive, earlier images, SkillApp executions
 
 - Profile memory works in agent runs (every TUI/Web message): recalled into context with the memory policy, and updated from the final answer's hidden `memory_save`/`memory_forget` blocks plus the prompt fallback. Turns that call tools cannot write memory; task wording never triggers forgets; only a user's own session runs write (not delegated, child, or scheduled runs). `/remember` classifies recognizable facts (name, favorites, single-value preferences such as a drink, meetings) so a new value replaces the old one, keeps multi-statement text verbatim too, and stops a name at the next clause. Web Config gains "Show forgotten" with Restore (`POST /v1/profiles/:name/memories/:id/restore`).

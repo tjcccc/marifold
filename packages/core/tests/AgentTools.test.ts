@@ -3,6 +3,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { execFileSync } from 'child_process';
 import { afterEach, describe, expect, it } from 'vitest';
+import type { JSONValue } from '@priest-ai/core';
 import { AskUserTool } from '../src/agent/tools/AskUserTool';
 import { DelegateTool } from '../src/agent/tools/DelegateTool';
 import { InspectAttachmentTool } from '../src/agent/tools/InspectAttachmentTool';
@@ -436,6 +437,73 @@ describe('SkillManagementTool', () => {
       persistable: false,
       targetPath: path.join(profileDir, 'translate'),
     });
+  });
+});
+
+describe('SkillManagementTool inspect and configure', () => {
+  function installed(root: string) {
+    const globalDir = path.join(root, 'skills');
+    const profileDir = path.join(root, 'profiles', 'writer', 'skills');
+    const store = new SkillStore({ globalDir, profileDir });
+    store.installFromText(skillText('qwen-prompt', 'Qwen.'), 'profile');
+    store.installFromText(skillText('gpt-prompt', 'GPT.'), 'profile');
+    fs.writeFileSync(path.join(profileDir, 'gpt-prompt', '.vars-path.toml'), 'vars_path = "/vars.toml"\n');
+    return { profileDir, tool: skillManagementTool({ globalDir, profileDir, store }) };
+  }
+
+  it('lists installed skills and their files without approval', async () => {
+    const root = tempDir();
+    const { tool } = installed(root);
+    expect(tool.assessRisk({ action: 'inspect' }, context(root))).toMatchObject({ escalate: false, trusted: true });
+    const result = await tool.execute({ action: 'inspect' }, context(root));
+    expect(result.isError, result.content).toBeFalsy();
+    expect(result.content).toContain('$gpt-prompt: .vars-path.toml');
+    expect(result.content).toContain('$qwen-prompt: SKILL.md only');
+  });
+
+  it('writes a skill-local config file from content or another skill', async () => {
+    const root = tempDir();
+    const { profileDir, tool } = installed(root);
+    expect(tool.assessRisk({ action: 'configure', scope: 'profile', name: 'qwen-prompt', file: '.vars-path.toml' }, context(root)))
+      .toMatchObject({ escalate: true, persistable: false, targetPath: path.join(profileDir, 'qwen-prompt', '.vars-path.toml') });
+    const copied = await tool.execute(
+      { action: 'configure', scope: 'profile', name: 'qwen-prompt', file: '.vars-path.toml', copy_from: 'gpt-prompt' },
+      context(root),
+    );
+    expect(copied.isError, copied.content).toBeFalsy();
+    expect(fs.readFileSync(path.join(profileDir, 'qwen-prompt', '.vars-path.toml'), 'utf-8')).toBe('vars_path = "/vars.toml"\n');
+    const written = await tool.execute(
+      { action: 'configure', scope: 'profile', name: 'qwen-prompt', file: 'settings.toml', content: 'a = 1\n' },
+      context(root),
+    );
+    expect(written.isError, written.content).toBeFalsy();
+    expect(fs.readFileSync(path.join(profileDir, 'qwen-prompt', 'settings.toml'), 'utf-8')).toBe('a = 1\n');
+  });
+
+  it('refuses paths, SKILL.md, symlinks, missing sources, and skills outside the scope', async () => {
+    const root = tempDir();
+    const { profileDir, tool } = installed(root);
+    const configure = (input: Record<string, JSONValue>) => tool.execute(
+      { action: 'configure', scope: 'profile', name: 'qwen-prompt', ...input },
+      context(root),
+    );
+    for (const file of ['SKILL.md', '../x.toml', 'sub/x.toml', '..', 'notes.md']) {
+      const result = await configure({ file, content: 'x' });
+      expect(result.isError, file).toBe(true);
+    }
+    fs.symlinkSync(path.join(root, 'outside.toml'), path.join(profileDir, 'qwen-prompt', 'link.toml'));
+    const symlink = await configure({ file: 'link.toml', content: 'x' });
+    expect(symlink.isError).toBe(true);
+    expect(fs.existsSync(path.join(root, 'outside.toml'))).toBe(false);
+    const missing = await configure({ file: '.other.toml', copy_from: 'gpt-prompt' });
+    expect(missing.isError).toBe(true);
+    expect(missing.content).toContain('has no .other.toml');
+    const wrongScope = await tool.execute(
+      { action: 'configure', scope: 'global', name: 'qwen-prompt', file: '.vars-path.toml', content: 'x' },
+      context(root),
+    );
+    expect(wrongScope.isError).toBe(true);
+    expect(wrongScope.content).toContain('does not exist in global scope');
   });
 });
 

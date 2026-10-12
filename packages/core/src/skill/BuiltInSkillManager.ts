@@ -18,6 +18,30 @@ const SKILL_KEYWORDS = [
   'навыков',
 ] as const;
 
+/** Verbs that turn a skill mention into a request to change installed skills. */
+const MANAGEMENT_VERBS = [
+  'install',
+  'installs',
+  'installing',
+  'reinstall',
+  'uninstall',
+  'update',
+  'upgrade',
+  'remove',
+  'delete',
+  'configure',
+  'setup',
+  'set up',
+  '安装',
+  '卸载',
+  '更新',
+  '升级',
+  '删除',
+  '移除',
+  '配置',
+  '设置',
+] as const;
+
 export interface SkillManagerGuideOptions {
   profile: string;
   profilesDir: string;
@@ -29,6 +53,15 @@ export interface SkillManagerGuideOptions {
 export function mentionsSkills(prompt: string): boolean {
   const normalized = prompt.normalize('NFKC').toLowerCase();
   return SKILL_KEYWORDS.some(keyword => containsKeyword(normalized, keyword));
+}
+
+/** Narrower than mentionsSkills: a skill keyword plus a management verb. It
+ * moves Automatic workspace execution to the host, so it must not match a
+ * request that merely uses a skill. */
+export function mentionsSkillManagement(prompt: string): boolean {
+  if (!mentionsSkills(prompt)) { return false; }
+  const normalized = prompt.normalize('NFKC').toLowerCase();
+  return MANAGEMENT_VERBS.some(verb => containsKeyword(normalized, verb));
 }
 
 /** Path-aware internal guide for ordinary agent runs that mention skills. */
@@ -44,6 +77,7 @@ This request concerns Marifold skills. Follow these rules for any skill inspecti
 - A skill lives at <skill-directory>/<name>/SKILL.md, with optional bundled files beside SKILL.md. Never create .claude/skills, .agents/skills, or a skills directory in the working directory.
 - Profile skills shadow global skills with the same name. Inspect both exact locations before updating or removing, and change only the intended scope.
 - SKILL.md must contain YAML frontmatter with a lowercase name and a non-empty prompt body. Preserve bundled files unless the user asks to replace the whole skill.
+- Use manage_skill action inspect to see installed skills and their files instead of listing Marifold directories, and action configure to set a skill-local file such as .vars-path.toml (copy_from reuses another skill's file of the same name).
 - Prefer the validated manage_skill tool for creation, installation, update, or removal. It always targets exactly one scope and protects Marifold's built-in $skill-installer and $skill-creator. Direct filesystem operations for ordinary user skills remain permissible when the user explicitly requests them.
 - Confirm destructive or ambiguous changes. After any direct filesystem change, read back SKILL.md to verify it.`;
 }
