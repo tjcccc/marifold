@@ -213,8 +213,8 @@ function parseRunStartInput(value: unknown): RunStartInput {
 function parseApprovalAction(value: unknown): RunApprovalAction {
   const body = objectBody(value);
   const action = requiredString(body.action, 'action');
-  if (action === 'once' || action === 'always' || action === 'trust' || action === 'deny') { return action; }
-  throw MarifoldError.configInvalid('action must be one of "once", "always", "trust", or "deny".');
+  if (action === 'once' || action === 'run' || action === 'always' || action === 'trust' || action === 'deny') { return action; }
+  throw MarifoldError.configInvalid('action must be one of "once", "run", "always", "trust", or "deny".');
 }
 
 /** The Last-Event-ID header (an EventSource reconnect) wins over ?after. */

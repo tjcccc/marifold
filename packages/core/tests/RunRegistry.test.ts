@@ -124,6 +124,15 @@ async function pullUntil(
   }
 }
 
+/** The next pending approval (auto-approved calls never appear). */
+async function nextPending(registry: RunRegistry, runId: string) {
+  const own = () => registry.require(runId).pendingApprovals[0];
+  for (let i = 0; i < 400 && !own(); i++) { await new Promise(resolve => setTimeout(resolve, 5)); }
+  const request = own();
+  expect(request).toBeDefined();
+  return request!;
+}
+
 async function drain(gen: AsyncGenerator<SequencedEvent>): Promise<SequencedEvent[]> {
   return (await pullUntil(gen, () => false)).seen;
 }
@@ -432,17 +441,84 @@ describe('RunRegistry', () => {
     expect(seen.some(({ event }) => event.type === 'tool_result' && event.isError)).toBe(true);
   });
 
-  it('auto-denies an unanswered approval after the timeout', async () => {
-    const { registry } = makeRegistry([
+  it('stops the run when an approval goes unanswered', async () => {
+    const { registry, engines } = makeRegistry([
       response({ toolCalls: [{ id: 'call_0', name: 'write_note', arguments: {} }] }),
-      response({ text: 'Done without it.' }),
+      response({ text: 'Found another route.' }),
     ], [fakeTool({ name: 'write_note', kind: 'write' })], { approvalTimeoutMs: 30 });
 
     const record = registry.start({ objective: 'Write.', cwd: tempDir() });
     const events = await drain(registry.events(record.id, 0));
-    const decision = events.find(({ event }) => event.type === 'approval_decision' && event.source === 'user');
-    expect(decision!.event).toMatchObject({ approved: false, reason: 'no response to the approval prompt' });
+    const done = events.find(({ event }) => event.type === 'done')!.event;
+    expect(done).toMatchObject({ status: 'failed' });
+    expect(events.some(({ event }) => event.type === 'error' && /went unanswered/.test(event.message))).toBe(true);
+    // The model never got another turn to work around the missing approval.
+    expect(engines[0].requests).toHaveLength(1);
     expect(registry.require(record.id).pendingApprovals).toEqual([]);
+  });
+
+  describe('folder approvals for one run', () => {
+    // Simulates a guest file call: escalated, never persistable, grantable.
+    const grantable = (name: string, kind: 'read' | 'write') => fakeTool({
+      name,
+      kind,
+      assessRisk: (input) => ({
+        escalate: true,
+        persistable: false,
+        targetPath: String(input.path),
+        ...(String(input.path).startsWith('/home/u/docs/') ? { runGrantFolder: '/home/u/docs' } : {}),
+      }),
+    });
+    const calls = (...steps: Array<[string, string]>) => [
+      ...steps.map(([name, file], i) => response({ toolCalls: [{ id: `call_${i}`, name, arguments: { path: file } }] })),
+      response({ text: 'Done.' }),
+    ];
+
+    it('approves later reads in the folder but still asks for writes and other folders', async () => {
+      const { registry } = makeRegistry(
+        calls(['read_doc', '/home/u/docs/a.md'], ['read_doc', '/home/u/docs/sub/b.md'], ['write_doc', '/home/u/docs/c.md'], ['read_doc', '/home/u/other/d.md']),
+        [grantable('read_doc', 'read'), grantable('write_doc', 'write')],
+      );
+      const record = registry.start({ objective: 'Read.', cwd: tempDir() });
+      const prompts: string[] = [];
+      for (const action of ['run', 'once', 'once'] as const) {
+        const request = await nextPending(registry, record.id);
+        prompts.push(String(request.input.path));
+        if (action === 'run') { expect(request.runGrant).toEqual({ folder: '/home/u/docs', access: 'read' }); }
+        registry.answerApproval(record.id, request.id, action);
+      }
+      const { matched } = await pullUntil(registry.events(record.id, 0), doneEvent);
+      expect(matched!.event).toMatchObject({ status: 'completed' });
+      expect(prompts).toEqual(['/home/u/docs/a.md', '/home/u/docs/c.md', '/home/u/other/d.md']);
+    });
+
+    it('refuses "run" for a call without a grantable folder', async () => {
+      const { registry } = makeRegistry(calls(['read_doc', '/home/u/other/x.md']), [grantable('read_doc', 'read')]);
+      const record = registry.start({ objective: 'Read.', cwd: tempDir() });
+      const request = await nextPending(registry, record.id);
+      expect(() => registry.answerApproval(record.id, request.id, 'run')).toThrow('cannot cover a folder');
+      registry.answerApproval(record.id, request.id, 'deny');
+    });
+
+    it("keeps a child run's folder approval out of its parent", async () => {
+      const { registry } = makeRegistry(
+        calls(['read_doc', '/home/u/docs/a.md'], ['read_doc', '/home/u/docs/b.md']),
+        [grantable('read_doc', 'read')],
+      );
+      const execution = { workspaceId: 'w', originDeviceId: 'home', executionDeviceId: 'home' };
+      const parent = registry.start({ objective: 'Parent.', cwd: tempDir(), execution });
+      const first = await nextPending(registry, parent.id);
+      const child = registry.startChild(parent.id, { objective: 'Child.', cwd: tempDir(), execution: { ...execution, executionDeviceId: 'guest' } });
+      const childRequest = await nextPending(registry, child.id);
+      // Both scripted runs reuse call IDs, so answer the child by its own run.
+      registry.answerApproval(child.id, childRequest.id, 'run');
+      expect((await pullUntil(registry.events(child.id, 0), doneEvent)).matched!.event).toMatchObject({ status: 'completed' });
+
+      registry.answerApproval(parent.id, first.id, 'once');
+      const second = await nextPending(registry, parent.id);
+      expect(second.input.path).toBe('/home/u/docs/b.md');
+      registry.cancel(parent.id);
+    });
   });
 
   it('cancel() while an approval is pending unblocks the run immediately', async () => {

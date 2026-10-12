@@ -17,6 +17,8 @@ interface RunOptions {
   approvalHandler: (request: ApprovalRequest) => Promise<ApprovalDecision>;
   userInputHandler: UserInputHandler;
   cancelPrompts: () => void;
+  /** Forget the previous run's "for this run" folder approvals. */
+  beginRunApprovals: () => void;
 }
 
 /**
@@ -35,6 +37,7 @@ export function useRuns({
   approvalHandler,
   userInputHandler,
   cancelPrompts,
+  beginRunApprovals,
 }: RunOptions) {
   const abortRef = useRef<AbortController | null>(null);
   const steeringRef = useRef<string[]>([]);
@@ -66,6 +69,7 @@ export function useRuns({
     // can take a while before the host starts the task.
     dispatch({ type: 'set_activity', activity: 'sending' });
     const startedAt = Date.now();
+    beginRunApprovals();
     let usage: AgentUsage | undefined;
     let doneStatus: string | undefined;
     try {
@@ -116,7 +120,7 @@ export function useRuns({
         notify(`Task ${status}. ${runSummary(Date.now() - startedAt, usage)}`, status === 'completed' ? 'info' : 'warn');
       }
     }
-  }, [runtime, approvalHandler, userInputHandler, notify]);
+  }, [runtime, approvalHandler, userInputHandler, notify, beginRunApprovals]);
 
   const startTextRun = useCallback((text: string, options: { originalImages?: boolean } = {}) => {
     // Remember the last plain-text prompt so `/retry` can re-run it. Captured

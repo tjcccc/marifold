@@ -21,6 +21,7 @@ export interface ApprovalSheetProps {
  * The trust surface (design 1a/1b): the run is paused on this decision.
  * Allow once is the safe default (⌘⏎/Ctrl⏎); the middle button persists —
  * "Trust this folder" for an escalated file write, else "Always allow <kind>".
+ * "Allow folder for this run" approves the shown folder until the run ends.
  */
 export function ApprovalSheet({ request, busy, onAnswer }: ApprovalSheetProps) {
   const password = useRef<HTMLInputElement>(null);
@@ -65,6 +66,7 @@ export function ApprovalSheet({ request, busy, onAnswer }: ApprovalSheetProps) {
 
   const canPersist = !request.sudo && request.persistable !== false;
   const trustFolder = canPersist && request.escalatedPath !== undefined;
+  const runGrant = request.sudo ? undefined : request.runGrant;
 
   return (
     <div className={styles.sheet} role="alertdialog" aria-label="Approval required">
@@ -76,6 +78,11 @@ export function ApprovalSheet({ request, busy, onAnswer }: ApprovalSheetProps) {
           <div className={styles.title}>The agent wants to {verbFor(request.kind)}</div>
           <div className={styles.summary}>{request.summary}</div>
           {request.escalatedPath ? <code className={styles.path}>{request.escalatedPath}</code> : null}
+          {runGrant ? (
+            <div className={styles.meta}>
+              For this run: {runGrant.access === 'write' ? 'read and write' : 'read'} <code>{runGrant.folder}</code>
+            </div>
+          ) : null}
           <div className={styles.meta}>
             {request.tool} · {request.kind}
             {request.escalationReason ? ` — ${request.escalationReason}` : ''}
@@ -106,6 +113,11 @@ export function ApprovalSheet({ request, busy, onAnswer }: ApprovalSheetProps) {
             onClick={() => onAnswer(trustFolder ? 'trust' : 'always')}
           >
             {trustFolder ? 'Trust this folder' : `Always allow ${KIND_ACTION_LABEL[request.kind]}`}
+          </button>
+        ) : null}
+        {runGrant ? (
+          <button className={styles.persist} disabled={busy} title={runGrant.folder} onClick={() => onAnswer('run')}>
+            Allow folder for this run
           </button>
         ) : null}
         <button className={styles.allow} disabled={busy || encrypting} onClick={() => void answer('once')}>

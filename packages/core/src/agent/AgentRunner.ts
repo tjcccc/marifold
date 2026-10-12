@@ -686,6 +686,7 @@ export class AgentRunner {
       yield { type: 'approval_decision', requestId: call.id, approved: false, source: 'policy', reason: decision.reason };
     }
     if (!decision.approved) {
+      if (decision.unanswered) { throw new Error(decision.reason ?? 'An approval went unanswered; the run stopped.'); }
       if (!previouslyDenied) { state.deniedCalls.push({ name: call.name, arguments: structuredClone(call.arguments) }); }
       const message = `Tool call denied${decision.reason ? `: ${decision.reason}` : '.'} Do not retry this call or seek another route to the denied access. Continue only with independent authorized work; otherwise explain the limitation and answer from available information.`;
       yield { type: 'tool_result', callId: call.id, tool: call.name, summary: 'denied', isError: true };
@@ -854,6 +855,7 @@ export class AgentRunner {
       ...(risk.reason ? { escalationReason: risk.reason } : {}),
       ...(risk.targetPath ? { escalatedPath: risk.targetPath } : {}),
       ...(risk.persistable === false ? { persistable: false } : {}),
+      ...(risk.runGrantFolder ? { runGrant: { folder: risk.runGrantFolder, access: tool.kind === 'write' ? 'write' as const : 'read' as const } } : {}),
       ...(risk.sudo ? { sudo: risk.sudo } : {}),
     };
     yield { type: 'approval_request', request };

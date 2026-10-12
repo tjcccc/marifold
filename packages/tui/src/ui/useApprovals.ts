@@ -1,7 +1,7 @@
 import { useCallback, useRef } from 'react';
 import type { Dispatch, MutableRefObject } from 'react';
-import { isInsideAny } from '@marifold/core';
-import type { ApprovalDecision, ApprovalRequest, SudoResponse, ToolKind, UserInputHandler, UserInputSubmission } from '@marifold/core';
+import { coveredByRunGrant, isInsideAny } from '@marifold/core';
+import type { ApprovalDecision, ApprovalRequest, RunGrant, SudoResponse, ToolKind, UserInputHandler, UserInputSubmission } from '@marifold/core';
 import type { AppAction, AppState, NoticeTone } from '../core/appState.js';
 import type { TuiRuntime } from '../core/TuiRuntime.js';
 import { trustTargetFolder, type ApprovalChoice } from './ApprovalModal.js';
@@ -24,6 +24,10 @@ export function useApprovals({ runtime, dispatch, stateRef, notify }: ApprovalOp
   const userInputResolverRef = useRef<((submission: UserInputSubmission | undefined) => void) | null>(null);
   const sessionGrantsRef = useRef<Set<ToolKind>>(new Set());
   const sessionTrustedFoldersRef = useRef<Set<string>>(new Set());
+  // "For this run" folder approvals. Kept here (not on the service) because
+  // remote runs already show the prompt before the TUI answers it.
+  const runGrantsRef = useRef<RunGrant[]>([]);
+  const beginRunApprovals = useCallback(() => { runGrantsRef.current = []; }, []);
 
   const approvalHandler = useCallback((request: ApprovalRequest): Promise<ApprovalDecision> => {
     // Auto-approve from this session's "Always" grants — the run's baked config
@@ -36,6 +40,7 @@ export function useApprovals({ runtime, dispatch, stateRef, notify }: ApprovalOp
         && isInsideAny(request.escalatedPath, [...sessionTrustedFoldersRef.current])) {
       return Promise.resolve({ approved: true });
     }
+    if (coveredByRunGrant(request, runGrantsRef.current)) { return Promise.resolve({ approved: true }); }
     dispatch({ type: 'set_approval', request });
     return new Promise<ApprovalDecision>(resolve => {
       approvalResolverRef.current = resolve;
@@ -51,6 +56,9 @@ export function useApprovals({ runtime, dispatch, stateRef, notify }: ApprovalOp
     if (choice === 'no') {
       resolve({ approved: false, reason: 'denied by user' });
       return;
+    }
+    if (choice === 'run' && request.runGrant && !request.sudo) {
+      runGrantsRef.current.push({ ...request.runGrant });
     }
     if (choice === 'always' && request.persistable !== false) {
       const folder = trustTargetFolder(request);
@@ -118,6 +126,7 @@ export function useApprovals({ runtime, dispatch, stateRef, notify }: ApprovalOp
     resolveUserInput,
     trustFolderForProfile,
     cancelPrompts,
+    beginRunApprovals,
     sessionGrantsRef,
     sessionTrustedFoldersRef,
   };

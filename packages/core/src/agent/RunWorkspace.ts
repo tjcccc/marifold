@@ -284,6 +284,20 @@ export function sensitiveHostRoots(userHome: string): string[] {
   ];
 }
 
+/** The folder a run-scoped grant for this target would cover: its parent
+ * folder, inside the user's home but never home itself, a sensitive or denied
+ * root, or a folder containing one. */
+export function runGrantFolder(target: string, workspace: RunWorkspace): string | undefined {
+  // The run's own folders belong to this run anyway.
+  if (isInside(target, workspace.rootDir)) { return canonicalPath(workspace.rootDir); }
+  const folder = path.dirname(canonicalPath(target));
+  const home = canonicalPath(workspace.userHome);
+  if (folder === home || !isInside(folder, home)) { return undefined; }
+  const protectedRoots = [...sensitiveHostRoots(workspace.userHome), ...(workspace.deniedRoots ?? [])];
+  if (protectedRoots.some(root => isInside(folder, root) || isInside(root, folder))) { return undefined; }
+  return folder;
+}
+
 export function isSensitiveHostPath(target: string, workspace: RunWorkspace): boolean {
   const resolved = canonicalPath(target);
   if (isInside(resolved, workspace.rootDir)) { return false; }

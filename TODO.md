@@ -41,6 +41,7 @@ Shipped history lives in `DEVLOG.md` and the `docs/roadmap.md` ladder; this list
 - Web UI: a `/v1/events` push channel to replace run polling, and profile rename/delete.
 - Web UI side chat (deferred 2026-10-10): `/btw` (or Cmd/Ctrl+;) opens an ephemeral, multi-turn side chat modelled on the Claude desktop app's — a right panel on desktop, bottom sheet on mobile, each turn one tool-less `ask` that sees the main thread and is never saved. The Web `/btw` command is hidden until then (typing during a run already steers).
 - Bridge setup: fewer manual steps to bring a personal bridge online and pair devices.
+- Run-scoped approvals, follow-ups (from step 2 of the 2026-10-12 workspace plan): the agent proposing a grant up front ("read ~/x for this task") instead of the user granting at the first prompt; the `marifold agent` CLI prompt offering "for this run"; remote TUI sessions answering server-side `run` grants made from another client (the TUI keeps its own per-run grants and posts `once`).
 
 ### Platform
 

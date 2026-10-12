@@ -7,7 +7,7 @@ import { dirname } from 'path';
 import type { ImageInput } from '@priest-ai/core';
 import type { AgentEvent, AgentUsage } from '../agent/AgentEvents';
 import type { AgentRunner } from '../agent/AgentRunner';
-import type { ApprovalDecision, ApprovalMode, ApprovalRequest, ToolKind } from '../agent/ApprovalPolicy';
+import { coveredByRunGrant, type ApprovalDecision, type ApprovalMode, type ApprovalRequest, type RunGrant, type ToolKind } from '../agent/ApprovalPolicy';
 import { RUN_WORKSPACE_RETENTION_MS } from '../agent/RunWorkspace';
 import type { RunFileInput } from '../agent/RunWorkspace';
 import { resolveRunArtifact } from '../agent/RunArtifacts';
@@ -127,7 +127,8 @@ export interface SequencedEvent {
   event: AgentEvent;
 }
 
-export type RunApprovalAction = 'once' | 'always' | 'trust' | 'deny';
+/** `run` approves the request's folder for the rest of this run only. */
+export type RunApprovalAction = 'once' | 'run' | 'always' | 'trust' | 'deny';
 
 interface PendingApproval {
   runId: string;
@@ -163,6 +164,8 @@ interface ActiveRun {
   steeringQueue: string[];
   grantedKinds: Set<ToolKind>;
   trustedFolders: string[];
+  /** Folders approved for this run only (never persisted). */
+  runGrants: RunGrant[];
   waiters: Array<() => void>;
   evictTimer?: NodeJS.Timeout;
 }
@@ -205,7 +208,7 @@ export class RunRegistry {
         summary: interrupted ? 'Interrupted by host restart. Completed effects were not replayed.' : record.summary,
         finishedAt: record.finishedAt ?? new Date().toISOString(), finished: true,
         buffer: events, firstSeq: events[0]?.seq ?? record.eventCount + 1, lastSeq: record.eventCount,
-        abort: new AbortController(), steeringQueue: [], grantedKinds: new Set(), trustedFolders: [], waiters: [],
+        abort: new AbortController(), steeringQueue: [], grantedKinds: new Set(), trustedFolders: [], runGrants: [], waiters: [],
       };
       if (interrupted) { const event: SequencedEvent = { seq: ++run.lastSeq, event: { type: 'done', taskId: record.taskId ?? '', status: 'failed', summary: run.summary } }; run.buffer.push(event); this.journal?.save(this.toRecord(run), event); }
       this.runs.set(run.id, run);
@@ -240,6 +243,7 @@ export class RunRegistry {
       steeringQueue: [],
       grantedKinds: new Set(),
       trustedFolders: [],
+      runGrants: [],
       artifacts: [],
       waiters: [],
     };
@@ -349,6 +353,16 @@ export class RunRegistry {
       case 'deny':
         entry.settle({ approved: false, reason: 'denied via service' });
         return { requestId, approved: false };
+      case 'run': {
+        // Stored on the request's own run: a child may run on another device.
+        const grant = entry.request.runGrant;
+        if (!grant || entry.request.sudo) {
+          throw MarifoldError.agentRunInvalid('This approval cannot cover a folder for the run; use "once" or "deny".');
+        }
+        run.runGrants.push({ ...grant });
+        entry.settle({ approved: true });
+        return { requestId, approved: true };
+      }
       case 'trust': {
         if (entry.request.persistable === false) {
           throw MarifoldError.agentRunInvalid('This capability must be approved one call at a time and cannot be trusted persistently.');
@@ -523,6 +537,7 @@ export class RunRegistry {
    * the run is cancelled. Mirrors TelegramBridge.requestApproval. */
   private handleApproval(run: ActiveRun, request: ApprovalRequest): Promise<ApprovalDecision> {
     if (!request.escalated && run.grantedKinds.has(request.kind)) { return Promise.resolve({ approved: true }); }
+    if (coveredByRunGrant(request, run.runGrants)) { return Promise.resolve({ approved: true }); }
     if (request.persistable !== false
         && request.escalated
         && request.escalatedPath
@@ -531,8 +546,14 @@ export class RunRegistry {
     }
 
     return new Promise<ApprovalDecision>(resolve => {
+      // An unanswered prompt stops the run rather than inviting workarounds.
       const timer = setTimeout(() => {
-        settle({ approved: false, reason: 'no response to the approval prompt' });
+        const minutes = Math.max(1, Math.round(this.approvalTimeoutMs / 60000));
+        settle({
+          approved: false,
+          unanswered: true,
+          reason: `Stopped: the approval for "${request.summary}" went unanswered for ${minutes} minute${minutes === 1 ? '' : 's'}. Nothing else was attempted; start a new run when you are ready.`,
+        });
       }, this.approvalTimeoutMs);
       timer.unref?.();
       const onAbort = (): void => {

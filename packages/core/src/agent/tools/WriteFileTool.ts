@@ -9,6 +9,7 @@ import {
   isOutsideUserHome,
   isProtectedSystemWrite,
   isSensitiveHostPath,
+  runGrantFolder,
   resolveToolPath,
 } from '../RunWorkspace';
 import { type AgentTool, requireStringInput, type ToolExecutionContext, type ToolExecutionResult, type ToolRiskAssessment } from '../ToolRegistry';
@@ -68,9 +69,12 @@ export class WriteFileTool implements AgentTool {
             targetPath: target,
           };
         }
-        return { escalate: false };
+        // A guest executor still asks for these; let it offer "for this run".
+        const grantFolder = runGrantFolder(target, ctx.workspace);
+        return grantFolder ? { escalate: false, targetPath: target, runGrantFolder: grantFolder } : { escalate: false };
       }
       const nonPersistable = isOutsideUserHome(target, ctx.workspace) || isSensitiveHostPath(target, ctx.workspace);
+      const grantFolder = nonPersistable ? undefined : runGrantFolder(target, ctx.workspace);
       return {
         escalate: true,
         persistable: !nonPersistable,
@@ -78,6 +82,7 @@ export class WriteFileTool implements AgentTool {
           ? `writing ${target} is outside this run's persistent filesystem scope`
           : `target ${target} is outside the working directory and trusted folders`,
         targetPath: target,
+        ...(grantFolder ? { runGrantFolder: grantFolder } : {}),
       };
     }
     // A write inside a trusted folder is auto-approved — checked before the

@@ -179,13 +179,13 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
   }, []);
 
   const {
-    approvalHandler, resolveApproval, userInputHandler, resolveUserInput, trustFolderForProfile, cancelPrompts,
+    approvalHandler, resolveApproval, userInputHandler, resolveUserInput, trustFolderForProfile, cancelPrompts, beginRunApprovals,
     sessionGrantsRef, sessionTrustedFoldersRef,
   } = useApprovals({ runtime, dispatch, stateRef, notify });
   const {
     runAgent, startTextRun, retryLast, stop, steeringCount, setSteeringCount, steeringRef,
     abortRef, runGenerationRef, pendingContextRef, pendingImagesRef,
-  } = useRuns({ runtime, dispatch, stateRef, thinkRef, planNextRef, setPlanNext, notify, approvalHandler, userInputHandler, cancelPrompts });
+  } = useRuns({ runtime, dispatch, stateRef, thinkRef, planNextRef, setPlanNext, notify, approvalHandler, userInputHandler, cancelPrompts, beginRunApprovals });
   const { pendingSkill, runSkill, fillSkillVariable } = useSkills({ runtime, dispatch, stateRef, planNextRef, setPlanNext, notify, runAgent });
 
   // Confirm a `--resume` launch with a notice below the replayed turns, so the

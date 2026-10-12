@@ -66,6 +66,9 @@ export interface ToolRiskAssessment {
   /** False hides/rejects persistent "always"/"trust" actions. Used for host
    * paths outside $HOME and other capabilities that must be approved afresh. */
   persistable?: boolean;
+  /** Folder the user may approve for the rest of the run instead of this call
+   * alone (see `runGrantFolder`). Omit when the call must be approved singly. */
+  runGrantFolder?: string;
 }
 
 export interface AgentTool {

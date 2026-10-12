@@ -120,9 +120,12 @@ describe('RunWorkspace', () => {
       escalate: true,
       targetPath: fs.realpathSync(path.join(home, 'notes.txt')),
     });
-    expect(write.assessRisk({ path: 'inside', content: '' }, context)).toEqual({ escalate: false });
+    expect(write.assessRisk({ path: 'inside', content: '' }, context)).toMatchObject({
+      escalate: false,
+      targetPath: path.join(fs.realpathSync(cwd), 'missing-inside.txt'),
+    });
     // A link loop stays unresolved here because opening it fails with ELOOP.
-    expect(write.assessRisk({ path: 'loop', content: '' }, context)).toEqual({ escalate: false });
+    expect(write.assessRisk({ path: 'loop', content: '' }, context)).toMatchObject({ escalate: false, targetPath: path.join(fs.realpathSync(cwd), 'loop') });
     expect(() => fs.writeFileSync(path.join(cwd, 'loop'), 'x')).toThrow(/ELOOP/);
   });
 

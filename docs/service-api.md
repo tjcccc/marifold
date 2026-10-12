@@ -387,10 +387,11 @@ The default live-run wait is 30 minutes. Cancellation resolves it immediately. U
 #### The approval sequence
 
 1. The stream emits `approval_request`; the run **blocks**. The request also appears in the RunRecord's `pendingApprovals` (for polling clients).
-2. The client answers within 5 minutes (else auto-deny):
+2. The client answers within 5 minutes. Otherwise the run stops (status `failed`, an `error` event saying which approval went unanswered) instead of letting the model look for another route:
 
    `POST /v1/runs/:id/approvals/:requestId` with `{ "action": "..." }`
    - `once` — approve this call only.
+   - `run` — only when the request carries `runGrant` (`{ folder, access }`): approve and allow file calls under that folder for the rest of this run, without persisting anything. A `write` grant also covers reads; a `read` grant never covers writes. The tool offers `runGrant` only for in-home folders other than home itself, never for sensitive or Marifold state, shell, or sudo, and it works for guest-device calls that cannot be trusted persistently. A grant answered for a delegated child stays with the child. Otherwise `400 AGENT_RUN_INVALID`.
    - `always` — when `request.persistable !== false`, approve and persist "always allow `<kind>`" to the profile (future runs inherit it); later same-kind calls in this run stop asking.
    - `trust` — only when the request is persistable and has an `escalatedPath` (an out-of-workspace file write): approve and persist the target's folder as trusted. Otherwise `400 AGENT_RUN_INVALID`.
    - `deny` — reject; the model sees an error tool result and continues.
@@ -398,7 +399,7 @@ The default live-run wait is 30 minutes. Cancellation resolves it immediately. U
    Returns `{ ok, requestId, approved }`. Unknown/expired/already answered → `404 APPROVAL_NOT_FOUND`.
 3. The stream emits `approval_decision` (`source: "user"`), so every attached client converges — then `tool_result`.
 
-UX note for approval dialogs: mirror the TUI/Telegram wording — **Allow once** (safe default) / **Always allow \<kind\>** or **Trust folder** (when `escalatedPath` is present and `persistable !== false`) / **Deny**.
+UX note for approval dialogs: mirror the TUI/Telegram wording — **Allow once** (safe default) / **Allow folder for this run** (when `runGrant` is present; show its folder) / **Always allow \<kind\>** or **Trust folder** (when `escalatedPath` is present and `persistable !== false`) / **Deny**.
 
 ### Tasks (durable layer)
 

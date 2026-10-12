@@ -2,6 +2,12 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-10-13 — v0.87.0 — Folder approvals for one run, unanswered approvals stop the run
+
+- Approvals gain a `run` answer ("Allow folder for this run" in the Web sheet, `r` in the TUI): read and write tools propose the file's parent folder inside home (never home itself, sensitive or denied roots, or a folder containing them; the run's own folder for paths inside it), and later calls in that folder skip the prompt until the run ends. Grants live in memory on the run that answered, a write grant covers reads, and a delegated child run has its own grants, so a grant never covers another device. Guest executor calls carry the folder too. Shell, sudo, and full access still ask per command.
+- An approval left unanswered until the timeout now stops the run (`failed`, nothing else attempted) instead of being silently denied while the run continued.
+- Validation: lint, typecheck, core (584), service (102), TUI (141), and Web (280) tests. Live OrbStack harness `output/bridge-review-orbstack/run-run-grants.cjs` (temp `HOME`, mocked model): 5/5; four guest reads in two folders took two prompts instead of four, with the covered reads returning their content, and two guest writes took one. All devices need 0.87.0: the guest's assessment now reports the grant folder. Not done (in `TODO.md`): agent-proposed grants, the CLI prompt, remote TUI clients seeing grants made elsewhere.
+
 ## 2026-10-12 — v0.86.0 — Skill management across workspace devices
 
 - A skill install, update, removal, or configuration sent from a guest device now runs on the workspace host, where skills live (Automatic only: a skill keyword plus a management verb, including Chinese verbs). Using a skill stays on the requesting device; an explicit device selection wins.

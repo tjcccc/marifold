@@ -7,6 +7,7 @@ import {
   isExactPath,
   isOutsideUserHome,
   isSensitiveHostPath,
+  runGrantFolder,
   resolveToolPath,
 } from '../RunWorkspace';
 import {
@@ -53,7 +54,10 @@ export class ReadFileTool implements AgentTool {
     const target = canonicalPath(resolveToolPath(input.path, ctx.workspace, ctx.cwd));
     if (ctx.workspace && isDeniedRunPath(target, ctx.workspace)) { return { escalate: false, blocked: true, persistable: false, reason: 'This path contains device-local or other-workspace state.' }; }
     if (isInsideAnyRoot(target, ctx.workspace.readRoots) || isExactPath(target, ctx.workspace.readOnlyFiles)) {
-      return this.options.strictWorkspace ? { escalate: false, trusted: true } : { escalate: false };
+      if (this.options.strictWorkspace) { return { escalate: false, trusted: true }; }
+      // A guest executor still asks for these; let it offer "for this run".
+      const grantFolder = isInsideAnyRoot(target, ctx.workspace.readRoots) ? runGrantFolder(target, ctx.workspace) : undefined;
+      return grantFolder ? { escalate: false, targetPath: target, runGrantFolder: grantFolder } : { escalate: false };
     }
     if (this.options.strictWorkspace) {
       return {
@@ -64,6 +68,7 @@ export class ReadFileTool implements AgentTool {
       };
     }
     const nonPersistable = isOutsideUserHome(target, ctx.workspace) || isSensitiveHostPath(target, ctx.workspace);
+    const grantFolder = nonPersistable ? undefined : runGrantFolder(target, ctx.workspace);
     return {
       escalate: true,
       persistable: !nonPersistable,
@@ -71,6 +76,7 @@ export class ReadFileTool implements AgentTool {
         ? `reading ${target} is outside this run's persistent filesystem scope`
         : `reading ${target} is outside this run's working and trusted folders`,
       targetPath: target,
+      ...(grantFolder ? { runGrantFolder: grantFolder } : {}),
     };
   }
 

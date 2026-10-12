@@ -1,3 +1,4 @@
+import * as path from 'path';
 import type { JSONValue } from '@priest-ai/core';
 
 export type ToolKind = 'read' | 'write' | 'shell' | 'network' | 'delegate';
@@ -88,12 +89,40 @@ export interface ApprovalRequest {
   /** False means the capability must be approved one call at a time. Clients
    * must not offer or accept persistent "always"/"trust" actions. */
   persistable?: boolean;
+  /** Present when the tool allows approving this folder for the rest of the
+   * run ("Allow <folder> for this run"). Never persisted; absent for shell,
+   * sudo, sensitive, and out-of-home calls. */
+  runGrant?: RunGrant;
+}
+
+/** A folder approved for the remainder of one run. A write grant also covers
+ * reads; a read grant never covers writes. */
+export interface RunGrant {
+  folder: string;
+  access: 'read' | 'write';
+}
+
+/** True when an earlier run grant covers this request. Only requests the tool
+ * marked grantable qualify, so a grant never widens to other capabilities. */
+export function coveredByRunGrant(request: ApprovalRequest, grants: readonly RunGrant[]): boolean {
+  const wanted = request.runGrant;
+  if (!wanted || request.sudo || !request.escalatedPath) { return false; }
+  return grants.some(grant => (grant.access === 'write' || wanted.access === 'read')
+    && isWithin(request.escalatedPath!, grant.folder));
+}
+
+function isWithin(target: string, folder: string): boolean {
+  const relative = path.relative(folder, target);
+  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
 }
 
 export interface ApprovalDecision {
   sudoResponse?: import('./SudoCredentials').SudoResponse;
   approved: boolean;
   reason?: string;
+  /** Nobody answered in time. The run stops instead of looking for another
+   * route; `reason` tells the user what was left waiting. */
+  unanswered?: boolean;
 }
 
 /**

@@ -47,7 +47,7 @@ function previewLines(input: Record<string, PriestJSONValue>): string[] {
 
 /** What the user chose in the approval modal. The App maps this to an
  * ApprovalDecision plus the "Always" side effect (persist allow / trust folder). */
-export type ApprovalChoice = 'once' | 'always' | 'no';
+export type ApprovalChoice = 'once' | 'run' | 'always' | 'no';
 
 export function ApprovalModal({
   request,
@@ -87,6 +87,7 @@ export function ApprovalModal({
     if (key.escape || ch === 'd') { onResolve('no'); }
     else if (key.return || ch === 'a' || ch === 'y') { onResolve('once'); }
     else if (ch === 't' && request.persistable !== false) { onResolve('always'); }
+    else if (ch === 'r' && request.runGrant) { onResolve('run'); }
   });
 
   // The "always" action: trust this folder (escalated write), else allow this kind.
@@ -113,6 +114,12 @@ export function ApprovalModal({
         {request.sudo ? <Text>Target: {request.sudo.account}@{request.sudo.device}{'\n'}Password: {'•'.repeat(Math.min(length, 64))}{'\n'}Enter authorizes once · Esc cancels. Not saved or sent to the AI.{error ? `\n${error}` : ''}</Text> :
         <Text>
           <Text color={ATTACHMENT} bold>[a]</Text><Text color={DIM}>llow once</Text>
+          {request.runGrant ? (
+            <>
+              <Text color={DIM}> · </Text>
+              <Text color={ACCENT} bold>[r]</Text><Text color={DIM}>{`un: allow ${tildify(request.runGrant.folder)} until this task ends`}</Text>
+            </>
+          ) : null}
           {request.persistable !== false ? (
             <>
               <Text color={DIM}> · </Text>
