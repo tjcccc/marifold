@@ -2,6 +2,13 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-10-13 — v0.90.1 — Agent computer: pinned DNS through the proxy, delegation warning
+
+- With a proxy set, the egress no longer lets the proxy resolve names: it resolves them over DNS-over-HTTPS (`1.1.1.1`) through the proxy (local DNS may be poisoned where a proxy is needed), refuses private answers, and tunnels to the checked IP, so DNS rebinding cannot steer the proxy to the local network. If DNS-over-HTTPS is unreachable it falls back to local DNS, still pinning the address. Proxy rules that match domain names no longer apply to the computer's traffic. Without a proxy nothing changes.
+- In a run that can use the agent computer, the `delegate_device` approval says so: downloaded content could try to steer the run, so approve only what matches the request.
+- TODO: the default profile as the agent itself (avatars, official name, shared memory) for a design discussion.
+- Validation: lint, typecheck, core (596). Live through the user's Clash: pypi, GitHub, Docker Hub and Aliyun reached by pinned IP (GitHub's from DNS-over-HTTPS, differing from local DNS); the LAN IP and a name resolving to 127.0.0.1 refused. Harness `run-agent-computer.cjs`: 22/22 functional checks; its cleanup check wrongly counted the user's own agent computer and is now scoped to the test instance (the test instance left nothing).
+
 ## 2026-10-13 — v0.90.0 — One agent computer, an account per profile
 
 - The agent now has one computer instead of one per profile. Settings → **Agent computer** has **Create agent computer** / **Rebuild** / **Remove** for the computer and a **Profiles** list: **Give access** creates an account named after the profile (home `/home/<profile>`), **Remove access** keeps the account and files, **Remove account** deletes them. The `default` profile is the agent itself: its `marifold` account comes with the computer, is listed first, and cannot lose access.

@@ -171,7 +171,7 @@ export class WorkspaceRuns {
             { workspaceId, senderDeviceId: execution.originDeviceId, hostDeviceId: host.hostDeviceId },
           );
           return this.delegate!(input.registryRunId!, child);
-        }),
+        }, () => Boolean(registry.get('computer_exec'))),
       );
     }
     if (executionDeviceId === host.hostDeviceId) {

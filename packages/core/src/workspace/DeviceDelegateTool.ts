@@ -26,12 +26,23 @@ export class DeviceDelegateTool implements AgentTool {
       required: ['device', 'objective'],
     },
   };
-  constructor(private readonly start: (device: string, objective: string) => Promise<DeviceChildRun>) {}
+  /** `usesAgentComputer`: the run can also work on the agent computer, whose
+   * downloaded content could try to steer it, so the approval says so. */
+  constructor(
+    private readonly start: (device: string, objective: string) => Promise<DeviceChildRun>,
+    private readonly usesAgentComputer: () => boolean = () => false,
+  ) {}
   summarizeCall(input: Record<string, JSONValue>): string {
     return `ask device ${String(input.device)} to ${String(input.objective).slice(0, 160)}`;
   }
   assessRisk() {
-    return { escalate: true, persistable: false, reason: 'This starts agent work on another device.' };
+    return {
+      escalate: true,
+      persistable: false,
+      reason: this.usesAgentComputer()
+        ? 'This starts agent work on another device. This run also works on the agent computer, where downloaded content could try to steer it: approve only if this matches what you asked for.'
+        : 'This starts agent work on another device.',
+    };
   }
   async execute(input: Record<string, JSONValue>, context: ToolExecutionContext) {
     if (context.signal?.aborted) { throw new Error('Run cancelled.'); }

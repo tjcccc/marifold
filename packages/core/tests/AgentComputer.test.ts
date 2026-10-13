@@ -8,6 +8,7 @@ import { accountNameProblem, nextAccountUid, reconcileInput } from '../src/compu
 import { agentComputerTools, ComputerPutTool, mentionsAgentComputer } from '../src/computer/ComputerTools';
 import { choosePlatform, parseImageReference } from '../src/computer/ImageDownload';
 import { newProfileNameProblem } from '../src/profiles/ProfileName';
+import { DeviceDelegateTool } from '../src/workspace/DeviceDelegateTool';
 
 const dirs: string[] = [];
 afterEach(() => { for (const dir of dirs.splice(0)) { fs.rmSync(dir, { recursive: true, force: true }); } });
@@ -89,5 +90,11 @@ describe('agent computer', () => {
     expect(choosePlatform(manifests, 'linux/arm64')?.digest).toBe('arm64');
     expect(choosePlatform(manifests, 'linux/amd64')?.digest).toBe('amd');
     expect(choosePlatform(manifests, 'linux/riscv64')).toBeUndefined();
+  });
+
+  it('warns in delegate approvals when the run can also use the agent computer', () => {
+    const start = async () => { throw new Error('not used'); };
+    expect(new DeviceDelegateTool(start).assessRisk().reason).not.toContain('agent computer');
+    expect(new DeviceDelegateTool(start, () => true).assessRisk()).toMatchObject({ escalate: true, persistable: false, reason: expect.stringContaining('agent computer') });
   });
 });

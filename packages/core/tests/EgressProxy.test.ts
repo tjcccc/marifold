@@ -68,8 +68,10 @@ describe('egress proxy through an upstream', () => {
     expect(await ask('GET http://192.168.50.23:32140/v1/sessions HTTP/1.1\r\nHost: x\r\n\r\n')).toMatch(/^HTTP\/1\.1 403/);
     expect(await ask('CONNECT host.docker.internal:7890 HTTP/1.1\r\n\r\n')).toMatch(/^HTTP\/1\.1 403/);
     expect(seen).toEqual([]);
-    // Plain HTTP goes through a CONNECT tunnel to the checked host, in origin form.
+    // Plain HTTP goes through a CONNECT tunnel to the checked address (never a
+    // name the upstream would resolve again), in origin form.
     expect(await ask('GET http://mirrors.example/ubuntu/ HTTP/1.1\r\nHost: mirrors.example\r\n\r\n')).toContain('echo:GET /ubuntu/ HTTP/1.1');
-    expect(seen).toEqual(['CONNECT mirrors.example:80 HTTP/1.1']);
+    expect(await ask('CONNECT rebind.example:443 HTTP/1.1\r\n\r\n')).toMatch(/^HTTP\/1\.1 403/);
+    expect(seen).toEqual(['CONNECT 93.184.216.34:80 HTTP/1.1']);
   });
 });
