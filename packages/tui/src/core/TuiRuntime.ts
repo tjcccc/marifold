@@ -20,6 +20,7 @@ type AsyncMethods =
   | 'forgetMemories'
   | 'deleteMemories'
   | 'setProfileMaxContextTokens'
+  | 'setConfigValue'
   | 'compactSession'
   | 'updateSessionDisplay'
   | 'removeSkill';

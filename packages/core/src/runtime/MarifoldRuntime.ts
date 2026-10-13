@@ -42,7 +42,7 @@ import { sessionImageAccess } from '../agent/EarlierImages';
 import type { MemoryEntry, MemoryKind, MemoryMutationResult, MemoryRememberResult, MemoryScaffoldFile } from '../memory/MemoryStore';
 import { ProfileResolver } from '../profiles/ProfileResolver';
 import { ProfileManager } from '../profiles/ProfileManager';
-import type { ProfileFileKind, ProfileInstructionsMigrationResult, ProfileModelMigrationResult } from '../profiles/ProfileManager';
+import type { ProfileFileKind, ProfileInstructionsMigrationResult, ProfileSettingsMigrationResult } from '../profiles/ProfileManager';
 import { Scheduler } from '../schedule/Scheduler';
 import { RunRegistry } from '../runs/RunRegistry';
 import { TelegramBridge } from '../channels/TelegramBridge';
@@ -145,7 +145,7 @@ export class MarifoldRuntime {
       assertSessionAvailable: (sessionId, owner) => this.assertSessionAvailable(sessionId, owner),
       assertSessionWritable: sessionId => this.assertSessionWritable(sessionId),
       memoryEnabled: (profile, requestMemories) => this.memoryEnabled(profile, requestMemories),
-      memoryForRequest: (profile, requestMemories, prompt, thinking) => this.memoryForRequest(profile, requestMemories, prompt, thinking),
+      memoryForRequest: (profile, requestMemories, prompt) => this.memoryForRequest(profile, requestMemories, prompt),
       resolveAgentConfigForProfile: profile => this.resolveAgentConfigForProfile(profile),
       resolveWebSearch: (settings, modelToolsEnabled) => this.resolveWebSearch(settings, modelToolsEnabled),
       fallbackWebSearchAvailable: (settings, modelToolsEnabled) => this.fallbackWebSearchAvailable(settings, modelToolsEnabled),
@@ -158,7 +158,7 @@ export class MarifoldRuntime {
       engines: this.engines,
       createAppStore: directory => this.createAppStore(directory),
       resolveSettings: request => this.resolveSettings(request),
-      memoryForRequest: (profile, requestMemories, prompt, thinking) => this.memoryForRequest(profile, requestMemories, prompt, thinking),
+      memoryForRequest: (profile, requestMemories, prompt) => this.memoryForRequest(profile, requestMemories, prompt),
       resolveAgentConfigForProfile: profile => this.resolveAgentConfigForProfile(profile),
       createAgentRunner: (profile, registry, agentConfig, runtimeOptions) => this.createAgentRunner(profile, registry, agentConfig, runtimeOptions),
       listApps: () => this.listApps(),
@@ -173,7 +173,7 @@ export class MarifoldRuntime {
     const profileSettings = this.profileResolver.loadSettings(profile);
     const provider = request.provider ?? profileSettings.provider ?? config.default.provider;
     const model = request.model ?? profileSettings.model ?? config.default.model;
-    const think = request.think ?? profileSettings.think ?? config.default.think;
+    const think = request.think ?? config.default.think;
     const mode = profileSettings.mode ?? 'agent';
     if (!provider || !model) { throw MarifoldError.missingProviderModel(configPath); }
     return {
@@ -293,11 +293,6 @@ export class MarifoldRuntime {
     this.profileManager.setMemories(name, memories);
   }
 
-  /** Persist (or clear) a profile's thinking-mode default. */
-  setProfileThink(name: string, think: boolean | undefined): void {
-    this.profileManager.setThink(name, think);
-  }
-
   /** Persist a profile's recent-turn window ('all'/undefined clears the key). */
   setProfileSessionContextTurns(name: string, turns: number | 'all' | undefined): void {
     this.profileManager.setSessionContextTurns(name, turns);
@@ -313,7 +308,7 @@ export class MarifoldRuntime {
     return this.profileManager.migrateProfileInstructions(name);
   }
   /** Rewrite an older profile model setting as one `model` line, with backup. */
-  migrateProfileModel(name: string): ProfileModelMigrationResult { return this.profileManager.migrateModelSetting(name); }
+  migrateProfileSettings(name: string): ProfileSettingsMigrationResult { return this.profileManager.migrateProfileSettings(name); }
 
   /** Scaffold a new profile directory (same layout as `profile init`) and
    * return its detail. Duplicate or invalid names throw PROFILE_INVALID. */
@@ -590,7 +585,7 @@ export class MarifoldRuntime {
       sessionImages: runtimeOptions.createWorkspace ? undefined : sessionImageAccess(this.sessionResolver),
       memory: {
         enabled: memoryProfile => this.memoryEnabled(memoryProfile),
-        load: (memoryProfile, objective, thinking) => this.memoryForRequest(memoryProfile, true, objective, thinking),
+        load: (memoryProfile, objective) => this.memoryForRequest(memoryProfile, true, objective),
         apply: (memoryProfile, objective, controls, sessionId) => applyTurnMemory(this.memoryStore, memoryProfile, objective, controls, { sessionId, sizeLimit: this.options.loadedConfig.config.memory.sizeLimit, promptForgets: false }),
       },
       // Record the run as a tidy user→assistant exchange (the prompt when the
@@ -927,14 +922,13 @@ export class MarifoldRuntime {
     return this.engines.supportsThink(settings.provider, settings.model);
   }
 
-  private memoryForRequest(profile: string, requestMemories = true, prompt = '', thinking = false): string[] {
+  private memoryForRequest(profile: string, requestMemories = true, prompt = ''): string[] {
     const { config } = this.options.loadedConfig;
     if (!this.memoryEnabled(profile, requestMemories)) { return []; }
     this.ensureProfileMemoryFiles(profile);
     return this.memoryStore.listPromptMemory(profile, {
       contextLimit: config.memory.contextLimit,
       prompt,
-      thinking,
     });
   }
 

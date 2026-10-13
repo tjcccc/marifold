@@ -7,6 +7,7 @@ import {
   type MarifoldRuntime,
   resolveAgentConfig,
   resolveWebSearchConfig,
+  supportsThink,
 } from '@marifold/core';
 import { type JsonObject, objectBody, optionalStringField, requiredString, stringValue } from './Validation';
 
@@ -92,14 +93,7 @@ export function registerConfigRoutes(
     };
   });
 
-  server.get('/v1/models', async () => ({
-    ok: true,
-    default: {
-      provider: options.loadedConfig.config.default.provider,
-      model: options.loadedConfig.config.default.model,
-    },
-    options: [...options.loadedConfig.config.models.options],
-  }));
+  server.get('/v1/models', async () => modelsView(options.loadedConfig));
 
   // Model management (CLI `model add`/`rm`/`default`). Provider entries may be
   // created/updated here, but never with secrets — raw api_key values stay
@@ -149,6 +143,13 @@ function modelsView(loadedConfig: LoadedMarifoldConfig): JsonObject {
       model: loadedConfig.config.default.model,
     },
     options: [...loadedConfig.config.models.options],
+    // Models the global Think switch changes, so clients can hide it elsewhere.
+    thinkOptions: loadedConfig.config.models.options.filter(option => {
+      const slash = option.indexOf('/');
+      const providerName = option.slice(0, slash);
+      const providerType = loadedConfig.config.providers[providerName]?.type;
+      return slash > 0 && supportsThink({ providerName, providerType, model: option.slice(slash + 1) });
+    }),
   };
 }
 

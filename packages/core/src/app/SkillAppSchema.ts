@@ -49,7 +49,8 @@ export interface SkillAppModelDefinition {
   name: string;
   provider: string;
   model: string;
-  think: boolean;
+  /** Overrides the global Think switch; omitted follows `default.think`. */
+  think?: boolean;
 }
 
 /** A profile reference declared by a v2 template. Model/thinking overrides

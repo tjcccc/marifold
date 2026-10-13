@@ -211,20 +211,6 @@ describe('MarifoldOpenAICompatProvider', () => {
     expect(requestBody).not.toHaveProperty('think');
   });
 
-  it('translates legacy ChatGPT think=true into neutral Responses reasoning and drops the raw key', async () => {
-    let requestBody: Record<string, unknown> | undefined;
-    vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
-      requestBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
-      return sseResponse([{ type: 'response.completed' }]);
-    }));
-    const provider = new MarifoldOpenAICompatProvider('https://chatgpt.com/backend-api/codex', 'tok', { providerName: 'chatgpt', accountId: 'a' });
-    await provider.complete([{ role: 'user', content: 'Hi' }], {
-      provider: 'chatgpt', model: 'gpt-5-codex', providerOptions: { think: true },
-    });
-    expect(requestBody).toHaveProperty('reasoning', { effort: 'high' });
-    expect(requestBody).not.toHaveProperty('think'); // raw flag never reaches the backend
-  });
-
   it('preserves safe reasoning summaries, usage subsets, and opaque tool continuation', async () => {
     const bodies: Array<Record<string, unknown>> = [];
     let call = 0;

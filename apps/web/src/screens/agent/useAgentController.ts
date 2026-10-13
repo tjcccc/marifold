@@ -51,6 +51,7 @@ import type { ThreadState, UserAttachment } from '../../state/thread';
 import { activeRun, createThreadState, threadReducer } from '../../state/thread';
 import { preparedAttachmentsFromUser, toUserAttachments } from './sessionAttachments';
 import { runAgentCommand } from './agentCommands';
+import { useGlobalThink } from './useGlobalThink';
 import { useSessionLease } from './useSessionLease';
 
 
@@ -160,7 +161,6 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
   const [sendingBytes, setSendingBytes] = useState<number>();
   const [sessionLoading, setSessionLoading] = useState(Boolean(route.session));
   const sessionLoadRef = useRef(0);
-  const [think, setThink] = useState(false);
   const [modelOptions, setModelOptions] = useState<string[]>([]);
   const [modelChoice, setModelChoice] = useState<string | undefined>();
   const [sending, setSending] = useState(false);
@@ -226,6 +226,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
     },
     [onUnauthorized],
   );
+  const [think, setThink] = useGlobalThink(client, handleError);
 
   const rememberPersistedSessionIds = useCallback((ids: Iterable<string>) => {
     setPersistedSessionIds(current => {
@@ -374,7 +375,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
     };
   }, [client, handleError]);
 
-  // Profile selection → detail + think default.
+  // Profile selection → detail and skills.
   useEffect(() => {
     if (!profileName) { return; }
     let cancelled = false;
@@ -387,7 +388,6 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
         if (cancelled) { return; }
         setProfileDetail(detail);
         setSkills(skillList);
-        setThink(detail.settings.think ?? false);
       } catch (error) {
         if (!cancelled) { handleError(error); }
       }

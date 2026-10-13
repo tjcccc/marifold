@@ -218,7 +218,7 @@ describe('MemoryStore', () => {
     expect(rendered).not.toContain('VS Code');
   });
 
-  it('uses simple-prompt recall gating and thinking-mode priority expansion', () => {
+  it('uses simple-prompt recall gating and a fixed priority cutoff', () => {
     const store = new MemoryStore(path.join(tempDir(), 'profiles'));
 
     store.applySavePayloads('default', [
@@ -233,9 +233,8 @@ describe('MemoryStore', () => {
     expect(simple).not.toContain('Low priority');
 
     const normal = store.listPromptMemory('default', { prompt: 'What context do you have?' }).join('\n\n');
-    const thinking = store.listPromptMemory('default', { prompt: 'What context do you have?', thinking: true }).join('\n\n');
+    expect(normal).toContain('Python examples');
     expect(normal).not.toContain('Low priority');
-    expect(thinking).toContain('Low priority');
   });
 
   it('ranks same-priority memory by prompt relevance', () => {

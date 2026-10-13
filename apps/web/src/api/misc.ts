@@ -22,6 +22,8 @@ export async function getConfig(client: ApiClient): Promise<PublicConfig> {
 export interface ModelsView {
   default: { provider?: string; model?: string };
   options: string[];
+  /** Options the Think switch changes; absent from older services. */
+  thinkOptions?: string[];
 }
 
 export async function getModels(client: ApiClient): Promise<ModelsView> {

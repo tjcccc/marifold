@@ -38,8 +38,6 @@ const DEFAULT_CONTEXT_LIMIT = 2400;
 
 const NORMAL_PRIORITY_CUTOFF = 3;
 
-const THINKING_PRIORITY_CUTOFF = 10;
-
 const SIMPLE_PROMPT_PRIORITY_CUTOFF = 0;
 
 const JSONL_FILES: Record<MemoryKind, string> = {
@@ -313,9 +311,7 @@ export class MemoryStore {
     const contextLimit = options.contextLimit ?? DEFAULT_CONTEXT_LIMIT;
     const cutoff = isSimpleMemoryPrompt(options.prompt ?? '')
       ? SIMPLE_PROMPT_PRIORITY_CUTOFF
-      : options.thinking
-        ? THINKING_PRIORITY_CUTOFF
-        : NORMAL_PRIORITY_CUTOFF;
+      : NORMAL_PRIORITY_CUTOFF;
     const promptTokens = tokens(options.prompt ?? '');
     const nowTs = Date.now() / 1000;
     let candidates = [

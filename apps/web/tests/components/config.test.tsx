@@ -26,7 +26,6 @@ const detail: ProfileDetail = {
     displayName: 'Writing Partner',
     memories: true,
     mode: 'agent',
-    think: true,
     provider: 'ollama',
     model: 'gemma4:e4b',
     agent: { approval: { shell: 'deny' }, trustedFolders: ['/Users/me/blog'] },

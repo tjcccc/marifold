@@ -25,7 +25,7 @@ const V1_TEMPLATE = `import {
 
 const input = State('');
 const result = State('');
-const model = registerModel('provider/model', { think: false });
+const model = registerModel('provider/model');
 const skill = registerSkill('skill-name', { result: TextResult({ trim: true }) });
 const run = useSkill(model, skill, {
   parameters: { request: input },
@@ -135,7 +135,7 @@ export class SkillAppContextTool implements AgentTool {
           declarations: [
             'State(initialText)',
             'AttachmentState()',
-            "registerModel('provider/model', { think? })",
+            "registerModel('provider/model', { think? }) — omit think to follow the global Think switch",
             "registerProfile('profile-name', { model?, think?, memory?, history? })",
             "registerSkill('skill-name', { result: TextResult({ trim? }) })",
             'TextResult({ trim? })',

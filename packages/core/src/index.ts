@@ -180,6 +180,8 @@ export {
   providerConfigFromRegistry,
 } from './config/ProviderRegistry';
 export type { ProviderRegistryEntry, ProviderRegistryKind } from './config/ProviderRegistry';
+export { supportsThink } from './config/ThinkReasoning';
+export type { ThinkTarget } from './config/ThinkReasoning';
 export { MarifoldError } from './errors/MarifoldError';
 export type { MarifoldErrorCode } from './errors/MarifoldError';
 export {
@@ -223,7 +225,7 @@ export type {
   ProfileFileKind,
   ProfileInitResult,
   ProfileInstructionsMigrationResult,
-  ProfileModelMigrationResult,
+  ProfileSettingsMigrationResult,
   ProfileModelOverrideResult,
   ProfileRenameResult,
 } from './profiles/ProfileManager';

@@ -19,6 +19,8 @@ export interface InputBarProps {
   responding: boolean;
   disabled?: boolean;
   think: boolean;
+  /** False when the selected model has no thinking mode: the pill is hidden. */
+  thinkAvailable?: boolean;
   onToggleThink: () => void;
   modelOptions: string[];
   /** undefined = Auto (profile/config default). */
@@ -367,13 +369,15 @@ export function InputBar(props: InputBarProps) {
             </>
           ) : null}
           <div className={styles.controls}>
-            <button
-              className={props.think ? styles.pillActive : styles.pill}
-              title="Thinking mode"
-              onClick={props.onToggleThink}
-            >
-              Think
-            </button>
+            {props.thinkAvailable === false ? null : (
+              <button
+                className={props.think ? styles.pillActive : styles.pill}
+                title="Thinking for all profiles"
+                onClick={props.onToggleThink}
+              >
+                Think
+              </button>
+            )}
             <ModelChip options={props.modelOptions} choice={props.modelChoice} onSelect={props.onSelectModel} />
             {props.responding ? (
               <button

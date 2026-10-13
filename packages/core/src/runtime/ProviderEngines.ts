@@ -4,16 +4,14 @@ import type { LoadedMarifoldConfig } from '../config/ConfigSchema';
 import { exchangeGitHubTokenForCopilotToken } from '../config/GitHubCopilotAuth';
 import { withOAuthCredentials } from '../config/OAuthCredentials';
 import type { NativeWebSearchStrategy, ProviderFactory } from '../config/ProviderFactory';
-import { isGitHubCopilotResponsesModelId } from '../config/ProviderRegistry';
+import { ReasoningRetryProvider, reasoningRejected } from '../config/ReasoningRetry';
+import { type ThinkTarget, supportsThink, thinkReasoning } from '../config/ThinkReasoning';
 import { type XaiRefreshedTokens, refreshXaiAccessToken } from '../config/XaiTokenRefresh';
 import { MarifoldError } from '../errors/MarifoldError';
 import type { ProfileResolver } from '../profiles/ProfileResolver';
 import type { SessionResolver } from '../sessions/SessionResolver';
 import type { MarifoldResolvedSettings } from './MarifoldTypes';
 
-// Older OpenAI-compatible gateways still take a raw `{think}` body option.
-// Priest 2.8 owns neutral reasoning for Ollama, Anthropic, and Responses.
-const LEGACY_THINK_PROVIDER_NAMES = new Set(['bailian', 'alibaba_cloud']);
 const NATIVE_WEB_SEARCH_COMPAT_OPTION = 'marifold_native_web_search';
 
 /**
@@ -30,7 +28,7 @@ export class ProviderEngines {
   ) {}
 
   create(providerName: string, useSession: boolean, profileContext = true): PriestEngine {
-    const adapter = this.providerFactory.create(providerName);
+    const adapter = new ReasoningRetryProvider(this.providerFactory.create(providerName), providerName);
     const profileLoader = profileContext
       ? this.profileResolver
       : {
@@ -90,10 +88,7 @@ export class ProviderEngines {
     nativeWebSearch: NativeWebSearchStrategy = 'none',
   ): PriestConfig {
     const { config } = this.loadedConfig;
-    const provider = config.providers[settings.provider];
-    const neutralReasoning = this.supportsNeutralReasoning(settings.provider, settings.model);
     const providerOptions: Record<string, JSONValue> = {};
-    if (LEGACY_THINK_PROVIDER_NAMES.has(settings.provider)) { providerOptions['think'] = settings.think; }
     // Compatibility bridge for Priest 3.0.x. Priest 3.1 reads providerTools
     // directly; Marifold's Responses wrapper consumes and removes this marker
     // when an older engine does not forward that additive request field.
@@ -111,34 +106,17 @@ export class ProviderEngines {
       maxContextTokens: settings.maxContextTokens ?? config.default.maxContextTokens,
       compactionKeepTurns: config.default.compactionKeepTurns,
       sessionContextTurns: settings.sessionContextTurns ?? config.default.sessionContextTurns,
-      reasoning: provider?.type === 'ollama'
-        ? {
-            enabled: settings.think,
-            ...(settings.think ? { effort: 'high', summary: 'auto' as const } : {}),
-          }
-        : neutralReasoning && /^gpt-6-astra(?:-|$)/.test(settings.model)
-          ? {
-              enabled: true,
-              effort: settings.think ? 'medium' : 'low',
-              ...(settings.think ? { summary: 'auto' as const } : {}),
-            }
-          : neutralReasoning && settings.think
-            ? { enabled: true, effort: 'high', summary: 'auto' }
-            : undefined,
+      reasoning: thinkReasoning(this.thinkTarget(settings.provider, settings.model), settings.think),
       providerOptions: Object.keys(providerOptions).length > 0 ? providerOptions : undefined,
     };
   }
 
   supportsThink(providerName: string, model: string): boolean {
-    return LEGACY_THINK_PROVIDER_NAMES.has(providerName)
-      || this.supportsNeutralReasoning(providerName, model);
+    return supportsThink(this.thinkTarget(providerName, model));
   }
 
-  private supportsNeutralReasoning(providerName: string, model: string): boolean {
-    const provider = this.loadedConfig.config.providers[providerName];
-    return provider?.type === 'ollama'
-      || provider?.type === 'anthropic'
-      || providerName === 'chatgpt'
-      || (providerName === 'github_copilot' && isGitHubCopilotResponsesModelId(model));
+  private thinkTarget(providerName: string, model: string): ThinkTarget {
+    const providerType = this.loadedConfig.config.providers[providerName]?.type;
+    return { providerName, providerType, model, rejected: reasoningRejected(providerName, model) };
   }
 }

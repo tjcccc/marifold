@@ -38,7 +38,7 @@ export interface SkillAppOperationHost {
   readonly engines: ProviderEngines;
   createAppStore(directory?: string): AppStore;
   resolveSettings(request: Pick<MarifoldRunRequest, 'profile' | 'provider' | 'model' | 'think' | 'maxContextTokens'>): MarifoldResolvedSettings;
-  memoryForRequest(profile: string, requestMemories?: boolean, prompt?: string, thinking?: boolean): string[];
+  memoryForRequest(profile: string, requestMemories?: boolean, prompt?: string): string[];
   resolveAgentConfigForProfile(profile?: string): MarifoldAgentConfig;
   createAgentRunner(
     profile: string,
@@ -91,7 +91,6 @@ export class SkillAppOperations {
           settings.profile,
           operation.profile.memory,
           operation.prompt,
-          settings.think,
         );
         const historyContext = operation.profile.history && history?.length
           ? buildHistoryContext(history, 16_000)
@@ -165,7 +164,7 @@ export class SkillAppOperations {
           profile: `skillapp-${appName}`,
           provider: operation.model.provider,
           model: operation.model.model,
-          think: operation.model.think,
+          think: operation.model.think ?? this.host.loadedConfig.config.default.think,
           mode: 'chat',
         };
         await this.host.engines.refreshCredentials(settings.provider);

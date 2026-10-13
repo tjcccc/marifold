@@ -27,7 +27,6 @@ interface ProfilePatch {
   /** Both strings sets the override; both null clears it. */
   model?: { provider: string; model: string } | null;
   memories?: boolean | null;
-  think?: boolean | null;
   maxContextTokens?: number | null;
   sessionContextTurns?: number | 'all' | null;
   approval?: Partial<Record<ToolKind, ApprovalMode | null>>;
@@ -135,7 +134,6 @@ export function registerProfileRoutes(
       else { runtime.setProfileModelOverride(name, patch.model.provider, patch.model.model); }
     }
     if (patch.memories !== undefined) { runtime.setProfileMemories(name, patch.memories ?? undefined); }
-    if (patch.think !== undefined) { runtime.setProfileThink(name, patch.think ?? undefined); }
     if (patch.maxContextTokens !== undefined) {
       runtime.setProfileMaxContextTokens(name, patch.maxContextTokens ?? undefined);
     }
@@ -282,7 +280,6 @@ function parseProfilePatch(value: unknown): ProfilePatch {
   }
 
   patch.memories = nullableBoolean(body.memories, 'memories');
-  patch.think = nullableBoolean(body.think, 'think');
 
   if (body.maxContextTokens !== undefined) {
     if (body.maxContextTokens === null) { patch.maxContextTokens = null; }
@@ -316,7 +313,6 @@ function parseProfilePatch(value: unknown): ProfilePatch {
 
   // Drop the undefined placeholders so "absent" and "clear" stay distinct.
   if (patch.memories === undefined) { delete patch.memories; }
-  if (patch.think === undefined) { delete patch.think; }
   return patch;
 }
 

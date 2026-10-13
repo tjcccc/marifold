@@ -262,7 +262,7 @@ export class AgentRunner {
     // runs given memory by their caller stay read-only.
     const memoryAccess = !options.lean && options.memory === undefined && this.deps.memory?.enabled(settings.profile) ? this.deps.memory : undefined;
     const instructions = [environmentContext(environment, new Date(startedAtMs), settings), artifactPresentation(environment), ...(this.deps.contextInstructions ?? []), ...builtInInstructions, ...(memoryAccess ? agentMemoryInstructions(options.objective) : []), ...(options.instructions ?? [])];
-    let runOptions: AgentRunOptions = { ...options, environment, instructions, ...(memoryAccess ? { memory: memoryAccess.load(settings.profile, options.objective, settings.think) } : {}) };
+    let runOptions: AgentRunOptions = { ...options, environment, instructions, ...(memoryAccess ? { memory: memoryAccess.load(settings.profile, options.objective) } : {}) };
     if (runOptions.images && this.deps.prepareImages) {
       runOptions = {
         ...runOptions,

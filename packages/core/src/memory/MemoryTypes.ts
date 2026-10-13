@@ -100,7 +100,6 @@ export interface MemorySaveResult {
 export interface MemoryListOptions {
   limit?: number;
   contextLimit?: number;
-  thinking?: boolean;
   prompt?: string;
 }
 

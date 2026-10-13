@@ -840,7 +840,7 @@ describe('chat tool loop', () => {
       expect(summaries.join('')).toBe('Checking sources.');
       expect(usage).toMatchObject({ cachedInputTokens: 4, reasoningTokens: 3 });
       expect(bodies[0]).toMatchObject({
-        reasoning: { effort: 'high', summary: 'auto' },
+        reasoning: { effort: 'medium', summary: 'auto' },
       });
       const replay = bodies[1].input as Array<Record<string, unknown>>;
       expect(replay).toEqual(expect.arrayContaining([

@@ -155,7 +155,7 @@ function registerDeclaration(
       name,
       provider,
       model,
-      think: requireBoolean(value.think, 'model think', node, state, sourcePath),
+      ...(value.think !== undefined ? { think: requireBoolean(value.think, 'model think', node, state, sourcePath) } : {}),
     });
   } else if (value.__kind === 'profile') {
     const profile = requireString(value.profileName, 'profile name', node, state, sourcePath);
@@ -343,7 +343,7 @@ function evaluateCall(
       return {
         __kind: 'model',
         id: requireString(args[0], 'model id', node, state, sourcePath),
-        think: options.think === undefined ? false : requireBoolean(options.think, 'think', node, state, sourcePath),
+        ...(options.think !== undefined ? { think: requireBoolean(options.think, 'think', node, state, sourcePath) } : {}),
       };
     }
     case 'registerProfile': {

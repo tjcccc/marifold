@@ -597,7 +597,7 @@ describe('AgentRunner', () => {
     const memory = { enabled: () => true, load: vi.fn(() => ['The user likes green.']), apply };
     const { runner } = makeRunner(engine, [fakeTool()], {}, { memory });
     const events = await collect(runner.run({ objective: 'I prefer tea over coffee, please remember that.', sessionId: 'm1' }));
-    expect(memory.load).toHaveBeenCalledWith('default', 'I prefer tea over coffee, please remember that.', false);
+    expect(memory.load).toHaveBeenCalledWith('default', 'I prefer tea over coffee, please remember that.');
     expect(engine.requests[0].memory).toEqual(['The user likes green.']);
     expect(JSON.stringify(engine.requests[0])).toContain('memory_save');
     expect(events.filter(e => e.type === 'text')).toEqual([{ type: 'text', phase: 'final', text: 'Noted — tea it is.' }]);

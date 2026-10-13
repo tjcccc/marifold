@@ -148,7 +148,6 @@ export function ProfileSettingsPage(props: ProfileSettingsPageProps) {
           <div className={styles.name}>{detail.displayName}</div>
           <div className={styles.identitySub}>
             {detail.source} profile
-            {detail.settings.think ? ' · thinking on' : ''}
           </div>
         </div>
         {canEditAvatar ? (
@@ -289,15 +288,6 @@ export function ProfileSettingsPage(props: ProfileSettingsPageProps) {
               value={detail.settings.memories ? 'on' : 'off'}
               onChange={state => props.onPatch({ memories: state === 'on' })}
               aria-label="Memories"
-            />
-          </div>
-          <div className={styles.rowLine}>
-            <span className={styles.rowLabel}>Thinking</span>
-            <SegmentedControl
-              options={[{ id: 'on', label: 'On' }, { id: 'off', label: 'Off' }] as const}
-              value={detail.settings.think ? 'on' : 'off'}
-              onChange={state => props.onPatch({ think: state === 'on' })}
-              aria-label="Thinking"
             />
           </div>
         </div>
@@ -476,7 +466,7 @@ export function ProfileSettingsPage(props: ProfileSettingsPageProps) {
 
       {props.onDelete ? (
         <section className={styles.group} aria-label="Remove profile">
-          <div className={styles.groupTitle}>Profile</div>
+          <div className={styles.groupTitle}>Danger zone</div>
           <div className={styles.dangerCard}>
             <div>
               <div className={styles.dangerTitle}>Remove this profile</div>

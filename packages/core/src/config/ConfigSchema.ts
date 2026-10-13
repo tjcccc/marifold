@@ -193,8 +193,9 @@ export interface ProfileSettings {
   /** Per-profile cap on recent session turns replayed to the model (undefined = all);
    * falls back to default.sessionContextTurns. */
   sessionContextTurns?: number;
-  /** Per-profile thinking default; undefined falls back to default.think (off). */
-  think?: boolean;
+  /** A leftover per-profile `think` key. Ignored: Think is global
+   * (`default.think`). `marifold doctor --fix` removes it. */
+  legacyThink?: boolean;
   /** Per-profile agent overrides (approval/permissions, tool mode, iterations).
    * Merged over the global `[agent]`; undefined keys inherit global/defaults. */
   agent?: PartialAgentConfig;

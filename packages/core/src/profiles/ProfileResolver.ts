@@ -59,7 +59,7 @@ export class ProfileResolver implements ProfileLoader {
     const memories = optionalBoolean(raw.memories, `${name}.profile.toml memories`) ?? true;
     const maxContextTokens = optionalNumber(raw.max_context_tokens, `${name}.profile.toml max_context_tokens`);
     const sessionContextTurns = optionalTurnWindow(raw.session_context_turns, `${name}.profile.toml session_context_turns`);
-    const think = optionalBoolean(raw.think, `${name}.profile.toml think`);
+    const legacyThink = optionalBoolean(raw.think, `${name}.profile.toml think`);
     const agent = raw.agent !== undefined ? parsePartialAgentConfig(raw.agent, `${name}.profile.toml [agent]`) : undefined;
     const rawMode = optionalString(raw.mode, `${name}.profile.toml mode`);
     if (rawMode !== undefined && rawMode !== 'agent' && rawMode !== 'chat') {
@@ -68,7 +68,7 @@ export class ProfileResolver implements ProfileLoader {
         name,
       );
     }
-    return { displayName, provider, model, modelSetting, memories, mode: rawMode as ProfileMode | undefined, maxContextTokens, sessionContextTurns, think, agent };
+    return { displayName, provider, model, modelSetting, memories, mode: rawMode as ProfileMode | undefined, maxContextTokens, sessionContextTurns, agent, ...(legacyThink !== undefined ? { legacyThink } : {}) };
   }
 
   list(): ProfileSummary[] {

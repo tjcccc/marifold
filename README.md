@@ -78,7 +78,7 @@ For product direction and future scope, see [docs/vision.md](docs/vision.md) and
 - Profile memory inspection through `profile memory`.
 - Memory injection through the `@priest-ai/core` request `memory` lane.
 - Memory recall controls through `[memory].context_limit`, `profile.toml` `memories = false`, and `--no-memories`.
-- Thinking controls through `[default].think`, `ask --think [true|false]`, and TUI `/think on|off`.
+- One global Think switch, `[default].think`, set by the Web Think pill, TUI `/think on|off`, and Telegram `/think`; `ask --think [true|false]` overrides it for one run.
 - Basic config, model, provider, and session inspection commands.
 - Config backup and restore for config, profiles, memories, and optional sessions.
 - Profile rename and delete commands for stored profiles.
@@ -288,8 +288,8 @@ The packaged binary name is `marifold`.
 Related commands available inside the TUI:
 
 ```text
-/think on             Enable thinking mode for supported providers.
-/think off            Disable thinking mode.
+/think on             Turn thinking on for all profiles (saves [default].think).
+/think off            Turn thinking off for all profiles.
 /read <path>           Attach a local file's content to your next message.
 /image <path>          Attach an image to your next message. Repeatable.
 /image clear           Drop pending image attachments.
@@ -390,7 +390,7 @@ cors_origins = ["http://127.0.0.1:5173"] # exact-match browser origins allowed t
 
 With no token resolved, auth is off; loopback and private-network access remain available. With no `cors_origins`, cross-origin browser requests are rejected; a hosted Web UI reached through the same loopback, LAN, or Tailscale address is same-origin and needs no allowlist entry. `marifold service --token/--token-env/--cors-origin` override the config per start. When enabled, auth covers `/v1/*`; `/health` and hosted static files stay reachable. Authentication protects the API but never admits public source addresses.
 
-GPT-6 Astra uses `low` reasoning in normal mode and `medium` with thinking enabled. Thinking mode also requests reasoning summaries. Other models retain their existing reasoning defaults.
+ChatGPT models use `low` reasoning effort with Think off and `medium` with Think on; Think on also requests reasoning summaries. marifold never asks for `high`.
 
 ChatGPT model discovery queries the signed-in Codex catalog. Its required client version uses `MARIFOLD_CHATGPT_CATALOG_CLIENT_VERSION` when set to a numeric `major.minor.patch` version; otherwise it uses the newer of the bundled baseline (`0.154.0`) and the `client_version` in `$CODEX_HOME/models_cache.json` (default `~/.codex/models_cache.json`). Codex is optional: missing or invalid metadata uses the baseline. Local cached models and Codex credentials are never imported. Restart a running service after changing the environment override.
 
@@ -462,7 +462,15 @@ Web Config can remove a non-default provider after typed confirmation. Removal d
 
 `[memory].context_limit` caps the combined memory text injected into one provider request. Set it to `0` for unlimited memory injection. `[memory].size_limit` caps `memories/auto_short.jsonl`; low-priority short-term entries are trimmed first while priority `0` entries are preserved where possible.
 
-`[default].think` controls default thinking mode. marifold sends Priest's provider-neutral reasoning configuration to Ollama, Anthropic, ChatGPT, and Responses-only GitHub Copilot models. The legacy raw `think` option remains only for `bailian` and `alibaba_cloud`. When a provider returns a safe reasoning summary, marifold renders it separately from the answer; opaque provider continuation data is replayed to the provider but never exposed as text.
+`[default].think` is the global Think switch; there is no per-profile setting. SkillApps may override it per model or profile reference. Think on asks for `medium` effort and Think off for `low`, sent explicitly so a provider's higher default never applies:
+
+- ChatGPT and Responses-only GitHub Copilot models: `reasoning.effort`.
+- xAI: `reasoning_effort` (Grok defaults to `high` and cannot turn reasoning off).
+- Bailian and Alibaba Cloud: `enable_thinking` on or off.
+- Ollama: `think` on or off; `gpt-oss` models get the `low`/`medium` level instead.
+- Anthropic: adaptive thinking at `medium` effort when on; nothing when off.
+
+Other providers get no reasoning setting. If a model rejects the setting with an HTTP 400, marifold retries the call once without it and stops sending it to that model until the service restarts, and the Web Think pill is hidden for models it cannot affect. When a provider returns a safe reasoning summary, marifold renders it separately from the answer; opaque provider continuation data is replayed to the provider but never exposed as text.
 
 `[default]` also holds the conversation-context controls. `max_context_tokens` (budget that triggers summary compaction near ~80%; `0` disables it) and `session_context_turns` (hard cap on recent turns the model sees each turn — `"all"`/absent means no cap) are inherited by profiles and overridable per-profile in `profile.toml`. `compaction_keep_turns` (recent turns kept verbatim when compacting; defaults to 6) is global-only. See the `profile.toml` properties table below for the per-profile form.
 
@@ -524,7 +532,6 @@ All keys are optional. An absent key inherits the global `[default]` value (wher
 | `memories` | boolean | `true` | Load profile memory for this profile. Set `false` for tool profiles. Per-run `--no-memories` disables it for one `ask`. |
 | `max_context_tokens` | integer | inherits `[default].max_context_tokens` | Conversation-context budget in tokens; near ~80% older turns fold into a running summary. `0` disables compaction. |
 | `session_context_turns` | integer ≥ 0 \| `"all"` | `"all"` (inherits `[default].session_context_turns`) | Hard cap on the recent session turns the model sees each turn — applies to conversation replay and non-lean agent history. `0` = none; `"all"` or absent = no cap. Older turns stay on disk; this only bounds what is sent per turn. Pairs with `max_context_tokens` (the budget safety net). |
-| `think` | boolean | inherits `[default].think` (off) | Per-profile thinking default. Toggle per session with `/think on\|off`. |
 | `agent.approval.<kind>` | `"allow"` \| `"ask"` \| `"deny"` | inherits global `[agent.approval]` | Per-profile tool permission for `read`/`write`/`shell`/`network`/`delegate`. Persisted by the approval prompt's "Trust". |
 | `agent.trusted_folders` | array of paths | `[]` (union of global) | Extra folder capabilities. In-home entries may be written without prompting; external entries still require one-time approval per action. Add eligible entries with `/trust-folder` or the prompt. The whole `[agent]` table (incl. `max_iterations`, `tool_mode`, `unattended`) is per-profile overridable. |
 
@@ -540,7 +547,7 @@ session_context_turns = 5
 
 Memory is context, not authority. Human-authored profile instructions and the current user message outrank memory. Prompt injection receives compact grouped memory blocks rather than raw JSON.
 
-marifold creates memory files for existing profiles when memory is first prepared, read, or written. When memory is on, marifold asks the model to emit hidden memory control blocks for useful saves or forgets, strips those blocks from visible replies and session history, applies JSONL updates after the turn, applies conservative prompt fallback extraction, applies prompt-driven forgets, and trims low-priority short-term memory. Recall uses priority cutoffs: normal mode recalls priority `0..3`, thinking mode recalls priority `0..10`, and simple greetings recall only priority `0`.
+marifold creates memory files for existing profiles when memory is first prepared, read, or written. When memory is on, marifold asks the model to emit hidden memory control blocks for useful saves or forgets, strips those blocks from visible replies and session history, applies JSONL updates after the turn, applies conservative prompt fallback extraction, applies prompt-driven forgets, and trims low-priority short-term memory. Recall uses priority cutoffs: messages recall priority `0..3` and simple greetings recall only priority `0`; Think does not change recall.
 
 marifold also reads legacy Markdown memory files in `memories/user.md`, `memories/preferences.md`, `memories/notes.md`, and `memories/auto_short.md` as read-only fallback prompt context.
 

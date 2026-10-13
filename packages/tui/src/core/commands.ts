@@ -119,7 +119,7 @@ const COMMANDS: CommandSpec[] = [
   { name: 'takeover', summary: 'Reopen this session here after another page, terminal, or app took it over.', run: ctx => ctx.takeOver() },
   {
     name: 'think',
-    summary: 'Toggle thinking: /think on|off.',
+    summary: 'Thinking for all profiles: /think on|off.',
     run: (ctx, args) => {
       const value = args.trim().toLowerCase();
       if (value === 'on') { ctx.setThink(true); }

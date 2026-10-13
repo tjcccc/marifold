@@ -528,8 +528,8 @@ describe('MarifoldRuntime', () => {
     ['gpt-6-astra', false, 'low'],
     ['gpt-6-astra', true, 'medium'],
     ['gpt-6-astra-2026-09-01', true, 'medium'],
-    ['gpt-5.6-sol', true, 'high'],
-    ['gpt-5.6-sol', false, undefined],
+    ['gpt-6.1-sol', true, 'medium'],
+    ['gpt-6.1-sol', false, 'low'],
   ] as const)('maps %s thinking=%s to %s reasoning', async (model, think, effort) => {
     const dir = tempDir();
     const config: MarifoldConfig = {
@@ -568,7 +568,7 @@ describe('MarifoldRuntime', () => {
     }
   });
 
-  it('passes thinking mode to supported providers', async () => {
+  it('passes thinking to Ollama on/off models as true, never a level they would ignore', async () => {
     const dir = tempDir();
     const config: MarifoldConfig = {
       default: {
@@ -618,7 +618,7 @@ describe('MarifoldRuntime', () => {
       });
 
       expect(response.ok).toBe(true);
-      expect(requestBody?.think).toBe('high');
+      expect(requestBody?.think).toBe(true);
     } finally {
       runtime.close();
     }
@@ -705,7 +705,7 @@ describe('MarifoldRuntime', () => {
     }
   });
 
-  it('resolves think with request > profile > default precedence (default off)', () => {
+  it('resolves think from the request, then the global default, ignoring a leftover profile key', () => {
     const dir = tempDir();
     const profilesDir = path.join(dir, 'profiles');
     fs.mkdirSync(path.join(profilesDir, 'thinker'), { recursive: true });
@@ -725,12 +725,11 @@ describe('MarifoldRuntime', () => {
     });
 
     try {
-      // Profile override wins over the (off) global default.
-      expect(runtime.resolveSettings({ profile: 'thinker' }).think).toBe(true);
-      // An explicit request value wins over the profile override.
-      expect(runtime.resolveSettings({ profile: 'thinker', think: false }).think).toBe(false);
-      // Unset profile falls back to default.think (off) — no profile edits needed.
-      expect(runtime.resolveSettings({ profile: 'plain' }).think).toBe(false);
+      // Think is global: a leftover `think = true` in profile.toml changes nothing.
+      expect(runtime.resolveSettings({ profile: 'thinker' }).think).toBe(false);
+      expect(runtime.resolveSettings({ profile: 'plain', think: true }).think).toBe(true);
+      config.default.think = true;
+      expect(runtime.resolveSettings({ profile: 'plain' }).think).toBe(true);
     } finally {
       runtime.close();
     }

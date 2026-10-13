@@ -330,17 +330,20 @@ describe('useAgentController session lifecycle', () => {
       if (path.startsWith('/v1/sessions?')) { return { sessions: [] }; }
       if (path.startsWith('/v1/runs')) { return { runs: [] }; }
       if (method === 'POST' && path === '/v1/profiles/prompt-maker/memories') { return { memories: [] }; }
+      if (method === 'PATCH' && path === '/v1/config') { return { config: { default: { profile: 'default', think: true } } }; }
       throw new Error(`Unexpected request: ${method} ${path}`);
     });
     const client = { request } as unknown as ApiClient;
     // Stable props, as App passes them: a new onUnauthorized per render would
-    // re-run the profile effect and reset the thinking default.
+    // re-run the profile effect.
     const options = { client, route: { view: 'agent' as const, profile: 'prompt-maker' }, navigate: vi.fn(), onUnauthorized: vi.fn() };
     const { result } = renderHook(() => useAgentController(options));
     await waitFor(() => expect(result.current.profileDetail?.name).toBe('prompt-maker'));
     const thread = () => JSON.stringify(result.current.thread);
     act(() => { void result.current.send('/think'); });
     await waitFor(() => expect(result.current.think).toBe(true));
+    // Think is global: the toggle saves default.think.
+    expect(request).toHaveBeenCalledWith('PATCH', '/v1/config', { key: 'default.think', value: 'true' });
     act(() => { void result.current.send('/model xai/grok-4.5'); });
     await waitFor(() => expect(thread()).toContain('Model set to xai/grok-4.5.'));
     act(() => { void result.current.send('/status'); });

@@ -47,7 +47,7 @@ export interface ChatTurnHost {
   assertSessionAvailable(sessionId: string, owner?: string): void;
   assertSessionWritable(sessionId: string): void;
   memoryEnabled(profile: string, requestMemories?: boolean): boolean;
-  memoryForRequest(profile: string, requestMemories?: boolean, prompt?: string, thinking?: boolean): string[];
+  memoryForRequest(profile: string, requestMemories?: boolean, prompt?: string): string[];
   resolveAgentConfigForProfile(profile?: string): MarifoldAgentConfig;
   resolveWebSearch(
     settings: Pick<MarifoldResolvedSettings, 'profile' | 'provider' | 'model'>,
@@ -95,7 +95,7 @@ export class ChatTurns {
       request.profileContext !== false,
     );
     const memoryOn = this.host.memoryEnabled(settings.profile, request.memories);
-    const memory = this.host.memoryForRequest(settings.profile, request.memories, request.prompt, settings.think);
+    const memory = this.host.memoryForRequest(settings.profile, request.memories, request.prompt);
     const searchResolution = this.host.resolveWebSearch(settings, request.chatTools !== false);
     let webSearchMode = searchResolution.mode;
     let chatTools = this.chatTools(request, webSearchMode);
@@ -256,7 +256,7 @@ export class ChatTurns {
       request.profileContext !== false,
     );
     const memoryOn = this.host.memoryEnabled(settings.profile, request.memories);
-    const memory = this.host.memoryForRequest(settings.profile, request.memories, request.prompt, settings.think);
+    const memory = this.host.memoryForRequest(settings.profile, request.memories, request.prompt);
     const searchResolution = this.host.resolveWebSearch(settings, request.chatTools !== false);
     let webSearchMode = searchResolution.mode;
     let chatTools = this.chatTools(request, webSearchMode);

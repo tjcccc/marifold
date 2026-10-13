@@ -14,6 +14,7 @@ import { randomUUID } from 'crypto';
 import { proxyDispatcher } from '../util/proxy';
 import { openAIChatCompletionsUrl, openAIResponsesUrl } from './OpenAICompatUrls';
 import { isGitHubCopilotResponsesModelId } from './ProviderRegistry';
+import { providerReasoning } from './ThinkReasoning';
 
 type OpenAICompatEndpoint = 'chat-completions' | 'responses';
 const NATIVE_WEB_SEARCH_COMPAT_OPTION = 'marifold_native_web_search';
@@ -70,7 +71,7 @@ export class MarifoldOpenAICompatProvider implements ProviderAdapter {
     options?: AdapterCallOptions,
   ): Promise<AdapterResult> {
     if (this.endpointForRequest(config) !== 'responses') {
-      return this.chatProvider.complete(messages, config, outputSpec, options);
+      return this.chatProvider.complete(messages, this.chatConfig(config), outputSpec, options);
     }
     const responsesConfig = this.responsesConfig(config, options);
     // The ChatGPT Codex backend is SSE-only ("Stream must be set to true").
@@ -106,7 +107,22 @@ export class MarifoldOpenAICompatProvider implements ProviderAdapter {
       );
       return;
     }
-    yield* this.chatProvider.streamEvents(messages, config, outputSpec, options);
+    yield* this.chatProvider.streamEvents(messages, this.chatConfig(config), outputSpec, options);
+  }
+
+  private chatConfig(config: PriestConfig): PriestConfig {
+    return this.withProviderReasoning(config, 'chat-completions');
+  }
+
+  /** Carry reasoning in the provider's own dialect for this wire API. */
+  private withProviderReasoning(config: PriestConfig, endpoint: OpenAICompatEndpoint): PriestConfig {
+    if (!config.reasoning) { return config; }
+    const { reasoning, fields } = providerReasoning(this.options.providerName, config.reasoning, endpoint);
+    return {
+      ...config,
+      reasoning,
+      providerOptions: Object.keys(fields).length > 0 ? { ...fields, ...config.providerOptions } : config.providerOptions,
+    };
   }
 
   private async accumulateResponsesStream(
@@ -177,14 +193,10 @@ export class MarifoldOpenAICompatProvider implements ProviderAdapter {
     return 'chat-completions';
   }
 
-  /** Preserve compatibility with Marifold callers that used `{think}` before
-   * Priest 2.8 introduced the provider-neutral reasoning field. Raw `think`
-   * must never leak into a Responses request. */
-  private responsesConfig(config: PriestConfig, options?: AdapterCallOptions): PriestConfig {
+  private responsesConfig(requested: PriestConfig, options?: AdapterCallOptions): PriestConfig {
+    const config = this.withProviderReasoning(requested, 'responses');
     const providerOptions = { ...(config.providerOptions ?? {}) };
-    const legacyThink = providerOptions['think'];
     const nativeWebSearch = providerOptions[NATIVE_WEB_SEARCH_COMPAT_OPTION] === true;
-    delete providerOptions['think'];
     delete providerOptions[NATIVE_WEB_SEARCH_COMPAT_OPTION];
     // The public OpenAI Responses API accepts max_output_tokens, but the
     // ChatGPT subscription Codex backend rejects it as an unsupported field.
@@ -214,9 +226,6 @@ export class MarifoldOpenAICompatProvider implements ProviderAdapter {
       maxOutputTokens: this.options.providerName === 'chatgpt'
         ? undefined
         : config.maxOutputTokens,
-      reasoning: config.reasoning ?? (legacyThink === true
-        ? { enabled: true, effort: 'high' }
-        : undefined),
       providerOptions: Object.keys(providerOptions).length > 0 ? providerOptions : undefined,
     };
   }

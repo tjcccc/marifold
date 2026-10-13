@@ -102,6 +102,10 @@ export class RemoteRuntime implements TuiRuntime {
     ]);
     clearTimeout(timer);
   }
+  setConfigValue: TuiRuntime['setConfigValue'] = async (key, value) => {
+    await this.api.request('PATCH', '/v1/config', { key, value });
+    await this.refresh();
+  };
   releaseSession = async (id: string): Promise<void> => {
     const request = releaseSessionLease(this.api, id);
     RemoteRuntime.releases.add(request);

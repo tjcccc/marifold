@@ -4,7 +4,7 @@ import { buildMemoryInstructions, shouldInjectMemoryInstructions, type MemoryCon
  * what it remembers for this objective, and where a completed turn's lessons go. */
 export interface AgentMemoryAccess {
   enabled(profile: string): boolean;
-  load(profile: string, objective: string, thinking: boolean): string[];
+  load(profile: string, objective: string): string[];
   apply(profile: string, objective: string, controls: MemoryControlPayloads, sessionId?: string): void;
 }
 

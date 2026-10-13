@@ -19,6 +19,7 @@ function makeBridge(opts: {
   supportsThink?: boolean;
 } = {}): { bridge: TelegramBridge; sent: Sent[] } {
   const sent: Sent[] = [];
+  const configWrites: string[] = [];
   let messageId = 0;
   const fetchImpl = (async (url: string | URL, init?: { body?: string }) => {
     const body = JSON.parse(String(init?.body ?? '{}'));
@@ -39,6 +40,7 @@ function makeBridge(opts: {
       },
     }),
     profileSupportsThink: () => opts.supportsThink ?? true,
+    setConfigValue: (key: string, value: string) => { configWrites.push(`${key}=${value}`); },
   } as unknown as MarifoldRuntime);
 
   const config: TelegramChannelConfig = {
@@ -46,7 +48,7 @@ function makeBridge(opts: {
     profile: 'messenger',
     defaultMode: opts.defaultMode ?? 'agent',
   };
-  return { bridge: new TelegramBridge({ runtime, token: 'TKN', config, fetchImpl, profilesDir: '/tmp/marifold-test-profiles' }), sent };
+  return { bridge: new TelegramBridge({ runtime, token: 'TKN', config, fetchImpl, profilesDir: '/tmp/marifold-test-profiles' }), sent, configWrites };
 }
 
 function msg(text: string, fromId = 42, chatId = 100) {
@@ -98,11 +100,12 @@ describe('TelegramBridge.handleUpdate', () => {
   it('/think on|off toggles, and warns when the provider does not support it', async () => {
     const supported = makeBridge({ supportsThink: true });
     await supported.bridge.handleUpdate(msg('/think on'));
-    expect(supported.sent[0].text).toBe('Thinking mode on.');
+    expect(supported.sent[0].text).toBe('Thinking mode on for all profiles.');
+    expect(supported.configWrites).toEqual(['default.think=true']);
 
     const unsupported = makeBridge({ supportsThink: false });
     await unsupported.bridge.handleUpdate(msg('/think on'));
-    expect(unsupported.sent[0].text).toContain('Thinking mode on.');
+    expect(unsupported.sent[0].text).toContain('Thinking mode on for all profiles.');
     expect(unsupported.sent[0].text).toContain('no effect');
 
     const badArg = makeBridge();

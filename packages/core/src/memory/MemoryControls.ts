@@ -148,7 +148,7 @@ export function buildMemoryInstructions(): string {
     + '<memory_forget>{"query":"user.favorite_color"}</memory_forget>\n\n'
     + 'Allowed kind values: "user", "preferences", "auto_short".\n'
     + 'priority is 0..10 where 0 is highest. Use 0 rarely for stable identity facts such as the user\'s name; '
-    + 'normal chats recall 0..3, thinking mode recalls 0..10.\n'
+    + 'chats recall 0..3 automatically; higher numbers are kept but not recalled automatically.\n'
     + 'Use priority 1-2 for explicit durable user facts, priority 2 for explicit preferences, '
     + 'priority 2-3 for time-sensitive facts the user may ask about soon, and 5+ for low-value background.\n'
     + 'confidence is 0..1. Use source=user_direct only for explicit user statements; otherwise use model_inferred.\n'

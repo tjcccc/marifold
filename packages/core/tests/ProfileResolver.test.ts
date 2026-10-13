@@ -263,19 +263,6 @@ describe('ProfileResolver', () => {
     expect(() => new ProfileResolver(root).loadSettings('broken-agent')).toThrow(/allow.*ask.*deny/i);
   });
 
-  it('parses a per-profile think override (and leaves it undefined when unset)', () => {
-    const root = tempDir();
-    const onDir = path.join(root, 'thinker');
-    fs.mkdirSync(onDir, { recursive: true });
-    fs.writeFileSync(path.join(onDir, 'profile.toml'), 'think = true\n');
-    expect(new ProfileResolver(root).loadSettings('thinker').think).toBe(true);
-
-    const offDir = path.join(root, 'plain');
-    fs.mkdirSync(offDir, { recursive: true });
-    fs.writeFileSync(path.join(offDir, 'profile.toml'), 'memories = true\n');
-    expect(new ProfileResolver(root).loadSettings('plain').think).toBeUndefined();
-  });
-
   it('treats session_context_turns = "all" as no cap (undefined) and accepts 0', () => {
     const root = tempDir();
     const allDir = path.join(root, 'full');
@@ -386,7 +373,7 @@ describe('ProfileResolver', () => {
     expect(new ProfileResolver(root).loadSettings('helper2').agent?.approval?.shell).toBeUndefined();
   });
 
-  it('sets and clears memories / think / session_context_turns via ProfileManager', () => {
+  it('sets and clears memories / session_context_turns via ProfileManager', () => {
     const root = tempDir();
     const dir = path.join(root, 'tuner');
     fs.mkdirSync(dir, { recursive: true });
@@ -394,15 +381,12 @@ describe('ProfileResolver', () => {
     const pm = new ProfileManager(root);
 
     pm.setMemories('tuner', false);
-    pm.setThink('tuner', true);
     pm.setSessionContextTurns('tuner', 5);
     let settings = new ProfileResolver(root).loadSettings('tuner');
-    expect(settings).toMatchObject({ memories: false, think: true, sessionContextTurns: 5, provider: 'ollama' });
+    expect(settings).toMatchObject({ memories: false, sessionContextTurns: 5, provider: 'ollama' });
 
-    pm.setThink('tuner', undefined);
     pm.setSessionContextTurns('tuner', 'all');
     settings = new ProfileResolver(root).loadSettings('tuner');
-    expect(settings.think).toBeUndefined();
     expect(settings.sessionContextTurns).toBeUndefined();
 
     expect(() => pm.setSessionContextTurns('tuner', -1)).toThrow(/non-negative integer/);

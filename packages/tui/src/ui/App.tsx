@@ -456,9 +456,6 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
         model: settings.model,
         maxContextTokens: settings.maxContextTokens ?? loadedConfig.config.default.maxContextTokens,
       });
-      // Adopt the new profile's thinking default (bare setter — selectProfile
-      // emits its own notice; the wrapped ctx.setThink would add a spurious one).
-      setThink(settings.think);
       dispatch({ type: 'new_session', sessionId: undefined });
       sessionGrantsRef.current.clear();
       sessionTrustedFoldersRef.current.clear();
@@ -479,7 +476,12 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
     stop,
     sideQuestion: sideQuestion.ask,
     exit: quit,
-    setThink: (on: boolean) => { setThink(on); notify(`Thinking ${on ? 'on' : 'off'}.`, 'info'); },
+    // Think is global (`default.think`): save it so every client follows.
+    setThink: async (on: boolean) => {
+      try { await runtime.setConfigValue('default.think', String(on)); } catch (error) { notify(`Cannot save thinking: ${errorText(error)}`, 'error'); return; }
+      setThink(on);
+      notify(`Thinking ${on ? 'on' : 'off'} (all profiles).`, 'info');
+    },
     toggleForcePlan: () => setPlanNext(armed => {
       notify(armed ? 'Planning disarmed.' : 'Next message will be planned step-by-step.', 'info');
       return !armed;

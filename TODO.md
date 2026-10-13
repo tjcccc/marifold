@@ -35,6 +35,27 @@ Shipped history lives in `DEVLOG.md` and the `docs/roadmap.md` ladder; this list
 
 ### Product
 
+- Curated model selection (agreed 2026-10-13; build after the next weekly reset):
+  - **Model first.** The picker lists the models we have tested, and each one offers the providers that serve it. Example list:
+    - GPT-6.1 Sol: ChatGPT, OpenAI, OpenRouter, custom…
+    - Sonnet 5.5: Anthropic, OpenRouter, custom…
+    - Grok 4.6: xAI, OpenRouter, custom…
+    - Qwen 3.8 27B: Bailian, llama.cpp, Ollama, OpenRouter, custom…
+    - Last entry, "Other model…": any provider and model ID.
+  - **What a catalog entry holds:**
+    - Whether the model is agent-capable, and its context size.
+    - Per provider: that provider's model ID, for example `gpt-6.1-sol` vs `openai/gpt-6.1-sol` vs `qwen3.8:27b`.
+    - Per provider: the think/effort settings, from the global think table.
+  - **Storage and providers:**
+    - Config and `profile.toml` keep `model = "provider/model"`; the catalog is only a picker and capability layer.
+    - Choosing a provider that isn't set up yet goes to its sign-in or key step; for Ollama it pulls the model.
+    - Provider settings (keys, sign-in, proxy, base URL) move to a secondary page.
+  - **Supported providers** (tested each release): chatgpt, xai, bailian/alibaba_cloud, ollama, llama.cpp, openrouter, openai, anthropic, gemini. Every other provider becomes a custom OpenAI-compatible endpoint; existing configs keep working, and `doctor` reports them.
+  - **Unverified models.** "Other model…" choices are labelled unverified, with a one-time warning that agent tasks may go poorly. They are never refused, because a translator SkillApp on a small model is a legitimate use.
+  - **Keeping it current.** Update the catalog with each release and keep it to about 5–8 models.
+  - **Later, not now:** fall back automatically to another provider for the same model when one fails, for example when a region is blocked.
+- Global think follow-up: confirm with one paid live request each that xAI honors `reasoning_effort` low/medium and that DashScope accepts `enable_thinking` on Qwen 3.8 and DeepSeek V4 (including non-streaming calls), on both Chat Completions and the Responses API that native web search and agent runs use (xAI `reasoning.effort`, Bailian `enable_thinking`). Built 2026-10-13 from the docs only.
+
 - The default profile as the agent itself (from 2026-10-13): make `default` the real marifold agent and other profiles its avatars ("avatar" or "persona"; the profile picture renamed to "portrait" or "icon"); choose its official name ("bot" rejected); decide whether avatars share core memory with per-avatar persona; the user-facing "talk to <name>" model. It already owns the fixed `marifold` account on the agent computer. Design discussion before code.
 
 - Apple clients (agreed architecture): build native SwiftUI renderers over a shared `MarifoldClient` package that consumes the service HTTP/SSE contracts with `URLSession`. The macOS app connects directly to the loopback service on its host; iOS connects to the Mac mini through private Tailscale Serve HTTPS. Keep profiles, memory, skills, sessions, tools, approvals, provider credentials, and execution authoritative in the TypeScript service. Store remote bearer credentials in Keychain, recover interrupted iOS streams by reloading durable task/session state, and reserve PriestSwift for a later explicit offline/local execution backend rather than running a second engine in ordinary connected clients.

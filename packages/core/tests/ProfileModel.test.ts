@@ -31,21 +31,29 @@ describe('profile model setting', () => {
     expect(() => settings(profile('provider = "chatgpt"\nmodel = "default"\n').root)).toThrow(/provider without a model/);
   });
 
-  it('migrates the older pair in place, keeping comments and tables, with a backup', () => {
+  it('migrates the older pair and drops the retired think key in one pass, keeping comments and tables, with one backup', () => {
     const original = '# my notes\ndisplay_name = "X"\nprovider = "chatgpt"\nmodel = "gpt-5.6-sol"\nthink = true\n\n[agent]\nmax_iterations = 9\n';
     const { root, file } = profile(original);
-    const result = new ProfileManager(root).migrateModelSetting('p');
-    expect(result).toMatchObject({ status: 'migrated', value: 'chatgpt/gpt-5.6-sol' });
-    expect(fs.readFileSync(file, 'utf-8')).toBe('# my notes\ndisplay_name = "X"\nmodel = "chatgpt/gpt-5.6-sol"\nthink = true\n\n[agent]\nmax_iterations = 9\n');
+    const result = new ProfileManager(root).migrateProfileSettings('p');
+    expect(result).toMatchObject({ status: 'migrated', value: 'chatgpt/gpt-5.6-sol', removedThink: true });
+    expect(fs.readFileSync(file, 'utf-8')).toBe('# my notes\ndisplay_name = "X"\nmodel = "chatgpt/gpt-5.6-sol"\n\n[agent]\nmax_iterations = 9\n');
     expect(fs.readFileSync(result.backupPath!, 'utf-8')).toBe(original);
-    expect(settings(root)).toMatchObject({ provider: 'chatgpt', model: 'gpt-5.6-sol', modelSetting: 'pinned', think: true, agent: { maxIterations: 9 } });
-    expect(new ProfileManager(root).migrateModelSetting('p').status).toBe('unchanged');
+    expect(settings(root)).toMatchObject({ provider: 'chatgpt', model: 'gpt-5.6-sol', modelSetting: 'pinned', agent: { maxIterations: 9 } });
+    expect(settings(root).legacyThink).toBeUndefined();
+    expect(new ProfileManager(root).migrateProfileSettings('p').status).toBe('unchanged');
   });
 
   it('writes model = "default" as a top-level key ahead of any table', () => {
     const { root, file } = profile('memories = false\n\n[agent]\nmax_iterations = 9\n');
-    expect(new ProfileManager(root).migrateModelSetting('p')).toMatchObject({ status: 'migrated', value: 'default' });
+    expect(new ProfileManager(root).migrateProfileSettings('p')).toMatchObject({ status: 'migrated', value: 'default' });
     expect(fs.readFileSync(file, 'utf-8')).toBe('memories = false\n\nmodel = "default"\n\n[agent]\nmax_iterations = 9\n');
     expect(settings(root)).toMatchObject({ modelSetting: 'default', memories: false, agent: { maxIterations: 9 } });
+  });
+
+  it('removes a leftover think key from an otherwise current profile, and reports it until then', () => {
+    const { root, file } = profile('model = "default"\nthink = false\n');
+    expect(settings(root)).toMatchObject({ modelSetting: 'default', legacyThink: false });
+    expect(new ProfileManager(root).migrateProfileSettings('p')).toMatchObject({ status: 'migrated', removedThink: false });
+    expect(fs.readFileSync(file, 'utf-8')).toBe('model = "default"\n');
   });
 });

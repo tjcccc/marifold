@@ -14,7 +14,6 @@ export interface ProfilePatchInput {
   provider?: string | null;
   model?: string | null;
   memories?: boolean | null;
-  think?: boolean | null;
   maxContextTokens?: number | null;
   sessionContextTurns?: number | 'all' | null;
   approval?: Partial<Record<ToolKind, ApprovalMode | null>>;

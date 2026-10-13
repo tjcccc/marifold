@@ -88,20 +88,21 @@ export function registerDoctorCommand(program: Command, printer: ConsolePrinter)
           }
         }
 
-        // Profile models — the one-line `model` form; --fix rewrites older forms.
-        out.write('\nProfile models\n');
+        // Profile settings — the one-line `model` form and no per-profile `think`
+        // (Think is one global switch); --fix rewrites both after one backup.
+        out.write('\nProfile settings\n');
         const modelOptions = new Set(loadConfig(program).config.models.options);
         for (const target of targets) {
           try {
             let settings = runtime.getProfile(target.name).settings;
-            if (options.fix && (settings.modelSetting === 'legacy' || settings.modelSetting === 'unset')) {
-              const result = runtime.migrateProfileModel(target.name);
+            const fixed: string[] = [];
+            const outdated = settings.modelSetting === 'legacy' || settings.modelSetting === 'unset' || settings.legacyThink !== undefined;
+            if (options.fix && outdated) {
+              const result = runtime.migrateProfileSettings(target.name);
               settings = runtime.getProfile(target.name).settings;
-              if (result.status === 'migrated') {
-                out.write(`  ${target.name}: ✓ rewritten as model = "${result.value}"\n`);
-                if (result.backupPath) { out.write(`    Backup: ${result.backupPath}\n`); }
-                continue;
-              }
+              if (result.value) { fixed.push(`✓ rewritten as model = "${result.value}"`); }
+              if (result.removedThink !== undefined) { fixed.push(`✓ removed think = ${result.removedThink}; Think is one global switch now`); }
+              if (result.backupPath) { fixed.push(`Backup: ${result.backupPath}`); }
             }
             const pinned = settings.provider && settings.model ? `${settings.provider}/${settings.model}` : undefined;
             if (settings.modelSetting === 'legacy') {
@@ -112,6 +113,11 @@ export function registerDoctorCommand(program: Command, printer: ConsolePrinter)
               out.write(`    Run \`${fixCommand}\` to write model = "default".\n`);
             } else {
               out.write(`  ${target.name}: ✓ ${pinned ?? 'default'}\n`);
+            }
+            for (const line of fixed) { out.write(`    ${line}\n`); }
+            if (settings.legacyThink !== undefined) {
+              out.write(`    ⚠ think = ${settings.legacyThink} is ignored: Think is one global switch now.\n`);
+              out.write(`    Run \`${fixCommand}\` to remove it.\n`);
             }
             // A pin removed from the model list is easy to miss: it does not follow the default.
             if (pinned && !modelOptions.has(pinned)) {

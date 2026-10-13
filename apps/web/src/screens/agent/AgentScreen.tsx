@@ -18,6 +18,7 @@ import { useAppsCatalog } from '../apps/useAppsCatalog';
 import { CatchUpBanner } from './CatchUpBanner';
 import { SessionArchivedBanner, SessionBlockedBanner } from './SessionBlockedBanner';
 import { InputBar } from './InputBar';
+import { useThinkAvailable } from './useGlobalThink';
 import { ProfileSidebarContent } from './ProfileSidebar';
 import { SessionListContent, sessionTitle } from './SessionList';
 import { ThreadHeader } from './ThreadHeader';
@@ -47,6 +48,7 @@ export interface AgentScreenProps {
 /** Responsive Agent workspace: desktop sidebar or mobile navigation stack plus conversation. */
 export function AgentScreen(props: AgentScreenProps) {
   const controller = useAgentController(props);
+  const thinkAvailable = useThinkAvailable(props.client, controller.modelChoice, controller.profileDetail?.settings);
   const appsCatalog = useAppsCatalog(props.client, props.onUnauthorized, props.appName);
   const mobile = useMediaQuery(MOBILE_QUERY);
   const [sidebarsHidden, setSidebarsHidden] = useState(
@@ -338,6 +340,7 @@ export function AgentScreen(props: AgentScreenProps) {
               responding={controller.responding}
               disabled={controller.sending || controller.sessionLoading || controller.sessionBlocked || sessionArchived}
               think={controller.think}
+              thinkAvailable={thinkAvailable}
               onToggleThink={() => controller.setThink(!controller.think)}
               modelOptions={controller.modelOptions}
               modelChoice={controller.modelChoice}

@@ -55,10 +55,6 @@ model = "default"
 # Load this profile's structured memory into context (default true).
 # memories = true
 
-# Thinking for this profile (default off). On = stronger reasoning, slower and
-# more expensive. Toggle per session with /think on|off.
-# think = false
-
 # Conversation-context budget in tokens; enables compaction past ~80%.
 # Falls back to default.max_context_tokens.
 # max_context_tokens = 16000
@@ -112,11 +108,13 @@ export interface ProfileModelOverrideResult {
   cleared: boolean;
 }
 
-export interface ProfileModelMigrationResult {
+export interface ProfileSettingsMigrationResult {
   name: string;
   status: 'migrated' | 'unchanged';
-  /** The `model` value written. */
+  /** The `model` value written, when the model line was rewritten. */
   value?: string;
+  /** The retired per-profile `think` value that was removed. */
+  removedThink?: boolean;
   backupPath?: string;
 }
 
@@ -193,26 +191,35 @@ export class ProfileManager {
     return { name, path: profileToml, cleared: true };
   }
 
-  /** Rewrite an older `provider` + `model` pair, or a missing model line, as
-   * one `model` line after backing up profile.toml. The choice itself is kept:
-   * a pin stays a pin and no pin becomes `model = "default"`. */
-  migrateModelSetting(name: string): ProfileModelMigrationResult {
+  /** Bring profile.toml to the current form after one backup. An older
+   * `provider` + `model` pair, or a missing model line, becomes one `model`
+   * line (a pin stays a pin, no pin becomes `model = "default"`), and the
+   * retired per-profile `think` key is removed because Think is global. */
+  migrateProfileSettings(name: string): ProfileSettingsMigrationResult {
     assertSafeName(name);
     const profileToml = path.join(this.requireProfileDir(name), 'profile.toml');
     if (!fs.existsSync(profileToml)) { return { name, status: 'unchanged' }; }
-    const text = fs.readFileSync(profileToml, 'utf-8');
-    const raw = parse(text) as { provider?: unknown; model?: unknown };
+    const original = fs.readFileSync(profileToml, 'utf-8');
+    const raw = parse(original) as { provider?: unknown; model?: unknown; think?: unknown };
     const current = parseProfileModel(
       name,
       typeof raw.provider === 'string' ? raw.provider : undefined,
       typeof raw.model === 'string' ? raw.model : undefined,
     );
-    if (current.setting === 'pinned' || current.setting === 'default') { return { name, status: 'unchanged' }; }
+    const rewriteModel = current.setting === 'legacy' || current.setting === 'unset';
+    const removedThink = typeof raw.think === 'boolean' ? raw.think : undefined;
+    if (!rewriteModel && removedThink === undefined) { return { name, status: 'unchanged' }; }
     const backupPath = path.join(createInstructionsBackupDir(this.profilesDir, name, '.legacy-profile-toml'), 'profile.toml');
     fs.copyFileSync(profileToml, backupPath);
-    const value = profileModelValue(current.provider, current.model);
-    atomicWriteFile(profileToml, upsertModelLine(text, value));
-    return { name, status: 'migrated', value, backupPath };
+    let text = removedThink === undefined ? original : removeTopLevelKey(original, 'think');
+    const value = rewriteModel ? profileModelValue(current.provider, current.model) : undefined;
+    if (value !== undefined) { text = upsertModelLine(text, value); }
+    atomicWriteFile(profileToml, text);
+    return {
+      name, status: 'migrated', backupPath,
+      ...(value !== undefined ? { value } : {}),
+      ...(removedThink !== undefined ? { removedThink } : {}),
+    };
   }
 
   /** Retained compatibility API for older clients that persist profile mode. */
@@ -320,11 +327,6 @@ export class ProfileManager {
   /** Persist (or clear, when undefined) whether this profile loads its memory. */
   setMemories(name: string, memories: boolean | undefined): { name: string; path: string; memories?: boolean } {
     return this.upsertSetting(name, 'memories', memories === undefined ? undefined : String(memories), { memories });
-  }
-
-  /** Persist (or clear, when undefined) the profile's thinking-mode default. */
-  setThink(name: string, think: boolean | undefined): { name: string; path: string; think?: boolean } {
-    return this.upsertSetting(name, 'think', think === undefined ? undefined : String(think), { think });
   }
 
   /** Persist the profile's recent-turn window. `undefined` or `'all'` removes the
@@ -559,6 +561,16 @@ function upsertModelLine(text: string, value: string): string {
   const next = out.join('\n').trimEnd();
   if (written) { return `${next}\n`; }
   return next ? `${next}\n\n${line}\n` : `${line}\n`;
+}
+
+/** Drop a top-level `key = …` line, leaving tables and comments untouched. */
+function removeTopLevelKey(text: string, key: string): string {
+  const pattern = new RegExp(`^\\s*${key}\\s*=`);
+  let inTable = false;
+  return text.split(/\r?\n/).filter(line => {
+    if (/^\s*\[/.test(line)) { inTable = true; }
+    return inTable || !pattern.test(line);
+  }).join('\n');
 }
 
 function upsertMode(text: string, mode: ProfileMode): string {

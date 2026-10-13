@@ -44,11 +44,13 @@ describe('config editing routes', () => {
       expect(patched.json().profile.displayName).toBe('Writing Partner');
       expect(settings).toMatchObject({
         mode: 'chat', provider: 'ollama', model: 'codellama',
-        memories: false, think: true, sessionContextTurns: 5,
+        memories: false, sessionContextTurns: 5,
       });
+      // Think is global now: an older client's profile think is ignored.
+      expect(settings.think).toBeUndefined();
       expect(settings.agent.approval.shell).toBe('deny');
 
-      // null clears: model override, think, the approval override, the turn window.
+      // null clears: model override, the approval override, the turn window.
       const cleared = await server.inject({
         method: 'PATCH',
         url: '/v1/profiles/writer',
@@ -56,7 +58,6 @@ describe('config editing routes', () => {
           displayName: null,
           provider: null,
           model: null,
-          think: null,
           sessionContextTurns: null,
           approval: { shell: null },
         },
@@ -67,7 +68,6 @@ describe('config editing routes', () => {
       expect(after.displayName).toBeUndefined();
       expect(after.provider).toBeUndefined();
       expect(after.model).toBeUndefined();
-      expect(after.think).toBeUndefined();
       expect(after.sessionContextTurns).toBeUndefined();
       expect(after.agent?.approval?.shell).toBeUndefined();
       expect(after.mode).toBe('chat'); // untouched fields preserved
