@@ -32,6 +32,7 @@ export type MarifoldErrorCode =
   | 'UNAUTHORIZED'
   | 'NETWORK_FORBIDDEN'
   | 'ORIGIN_FORBIDDEN'
+  | 'HOST_ONLY_SETTING'
   | 'WORKSPACE_INVALID'
   | 'WORKSPACE_CONFLICT';
 
@@ -205,6 +206,10 @@ export class MarifoldError extends Error {
       `Origin not allowed: ${origin}. Add it to [service].cors_origins.`,
       { origin },
     );
+  }
+
+  static hostOnlySetting(message: string): MarifoldError {
+    return new MarifoldError('HOST_ONLY_SETTING', message);
   }
 
   static workspaceAlreadyInitialized(configPath: string): MarifoldError {

@@ -2,6 +2,7 @@ import { SudoExecTool } from '../agent/tools/SudoExecTool';
 import { parseSudoResponse } from '../agent/SudoCredentials';
 import type { DeviceExecution } from '../agent/DeviceExecution';
 import { ShellJobStatusTool } from '../agent/tools/ShellJobStatusTool';
+import type { RemoteStateAccess } from './RemoteStateAccess';
 import type { ArtifactWebRtc } from './ArtifactWebRtc';
 import { createArtifactPreview, artifactPreviewVariant } from '../agent/ArtifactPreview';
 import { artifactReadLength } from './WorkspaceArtifactTransfer';
@@ -64,6 +65,9 @@ export class WorkspaceExecutor {
     private readonly protectedPaths: string[] = [],
     private readonly transfers?: ArtifactWebRtc,
     device?: DeviceExecution,
+    /** Readable Marifold state for a workspace's runs; undefined keeps all of
+     * `protectedPaths` denied (this device is paired as executor only). */
+    private readonly stateAccess?: (workspaceId: string) => RemoteStateAccess | undefined,
   ) {
     for (const tool of executionTools(device)) { this.registry.register(tool); }
     this.timer = setInterval(() => {
@@ -129,8 +133,10 @@ export class WorkspaceExecutor {
         throw new Error('Remote image inputs must carry bytes or URLs, never device paths.');
       }
       const config = this.config();
+      const stateAccess = this.stateAccess?.(context.workspaceId);
       const workspace = createRunWorkspace({
-        deniedRoots: this.protectedPaths,
+        deniedRoots: stateAccess?.deniedRoots ?? this.protectedPaths,
+        ...(stateAccess ? { stateReadRoots: stateAccess.stateReadRoots } : {}),
         id: `ws_${context.workspaceId}_${runId}`,
         cwd: typeof b.cwd === 'string' ? b.cwd : undefined,
         trustedFolders: config.trustedFolders,

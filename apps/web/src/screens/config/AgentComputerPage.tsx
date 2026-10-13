@@ -15,9 +15,13 @@ const STATE_LABEL: Record<string, string> = {
   failed: 'Failed',
 };
 
-/** The agent's own Linux computers. Device-local: never reached through a workspace. */
+/** `managedHere` is false on another device of the host's workspace. */
+type ComputerPageStatus = AgentComputerStatus & { managedHere?: boolean };
+
+/** The agent's own Linux computer, on the device that hosts the profiles.
+ * Other workspace devices see it and give or remove profile access only. */
 export function AgentComputerPage({ client }: AgentComputerPageProps) {
-  const [status, setStatus] = useState<AgentComputerStatus>();
+  const [status, setStatus] = useState<ComputerPageStatus>();
   const [problem, setProblem] = useState<string>();
   const [busy, setBusy] = useState(false);
   const [proxy, setProxy] = useState<string>();
@@ -27,7 +31,7 @@ export function AgentComputerPage({ client }: AgentComputerPageProps) {
 
   const refresh = useCallback(async () => {
     try {
-      setStatus(await client.request<AgentComputerStatus>('GET', '/v1/agent-computer'));
+      setStatus(await client.request<ComputerPageStatus>('GET', '/v1/agent-computer'));
       setProblem(undefined);
     } catch (error) {
       setProblem(error instanceof Error ? error.message : String(error));
@@ -68,6 +72,7 @@ export function AgentComputerPage({ client }: AgentComputerPageProps) {
   const docker = status?.docker;
   const computer = status?.computer;
   const exists = computer?.state === 'running' || computer?.state === 'stopped';
+  const managedHere = status?.managedHere !== false;
   const setAccess = (profile: string, access: boolean) => act(() => client.request('PUT', `/v1/agent-computer/profiles/${encodeURIComponent(profile)}`, { access }));
 
   return (
@@ -77,13 +82,19 @@ export function AgentComputerPage({ client }: AgentComputerPageProps) {
           <div className={styles.pageTitle}>Agent computer</div>
           <div className={styles.pageSub}>
             A Linux computer the agent uses without approval prompts, with sudo. Each profile you give access gets its
-            own account there. It runs in Docker on this device, cannot reach your devices or local network, and receives
-            your files only when the agent copies them in with your approval.
+            own account there. It runs in Docker on {managedHere ? 'this device' : 'the workspace host'}, cannot reach your
+            devices or local network, and receives your files only when the agent copies them in with your approval.
           </div>
         </div>
       </header>
 
       {problem ? <div className={styles.problem} role="alert">{problem}</div> : null}
+      {managedHere ? null : (
+        <div className={styles.cardNote}>
+          This computer belongs to the workspace host. From this device you can give or remove a profile's access; create,
+          rebuild, or remove it and change its settings on the host.
+        </div>
+      )}
 
       <section className={styles.card}>
         <div className={styles.cardTitle}>Docker</div>
@@ -101,7 +112,7 @@ export function AgentComputerPage({ client }: AgentComputerPageProps) {
         <div className={styles.cardTitle}>Network</div>
         <div className={styles.fieldRow}>
           <span className={styles.fieldLabel}>Proxy</span>
-          <div className={styles.fieldEdit}>
+          {managedHere ? <div className={styles.fieldEdit}>
             <input
               className={styles.input}
               value={proxyValue}
@@ -111,11 +122,11 @@ export function AgentComputerPage({ client }: AgentComputerPageProps) {
             {proxy !== undefined && proxy !== (status?.settings.proxy ?? '') ? (
               <button className={styles.saveAction} disabled={busy} onClick={() => void saveSettings({ proxy: proxy.trim() })}>Save</button>
             ) : null}
-          </div>
+          </div> : <span className={styles.fieldStatic}>{proxyValue || 'None'}</span>}
         </div>
         <div className={styles.fieldRow}>
           <span className={styles.fieldLabel}>Base image</span>
-          <div className={styles.fieldEdit}>
+          {managedHere ? <div className={styles.fieldEdit}>
             <input
               className={styles.input}
               value={baseImageValue}
@@ -125,7 +136,7 @@ export function AgentComputerPage({ client }: AgentComputerPageProps) {
             {baseImage !== undefined && baseImage !== (status?.settings.baseImage ?? '') ? (
               <button className={styles.saveAction} disabled={busy} onClick={() => void saveSettings({ baseImage: baseImage.trim() })}>Save</button>
             ) : null}
-          </div>
+          </div> : <span className={styles.fieldStatic}>{baseImageValue || 'Default: ubuntu:24.04'}</span>}
         </div>
         <div className={styles.cardNote}>
           {status?.settings.upstream
@@ -139,7 +150,7 @@ export function AgentComputerPage({ client }: AgentComputerPageProps) {
         <div className={styles.optionRow}>
           <span className={styles.optionMeta}>{computer ? STATE_LABEL[computer.state] ?? computer.state : 'Checking…'}</span>
           <span className={styles.pageActions}>
-            {computer?.state === 'missing' || computer?.state === 'failed' ? (
+            {managedHere && (computer?.state === 'missing' || computer?.state === 'failed') ? (
               <button
                 className={styles.saveAction}
                 disabled={busy || !docker?.available}
@@ -148,7 +159,7 @@ export function AgentComputerPage({ client }: AgentComputerPageProps) {
                 Create agent computer
               </button>
             ) : null}
-            {exists ? (
+            {managedHere && exists ? (
               <>
                 <button
                   className={styles.linkAction}
@@ -218,7 +229,7 @@ export function AgentComputerPage({ client }: AgentComputerPageProps) {
                   Give access
                 </button>
               )}
-              {!item.fixed && item.account && !item.access ? (
+              {managedHere && !item.fixed && item.account && !item.access ? (
                 confirmRemove === item.profile ? (
                   <button
                     className={styles.removeAction}

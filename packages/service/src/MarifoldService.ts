@@ -113,7 +113,7 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
 
   const artifactTransfers = new ArtifactWebRtc();
   server.addHook('onClose', async () => artifactTransfers.close());
-  const workspaceExecutor = new WorkspaceExecutor(() => runtime.resolveAgentConfigForProfile(), path.join(workspaceManager.store.directory, 'runs'), [options.loadedConfig.configPath, ...Object.values(options.loadedConfig.config.paths).filter((value): value is string => typeof value === 'string'), path.dirname(workspaceManager.store.directory)], artifactTransfers, new DeviceExecution(options.loadedConfig.configPath));
+  const workspaceExecutor = new WorkspaceExecutor(() => runtime.resolveAgentConfigForProfile(), path.join(workspaceManager.store.directory, 'runs'), [options.loadedConfig.configPath, ...Object.values(options.loadedConfig.config.paths).filter((value): value is string => typeof value === 'string'), path.dirname(workspaceManager.store.directory)], artifactTransfers, new DeviceExecution(options.loadedConfig.configPath), workspaceId => workspaceManager.store.get(workspaceId).certificate.membership.access === 'executor' ? undefined : runtime.remoteStateAccess());
   const workspaceRuns = new WorkspaceRuns(runtime, workspaceManager);
   const workspaceContext = new WorkspaceRequestContext();
   registerSessionOwners(server, workspaceContext);
@@ -305,7 +305,7 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
   });
 
   registerTaskRoutes(server, runtime);
-  registerAgentComputerRoutes(server, runtime);
+  registerAgentComputerRoutes(server, runtime, workspaceContext);
 
   return server;
 }

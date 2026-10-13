@@ -69,6 +69,9 @@ export interface RunWorkspace {
    * are not capabilities and must not become listable. */
   readOnlyFiles: string[];
   deniedRoots?: string[];
+  /** Parts of `deniedRoots` this run may still read with approval for each
+   * access, and never write. */
+  stateReadRoots?: string[];
   readRoots: string[];
   writeRoots: string[];
   /** Roots outside the user's home. Shell calls touching this capability set
@@ -82,6 +85,7 @@ export interface RunWorkspace {
 
 export interface CreateRunWorkspaceOptions {
   deniedRoots?: string[];
+  stateReadRoots?: string[];
   id: string;
   cwd?: string;
   trustedFolders?: string[];
@@ -156,7 +160,8 @@ export function createRunWorkspace(options: CreateRunWorkspaceOptions): RunWorks
     userHome,
     readOnlyRoots,
     readOnlyFiles,
-    deniedRoots: uniquePaths([path.join(marifoldHome(), 'workspaces'), ...(options.deniedRoots ?? [])]),
+    deniedRoots: uniquePaths(options.deniedRoots ?? []),
+    stateReadRoots: uniquePaths(options.stateReadRoots ?? []),
     readRoots,
     writeRoots,
     externalRoots,
@@ -267,7 +272,14 @@ export function isOutsideUserHome(target: string, workspace: RunWorkspace): bool
 }
 
 export function isDeniedRunPath(target: string, workspace: RunWorkspace): boolean {
-  return !isInsideAnyRoot(target, [workspace.rootDir]) && isInsideAnyRoot(target, workspace.deniedRoots ?? []);
+  return !isInsideAnyRoot(target, [workspace.rootDir])
+    && isInsideAnyRoot(target, workspace.deniedRoots ?? [])
+    && !isInsideAnyRoot(target, workspace.stateReadRoots ?? []);
+}
+
+/** Marifold state this run may read but never write. */
+export function isReadOnlyStatePath(target: string, workspace: RunWorkspace): boolean {
+  return !isInsideAnyRoot(target, [workspace.rootDir]) && isInsideAnyRoot(target, workspace.stateReadRoots ?? []);
 }
 
 /** Account data that is never granted persistently: runs approve each access
@@ -293,7 +305,7 @@ export function runGrantFolder(target: string, workspace: RunWorkspace): string 
   const folder = path.dirname(canonicalPath(target));
   const home = canonicalPath(workspace.userHome);
   if (folder === home || !isInside(folder, home)) { return undefined; }
-  const protectedRoots = [...sensitiveHostRoots(workspace.userHome), ...(workspace.deniedRoots ?? [])];
+  const protectedRoots = [...sensitiveHostRoots(workspace.userHome), ...(workspace.deniedRoots ?? []), ...(workspace.stateReadRoots ?? [])];
   if (protectedRoots.some(root => isInside(folder, root) || isInside(root, folder))) { return undefined; }
   return folder;
 }
@@ -301,7 +313,7 @@ export function runGrantFolder(target: string, workspace: RunWorkspace): string 
 export function isSensitiveHostPath(target: string, workspace: RunWorkspace): boolean {
   const resolved = canonicalPath(target);
   if (isInside(resolved, workspace.rootDir)) { return false; }
-  return sensitiveHostRoots(workspace.userHome).some(root => isInside(resolved, root));
+  return [...sensitiveHostRoots(workspace.userHome), ...(workspace.stateReadRoots ?? [])].some(root => isInside(resolved, root));
 }
 
 export function isProtectedSystemWrite(target: string, workspace: RunWorkspace): boolean {

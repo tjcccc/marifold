@@ -4,7 +4,7 @@ The agent has its own Linux computer: one Docker container on this device that t
 
 ## Setup
 
-Settings → **Agent computer** (Web UI, on the device that hosts the profiles):
+Settings → **Agent computer** (Web UI, on the device that hosts the profiles; other devices in its workspace see the same page with only **Give access** and **Remove access**):
 
 1. **Docker** shows the detected runtime: OrbStack, Docker Desktop, Colima, or plain Docker. Install one if it says Docker is missing; start it if it says Docker is not running. The service looks for `docker` on `PATH` and in the usual install locations, so a launchd service without the shell `PATH` still finds it.
 2. **Proxy** (optional): the HTTP proxy you use on this device, such as `http://127.0.0.1:7890`. The computer reaches a proxy on this device's loopback as `host.docker.internal:<port>`. Not set means a direct connection.
@@ -16,7 +16,7 @@ Accounts follow their profiles: renaming a profile (`marifold profile rename`) r
 
 New profile names must be valid account names: lowercase letters, numbers, `_` and `-`, starting with a letter, at most 32 characters; system account names such as `root`, `ubuntu` and `marifold` are reserved. An older profile whose name does not fit is told to rename itself before it can have an account.
 
-Service API: `GET /v1/agent-computer`, `PUT /v1/agent-computer/settings`, `POST /v1/agent-computer/computer` (`{rebuildImage?}`), `DELETE /v1/agent-computer/computer`, `PUT /v1/agent-computer/profiles/:profile` (`{access}`), `DELETE /v1/agent-computer/profiles/:profile` (remove the account), and `DELETE /v1/agent-computer` (everything this configuration created, images included). These routes are device-local: they are never forwarded through a workspace bridge.
+Service API: `GET /v1/agent-computer`, `PUT /v1/agent-computer/settings`, `POST /v1/agent-computer/computer` (`{rebuildImage?}`), `DELETE /v1/agent-computer/computer`, `PUT /v1/agent-computer/profiles/:profile` (`{access}`), `DELETE /v1/agent-computer/profiles/:profile` (remove the account), and `DELETE /v1/agent-computer` (everything this configuration created, images included). Through a workspace, other full-member devices may use only `GET /v1/agent-computer` (its response carries `managedHere: false` for them) and `PUT /v1/agent-computer/profiles/:profile`; every other route answers 403 `HOST_ONLY_SETTING`. The check uses the bridge-authenticated sending device, so the host's own Web UI keeps full control through its hosted workspace. Executor-only devices cannot use the workspace API at all.
 
 ## What the agent gets
 

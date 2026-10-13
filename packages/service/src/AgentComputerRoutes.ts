@@ -1,20 +1,37 @@
 import type { FastifyInstance } from 'fastify';
 import { MarifoldError, type MarifoldRuntime } from '@marifold/core';
 import { objectBody } from './Validation';
+import type { WorkspaceRequestContext } from './WorkspaceRequestContext';
 
 /**
- * The agent computer belongs to this device. These routes are never forwarded
- * through a workspace bridge (`workspaceApiPath` does not list them).
+ * The agent computer belongs to this device. Other devices in its workspace
+ * see its status and give or remove a profile's access; creating, rebuilding
+ * or removing it, deleting accounts, and its network and image settings stay
+ * with this device.
  */
-export function registerAgentComputerRoutes(server: FastifyInstance, runtime: MarifoldRuntime): void {
+export function registerAgentComputerRoutes(server: FastifyInstance, runtime: MarifoldRuntime, workspaceContext: WorkspaceRequestContext): void {
   const computer = runtime.agentComputer;
+  const fromOtherDevice = (headers: Record<string, string | string[] | undefined>) => {
+    const provenance = workspaceContext.resolve(headers);
+    return provenance !== undefined && provenance.senderDeviceId !== provenance.hostDeviceId;
+  };
+  server.addHook('onRequest', async (request) => {
+    // The matched route, not the raw URL, so no spelling of a path slips past.
+    const route = request.routeOptions.url ?? '';
+    if (!route.startsWith('/v1/agent-computer')) { return; }
+    const shared = (request.method === 'GET' && route === '/v1/agent-computer')
+      || (request.method === 'PUT' && route === '/v1/agent-computer/profiles/:profile');
+    if (!shared && fromOtherDevice(request.headers)) {
+      throw MarifoldError.hostOnlySetting('The agent computer is managed on the workspace host; other devices can only give or remove profile access.');
+    }
+  });
   const profileNames = () => runtime.listProfiles().map(profile => profile.name);
   const requireProfile = (name: string) => {
     if (!profileNames().includes(name)) { throw MarifoldError.configInvalid(`Unknown profile "${name}".`); }
     return name;
   };
 
-  server.get('/v1/agent-computer', async () => ({ ok: true, ...(await computer.status(profileNames())) }));
+  server.get('/v1/agent-computer', async (request) => ({ ok: true, ...(await computer.status(profileNames())), managedHere: !fromOtherDevice(request.headers) }));
 
   server.put('/v1/agent-computer/settings', async (request) => {
     const body = objectBody(request.body);

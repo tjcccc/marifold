@@ -8,6 +8,7 @@ import {
   isInsideAnyRoot,
   isOutsideUserHome,
   isProtectedSystemWrite,
+  isReadOnlyStatePath,
   isSensitiveHostPath,
   runGrantFolder,
   resolveToolPath,
@@ -44,6 +45,7 @@ export class WriteFileTool implements AgentTool {
     if (typeof input.path !== 'string') { return { escalate: false }; }
     const target = canonicalPath(resolveToolPath(input.path, ctx.workspace, ctx.cwd));
     if (ctx.workspace && isDeniedRunPath(target, ctx.workspace)) { return { escalate: false, blocked: true, persistable: false, reason: 'This path contains device-local or other-workspace state.' }; }
+    if (ctx.workspace && isReadOnlyStatePath(target, ctx.workspace)) { return { escalate: false, blocked: true, persistable: false, reason: 'Marifold state on this device is read-only for requests from another workspace device.' }; }
     if (ctx.workspace) {
       if (isProtectedSystemWrite(target, ctx.workspace)) {
         return {
@@ -100,6 +102,7 @@ export class WriteFileTool implements AgentTool {
       ctx.cwd,
     );
     if (ctx.workspace && isDeniedRunPath(target, ctx.workspace)) { return { content: 'Path is isolated from this workspace.', summary: 'blocked workspace state access', isError: true }; }
+    if (ctx.workspace && isReadOnlyStatePath(target, ctx.workspace)) { return { content: 'Marifold state is read-only for this request.', summary: 'blocked workspace state write', isError: true }; }
     if (ctx.workspace && isProtectedSystemWrite(target, ctx.workspace)) {
       return {
         content: `Refused to write protected system path ${target}.`,

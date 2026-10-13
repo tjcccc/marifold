@@ -124,8 +124,21 @@ describe('device-hosted workspaces', () => {
     expect(response.statusCode, response.body).toBe(200);
     expect(response.json().devices.map((d: { id: string }) => d.id)).toEqual(expect.arrayContaining([p.hostDevice, p.device]));
     expect(workspaceApiPath('POST', '/v1/execution-devices')).toBe(false);
-    // The agent computer is this device's own; another device must not create or remove it.
-    for (const method of ['GET', 'PUT', 'POST', 'DELETE']) { expect(workspaceApiPath(method, '/v1/agent-computer/computers/default')).toBe(false); }
+  });
+  it('lets another device give profile access to the host computer but nothing else', async () => {
+    const p = await paired();
+    // The host computer's lifecycle and settings stay with the host.
+    for (const [method, url] of [['POST', '/v1/agent-computer/computer'], ['DELETE', '/v1/agent-computer/computer'], ['PUT', '/v1/agent-computer/settings'], ['DELETE', '/v1/agent-computer/profiles/default'], ['DELETE', '/v1/agent-computer']] as const) {
+      const response = await p.guest.inject({ method, url: `${p.prefix}${url}`, payload: {} });
+      expect(response.statusCode, `${method} ${url}`).toBe(403);
+      expect(response.json().error.code).toBe('HOST_ONLY_SETTING');
+    }
+    // Profile access reaches the host's handler (which then validates the profile).
+    const access = await p.guest.inject({ method: 'PUT', url: `${p.prefix}/v1/agent-computer/profiles/nobody`, payload: { access: true } });
+    expect(access.statusCode, access.body).toBe(400);
+    // The host's own Web UI may manage it through its hosted workspace.
+    const own = await p.host.inject({ method: 'PUT', url: `/v1/workspaces/${p.id}/api/v1/agent-computer/settings`, payload: { proxy: 'not a url' } });
+    expect(own.statusCode).not.toBe(403);
   });
   it('preserves a remote browser origin through the host-local workspace facade', async () => {
     const p = await paired();

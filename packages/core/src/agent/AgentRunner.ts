@@ -183,7 +183,7 @@ export interface AgentRunnerDeps {
   /** Exact app-owned files that may be read without exposing their parents. */
   resolveReadOnlyFiles?: (profile: string) => string[];
   allowExternalReadOnlyFolders?: boolean;
-  deniedRoots?: string[];
+  stateAccess?: { deniedRoots: string[]; stateReadRoots: string[] };
   contextInstructions?: string[];
 }
 
@@ -345,7 +345,7 @@ export class AgentRunner {
     let workspace: RunWorkspace;
     try {
     workspace = await (this.deps.createWorkspace ?? createRunWorkspace)({
-      deniedRoots: this.deps.deniedRoots,
+      ...this.deps.stateAccess,
       id: options.executionId ?? task.id,
       cwd,
       trustedFolders: [...agentConfig.trustedFolders, ...(options.trustedFolders ?? [])],

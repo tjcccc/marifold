@@ -4,7 +4,6 @@ import { SudoExecTool } from '../agent/tools/SudoExecTool';
 import { DeviceExecution } from '../agent/DeviceExecution';
 import { ShellJobStatusTool } from '../agent/tools/ShellJobStatusTool';
 import type { RuntimeEnvironment } from './RuntimeEnvironment';
-import type { AgentRunnerDeps } from '../agent/AgentRunner';
 import type { RunStartInput, RunJournal } from '../runs/RunRegistry';
 import type { ImageInput, UsageInfo } from '@priest-ai/core';
 import * as path from 'path';
@@ -80,7 +79,7 @@ import {
   type SkillAppInteractionHandlers,
 } from '../app/SkillAppInstanceRegistry';
 import { TaskStore } from '../tasks/TaskStore';
-import { defaultAppsDir, defaultSchedulesDir, defaultSkillsDir } from '../workspace/WorkspacePaths';
+import { defaultAppsDir, defaultSchedulesDir, defaultSkillsDir, marifoldHome } from '../workspace/WorkspacePaths';
 import type { TaskCreateInput, TaskEventInput, TaskListOptions, TaskState, TaskSummary, TaskUpdateInput } from '../tasks/TaskStore';
 import type { MarifoldAskResponse, MarifoldProviderToolDefinition, MarifoldResolvedSettings, MarifoldRunRequest, MarifoldWebSearchMode } from './MarifoldTypes';
 import { ProviderEngines } from './ProviderEngines';
@@ -88,6 +87,8 @@ import { ChatTurns } from './ChatTurns';
 import { SkillAppOperations } from './SkillAppOperations';
 import { AgentComputer } from '../computer/AgentComputer';
 import { agentComputerTools } from '../computer/ComputerTools';
+import { remoteStateAccess, type RemoteStateAccess } from '../workspace/RemoteStateAccess';
+import type { AgentRunnerOptions } from './AgentRunnerOptions';
 
 
 export interface MarifoldRuntimeOptions {
@@ -548,16 +549,7 @@ export class MarifoldRuntime {
     profile?: string,
     registry?: ToolRegistry,
     agentConfigOverride?: MarifoldAgentConfig,
-    runtimeOptions: {
-      createWorkspace?: AgentRunnerDeps['createWorkspace'];
-      listArtifacts?: AgentRunnerDeps['listArtifacts'];
-      deviceInstructions?: string;
-      contextInstructions?: string[];
-      webSearch?: boolean;
-      readOnlyFolders?: string[];
-      readOnlyFiles?: string[];
-      allowExternalReadOnlyFolders?: boolean;
-    } = {},
+    runtimeOptions: AgentRunnerOptions = {},
   ): AgentRunner {
     return new AgentRunner({
       checkSession: options => { if (options.sessionId) { this.assertSessionAvailable(options.sessionId, options.sessionOwner); this.assertSessionWritable(options.sessionId); } },
@@ -565,7 +557,7 @@ export class MarifoldRuntime {
         ? this.sessionLeases.hold(options.sessionId, options.sessionOwner ?? this.sessionOwner)
         : undefined,
       environment: this.options.environment,
-      deniedRoots: [path.join(path.dirname(this.options.loadedConfig.configPath), 'workspaces')],
+      stateAccess: runtimeOptions.stateAccess,
       contextInstructions: runtimeOptions.contextInstructions,
       createWorkspace: runtimeOptions.createWorkspace,
       listArtifacts: runtimeOptions.listArtifacts,
@@ -645,6 +637,12 @@ export class MarifoldRuntime {
       resolveReadOnlyFiles: () => runtimeOptions.readOnlyFiles ?? [],
       allowExternalReadOnlyFolders: runtimeOptions.allowExternalReadOnlyFolders,
     });
+  }
+
+  /** What runs requested from other workspace devices may do with this
+   * device's Marifold state. */
+  remoteStateAccess(): RemoteStateAccess {
+    return remoteStateAccess(marifoldHome(), this.options.loadedConfig.configPath, this.options.loadedConfig.config.paths);
   }
 
   createHostContextTools(profile?: string): ToolRegistry {

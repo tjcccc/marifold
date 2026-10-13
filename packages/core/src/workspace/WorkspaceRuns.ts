@@ -14,6 +14,7 @@ import {
 import type { MarifoldRuntime } from '../runtime/MarifoldRuntime';
 import { mentionsSkillManagement } from '../skill/BuiltInSkillManager';
 import { mentionsAgentComputer } from '../computer/ComputerTools';
+import { mentionsMarifoldState } from './RemoteStateAccess';
 import type { RunStartInput } from '../runs/RunRegistry';
 import { SkillManagementTool } from '../agent/tools/SkillManagementTool';
 import { executionTools } from './WorkspaceExecutor';
@@ -60,9 +61,11 @@ export class WorkspaceRuns {
     const devices = this.manager.devices(connection.id);
     const skill = input.lean || /^\s*\$[\w-]+/.test(input.userTurn ?? input.objective);
     // Skills are installed on the host, so Automatic sends management there too;
-    // likewise work on the agent computer, which the host drives.
+    // likewise work on the agent computer, which the host drives, and requests
+    // about ~/.marifold, where the host keeps the profiles and skills.
     const management = mentionsSkillManagement(input.userTurn ?? input.objective);
-    const hostOwned = skill || management || mentionsAgentComputer(input.userTurn ?? input.objective);
+    const hostOwned = skill || management || mentionsAgentComputer(input.userTurn ?? input.objective)
+      || mentionsMarifoldState(input.userTurn ?? input.objective);
     const mentioned = mention?.[2] ?? mention?.[3];
     const find = (value: string) => devices.filter(d => d.id === value || d.name.toLowerCase() === value.toLowerCase());
     // Accept a possessive ("@office's folder") when no device carries that exact name.
@@ -175,7 +178,10 @@ export class WorkspaceRuns {
       );
     }
     if (executionDeviceId === host.hostDeviceId) {
-      return this.runtime.createAgentRunner(input.profile, registry, undefined, { contextInstructions });
+      // A request from another device may read the host's Marifold state with
+      // approval, never its credentials or workspace keys, and never write it.
+      const stateAccess = execution.originDeviceId !== host.hostDeviceId ? this.runtime.remoteStateAccess() : undefined;
+      return this.runtime.createAgentRunner(input.profile, registry, undefined, { contextInstructions, ...(stateAccess ? { stateAccess } : {}) });
     }
     let runId: string;
     let lease: ReturnType<typeof setInterval> | undefined;
