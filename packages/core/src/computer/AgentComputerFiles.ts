@@ -3,11 +3,9 @@ import { spawn } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { AgentComputer } from './AgentComputer';
-import { COMPUTER_USER } from './AgentComputerImage';
 
 export const MAX_TRANSFER_BYTES = 512 * 1024 * 1024;
 export const MAX_TRANSFER_FILES = 20_000;
-const HOME = `/home/${COMPUTER_USER}`;
 
 export interface ExecResult {
   exitCode: number;
@@ -16,7 +14,7 @@ export interface ExecResult {
 }
 
 /**
- * Run a shell command as the computer's agent account. The command runs under
+ * Run a shell command as the profile's account. The command runs under
  * `timeout` in its own process group; cancelling kills that group inside the
  * container, because killing the local `docker exec` client alone would leave
  * the command running.
@@ -27,7 +25,7 @@ export async function execInComputer(
   command: string,
   options: { timeoutSeconds: number; signal?: AbortSignal; maxOutput: number },
 ): Promise<ExecResult> {
-  const container = await computer.ready(profile);
+  const { container, user, home } = await computer.ready(profile);
   const id = randomBytes(8).toString('hex');
   const wrapper = 'mkdir -p /tmp/.marifold-exec && echo $$ > "/tmp/.marifold-exec/$1" && exec 2>&1 && exec timeout -k 5 "$2" bash -lc "$3"';
   // bash, not sh: dash's kill rejects "--" before a negative process-group ID.
@@ -37,7 +35,7 @@ export async function execInComputer(
   options.signal?.addEventListener('abort', stop, { once: true });
   try {
     const result = await computer.cli().run(
-      ['exec', '-i', '-u', COMPUTER_USER, '-w', HOME, container, 'bash', '-c', wrapper, '_', id, String(options.timeoutSeconds), command],
+      ['exec', '-i', '-u', user, '-w', home, container, 'bash', '-c', wrapper, '_', id, String(options.timeoutSeconds), command],
       { maxOutput: options.maxOutput, signal: options.signal, timeoutMs: (options.timeoutSeconds + 30) * 1000 },
     );
     void computer.cli().run(['exec', '-u', 'root', container, 'rm', '-f', `/tmp/.marifold-exec/${id}`]).catch(() => undefined);
@@ -47,11 +45,11 @@ export async function execInComputer(
   }
 }
 
-/** Write text to a path inside the computer (relative paths start at the agent's home). */
+/** Write text to a path inside the computer (relative paths start at the account's home). */
 export async function writeComputerFile(computer: AgentComputer, profile: string, target: string, content: string): Promise<void> {
-  const container = await computer.ready(profile);
+  const { container, user, home } = await computer.ready(profile);
   await computer.cli().check(
-    ['exec', '-i', '-u', COMPUTER_USER, '-w', HOME, container, 'sh', '-c', 'mkdir -p -- "$(dirname -- "$1")" && cat > "$1"', '_', target],
+    ['exec', '-i', '-u', user, '-w', home, container, 'sh', '-c', 'mkdir -p -- "$(dirname -- "$1")" && cat > "$1"', '_', target],
     { input: content, timeoutMs: 120_000 },
   );
 }
@@ -67,12 +65,12 @@ export async function putIntoComputer(
   signal?: AbortSignal,
 ): Promise<{ files: number; bytes: number; destination: string }> {
   const stat = fs.lstatSync(source);
-  const container = await computer.ready(profile);
+  const { container, user, home } = await computer.ready(profile);
   if (stat.isFile()) {
     if (stat.size > MAX_TRANSFER_BYTES) { throw new Error(`${source} is larger than ${MAX_TRANSFER_BYTES / 1024 / 1024} MB.`); }
     const target = destination.endsWith('/') ? `${destination}${path.basename(source)}` : destination;
     await computer.cli().check(
-      ['exec', '-i', '-u', COMPUTER_USER, '-w', HOME, container, 'sh', '-c', 'mkdir -p -- "$(dirname -- "$1")" && cat > "$1"', '_', target],
+      ['exec', '-i', '-u', user, '-w', home, container, 'sh', '-c', 'mkdir -p -- "$(dirname -- "$1")" && cat > "$1"', '_', target],
       { input: fs.createReadStream(source), timeoutMs: 30 * 60_000, signal },
     );
     return { files: 1, bytes: stat.size, destination: target };
@@ -99,7 +97,7 @@ export async function putIntoComputer(
   const tarFailed = new Promise<never>((_, reject) => tar.on('close', code => { if (code) { reject(new Error(`Packing ${source} failed.`)); } }));
   await Promise.race([
     computer.cli().check(
-      ['exec', '-i', '-u', COMPUTER_USER, '-w', HOME, container, 'sh', '-c', 'mkdir -p -- "$1" && tar -xf - --no-same-owner --warning=no-unknown-keyword -C "$1"', '_', destination],
+      ['exec', '-i', '-u', user, '-w', home, container, 'sh', '-c', 'mkdir -p -- "$1" && tar -xf - --no-same-owner --warning=no-unknown-keyword -C "$1"', '_', destination],
       { input: tar.stdout, timeoutMs: 30 * 60_000, signal },
     ),
     tarFailed,
@@ -115,16 +113,16 @@ export async function getFromComputer(
   outputDir: string,
   signal?: AbortSignal,
 ): Promise<{ file: string; bytes: number }> {
-  const container = await computer.ready(profile);
+  const { container, user, home } = await computer.ready(profile);
   const size = Number(await computer.cli().check(
-    ['exec', '-u', COMPUTER_USER, '-w', HOME, container, 'sh', '-c', '[ -f "$1" ] || { echo "$1 is not a regular file in the computer" >&2; exit 2; }; stat -c %s -- "$1"', '_', source],
+    ['exec', '-u', user, '-w', home, container, 'sh', '-c', '[ -f "$1" ] || { echo "$1 is not a regular file in the computer" >&2; exit 2; }; stat -c %s -- "$1"', '_', source],
     { timeoutMs: 60_000 },
   ));
   if (!Number.isSafeInteger(size) || size > MAX_TRANSFER_BYTES) { throw new Error(`${source} is larger than ${MAX_TRANSFER_BYTES / 1024 / 1024} MB.`); }
   const file = uniquePath(outputDir, path.posix.basename(source).replace(/[^\w.@+-]/g, '_') || 'file');
   const out = fs.createWriteStream(file, { flags: 'wx', mode: 0o600 });
   try {
-    const result = await computer.cli().run(['exec', '-u', COMPUTER_USER, '-w', HOME, container, 'cat', '--', source], { stdout: out, timeoutMs: 30 * 60_000, signal });
+    const result = await computer.cli().run(['exec', '-u', user, '-w', home, container, 'cat', '--', source], { stdout: out, timeoutMs: 30 * 60_000, signal });
     await new Promise<void>(resolve => (out.writableFinished ? resolve() : out.once('finish', () => resolve())));
     if (result.code !== 0) { throw new Error(result.stderr.trim() || `Could not read ${source}.`); }
   } catch (error) {

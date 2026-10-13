@@ -290,14 +290,16 @@ describe('CreateProfileSheet', () => {
         onClose={() => {}}
       />,
     );
-    expect(screen.getByText('Letters, numbers, underscores, and hyphens only. No spaces.')).toBeTruthy();
+    expect(screen.getByText('Lowercase letters, numbers, underscores, and hyphens, starting with a letter. No spaces.')).toBeTruthy();
     const input = screen.getByLabelText('Profile name');
     expect(input.getAttribute('aria-describedby')).toBe('new-profile-name-rules');
     expect(screen.queryByLabelText('Mode')).toBeNull();
 
-    fireEvent.change(input, { target: { value: 'my profile' } });
-    expect(screen.getByText('Letters, numbers, underscores, and hyphens only.')).toBeTruthy();
+    fireEvent.change(input, { target: { value: 'MyProfile' } });
+    expect(screen.getByText('Lowercase letters, numbers, underscores, and hyphens, starting with a letter.')).toBeTruthy();
     expect((screen.getByRole('button', { name: 'Create profile' }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(input, { target: { value: 'root' } });
+    expect(screen.getByText("'root' is reserved for a system account.")).toBeTruthy();
   });
 });
 

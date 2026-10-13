@@ -330,6 +330,8 @@ export class MarifoldRuntime {
     }
     this.profileManager.delete(name);
     this.sessionResolver.deleteProfileDisplay(name);
+    // Recorded synchronously; the account goes now or on the computer's next use.
+    void this.agentComputer.removeAccount(name).catch(() => undefined);
   }
 
   /** The profile's stored avatar image (path + media type), if any. */

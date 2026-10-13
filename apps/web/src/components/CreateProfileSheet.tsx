@@ -3,7 +3,10 @@ import type { CreateProfileInput } from '../api/profiles';
 import { fileToBase64 } from '../lib/attachments';
 import styles from './CreateProfileSheet.module.css';
 
-const SAFE_NAME = /^[A-Za-z0-9_-]+$/;
+// Matches NEW_PROFILE_NAME in core: a profile name is also its agent computer account name.
+const SAFE_NAME = /^[a-z][a-z0-9_-]{0,31}$/;
+const RESERVED_NAMES = new Set(['root', 'daemon', 'bin', 'sys', 'sync', 'games', 'man', 'lp', 'mail', 'news', 'uucp', 'proxy',
+  'www-data', 'backup', 'list', 'irc', 'nobody', 'nogroup', 'ubuntu', 'agent', 'sudo', 'users', 'staff', 'adm', 'marifold', 'marifold-agents']);
 const AVATAR_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp']);
 const MAX_AVATAR_BYTES = 1024 * 1024;
 
@@ -32,10 +35,12 @@ export function CreateProfileSheet(props: CreateProfileSheetProps) {
     trimmed.length === 0
       ? undefined
       : !SAFE_NAME.test(trimmed)
-        ? 'Letters, numbers, underscores, and hyphens only.'
-        : taken
-          ? `'${trimmed}' already exists.`
-          : undefined;
+        ? 'Lowercase letters, numbers, underscores, and hyphens, starting with a letter.'
+        : RESERVED_NAMES.has(trimmed)
+          ? `'${trimmed}' is reserved for a system account.`
+          : taken
+            ? `'${trimmed}' already exists.`
+            : undefined;
   const canSubmit = trimmed.length > 0 && !nameProblem && !props.busy;
 
   async function pickAvatar(file: File | undefined): Promise<void> {
@@ -117,7 +122,7 @@ export function CreateProfileSheet(props: CreateProfileSheetProps) {
               }}
             />
             <div id="new-profile-name-rules" className={styles.nameRules}>
-              Letters, numbers, underscores, and hyphens only. No spaces.
+              Lowercase letters, numbers, underscores, and hyphens, starting with a letter. No spaces.
             </div>
           </div>
         </div>

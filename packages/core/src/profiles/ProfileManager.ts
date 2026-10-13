@@ -12,6 +12,7 @@ import {
   PROFILE_INSTRUCTIONS_FILE,
   resolveDirectoryProfileInstructions,
 } from './ProfileInstructions';
+import { assertNewProfileName } from './ProfileName';
 
 const SAFE_PROFILE_NAME = /^[A-Za-z0-9_-]+$/;
 
@@ -132,7 +133,7 @@ export class ProfileManager {
   constructor(private readonly profilesDir: string) {}
 
   init(name: string): ProfileInitResult {
-    assertSafeName(name);
+    assertNewProfileName(name);
     const profileDir = path.join(this.profilesDir, name);
     if (fs.existsSync(profileDir)) {
       throw MarifoldError.profileInvalid(`Profile '${name}' already exists at ${profileDir}.`, name);
@@ -351,7 +352,7 @@ export class ProfileManager {
 
   rename(from: string, to: string): ProfileRenameResult {
     assertSafeName(from);
-    assertSafeName(to);
+    assertNewProfileName(to);
     if (from === to) { throw MarifoldError.profileInvalid('New profile name must be different from the current name.', from); }
     if (from === 'default' || to === 'default') {
       throw MarifoldError.profileInvalid('Profile rename does not support the built-in default profile.', from);

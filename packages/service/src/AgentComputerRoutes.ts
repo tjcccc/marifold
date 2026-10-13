@@ -30,17 +30,35 @@ export function registerAgentComputerRoutes(server: FastifyInstance, runtime: Ma
 
   // Creating builds an image on first use, which takes minutes: start it and
   // let the client follow progress through GET /v1/agent-computer.
-  server.post<{ Params: { profile: string } }>('/v1/agent-computer/computers/:profile', async (request, reply) => {
-    const profile = requireProfile(request.params.profile);
+  server.post('/v1/agent-computer/computer', async (request, reply) => {
     const rebuildImage = objectBody(request.body ?? {}).rebuildImage === true;
-    if (!(await computer.dockerEnvironment()).available) { throw MarifoldError.configInvalid((await computer.dockerEnvironment()).error ?? 'Docker is unavailable.'); }
-    computer.create(profile, { rebuildImage }).catch(() => undefined);
+    const docker = await computer.dockerEnvironment();
+    if (!docker.available) { throw MarifoldError.configInvalid(docker.error ?? 'Docker is unavailable.'); }
+    computer.create({ rebuildImage }).catch(() => undefined);
     reply.status(202);
-    return { ok: true, profile, state: 'creating' };
+    return { ok: true, state: 'creating' };
   });
 
-  server.delete<{ Params: { profile: string } }>('/v1/agent-computer/computers/:profile', async (request) => {
-    await computer.remove(request.params.profile);
+  server.delete('/v1/agent-computer/computer', async () => {
+    await computer.remove();
+    return { ok: true };
+  });
+
+  // access: true creates the profile's account when it has none; false keeps it.
+  server.put<{ Params: { profile: string } }>('/v1/agent-computer/profiles/:profile', async (request) => {
+    const profile = requireProfile(request.params.profile);
+    const access = objectBody(request.body).access;
+    if (typeof access !== 'boolean') { throw MarifoldError.configInvalid('access must be a boolean.'); }
+    if (access) {
+      await computer.giveAccess(profile);
+    } else {
+      computer.removeAccess(profile);
+    }
+    return { ok: true, profile, access };
+  });
+
+  server.delete<{ Params: { profile: string } }>('/v1/agent-computer/profiles/:profile', async (request) => {
+    await computer.removeAccount(request.params.profile);
     return { ok: true };
   });
 

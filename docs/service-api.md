@@ -429,10 +429,12 @@ Managed via `marifold schedule ...`; schedules fire only while the service runs.
 
 | Method | Path | Notes |
 |---|---|---|
-| GET | `/v1/agent-computer` | Docker detection, settings (`proxy`, `baseImage`, and the `upstream` the containers use), image, egress, and each profile's computer state (`running`, `stopped`, `missing`, `creating`, `failed` with `error`) |
+| GET | `/v1/agent-computer` | Docker detection, settings (`proxy`, `baseImage`, and the `upstream` the containers use), image, egress, and the computer state (`running`, `stopped`, `missing`, `creating`, `failed` with `error`) |
 | PUT | `/v1/agent-computer/settings` | `{proxy?, baseImage?}`; a field left out keeps its value and an empty string clears it. A proxy must be `http://host:port`; changing it recreates the egress container |
-| POST | `/v1/agent-computer/computers/:profile` | `{rebuildImage?}`; returns 202 and creates in the background (poll `GET`). Recreating discards the computer's files |
-| DELETE | `/v1/agent-computer/computers/:profile` | Removes that computer; the network and egress go with the last one |
+| POST | `/v1/agent-computer/computer` | `{rebuildImage?}`; returns 202 and creates or rebuilds in the background (poll `GET`). Home folders are kept |
+| DELETE | `/v1/agent-computer/computer` | Removes the computer with its accounts, `/home` volume, egress, and network |
+| PUT | `/v1/agent-computer/profiles/:profile` | `{access}`; `true` creates the profile's account when missing, `false` keeps the account. Not for `default` |
+| DELETE | `/v1/agent-computer/profiles/:profile` | Removes the profile's account and home folder. Not for `default` |
 | DELETE | `/v1/agent-computer` | Removes every container, network, and image this configuration created |
 
 Never forwarded through a workspace bridge. See `docs/agent-computer.md`.

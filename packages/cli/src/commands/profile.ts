@@ -1,5 +1,5 @@
 import type { Command } from 'commander';
-import { ConfigManager, MarifoldError, ProfileManager } from '@marifold/core';
+import { AgentComputer, ConfigManager, MarifoldError, ProfileManager } from '@marifold/core';
 import type { MemoryEntry } from '@marifold/core';
 import { InteractivePrompt } from '../input/InteractivePrompt';
 import { PromptAbortError, isPromptAbortError } from '../input/PromptAbort';
@@ -99,7 +99,7 @@ export function registerProfileCommand(program: Command, printer: ConsolePrinter
   profile
     .command('init')
     .description('Scaffold a new profile directory.')
-    .argument('[name]', 'Profile name (letters, numbers, underscores, and hyphens only).')
+    .argument('[name]', 'Profile name (lowercase letters, numbers, underscores, and hyphens; starts with a letter).')
     .action(async (name: string | undefined) => {
       const prompt = new InteractivePrompt();
       try {
@@ -122,11 +122,12 @@ export function registerProfileCommand(program: Command, printer: ConsolePrinter
     .command('rename')
     .description('Rename a stored profile.')
     .argument('<from>', 'Current profile name.')
-    .argument('<to>', 'New profile name (letters, numbers, underscores, and hyphens only).')
-    .action((from: string, to: string) => {
+    .argument('<to>', 'New profile name (lowercase letters, numbers, underscores, and hyphens; starts with a letter).')
+    .action(async (from: string, to: string) => {
       try {
         const loadedConfig = loadConfig(program);
         const result = new ProfileManager(loadedConfig.config.paths.profilesDir).rename(from, to);
+        await new AgentComputer(loadedConfig.configPath).renameAccount(from, to);
         if (loadedConfig.config.default.profile === from) {
           new ConfigManager(loadedConfig).setDefaultProfile(to);
           process.stdout.write(`Default profile updated to '${to}'.\n`);
@@ -163,6 +164,7 @@ export function registerProfileCommand(program: Command, printer: ConsolePrinter
         }
 
         const result = new ProfileManager(loadedConfig.config.paths.profilesDir).delete(name);
+        await new AgentComputer(loadedConfig.configPath).removeAccount(name);
         process.stdout.write(`Deleted profile '${result.name}' from ${result.path}\n`);
       } catch (error) {
         if (isPromptAbortError(error)) {

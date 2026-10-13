@@ -228,7 +228,7 @@ export function ProfileSettingsPage(props: ProfileSettingsPageProps) {
           ) : null}
         </div>
         <div className={styles.groupHint}>
-          Profile names use letters, numbers, underscores, and hyphens only. Display names are shown throughout the Web UI; blank uses the profile name.
+          New profile names use lowercase letters, numbers, underscores, and hyphens. Display names are shown throughout the Web UI; blank uses the profile name.
         </div>
       </section>
 

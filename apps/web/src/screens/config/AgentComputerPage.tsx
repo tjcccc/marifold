@@ -11,7 +11,7 @@ const STATE_LABEL: Record<string, string> = {
   running: 'Running',
   stopped: 'Stopped',
   missing: 'Not created',
-  creating: 'Creating… (the first build takes a few minutes)',
+  creating: 'Creating… (the first build can take ten minutes or more)',
   failed: 'Failed',
 };
 
@@ -22,6 +22,7 @@ export function AgentComputerPage({ client }: AgentComputerPageProps) {
   const [busy, setBusy] = useState(false);
   const [proxy, setProxy] = useState<string>();
   const [baseImage, setBaseImage] = useState<string>();
+  /** 'computer' or a profile name whose Remove is waiting for a second click. */
   const [confirmRemove, setConfirmRemove] = useState<string>();
 
   const refresh = useCallback(async () => {
@@ -34,7 +35,7 @@ export function AgentComputerPage({ client }: AgentComputerPageProps) {
   }, [client]);
 
   useEffect(() => { void refresh(); }, [refresh]);
-  const creating = status?.computers.some(computer => computer.state === 'creating') === true;
+  const creating = status?.computer.state === 'creating';
   useEffect(() => {
     if (!creating) { return undefined; }
     const timer = setInterval(() => void refresh(), 3000);
@@ -65,6 +66,9 @@ export function AgentComputerPage({ client }: AgentComputerPageProps) {
   const proxyValue = proxy ?? status?.settings.proxy ?? '';
   const baseImageValue = baseImage ?? status?.settings.baseImage ?? '';
   const docker = status?.docker;
+  const computer = status?.computer;
+  const exists = computer?.state === 'running' || computer?.state === 'stopped';
+  const setAccess = (profile: string, access: boolean) => act(() => client.request('PUT', `/v1/agent-computer/profiles/${encodeURIComponent(profile)}`, { access }));
 
   return (
     <div className={styles.page}>
@@ -72,9 +76,9 @@ export function AgentComputerPage({ client }: AgentComputerPageProps) {
         <div>
           <div className={styles.pageTitle}>Agent computer</div>
           <div className={styles.pageSub}>
-            A Linux computer for each profile that the agent uses without approval prompts, with sudo. It runs in Docker on
-            this device, cannot reach your devices or local network, and receives your files only when the agent copies
-            them in with your approval.
+            A Linux computer the agent uses without approval prompts, with sudo. Each profile you give access gets its
+            own account there. It runs in Docker on this device, cannot reach your devices or local network, and receives
+            your files only when the agent copies them in with your approval.
           </div>
         </div>
       </header>
@@ -110,20 +114,12 @@ export function AgentComputerPage({ client }: AgentComputerPageProps) {
           </div>
         </div>
         <div className={styles.fieldRow}>
-          <span className={styles.fieldLabel} />
-          <span className={styles.fieldHint}>
-            {status?.settings.upstream
-              ? `The computers reach it as ${status.settings.upstream}. Local and private addresses stay blocked.`
-              : 'Empty: the computers connect to the internet directly. Local and private addresses are always blocked.'}
-          </span>
-        </div>
-        <div className={styles.fieldRow}>
           <span className={styles.fieldLabel}>Base image</span>
           <div className={styles.fieldEdit}>
             <input
               className={styles.input}
               value={baseImageValue}
-              placeholder="ubuntu:24.04"
+              placeholder="Default: ubuntu:24.04"
               onChange={event => setBaseImage(event.target.value)}
             />
             {baseImage !== undefined && baseImage !== (status?.settings.baseImage ?? '') ? (
@@ -131,60 +127,122 @@ export function AgentComputerPage({ client }: AgentComputerPageProps) {
             ) : null}
           </div>
         </div>
+        <div className={styles.cardNote}>
+          {status?.settings.upstream
+            ? `The computer reaches the proxy as ${status.settings.upstream}. Local and private addresses stay blocked. Docker itself downloads the base image through its own network settings.`
+            : 'No proxy: the computer connects to the internet directly. Local and private addresses are always blocked. Docker itself downloads the base image through its own network settings.'}
+        </div>
       </section>
 
       <section className={styles.card}>
-        <div className={styles.cardTitle}>Computers</div>
-        {(status?.computers ?? []).map(computer => (
-          <div key={computer.profile} className={styles.optionRow}>
+        <div className={styles.cardTitle}>Computer</div>
+        <div className={styles.optionRow}>
+          <span className={styles.optionMeta}>{computer ? STATE_LABEL[computer.state] ?? computer.state : 'Checking…'}</span>
+          <span className={styles.pageActions}>
+            {computer?.state === 'missing' || computer?.state === 'failed' ? (
+              <button
+                className={styles.saveAction}
+                disabled={busy || !docker?.available}
+                onClick={() => void act(() => client.request('POST', '/v1/agent-computer/computer', {}))}
+              >
+                Create agent computer
+              </button>
+            ) : null}
+            {exists ? (
+              <>
+                <button
+                  className={styles.linkAction}
+                  disabled={busy}
+                  title="Rebuild the image and recreate the computer. Files in home folders are kept; installed software is not."
+                  onClick={() => void act(() => client.request('POST', '/v1/agent-computer/computer', { rebuildImage: true }))}
+                >
+                  Rebuild
+                </button>
+                {confirmRemove === 'computer' ? (
+                  <button
+                    className={styles.removeAction}
+                    disabled={busy}
+                    onClick={() => void act(async () => {
+                      await client.request('DELETE', '/v1/agent-computer/computer');
+                      setConfirmRemove(undefined);
+                    })}
+                  >
+                    Remove with all accounts and files
+                  </button>
+                ) : (
+                  <button className={styles.removeAction} disabled={busy} onClick={() => setConfirmRemove('computer')}>Remove</button>
+                )}
+              </>
+            ) : null}
+          </span>
+        </div>
+        {computer?.error ? (
+          <div className={styles.errorBox} role="alert">
+            {computer.error}
+            {computer.errorDetail ? (
+              <details>
+                <summary>Details</summary>
+                <pre className={styles.errorDetail}>{computer.errorDetail}</pre>
+              </details>
+            ) : null}
+          </div>
+        ) : null}
+        <div className={styles.cardNote}>
+          Rebuild keeps every account's home folder; software installed outside them (for example with apt) is lost.
+        </div>
+      </section>
+
+      <section className={styles.card}>
+        <div className={styles.cardTitle}>Profiles</div>
+        {(status?.profiles ?? []).map(item => (
+          <div key={item.profile} className={styles.optionRow}>
             <span className={styles.optionName}>
-              {computer.profile}
-              <span className={styles.fieldHint}> · {STATE_LABEL[computer.state] ?? computer.state}</span>
-              {computer.error ? <span className={styles.fieldHint}> — {computer.error}</span> : null}
+              {item.profile}
+              <span className={styles.optionMeta}>
+                {item.fixed
+                  ? ` · the agent itself, account ${item.accountName}${item.account ? '' : ' (created with the computer)'}`
+                  : ` · ${item.access ? `Has access as ${item.accountName}` : item.account ? 'Account, no access' : 'No access'}`}
+              </span>
+              {item.problem ? <span className={styles.optionMeta}> — {item.problem}</span> : null}
             </span>
             <span className={styles.pageActions}>
-              {computer.state === 'missing' || computer.state === 'failed' ? (
+              {item.fixed ? null : item.access ? (
+                <button className={styles.linkAction} disabled={busy} onClick={() => void setAccess(item.profile, false)}>Remove access</button>
+              ) : (
                 <button
                   className={styles.saveAction}
-                  disabled={busy || !docker?.available}
-                  onClick={() => void act(() => client.request('POST', `/v1/agent-computer/computers/${encodeURIComponent(computer.profile)}`, {}))}
+                  disabled={busy || computer?.state !== 'running' || Boolean(item.problem)}
+                  title={item.account ? 'Use the existing account and its files.' : `Create the account ${item.profile} with the home folder /home/${item.profile}.`}
+                  onClick={() => void setAccess(item.profile, true)}
                 >
-                  Create
+                  Give access
                 </button>
-              ) : null}
-              {computer.state === 'running' || computer.state === 'stopped' ? (
-                <>
+              )}
+              {!item.fixed && item.account && !item.access ? (
+                confirmRemove === item.profile ? (
                   <button
-                    className={styles.linkAction}
+                    className={styles.removeAction}
                     disabled={busy}
-                    title="Rebuild the image and recreate this computer. Its files are lost."
-                    onClick={() => void act(() => client.request('POST', `/v1/agent-computer/computers/${encodeURIComponent(computer.profile)}`, { rebuildImage: true }))}
+                    onClick={() => void act(async () => {
+                      await client.request('DELETE', `/v1/agent-computer/profiles/${encodeURIComponent(item.profile)}`);
+                      setConfirmRemove(undefined);
+                    })}
                   >
-                    Rebuild
+                    Delete account and files
                   </button>
-                  {confirmRemove === computer.profile ? (
-                    <button
-                      className={styles.removeAction}
-                      disabled={busy}
-                      onClick={() => void act(async () => {
-                        await client.request('DELETE', `/v1/agent-computer/computers/${encodeURIComponent(computer.profile)}`);
-                        setConfirmRemove(undefined);
-                      })}
-                    >
-                      Remove and delete its files
-                    </button>
-                  ) : (
-                    <button className={styles.removeAction} disabled={busy} onClick={() => setConfirmRemove(computer.profile)}>Remove</button>
-                  )}
-                </>
+                ) : (
+                  <button className={styles.removeAction} disabled={busy} onClick={() => setConfirmRemove(item.profile)}>Remove account</button>
+                )
               ) : null}
             </span>
           </div>
         ))}
-        <div className={styles.note}>
-          The agent uses its computer through computer_exec, computer_write_file, computer_put (copies a file or folder
-          from this device, with your approval) and computer_get (brings a file back as a run result). Credentials and
-          Marifold state are never copied in.
+        <div className={styles.cardNote}>
+          The default profile is the agent itself and always uses the marifold account. Each other profile with access
+          works in its own account (with sudo) and home folder. It uses the computer through
+          computer_exec, computer_write_file, computer_put (copies a file or folder from this device, with your approval)
+          and computer_get (brings a file back as a run result). Credentials and marifold state are never copied in.
+          Deleting a profile also deletes its account.
         </div>
       </section>
     </div>

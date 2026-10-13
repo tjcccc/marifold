@@ -226,6 +226,7 @@ export type {
   ProfileRenameResult,
 } from './profiles/ProfileManager';
 export { ProfileResolver } from './profiles/ProfileResolver';
+export { assertNewProfileName, NEW_PROFILE_NAME, NEW_PROFILE_NAME_HINT, newProfileNameProblem, RESERVED_PROFILE_NAMES } from './profiles/ProfileName';
 export { MarifoldRuntime } from './runtime/MarifoldRuntime';
 export type { MarifoldRuntimeOptions } from './runtime/MarifoldRuntime';
 export { respond } from './channels/respond';

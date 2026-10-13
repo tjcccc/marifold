@@ -4,7 +4,10 @@ import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { RunWorkspace } from '../src/agent/RunWorkspace';
 import { AgentComputer, upstreamFor } from '../src/computer/AgentComputer';
+import { accountNameProblem, nextAccountUid, reconcileInput } from '../src/computer/AgentComputerAccounts';
 import { agentComputerTools, ComputerPutTool, mentionsAgentComputer } from '../src/computer/ComputerTools';
+import { choosePlatform, parseImageReference } from '../src/computer/ImageDownload';
+import { newProfileNameProblem } from '../src/profiles/ProfileName';
 
 const dirs: string[] = [];
 afterEach(() => { for (const dir of dirs.splice(0)) { fs.rmSync(dir, { recursive: true, force: true }); } });
@@ -24,14 +27,30 @@ describe('agent computer', () => {
     }
   });
 
-  it('offers its tools only to profiles that have a computer', () => {
+  it('offers its tools only to profiles with access to an existing computer', () => {
     const configDir = tempDir();
     const computer = new AgentComputer(path.join(configDir, 'config.toml'), '/nonexistent/docker');
+    const state = (value: object) => fs.writeFileSync(path.join(configDir, 'agent-computer.json'), JSON.stringify(value));
+    const accounts = { writer: { uid: 2000, access: true, createdAt: 1 }, painter: { uid: 2001, access: false, createdAt: 1 } };
+    state({ settings: {}, accounts });
     expect(agentComputerTools(computer, 'writer')).toEqual([]);
-    fs.writeFileSync(path.join(configDir, 'agent-computer.json'), JSON.stringify({ settings: {}, computers: { writer: { createdAt: 1 } } }));
+    state({ settings: {}, computer: { createdAt: 1 }, accounts });
     expect(agentComputerTools(computer, 'writer').map(tool => tool.definition.name)).toEqual(['computer_exec', 'computer_write_file', 'computer_put', 'computer_get']);
     expect(agentComputerTools(computer, 'painter')).toEqual([]);
-    expect(() => computer.containerName('Bad Name')).toThrow();
+    // Per-profile computers from before 0.90 grant nothing.
+    state({ settings: {}, computers: { writer: { createdAt: 1 } } });
+    expect(agentComputerTools(computer, 'writer')).toEqual([]);
+  });
+
+  it('accepts only new profile names that can be account names', () => {
+    for (const name of ['writer', 'dev_test', 'x-runner', `a${'b'.repeat(31)}`]) { expect(newProfileNameProblem(name), name).toBeUndefined(); }
+    for (const name of ['Writer', '1writer', '-x', `a${'b'.repeat(32)}`, 'root', 'ubuntu', 'marifold-agents']) { expect(newProfileNameProblem(name), name).toBeDefined(); }
+    expect(accountNameProblem('MyBot')).toContain('marifold profile rename MyBot');
+    expect(newProfileNameProblem('marifold')).toBeDefined();
+    expect(reconcileInput({ default: { uid: 2000, access: true, createdAt: 1 }, writer: { uid: 2001, access: false, createdAt: 1 } }, [{ uid: 2002, name: 'gone' }]))
+      .toBe('rm 2002 gone\nadd 2000 marifold\nadd 2001 writer\n');
+    expect(nextAccountUid({ a: { uid: 2004, access: true, createdAt: 1 } }, [{ uid: 2007, name: 'gone' }])).toBe(2008);
+    expect(nextAccountUid({}, [])).toBe(2000);
   });
 
   it('recognizes requests about the agent computer, not the user\'s', () => {
@@ -54,5 +73,21 @@ describe('agent computer', () => {
     }
     expect(assess('~/Documents/brief')).toMatchObject({ escalate: true });
     expect(assess(path.join(workspace.rootDir, 'out.txt'))).not.toMatchObject({ blocked: true });
+  });
+
+  it('names images the way Docker does when downloading them through the proxy', () => {
+    expect(parseImageReference('ubuntu:24.04')).toEqual({ registry: 'registry-1.docker.io', repository: 'library/ubuntu', reference: '24.04', name: 'docker.io/library/ubuntu:24.04' });
+    expect(parseImageReference('someone/tool')).toMatchObject({ repository: 'someone/tool', reference: 'latest' });
+    expect(parseImageReference('mirror.example.com:5000/library/ubuntu:24.04')).toMatchObject({ registry: 'mirror.example.com:5000', repository: 'library/ubuntu', reference: '24.04' });
+    const digest = `sha256:${'a'.repeat(64)}`;
+    expect(parseImageReference(`ubuntu@${digest}`)).toMatchObject({ repository: 'library/ubuntu', reference: digest });
+    const manifests = [
+      { mediaType: 'm', digest: 'amd', size: 1, platform: { os: 'linux', architecture: 'amd64' } },
+      { mediaType: 'm', digest: 'v7', size: 1, platform: { os: 'linux', architecture: 'arm', variant: 'v7' } },
+      { mediaType: 'm', digest: 'arm64', size: 1, platform: { os: 'linux', architecture: 'arm64', variant: 'v8' } },
+    ];
+    expect(choosePlatform(manifests, 'linux/arm64')?.digest).toBe('arm64');
+    expect(choosePlatform(manifests, 'linux/amd64')?.digest).toBe('amd');
+    expect(choosePlatform(manifests, 'linux/riscv64')).toBeUndefined();
   });
 });

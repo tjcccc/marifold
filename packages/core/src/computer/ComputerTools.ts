@@ -10,9 +10,13 @@ import {
   type ToolRiskAssessment,
 } from '../agent/ToolRegistry';
 import type { AgentComputer } from './AgentComputer';
+import { accountName } from './AgentComputerAccounts';
 import { execInComputer, getFromComputer, putIntoComputer, writeComputerFile } from './AgentComputerFiles';
 
-const ABOUT = 'the agent\'s own Linux computer (Ubuntu 24.04, account "agent" with passwordless sudo, home /home/agent). It is isolated: it cannot reach the user\'s devices, files, or local network; internet access goes through an HTTP(S) proxy that apt, pip, npm, curl and git over HTTPS already use. Nothing there needs approval.';
+function about(profile: string): string {
+  const account = accountName(profile);
+  return `the agent's own Linux computer (Ubuntu 24.04; your account "${account}" with passwordless sudo, home /home/${account}). It is isolated: it cannot reach the user's devices, files, or local network; internet access goes through an HTTP(S) proxy that apt, pip, npm, curl and git over HTTPS already use. Other profiles of this agent may have accounts there too. Nothing there needs approval.`;
+}
 const TRUSTED: ToolRiskAssessment = { escalate: false, trusted: true };
 
 function failure(error: unknown, summary: string): ToolExecutionResult {
@@ -22,19 +26,21 @@ function failure(error: unknown, summary: string): ToolExecutionResult {
 /** Runs commands on the profile's computer: installs, builds, scripts, long jobs. */
 export class ComputerExecTool implements AgentTool {
   readonly kind = 'shell' as const;
-  readonly definition = {
-    name: 'computer_exec',
-    description: `Run a bash command on ${ABOUT} Use sudo freely there (for example sudo apt-get install -y ...). Output is combined stdout/stderr. For servers or long jobs, start them with nohup ... & and check later.`,
-    parameters: {
-      type: 'object',
-      properties: {
-        command: { type: 'string', description: 'Bash command, run in a login shell from /home/agent.' },
-        timeout_seconds: { type: 'number', description: 'Stop the command after this many seconds (default 300, maximum 3600).' },
+  readonly definition: AgentTool['definition'];
+  constructor(private readonly computer: AgentComputer, private readonly profile: string) {
+    this.definition = {
+      name: 'computer_exec',
+      description: `Run a bash command on ${about(profile)} Use sudo freely there (for example sudo apt-get install -y ...). Output is combined stdout/stderr. For servers or long jobs, start them with nohup ... & and check later.`,
+      parameters: {
+        type: 'object',
+        properties: {
+          command: { type: 'string', description: `Bash command, run in a login shell from /home/${accountName(profile)}.` },
+          timeout_seconds: { type: 'number', description: 'Stop the command after this many seconds (default 300, maximum 3600).' },
+        },
+        required: ['command'],
       },
-      required: ['command'],
-    },
-  };
-  constructor(private readonly computer: AgentComputer, private readonly profile: string) {}
+    };
+  }
   summarizeCall(input: Record<string, JSONValue>): string {
     return `on the agent computer: ${typeof input.command === 'string' ? input.command.slice(0, 120) : '<missing command>'}`;
   }
@@ -59,19 +65,21 @@ export class ComputerExecTool implements AgentTool {
 
 export class ComputerWriteFileTool implements AgentTool {
   readonly kind = 'write' as const;
-  readonly definition = {
-    name: 'computer_write_file',
-    description: `Write a UTF-8 text file on ${ABOUT} Parent folders are created. To read files there, use computer_exec (cat, head, ls).`,
-    parameters: {
-      type: 'object',
-      properties: {
-        path: { type: 'string', description: 'Path on the agent computer; relative paths start at /home/agent.' },
-        content: { type: 'string', description: 'Full file content.' },
+  readonly definition: AgentTool['definition'];
+  constructor(private readonly computer: AgentComputer, private readonly profile: string) {
+    this.definition = {
+      name: 'computer_write_file',
+      description: `Write a UTF-8 text file on ${about(profile)} Parent folders are created. To read files there, use computer_exec (cat, head, ls).`,
+      parameters: {
+        type: 'object',
+        properties: {
+          path: { type: 'string', description: `Path on the agent computer; relative paths start at /home/${accountName(profile)}.` },
+          content: { type: 'string', description: 'Full file content.' },
+        },
+        required: ['path', 'content'],
       },
-      required: ['path', 'content'],
-    },
-  };
-  constructor(private readonly computer: AgentComputer, private readonly profile: string) {}
+    };
+  }
   summarizeCall(input: Record<string, JSONValue>): string {
     return `write ${typeof input.content === 'string' ? input.content.length : 0} chars to ${String(input.path)} on the agent computer`;
   }
@@ -92,20 +100,22 @@ export class ComputerWriteFileTool implements AgentTool {
  * device's ordinary read approvals; the computer is never handed a path itself. */
 export class ComputerPutTool implements AgentTool {
   readonly kind = 'read' as const;
-  readonly definition = {
-    name: 'computer_put',
-    description: `Copy a file or folder from the user's device into ${ABOUT} Reading the source on the user's device may ask the user for approval. This is the only way the computer receives the user's files.`,
-    parameters: {
-      type: 'object',
-      properties: {
-        source: { type: 'string', description: 'File or folder on the user\'s device (absolute, ~/..., or relative to the working directory).' },
-        destination: { type: 'string', description: 'Destination on the agent computer. For a file: the target path, or a folder ending in /. For a folder: the folder to place it in. Default: /home/agent/inbox/.' },
-      },
-      required: ['source'],
-    },
-  };
   private readonly reader = new ReadFileTool();
-  constructor(private readonly computer: AgentComputer, private readonly profile: string) {}
+  readonly definition: AgentTool['definition'];
+  constructor(private readonly computer: AgentComputer, private readonly profile: string) {
+    this.definition = {
+      name: 'computer_put',
+      description: `Copy a file or folder from the user's device into ${about(profile)} Reading the source on the user's device may ask the user for approval. This is the only way the computer receives the user's files.`,
+      parameters: {
+        type: 'object',
+        properties: {
+          source: { type: 'string', description: 'File or folder on the user\'s device (absolute, ~/..., or relative to the working directory).' },
+          destination: { type: 'string', description: `Destination on the agent computer. For a file: the target path, or a folder ending in /. For a folder: the folder to place it in. Default: /home/${accountName(profile)}/inbox/.` },
+        },
+        required: ['source'],
+      },
+    };
+  }
   summarizeCall(input: Record<string, JSONValue>): string {
     return `give the agent computer ${String(input.source)}`;
   }
@@ -124,7 +134,7 @@ export class ComputerPutTool implements AgentTool {
     const workspace = ctx.workspace;
     if (!workspace) { return failure('computer_put needs a run workspace.', 'unavailable'); }
     const source = resolveToolPath(requireStringInput(input, 'source', this.definition.name), workspace, ctx.cwd);
-    const destination = typeof input.destination === 'string' && input.destination.trim() ? input.destination.trim() : '/home/agent/inbox/';
+    const destination = typeof input.destination === 'string' && input.destination.trim() ? input.destination.trim() : `/home/${accountName(this.profile)}/inbox/`;
     try {
       const result = await putIntoComputer(this.computer, this.profile, source, destination, (entry) => {
         if (isDeniedRunPath(entry, workspace)) { return 'contains device-local Marifold or other-workspace state'; }
@@ -144,16 +154,18 @@ export class ComputerPutTool implements AgentTool {
 /** Brings a result back: the file becomes a run artifact the user can download. */
 export class ComputerGetTool implements AgentTool {
   readonly kind = 'write' as const;
-  readonly definition = {
-    name: 'computer_get',
-    description: `Bring one file back from ${ABOUT} The file becomes a downloadable result of this run. To return a folder, archive it first with computer_exec (tar or zip).`,
-    parameters: {
-      type: 'object',
-      properties: { path: { type: 'string', description: 'File on the agent computer; relative paths start at /home/agent.' } },
-      required: ['path'],
-    },
-  };
-  constructor(private readonly computer: AgentComputer, private readonly profile: string) {}
+  readonly definition: AgentTool['definition'];
+  constructor(private readonly computer: AgentComputer, private readonly profile: string) {
+    this.definition = {
+      name: 'computer_get',
+      description: `Bring one file back from ${about(profile)} The file becomes a downloadable result of this run. To return a folder, archive it first with computer_exec (tar or zip).`,
+      parameters: {
+        type: 'object',
+        properties: { path: { type: 'string', description: `File on the agent computer; relative paths start at /home/${accountName(profile)}.` } },
+        required: ['path'],
+      },
+    };
+  }
   summarizeCall(input: Record<string, JSONValue>): string {
     return `bring back ${String(input.path)} from the agent computer`;
   }
