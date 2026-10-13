@@ -13,6 +13,7 @@ import {
   resolveDirectoryProfileInstructions,
 } from './ProfileInstructions';
 import { assertNewProfileName } from './ProfileName';
+import { PROFILE_DEFAULT_MODEL, parseProfileModel, profileModelValue } from './ProfileModel';
 
 const SAFE_PROFILE_NAME = /^[A-Za-z0-9_-]+$/;
 
@@ -47,9 +48,9 @@ export const PROFILE_TOML_STUB = `# profile.toml — per-profile overrides. Ever
 # Human-readable name shown by clients. Blank or absent = profile name.
 # display_name = "Writing Assistant"
 
-# Provider + model override (set BOTH or NEITHER). Blank = use [default].
-# provider = "ollama"
-# model = "gemma4:e4b"
+# Model: "provider/model" pins one (for example "ollama/gemma4:e4b");
+# "default" follows the global default model in config.toml.
+model = "default"
 
 # Load this profile's structured memory into context (default true).
 # memories = true
@@ -111,6 +112,14 @@ export interface ProfileModelOverrideResult {
   cleared: boolean;
 }
 
+export interface ProfileModelMigrationResult {
+  name: string;
+  status: 'migrated' | 'unchanged';
+  /** The `model` value written. */
+  value?: string;
+  backupPath?: string;
+}
+
 export interface ProfileModeResult {
   name: string;
   path: string;
@@ -166,23 +175,44 @@ export class ProfileManager {
     if (!provider || !model) {
       throw MarifoldError.profileInvalid('Profile model overrides require both provider and model.', name);
     }
-    const profileDir = this.requireProfileDir(name);
-    const profileToml = path.join(profileDir, 'profile.toml');
-    const next = upsertProfileToml(fs.existsSync(profileToml) ? fs.readFileSync(profileToml, 'utf-8') : '', provider, model);
-    fs.writeFileSync(profileToml, next);
+    if (provider.includes('/')) {
+      throw MarifoldError.profileInvalid(`Provider name '${provider}' cannot contain "/".`, name);
+    }
+    const profileToml = path.join(this.requireProfileDir(name), 'profile.toml');
+    const current = fs.existsSync(profileToml) ? fs.readFileSync(profileToml, 'utf-8') : PROFILE_TOML_STUB;
+    fs.writeFileSync(profileToml, upsertModelLine(current, profileModelValue(provider, model)));
     return { name, path: profileToml, provider, model, cleared: false };
   }
 
+  /** Follow the global default model again: writes `model = "default"`. */
   clearModelOverride(name: string): ProfileModelOverrideResult {
     assertSafeName(name);
-    const profileDir = this.requireProfileDir(name);
-    const profileToml = path.join(profileDir, 'profile.toml');
-    if (!fs.existsSync(profileToml)) {
-      fs.writeFileSync(profileToml, PROFILE_TOML_STUB);
-    } else {
-      fs.writeFileSync(profileToml, removeModelOverride(fs.readFileSync(profileToml, 'utf-8')));
-    }
+    const profileToml = path.join(this.requireProfileDir(name), 'profile.toml');
+    const current = fs.existsSync(profileToml) ? fs.readFileSync(profileToml, 'utf-8') : PROFILE_TOML_STUB;
+    fs.writeFileSync(profileToml, upsertModelLine(current, PROFILE_DEFAULT_MODEL));
     return { name, path: profileToml, cleared: true };
+  }
+
+  /** Rewrite an older `provider` + `model` pair, or a missing model line, as
+   * one `model` line after backing up profile.toml. The choice itself is kept:
+   * a pin stays a pin and no pin becomes `model = "default"`. */
+  migrateModelSetting(name: string): ProfileModelMigrationResult {
+    assertSafeName(name);
+    const profileToml = path.join(this.requireProfileDir(name), 'profile.toml');
+    if (!fs.existsSync(profileToml)) { return { name, status: 'unchanged' }; }
+    const text = fs.readFileSync(profileToml, 'utf-8');
+    const raw = parse(text) as { provider?: unknown; model?: unknown };
+    const current = parseProfileModel(
+      name,
+      typeof raw.provider === 'string' ? raw.provider : undefined,
+      typeof raw.model === 'string' ? raw.model : undefined,
+    );
+    if (current.setting === 'pinned' || current.setting === 'default') { return { name, status: 'unchanged' }; }
+    const backupPath = path.join(createInstructionsBackupDir(this.profilesDir, name, '.legacy-profile-toml'), 'profile.toml');
+    fs.copyFileSync(profileToml, backupPath);
+    const value = profileModelValue(current.provider, current.model);
+    atomicWriteFile(profileToml, upsertModelLine(text, value));
+    return { name, status: 'migrated', value, backupPath };
   }
 
   /** Retained compatibility API for older clients that persist profile mode. */
@@ -482,9 +512,9 @@ function writeFile(filePath: string, content: string): string {
   return filePath;
 }
 
-function createInstructionsBackupDir(profilesDir: string, name: string): string {
+function createInstructionsBackupDir(profilesDir: string, name: string, folder = '.legacy-instructions'): string {
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const backupDir = path.join(profilesDir, '.legacy-instructions', `${stamp}-${randomUUID()}`, name);
+  const backupDir = path.join(profilesDir, folder, `${stamp}-${randomUUID()}`, name);
   fs.mkdirSync(backupDir, { recursive: true });
   return backupDir;
 }
@@ -503,10 +533,32 @@ function atomicWriteFile(filePath: string, content: string): void {
   }
 }
 
-function upsertProfileToml(text: string, provider: string, model: string): string {
-  const cleaned = removeModelOverride(text).trimEnd();
-  const prefix = cleaned ? `${cleaned}\n\n` : '';
-  return `${prefix}provider = ${tomlString(provider)}\nmodel = ${tomlString(model)}\n`;
+/** Replace the `provider`/`model` keys with one `model` line, in place of the
+ * first of them, or before the first table so it stays a top-level key. */
+function upsertModelLine(text: string, value: string): string {
+  const line = `model = ${tomlString(value)}`;
+  const lines = text.split(/\r?\n/);
+  const out: string[] = [];
+  let written = false;
+  let inTable = false;
+  for (const current of lines) {
+    if (/^\s*\[/.test(current)) {
+      if (!written) {
+        while (out.length > 0 && out[out.length - 1]!.trim() === '') { out.pop(); }
+        out.push(...(out.length > 0 ? ['', line, ''] : [line, '']));
+        written = true;
+      }
+      inTable = true;
+    }
+    if (!inTable && /^\s*(?:provider|model)\s*=/.test(current)) {
+      if (!written) { out.push(line); written = true; }
+      continue;
+    }
+    out.push(current);
+  }
+  const next = out.join('\n').trimEnd();
+  if (written) { return `${next}\n`; }
+  return next ? `${next}\n\n${line}\n` : `${line}\n`;
 }
 
 function upsertMode(text: string, mode: ProfileMode): string {
@@ -582,15 +634,6 @@ function upsertMaxContextTokens(text: string, tokens: number | undefined): strin
   if (tokens == null || tokens <= 0) { return cleaned ? `${cleaned}\n` : PROFILE_TOML_STUB; }
   const prefix = cleaned ? `${cleaned}\n\n` : '';
   return `${prefix}max_context_tokens = ${Math.round(tokens)}\n`;
-}
-
-function removeModelOverride(text: string): string {
-  const lines = text.split(/\r?\n/).filter(line => {
-    const trimmed = line.trimStart();
-    return !trimmed.startsWith('provider =') && !trimmed.startsWith('model =');
-  });
-  const next = lines.join('\n').trimEnd();
-  return next ? `${next}\n` : PROFILE_TOML_STUB;
 }
 
 function assertSafeName(name: string): void {

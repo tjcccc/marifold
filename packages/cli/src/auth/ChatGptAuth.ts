@@ -26,6 +26,8 @@ const CHATGPT_CALLBACK_PATH = '/auth/callback';
 
 export async function authorizeChatGptWithBrowser(
   write: (text: string) => void = text => process.stdout.write(text),
+  /** Explicit provider proxy. Falls back to HTTP(S)_PROXY when omitted. */
+  proxy?: string,
 ): Promise<ChatGptAuthTokens> {
   const pkce = generatePkce();
   const state = base64Url(randomBytes(32));
@@ -39,7 +41,7 @@ export async function authorizeChatGptWithBrowser(
     write('Waiting for the browser redirect...\n');
     const code = await callback.waitForCode();
     write('Received the authorization code — exchanging tokens with OpenAI...\n');
-    return await exchangeChatGptCodeForTokens(code, callback.redirectUri, pkce);
+    return await exchangeChatGptCodeForTokens(code, callback.redirectUri, pkce, proxy);
   } finally {
     await callback.close();
   }
@@ -65,6 +67,7 @@ async function exchangeChatGptCodeForTokens(
   code: string,
   redirectUri: string,
   pkce: PkceCodes,
+  proxy?: string,
 ): Promise<ChatGptAuthTokens> {
   const data = await postForm(`${CHATGPT_AUTH_ISSUER}/oauth/token`, {
     grant_type: 'authorization_code',
@@ -72,7 +75,7 @@ async function exchangeChatGptCodeForTokens(
     redirect_uri: redirectUri,
     client_id: CHATGPT_OAUTH_CLIENT_ID,
     code_verifier: pkce.codeVerifier,
-  }, 'ChatGPT token exchange failed');
+  }, 'ChatGPT token exchange failed', proxy);
 
   const accessToken = stringField(data.access_token);
   const refreshToken = stringField(data.refresh_token);
@@ -96,7 +99,7 @@ async function exchangeChatGptCodeForTokens(
   };
 }
 
-async function postForm(url: string, data: Record<string, string>, label: string): Promise<Record<string, unknown>> {
+async function postForm(url: string, data: Record<string, string>, label: string, proxy?: string): Promise<Record<string, unknown>> {
   // Node's fetch ignores HTTPS_PROXY by default; honor it for this external call
   // (OpenAI's token endpoint) so the exchange works behind a proxy like the browser.
   const init: Record<string, unknown> = {
@@ -109,7 +112,7 @@ async function postForm(url: string, data: Record<string, string>, label: string
     // Generous ceiling: the OAuth token endpoint can be slow through a proxy.
     signal: AbortSignal.timeout(60000),
   };
-  const dispatcher = proxyDispatcher();
+  const dispatcher = proxyDispatcher(proxy);
   if (dispatcher) { init.dispatcher = dispatcher; }
   const response = await fetch(url, init as RequestInit).catch(error => {
     throw new Error(`${label}: ${stringifyError(error)}`);

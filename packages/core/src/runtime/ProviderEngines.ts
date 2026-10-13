@@ -71,7 +71,7 @@ export class ProviderEngines {
         }
         // Legacy ChatGPT credentials may be valid without a reported expiry.
         if (provider.apiKey && provider.apiKeyExpiresAt === undefined) { return; }
-        const refreshed: ChatGptRefreshedTokens = await refreshChatGptAccessToken(provider.oauthToken);
+        const refreshed: ChatGptRefreshedTokens = await refreshChatGptAccessToken(provider.oauthToken, provider.proxy);
         return {
           apiKey: refreshed.apiKey, oauthToken: refreshed.refreshToken, apiKeyExpiresAt: refreshed.expiresAt,
           ...(refreshed.accountId ? { accountId: refreshed.accountId } : {}),

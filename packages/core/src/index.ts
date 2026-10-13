@@ -141,6 +141,7 @@ export type {
   ProfileFileSummary,
   ProfileInstructionsFormat,
   ProfileMode,
+  ProfileModelSetting,
   ProfileSettings,
   ProfileSummary,
   SessionDetail,
@@ -222,10 +223,12 @@ export type {
   ProfileFileKind,
   ProfileInitResult,
   ProfileInstructionsMigrationResult,
+  ProfileModelMigrationResult,
   ProfileModelOverrideResult,
   ProfileRenameResult,
 } from './profiles/ProfileManager';
 export { ProfileResolver } from './profiles/ProfileResolver';
+export { PROFILE_DEFAULT_MODEL, parseProfileModel, profileModelValue } from './profiles/ProfileModel';
 export { assertNewProfileName, NEW_PROFILE_NAME, NEW_PROFILE_NAME_HINT, newProfileNameProblem, RESERVED_PROFILE_NAMES } from './profiles/ProfileName';
 export { MarifoldRuntime } from './runtime/MarifoldRuntime';
 export type { MarifoldRuntimeOptions } from './runtime/MarifoldRuntime';

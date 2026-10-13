@@ -273,6 +273,10 @@ export function ProfileSettingsPage(props: ProfileSettingsPageProps) {
               }}
             >
               <option value="">Default</option>
+              {modelValue && !modelOptions.includes(modelValue) ? (
+                // A pinned model removed from the list would otherwise display as "Default".
+                <option value={modelValue}>{modelValue} (not in model list)</option>
+              ) : null}
               {modelOptions.map(option => (
                 <option key={option} value={option}>{option}</option>
               ))}

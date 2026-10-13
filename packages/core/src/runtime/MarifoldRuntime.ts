@@ -42,7 +42,7 @@ import { sessionImageAccess } from '../agent/EarlierImages';
 import type { MemoryEntry, MemoryKind, MemoryMutationResult, MemoryRememberResult, MemoryScaffoldFile } from '../memory/MemoryStore';
 import { ProfileResolver } from '../profiles/ProfileResolver';
 import { ProfileManager } from '../profiles/ProfileManager';
-import type { ProfileFileKind, ProfileInstructionsMigrationResult } from '../profiles/ProfileManager';
+import type { ProfileFileKind, ProfileInstructionsMigrationResult, ProfileModelMigrationResult } from '../profiles/ProfileManager';
 import { Scheduler } from '../schedule/Scheduler';
 import { RunRegistry } from '../runs/RunRegistry';
 import { TelegramBridge } from '../channels/TelegramBridge';
@@ -312,6 +312,8 @@ export class MarifoldRuntime {
   migrateProfileInstructions(name: string): ProfileInstructionsMigrationResult {
     return this.profileManager.migrateProfileInstructions(name);
   }
+  /** Rewrite an older profile model setting as one `model` line, with backup. */
+  migrateProfileModel(name: string): ProfileModelMigrationResult { return this.profileManager.migrateModelSetting(name); }
 
   /** Scaffold a new profile directory (same layout as `profile init`) and
    * return its detail. Duplicate or invalid names throw PROFILE_INVALID. */

@@ -6,6 +6,7 @@ import { MarifoldError } from '../errors/MarifoldError';
 import type { ProfileDetail, ProfileFileSummary, ProfileMode, ProfileSettings, ProfileSummary } from '../config/ConfigSchema';
 import { parsePartialAgentConfig } from '../config/ConfigLoader';
 import { findProfileAvatar, normalizeProfileDisplayName } from './ProfileManager';
+import { parseProfileModel } from './ProfileModel';
 import {
   DEFAULT_MARIFOLD_PROFILE_INSTRUCTIONS,
   PROFILE_INSTRUCTIONS_FILE,
@@ -50,8 +51,11 @@ export class ProfileResolver implements ProfileLoader {
       optionalString(raw.display_name, `${name}.profile.toml display_name`),
       name,
     );
-    const provider = optionalString(raw.provider, `${name}.profile.toml provider`);
-    const model = optionalString(raw.model, `${name}.profile.toml model`);
+    const { provider, model, setting: modelSetting } = parseProfileModel(
+      name,
+      optionalString(raw.provider, `${name}.profile.toml provider`),
+      optionalString(raw.model, `${name}.profile.toml model`),
+    );
     const memories = optionalBoolean(raw.memories, `${name}.profile.toml memories`) ?? true;
     const maxContextTokens = optionalNumber(raw.max_context_tokens, `${name}.profile.toml max_context_tokens`);
     const sessionContextTurns = optionalTurnWindow(raw.session_context_turns, `${name}.profile.toml session_context_turns`);
@@ -64,13 +68,7 @@ export class ProfileResolver implements ProfileLoader {
         name,
       );
     }
-    if ((provider && !model) || (!provider && model)) {
-      throw MarifoldError.profileInvalid(
-        `Profile '${name}' must set both provider and model in profile.toml, or neither.`,
-        name,
-      );
-    }
-    return { displayName, provider, model, memories, mode: rawMode as ProfileMode | undefined, maxContextTokens, sessionContextTurns, think, agent };
+    return { displayName, provider, model, modelSetting, memories, mode: rawMode as ProfileMode | undefined, maxContextTokens, sessionContextTurns, think, agent };
   }
 
   list(): ProfileSummary[] {

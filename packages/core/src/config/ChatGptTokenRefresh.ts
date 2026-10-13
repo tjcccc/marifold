@@ -22,12 +22,12 @@ export interface ChatGptRefreshedTokens {
  * the Codex backend, so no id_token→API-key exchange happens; the account id is
  * re-derived from the refreshed id_token for the `chatgpt-account-id` header.
  */
-export async function refreshChatGptAccessToken(refreshToken: string): Promise<ChatGptRefreshedTokens> {
+export async function refreshChatGptAccessToken(refreshToken: string, proxy?: string): Promise<ChatGptRefreshedTokens> {
   const data = await postJson(`${CHATGPT_AUTH_ISSUER}/oauth/token`, {
     grant_type: 'refresh_token',
     refresh_token: refreshToken,
     client_id: CHATGPT_OAUTH_CLIENT_ID,
-  }, 'ChatGPT token refresh failed');
+  }, 'ChatGPT token refresh failed', proxy);
 
   const accessToken = stringField(data.access_token);
   if (!accessToken) {
@@ -45,17 +45,18 @@ export async function refreshChatGptAccessToken(refreshToken: string): Promise<C
   };
 }
 
-async function postJson(url: string, body: Record<string, string>, label: string): Promise<Record<string, unknown>> {
+async function postJson(url: string, body: Record<string, string>, label: string, proxy?: string): Promise<Record<string, unknown>> {
   return parseResponse(await doFetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(REFRESH_TIMEOUT_MS),
-  }, label), label);
+  }, label, proxy), label);
 }
 
-async function doFetch(url: string, init: RequestInit, label: string): Promise<Response> {
-  const dispatcher = proxyDispatcher();
+/** Uses the provider's proxy, else HTTP(S)_PROXY: a service rarely has the shell's environment. */
+async function doFetch(url: string, init: RequestInit, label: string, proxy?: string): Promise<Response> {
+  const dispatcher = proxyDispatcher(proxy);
   try {
     return await fetch(url, dispatcher ? { ...init, dispatcher } as RequestInit : init);
   } catch (error) {

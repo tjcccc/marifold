@@ -381,11 +381,16 @@ describe('ProfileManager', () => {
     expect(fs.existsSync(path.join(created.path, 'memories', 'preferences.jsonl'))).toBe(true);
     expect(fs.existsSync(path.join(created.path, 'memories', 'auto_short.jsonl'))).toBe(true);
 
+    expect(fs.readFileSync(path.join(created.path, 'profile.toml'), 'utf-8')).toContain('\nmodel = "default"\n');
     const override = manager.setModelOverride('coder', 'ollama', 'qwen3:8b');
-    expect(fs.readFileSync(override.path, 'utf-8')).toContain('model = "qwen3:8b"');
+    const pinned = fs.readFileSync(override.path, 'utf-8');
+    expect(pinned).toContain('\nmodel = "ollama/qwen3:8b"\n');
+    expect(pinned).not.toMatch(/^(?:provider|model) = "(?:ollama|default)"$/m);
 
     manager.clearModelOverride('coder');
-    expect(fs.readFileSync(override.path, 'utf-8')).not.toContain('model = "qwen3:8b"');
+    const cleared = fs.readFileSync(override.path, 'utf-8');
+    expect(cleared).toContain('\nmodel = "default"\n');
+    expect(cleared).not.toContain('qwen3:8b');
   });
 
   it('renames and deletes stored profiles', () => {

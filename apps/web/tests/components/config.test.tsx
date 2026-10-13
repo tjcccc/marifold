@@ -201,6 +201,15 @@ describe('ProfileSettingsPage', () => {
     expect(handlers.onPatch).toHaveBeenCalledWith({ provider: null, model: null });
   });
 
+  it('shows a pinned model missing from the model list instead of Default', () => {
+    const handlers = renderPage({ modelOptions: ['ollama/codellama'] });
+    const select = screen.getByLabelText('Model override') as HTMLSelectElement;
+    expect(select.value).toBe('ollama/gemma4:e4b');
+    expect(select.selectedOptions[0]?.textContent).toBe('ollama/gemma4:e4b (not in model list)');
+    fireEvent.change(select, { target: { value: '' } });
+    expect(handlers.onPatch).toHaveBeenCalledWith({ provider: null, model: null });
+  });
+
   it('shows the instruction editor above Model and saves or reverts edits', () => {
     const handlers = renderPage();
     const instructions = screen.getByRole('region', { name: 'Instructions' });

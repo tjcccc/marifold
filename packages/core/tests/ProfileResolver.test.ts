@@ -63,7 +63,7 @@ describe('ProfileResolver', () => {
 
     const settings = new ProfileResolver(root).loadSettings('coder');
 
-    expect(settings).toEqual({ provider: 'ollama', model: 'codellama', memories: true });
+    expect(settings).toEqual({ provider: 'ollama', model: 'codellama', modelSetting: 'legacy', memories: true });
   });
 
   it('resolves display names from profile.toml and falls back to the profile name', () => {
@@ -116,7 +116,7 @@ describe('ProfileResolver', () => {
 
     const settings = new ProfileResolver(root).loadSettings('tool');
 
-    expect(settings).toEqual({ memories: false });
+    expect(settings).toEqual({ memories: false, modelSetting: 'unset' });
   });
 
   it('shows profile file details and settings', () => {
@@ -131,7 +131,7 @@ describe('ProfileResolver', () => {
     const detail = new ProfileResolver(root).detail('writer');
 
     expect(detail.name).toBe('writer');
-    expect(detail.settings).toEqual({ provider: 'ollama', model: 'gemma4:e4b', memories: true });
+    expect(detail.settings).toEqual({ provider: 'ollama', model: 'gemma4:e4b', modelSetting: 'legacy', memories: true });
     expect(detail.instructionFormat).toBe('legacy');
     expect(detail.legacyInstructionFiles).toEqual(['PROFILE.md', 'RULES.md', 'CUSTOM.md']);
     expect(detail.files.instructions.content).toBe('Writer rules\n\nWriter identity\n\nWriter custom');
@@ -170,7 +170,7 @@ describe('ProfileResolver', () => {
     const settings = new ProfileResolver(root).loadSettings('coder');
 
     expect(result.mode).toBe('chat');
-    expect(settings).toEqual({ provider: 'ollama', model: 'codellama', memories: false, mode: 'chat' });
+    expect(settings).toEqual({ provider: 'ollama', model: 'codellama', modelSetting: 'legacy', memories: false, mode: 'chat' });
   });
 
   it('persists a per-profile approval via ProfileManager and preserves other keys', () => {

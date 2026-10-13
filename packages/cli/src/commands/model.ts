@@ -203,7 +203,7 @@ export function registerModelCommand(program: Command, printer: ConsolePrinter):
     .argument('[model]', 'Model name.')
     .option('--provider <name>', 'Provider key from config.toml.')
     .option('--profile <name>', 'Write the model override to this profile.')
-    .option('--clear', 'Clear a profile model override.')
+    .option('--clear', 'With --profile: follow the global default model (writes model = "default").')
     .action(async (modelName: string | undefined, options: ModelDefaultOptions) => {
       let prompt: InteractivePrompt | undefined;
       try {

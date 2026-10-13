@@ -14,7 +14,7 @@ export function registerDoctorCommand(program: Command, printer: ConsolePrinter)
     .command('doctor')
     .description('Check Marifold health: configuration, profile instructions, and session database integrity.')
     .option('--profile <name>', 'Limit profile checks and migration to this profile.')
-    .option('--fix', 'Back up and migrate legacy profile instructions.')
+    .option('--fix', 'Back up and migrate legacy profile instructions and model settings.')
     .action((options: { profile?: string; fix?: boolean }) => {
       const runtime = createRuntime(program);
       const out = process.stdout;
@@ -81,6 +81,41 @@ export function registerDoctorCommand(program: Command, printer: ConsolePrinter)
               out.write(`  ${target.name}: ⚠ legacy JSON profile (supported; not changed by --fix)\n`);
             } else {
               out.write(`  ${target.name}: ⚠ no instruction document\n`);
+            }
+          } catch (error) {
+            out.write(`  ${target.name}: ✗ ${error instanceof Error ? error.message : String(error)}\n`);
+            process.exitCode = 1;
+          }
+        }
+
+        // Profile models — the one-line `model` form; --fix rewrites older forms.
+        out.write('\nProfile models\n');
+        const modelOptions = new Set(loadConfig(program).config.models.options);
+        for (const target of targets) {
+          try {
+            let settings = runtime.getProfile(target.name).settings;
+            if (options.fix && (settings.modelSetting === 'legacy' || settings.modelSetting === 'unset')) {
+              const result = runtime.migrateProfileModel(target.name);
+              settings = runtime.getProfile(target.name).settings;
+              if (result.status === 'migrated') {
+                out.write(`  ${target.name}: ✓ rewritten as model = "${result.value}"\n`);
+                if (result.backupPath) { out.write(`    Backup: ${result.backupPath}\n`); }
+                continue;
+              }
+            }
+            const pinned = settings.provider && settings.model ? `${settings.provider}/${settings.model}` : undefined;
+            if (settings.modelSetting === 'legacy') {
+              out.write(`  ${target.name}: ⚠ ${pinned} in the older provider + model form\n`);
+              out.write(`    Run \`${fixCommand}\` to rewrite it as model = "${pinned}".\n`);
+            } else if (settings.modelSetting === 'unset') {
+              out.write(`  ${target.name}: ⚠ no model line (follows the default)\n`);
+              out.write(`    Run \`${fixCommand}\` to write model = "default".\n`);
+            } else {
+              out.write(`  ${target.name}: ✓ ${pinned ?? 'default'}\n`);
+            }
+            // A pin removed from the model list is easy to miss: it does not follow the default.
+            if (pinned && !modelOptions.has(pinned)) {
+              out.write(`    ⚠ ${pinned} is not in the model list; set model = "default" to follow the default model.\n`);
             }
           } catch (error) {
             out.write(`  ${target.name}: ✗ ${error instanceof Error ? error.message : String(error)}\n`);

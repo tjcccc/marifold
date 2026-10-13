@@ -173,11 +173,18 @@ export interface LoadedMarifoldConfig {
  * Primary clients route ordinary messages through Agent. */
 export type ProfileMode = 'agent' | 'chat';
 
+/** How profile.toml states the model: `unset` and `default` follow the global
+ * default, `pinned` is `model = "provider/model"`, `legacy` the older pair of
+ * `provider` and `model` keys (still read; `doctor --fix` rewrites it). */
+export type ProfileModelSetting = 'unset' | 'default' | 'pinned' | 'legacy';
+
 export interface ProfileSettings {
   /** Optional human-readable label. Clients fall back to the profile name. */
   displayName?: string;
+  /** Resolved pin; both undefined means the global default. */
   provider?: string;
   model?: string;
+  modelSetting?: ProfileModelSetting;
   memories: boolean;
   /** Legacy compatibility override; primary clients ignore it for ordinary messages. */
   mode?: ProfileMode;

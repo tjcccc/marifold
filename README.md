@@ -511,7 +511,7 @@ profiles/default/
     auto_short.jsonl
 ```
 
-`INSTRUCTIONS.md` is one free-form Markdown document for the profile's identity, behavior, tone, and optional context. Headings are organizational only; marifold does not require or parse a section schema. Older `RULES.md`, `PROFILE.md`, and `CUSTOM.md` files remain readable in their previous effective order. Run `marifold doctor` to find them and `marifold doctor --fix` to back them up and consolidate them into `INSTRUCTIONS.md`.
+`INSTRUCTIONS.md` is one free-form Markdown document for the profile's identity, behavior, tone, and optional context. Headings are organizational only; marifold does not require or parse a section schema. Older `RULES.md`, `PROFILE.md`, and `CUSTOM.md` files remain readable in their previous effective order. Run `marifold doctor` to find them and `marifold doctor --fix` to back them up and consolidate them into `INSTRUCTIONS.md`; the same command also rewrites the older `provider` + `model` keys in `profile.toml` as one `model` line.
 
 ### `profile.toml` properties
 
@@ -520,8 +520,7 @@ All keys are optional. An absent key inherits the global `[default]` value (wher
 | Key | Type | Default | Effect |
 |-----|------|---------|--------|
 | `display_name` | string | profile name | Optional human-readable label shown by clients. Blank or absent keeps the stable profile name as the display fallback. |
-| `provider` | string | inherits `[default].provider` | Provider override. Must be set **together with** `model` (both or neither). |
-| `model` | string | inherits `[default].model` | Model override. Must be set together with `provider`. |
+| `model` | `"provider/model"` \| `"default"` | `"default"` | `"provider/model"` pins this profile to one model (split at the first `/`, so `"ollama/maternion/hy-mt2:1.8b"` works); `"default"` or absent follows the global default model, also after it changes. The older `provider` + `model` pair still loads; `marifold doctor --fix` rewrites it as one line (with a backup), and `marifold doctor` warns about a pin that is no longer in the model list. |
 | `memories` | boolean | `true` | Load profile memory for this profile. Set `false` for tool profiles. Per-run `--no-memories` disables it for one `ask`. |
 | `max_context_tokens` | integer | inherits `[default].max_context_tokens` | Conversation-context budget in tokens; near ~80% older turns fold into a running summary. `0` disables compaction. |
 | `session_context_turns` | integer ≥ 0 \| `"all"` | `"all"` (inherits `[default].session_context_turns`) | Hard cap on the recent session turns the model sees each turn — applies to conversation replay and non-lean agent history. `0` = none; `"all"` or absent = no cap. Older turns stay on disk; this only bounds what is sent per turn. Pairs with `max_context_tokens` (the budget safety net). |
@@ -533,8 +532,7 @@ Example:
 
 ```toml
 display_name = "Writing Partner"
-provider = "bailian"
-model = "qwen3.6-plus"
+model = "bailian/qwen3.6-plus"
 session_context_turns = 5
 ```
 

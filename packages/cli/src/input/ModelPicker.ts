@@ -285,7 +285,7 @@ async function promptOAuthCredentials(
   proxy?: string,
 ): Promise<Partial<MarifoldProviderConfig>> {
   if (provider.name === 'github_copilot') { return promptGitHubCopilotCredentials(getPrompt, style, provider); }
-  if (provider.name === 'chatgpt') { return promptChatGptCredentials(getPrompt, style, provider); }
+  if (provider.name === 'chatgpt') { return promptChatGptCredentials(getPrompt, style, provider, proxy); }
   if (provider.name === 'xai') { return promptXaiCredentials(getPrompt, style, provider, proxy); }
 
   const token = await readRequiredSecret(getPrompt, style, 'OAuth token: ');
@@ -336,6 +336,7 @@ async function promptChatGptCredentials(
   getPrompt: PromptFactory,
   style: TerminalStyle,
   provider: ProviderRegistryEntry,
+  proxy?: string,
 ): Promise<Partial<MarifoldProviderConfig>> {
   const method = await selectLabeledChoice(getPrompt, style, 'ChatGPT credential:', [
     { label: 'Sign in with ChatGPT in browser (OAuth)', value: 'oauth' },
@@ -343,7 +344,7 @@ async function promptChatGptCredentials(
   ]);
 
   if (method === 'oauth') {
-    const tokens = await authorizeChatGptWithBrowser();
+    const tokens = await authorizeChatGptWithBrowser(undefined, proxy);
     return {
       // The OAuth access token is the Codex-backend bearer credential; ChatGPT
       // subscription accounts have no platform API key to exchange for.
