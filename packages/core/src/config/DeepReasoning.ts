@@ -1,7 +1,7 @@
 import type { ReasoningConfig } from '@priest-ai/core';
 import { isGitHubCopilotResponsesModelId } from './ProviderRegistry';
 
-export interface ThinkTarget {
+export interface DeepTarget {
   providerName: string;
   providerType?: string;
   model: string;
@@ -17,35 +17,35 @@ const SWITCH_CHAT_PROVIDERS = new Set(['bailian', 'alibaba_cloud']);
 const OLLAMA_LEVEL_MODELS = /^gpt-oss(?::|$)/;
 
 /**
- * Think on asks for medium effort and think off for low, sent explicitly so
+ * Deep on asks for medium effort and deep off for low, sent explicitly so
  * the provider default (often high) never applies. High is never sent:
  * marifold is not a coding agent. Providers without levels get an on/off
  * switch; providers marifold has not verified get nothing.
  */
-export function thinkReasoning(target: ThinkTarget, think: boolean): ReasoningConfig | undefined {
-  if (!supportsThink(target)) { return undefined; }
-  const effort = think ? 'medium' : 'low';
-  const summary = think ? { summary: 'auto' as const } : {};
+export function deepReasoning(target: DeepTarget, deep: boolean): ReasoningConfig | undefined {
+  if (!supportsDeep(target)) { return undefined; }
+  const effort = deep ? 'medium' : 'low';
+  const summary = deep ? { summary: 'auto' as const } : {};
   if (target.providerType === 'ollama') {
     return OLLAMA_LEVEL_MODELS.test(target.model)
       ? { enabled: true, effort, ...summary }
-      : { enabled: think, ...summary };
+      : { enabled: deep, ...summary };
   }
   if (target.providerType === 'anthropic') {
     // Claude only thinks when asked, so off keeps the provider default.
-    return think ? { enabled: true, effort, ...summary } : undefined;
+    return deep ? { enabled: true, effort, ...summary } : undefined;
   }
   if (usesResponsesEffort(target) || EFFORT_CHAT_PROVIDERS.has(target.providerName)) {
     return { enabled: true, effort, ...summary };
   }
   if (SWITCH_CHAT_PROVIDERS.has(target.providerName)) {
-    return { enabled: think };
+    return { enabled: deep };
   }
   return undefined;
 }
 
-/** Whether the Think switch changes anything for this provider and model. */
-export function supportsThink(target: ThinkTarget): boolean {
+/** Whether the Deep switch changes anything for this provider and model. */
+export function supportsDeep(target: DeepTarget): boolean {
   if (target.rejected) { return false; }
   return target.providerType === 'ollama'
     || target.providerType === 'anthropic'
@@ -76,7 +76,7 @@ export function providerReasoning(
   return endpoint === 'responses' ? { reasoning, fields: {} } : { fields: {} };
 }
 
-function usesResponsesEffort(target: ThinkTarget): boolean {
+function usesResponsesEffort(target: DeepTarget): boolean {
   return target.providerName === 'chatgpt'
     || (target.providerName === 'github_copilot' && isGitHubCopilotResponsesModelId(target.model));
 }

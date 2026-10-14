@@ -33,7 +33,7 @@ export interface PermissionReference {
 export interface ModelReference {
   readonly kind: 'model';
   readonly id: string;
-  readonly options: { think?: boolean };
+  readonly options: { deep?: boolean };
 }
 
 export interface ProfileReference {
@@ -41,7 +41,7 @@ export interface ProfileReference {
   readonly profile: string;
   readonly options: {
     model?: string;
-    think?: boolean;
+    deep?: boolean;
     memory: boolean;
     history: boolean;
   };
@@ -103,7 +103,7 @@ export function FolderAccess(path: string, options: { access: 'read' }): Permiss
   return { kind: 'permission', resource: 'folder', path, access: options.access };
 }
 
-export function registerModel(id: string, options: { think?: boolean } = {}): ModelReference {
+export function registerModel(id: string, options: { deep?: boolean } = {}): ModelReference {
   return { kind: 'model', id, options };
 }
 
@@ -111,7 +111,7 @@ export function registerProfile(
   profile: string,
   options: {
     model?: string;
-    think?: boolean;
+    deep?: boolean;
     memory?: boolean;
     history?: boolean;
   } = {},
@@ -121,7 +121,7 @@ export function registerProfile(
     profile,
     options: {
       ...(options.model !== undefined ? { model: options.model } : {}),
-      ...(options.think !== undefined ? { think: options.think } : {}),
+      ...(options.deep !== undefined ? { deep: options.deep } : {}),
       memory: options.memory ?? false,
       history: options.history ?? false,
     },

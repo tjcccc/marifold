@@ -18,7 +18,7 @@ export function reasoningRejected(providerName: string, model: string): boolean 
 }
 
 /**
- * Keeps Think from ever breaking a reply. When a provider answers a request
+ * Keeps Deep from ever breaking a reply. When a provider answers a request
  * with an HTTP 400 that names the reasoning setting (an effort level the
  * model lacks, or thinking on a model that cannot think), the call is retried
  * once without it and the model is remembered, so later calls skip it.
@@ -82,7 +82,7 @@ export class ReasoningRetryProvider implements ProviderAdapter {
   }
 
   /** Remembered only once the retry without the setting worked, so an
-   * unrelated failure never switches Think off for a model. */
+   * unrelated failure never switches Deep off for a model. */
   private remember(config: PriestConfig): void {
     rejected.add(`${this.providerName}/${config.model}`);
   }

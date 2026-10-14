@@ -25,7 +25,7 @@ describe('SkillApp', () => {
     expect(definition).toMatchObject({
       schema: 'marifold.skillapp.v1',
       app: { name: 'translator', title: 'Marifold Translation' },
-      models: [{ provider: 'ollama', model: 'maternion/hy-mt2:1.8b', think: false }],
+      models: [{ provider: 'ollama', model: 'maternion/hy-mt2:1.8b', deep: false }],
       skills: [{ name: 'translate', result: { kind: 'text', trim: true } }],
       operations: [{
         name: 'translate',
@@ -139,7 +139,7 @@ describe('SkillApp', () => {
     const overridden = compileSkillApp(
       painersRoomSource().replace(
         'memory: false,',
-        "model: 'chatgpt/gpt-5.6-sol',\n  think: false,\n  memory: false,",
+        "model: 'chatgpt/gpt-5.6-sol',\n  deep: false,\n  memory: false,",
       ),
       'painers-room/skillapp.ts',
     );
@@ -147,7 +147,7 @@ describe('SkillApp', () => {
       profile: 'painter',
       provider: 'chatgpt',
       model: 'gpt-5.6-sol',
-      think: false,
+      deep: false,
     }]);
 
     const resolveProfileSkill = (profile: string, skillName: string) => {

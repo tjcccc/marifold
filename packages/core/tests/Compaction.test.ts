@@ -27,7 +27,7 @@ function makeConfig(
   extra: Partial<MarifoldConfig> = {},
 ): MarifoldConfig {
   return {
-    default: { provider: 'ollama', model: 'gemma4:e4b', profile: 'default', think: false, ...overrides },
+    default: { provider: 'ollama', model: 'gemma4:e4b', profile: 'default', deep: false, ...overrides },
     models: { options: ['ollama/gemma4:e4b'] },
     memory: { sizeLimit: 50000, contextLimit: 2400 },
     paths: { profilesDir: path.join(dir, 'profiles'), sessionsDb: path.join(dir, 'sessions.db'), tasksDir: path.join(dir, 'tasks') },

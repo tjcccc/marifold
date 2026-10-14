@@ -90,7 +90,7 @@ function makeRegistry(
           taskStore: new TaskStore(tempDir()),
           registry: toolRegistry,
           agentConfig: resolveAgentConfig({}),
-          resolveSettings: () => ({ profile: 'default', provider: 'mock', model: 'test-model', think: false, mode: 'agent' }),
+          resolveSettings: () => ({ profile: 'default', provider: 'mock', model: 'test-model', deep: false, mode: 'agent' }),
           prepareEngine: async () => ({ engine, config: { provider: 'mock', model: 'test-model' } }),
         });
       },

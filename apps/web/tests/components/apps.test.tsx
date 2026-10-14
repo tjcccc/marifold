@@ -37,7 +37,7 @@ const skillTranslator: SkillAppDefinition = {
     name: 'translationModel',
     provider: 'ollama',
     model: 'maternion/hy-mt2:1.8b',
-    think: false,
+    deep: false,
   }],
   skills: [{ name: 'translate', result: { kind: 'text', trim: true } }],
   operations: [{

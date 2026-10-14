@@ -41,7 +41,7 @@ describe('App', () => {
     const second = new MarifoldRuntime({ loadedConfig });
     owner.acquireSession('occupied');
     const { lastFrame, unmount } = render(<App runtime={second} loadedConfig={loadedConfig} initial={{
-      profile: 'default', provider: 'ollama', model: 'test-model', think: false,
+      profile: 'default', provider: 'ollama', model: 'test-model', deep: false,
       cwd: '/tmp/work', version: 'test', sessionId: 'occupied',
       transcript: [{ kind: 'assistant', text: 'other client conversation' }],
     }} />);
@@ -57,7 +57,7 @@ describe('App', () => {
     const { runtime, loadedConfig } = workspace();
     const acquire = vi.spyOn(runtime, 'acquireSession').mockImplementationOnce(() => { throw new Error('fetch failed'); });
     const { lastFrame, unmount } = render(<App runtime={runtime} loadedConfig={loadedConfig} initial={{
-      profile: 'default', provider: 'ollama', model: 'test-model', think: false,
+      profile: 'default', provider: 'ollama', model: 'test-model', deep: false,
       cwd: '/tmp/work', version: 'test', sessionId: 'mine',
       transcript: [{ kind: 'assistant', text: 'kept conversation' }],
     }} />);
@@ -75,7 +75,7 @@ describe('App', () => {
     const run = vi.spyOn(runner, 'run').mockImplementation(async function* () {});
     const createRunner = vi.spyOn(runtime, 'createAgentRunner').mockReturnValue(runner);
     const { stdin, unmount } = render(<App runtime={runtime} loadedConfig={loadedConfig} initial={{
-      profile: 'default', provider: 'ollama', model: 'test-model', think: false,
+      profile: 'default', provider: 'ollama', model: 'test-model', deep: false,
       cwd: '/tmp/work', version: 'test', history: [{ text: 'describe [image #3]',
         images: ['/tmp/missing-first.png', '/tmp/missing-second.png', '/tmp/current.png'] }],
     }} />);
@@ -100,7 +100,7 @@ describe('App', () => {
     const run = vi.spyOn(runner, 'run').mockImplementation(async function* () {});
     const createRunner = vi.spyOn(runtime, 'createAgentRunner').mockReturnValue(runner);
     const { stdin, unmount } = render(<App runtime={runtime} loadedConfig={loadedConfig} initial={{
-      profile: 'default', provider: 'ollama', model: 'test-model', think: false, cwd: '/tmp/work', version: 'test',
+      profile: 'default', provider: 'ollama', model: 'test-model', deep: false, cwd: '/tmp/work', version: 'test',
     }} />);
     try {
       await delay();
@@ -129,7 +129,7 @@ describe('App', () => {
     const createRunner = vi.spyOn(runtime, 'createAgentRunner').mockReturnValue(runner);
     const { stdin, unmount } = render(<App runtime={runtime} loadedConfig={loadedConfig} initial={{
       profile: 'default', provider: 'ollama', model: 'test-model',
-      think: false, cwd: '/tmp/work', version: '0.0.0-test',
+      deep: false, cwd: '/tmp/work', version: '0.0.0-test',
     }} />);
     try {
       await delay();
@@ -167,7 +167,7 @@ describe('App', () => {
     const createRunner = vi.spyOn(runtime, 'createAgentRunner').mockReturnValue(runner);
     const { stdin, lastFrame, unmount } = render(<App runtime={runtime} loadedConfig={loadedConfig} initial={{
       profile: 'default', provider: 'ollama', model: 'test-model',
-      think: false, cwd: '/tmp/work', version: '0.0.0-test',
+      deep: false, cwd: '/tmp/work', version: '0.0.0-test',
       ...(mode === 'startup' ? {
         sessionId: saved.id,
         transcript: saved.turns.map(turn => ({ kind: turn.role, text: turn.content })),
@@ -217,7 +217,7 @@ describe('App', () => {
     const run = vi.spyOn(runner, 'run').mockImplementation(async function* () {});
     const createRunner = vi.spyOn(runtime, 'createAgentRunner').mockReturnValue(runner);
     const { stdin, lastFrame, unmount } = render(<App runtime={runtime} loadedConfig={loadedConfig} initial={{
-      profile: 'default', provider: 'ollama', model: 'test-model', think: false,
+      profile: 'default', provider: 'ollama', model: 'test-model', deep: false,
       cwd: '/tmp/work', version: 'test', sessionId: saved.id, history: sessionPromptHistory(saved),
     }} />);
     try {
@@ -239,7 +239,7 @@ describe('App', () => {
     const hostile = 'before\x1b]52;c;cGF5bG9hZA==\x07 \x1b]0;spoofed title\x1b\\ \x1b]8;;https://evil.example\x07docs\x1b]8;;\x07 after';
     const app = renderTerminal(<App runtime={runtime} loadedConfig={loadedConfig} initial={{
       profile: 'default', provider: 'ollama', model: 'test-model',
-      think: false, cwd: '/tmp/work', version: '0.0.0-test',
+      deep: false, cwd: '/tmp/work', version: '0.0.0-test',
       transcript: [{ kind: 'assistant', text: hostile }],
     }} />, { stdin, stdout: filtered ? inertTerminalOutput(raw as unknown as NodeJS.WriteStream) : raw, stderr: new PassThrough(), exitOnCtrlC: false, patchConsole: false });
     try {
@@ -261,7 +261,7 @@ describe('App', () => {
     stdout.on('data', chunk => { output += chunk.toString(); });
     const app = renderTerminal(<App runtime={runtime} loadedConfig={loadedConfig} fullscreen initial={{
       profile: 'default', provider: 'ollama', model: 'test-model',
-      think: false, cwd: '/tmp/work', version: '0.0.0-test',
+      deep: false, cwd: '/tmp/work', version: '0.0.0-test',
       transcript: [{ kind: 'assistant', text: 'A response that wraps as terminal geometry changes. '.repeat(4) }],
     }} />, { stdin, stdout, stderr: new PassThrough(), alternateScreen: true, incrementalRendering: true, exitOnCtrlC: false, patchConsole: false });
     try {
@@ -287,7 +287,7 @@ describe('App', () => {
     const { runtime, loadedConfig } = workspace();
     const initial = {
       profile: 'default', displayName: 'Display Name', provider: 'ollama', model: 'test-model',
-      think: false, cwd: '/tmp/work', version: '0.0.0-test',
+      deep: false, cwd: '/tmp/work', version: '0.0.0-test',
     };
     const { lastFrame, stdin, unmount } = render(
       <App runtime={runtime} loadedConfig={loadedConfig} initial={initial} />,
@@ -318,7 +318,7 @@ describe('App', () => {
 
   it('preserves the full-screen draft when Ctrl+L redraws the terminal', async () => {
     const { runtime, loadedConfig } = workspace();
-    const initial = { profile: 'default', provider: 'ollama', model: 'test-model', think: false, cwd: '/tmp/work', version: '0.0.0-test' };
+    const initial = { profile: 'default', provider: 'ollama', model: 'test-model', deep: false, cwd: '/tmp/work', version: '0.0.0-test' };
     const { lastFrame, stdin, unmount } = render(<App runtime={runtime} loadedConfig={loadedConfig} initial={initial} fullscreen />);
     try {
       await vi.waitFor(() => expect(lastFrame()).toContain('marifold'));
@@ -332,7 +332,7 @@ describe('App', () => {
 
   it('switches profile via the picker (Enter) and the direct /profile <name> form', async () => {
     const { runtime, loadedConfig } = workspace();
-    const initial = { profile: 'default', provider: 'ollama', model: 'test-model', think: false, cwd: '/tmp/work', version: '0.0.0-test' };
+    const initial = { profile: 'default', provider: 'ollama', model: 'test-model', deep: false, cwd: '/tmp/work', version: '0.0.0-test' };
     const { lastFrame, stdin, unmount } = render(
       <App runtime={runtime} loadedConfig={loadedConfig} initial={initial} />,
     );
@@ -368,7 +368,7 @@ describe('App', () => {
     const profileSource = path.join(root, 'profile-skill.md');
     fs.writeFileSync(globalSource, '---\nname: everywhere\ndescription: Global test.\n---\n\nHelp everywhere.\n');
     fs.writeFileSync(profileSource, '---\nname: private-helper\ndescription: Profile test.\n---\n\nHelp this profile.\n');
-    const initial = { profile: 'default', provider: 'ollama', model: 'test-model', think: false, cwd: root, version: '0.0.0-test' };
+    const initial = { profile: 'default', provider: 'ollama', model: 'test-model', deep: false, cwd: root, version: '0.0.0-test' };
     const { stdin, unmount } = render(
       <App runtime={runtime} loadedConfig={loadedConfig} initial={initial} />,
     );

@@ -126,7 +126,7 @@ const artifactStarted = new Date(Date.now() - 2 * 86400000).toISOString();
 const artifactFinished = new Date(Date.parse(artifactStarted) + 1000).toISOString();
 const artifactSessions = new SessionResolver(remoteLoadedConfig.config.paths.sessionsDb);
 await artifactSessions.appendExchange('session-download', 'remote-only', 'Capture the home desktop.', 'The screenshot is ready.', undefined, {
-  mode: 'agent', provider: 'ollama', model: 'fixture-model', think: false,
+  mode: 'agent', provider: 'ollama', model: 'fixture-model', deep: false,
   startedAt: artifactStarted, finishedAt: artifactFinished, latencyMs: 1000,
 });
 artifactSessions.close();

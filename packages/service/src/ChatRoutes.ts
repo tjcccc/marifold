@@ -112,7 +112,7 @@ function parseRunRequest(value: unknown): MarifoldRunRequest {
     ...optionalBooleanField('isolated', body.isolated),
     ...optionalNonNegativeIntegerField('replaceUserTurnIndex', body.replaceUserTurnIndex),
     ...optionalBooleanField('memories', body.memories),
-    ...optionalBooleanField('think', body.think),
+    ...optionalBooleanField('deep', body.deep),
     ...optionalBooleanField('profileContext', body.profileContext),
     ...optionalBooleanField('originalImages', body.originalImages),
     ...optionalImagesField(body.images),

@@ -51,7 +51,7 @@ import type { ThreadState, UserAttachment } from '../../state/thread';
 import { activeRun, createThreadState, threadReducer } from '../../state/thread';
 import { preparedAttachmentsFromUser, toUserAttachments } from './sessionAttachments';
 import { runAgentCommand } from './agentCommands';
-import { useGlobalThink } from './useGlobalThink';
+import { useGlobalDeep } from './useGlobalDeep';
 import { useSessionLease } from './useSessionLease';
 
 
@@ -90,8 +90,8 @@ export interface AgentController {
   /** True while the selected conversation has a live chat or agent response. */
   responding: boolean;
   sending: boolean;
-  think: boolean;
-  setThink: (on: boolean) => void;
+  deep: boolean;
+  setDeep: (on: boolean) => void;
   modelOptions: string[];
   /** "provider/model" or undefined = Auto (profile/config default). */
   modelChoice?: string;
@@ -226,7 +226,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
     },
     [onUnauthorized],
   );
-  const [think, setThink] = useGlobalThink(client, handleError);
+  const [deep, setDeep] = useGlobalDeep(client, handleError);
 
   const rememberPersistedSessionIds = useCallback((ids: Iterable<string>) => {
     setPersistedSessionIds(current => {
@@ -848,7 +848,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
             profile: profileName,
             sessionId: sid,
             replaceUserTurnIndex: options.replaceUserTurnIndex,
-            think,
+            deep,
             provider,
             model,
             ...(images.length > 0 ? { images } : {}),
@@ -902,7 +902,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
           profile: profileName,
           sessionId: sid,
           replaceUserTurnIndex: options.replaceUserTurnIndex,
-          think,
+          deep,
           provider,
           model,
           ...(images.length > 0 ? { images } : {}),
@@ -924,7 +924,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
         setSendingBytes(undefined);
       }
     },
-    [client, profileName, sessionId, modelChoice, think, followers, navigate, handleError, refreshSessions, loadSession, attachmentDraftKey],
+    [client, profileName, sessionId, modelChoice, deep, followers, navigate, handleError, refreshSessions, loadSession, attachmentDraftKey],
   );
 
   const stop = useCallback(async (): Promise<boolean> => {
@@ -945,10 +945,10 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
 
   const runCommand = useCallback(
     (command: { name: string; args: string }) => runAgentCommand({
-      client, dispatch, threadRef, profileName, profileDetail, modelChoice, think, sessionId,
-      newSession, setThink, setModelChoice, sendMessage, refreshSessions, handleError, stop,
+      client, dispatch, threadRef, profileName, profileDetail, modelChoice, deep, sessionId,
+      newSession, setDeep, setModelChoice, sendMessage, refreshSessions, handleError, stop,
     }, command),
-    [client, profileName, profileDetail, modelChoice, think, sessionId, newSession, setThink, setModelChoice, setProfileDetail, sendMessage, refreshSessions, handleError, stop],
+    [client, profileName, profileDetail, modelChoice, deep, sessionId, newSession, setDeep, setModelChoice, setProfileDetail, sendMessage, refreshSessions, handleError, stop],
   );
 
   // `/command` is a deterministic web action, handled before steering so e.g.
@@ -1116,8 +1116,8 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
     steeringRun: activeRun(thread)?.runId,
     responding: chatResponding || activeRun(thread) !== undefined,
     sending,
-    think,
-    setThink,
+    deep,
+    setDeep,
     modelOptions,
     modelChoice,
     setModelChoice,

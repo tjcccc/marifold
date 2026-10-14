@@ -144,7 +144,7 @@ export class ConfigLoader {
       maxContextTokens: optionalNumber(raw.max_context_tokens, 'default.max_context_tokens'),
       compactionKeepTurns: optionalNumber(raw.compaction_keep_turns, 'default.compaction_keep_turns'),
       sessionContextTurns: optionalTurnWindow(raw.session_context_turns, 'default.session_context_turns'),
-      think: optionalBoolean(raw.think, 'default.think') ?? false,
+      deep: optionalBoolean(raw.deep, 'default.deep') ?? false,
     };
   }
 

@@ -150,7 +150,7 @@ export async function runTui(options: RunTuiOptions): Promise<void> {
       displayName: runtime.getProfile(settings.profile).displayName,
       provider: settings.provider,
       model: settings.model,
-      think: settings.think,
+      deep: settings.deep,
       cwd: process.cwd(),
       version: readVersion(),
       maxContextTokens: settings.maxContextTokens ?? options.loadedConfig.config.default.maxContextTokens,

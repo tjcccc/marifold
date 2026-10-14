@@ -27,7 +27,7 @@ describe('ChatGPT token refresh', () => {
       configPath: path.join(dir, 'config.toml'),
       foundConfig: false,
       config: {
-        default: { provider: 'chatgpt', model: 'gpt-x', profile: 'default', think: false },
+        default: { provider: 'chatgpt', model: 'gpt-x', profile: 'default', deep: false },
         models: { options: [] },
         memory: { sizeLimit: 50000, contextLimit: 2400 },
         paths: { profilesDir: path.join(dir, 'profiles'), sessionsDb: path.join(dir, 'sessions.db'), tasksDir: path.join(dir, 'tasks') },

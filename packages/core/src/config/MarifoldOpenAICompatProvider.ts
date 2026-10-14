@@ -14,7 +14,7 @@ import { randomUUID } from 'crypto';
 import { proxyDispatcher } from '../util/proxy';
 import { openAIChatCompletionsUrl, openAIResponsesUrl } from './OpenAICompatUrls';
 import { isGitHubCopilotResponsesModelId } from './ProviderRegistry';
-import { providerReasoning } from './ThinkReasoning';
+import { providerReasoning } from './DeepReasoning';
 
 type OpenAICompatEndpoint = 'chat-completions' | 'responses';
 const NATIVE_WEB_SEARCH_COMPAT_OPTION = 'marifold_native_web_search';

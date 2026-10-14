@@ -18,7 +18,7 @@ For product direction and future scope, see [docs/vision.md](docs/vision.md) and
 - Protected skill management: `$skill-installer install|update|remove|uninstall|help` manages local skill sources and `$skill-creator` gathers requirements and creates a validated skill. Both default to the shared user scope so new profiles see installed Skills immediately; `--profile <name>` creates or changes a profile-only copy. The older `--global`/`-g` spelling remains accepted as a redundant compatibility alias. Their names are compiled into core, cannot be shadowed or removed, and ordinary skill-related prompts receive the same validated management guidance lazily.
 - The TUI: launch with bare `marifold` (or `marifold --profile <name>`); ordinary messages always use the Agent path. Full-screen mode includes transcript scrolling, mouse caret placement, and drag-to-copy by default; `--no-fullscreen` or `[tui] fullscreen = false` uses native terminal scrollback.
 - Input grammar: plain text → agent, `/command` → app-executed action, `$skill [args]` → model-backed skill.
-- `/` commands: `/help` `/exit` `/new` `/model` `/profile` `/resume` `/takeover` `/archive` `/unarchive` `/think` `/clear` `/stop` `/btw` `/permissions` `/skills` `/install-skill` `/doctor [--fix]`, plus `/read` `/image` `/attach-original` `/remember` `/forget` `/delete-memory`.
+- `/` commands: `/help` `/exit` `/new` `/model` `/profile` `/resume` `/takeover` `/archive` `/unarchive` `/deep` `/clear` `/stop` `/btw` `/permissions` `/skills` `/install-skill` `/doctor [--fix]`, plus `/read` `/image` `/attach-original` `/remember` `/forget` `/delete-memory`.
 - Approval modal that previews the tool's input (file content / shell command), with allow-once / session-grant / persist-to-config / deny; escalated (out-of-cwd) calls always prompt; `/permissions` shows modes and grants.
 - Typing while a task runs steers it (queued for its next model turn); `/btw <question>` asks a quick side question about the conversation in a panel (↑/↓ scroll, c copy, Esc close) without interrupting the task or saving anything; Esc / Ctrl+C cancels a run, and a second Ctrl+C when idle exits.
 - Input editing: history (Up/Down), multi-line via trailing `\`, readline keys (Ctrl+A/E/U/W), and Tab completion for `/commands` and `$skills`.
@@ -71,14 +71,14 @@ For product direction and future scope, see [docs/vision.md](docs/vision.md) and
 - Rich memory metadata: priority, confidence, stability, source, source type, scope, timestamps, evidence, reason, conflict keys, and supersession status.
 - Model-driven memory saves and forgets through hidden `<memory_save>` and `<memory_forget>` blocks.
 - Conservative prompt fallback for explicit names, favorite/preferred facts, response-style preferences, meeting times, and prompt-driven forget requests.
-- Priority/relevance recall with simple-prompt gating, thinking-mode priority expansion, expiry handling, and `[memory].context_limit`.
+- Priority/relevance recall with simple-prompt gating, expiry handling, and `[memory].context_limit`.
 - Conflict-key canonicalization and open-slot updates such as `user.name`, `user.favorite_color`, `user.favorite_editor`, `preferences.reply_style`, and `auto_short.project_meeting_time`.
 - Automatic low-priority short-term trimming through `[memory].size_limit`.
 - Explicit conversation memory commands for remember, soft-forget, and permanent delete.
 - Profile memory inspection through `profile memory`.
 - Memory injection through the `@priest-ai/core` request `memory` lane.
 - Memory recall controls through `[memory].context_limit`, `profile.toml` `memories = false`, and `--no-memories`.
-- One global Think switch, `[default].think`, set by the Web Think pill, TUI `/think on|off`, and Telegram `/think`; `ask --think [true|false]` overrides it for one run.
+- One global Deep switch, `[default].deep`, for deeper reasoning: set by the Web Deep pill, TUI `/deep on|off`, and Telegram `/deep`; `ask --deep [true|false]` overrides it for one run. (Called Think before v0.94; `marifold doctor --fix` renames old settings.)
 - Basic config, model, provider, and session inspection commands.
 - Config backup and restore for config, profiles, memories, and optional sessions.
 - Profile rename and delete commands for stored profiles.
@@ -207,7 +207,7 @@ marifold agent --tool-mode control-block --yes "Write a haiku into haiku.txt"
 marifold ask "Hello"
 marifold ask --profile default "Explain marifold in one sentence."
 marifold ask --no-memories "Format this JSON"
-marifold ask --think true "Solve step by step."
+marifold ask --deep true "Solve step by step."
 marifold ask --image ./photo.jpg "What is in this image?"
 
 marifold init
@@ -288,8 +288,8 @@ The packaged binary name is `marifold`.
 Related commands available inside the TUI:
 
 ```text
-/think on             Turn thinking on for all profiles (saves [default].think).
-/think off            Turn thinking off for all profiles.
+/deep on              Deeper reasoning for all profiles (saves [default].deep).
+/deep off             Normal reasoning for all profiles.
 /read <path>           Attach a local file's content to your next message.
 /image <path>          Attach an image to your next message. Repeatable.
 /image clear           Drop pending image attachments.
@@ -323,7 +323,7 @@ provider = "ollama"
 model = "gemma4:e4b"
 profile = "default"
 timeout_seconds = 300
-think = false
+deep = false
 max_context_tokens = 16000
 # session_context_turns = "all"   # "all" | 0 | 5 | 10 — recent turns the model sees per turn
 
@@ -390,7 +390,7 @@ cors_origins = ["http://127.0.0.1:5173"] # exact-match browser origins allowed t
 
 With no token resolved, auth is off; loopback and private-network access remain available. With no `cors_origins`, cross-origin browser requests are rejected; a hosted Web UI reached through the same loopback, LAN, or Tailscale address is same-origin and needs no allowlist entry. `marifold service --token/--token-env/--cors-origin` override the config per start. When enabled, auth covers `/v1/*`; `/health` and hosted static files stay reachable. Authentication protects the API but never admits public source addresses.
 
-ChatGPT models use `low` reasoning effort with Think off and `medium` with Think on; Think on also requests reasoning summaries. marifold never asks for `high`.
+ChatGPT models use `low` reasoning effort with Deep off and `medium` with Deep on; Deep on also requests reasoning summaries. marifold never asks for `high`.
 
 ChatGPT model discovery queries the signed-in Codex catalog. Its required client version uses `MARIFOLD_CHATGPT_CATALOG_CLIENT_VERSION` when set to a numeric `major.minor.patch` version; otherwise it uses the newer of the bundled baseline (`0.154.0`) and the `client_version` in `$CODEX_HOME/models_cache.json` (default `~/.codex/models_cache.json`). Codex is optional: missing or invalid metadata uses the baseline. Local cached models and Codex credentials are never imported. Restart a running service after changing the environment override.
 
@@ -462,7 +462,7 @@ Web Config can remove a non-default provider after typed confirmation. Removal d
 
 `[memory].context_limit` caps the combined memory text injected into one provider request. Set it to `0` for unlimited memory injection. `[memory].size_limit` caps `memories/auto_short.jsonl`; low-priority short-term entries are trimmed first while priority `0` entries are preserved where possible.
 
-`[default].think` is the global Think switch; there is no per-profile setting. SkillApps may override it per model or profile reference. Think on asks for `medium` effort and Think off for `low`, sent explicitly so a provider's higher default never applies:
+`[default].deep` is the global Deep switch; there is no per-profile setting. SkillApps may override it per model or profile reference with `deep`. Most current models reason either way, so Deep sets how hard: on asks for `medium` effort and off for `low`, sent explicitly so a provider's higher default never applies:
 
 - ChatGPT and Responses-only GitHub Copilot models: `reasoning.effort`.
 - xAI: `reasoning_effort` (Grok defaults to `high` and cannot turn reasoning off).
@@ -470,7 +470,7 @@ Web Config can remove a non-default provider after typed confirmation. Removal d
 - Ollama: `think` on or off; `gpt-oss` models get the `low`/`medium` level instead.
 - Anthropic: adaptive thinking at `medium` effort when on; nothing when off.
 
-Other providers get no reasoning setting. If a model rejects the setting with an HTTP 400, marifold retries the call once without it and stops sending it to that model until the service restarts, and the Web Think pill is hidden for models it cannot affect. When a provider returns a safe reasoning summary, marifold renders it separately from the answer; opaque provider continuation data is replayed to the provider but never exposed as text.
+Other providers get no reasoning setting. If a model rejects the setting with an HTTP 400, marifold retries the call once without it and stops sending it to that model until the service restarts, and the Web Deep pill is hidden for models it cannot affect. When a provider returns a safe reasoning summary, marifold renders it separately from the answer; opaque provider continuation data is replayed to the provider but never exposed as text.
 
 `[default]` also holds the conversation-context controls. `max_context_tokens` (budget that triggers summary compaction near ~80%; `0` disables it) and `session_context_turns` (hard cap on recent turns the model sees each turn — `"all"`/absent means no cap) are inherited by profiles and overridable per-profile in `profile.toml`. `compaction_keep_turns` (recent turns kept verbatim when compacting; defaults to 6) is global-only. See the `profile.toml` properties table below for the per-profile form.
 
@@ -547,7 +547,7 @@ session_context_turns = 5
 
 Memory is context, not authority. Human-authored profile instructions and the current user message outrank memory. Prompt injection receives compact grouped memory blocks rather than raw JSON.
 
-marifold creates memory files for existing profiles when memory is first prepared, read, or written. When memory is on, marifold asks the model to emit hidden memory control blocks for useful saves or forgets, strips those blocks from visible replies and session history, applies JSONL updates after the turn, applies conservative prompt fallback extraction, applies prompt-driven forgets, and trims low-priority short-term memory. Recall uses priority cutoffs: messages recall priority `0..3` and simple greetings recall only priority `0`; Think does not change recall.
+marifold creates memory files for existing profiles when memory is first prepared, read, or written. When memory is on, marifold asks the model to emit hidden memory control blocks for useful saves or forgets, strips those blocks from visible replies and session history, applies JSONL updates after the turn, applies conservative prompt fallback extraction, applies prompt-driven forgets, and trims low-priority short-term memory. Recall uses priority cutoffs: messages recall priority `0..3` and simple greetings recall only priority `0`; Deep does not change recall.
 
 marifold also reads legacy Markdown memory files in `memories/user.md`, `memories/preferences.md`, `memories/notes.md`, and `memories/auto_short.md` as read-only fallback prompt context.
 

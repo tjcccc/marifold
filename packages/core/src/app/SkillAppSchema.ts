@@ -49,11 +49,11 @@ export interface SkillAppModelDefinition {
   name: string;
   provider: string;
   model: string;
-  /** Overrides the global Think switch; omitted follows `default.think`. */
-  think?: boolean;
+  /** Overrides the global Deep switch; omitted follows `default.deep`. */
+  deep?: boolean;
 }
 
-/** A profile reference declared by a v2 template. Model/thinking overrides
+/** A profile reference declared by a v2 template. Model/Deep overrides
  * are local to the App and never mutate the underlying profile settings. */
 export interface SkillAppProfileDefinition {
   /** Template-local const name used by operations. */
@@ -62,7 +62,7 @@ export interface SkillAppProfileDefinition {
   profile: string;
   provider?: string;
   model?: string;
-  think?: boolean;
+  deep?: boolean;
   /** Read-only profile memory for this operation. Agent runs never write it. */
   memory: boolean;
   /** Ephemeral history shared only inside one App instance/profile reference. */

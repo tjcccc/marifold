@@ -61,7 +61,7 @@ export async function updateSession(
 export async function compactSession(
   client: ApiClient,
   id: string,
-  request: { profile: string; provider?: string; model?: string; think?: boolean },
+  request: { profile: string; provider?: string; model?: string; deep?: boolean },
 ): Promise<{ compacted: boolean }> {
   const body = await client.request<{ compacted: boolean }>(
     'POST',

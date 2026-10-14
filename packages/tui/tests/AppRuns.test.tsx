@@ -39,7 +39,7 @@ function makeRuntime(opts: {
     getProfile: (name: string) => ({ name, displayName: name === 'helper' ? 'Helper' : name }),
     listSessions: listSessionsSpy,
     getSession: (id: string) => opts.sessionDetail?.id === id ? opts.sessionDetail : undefined,
-    resolveSettings: ({ profile }: { profile: string }) => ({ profile, provider: 'p', model: 'm', mode: 'agent' as const, think: false }),
+    resolveSettings: ({ profile }: { profile: string }) => ({ profile, provider: 'p', model: 'm', mode: 'agent' as const, deep: false }),
     createAgentRunner: () => ({
       run: (call: RunnerCall) => {
         runSpy(call);
@@ -63,7 +63,7 @@ const config = {
 } as unknown as LoadedMarifoldConfig;
 
 function initial() {
-  return { profile: 'default', provider: 'p', model: 'm', think: false, cwd: '/tmp', version: '0.0.0-test' };
+  return { profile: 'default', provider: 'p', model: 'm', deep: false, cwd: '/tmp', version: '0.0.0-test' };
 }
 
 const delay = () => new Promise(resolve => setTimeout(resolve, 30));

@@ -37,7 +37,7 @@ export interface SkillAppOperationHost {
   readonly loadedConfig: LoadedMarifoldConfig;
   readonly engines: ProviderEngines;
   createAppStore(directory?: string): AppStore;
-  resolveSettings(request: Pick<MarifoldRunRequest, 'profile' | 'provider' | 'model' | 'think' | 'maxContextTokens'>): MarifoldResolvedSettings;
+  resolveSettings(request: Pick<MarifoldRunRequest, 'profile' | 'provider' | 'model' | 'deep' | 'maxContextTokens'>): MarifoldResolvedSettings;
   memoryForRequest(profile: string, requestMemories?: boolean, prompt?: string): string[];
   resolveAgentConfigForProfile(profile?: string): MarifoldAgentConfig;
   createAgentRunner(
@@ -85,7 +85,7 @@ export class SkillAppOperations {
           profile: operation.profile.profile,
           ...(operation.profile.provider ? { provider: operation.profile.provider } : {}),
           ...(operation.profile.model ? { model: operation.profile.model } : {}),
-          ...(operation.profile.think !== undefined ? { think: operation.profile.think } : {}),
+          ...(operation.profile.deep !== undefined ? { deep: operation.profile.deep } : {}),
         });
         const memory = this.host.memoryForRequest(
           settings.profile,
@@ -164,7 +164,7 @@ export class SkillAppOperations {
           profile: `skillapp-${appName}`,
           provider: operation.model.provider,
           model: operation.model.model,
-          think: operation.model.think ?? this.host.loadedConfig.config.default.think,
+          deep: operation.model.deep ?? this.host.loadedConfig.config.default.deep,
           mode: 'chat',
         };
         await this.host.engines.refreshCredentials(settings.provider);
@@ -296,7 +296,7 @@ export class SkillAppOperations {
       profile: settings.profile,
       provider: settings.provider,
       model: settings.model,
-      think: settings.think,
+      deep: settings.deep,
       lean: true,
       instructions,
       ...(images.length > 0 || files.length > 0 ? {

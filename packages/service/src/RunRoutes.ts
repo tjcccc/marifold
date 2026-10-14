@@ -199,7 +199,7 @@ function parseRunStartInput(value: unknown): RunStartInput {
     ...optionalStringField('userTurn', body.userTurn),
     ...optionalNonNegativeIntegerField('replaceUserTurnIndex', body.replaceUserTurnIndex),
     ...optionalStringField('cwd', body.cwd),
-    ...optionalBooleanField('think', body.think),
+    ...optionalBooleanField('deep', body.deep),
     ...optionalBooleanField('originalImages', body.originalImages),
     ...optionalBooleanField('forcePlan', body.forcePlan),
     ...optionalBooleanField('lean', body.lean),

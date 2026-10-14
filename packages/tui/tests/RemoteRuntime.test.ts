@@ -5,7 +5,7 @@ afterEach(() => vi.unstubAllGlobals());
 it('uses the host snapshot and the workspace run contract without local model credentials', async () => {
   const calls: Array<{ path: string; body?: { action?: string } }> = [];
   const config = {
-    default: { profile: 'host-profile', provider: 'host-provider', model: 'host-model', think: false },
+    default: { profile: 'host-profile', provider: 'host-provider', model: 'host-model', deep: false },
     models: { options: ['host-provider/host-model'] },
   };
   vi.stubGlobal(

@@ -166,7 +166,7 @@ export class WorkspaceRuns {
               profile: input.profile,
               provider: input.provider,
               model: input.model,
-              think: input.think,
+              deep: input.deep,
               files: input.files,
               images: input.images,
             },

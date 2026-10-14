@@ -206,7 +206,7 @@ describe('MarifoldOpenAICompatProvider', () => {
     // The Codex backend rejects store:true and requires stream:true.
     expect(requestBody).toMatchObject({ model: 'gpt-5-codex', store: false, stream: true });
     expect(requestBody).not.toHaveProperty('max_output_tokens');
-    // Without thinking, no reasoning param and no raw think key (default flow).
+    // Without thinking, no reasoning param and no raw deep key (default flow).
     expect(requestBody).not.toHaveProperty('reasoning');
     expect(requestBody).not.toHaveProperty('think');
   });

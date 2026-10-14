@@ -180,8 +180,9 @@ export {
   providerConfigFromRegistry,
 } from './config/ProviderRegistry';
 export type { ProviderRegistryEntry, ProviderRegistryKind } from './config/ProviderRegistry';
-export { supportsThink } from './config/ThinkReasoning';
-export type { ThinkTarget } from './config/ThinkReasoning';
+export { supportsDeep } from './config/DeepReasoning';
+export { legacyDefaultThink, legacyThinkApps, migrateAppThink, migrateDefaultThink } from './config/DeepMigration';
+export type { DeepTarget } from './config/DeepReasoning';
 export { MarifoldError } from './errors/MarifoldError';
 export type { MarifoldErrorCode } from './errors/MarifoldError';
 export {

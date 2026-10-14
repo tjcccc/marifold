@@ -9,7 +9,7 @@ export interface ResponseMetrics {
   mode: 'agent' | 'chat';
   provider: string;
   model: string;
-  think: boolean;
+  deep: boolean;
   startedAt: string;
   finishedAt: string;
   latencyMs: number;

@@ -171,6 +171,9 @@ export function rejectUnknown(
   sourcePath: string,
 ): void {
   const unknown = Object.keys(object).filter(key => !allowed.includes(key));
+  if (unknown.includes('think') && allowed.includes('deep')) {
+    throw invalidAt(state.sourceFile, node.pos, `${label}: \`think\` was renamed to \`deep\`. Run \`marifold doctor --fix\` to update installed apps.`, sourcePath);
+  }
   if (unknown.length > 0) { throw invalidAt(state.sourceFile, node.pos, `${label} does not support: ${unknown.join(', ')}.`, sourcePath); }
 }
 

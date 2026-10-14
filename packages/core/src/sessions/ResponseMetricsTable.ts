@@ -103,7 +103,7 @@ export function upsertResponseMetrics(
     metrics.mode,
     metrics.provider,
     metrics.model,
-    metrics.think ? 1 : 0,
+    metrics.deep ? 1 : 0, // stored in the `think` column (named before Think became Deep)
     metrics.startedAt,
     metrics.finishedAt,
     nonNegativeInteger(metrics.latencyMs) ?? 0,
@@ -152,7 +152,7 @@ export function listResponseMetrics(db: Database.Database, sessionId: string): M
       mode: row.mode,
       provider: row.provider,
       model: row.model,
-      think: row.think === 1,
+      deep: row.think === 1,
       startedAt: row.startedAt,
       finishedAt: row.finishedAt,
       latencyMs: row.latencyMs,

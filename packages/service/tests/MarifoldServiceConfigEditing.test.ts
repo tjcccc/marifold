@@ -34,7 +34,7 @@ describe('config editing routes', () => {
           provider: 'ollama',
           model: 'codellama',
           memories: false,
-          think: true,
+          deep: true,
           sessionContextTurns: 5,
           approval: { shell: 'deny' },
         },
@@ -46,8 +46,8 @@ describe('config editing routes', () => {
         mode: 'chat', provider: 'ollama', model: 'codellama',
         memories: false, sessionContextTurns: 5,
       });
-      // Think is global now: an older client's profile think is ignored.
-      expect(settings.think).toBeUndefined();
+      // Deep is global now: an older client's profile deep is ignored.
+      expect(settings.deep).toBeUndefined();
       expect(settings.agent.approval.shell).toBe('deny');
 
       // null clears: model override, the approval override, the turn window.
@@ -256,7 +256,7 @@ describe('config editing routes', () => {
       expect(unknown.statusCode).toBe(400);
 
       // Auth still gates the write route.
-      const bare = await server.inject({ method: 'PATCH', url: '/v1/config', payload: { key: 'default.think', value: 'true' } });
+      const bare = await server.inject({ method: 'PATCH', url: '/v1/config', payload: { key: 'default.deep', value: 'true' } });
       expect(bare.statusCode).toBe(401);
     } finally {
       await server.close();

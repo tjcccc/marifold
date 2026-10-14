@@ -77,12 +77,12 @@ export interface Suggestion {
  * runAgentCommand (screens/agent/agentCommands.ts). Keep the two in sync. */
 export const WEB_COMMANDS: Suggestion[] = [
   { name: 'help', usage: '/help', description: 'List available commands.' },
-  { name: 'status', usage: '/status', description: 'Show profile, model, thinking, and session.' },
+  { name: 'status', usage: '/status', description: 'Show profile, model, Deep, and session.' },
   { name: 'copy', usage: '/copy', description: "Copy the last response to the clipboard." },
   { name: 'retry', usage: '/retry', description: 'Re-run your last message.' },
   { name: 'attach-original', usage: '/attach-original <prompt>', description: 'Send this message’s attached images without optimization.' },
   { name: 'new', usage: '/new', description: 'Start a fresh session.' },
-  { name: 'think', usage: '/think', description: 'Toggle thinking mode.' },
+  { name: 'deep', usage: '/deep', description: 'Toggle Deep: deeper reasoning for all profiles.' },
   { name: 'model', usage: '/model <id>', description: 'Set the session model, e.g. /model xai/grok-4.5.' },
   { name: 'stop', usage: '/stop', description: 'Cancel the running task.' },
   { name: 'remember', usage: '/remember <text>', description: 'Save a memory for this profile.' },

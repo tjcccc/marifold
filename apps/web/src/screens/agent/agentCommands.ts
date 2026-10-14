@@ -17,10 +17,10 @@ export interface AgentCommandContext {
   profileName: string | undefined;
   profileDetail: ProfileDetail | undefined;
   modelChoice: string | undefined;
-  think: boolean;
+  deep: boolean;
   sessionId: string | undefined;
   newSession: () => void;
-  setThink: (think: boolean) => void;
+  setDeep: (deep: boolean) => void;
   setModelChoice: (choice: string | undefined) => void;
   sendMessage: (text: string, options?: { originalImages?: boolean }) => Promise<boolean>;
   refreshSessions: () => Promise<void>;
@@ -31,8 +31,8 @@ export interface AgentCommandContext {
 /** Run one Web `/command`: a deterministic action, notice, or message send. */
 export async function runAgentCommand(context: AgentCommandContext, { name, args }: { name: string; args: string }): Promise<void> {
   const {
-    client, dispatch, threadRef, profileName, profileDetail, modelChoice, think, sessionId,
-    newSession, setThink, setModelChoice, sendMessage, refreshSessions, handleError, stop,
+    client, dispatch, threadRef, profileName, profileDetail, modelChoice, deep, sessionId,
+    newSession, setDeep, setModelChoice, sendMessage, refreshSessions, handleError, stop,
   } = context;
   const notify = (text: string, tone: 'info' | 'warn' | 'error' = 'info') =>
     dispatch({ type: 'notice', tone, text });
@@ -44,7 +44,7 @@ export async function runAgentCommand(context: AgentCommandContext, { name, args
       notify([
         `Profile: ${profileName ?? '—'}`,
         `Model: ${modelChoice ?? 'Auto (profile default)'}`,
-        `Thinking: ${think ? 'on' : 'off'}`,
+        `Deep: ${deep ? 'on' : 'off'}`,
         `Session: ${sessionId ?? 'new'}`,
       ].join('\n'));
       break;
@@ -75,9 +75,9 @@ export async function runAgentCommand(context: AgentCommandContext, { name, args
     case 'new':
       newSession();
       break;
-    case 'think':
-      setThink(!think);
-      notify(`Thinking mode ${think ? 'off' : 'on'}.`);
+    case 'deep':
+      setDeep(!deep);
+      notify(`Deep ${deep ? 'off' : 'on'} for all profiles.`);
       break;
     case 'model':
       if (args) {
@@ -133,7 +133,7 @@ export async function runAgentCommand(context: AgentCommandContext, { name, args
           profile: profileName ?? 'default',
           ...(provider ? { provider } : {}),
           ...(model ? { model } : {}),
-          think,
+          deep,
         });
         notify(result.compacted ? 'Compacted older turns in this session.' : 'Nothing to compact yet.');
         void refreshSessions();
@@ -143,6 +143,6 @@ export async function runAgentCommand(context: AgentCommandContext, { name, args
       break;
     }
     default:
-      notify(`Unknown command: /${name}`, 'warn');
+      notify(name === 'think' ? '/think was renamed to /deep.' : `Unknown command: /${name}`, 'warn');
   }
 }

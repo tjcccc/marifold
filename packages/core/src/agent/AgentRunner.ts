@@ -96,8 +96,8 @@ export interface AgentRunOptions {
    * In-home writes are auto-approved; external folders remain per-call
    * approval-gated. Used by channels for scratch/outbox capabilities. */
   trustedFolders?: string[];
-  /** Per-run thinking-mode override (honored by think-capable providers). */
-  think?: boolean;
+  /** Per-run Deep override (medium reasoning effort instead of low). */
+  deep?: boolean;
   /** Authoritative instructions (e.g. a skill body) injected at the top of the
    * system prompt for every loop turn, so the run is guided by them. */
   instructions?: string[];
@@ -408,7 +408,7 @@ export class AgentRunner {
           mode: 'agent',
           provider: settings.provider,
           model: settings.model,
-          think: settings.think,
+          deep: settings.deep,
           startedAt,
           finishedAt: new Date(finishedAtMs).toISOString(),
           latencyMs: Math.max(0, finishedAtMs - startedAtMs),

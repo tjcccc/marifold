@@ -1,3 +1,5 @@
+import * as path from 'path';
+import { defaultAppsDir, legacyDefaultThink, legacyThinkApps, migrateAppThink, migrateDefaultThink } from '@marifold/core';
 import type { Command } from 'commander';
 import type { ConsolePrinter } from '../output/ConsolePrinter';
 import { createRuntime, loadConfig } from './RuntimeFactory';
@@ -88,8 +90,38 @@ export function registerDoctorCommand(program: Command, printer: ConsolePrinter)
           }
         }
 
+        // Deep — `think` was renamed to `deep` with no alias; --fix renames it
+        // in config.toml and in installed SkillApp templates after a backup.
+        out.write('\nDeep setting\n');
+        try {
+          const loaded = loadConfig(program);
+          const legacy = legacyDefaultThink(loaded.configPath);
+          if (legacy !== undefined && options.fix) {
+            const backupPath = migrateDefaultThink(loaded.configPath);
+            out.write(`  config.toml: ✓ renamed [default] think = ${legacy} to deep = ${legacy}\n`);
+            if (backupPath) { out.write(`    Backup: ${backupPath}\n`); }
+          } else if (legacy !== undefined) {
+            out.write(`  config.toml: ⚠ [default] think = ${legacy} is ignored; it was renamed to deep\n`);
+            out.write(`    Run \`${fixCommand}\` to rename it.\n`);
+          } else {
+            out.write(`  config.toml: ✓ deep = ${loaded.config.default.deep}\n`);
+          }
+          const appsDir = loaded.config.paths.appsDir ?? defaultAppsDir();
+          for (const template of legacyThinkApps(appsDir)) {
+            const app = path.basename(path.dirname(template));
+            if (options.fix) {
+              out.write(`  app ${app}: ✓ renamed think: to deep:\n    Backup: ${migrateAppThink(appsDir, template)}\n`);
+            } else {
+              out.write(`  app ${app}: ⚠ uses think:, renamed to deep:; the app will not load\n    Run \`${fixCommand}\` to rename it.\n`);
+            }
+          }
+        } catch (error) {
+          out.write(`  ✗ ${error instanceof Error ? error.message : String(error)}\n`);
+          process.exitCode = 1;
+        }
+
         // Profile settings — the one-line `model` form and no per-profile `think`
-        // (Think is one global switch); --fix rewrites both after one backup.
+        // (Deep is one global switch); --fix rewrites both after one backup.
         out.write('\nProfile settings\n');
         const modelOptions = new Set(loadConfig(program).config.models.options);
         for (const target of targets) {
@@ -101,7 +133,7 @@ export function registerDoctorCommand(program: Command, printer: ConsolePrinter)
               const result = runtime.migrateProfileSettings(target.name);
               settings = runtime.getProfile(target.name).settings;
               if (result.value) { fixed.push(`✓ rewritten as model = "${result.value}"`); }
-              if (result.removedThink !== undefined) { fixed.push(`✓ removed think = ${result.removedThink}; Think is one global switch now`); }
+              if (result.removedThink !== undefined) { fixed.push(`✓ removed think = ${result.removedThink}; Deep is one global switch now`); }
               if (result.backupPath) { fixed.push(`Backup: ${result.backupPath}`); }
             }
             const pinned = settings.provider && settings.model ? `${settings.provider}/${settings.model}` : undefined;
@@ -116,7 +148,7 @@ export function registerDoctorCommand(program: Command, printer: ConsolePrinter)
             }
             for (const line of fixed) { out.write(`    ${line}\n`); }
             if (settings.legacyThink !== undefined) {
-              out.write(`    ⚠ think = ${settings.legacyThink} is ignored: Think is one global switch now.\n`);
+              out.write(`    ⚠ think = ${settings.legacyThink} is ignored: Deep is one global switch now.\n`);
               out.write(`    Run \`${fixCommand}\` to remove it.\n`);
             }
             // A pin removed from the model list is easy to miss: it does not follow the default.

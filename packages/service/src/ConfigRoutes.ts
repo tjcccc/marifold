@@ -7,7 +7,7 @@ import {
   type MarifoldRuntime,
   resolveAgentConfig,
   resolveWebSearchConfig,
-  supportsThink,
+  supportsDeep,
 } from '@marifold/core';
 import { type JsonObject, objectBody, optionalStringField, requiredString, stringValue } from './Validation';
 
@@ -143,12 +143,12 @@ function modelsView(loadedConfig: LoadedMarifoldConfig): JsonObject {
       model: loadedConfig.config.default.model,
     },
     options: [...loadedConfig.config.models.options],
-    // Models the global Think switch changes, so clients can hide it elsewhere.
-    thinkOptions: loadedConfig.config.models.options.filter(option => {
+    // Models the global Deep switch changes, so clients can hide it elsewhere.
+    deepOptions: loadedConfig.config.models.options.filter(option => {
       const slash = option.indexOf('/');
       const providerName = option.slice(0, slash);
       const providerType = loadedConfig.config.providers[providerName]?.type;
-      return slash > 0 && supportsThink({ providerName, providerType, model: option.slice(slash + 1) });
+      return slash > 0 && supportsDeep({ providerName, providerType, model: option.slice(slash + 1) });
     }),
   };
 }

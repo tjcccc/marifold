@@ -38,7 +38,7 @@ afterEach(() => {
 function fixtureLoadedConfig(dir: string): LoadedMarifoldConfig {
   return {
     config: {
-      default: { provider: 'ollama', model: 'gemma4:e4b', profile: 'default', think: false },
+      default: { provider: 'ollama', model: 'gemma4:e4b', profile: 'default', deep: false },
       models: { options: ['ollama/gemma4:e4b'] },
       memory: { sizeLimit: 50000, contextLimit: 2400 },
       paths: {

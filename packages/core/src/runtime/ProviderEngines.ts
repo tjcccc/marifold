@@ -5,7 +5,7 @@ import { exchangeGitHubTokenForCopilotToken } from '../config/GitHubCopilotAuth'
 import { withOAuthCredentials } from '../config/OAuthCredentials';
 import type { NativeWebSearchStrategy, ProviderFactory } from '../config/ProviderFactory';
 import { ReasoningRetryProvider, reasoningRejected } from '../config/ReasoningRetry';
-import { type ThinkTarget, supportsThink, thinkReasoning } from '../config/ThinkReasoning';
+import { type DeepTarget, supportsDeep, deepReasoning } from '../config/DeepReasoning';
 import { type XaiRefreshedTokens, refreshXaiAccessToken } from '../config/XaiTokenRefresh';
 import { MarifoldError } from '../errors/MarifoldError';
 import type { ProfileResolver } from '../profiles/ProfileResolver';
@@ -106,16 +106,16 @@ export class ProviderEngines {
       maxContextTokens: settings.maxContextTokens ?? config.default.maxContextTokens,
       compactionKeepTurns: config.default.compactionKeepTurns,
       sessionContextTurns: settings.sessionContextTurns ?? config.default.sessionContextTurns,
-      reasoning: thinkReasoning(this.thinkTarget(settings.provider, settings.model), settings.think),
+      reasoning: deepReasoning(this.deepTarget(settings.provider, settings.model), settings.deep),
       providerOptions: Object.keys(providerOptions).length > 0 ? providerOptions : undefined,
     };
   }
 
-  supportsThink(providerName: string, model: string): boolean {
-    return supportsThink(this.thinkTarget(providerName, model));
+  supportsDeep(providerName: string, model: string): boolean {
+    return supportsDeep(this.deepTarget(providerName, model));
   }
 
-  private thinkTarget(providerName: string, model: string): ThinkTarget {
+  private deepTarget(providerName: string, model: string): DeepTarget {
     const providerType = this.loadedConfig.config.providers[providerName]?.type;
     return { providerName, providerType, model, rejected: reasoningRejected(providerName, model) };
   }

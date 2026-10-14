@@ -84,7 +84,7 @@ export interface RunStartInput {
   userTurn?: string;
   /** Replace a persisted exchange instead of appending a new one. */
   replaceUserTurnIndex?: number;
-  think?: boolean;
+  deep?: boolean;
   /** Staged for lazy inspect_attachment access during the agent run. */
   images?: ImageInput[];
   /** Preserve attached images' original encoded bytes for this run. */
@@ -453,7 +453,7 @@ export class RunRegistry {
         sessionId: input.sessionId,
         userTurn: input.userTurn,
         replaceUserTurnIndex: input.replaceUserTurnIndex,
-        think: input.think,
+        deep: input.deep,
         images: input.images,
         originalImages: input.originalImages,
         files: input.files,

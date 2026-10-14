@@ -12,7 +12,7 @@ export interface ChatRequest {
   isolated?: boolean;
   replaceUserTurnIndex?: number;
   memories?: boolean;
-  think?: boolean;
+  deep?: boolean;
   images?: ImageInput[];
   originalImages?: boolean;
   instructions?: string[];

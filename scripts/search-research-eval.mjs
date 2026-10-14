@@ -21,7 +21,7 @@ mkdirSync(path.join(profilesDir, 'default'), { recursive: true });
 writeFileSync(path.join(profilesDir, 'default/INSTRUCTIONS.md'), 'Answer the user’s question briefly with supporting source links.');
 const today = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 const config = {
-  default: { provider: 'ollama', model, profile: 'default', think: false, timeoutSeconds: 90, maxOutputTokens: 1500 },
+  default: { provider: 'ollama', model, profile: 'default', deep: false, timeoutSeconds: 90, maxOutputTokens: 1500 },
   models: { options: [`ollama/${model}`] }, memory: { sizeLimit: 1000, contextLimit: 120 },
   paths: { profilesDir, sessionsDb: path.join(root, 'sessions.db'), tasksDir: path.join(root, 'tasks'), skillsDir: path.join(root, 'skills'), appsDir: path.join(root, 'apps') },
   providers: { ollama: { type: 'ollama', baseUrl: 'http://127.0.0.1:11434' } },

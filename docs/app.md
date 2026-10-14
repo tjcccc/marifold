@@ -64,7 +64,7 @@ const result = State('');
 
 const translationModel = registerModel(
   'ollama/maternion/hy-mt2:1.8b',
-  { think: false },
+  { deep: false },
 );
 
 const translationSkill = registerSkill('translate', {
@@ -231,7 +231,7 @@ Ordinary `State` remains string-only. `AttachmentState()` is a separate, bounded
 
 `registerModel("provider/model", options)` splits on the first slash. The provider must already exist in marifold configuration; the remainder is passed as the provider's model ID, so model IDs may contain additional slashes.
 
-v1 model options contain `think` only; omitted follows the global Think switch (`[default].think`). `memory`, `history`, and `profileContext` belong to `useSkill` execution policy and must all be `false`. The run is genuinely profile-free: it creates no Agent session or transcript, loads no profile or memory, and exposes no chat/agent tools.
+v1 model options contain `deep` only; omitted follows the global Deep switch (`[default].deep`). The older `think` option fails with a rename error; `marifold doctor --fix` rewrites installed apps. `memory`, `history`, and `profileContext` belong to `useSkill` execution policy and must all be `false`. The run is genuinely profile-free: it creates no Agent session or transcript, loads no profile or memory, and exposes no chat/agent tools.
 
 `registerSkill(name, { result })` registers an app-local Skill. The Skill's `SKILL.md` remains the authoritative prompt, so v1 has no inline prompt or prompt override.
 
@@ -244,7 +244,7 @@ v1 model options contain `think` only; omitted follows the global Think switch (
 `registerProfile(name, options)` declares a v2 profile reference. `name` is a stable configured profile name. The options are:
 
 - `model`: optional `provider/model` override for this App only. When omitted, the profile's model override falls back to the global default normally;
-- `think`: optional App-only override; omitted follows the global Think switch (`[default].think`);
+- `deep`: optional App-only override; omitted follows the global Deep switch (`[default].deep`);
 - `memory`: defaults to `false`; when `true`, current profile memory is loaded read-only when that profile has memory enabled, and Agent output is never promoted into memory;
 - `history`: defaults to `false`; when `true`, completed turns are retained only inside the current ephemeral App instance and profile reference. Normal profile conversations are never read or written.
 

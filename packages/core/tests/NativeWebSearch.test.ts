@@ -8,7 +8,7 @@ function factory(
   nativeWebSearch?: NativeWebSearchPreference,
 ): ProviderFactory {
   const config: MarifoldConfig = {
-    default: { provider: providerName, model: 'test', profile: 'default', think: false },
+    default: { provider: providerName, model: 'test', profile: 'default', deep: false },
     models: { options: [] },
     memory: { sizeLimit: 1000, contextLimit: 100 },
     paths: { profilesDir: '/tmp/profiles', sessionsDb: '/tmp/sessions.db', tasksDir: '/tmp/tasks' },

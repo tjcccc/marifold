@@ -19,8 +19,8 @@ function renderBar(onSubmit = vi.fn()) {
     <InputBar
       steering={false}
       responding={false}
-      think={false}
-      onToggleThink={() => {}}
+      deep={false}
+      onToggleDeep={() => {}}
       modelOptions={[]}
       onSelectModel={() => {}}
       skills={skills}
@@ -57,8 +57,8 @@ describe('InputBar $-autocomplete', () => {
     const base = {
       steering: false,
       responding: false,
-      think: false,
-      onToggleThink: vi.fn(),
+      deep: false,
+      onToggleDeep: vi.fn(),
       modelOptions: [] as string[],
       onSelectModel: vi.fn(),
       onSubmit: vi.fn(),
@@ -192,8 +192,8 @@ describe('InputBar composer interactions', () => {
       <InputBar
         steering={false}
         responding={false}
-        think={false}
-        onToggleThink={() => {}}
+        deep={false}
+        onToggleDeep={() => {}}
         modelOptions={[]}
         onSelectModel={() => {}}
         skills={skills}
@@ -225,8 +225,8 @@ describe('InputBar composer interactions', () => {
         steering={false}
         responding
         disabled
-        think={false}
-        onToggleThink={() => {}}
+        deep={false}
+        onToggleDeep={() => {}}
         modelOptions={[]}
         onSelectModel={() => {}}
         onSubmit={onSubmit}
@@ -259,8 +259,8 @@ describe('InputBar composer interactions', () => {
       <InputBar
         steering={false}
         responding={false}
-        think={false}
-        onToggleThink={() => {}}
+        deep={false}
+        onToggleDeep={() => {}}
         modelOptions={[]}
         onSelectModel={() => {}}
         onSubmit={() => {}}
@@ -287,8 +287,8 @@ describe('InputBar composer interactions', () => {
       <InputBar
         steering={false}
         responding={false}
-        think={false}
-        onToggleThink={() => {}}
+        deep={false}
+        onToggleDeep={() => {}}
         modelOptions={[]}
         onSelectModel={() => {}}
         onSubmit={() => {}}

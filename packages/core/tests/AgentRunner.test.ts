@@ -73,7 +73,7 @@ function makeRunner(
     taskStore,
     registry,
     agentConfig: resolveAgentConfig(configOverrides),
-    resolveSettings: () => ({ profile: 'default', provider: 'mock', model: 'test-model', think: false, mode: 'agent' }),
+    resolveSettings: () => ({ profile: 'default', provider: 'mock', model: 'test-model', deep: false, mode: 'agent' }),
     prepareEngine: async () => ({ engine, config: { provider: 'mock', model: 'test-model' } }),
     ...depsOverrides,
   });
@@ -515,7 +515,7 @@ describe('AgentRunner', () => {
       taskStore: new TaskStore(tempDir()),
       registry,
       agentConfig: resolveAgentConfig({}),
-      resolveSettings: () => ({ profile: 'default', provider: 'mock', model: 'test-model', think: false, mode: 'agent', maxContextTokens: 16000 }),
+      resolveSettings: () => ({ profile: 'default', provider: 'mock', model: 'test-model', deep: false, mode: 'agent', maxContextTokens: 16000 }),
       prepareEngine: async () => ({ engine, config: { provider: 'mock', model: 'test-model' } }),
       loadRecentTurns: () => recent,
     });
@@ -549,7 +549,7 @@ describe('AgentRunner', () => {
       taskStore: new TaskStore(tempDir()),
       registry,
       agentConfig: resolveAgentConfig({}),
-      resolveSettings: () => ({ profile: 'default', provider: 'mock', model: 'test-model', think: false, mode: 'agent' }),
+      resolveSettings: () => ({ profile: 'default', provider: 'mock', model: 'test-model', deep: false, mode: 'agent' }),
       prepareEngine: async () => ({ engine, config: { provider: 'mock', model: 'test-model' } }),
       loadRecentTurns,
       persistTurn,
@@ -573,7 +573,7 @@ describe('AgentRunner', () => {
         mode: 'agent',
         provider: 'mock',
         model: 'test-model',
-        think: false,
+        deep: false,
         latencyMs: expect.any(Number),
         usage: { inputTokens: 40, outputTokens: 10, totalTokens: 50 },
       }),
@@ -726,7 +726,7 @@ describe('AgentRunner', () => {
       taskStore: new TaskStore(tempDir()),
       registry,
       agentConfig: resolveAgentConfig({}),
-      resolveSettings: () => ({ profile: 'writer', provider: 'mock', model: 'test-model', think: false, mode: 'agent' }),
+      resolveSettings: () => ({ profile: 'writer', provider: 'mock', model: 'test-model', deep: false, mode: 'agent' }),
       prepareEngine: async () => ({ engine, config: { provider: 'mock', model: 'test-model' } }),
       resolveBuiltInInstructions: (objective, profile) => [`guide for ${profile}: ${objective}`],
     });
@@ -746,7 +746,7 @@ describe('AgentRunner', () => {
       taskStore: new TaskStore(tempDir()),
       registry,
       agentConfig: resolveAgentConfig({}),
-      resolveSettings: () => ({ profile: 'default', provider: 'mock', model: 'test-model', think: false, mode: 'agent' }),
+      resolveSettings: () => ({ profile: 'default', provider: 'mock', model: 'test-model', deep: false, mode: 'agent' }),
       prepareEngine: async () => ({ engine, config: { provider: 'mock', model: 'test-model' } }),
       resolveBuiltInInstructions: () => ['SHOULD-NOT-APPEAR'],
     });
@@ -847,7 +847,7 @@ describe('AgentRunner', () => {
       taskStore: new TaskStore(tempDir()),
       registry,
       agentConfig: resolveAgentConfig({}),
-      resolveSettings: () => ({ profile: 'default', provider: 'mock', model: 'test-model', think: false, mode: 'agent', maxContextTokens: 16000, sessionContextTurns: 2 }),
+      resolveSettings: () => ({ profile: 'default', provider: 'mock', model: 'test-model', deep: false, mode: 'agent', maxContextTokens: 16000, sessionContextTurns: 2 }),
       prepareEngine: async () => ({ engine, config: { provider: 'mock', model: 'test-model' } }),
       loadRecentTurns: () => recent,
     });
@@ -930,7 +930,7 @@ describe('AgentRunner', () => {
       taskStore: new TaskStore(tempDir()),
       registry,
       agentConfig: resolveAgentConfig({}),
-      resolveSettings: () => ({ profile: 'default', provider: 'mock', model: 'test-model', think: false, mode: 'agent' }),
+      resolveSettings: () => ({ profile: 'default', provider: 'mock', model: 'test-model', deep: false, mode: 'agent' }),
       prepareEngine: async () => ({ engine, config: { provider: 'mock', model: 'test-model' } }),
       prepareImages,
       persistTurn,
@@ -966,7 +966,7 @@ describe('AgentRunner', () => {
         mode: 'agent',
         provider: 'mock',
         model: 'test-model',
-        think: false,
+        deep: false,
         latencyMs: expect.any(Number),
       }),
     );
@@ -1291,7 +1291,7 @@ describe('AgentRunner', () => {
         profile: 'default',
         provider: 'xai',
         model: 'grok-4.6',
-        think: false,
+        deep: false,
         mode: 'agent',
       }),
       prepareEngine: async () => ({
@@ -1350,7 +1350,7 @@ describe('AgentRunner', () => {
         profile: 'default',
         provider: 'bailian',
         model: 'qwen-plus',
-        think: false,
+        deep: false,
         mode: 'agent',
       }),
       prepareEngine: async () => ({
@@ -1358,7 +1358,7 @@ describe('AgentRunner', () => {
         config: {
           provider: 'bailian',
           model: 'qwen-plus',
-          providerOptions: { think: false, enable_search: true },
+          providerOptions: { deep: false, enable_search: true },
         },
         webSearchMode: 'native',
         webSearchFallbackAvailable: true,
@@ -1374,7 +1374,7 @@ describe('AgentRunner', () => {
     const done = events[events.length - 1] as Extract<AgentEvent, { type: 'done' }>;
     expect(done.status).toBe('completed');
     expect(engine.requests[0].config.providerOptions).toMatchObject({ enable_search: true });
-    expect(engine.requests[1].config.providerOptions).toEqual({ think: false });
+    expect(engine.requests[1].config.providerOptions).toEqual({ deep: false });
     expect(engine.requests[1].tools?.map(tool => tool.name)).toContain('web_search');
   });
 

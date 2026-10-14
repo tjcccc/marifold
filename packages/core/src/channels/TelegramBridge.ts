@@ -28,7 +28,7 @@ const OUTBOX_INSTRUCTIONS = [
 
 const USAGE = [
   'marifold bot — commands:',
-  '/think on|off — thinking mode for all profiles (for models that support it)',
+  '/deep on|off — deeper reasoning for all profiles (for models that support it)',
   '/new — start a fresh session',
   '/help — show this help',
   '',
@@ -217,18 +217,21 @@ export class TelegramBridge {
         this.chatEpoch.set(chatId, (this.chatEpoch.get(chatId) ?? 0) + 1);
         await this.sendMessage(chatId, 'Started a new session.');
         return;
-      case '/think': {
+      case '/think':
+        await this.sendMessage(chatId, '/think was renamed to /deep.');
+        return;
+      case '/deep': {
         const arg = text.split(/\s+/)[1]?.toLowerCase();
         if (arg !== 'on' && arg !== 'off') {
-          await this.sendMessage(chatId, 'Usage: /think on | /think off');
+          await this.sendMessage(chatId, 'Usage: /deep on | /deep off');
           return;
         }
         const on = arg === 'on';
-        // Think is global (`default.think`), shared with the Web UI and the TUI.
-        this.runtime.setConfigValue('default.think', String(on));
-        let note = `Thinking mode ${on ? 'on' : 'off'} for all profiles.`;
-        if (on && !this.runtime.profileSupportsThink(this.profile)) {
-          note += `\n\n⚠️ This profile's model has no thinking mode, so it will have no effect here.`;
+        // Deep is global (`default.deep`), shared with the Web UI and the TUI.
+        this.runtime.setConfigValue('default.deep', String(on));
+        let note = `Deep ${on ? 'on' : 'off'} for all profiles.`;
+        if (on && !this.runtime.profileSupportsDeep(this.profile)) {
+          note += `\n\n⚠️ This profile's model has no reasoning setting, so Deep has no effect here.`;
         }
         await this.sendMessage(chatId, note);
         return;

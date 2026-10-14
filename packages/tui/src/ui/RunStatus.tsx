@@ -13,7 +13,7 @@ const VERBS = [
 
 /**
  * Transient run line shown above the input while a task is active: a verb,
- * elapsed time, the think/effort hint, any queued steering, and the cancel
+ * elapsed time, the deep/effort hint, any queued steering, and the cancel
  * hint. The `startedAt` anchor is owned by App so the elapsed clock keeps
  * counting even when this component unmounts/remounts during a resize burst.
  *
@@ -24,13 +24,13 @@ export function RunStatus({
   startedAt,
   activity,
   cancelling = false,
-  think,
+  deep,
   steeringQueued,
 }: {
   startedAt: number;
   activity?: string;
   cancelling?: boolean;
-  think: boolean;
+  deep: boolean;
   steeringQueued: number;
 }): React.ReactElement {
   const start = startedAt;
@@ -41,7 +41,7 @@ export function RunStatus({
   }, []);
 
   const verb = cancelling ? 'Cancelling' : labelFor(activity, start);
-  const detail = [formatElapsed(Date.now() - start), think ? 'thinking' : null]
+  const detail = [formatElapsed(Date.now() - start), deep ? 'deep' : null]
     .filter(Boolean)
     .join(' · ');
 

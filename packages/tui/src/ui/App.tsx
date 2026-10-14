@@ -45,7 +45,7 @@ export interface AppProps {
     displayName?: string;
     provider: string;
     model: string;
-    think: boolean;
+    deep: boolean;
     cwd: string;
     version: string;
     latestVersion?: string;
@@ -86,7 +86,7 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
   const [showRunDetails, setShowRunDetails] = useState(false);
   const transcript = useMemo(() => visibleTranscript(state, showRunDetails), [state.transcript, showRunDetails]);
   const [overlay, setOverlay] = useState<Overlay | null>(null);
-  const [think, setThink] = useState(initial.think);
+  const [deep, setDeep] = useState(initial.deep);
   // `/steps` arms a one-shot forced plan for the next model turn (then auto-disarms).
   const [planNext, setPlanNext] = useState(false);
   const [history, setHistory] = useState<InputHistoryEntry[]>(() => initial.history ?? (initial.transcript ?? []).flatMap(item => item.kind === 'user' ? [item.text] : []));
@@ -162,8 +162,8 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
   // Latest state for callbacks that must read current values without re-binding.
   const stateRef = useRef(state);
   stateRef.current = state;
-  const thinkRef = useRef(think);
-  thinkRef.current = think;
+  const deepRef = useRef(deep);
+  deepRef.current = deep;
   const planNextRef = useRef(planNext);
   planNextRef.current = planNext;
 
@@ -185,7 +185,7 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
   const {
     runAgent, startTextRun, retryLast, stop, steeringCount, setSteeringCount, steeringRef,
     abortRef, runGenerationRef, pendingContextRef, pendingImagesRef,
-  } = useRuns({ runtime, dispatch, stateRef, thinkRef, planNextRef, setPlanNext, notify, approvalHandler, userInputHandler, cancelPrompts, beginRunApprovals });
+  } = useRuns({ runtime, dispatch, stateRef, deepRef, planNextRef, setPlanNext, notify, approvalHandler, userInputHandler, cancelPrompts, beginRunApprovals });
   const { pendingSkill, runSkill, fillSkillVariable } = useSkills({ runtime, dispatch, stateRef, planNextRef, setPlanNext, notify, runAgent });
 
   // Confirm a `--resume` launch with a notice below the replayed turns, so the
@@ -271,7 +271,7 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
       `Profile:    ${s.profile}`,
       `Provider:   ${s.provider}`,
       `Model:      ${s.model}`,
-      `Thinking:   ${thinkRef.current ? 'on' : 'off'}`,
+      `Deep:       ${deepRef.current ? 'on' : 'off'}`,
       `Session:    ${session}`,
       `Turns:      ${userTurns}`,
       `Directory:  ${s.cwd}`,
@@ -476,11 +476,11 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
     stop,
     sideQuestion: sideQuestion.ask,
     exit: quit,
-    // Think is global (`default.think`): save it so every client follows.
-    setThink: async (on: boolean) => {
-      try { await runtime.setConfigValue('default.think', String(on)); } catch (error) { notify(`Cannot save thinking: ${errorText(error)}`, 'error'); return; }
-      setThink(on);
-      notify(`Thinking ${on ? 'on' : 'off'} (all profiles).`, 'info');
+    // Deep is global (`default.deep`): save it so every client follows.
+    setDeep: async (on: boolean) => {
+      try { await runtime.setConfigValue('default.deep', String(on)); } catch (error) { notify(`Cannot save Deep: ${errorText(error)}`, 'error'); return; }
+      setDeep(on);
+      notify(`Deep ${on ? 'on' : 'off'} (all profiles).`, 'info');
     },
     toggleForcePlan: () => setPlanNext(armed => {
       notify(armed ? 'Planning disarmed.' : 'Next message will be planned step-by-step.', 'info');
@@ -543,7 +543,7 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
       if (s.maxContextTokens == null) { notify('Set a context budget first: /context-window set <tokens>.', 'warn'); return; }
       notify('Compacting context…', 'info');
       runtime.compactSession(s.sessionId, {
-        profile: s.profile, provider: s.provider, model: s.model, think: thinkRef.current, maxContextTokens: s.maxContextTokens,
+        profile: s.profile, provider: s.provider, model: s.model, deep: deepRef.current, maxContextTokens: s.maxContextTokens,
       }).then(result => {
         notify(result.compacted ? 'Context compacted — older turns folded into a summary.' : 'Nothing to compact yet (history fits within the kept tail).', 'info');
       }).catch(error => notify(`Compaction failed: ${errorText(error)}`, 'error'));
@@ -617,7 +617,7 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
           // result is clearly separated from the previous turn.
           dispatch({ type: 'add_user', text: trimmed });
           if (!runCommand(commandContext, parsed.name, parsed.args)) {
-            notify(`Unknown command: /${parsed.name}. Type /help.`, 'warn');
+            notify(parsed.name === 'think' ? '/think was renamed to /deep.' : `Unknown command: /${parsed.name}. Type /help.`, 'warn');
           }
           return;
         case 'skill':
@@ -760,7 +760,7 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
   const footer = (
     <Box flexDirection="column">
       {(!resizing || fullscreen) && state.running ? (
-        <RunStatus startedAt={runStartedAt.current} activity={state.activity} cancelling={state.cancelling} think={think} steeringQueued={steeringCount} />
+        <RunStatus startedAt={runStartedAt.current} activity={state.activity} cancelling={state.cancelling} deep={deep} steeringQueued={steeringCount} />
       ) : null}
       {activeOverlay ?? (
         <InputBox

@@ -32,7 +32,7 @@ function minimalConfigToml(dir: string): string {
 provider = "ollama"
 model = "gemma4:e4b"
 profile = "default"
-think = false
+deep = false
 
 [models]
 options = [
@@ -62,7 +62,7 @@ describe('ConfigManager', () => {
 provider = "ollama"
 model = "gemma4:e4b"
 profile = "default"
-think = false
+deep = false
 
 [models]
 options = [
@@ -84,7 +84,7 @@ base_url = "http://localhost:11434"
 
     const loaded = new ConfigLoader().load({ configPath });
     new ConfigManager(loaded).setValue('default.model', 'qwen3:8b');
-    new ConfigManager(new ConfigLoader().load({ configPath })).setValue('default.think', 'true');
+    new ConfigManager(new ConfigLoader().load({ configPath })).setValue('default.deep', 'true');
     new ConfigManager(new ConfigLoader().load({ configPath })).setValue('providers.openai.type', 'openai-compatible');
     new ConfigManager(new ConfigLoader().load({ configPath })).setValue('providers.openai.base_url', 'https://api.openai.com');
     new ConfigManager(new ConfigLoader().load({ configPath })).addModel('openai', 'gpt-4o-mini', {
@@ -96,7 +96,7 @@ base_url = "http://localhost:11434"
 
     const updated = new ConfigLoader().load({ configPath });
     expect(updated.config.default.model).toBe('qwen3:8b');
-    expect(updated.config.default.think).toBe(true);
+    expect(updated.config.default.deep).toBe(true);
     expect(updated.config.memory.contextLimit).toBe(1200);
     expect(updated.config.providers.openai).toMatchObject({
       type: 'openai-compatible',
@@ -175,7 +175,7 @@ base_url = "http://localhost:11434"
 
     const manager = new ConfigManager(new ConfigLoader().load({ configPath }));
     expect(manager.getValue('default.model')).toBe('gemma4:e4b');
-    expect(manager.getValue('default.think')).toBe('false');
+    expect(manager.getValue('default.deep')).toBe('false');
     expect(manager.getValue('default.max_context_tokens')).toBeUndefined(); // known key, unset
     expect(manager.getValue('providers.ollama.base_url')).toBe('http://localhost:11434');
     expect(manager.getValue('service.web_dir')).toBeUndefined(); // section absent entirely
@@ -193,7 +193,7 @@ base_url = "http://localhost:11434"
     fs.writeFileSync(configPath, `
 [default]
 profile = "default"
-think = false
+deep = false
 
 [models]
 options = []
@@ -224,7 +224,7 @@ sessions_db = "${dir}/sessions.db"
     fs.writeFileSync(configPath, `
 [default]
 profile = "default"
-think = false
+deep = false
 
 [models]
 options = []
@@ -298,7 +298,7 @@ sessions_db = "${dir}/sessions.db"
     fs.writeFileSync(configPath, `
 [default]
 profile = "default"
-think = false
+deep = false
 
 [models]
 options = []
@@ -338,7 +338,7 @@ sessions_db = "${dir}/sessions.db"
 provider = "openai"
 model = "gpt-test"
 profile = "default"
-think = false
+deep = false
 
 [models]
 options = [
@@ -418,7 +418,7 @@ describe('ConfigBackup', () => {
 provider = "ollama"
 model = "gemma4:e4b"
 profile = "default"
-think = false
+deep = false
 
 [models]
 options = [

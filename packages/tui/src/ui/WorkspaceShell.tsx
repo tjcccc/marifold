@@ -85,7 +85,7 @@ export function WorkspaceShell(props: Props) {
         settings = runtime.resolveSettings({ profile });
       } catch {
         if (id !== 'local') { throw new Error('Choose a profile with a configured model on this workspace.'); }
-        settings = { profile: profile ?? config.config.default.profile, provider: '', model: '(configure a model)', think: false };
+        settings = { profile: profile ?? config.config.default.profile, provider: '', model: '(configure a model)', deep: false };
       }
       let sessionId = requested?.id;
       if (resume === true) {
@@ -120,7 +120,7 @@ export function WorkspaceShell(props: Props) {
           displayName,
           provider: settings.provider,
           model: settings.model,
-          think: settings.think,
+          deep: settings.deep,
           version: props.version,
           cwd: id === 'local' ? process.cwd() : `Workspace: ${name}`,
           sessionId: session?.id,

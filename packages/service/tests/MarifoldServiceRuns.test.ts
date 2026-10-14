@@ -252,7 +252,7 @@ Transform {{text}} into the final prompt.
         mode: 'agent',
         provider: 'ollama',
         model: 'gemma4:e4b',
-        think: false,
+        deep: false,
         latencyMs: expect.any(Number),
       });
       expect(JSON.stringify(captured)).toContain('Return one concise Grok Imagine prompt.');

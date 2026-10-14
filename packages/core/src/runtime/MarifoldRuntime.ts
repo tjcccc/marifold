@@ -167,17 +167,17 @@ export class MarifoldRuntime {
     });
   }
 
-  resolveSettings(request: Pick<MarifoldRunRequest, 'profile' | 'provider' | 'model' | 'think' | 'maxContextTokens'>): MarifoldResolvedSettings {
+  resolveSettings(request: Pick<MarifoldRunRequest, 'profile' | 'provider' | 'model' | 'deep' | 'maxContextTokens'>): MarifoldResolvedSettings {
     const { config, configPath } = this.options.loadedConfig;
     const profile = request.profile ?? config.default.profile;
     const profileSettings = this.profileResolver.loadSettings(profile);
     const provider = request.provider ?? profileSettings.provider ?? config.default.provider;
     const model = request.model ?? profileSettings.model ?? config.default.model;
-    const think = request.think ?? config.default.think;
+    const deep = request.deep ?? config.default.deep;
     const mode = profileSettings.mode ?? 'agent';
     if (!provider || !model) { throw MarifoldError.missingProviderModel(configPath); }
     return {
-      profile, provider, model, think, mode,
+      profile, provider, model, deep, mode,
       maxContextTokens: request.maxContextTokens ?? profileSettings.maxContextTokens,
       sessionContextTurns: profileSettings.sessionContextTurns,
     };
@@ -435,7 +435,7 @@ export class MarifoldRuntime {
   /** Manually compact a session now (the /compact command). Returns whether anything was folded. */
   async compactSession(
     sessionId: string,
-    request: Pick<MarifoldRunRequest, 'profile' | 'provider' | 'model' | 'think' | 'maxContextTokens'>,
+    request: Pick<MarifoldRunRequest, 'profile' | 'provider' | 'model' | 'deep' | 'maxContextTokens'>,
   ): Promise<{ compacted: boolean }> {
     const settings = this.resolveSettings(request);
     await this.engines.refreshCredentials(settings.provider);
@@ -915,11 +915,11 @@ export class MarifoldRuntime {
     this.sessionResolver.close();
   }
 
-  /** Whether the profile's resolved provider honors thinking mode — so a channel
-   * can tell the user when `/think` would have no effect. */
-  profileSupportsThink(profile: string): boolean {
+  /** Whether the profile's resolved model honors Deep — so a channel
+   * can tell the user when `/deep` would have no effect. */
+  profileSupportsDeep(profile: string): boolean {
     const settings = this.resolveSettings({ profile });
-    return this.engines.supportsThink(settings.provider, settings.model);
+    return this.engines.supportsDeep(settings.provider, settings.model);
   }
 
   private memoryForRequest(profile: string, requestMemories = true, prompt = ''): string[] {

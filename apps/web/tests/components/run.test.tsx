@@ -313,8 +313,8 @@ describe('InputBar', () => {
       <InputBar
         steering={false}
         responding={false}
-        think={false}
-        onToggleThink={() => {}}
+        deep={false}
+        onToggleDeep={() => {}}
         modelOptions={[]}
         onSelectModel={() => {}}
         onSubmit={onSubmit}
@@ -335,8 +335,8 @@ describe('InputBar', () => {
       <InputBar
         steering
         responding
-        think={false}
-        onToggleThink={() => {}}
+        deep={false}
+        onToggleDeep={() => {}}
         modelOptions={[]}
         onSelectModel={() => {}}
         onSubmit={() => {}}

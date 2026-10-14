@@ -330,7 +330,7 @@ describe('useAgentController session lifecycle', () => {
       if (path.startsWith('/v1/sessions?')) { return { sessions: [] }; }
       if (path.startsWith('/v1/runs')) { return { runs: [] }; }
       if (method === 'POST' && path === '/v1/profiles/prompt-maker/memories') { return { memories: [] }; }
-      if (method === 'PATCH' && path === '/v1/config') { return { config: { default: { profile: 'default', think: true } } }; }
+      if (method === 'PATCH' && path === '/v1/config') { return { config: { default: { profile: 'default', deep: true } } }; }
       throw new Error(`Unexpected request: ${method} ${path}`);
     });
     const client = { request } as unknown as ApiClient;
@@ -340,16 +340,16 @@ describe('useAgentController session lifecycle', () => {
     const { result } = renderHook(() => useAgentController(options));
     await waitFor(() => expect(result.current.profileDetail?.name).toBe('prompt-maker'));
     const thread = () => JSON.stringify(result.current.thread);
-    act(() => { void result.current.send('/think'); });
-    await waitFor(() => expect(result.current.think).toBe(true));
-    // Think is global: the toggle saves default.think.
-    expect(request).toHaveBeenCalledWith('PATCH', '/v1/config', { key: 'default.think', value: 'true' });
+    act(() => { void result.current.send('/deep'); });
+    await waitFor(() => expect(result.current.deep).toBe(true));
+    // Deep is global: the toggle saves default.deep.
+    expect(request).toHaveBeenCalledWith('PATCH', '/v1/config', { key: 'default.deep', value: 'true' });
     act(() => { void result.current.send('/model xai/grok-4.5'); });
     await waitFor(() => expect(thread()).toContain('Model set to xai/grok-4.5.'));
     act(() => { void result.current.send('/status'); });
     await waitFor(() => expect(thread()).toContain('Model: xai/grok-4.5'));
-    expect(thread()).toContain('Thinking mode on.');
-    expect(thread()).toContain('Thinking: on');
+    expect(thread()).toContain('Deep on for all profiles.');
+    expect(thread()).toContain('Deep: on');
     act(() => { void result.current.send('/remember I prefer tea'); });
     await waitFor(() => expect(thread()).toContain('Saved to memory.'));
     expect(request).toHaveBeenCalledWith('POST', '/v1/profiles/prompt-maker/memories', { text: 'I prefer tea' });
@@ -894,7 +894,7 @@ describe('useAgentController session lifecycle', () => {
                     mode: 'chat',
                     provider: 'xai',
                     model: 'grok-4.5',
-                    think: true,
+                    deep: true,
                     startedAt: '2026-07-22T00:00:00.000Z',
                     finishedAt: '2026-07-22T00:00:18.000Z',
                     latencyMs: 18_000,

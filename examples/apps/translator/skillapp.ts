@@ -30,7 +30,7 @@ const result = State('');
 
 const translationModel = registerModel(
   'ollama/maternion/hy-mt2:1.8b',
-  { think: false },
+  { deep: false },
 );
 
 const translationSkill = registerSkill('translate', {

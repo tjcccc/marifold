@@ -117,7 +117,7 @@ export class ConfigManager {
         max_context_tokens: d.maxContextTokens,
         compaction_keep_turns: d.compactionKeepTurns,
         session_context_turns: d.sessionContextTurns,
-        think: d.think,
+        deep: d.deep,
       }, parts[1]);
     }
     if (parts[0] === 'paths' && parts.length === 2) {
@@ -396,8 +396,8 @@ export class ConfigManager {
         }
         return;
       }
-      case 'think':
-        this.config.default.think = parseBoolean(value, 'default.think');
+      case 'deep':
+        this.config.default.deep = parseBoolean(value, 'default.deep');
         return;
       default:
         throw MarifoldError.configInvalid(`Unknown config key: default.${key}`);
@@ -583,7 +583,7 @@ export function renderMarifoldConfig(config: MarifoldConfig): string {
     optionalNumberLine('max_context_tokens', config.default.maxContextTokens),
     optionalNumberLine('compaction_keep_turns', config.default.compactionKeepTurns),
     optionalNumberLine('session_context_turns', config.default.sessionContextTurns),
-    `think = ${config.default.think}`,
+    `deep = ${config.default.deep}`,
   ].filter(Boolean);
 
   const pathLines = [

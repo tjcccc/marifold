@@ -52,7 +52,7 @@ describe('WorkspaceInitializer', () => {
       provider: 'ollama',
       model: 'gemma4:e4b',
       profile: 'default',
-      think: false,
+      deep: false,
       // New workspaces ship with conversation compaction on by default; profiles inherit it.
       maxContextTokens: 16000,
     });

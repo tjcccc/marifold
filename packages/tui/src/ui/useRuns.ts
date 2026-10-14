@@ -10,7 +10,7 @@ interface RunOptions {
   runtime: TuiRuntime;
   dispatch: Dispatch<AppAction>;
   stateRef: MutableRefObject<AppState>;
-  thinkRef: MutableRefObject<boolean>;
+  deepRef: MutableRefObject<boolean>;
   planNextRef: MutableRefObject<boolean>;
   setPlanNext: (planNext: boolean) => void;
   notify: (text: string, tone?: NoticeTone) => void;
@@ -30,7 +30,7 @@ export function useRuns({
   runtime,
   dispatch,
   stateRef,
-  thinkRef,
+  deepRef,
   planNextRef,
   setPlanNext,
   notify,
@@ -77,7 +77,7 @@ export function useRuns({
       const runner = runtime.createAgentRunner(current.profile);
       for await (const event of runner.run({
         objective,
-        think: thinkRef.current,
+        deep: deepRef.current,
         profile: current.profile,
         provider: current.provider,
         model: current.model,

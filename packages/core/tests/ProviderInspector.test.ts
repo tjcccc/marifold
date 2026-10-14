@@ -306,7 +306,7 @@ function testConfig(): LoadedMarifoldConfig {
         provider: 'ollama',
         model: 'gemma4:e4b',
         profile: 'default',
-        think: false,
+        deep: false,
       },
       models: {
         options: ['ollama/gemma4:e4b'],

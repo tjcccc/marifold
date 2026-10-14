@@ -26,7 +26,7 @@ export interface MarifoldRunRequest {
    * new one. Only turns before it are supplied as model context. */
   replaceUserTurnIndex?: number;
   memories?: boolean;
-  think?: boolean;
+  deep?: boolean;
   /** Images attached to the user turn. Passed through to the provider; embedded
    * data/URLs are also retained as display-only session attachments. */
   images?: ImageInput[];
@@ -54,7 +54,7 @@ export interface MarifoldResolvedSettings {
   profile: string;
   provider: string;
   model: string;
-  think: boolean;
+  deep: boolean;
   /** The profile's default TUI mode (`agent` unless the profile overrides it). */
   mode: ProfileMode;
   /** Per-profile conversation-context budget in tokens; undefined falls back to default.maxContextTokens. */

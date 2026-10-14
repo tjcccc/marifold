@@ -124,7 +124,7 @@ export type ChatStreamEvent =
 /** Sanitized `/v1/config` view (secrets are booleans server-side). The
  * resolved `agent` section arrives with the static-hosting service change. */
 export interface PublicConfig {
-  default: { provider?: string; model?: string; profile: string; think?: boolean };
+  default: { provider?: string; model?: string; profile: string; deep?: boolean };
   models: { options: string[] };
   providers: Record<string, {
     type: string;

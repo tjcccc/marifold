@@ -16,7 +16,7 @@ function makeBridge(opts: {
   chatChunks?: string[];
   agentEvents?: unknown[];
   runtime?: MarifoldRuntime;
-  supportsThink?: boolean;
+  supportsDeep?: boolean;
 } = {}): { bridge: TelegramBridge; sent: Sent[] } {
   const sent: Sent[] = [];
   const configWrites: string[] = [];
@@ -39,7 +39,7 @@ function makeBridge(opts: {
         for (const e of (opts.agentEvents ?? [{ type: 'text', text: 'agent reply' }, { type: 'done', status: 'completed' }])) { yield e; }
       },
     }),
-    profileSupportsThink: () => opts.supportsThink ?? true,
+    profileSupportsDeep: () => opts.supportsDeep ?? true,
     setConfigValue: (key: string, value: string) => { configWrites.push(`${key}=${value}`); },
   } as unknown as MarifoldRuntime);
 
@@ -97,20 +97,24 @@ describe('TelegramBridge.handleUpdate', () => {
     expect(sent[0].text).not.toContain('/chat');
   });
 
-  it('/think on|off toggles, and warns when the provider does not support it', async () => {
-    const supported = makeBridge({ supportsThink: true });
-    await supported.bridge.handleUpdate(msg('/think on'));
-    expect(supported.sent[0].text).toBe('Thinking mode on for all profiles.');
-    expect(supported.configWrites).toEqual(['default.think=true']);
+  it('/deep on|off toggles, and warns when the provider does not support it', async () => {
+    const supported = makeBridge({ supportsDeep: true });
+    await supported.bridge.handleUpdate(msg('/deep on'));
+    expect(supported.sent[0].text).toBe('Deep on for all profiles.');
+    expect(supported.configWrites).toEqual(['default.deep=true']);
 
-    const unsupported = makeBridge({ supportsThink: false });
-    await unsupported.bridge.handleUpdate(msg('/think on'));
-    expect(unsupported.sent[0].text).toContain('Thinking mode on for all profiles.');
+    const unsupported = makeBridge({ supportsDeep: false });
+    await unsupported.bridge.handleUpdate(msg('/deep on'));
+    expect(unsupported.sent[0].text).toContain('Deep on for all profiles.');
     expect(unsupported.sent[0].text).toContain('no effect');
 
     const badArg = makeBridge();
-    await badArg.bridge.handleUpdate(msg('/think'));
-    expect(badArg.sent[0].text).toContain('Usage: /think');
+    await badArg.bridge.handleUpdate(msg('/deep'));
+    expect(badArg.sent[0].text).toContain('Usage: /deep');
+
+    const renamed = makeBridge();
+    await renamed.bridge.handleUpdate(msg('/think on'));
+    expect(renamed.sent[0].text).toBe('/think was renamed to /deep.');
   });
 
   it('does not expose Chat/Agent mode commands', async () => {

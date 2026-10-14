@@ -821,7 +821,7 @@ describe('MarifoldService', () => {
         provider: 'chatgpt',
         model: 'gpt-5-codex',
         profile: 'default',
-        think: true,
+        deep: true,
       },
       models: { options: ['chatgpt/gpt-5-codex'] },
       providers: {
@@ -856,7 +856,7 @@ describe('MarifoldService', () => {
           mode: 'chat',
           provider: 'chatgpt',
           model: 'gpt-5-codex',
-          think: true,
+          deep: true,
           latencyMs: expect.any(Number),
           usage: {
             inputTokens: 120,

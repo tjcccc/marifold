@@ -13,7 +13,7 @@ function renderInput(overrides: Partial<Parameters<typeof InputBox>[0]> = {}) {
     onSubmit,
     onInterrupt: noop,
     history: [] as string[],
-    commands: [{ name: 'help' }, { name: 'think' }, { name: 'clear' }],
+    commands: [{ name: 'help' }, { name: 'deep' }, { name: 'clear' }],
     skills: [{ name: 'translate' }, { name: 'make-midjourney-prompt' }],
     ...overrides,
   };
@@ -236,7 +236,7 @@ describe('InputBox', () => {
 
   it('recalls history through a fully-typed command (menu does not trap ↑)', async () => {
     const { stdin, lastFrame } = renderInput({ history: ['older', 'prev'] });
-    stdin.write('/think'); // exact command — menu shows a single, already-typed item
+    stdin.write('/deep'); // exact command — menu shows a single, already-typed item
     await delay();
     stdin.write('\x1b[A'); // ↑ must fall through to history, not cycle the menu
     await delay();
@@ -248,25 +248,25 @@ describe('InputBox', () => {
 
   it('completes a command prefix on Tab', async () => {
     const { stdin, lastFrame } = renderInput();
-    stdin.write('/th');
+    stdin.write('/dee');
     await delay();
     stdin.write('\t');
     await delay();
-    expect(lastFrame()).toContain('/think');
+    expect(lastFrame()).toContain('/deep');
   });
 
   it.each([
     ['Update the skill $make-', 'Update the skill $make-midjourney-prompt '],
     ['Update the skill\n$make-', 'Update the skill\n$make-midjourney-prompt '],
-    ['Please use /th', 'Please use /think '],
-    ['Please use\n/th', 'Please use\n/think '],
+    ['Please use /dee', 'Please use /deep '],
+    ['Please use\n/dee', 'Please use\n/deep '],
   ])('completes an inline token at the caret: %s', async (draft, expected) => {
     const { stdin, lastFrame, onSubmit, unmount } = renderInput();
     try {
       // Bracketed paste keeps embedded newlines as literal draft content.
       stdin.write('\x1b[200~' + draft + '\x1b[201~');
       await delay();
-      expect(lastFrame()).toContain(draft.includes('$') ? 'make-midjourney-prompt' : '/think');
+      expect(lastFrame()).toContain(draft.includes('$') ? 'make-midjourney-prompt' : '/deep');
       stdin.write('\t');
       await delay();
       stdin.write('\r');

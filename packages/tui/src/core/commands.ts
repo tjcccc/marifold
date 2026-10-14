@@ -16,7 +16,7 @@ export interface CommandContext {
   /** Ask a quick side question about the conversation; never saved or steering. */
   sideQuestion(text: string): void | Promise<void>;
   exit(): void | Promise<void>;
-  setThink(on: boolean): void | Promise<void>;
+  setDeep(on: boolean): void | Promise<void>;
   openModelPicker(): void | Promise<void>;
   openProfilePicker(): void | Promise<void>;
   selectProfile(name: string): void | Promise<void>;
@@ -72,7 +72,7 @@ const COMMANDS: CommandSpec[] = [
   { name: 'workspace', summary: 'List, join, or leave a workspace: /workspace list|join <name|id>|leave.', run: (ctx, args) => ctx.workspace ? ctx.workspace(args) : ctx.notify('Start marifold service before using workspaces.', 'warn') },
   { name: 'device', summary: 'Show devices or choose tools: /device list|use <host|auto|id>.', run: (ctx, args) => ctx.device ? ctx.device(args) : ctx.notify('Join a workspace before selecting another device.', 'warn') },
   { name: 'help', summary: 'List commands and input syntax.', run: ctx => ctx.showHelp() },
-  { name: 'status', summary: 'Show profile, model, thinking, and session.', run: ctx => ctx.showStatus() },
+  { name: 'status', summary: 'Show profile, model, Deep, and session.', run: ctx => ctx.showStatus() },
   { name: 'copy', summary: "Copy the last response's original text to the clipboard.", run: ctx => ctx.copyLast() },
   { name: 'retry', aliases: ['regenerate'], summary: 'Re-run your last message (e.g. after /model to compare).', run: ctx => ctx.retryLast() },
   {
@@ -118,13 +118,13 @@ const COMMANDS: CommandSpec[] = [
   { name: 'unarchive', summary: 'Unarchive this session so it can continue.', run: ctx => ctx.setArchived(false) },
   { name: 'takeover', summary: 'Reopen this session here after another page, terminal, or app took it over.', run: ctx => ctx.takeOver() },
   {
-    name: 'think',
-    summary: 'Thinking for all profiles: /think on|off.',
+    name: 'deep',
+    summary: 'Deeper reasoning for all profiles: /deep on|off.',
     run: (ctx, args) => {
       const value = args.trim().toLowerCase();
-      if (value === 'on') { ctx.setThink(true); }
-      else if (value === 'off') { ctx.setThink(false); }
-      else { return ctx.notify('Usage: /think on|off', 'warn'); }
+      if (value === 'on') { ctx.setDeep(true); }
+      else if (value === 'off') { ctx.setDeep(false); }
+      else { return ctx.notify('Usage: /deep on|off', 'warn'); }
     },
   },
   { name: 'permissions', summary: 'Show approval modes and active session grants.', run: ctx => ctx.showPermissions() },

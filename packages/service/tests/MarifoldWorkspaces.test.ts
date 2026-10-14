@@ -37,7 +37,7 @@ function service(dir: string, guest = false) {
       ? {
           providers: {},
           models: { options: [] },
-          default: { profile: 'default', provider: '', model: '', think: false },
+          default: { profile: 'default', provider: '', model: '', deep: false },
         }
       : {}),
   });

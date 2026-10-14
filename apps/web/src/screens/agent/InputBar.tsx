@@ -18,10 +18,10 @@ export interface InputBarProps {
   /** True while the current chat or agent response can be stopped. */
   responding: boolean;
   disabled?: boolean;
-  think: boolean;
-  /** False when the selected model has no thinking mode: the pill is hidden. */
-  thinkAvailable?: boolean;
-  onToggleThink: () => void;
+  deep: boolean;
+  /** False when Deep cannot change the selected model: the pill is hidden. */
+  deepAvailable?: boolean;
+  onToggleDeep: () => void;
   modelOptions: string[];
   /** undefined = Auto (profile/config default). */
   modelChoice?: string;
@@ -38,7 +38,7 @@ export interface InputBarProps {
   onStop: () => void;
 }
 
-/** The composer (design 1a): attach +, textarea, Think pill, model chip,
+/** The composer (design 1a): attach +, textarea, Deep pill, model chip,
  * marigold send. `$skill` is highlighted inline and autocompleted from a
  * keyboard-navigable menu; files arrive via the picker or paste. */
 export function InputBar(props: InputBarProps) {
@@ -280,7 +280,7 @@ export function InputBar(props: InputBarProps) {
         </div>
       ) : null}
       {/* Two rows (ChatGPT-style): the textarea spans the full width; attach +
-          Think/model/send sit on their own row below — so a tall input never
+          Deep/model/send sit on their own row below — so a tall input never
           leaves a dead column above the inline controls. */}
       <div className={styles.bar}>
         <div className={styles.inputWrap}>
@@ -369,13 +369,13 @@ export function InputBar(props: InputBarProps) {
             </>
           ) : null}
           <div className={styles.controls}>
-            {props.thinkAvailable === false ? null : (
+            {props.deepAvailable === false ? null : (
               <button
-                className={props.think ? styles.pillActive : styles.pill}
-                title="Thinking for all profiles"
-                onClick={props.onToggleThink}
+                className={props.deep ? styles.pillActive : styles.pill}
+                title="Deeper reasoning for all profiles (slower)"
+                onClick={props.onToggleDeep}
               >
-                Think
+                Deep
               </button>
             )}
             <ModelChip options={props.modelOptions} choice={props.modelChoice} onSelect={props.onSelectModel} />

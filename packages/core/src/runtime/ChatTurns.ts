@@ -43,7 +43,7 @@ export interface ChatTurnHost {
   readonly memoryStore: MemoryStore;
   /** Read per turn: a `web_search.*` config edit replaces the backend. */
   searchBackend(): SearchBackend;
-  resolveSettings(request: Pick<MarifoldRunRequest, 'profile' | 'provider' | 'model' | 'think' | 'maxContextTokens'>): MarifoldResolvedSettings;
+  resolveSettings(request: Pick<MarifoldRunRequest, 'profile' | 'provider' | 'model' | 'deep' | 'maxContextTokens'>): MarifoldResolvedSettings;
   assertSessionAvailable(sessionId: string, owner?: string): void;
   assertSessionWritable(sessionId: string): void;
   memoryEnabled(profile: string, requestMemories?: boolean): boolean;
@@ -544,7 +544,7 @@ function completedResponseMetrics(
     mode,
     provider: settings.provider,
     model: settings.model,
-    think: settings.think,
+    deep: settings.deep,
     startedAt,
     finishedAt: new Date(finishedAtMs).toISOString(),
     latencyMs: Math.max(0, finishedAtMs - startedAtMs),

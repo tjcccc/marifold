@@ -45,7 +45,7 @@ Shipped history lives in `DEVLOG.md` and the `docs/roadmap.md` ladder; this list
   - **What a catalog entry holds:**
     - Whether the model is agent-capable, and its context size.
     - Per provider: that provider's model ID, for example `gpt-6.1-sol` vs `openai/gpt-6.1-sol` vs `qwen3.8:27b`.
-    - Per provider: the think/effort settings, from the global think table.
+    - Per provider: the Deep (effort) settings, from the global Deep table.
   - **Storage and providers:**
     - Config and `profile.toml` keep `model = "provider/model"`; the catalog is only a picker and capability layer.
     - Choosing a provider that isn't set up yet goes to its sign-in or key step; for Ollama it pulls the model.
@@ -54,7 +54,7 @@ Shipped history lives in `DEVLOG.md` and the `docs/roadmap.md` ladder; this list
   - **Unverified models.** "Other model…" choices are labelled unverified, with a one-time warning that agent tasks may go poorly. They are never refused, because a translator SkillApp on a small model is a legitimate use.
   - **Keeping it current.** Update the catalog with each release and keep it to about 5–8 models.
   - **Later, not now:** fall back automatically to another provider for the same model when one fails, for example when a region is blocked.
-- Global think follow-up: confirm with one paid live request each that xAI honors `reasoning_effort` low/medium and that DashScope accepts `enable_thinking` on Qwen 3.8 and DeepSeek V4 (including non-streaming calls), on both Chat Completions and the Responses API that native web search and agent runs use (xAI `reasoning.effort`, Bailian `enable_thinking`). Built 2026-10-13 from the docs only.
+- Deep (formerly Think) follow-up: confirm with one paid live request each that xAI honors `reasoning_effort` low/medium and that DashScope accepts `enable_thinking` on Qwen 3.8 and DeepSeek V4 (including non-streaming calls), on both Chat Completions and the Responses API that native web search and agent runs use (xAI `reasoning.effort`, Bailian `enable_thinking`). Built 2026-10-13 from the docs only.
 
 - The default profile as the agent itself (from 2026-10-13): make `default` the real marifold agent and other profiles its avatars ("avatar" or "persona"; the profile picture renamed to "portrait" or "icon"); choose its official name ("bot" rejected); decide whether avatars share core memory with per-avatar persona; the user-facing "talk to <name>" model. It already owns the fixed `marifold` account on the agent computer. Design discussion before code.
 

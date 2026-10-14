@@ -19,7 +19,7 @@ function setup() {
   const configPath = path.join(dir, 'config.toml');
   fs.writeFileSync(configPath, '');
   const loaded = new ConfigLoader().load({ configPath });
-  loaded.config.default = { provider: 'xai', model: 'grok-test', profile: 'default', think: false };
+  loaded.config.default = { provider: 'xai', model: 'grok-test', profile: 'default', deep: false };
   loaded.config.paths = {
     profilesDir: path.join(dir, 'profiles'), sessionsDb: path.join(dir, 'sessions.db'),
     tasksDir: path.join(dir, 'tasks'), skillsDir: path.join(dir, 'skills'),

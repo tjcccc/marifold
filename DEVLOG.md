@@ -2,6 +2,12 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-10-14 — v0.94.0 — Think renamed Deep
+
+- Low and medium both reason, so the switch sets depth, not whether the model thinks: Think is now **Deep**, with no alias. Web pill **Deep**, `/deep` (TUI, Telegram, Web), `marifold ask --deep`, `[default].deep`, SkillApp `{ deep }`, API request fields, `responseMetrics.deep`, and `GET /v1/models` `deepOptions`. The sessions database keeps its `think` column; Ollama's wire field stays `think`.
+- Safety net: `marifold doctor` gains **Deep setting**, warning about `[default].think` (otherwise silently ignored, leaving Deep off) and installed SkillApps using `think:` (which no longer compile); `--fix` renames both after backups (`.legacy-config/`, `apps/.legacy-skillapp/`), touching only `think: true|false`. `/think` answers that it was renamed, the SkillApp compiler says "`think` was renamed to `deep`", and `ask --think` is an unknown option. The bundled translator example uses `deep`.
+- Validation: lint, build, size ratchet, core (612, new `DeepMigration` test), service (103), Web (281), TUI (141), CLI (36). Built CLI under a temp HOME: `doctor` flagged the config key and a `think:` app, `--fix` renamed both with backups, a second run was clean, `ask --think` was rejected. The user's own config and two apps still need `marifold doctor --fix`.
+
 ## 2026-10-13 — v0.93.0 — Global Think, medium/low effort per provider
 
 - Think is one global switch, `[default].think`: the Web Think pill, TUI `/think on|off` and Telegram `/think` all save it (Telegram's was per chat); `ask --think` still overrides one run. The per-profile Thinking setting is gone (Web row, template line, `PATCH /v1/profiles` `think` now ignored); a leftover `think` in `profile.toml` is ignored, `marifold doctor` warns, and `doctor --fix` removes it in the same pass and backup as the model rewrite (section renamed **Profile settings**). SkillApp models and profile references that set `think` override it; one that omits it now follows the global switch (before, omitted meant off).

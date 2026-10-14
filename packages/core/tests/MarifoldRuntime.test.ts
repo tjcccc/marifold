@@ -25,7 +25,7 @@ describe('MarifoldRuntime', () => {
   it('exposes protected built-in skills without adding them to mutable scope lists', () => {
     const dir = tempDir();
     const config: MarifoldConfig = {
-      default: { provider: 'ollama', model: 'gemma4:e4b', profile: 'default', think: false },
+      default: { provider: 'ollama', model: 'gemma4:e4b', profile: 'default', deep: false },
       models: { options: ['ollama/gemma4:e4b'] },
       memory: { sizeLimit: 50000, contextLimit: 2400 },
       paths: {
@@ -96,7 +96,7 @@ describe('MarifoldRuntime', () => {
       });
     `);
     const config: MarifoldConfig = {
-      default: { provider: 'ollama', model: 'gemma4:e4b', profile: 'default', think: false },
+      default: { provider: 'ollama', model: 'gemma4:e4b', profile: 'default', deep: false },
       models: { options: ['ollama/gemma4:e4b'] },
       memory: { sizeLimit: 50000, contextLimit: 2400 },
       agent: { maxIterations: 1, toolMode: 'native' },
@@ -156,7 +156,7 @@ describe('MarifoldRuntime', () => {
         provider: 'ollama',
         model: 'gemma4:e4b',
         profile: 'default',
-        think: false,
+        deep: false,
       },
       models: {
         options: ['ollama/gemma4:e4b'],
@@ -225,7 +225,7 @@ describe('MarifoldRuntime', () => {
         mode: 'chat',
         provider: 'ollama',
         model: 'gemma4:e4b',
-        think: false,
+        deep: false,
         latencyMs: expect.any(Number),
       });
       expect(runtime.getSessionAttachment('test-session', 0, 0)).toEqual(source === 'local' ? { path: imagePath, mediaType: 'image/png' } : { mediaType: 'image/png', data: TINY_PNG });
@@ -241,7 +241,7 @@ describe('MarifoldRuntime', () => {
         provider: 'ollama',
         model: 'gemma4:e4b',
         profile: 'default',
-        think: false,
+        deep: false,
       },
       models: { options: ['ollama/gemma4:e4b'] },
       memory: { sizeLimit: 50000, contextLimit: 2400 },
@@ -309,7 +309,7 @@ describe('MarifoldRuntime', () => {
         provider: 'ollama',
         model: 'gemma4:e4b',
         profile: 'default',
-        think: false,
+        deep: false,
       },
       models: {
         options: ['ollama/gemma4:e4b'],
@@ -374,7 +374,7 @@ describe('MarifoldRuntime', () => {
   it('gives agent runs profile memory and saves what they learn', async () => {
     const dir = tempDir();
     const config: MarifoldConfig = {
-      default: { provider: 'ollama', model: 'gemma4:e4b', profile: 'default', think: false },
+      default: { provider: 'ollama', model: 'gemma4:e4b', profile: 'default', deep: false },
       models: { options: ['ollama/gemma4:e4b'] },
       memory: { sizeLimit: 50000, contextLimit: 2400 },
       paths: { profilesDir: path.join(dir, 'profiles'), sessionsDb: path.join(dir, 'sessions.db'), tasksDir: path.join(dir, 'tasks') },
@@ -416,7 +416,7 @@ describe('MarifoldRuntime', () => {
         provider: 'ollama',
         model: 'gemma4:e4b',
         profile: 'default',
-        think: false,
+        deep: false,
       },
       models: {
         options: ['ollama/gemma4:e4b'],
@@ -473,7 +473,7 @@ describe('MarifoldRuntime', () => {
         provider: 'ollama',
         model: 'gemma4:e4b',
         profile: 'default',
-        think: false,
+        deep: false,
       },
       models: {
         options: ['ollama/gemma4:e4b'],
@@ -530,10 +530,10 @@ describe('MarifoldRuntime', () => {
     ['gpt-6-astra-2026-09-01', true, 'medium'],
     ['gpt-6.1-sol', true, 'medium'],
     ['gpt-6.1-sol', false, 'low'],
-  ] as const)('maps %s thinking=%s to %s reasoning', async (model, think, effort) => {
+  ] as const)('maps %s thinking=%s to %s reasoning', async (model, deep, effort) => {
     const dir = tempDir();
     const config: MarifoldConfig = {
-      default: { provider: 'chatgpt', model, profile: 'default', think: false },
+      default: { provider: 'chatgpt', model, profile: 'default', deep: false },
       models: { options: [`chatgpt/${model}`] },
       memory: { sizeLimit: 50000, contextLimit: 2400 },
       paths: {
@@ -558,10 +558,10 @@ describe('MarifoldRuntime', () => {
       loadedConfig: { config, configPath: path.join(dir, 'config.toml'), foundConfig: true },
     });
     try {
-      const response = await runtime.ask({ prompt: 'Hello', think });
+      const response = await runtime.ask({ prompt: 'Hello', deep });
       expect(response.ok).toBe(true);
       expect(body?.reasoning).toEqual(effort
-        ? { effort, ...(think ? { summary: 'auto' } : {}) }
+        ? { effort, ...(deep ? { summary: 'auto' } : {}) }
         : undefined);
     } finally {
       runtime.close();
@@ -575,7 +575,7 @@ describe('MarifoldRuntime', () => {
         provider: 'ollama',
         model: 'gemma4:e4b',
         profile: 'default',
-        think: false,
+        deep: false,
       },
       models: {
         options: ['ollama/gemma4:e4b'],
@@ -614,7 +614,7 @@ describe('MarifoldRuntime', () => {
     try {
       const response = await runtime.ask({
         prompt: 'Hello',
-        think: true,
+        deep: true,
       });
 
       expect(response.ok).toBe(true);
@@ -631,7 +631,7 @@ describe('MarifoldRuntime', () => {
     fs.writeFileSync(path.join(profilesDir, 'windowed', 'profile.toml'), 'session_context_turns = 2\n');
 
     const config: MarifoldConfig = {
-      default: { provider: 'ollama', model: 'gemma4:e4b', profile: 'default', think: false },
+      default: { provider: 'ollama', model: 'gemma4:e4b', profile: 'default', deep: false },
       models: { options: ['ollama/gemma4:e4b'] },
       memory: { sizeLimit: 50000, contextLimit: 2400 },
       paths: { profilesDir, sessionsDb: path.join(dir, 'sessions.db'), tasksDir: path.join(dir, 'tasks') },
@@ -677,7 +677,7 @@ describe('MarifoldRuntime', () => {
     fs.writeFileSync(path.join(profilesDir, 'plain', 'profile.toml'), 'memories = true\n');
 
     const config: MarifoldConfig = {
-      default: { provider: 'ollama', model: 'gemma4:e4b', profile: 'default', think: false },
+      default: { provider: 'ollama', model: 'gemma4:e4b', profile: 'default', deep: false },
       models: { options: ['ollama/gemma4:e4b'] },
       memory: { sizeLimit: 50000, contextLimit: 2400 },
       paths: { profilesDir, sessionsDb: path.join(dir, 'sessions.db'), tasksDir: path.join(dir, 'tasks') },
@@ -705,16 +705,16 @@ describe('MarifoldRuntime', () => {
     }
   });
 
-  it('resolves think from the request, then the global default, ignoring a leftover profile key', () => {
+  it('resolves deep from the request, then the global default, ignoring a leftover profile key', () => {
     const dir = tempDir();
     const profilesDir = path.join(dir, 'profiles');
     fs.mkdirSync(path.join(profilesDir, 'thinker'), { recursive: true });
-    fs.writeFileSync(path.join(profilesDir, 'thinker', 'profile.toml'), 'think = true\n');
+    fs.writeFileSync(path.join(profilesDir, 'thinker', 'profile.toml'), 'deep = true\n');
     fs.mkdirSync(path.join(profilesDir, 'plain'), { recursive: true });
     fs.writeFileSync(path.join(profilesDir, 'plain', 'profile.toml'), 'memories = true\n');
 
     const config: MarifoldConfig = {
-      default: { provider: 'ollama', model: 'gemma4:e4b', profile: 'default', think: false },
+      default: { provider: 'ollama', model: 'gemma4:e4b', profile: 'default', deep: false },
       models: { options: ['ollama/gemma4:e4b'] },
       memory: { sizeLimit: 50000, contextLimit: 2400 },
       paths: { profilesDir, sessionsDb: path.join(dir, 'sessions.db'), tasksDir: path.join(dir, 'tasks') },
@@ -725,11 +725,11 @@ describe('MarifoldRuntime', () => {
     });
 
     try {
-      // Think is global: a leftover `think = true` in profile.toml changes nothing.
-      expect(runtime.resolveSettings({ profile: 'thinker' }).think).toBe(false);
-      expect(runtime.resolveSettings({ profile: 'plain', think: true }).think).toBe(true);
-      config.default.think = true;
-      expect(runtime.resolveSettings({ profile: 'plain' }).think).toBe(true);
+      // Deep is global: a leftover `deep = true` in profile.toml changes nothing.
+      expect(runtime.resolveSettings({ profile: 'thinker' }).deep).toBe(false);
+      expect(runtime.resolveSettings({ profile: 'plain', deep: true }).deep).toBe(true);
+      config.default.deep = true;
+      expect(runtime.resolveSettings({ profile: 'plain' }).deep).toBe(true);
     } finally {
       runtime.close();
     }
@@ -743,7 +743,7 @@ describe('MarifoldRuntime', () => {
         provider: 'github_copilot',
         model: 'gpt-5.4',
         profile: 'default',
-        think: false,
+        deep: false,
       },
       models: {
         options: ['github_copilot/gpt-5.4'],
@@ -816,7 +816,7 @@ describe('MarifoldRuntime', () => {
         provider: 'github_copilot',
         model: 'gpt-5.4-mini',
         profile: 'default',
-        think: false,
+        deep: false,
       },
       models: {
         options: ['github_copilot/gpt-5.4-mini'],
@@ -887,7 +887,7 @@ describe('MarifoldRuntime', () => {
   it('forwards the run signal to the provider so a cancel aborts the in-flight stream', async () => {
     const dir = tempDir();
     const config: MarifoldConfig = {
-      default: { provider: 'ollama', model: 'gemma4:e4b', profile: 'default', think: false },
+      default: { provider: 'ollama', model: 'gemma4:e4b', profile: 'default', deep: false },
       models: { options: ['ollama/gemma4:e4b'] },
       memory: { sizeLimit: 50000, contextLimit: 2400 },
       paths: {
@@ -934,7 +934,7 @@ describe('MarifoldRuntime', () => {
     fs.mkdirSync(path.join(profilesDir, 'writer'), { recursive: true });
     fs.writeFileSync(path.join(profilesDir, 'writer', 'PROFILE.md'), 'You are a writer.');
     const config: MarifoldConfig = {
-      default: { provider: 'ollama', model: 'gemma4:e4b', profile: 'writer', think: false },
+      default: { provider: 'ollama', model: 'gemma4:e4b', profile: 'writer', deep: false },
       models: { options: ['ollama/gemma4:e4b'] },
       memory: { sizeLimit: 50000, contextLimit: 2400 },
       paths: {

@@ -155,7 +155,7 @@ function registerDeclaration(
       name,
       provider,
       model,
-      ...(value.think !== undefined ? { think: requireBoolean(value.think, 'model think', node, state, sourcePath) } : {}),
+      ...(value.deep !== undefined ? { deep: requireBoolean(value.deep, 'model deep', node, state, sourcePath) } : {}),
     });
   } else if (value.__kind === 'profile') {
     const profile = requireString(value.profileName, 'profile name', node, state, sourcePath);
@@ -172,8 +172,8 @@ function registerDeclaration(
       name,
       profile,
       ...(modelOverride ?? {}),
-      ...(value.think !== undefined
-        ? { think: requireBoolean(value.think, 'profile think', node, state, sourcePath) }
+      ...(value.deep !== undefined
+        ? { deep: requireBoolean(value.deep, 'profile deep', node, state, sourcePath) }
         : {}),
       memory: requireBoolean(value.memory, 'profile memory', node, state, sourcePath),
       history: requireBoolean(value.history, 'profile history', node, state, sourcePath),
@@ -339,25 +339,25 @@ function evaluateCall(
     case 'registerModel': {
       argsRange(name, args, 1, 2, node, state, sourcePath);
       const options = args[1] === undefined ? {} : requireObject(args[1], 'registerModel options', node, state, sourcePath);
-      rejectUnknown(options, ['think'], name, node, state, sourcePath);
+      rejectUnknown(options, ['deep'], name, node, state, sourcePath);
       return {
         __kind: 'model',
         id: requireString(args[0], 'model id', node, state, sourcePath),
-        ...(options.think !== undefined ? { think: requireBoolean(options.think, 'think', node, state, sourcePath) } : {}),
+        ...(options.deep !== undefined ? { deep: requireBoolean(options.deep, 'deep', node, state, sourcePath) } : {}),
       };
     }
     case 'registerProfile': {
       argsRange(name, args, 1, 2, node, state, sourcePath);
       const options = args[1] === undefined ? {} : requireObject(args[1], 'registerProfile options', node, state, sourcePath);
-      rejectUnknown(options, ['model', 'think', 'memory', 'history'], name, node, state, sourcePath);
+      rejectUnknown(options, ['model', 'deep', 'memory', 'history'], name, node, state, sourcePath);
       return {
         __kind: 'profile',
         profileName: requireString(args[0], 'profile name', node, state, sourcePath),
         ...(options.model !== undefined
           ? { modelId: requireString(options.model, 'model', node, state, sourcePath) }
           : {}),
-        ...(options.think !== undefined
-          ? { think: requireBoolean(options.think, 'think', node, state, sourcePath) }
+        ...(options.deep !== undefined
+          ? { deep: requireBoolean(options.deep, 'deep', node, state, sourcePath) }
           : {}),
         memory: options.memory === undefined ? false : requireBoolean(options.memory, 'memory', node, state, sourcePath),
         history: options.history === undefined ? false : requireBoolean(options.history, 'history', node, state, sourcePath),

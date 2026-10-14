@@ -135,8 +135,8 @@ export class SkillAppContextTool implements AgentTool {
           declarations: [
             'State(initialText)',
             'AttachmentState()',
-            "registerModel('provider/model', { think? }) — omit think to follow the global Think switch",
-            "registerProfile('profile-name', { model?, think?, memory?, history? })",
+            "registerModel('provider/model', { deep? }) — omit deep to follow the global Deep switch",
+            "registerProfile('profile-name', { model?, deep?, memory?, history? })",
             "registerSkill('skill-name', { result: TextResult({ trim? }) })",
             'TextResult({ trim? })',
           ],

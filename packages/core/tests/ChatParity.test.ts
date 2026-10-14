@@ -24,7 +24,7 @@ afterEach(() => {
 
 function baseConfig(dir: string, overrides: Partial<MarifoldConfig> = {}): MarifoldConfig {
   return {
-    default: { provider: 'ollama', model: 'gemma4:e4b', profile: 'default', think: false },
+    default: { provider: 'ollama', model: 'gemma4:e4b', profile: 'default', deep: false },
     models: { options: ['ollama/gemma4:e4b'] },
     memory: { sizeLimit: 50000, contextLimit: 2400 },
     paths: {
@@ -175,7 +175,7 @@ describe('chat tool loop', () => {
         provider: 'chatgpt',
         model: 'gpt-5.6-sol',
         profile: 'default',
-        think: true,
+        deep: true,
       },
       models: { options: ['chatgpt/gpt-5.6-sol'] },
       providers: {
@@ -347,7 +347,7 @@ describe('chat tool loop', () => {
         provider: 'chatgpt',
         model: 'gpt-5.6-sol',
         profile: 'default',
-        think: false,
+        deep: false,
         maxOutputTokens: 256,
       },
       models: { options: ['chatgpt/gpt-5.6-sol'] },
@@ -406,7 +406,7 @@ describe('chat tool loop', () => {
     }));
 
     const config = baseConfig(dir, {
-      default: { provider: 'xai', model: 'grok-4.6', profile: 'default', think: false },
+      default: { provider: 'xai', model: 'grok-4.6', profile: 'default', deep: false },
       models: { options: ['xai/grok-4.6'] },
       providers: {
         xai: {
@@ -456,7 +456,7 @@ describe('chat tool loop', () => {
     }));
 
     const config = baseConfig(dir, {
-      default: { provider: 'bailian', model: 'qwen3.5-plus', profile: 'default', think: false },
+      default: { provider: 'bailian', model: 'qwen3.5-plus', profile: 'default', deep: false },
       models: { options: ['bailian/qwen3.5-plus'] },
       providers: {
         bailian: {
@@ -495,7 +495,7 @@ describe('chat tool loop', () => {
     }));
 
     const config = baseConfig(dir, {
-      default: { provider: 'bailian', model: 'qwen-plus', profile: 'default', think: false },
+      default: { provider: 'bailian', model: 'qwen-plus', profile: 'default', deep: false },
       models: { options: ['bailian/qwen-plus'] },
       providers: {
         bailian: {
@@ -533,7 +533,7 @@ describe('chat tool loop', () => {
     }));
 
     const config = baseConfig(dir, {
-      default: { provider: 'bailian', model: 'qwen3-32b', profile: 'default', think: false },
+      default: { provider: 'bailian', model: 'qwen3-32b', profile: 'default', deep: false },
       models: { options: ['bailian/qwen3-32b'] },
       providers: {
         bailian: {
@@ -595,7 +595,7 @@ describe('chat tool loop', () => {
     }));
 
     const config = baseConfig(dir, {
-      default: { provider: 'xai', model: 'grok-4.6', profile: 'default', think: false },
+      default: { provider: 'xai', model: 'grok-4.6', profile: 'default', deep: false },
       models: { options: ['xai/grok-4.6'] },
       providers: {
         xai: {
@@ -667,7 +667,7 @@ describe('chat tool loop', () => {
     }));
 
     const config = baseConfig(dir, {
-      default: { provider: 'xai', model: 'grok-4.6', profile: 'default', think: false },
+      default: { provider: 'xai', model: 'grok-4.6', profile: 'default', deep: false },
       models: { options: ['xai/grok-4.6'] },
       providers: {
         xai: {
@@ -717,7 +717,7 @@ describe('chat tool loop', () => {
     }));
 
     const config = baseConfig(dir, {
-      default: { provider: 'chatgpt', model: 'gpt-5.6-sol', profile: 'default', think: false },
+      default: { provider: 'chatgpt', model: 'gpt-5.6-sol', profile: 'default', deep: false },
       models: { options: ['chatgpt/gpt-5.6-sol'] },
       providers: {
         chatgpt: {
@@ -811,7 +811,7 @@ describe('chat tool loop', () => {
         provider: 'github_copilot',
         model: 'gpt-5.4-mini',
         profile: 'default',
-        think: true,
+        deep: true,
       },
       models: { options: ['github_copilot/gpt-5.4-mini'] },
       providers: {
@@ -903,7 +903,7 @@ describe('ChatGPT credential refresh', () => {
     const dir = tempDir();
     const configPath = path.join(dir, 'config.toml');
     const config = baseConfig(dir, {
-      default: { provider: 'chatgpt', model: 'gpt-4o-mini', profile: 'default', think: false },
+      default: { provider: 'chatgpt', model: 'gpt-4o-mini', profile: 'default', deep: false },
       providers: {
         chatgpt: {
           type: 'openai-compatible',
@@ -960,7 +960,7 @@ describe('ChatGPT credential refresh', () => {
   it('does not refresh when the credential is still valid', async () => {
     const dir = tempDir();
     const config = baseConfig(dir, {
-      default: { provider: 'chatgpt', model: 'gpt-4o-mini', profile: 'default', think: false },
+      default: { provider: 'chatgpt', model: 'gpt-4o-mini', profile: 'default', deep: false },
       providers: {
         chatgpt: {
           type: 'openai-compatible',

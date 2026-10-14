@@ -194,7 +194,7 @@ export class ProfileManager {
   /** Bring profile.toml to the current form after one backup. An older
    * `provider` + `model` pair, or a missing model line, becomes one `model`
    * line (a pin stays a pin, no pin becomes `model = "default"`), and the
-   * retired per-profile `think` key is removed because Think is global. */
+   * retired per-profile `think` key is removed because Deep (`default.deep`) is global. */
   migrateProfileSettings(name: string): ProfileSettingsMigrationResult {
     assertSafeName(name);
     const profileToml = path.join(this.requireProfileDir(name), 'profile.toml');

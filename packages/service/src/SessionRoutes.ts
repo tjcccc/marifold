@@ -188,7 +188,7 @@ export function registerSessionRoutes(
       profile: requiredString(body.profile, 'profile'),
       ...(typeof body.provider === 'string' ? { provider: body.provider } : {}),
       ...(typeof body.model === 'string' ? { model: body.model } : {}),
-      ...(typeof body.think === 'boolean' ? { think: body.think } : {}),
+      ...(typeof body.deep === 'boolean' ? { deep: body.deep } : {}),
     });
     return { ok: true, ...result };
     } finally { endRequest(); }

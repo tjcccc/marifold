@@ -10,7 +10,7 @@ const loaded = {
   configPath: '/tmp/config.toml',
   foundConfig: true,
   config: {
-    default: { provider: 'xai', model: 'grok-4.6', profile: 'default', think: false },
+    default: { provider: 'xai', model: 'grok-4.6', profile: 'default', deep: false },
     providers: {
       xai: { type: 'openai-compatible', baseUrl: 'https://api.x.ai/v1' },
       bailian: { type: 'openai-compatible', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode' },
@@ -26,7 +26,7 @@ function chatReply(): Response {
 }
 
 /** Send one request the way a chat turn does and return the HTTP bodies. */
-async function sentBodies(providerName: string, model: string, think: boolean, reply: (call: number) => Response = chatReply, search: 'none' | 'responses-tool' = 'none') {
+async function sentBodies(providerName: string, model: string, deep: boolean, reply: (call: number) => Response = chatReply, search: 'none' | 'responses-tool' = 'none') {
   const bodies: Array<Record<string, unknown>> = [];
   vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
     bodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
@@ -34,18 +34,18 @@ async function sentBodies(providerName: string, model: string, think: boolean, r
   }));
   const baseUrl = loaded.config.providers[providerName].baseUrl!;
   const provider = new ReasoningRetryProvider(new MarifoldOpenAICompatProvider(baseUrl, 'key', { providerName }), providerName);
-  const config = engines.priestConfig({ profile: 'p', provider: providerName, model, think, mode: 'chat' }, search);
+  const config = engines.priestConfig({ profile: 'p', provider: providerName, model, deep, mode: 'chat' }, search);
   await provider.complete([{ role: 'user', content: 'Hi' }], config);
   return bodies;
 }
 
-describe('global think on the wire', () => {
+describe('global deep on the wire', () => {
   it('asks Grok for medium effort when on and low when off, never its high default', async () => {
     expect((await sentBodies('xai', 'grok-4.6', true))[0]).toMatchObject({ reasoning_effort: 'medium' });
     expect((await sentBodies('xai', 'grok-4.6', false))[0]).toMatchObject({ reasoning_effort: 'low' });
   });
 
-  it('switches Bailian thinking with enable_thinking, not a raw think key', async () => {
+  it('switches Bailian thinking with enable_thinking, not a raw deep key', async () => {
     const [on] = await sentBodies('bailian', 'qwen3.8-27b', true);
     const [off] = await sentBodies('bailian', 'qwen3.8-27b', false);
     expect(on).toMatchObject({ enable_thinking: true });
@@ -64,15 +64,15 @@ describe('global think on the wire', () => {
   });
 
   it('sends ChatGPT low effort when off, for every model', () => {
-    expect(engines.priestConfig({ profile: 'p', provider: 'chatgpt', model: 'gpt-6.1-sol', think: false, mode: 'chat' }).reasoning)
+    expect(engines.priestConfig({ profile: 'p', provider: 'chatgpt', model: 'gpt-6.1-sol', deep: false, mode: 'chat' }).reasoning)
       .toEqual({ enabled: true, effort: 'low' });
-    expect(engines.priestConfig({ profile: 'p', provider: 'chatgpt', model: 'gpt-6.1-sol', think: true, mode: 'chat' }).reasoning)
+    expect(engines.priestConfig({ profile: 'p', provider: 'chatgpt', model: 'gpt-6.1-sol', deep: true, mode: 'chat' }).reasoning)
       .toEqual({ enabled: true, effort: 'medium', summary: 'auto' });
   });
 
   it('gives Ollama on/off models a plain switch and gpt-oss its levels', () => {
-    const reasoning = (model: string, think: boolean) =>
-      engines.priestConfig({ profile: 'p', provider: 'ollama', model, think, mode: 'chat' }).reasoning;
+    const reasoning = (model: string, deep: boolean) =>
+      engines.priestConfig({ profile: 'p', provider: 'ollama', model, deep, mode: 'chat' }).reasoning;
     // A level string makes gemma4 use its default and skip thinking, so it must get true/false.
     expect(reasoning('gemma4:31b-cloud', true)).toEqual({ enabled: true, summary: 'auto' });
     expect(reasoning('gemma4:31b-cloud', false)).toEqual({ enabled: false });

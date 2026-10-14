@@ -23,7 +23,7 @@ for (const provider of providers) {
     mkdirSync(path.join(profilesDir, 'default'), { recursive: true });
     writeFileSync(path.join(profilesDir, 'default/INSTRUCTIONS.md'), 'Answer briefly. Use web_search when requested. Only report facts supported by tool results.');
     const config = {
-      default: { provider: 'ollama', model, profile: 'default', think: false, timeoutSeconds: 60, maxOutputTokens: 1200 },
+      default: { provider: 'ollama', model, profile: 'default', deep: false, timeoutSeconds: 60, maxOutputTokens: 1200 },
       models: { options: [`ollama/${model}`] }, memory: { sizeLimit: 1000, contextLimit: 120 },
       paths: { profilesDir, sessionsDb: path.join(root, 'sessions.db'), tasksDir: path.join(root, 'tasks'), skillsDir: path.join(root, 'skills'), appsDir: path.join(root, 'apps') },
       providers: { ollama: { type: 'ollama', baseUrl: 'http://127.0.0.1:11434' } },

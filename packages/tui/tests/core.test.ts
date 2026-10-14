@@ -194,7 +194,7 @@ function fakeCtx(): { ctx: CommandContext; calls: Record<string, unknown[]> } {
   const ctx = {
     notify: record('notify'), newSession: record('newSession'),
     clear: record('clear'), stop: record('stop'), sideQuestion: record('sideQuestion'), exit: record('exit'),
-    setThink: record('setThink'), openModelPicker: record('openModelPicker'), openProfilePicker: record('openProfilePicker'),
+    setDeep: record('setDeep'), openModelPicker: record('openModelPicker'), openProfilePicker: record('openProfilePicker'),
     openSkills: record('openSkills'), showPermissions: record('showPermissions'), showHelp: record('showHelp'),
     showSessions: record('showSessions'), takeOver: record('takeOver'), setArchived: record('setArchived'), runDoctor: record('runDoctor'), installSkill: record('installSkill'),
     sendOriginal: record('sendOriginal'),
@@ -256,11 +256,11 @@ describe('commands', () => {
     expect(calls.openSkills).toEqual(['global']);
   });
 
-  it('validates think argument', () => {
+  it('validates deep argument', () => {
     const { ctx, calls } = fakeCtx();
-    runCommand(ctx, 'think', 'on');
-    expect(calls.setThink).toEqual([true]);
-    runCommand(ctx, 'think', 'sideways');
+    runCommand(ctx, 'deep', 'on');
+    expect(calls.setDeep).toEqual([true]);
+    runCommand(ctx, 'deep', 'sideways');
     expect(calls.notify).toBeDefined();
   });
 

@@ -167,7 +167,7 @@ provider = ${tomlString(options.provider)}
 model = ${tomlString(options.model)}
 profile = ${tomlString(options.profile)}
 timeout_seconds = 120
-think = false
+deep = false
 # Conversation-context budget (tokens). When a turn's input exceeds ~80% of this,
 # older turns fold into a running summary so cost stops growing with the thread.
 # Profiles inherit this; override per-profile in profile.toml. Set 0 to disable.
