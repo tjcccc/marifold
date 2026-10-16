@@ -253,7 +253,8 @@ export function AgentComputerPage({ client }: AgentComputerPageProps) {
           works in its own account (with sudo) and home folder. It uses the computer through
           computer_exec, computer_write_file, computer_put (copies a file or folder from this device, with your approval)
           and computer_get (brings a file back as a run result). Credentials and marifold state are never copied in.
-          Deleting a profile also deletes its account.
+          Remove access keeps the account and its files; the row then offers Remove account to delete them
+          {managedHere ? '' : ' (on the workspace host)'}. Deleting a profile also deletes its account.
         </div>
       </section>
     </div>

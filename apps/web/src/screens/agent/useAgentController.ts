@@ -370,9 +370,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
         if (!cancelled) { setProfilesLoading(false); }
       }
     })();
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [client, handleError]);
 
   // Profile selection → detail and skills.
@@ -389,7 +387,8 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
         setProfileDetail(detail);
         setSkills(skillList);
       } catch (error) {
-        if (!cancelled) { handleError(error); }
+        // An unknown profile shows the screen's "doesn't exist" state instead.
+        if (!cancelled && !(error instanceof MarifoldApiError && error.code === 'PROFILE_INVALID')) { handleError(error); }
       }
     })();
     return () => {

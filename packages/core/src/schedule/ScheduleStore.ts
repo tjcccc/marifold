@@ -75,6 +75,21 @@ export class ScheduleStore {
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   }
 
+  /** Point a renamed profile's schedules at its new name; unreadable files are skipped. */
+  reassignProfile(from: string, to: string): number {
+    if (!fs.existsSync(this.schedulesDir)) { return 0; }
+    let moved = 0;
+    for (const entry of fs.readdirSync(this.schedulesDir, { withFileTypes: true })) {
+      if (!entry.isFile() || !entry.name.endsWith('.json')) { continue; }
+      let schedule: ScheduleState;
+      try { schedule = this.readFile(path.join(this.schedulesDir, entry.name)); } catch { continue; }
+      if (schedule.profile !== from) { continue; }
+      this.write({ ...schedule, profile: to });
+      moved += 1;
+    }
+    return moved;
+  }
+
   get(scheduleId: string): ScheduleState | undefined {
     this.assertSafeId(scheduleId);
     const filePath = this.schedulePath(scheduleId);

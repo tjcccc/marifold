@@ -198,6 +198,7 @@ describe('TelegramBridge.handleUpdate', () => {
             const decision = await options.approvalHandler!({
               id, tool: 'write_file', kind: 'write', summary: 'write ~/notes.txt', input: {},
               escalated: true, persistable: true, escalatedPath: '/Users/someone/notes.txt',
+              runGrant: { folder: '/Users/someone', access: 'write' },
             });
             decisions.push(decision.approved);
           }

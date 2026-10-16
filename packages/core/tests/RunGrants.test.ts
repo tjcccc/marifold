@@ -2,7 +2,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { coveredByRunGrant, type ApprovalRequest } from '../src/agent/ApprovalPolicy';
+import { approvalTrustFolder, coveredByRunGrant, type ApprovalRequest } from '../src/agent/ApprovalPolicy';
 import { runGrantFolder, type RunWorkspace } from '../src/agent/RunWorkspace';
 import { ReadFileTool } from '../src/agent/tools/ReadFileTool';
 
@@ -28,6 +28,16 @@ describe('runGrantFolder', () => {
     expect(runGrantFolder(path.join(userHome, 'stacks', 'state', 'x.json'), ws)).toBeUndefined(); // denied root
     expect(runGrantFolder(path.join(userHome, 'stacks', 'a.md'), ws)).toBeUndefined(); // contains a denied root
     expect(runGrantFolder('/etc/hosts', ws)).toBeUndefined(); // outside home
+  });
+
+  it('grants a listed folder itself, and never home when home is the target', () => {
+    const userHome = home();
+    const ws = workspace(userHome);
+    fs.mkdirSync(path.join(userHome, 'docs'));
+    expect(runGrantFolder(path.join(userHome, 'docs'), ws)).toBe(path.join(userHome, 'docs'));
+    expect(runGrantFolder(userHome, ws)).toBeUndefined();
+    const request: ApprovalRequest = { id: 'r', tool: 'read_file', kind: 'read', summary: 's', input: {}, escalated: true, escalatedPath: userHome };
+    expect(approvalTrustFolder(request)).toBeUndefined(); // no "[t]rust (/Users)"
   });
 
   it('is offered by read_file only for persistable in-home escalations', () => {

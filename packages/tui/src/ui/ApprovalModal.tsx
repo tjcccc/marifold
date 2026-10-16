@@ -3,14 +3,19 @@ import { useEffect, useRef, useState } from 'react';
 import * as os from 'os';
 import * as path from 'path';
 import { Box, Text, useInput } from 'ink';
-import { encryptSudoPassword, type ApprovalRequest, type PriestJSONValue, type SudoResponse } from '@marifold/core';
+import { approvalTrustFolder, encryptSudoPassword, type ApprovalRequest, type PriestJSONValue, type SudoResponse } from '@marifold/core';
 import { ACCENT, ATTACHMENT, DIM } from './theme.js';
 
-/** The folder a "trust" action would add, for an escalated file write. */
+/** The folder a "trust" action would add, for an escalated file call. */
 export function trustTargetFolder(request: ApprovalRequest): string | undefined {
-  return request.persistable !== false && request.escalated && request.escalatedPath
-    ? path.dirname(request.escalatedPath)
-    : undefined;
+  return approvalTrustFolder(request);
+}
+
+/** Whether `[t]` applies: trusting a folder, or allowing an ordinary call's
+ * kind. An escalated path with no trustable folder (home, above it, or a
+ * sensitive root) offers neither: "allow always" would not cover it. */
+export function canAlwaysAllow(request: ApprovalRequest): boolean {
+  return request.persistable !== false && (trustTargetFolder(request) !== undefined || !request.escalatedPath);
 }
 
 function tildify(p: string): string {
@@ -86,7 +91,7 @@ export function ApprovalModal({
     // Enter = allow once (safe default) — never persists/trusts on a stray keypress.
     if (key.escape || ch === 'd') { onResolve('no'); }
     else if (key.return || ch === 'a' || ch === 'y') { onResolve('once'); }
-    else if (ch === 't' && request.persistable !== false) { onResolve('always'); }
+    else if (ch === 't' && canAlwaysAllow(request)) { onResolve('always'); }
     else if (ch === 'r' && request.runGrant) { onResolve('run'); }
   });
 
@@ -120,7 +125,7 @@ export function ApprovalModal({
               <Text color={ACCENT} bold>[r]</Text><Text color={DIM}>{`un: allow ${tildify(request.runGrant.folder)} until this task ends`}</Text>
             </>
           ) : null}
-          {request.persistable !== false ? (
+          {canAlwaysAllow(request) ? (
             <>
               <Text color={DIM}> · </Text>
               <Text color={ACCENT} bold>[t]</Text><Text color={DIM}>{alwaysLabel}</Text>

@@ -7,6 +7,9 @@ import { accountName, accountNameProblem, DEFAULT_PROFILE, type ComputerAccount,
 import { buildComputerImage, ComputerSetupError, DEFAULT_BASE_IMAGE, EGRESS_ALIAS, EGRESS_PORT } from './AgentComputerImage';
 import { DockerCli, findDocker } from './DockerCli';
 
+/** Where the egress container sees the host's settings folder (read-only). */
+const EGRESS_SETTINGS_DIR = '/etc/marifold-egress';
+
 export interface AgentComputerSettings {
   /** The user's own HTTP proxy as seen from this device, e.g. http://127.0.0.1:7890. */
   proxy?: string;
@@ -80,6 +83,8 @@ const LABEL = 'dev.marifold.computer';
 export class AgentComputer {
   readonly instance: string;
   private readonly stateFile: string;
+  /** Host folder mounted read-only into the egress container. */
+  private readonly egressDir: string;
   private docker?: DockerCli;
   private operation?: { state: 'creating' | 'failed'; error?: string; errorDetail?: string };
   /** Container ID + accounts last reconciled, so most commands skip it. */
@@ -88,6 +93,7 @@ export class AgentComputer {
   constructor(configPath: string, private readonly dockerBinary?: string) {
     this.instance = createHash('sha256').update(path.resolve(configPath)).digest('hex').slice(0, 8);
     this.stateFile = path.join(path.dirname(configPath), 'agent-computer.json');
+    this.egressDir = path.join(path.dirname(configPath), 'agent-computer-egress');
   }
 
   get networkName(): string { return `marifold-${this.instance}-agent-net`; }
@@ -115,11 +121,8 @@ export class AgentComputer {
     if (baseImage && !/^[a-z0-9][a-z0-9._/:@-]{0,200}$/i.test(baseImage)) { throw MarifoldError.configInvalid('Invalid base image name.'); }
     const settings: AgentComputerSettings = { ...(proxy ? { proxy } : {}), ...(baseImage ? { baseImage } : {}) };
     this.write({ ...this.read(), settings });
-    // A running egress container picks up a new proxy only when recreated.
-    if (this.read().computer && (await this.dockerEnvironment()).available) {
-      await this.cli().run(['rm', '-f', this.egressName]);
-      await this.ensureEgress();
-    }
+    // The egress container reads this file for each connection: no restart.
+    this.writeUpstream();
     return settings;
   }
 
@@ -370,14 +373,26 @@ export class AgentComputer {
       return;
     }
     if (inspect.code === 0) { await this.cli().run(['rm', '-f', this.egressName]); }
-    const proxy = this.settings().proxy;
+    this.writeUpstream();
     await this.cli().check([
       'run', '-d', '--name', this.egressName, '--restart', 'unless-stopped', '--user', 'nobody',
       '--network', 'bridge', '--add-host', 'host.docker.internal:host-gateway', '--memory', '256m', '--pids-limit', '256',
-      '-e', `EGRESS_PORT=${EGRESS_PORT}`, ...(proxy ? ['-e', `EGRESS_UPSTREAM=${upstreamFor(proxy)}`] : []),
+      // A folder, not the file: an atomic replace gives the file a new inode.
+      '-v', `${this.egressDir}:${EGRESS_SETTINGS_DIR}:ro`,
+      '-e', `EGRESS_PORT=${EGRESS_PORT}`, '-e', `EGRESS_UPSTREAM_FILE=${EGRESS_SETTINGS_DIR}/upstream`,
       ...this.labels('egress'), this.imageTag, 'node', '/opt/marifold-egress/EgressProxy.js',
     ], { timeoutMs: 120_000 });
     await this.cli().check(['network', 'connect', '--alias', EGRESS_ALIAS, this.networkName, this.egressName]);
+  }
+
+  /** The proxy setting as the egress container reads it: `host:port` or empty. */
+  private writeUpstream(): void {
+    const proxy = this.settings().proxy;
+    fs.mkdirSync(this.egressDir, { recursive: true, mode: 0o755 });
+    const file = path.join(this.egressDir, 'upstream');
+    const temp = `${file}.${process.pid}.tmp`;
+    fs.writeFileSync(temp, proxy ? `${upstreamFor(proxy)}\n` : '', { mode: 0o644 });
+    fs.renameSync(temp, file);
   }
 
   private labels(role: string): string[] {

@@ -70,7 +70,7 @@ export interface CommandCompletion {
 
 const COMMANDS: CommandSpec[] = [
   { name: 'workspace', summary: 'List, join, or leave a workspace: /workspace list|join <name|id>|leave.', run: (ctx, args) => ctx.workspace ? ctx.workspace(args) : ctx.notify('Start marifold service before using workspaces.', 'warn') },
-  { name: 'device', summary: 'Show devices or choose tools: /device list|use <host|auto|id>.', run: (ctx, args) => ctx.device ? ctx.device(args) : ctx.notify('Join a workspace before selecting another device.', 'warn') },
+  { name: 'device', summary: 'Show devices or choose tools: /device list|use <host|auto|name|id>.', run: (ctx, args) => ctx.device ? ctx.device(args) : ctx.notify('Join a workspace before selecting another device.', 'warn') },
   { name: 'help', summary: 'List commands and input syntax.', run: ctx => ctx.showHelp() },
   { name: 'status', summary: 'Show profile, model, Deep, and session.', run: ctx => ctx.showStatus() },
   { name: 'copy', summary: "Copy the last response's original text to the clipboard.", run: ctx => ctx.copyLast() },

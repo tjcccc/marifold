@@ -1,5 +1,5 @@
 import * as path from 'path';
-import { defaultAppsDir, legacyDefaultThink, legacyThinkApps, migrateAppThink, migrateDefaultThink } from '@marifold/core';
+import { defaultAppsDir, legacyDefaultThink, legacyThinkApps, migrateAppThink, migrateDefaultThink, orphanedSessionProfiles } from '@marifold/core';
 import type { Command } from 'commander';
 import type { ConsolePrinter } from '../output/ConsolePrinter';
 import { createRuntime, loadConfig } from './RuntimeFactory';
@@ -169,6 +169,12 @@ export function registerDoctorCommand(program: Command, printer: ConsolePrinter)
           out.write('  Status: none yet (no sessions saved)\n');
         } else if (health.ok) {
           out.write(`  Status: ✓ ok (${health.sessions} sessions, ${health.turns} turns)\n`);
+          // Before 0.95 a profile rename left its sessions under the old name.
+          const profileNames = new Set(runtime.listProfiles().map(profile => profile.name));
+          for (const orphan of orphanedSessionProfiles(runtime.sessionDbPath, name => profileNames.has(name))) {
+            out.write(`  ⚠ ${orphan.sessions} session(s) belong to '${orphan.name}', which is not a profile (renamed or deleted)\n`);
+            out.write(`    If it was renamed, run \`marifold profile rename ${orphan.name} <new-name>\` to move them.\n`);
+          }
         } else {
           out.write(`  Status: ✗ CORRUPT — ${health.error}\n`);
           out.write('  The session DB is damaged. A guided repair (backs up first) is coming in `marifold session repair`.\n');

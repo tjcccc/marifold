@@ -95,6 +95,15 @@ export interface ApprovalRequest {
   runGrant?: RunGrant;
 }
 
+/** The folder a "trust" answer would add to the profile: the same folder a
+ * run grant would cover, so trust never reaches home itself, a folder above
+ * it, or a sensitive root. Undefined when the request cannot be trusted. */
+export function approvalTrustFolder(request: ApprovalRequest): string | undefined {
+  return request.persistable !== false && request.escalated && request.escalatedPath && !request.sudo
+    ? request.runGrant?.folder
+    : undefined;
+}
+
 /** A folder approved for the remainder of one run. A write grant also covers
  * reads; a read grant never covers writes. */
 export interface RunGrant {

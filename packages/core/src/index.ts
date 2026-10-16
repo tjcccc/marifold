@@ -5,6 +5,7 @@ export type { AgentEngineContext, AgentRunnerDeps, AgentRunOptions } from './age
 export type { AgentEvent, AgentUsage } from './agent/AgentEvents';
 export type { UsageInfo } from '@priest-ai/core';
 export {
+  approvalTrustFolder,
   coveredByRunGrant,
   DEFAULT_AGENT_CONFIG,
   resolveAgentConfig,
@@ -230,6 +231,8 @@ export type {
   ProfileModelOverrideResult,
   ProfileRenameResult,
 } from './profiles/ProfileManager';
+export { orphanedSessionProfiles, renameProfile } from './profiles/ProfileRename';
+export type { ProfileRenameOutcome } from './profiles/ProfileRename';
 export { ProfileResolver } from './profiles/ProfileResolver';
 export { PROFILE_DEFAULT_MODEL, parseProfileModel, profileModelValue } from './profiles/ProfileModel';
 export { assertNewProfileName, NEW_PROFILE_NAME, NEW_PROFILE_NAME_HINT, newProfileNameProblem, RESERVED_PROFILE_NAMES } from './profiles/ProfileName';

@@ -64,8 +64,11 @@ export function ApprovalSheet({ request, busy, onAnswer }: ApprovalSheetProps) {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [busy, encrypting, onAnswer, request]);
 
-  const canPersist = !request.sudo && request.persistable !== false;
-  const trustFolder = canPersist && request.escalatedPath !== undefined;
+  // Trust covers the folder a run grant would; an escalated path without one
+  // (home, above it, or a sensitive root) can't be trusted or always allowed.
+  const trustFolder = !request.sudo && request.persistable !== false && request.escalated
+    && request.escalatedPath !== undefined && request.runGrant !== undefined;
+  const canPersist = !request.sudo && request.persistable !== false && (trustFolder || request.escalatedPath === undefined);
   const runGrant = request.sudo ? undefined : request.runGrant;
 
   return (

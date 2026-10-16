@@ -3,11 +3,10 @@ import type { RuntimeEnvironment } from '../runtime/RuntimeEnvironment';
 import type { AgentRunOptions } from '../agent/AgentRunner';
 import type { WorkspaceExecutionContext } from '@marifold/workspace-protocol';
 import * as crypto from 'crypto';
-import { dirname } from 'path';
 import type { ImageInput } from '@priest-ai/core';
 import type { AgentEvent, AgentUsage } from '../agent/AgentEvents';
 import type { AgentRunner } from '../agent/AgentRunner';
-import { coveredByRunGrant, type ApprovalDecision, type ApprovalMode, type ApprovalRequest, type RunGrant, type ToolKind } from '../agent/ApprovalPolicy';
+import { approvalTrustFolder, coveredByRunGrant, type ApprovalDecision, type ApprovalMode, type ApprovalRequest, type RunGrant, type ToolKind } from '../agent/ApprovalPolicy';
 import { RUN_WORKSPACE_RETENTION_MS } from '../agent/RunWorkspace';
 import type { RunFileInput } from '../agent/RunWorkspace';
 import { resolveRunArtifact } from '../agent/RunArtifacts';
@@ -367,14 +366,14 @@ export class RunRegistry {
         if (entry.request.persistable === false) {
           throw MarifoldError.agentRunInvalid('This capability must be approved one call at a time and cannot be trusted persistently.');
         }
-        const escalatedPath = entry.request.escalatedPath;
-        if (!escalatedPath) {
-          throw MarifoldError.agentRunInvalid('This approval has no escalated path to trust; use "once", "always", or "deny".');
+        const trustFolder = approvalTrustFolder(entry.request);
+        if (!trustFolder) {
+          throw MarifoldError.agentRunInvalid('This approval has no folder that can be trusted; use "once" or "deny".');
         }
         // Persist before trusting in memory: the profile layer refuses broad or
         // sensitive folders (such as the home directory), and a refused folder
         // must not silence later prompts. The client can still answer once/deny.
-        const folder = this.runtime.addProfileTrustedFolder(run.profile, dirname(escalatedPath));
+        const folder = this.runtime.addProfileTrustedFolder(run.profile, trustFolder);
         if (!run.trustedFolders.includes(folder)) { run.trustedFolders.push(folder); }
         entry.settle({ approved: true });
         return { requestId, approved: true };

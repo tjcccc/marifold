@@ -127,6 +127,11 @@ export function AgentScreen(props: AgentScreenProps) {
     return names;
   }, [controller.steeringRun, controller.profileName]);
 
+  // A route naming a profile that isn't listed (deleted, renamed, or mistyped).
+  // An empty list means it failed to load (`default` is always listed).
+  const missingProfile = controller.profileName !== undefined && !controller.profilesLoading && controller.profiles.length > 0
+    && !controller.profiles.some(profile => profile.name === controller.profileName);
+  const openProfile = missingProfile ? undefined : controller.profileName;
   const currentSession = controller.sessions.find(session => session.id === controller.sessionId);
   const sessionArchived = currentSession?.archived === true;
   const mobileWorkspaceOpen = appsView
@@ -160,9 +165,9 @@ export function AgentScreen(props: AgentScreenProps) {
 
   const navigation = (
     <WorkspaceSidebar
-      ariaLabel={appsView ? 'Apps' : controller.profileName ? 'Sessions' : 'Profiles'}
+      ariaLabel={appsView ? 'Apps' : openProfile ? 'Sessions' : 'Profiles'}
       footer={sidebarFooter}
-      showBrand={appsView || !controller.profileName}
+      showBrand={appsView || !openProfile}
     >
       {appsView ? (
         <AppsSidebarContent
@@ -177,17 +182,17 @@ export function AgentScreen(props: AgentScreenProps) {
             setMobileAppOpen(true);
           }}
         />
-      ) : controller.profileName ? (
+      ) : openProfile ? (
         <SessionListContent
           sessions={controller.sessions}
           loading={controller.sessionsLoading}
           selected={controller.sessionId}
-          profileName={controller.profileName}
+          profileName={openProfile}
           profileDisplayName={controller.profileDetail?.displayName}
           profileAvatar={(
             <Avatar
               client={props.client}
-              name={controller.profileName}
+              name={openProfile}
               label={controller.profileDetail?.displayName}
               hasAvatar={controller.profiles.some(
                 profile => profile.name === controller.profileName && profile.avatar !== undefined,
@@ -224,7 +229,7 @@ export function AgentScreen(props: AgentScreenProps) {
           client={props.client}
           profiles={controller.profiles}
           loading={controller.profilesLoading}
-          selected={controller.profileName}
+          selected={openProfile}
           workingProfiles={workingProfiles}
           onSelect={name => {
             setMobileConversationOpen(false);
@@ -284,7 +289,7 @@ export function AgentScreen(props: AgentScreenProps) {
           <ThreadHeader
             sessionTitle={appsView
               ? 'Apps'
-              : controller.profileName
+              : openProfile
                 ? (currentSession ? sessionTitle(currentSession) : 'New session')
                 : 'Profiles'}
             sidebarsHidden={sidebarsHidden}
@@ -307,7 +312,7 @@ export function AgentScreen(props: AgentScreenProps) {
             />
           </div>
         ) : null}
-        {!appsView && controller.profileName ? (
+        {!appsView && openProfile ? (
           <>
             <CatchUpBanner
               runs={controller.thread.catchUp}
@@ -358,6 +363,12 @@ export function AgentScreen(props: AgentScreenProps) {
               onStop={() => void controller.stop()}
             />
           </>
+        ) : !appsView && missingProfile ? (
+          <div className={styles.chooseProfile}>
+            <div className={styles.chooseTitle}>Profile “{controller.profileName}” doesn’t exist</div>
+            <div className={styles.chooseHint}>It may have been renamed or deleted. Choose another profile.</div>
+            <button type="button" className={styles.chooseAction} onClick={controller.showProfiles}>Back to profiles</button>
+          </div>
         ) : !appsView ? (
           <div className={styles.chooseProfile}>
             <div className={styles.chooseTitle}>Choose a profile</div>

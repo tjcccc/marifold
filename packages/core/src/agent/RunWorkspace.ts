@@ -296,13 +296,14 @@ export function sensitiveHostRoots(userHome: string): string[] {
   ];
 }
 
-/** The folder a run-scoped grant for this target would cover: its parent
- * folder, inside the user's home but never home itself, a sensitive or denied
- * root, or a folder containing one. */
+/** The folder a run-scoped grant (or a trust) for this target would cover:
+ * the folder itself, or a file's parent folder, inside the user's home but
+ * never home itself, a sensitive or denied root, or a folder containing one. */
 export function runGrantFolder(target: string, workspace: RunWorkspace): string | undefined {
   // The run's own folders belong to this run anyway.
   if (isInside(target, workspace.rootDir)) { return canonicalPath(workspace.rootDir); }
-  const folder = path.dirname(canonicalPath(target));
+  const resolved = canonicalPath(target);
+  const folder = isDirectory(resolved) ? resolved : path.dirname(resolved);
   const home = canonicalPath(workspace.userHome);
   if (folder === home || !isInside(folder, home)) { return undefined; }
   const protectedRoots = [...sensitiveHostRoots(workspace.userHome), ...(workspace.deniedRoots ?? []), ...(workspace.stateReadRoots ?? [])];
@@ -480,5 +481,13 @@ function pruneRunWorkspaces(runsDir: string): void {
       // Cleanup is best-effort; inability to prune an old run must not block a
       // new one.
     }
+  }
+}
+
+function isDirectory(target: string): boolean {
+  try {
+    return fs.statSync(target).isDirectory();
+  } catch {
+    return false;
   }
 }

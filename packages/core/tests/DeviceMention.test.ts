@@ -70,3 +70,12 @@ describe('skill management routing', () => {
     expect((await fixture().resolve({ objective: 'install the abc skill on @guest' }, {}, guestOrigin)).execution?.executionDeviceId).toBe('guest');
   });
 });
+
+describe('agent computer routing', () => {
+  it('treats @device as the source of agent computer work, keeping the run on the host', async () => {
+    const origin = { workspaceId: 'workspace', senderDeviceId: 'home', hostDeviceId: 'home' };
+    const copy = await fixture().resolve({ objective: "Copy @STJC-M1P-2.local's ~/tempfiles/hello.md to your computer" }, {}, origin);
+    expect(copy.execution?.executionDeviceId).toBe('home');
+    expect((await fixture().resolve({ objective: "save hello to @guest's ~/tempfiles" }, {}, origin)).execution?.executionDeviceId).toBe('guest');
+  });
+});

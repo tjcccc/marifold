@@ -15,7 +15,7 @@ import { execInComputer, getFromComputer, putIntoComputer, writeComputerFile } f
 
 function about(profile: string): string {
   const account = accountName(profile);
-  return `the agent's own Linux computer (Ubuntu 24.04; your account "${account}" with passwordless sudo, home /home/${account}). It is isolated: it cannot reach the user's devices, files, or local network; internet access goes through an HTTP(S) proxy that apt, pip, npm, curl and git over HTTPS already use. Other profiles of this agent may have accounts there too. Nothing there needs approval.`;
+  return `the agent's own Linux computer (Ubuntu 24.04; your account "${account}" with passwordless sudo, home /home/${account}). It is isolated: it cannot reach the user's devices, files, or local network; internet access goes through an HTTP(S) proxy that apt, pip, npm, curl and git over HTTPS already use. Other profiles of this agent may have accounts there too. Nothing there needs approval. "Your computer" (your machine, your Linux, 你的电脑) means this computer; "my computer", "this device" and @device mean the user's devices, never this one. To bring a file from another device here, read it there with delegate_device, then use computer_write_file (text) or save it in this run and use computer_put.`;
 }
 const TRUSTED: ToolRiskAssessment = { escalate: false, trusted: true };
 

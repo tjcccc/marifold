@@ -157,6 +157,7 @@ describe('RunCard', () => {
         input: {},
         escalated: true,
         escalatedPath: '/Users/me/blog/post.md',
+        runGrant: { folder: '/Users/me/blog', access: 'write' },
       },
     });
     render(<RunCard run={run} onCancel={() => {}} onAnswer={onAnswer} onToggle={() => {}} />);

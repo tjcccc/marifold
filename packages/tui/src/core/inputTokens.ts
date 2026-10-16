@@ -1,16 +1,17 @@
 export interface InputToken {
   start: number;
   end: number;
-  sigil: '$' | '/';
+  sigil: '$' | '/' | '@';
   name: string;
 }
 
-/** Whitespace-delimited tokens; paths and sigils inside words stay plain. */
+/** Whitespace-delimited tokens; paths and sigils inside words stay plain.
+ * A device mention (`@name`, dots allowed) may end in a possessive `'s`. */
 export function inputTokens(text: string): InputToken[] {
-  return Array.from(text.matchAll(/(^|\s)([$/])([\w-]*)(?=\s|$)/g), match => ({
+  return Array.from(text.matchAll(/(^|\s)(?:([$/])([\w-]*)(?=\s|$)|(@)([\w.-]*)(?=\s|$|'))/g), match => ({
     start: match.index! + match[1].length,
     end: match.index! + match[0].length,
-    sigil: match[2] as '$' | '/',
-    name: match[3],
+    sigil: (match[2] ?? match[4]) as '$' | '/' | '@',
+    name: match[3] ?? match[5] ?? '',
   }));
 }

@@ -129,11 +129,13 @@ describe('ApprovalModal', () => {
       id: 'c', tool: 'write_file', kind: 'write', summary: 'write 1B to ~/blog/x.md',
       input: { path: '~/blog/x.md' }, escalated: true,
       escalationReason: 'target /home/u/blog/x.md is outside the working directory /repo',
-      escalatedPath: '/home/u/blog/x.md',
+      escalatedPath: '/home/u/blog/x.md', runGrant: { folder: '/home/u/blog', access: 'write' },
     };
     const frame = render(<ApprovalModal request={escalated} onResolve={() => {}} />).lastFrame() ?? '';
-    expect(frame).toContain('/home/u/blog');     // the folder a trust would add
-    expect(frame).toContain('allow always');
+    expect(frame).toContain('[t]rust (/home/u/blog)');     // the folder a trust would add
+    // No trustable folder (home or above it): no [t], rather than "trust (/Users)".
+    const home: ApprovalRequest = { ...escalated, escalatedPath: '/home/u', runGrant: undefined };
+    expect(render(<ApprovalModal request={home} onResolve={() => {}} />).lastFrame() ?? '').not.toContain('[t]');
   });
 });
 

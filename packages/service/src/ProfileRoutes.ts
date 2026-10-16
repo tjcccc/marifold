@@ -122,6 +122,15 @@ export function registerProfileRoutes(
     return { ok: true, removed, profile: runtime.getProfile(name) };
   });
 
+  server.post<{ Params: { name: string } }>('/v1/profiles/:name/rename', async request => {
+    const name = request.params.name;
+    const to = requiredString(objectBody(request.body).to, 'to');
+    if (options.isProfileActive?.(name)) {
+      throw MarifoldError.agentRunInvalid('Cancel active requests for this profile before renaming it.');
+    }
+    return { ok: true, rename: await runtime.renameProfile(name, to) };
+  });
+
   server.patch<{ Params: { name: string } }>('/v1/profiles/:name', async request => {
     const name = request.params.name;
     runtime.getProfile(name); // throws PROFILE_INVALID (400) for unknown names

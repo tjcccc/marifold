@@ -4,6 +4,7 @@ import { Box, Text, useApp } from 'ink';
 import { createApiClient, isSessionBusy, startupWorkspaces, type ApiClientOptions } from '@marifold/client';
 import type { MarifoldRuntime } from '@marifold/core';
 import type { WorkspaceSummary, WorkspaceDevice, LoadedMarifoldConfig } from '@marifold/core';
+import { deviceCompletions, findDevice, mentionedNames } from '../core/deviceMentions.js';
 import { RemoteRuntime } from '../core/RemoteRuntime.js';
 import type { TuiRuntime } from '../core/TuiRuntime.js';
 import { App, type AppProps } from './App.js';
@@ -33,6 +34,7 @@ export function WorkspaceShell(props: Props) {
   const [entry, setEntry] = useState<Entry>();
   const { exit } = useApp();
   const [notice, setNotice] = useState('Connecting to workspace…');
+  const [devices, setDevices] = useState<Array<{ name: string; hint: string }>>([]);
   const selected = useRef<string>('local');
   const execution = useRef<string | undefined>(undefined);
   const localApi = useRef(createApiClient({ ...props.service, interface: 'terminal' })).current;
@@ -178,6 +180,36 @@ export function WorkspaceShell(props: Props) {
       serial.current++;
     };
   }, []);
+  // `@` completions follow the workspace's online executors, like the Web composer.
+  useEffect(() => {
+    setDevices([]);
+    if (!(entry?.runtime instanceof RemoteRuntime)) { return; }
+    const remote = entry.runtime;
+    let alive = true;
+    const refresh = () => void remote.api.request<{ devices: WorkspaceDevice[] }>('GET', '/v1/execution-devices')
+      .then(result => { if (alive) { setDevices(deviceCompletions(result.devices)); } })
+      .catch(() => { if (alive) { setDevices([]); } });
+    refresh();
+    const timer = setInterval(refresh, 15_000);
+    return () => { alive = false; clearInterval(timer); };
+  }, [entry?.key]);
+  // Local runs never reach a workspace, so an @device there would silently
+  // run here instead. Say which workspace to join.
+  const checkPrompt = async (text: string): Promise<string | undefined> => {
+    const names = mentionedNames(text);
+    if (selected.current !== 'local' || names.length === 0) { return undefined; }
+    let workspaces: WorkspaceSummary[];
+    try { ({ workspaces } = await localApi.request<{ workspaces: WorkspaceSummary[] }>('GET', '/v1/workspaces')); }
+    catch { return undefined; }
+    for (const workspace of workspaces.filter(w => w.online)) {
+      let list: WorkspaceDevice[];
+      try { ({ devices: list } = await localApi.request<{ devices: WorkspaceDevice[] }>('POST', `/v1/workspaces/${workspace.id}/manage/devices`, {})); }
+      catch { continue; }
+      const name = names.find(n => findDevice(list, n.replace(/^"|"$/g, '')));
+      if (name) { return `@${name} is a device in workspace "${workspace.name}". Join it first with /workspace join ${workspace.name}, then send again.`; }
+    }
+    return undefined;
+  };
   useEffect(() => {
     if (!(entry?.runtime instanceof RemoteRuntime)) { return; }
     const remote = entry.runtime;
@@ -241,13 +273,15 @@ export function WorkspaceShell(props: Props) {
       {},
     );
     const [operation, value] = args.trim().split(/\s+/);
+    const name = args.trim().slice(operation?.length ?? 0).trim();
     if (operation === 'use' && value) {
-      if (!['auto', 'host'].includes(value) && !devices.some((d) => d.id === value && d.online && d.executor)) {
+      const device = ['auto', 'host'].includes(name) ? undefined : findDevice(devices, name);
+      if (!['auto', 'host'].includes(name) && !(device?.online && device.executor)) {
         throw new Error('Device is unavailable or has not enabled execution.');
       }
-      execution.current = value === 'auto' ? undefined : value;
-      setNotice(`${entry?.name} workspace · tools: ${value}`);
-      return `Next run uses ${value}. Skills always use the host.`;
+      execution.current = name === 'auto' ? undefined : device?.id ?? name;
+      setNotice(`${entry?.name} workspace · tools: ${device?.name ?? name}`);
+      return `Next run uses ${device?.name ?? name}. Skills always use the host.`;
     }
     return devices
       .map(
@@ -268,6 +302,8 @@ export function WorkspaceShell(props: Props) {
           initial={entry.initial}
           workspaceCommand={workspaceCommand}
           deviceCommand={deviceCommand}
+          devices={devices}
+          checkPrompt={checkPrompt}
         />
       )}
     </Box>

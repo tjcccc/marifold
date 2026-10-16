@@ -4,7 +4,7 @@ import { basename, dirname, extname, join, resolve, sep } from 'path';
 import { createLinkedAbort } from '@priest-ai/core';
 import type { MarifoldRuntime } from '../runtime/MarifoldRuntime';
 import type { TelegramChannelConfig } from '../config/ConfigSchema';
-import type { ApprovalDecision, ApprovalRequest, ToolKind } from '../agent/ApprovalPolicy';
+import { approvalTrustFolder, type ApprovalDecision, type ApprovalRequest, type ToolKind } from '../agent/ApprovalPolicy';
 import { proxyDispatcher } from '../util/proxy';
 import { respond } from './respond';
 
@@ -89,15 +89,18 @@ export interface TelegramBridgeDeps {
  * (Telegram is often blocked).
  */
 export class TelegramBridge {
-  /** Profile the bot runs as — surfaced so the service can report it. */
-  readonly profile: string;
+  /** Profile the bot runs as — surfaced so the service can report it. Read
+   * from the config each time, so a profile rename takes effect at once. */
+  get profile(): string { return this.config.profile; }
 
   private readonly runtime: MarifoldRuntime;
   private readonly token: string;
   private readonly config: TelegramChannelConfig;
-  private readonly profileDir: string;
+  private readonly profilesDir: string;
   private readonly log?: (message: string) => void;
   private readonly fetchImpl: typeof fetch;
+
+  private get profileDir(): string { return join(this.profilesDir, this.profile); }
 
   private readonly chatEpoch = new Map<number, number>();
   // Path of the most recently received file per chat, injected into the next
@@ -117,8 +120,7 @@ export class TelegramBridge {
     this.runtime = deps.runtime;
     this.token = deps.token;
     this.config = deps.config;
-    this.profile = deps.config.profile;
-    this.profileDir = join(deps.profilesDir, deps.config.profile);
+    this.profilesDir = deps.profilesDir;
     this.log = deps.log;
     this.fetchImpl = deps.fetchImpl ?? fetch;
   }
@@ -390,13 +392,16 @@ export class TelegramBridge {
     }
 
     const token = randomUUID();
-    const alwaysButton = request.escalatedPath
+    // An escalated path that can't be trusted (home, above it, sensitive) gets no
+    // persistent button: "always allow <kind>" would not cover escalated calls.
+    const trustFolder = approvalTrustFolder(request);
+    const alwaysButton = trustFolder
       ? { text: '🛡 Trust folder', callback_data: `appr:${token}:trust` }
-      : { text: `🛡 Always allow ${request.kind}`, callback_data: `appr:${token}:always` };
+      : request.escalatedPath ? undefined : { text: `🛡 Always allow ${request.kind}`, callback_data: `appr:${token}:always` };
     const keyboard: InlineKeyboard = {
       inline_keyboard: [
         [{ text: '✅ Allow once', callback_data: `appr:${token}:once` }],
-        ...(request.persistable === false ? [] : [[alwaysButton]]),
+        ...(request.persistable === false || !alwaysButton ? [] : [[alwaysButton]]),
         [{ text: '❌ Deny', callback_data: `appr:${token}:deny` }],
       ],
     };
@@ -411,9 +416,9 @@ export class TelegramBridge {
     // broad or sensitive folders; the user still approved this call, so a
     // refused folder falls back to allowing it once.
     let trustRefused: string | undefined;
-    if (action === 'trust' && request.persistable !== false) {
+    if (action === 'trust' && trustFolder) {
       try {
-        const folder = this.runtime.addProfileTrustedFolder(this.profile, dirname(request.escalatedPath as string));
+        const folder = this.runtime.addProfileTrustedFolder(this.profile, trustFolder);
         if (!this.trustedFolders.includes(folder)) { this.trustedFolders.push(folder); }
       } catch (error) {
         trustRefused = errorMessage(error);

@@ -4,7 +4,7 @@ import { coveredByRunGrant, isInsideAny } from '@marifold/core';
 import type { ApprovalDecision, ApprovalRequest, RunGrant, SudoResponse, ToolKind, UserInputHandler, UserInputSubmission } from '@marifold/core';
 import type { AppAction, AppState, NoticeTone } from '../core/appState.js';
 import type { TuiRuntime } from '../core/TuiRuntime.js';
-import { trustTargetFolder, type ApprovalChoice } from './ApprovalModal.js';
+import { canAlwaysAllow, trustTargetFolder, type ApprovalChoice } from './ApprovalModal.js';
 import { errorText } from './appHelpers.js';
 
 interface ApprovalOptions {
@@ -60,7 +60,7 @@ export function useApprovals({ runtime, dispatch, stateRef, notify }: ApprovalOp
     if (choice === 'run' && request.runGrant && !request.sudo) {
       runGrantsRef.current.push({ ...request.runGrant });
     }
-    if (choice === 'always' && request.persistable !== false) {
+    if (choice === 'always' && canAlwaysAllow(request)) {
       const folder = trustTargetFolder(request);
       if (folder) { trustFolderForProfile(folder); }   // escalated write → trust the folder
       else { persistApprovalKind(request.kind); }       // ordinary call → allow this kind
@@ -102,7 +102,7 @@ export function useApprovals({ runtime, dispatch, stateRef, notify }: ApprovalOp
     try {
       const resolved = await runtime.addProfileTrustedFolder(profile, folder);
       sessionTrustedFoldersRef.current.add(resolved);
-      notify(`Trusting ${resolved} for ${profile} (writes here won't ask).`, 'info');
+      notify(`Trusting ${resolved} for ${profile} (reads and writes here won't ask).`, 'info');
     } catch (error) {
       notify(`Could not trust folder: ${errorText(error)}`, 'error');
     }

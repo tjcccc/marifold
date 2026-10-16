@@ -381,7 +381,8 @@ describe('RunRegistry', () => {
     const escalating = fakeTool({
       name: 'write_note',
       kind: 'write',
-      assessRisk: () => ({ escalate: true, persistable: true, reason: 'outside', targetPath: homeFile }),
+      // A run-grant folder the profile layer still refuses to trust.
+      assessRisk: () => ({ escalate: true, persistable: true, reason: 'outside', targetPath: homeFile, runGrantFolder: os.homedir() }),
     });
     const { registry, folders } = makeRegistry([
       response({ toolCalls: [{ id: 'call_0', name: 'write_note', arguments: {} }] }),
@@ -406,7 +407,7 @@ describe('RunRegistry', () => {
     expect(done!.event).toMatchObject({ type: 'done', status: 'completed' });
   });
 
-  it('"trust" without an escalated path is rejected', async () => {
+  it('"trust" without a trustable folder is rejected', async () => {
     const { registry } = makeRegistry([
       response({ toolCalls: [{ id: 'call_0', name: 'write_note', arguments: {} }] }),
       response({ text: 'Done.' }),
@@ -418,7 +419,7 @@ describe('RunRegistry', () => {
     const request = (matched!.event as Extract<AgentEvent, { type: 'approval_request' }>).request;
 
     expect(() => registry.answerApproval(record.id, request.id, 'trust'))
-      .toThrow(/no escalated path/);
+      .toThrow(/no folder that can be trusted/);
     // The prompt is still pending; a follow-up answer resolves it.
     registry.answerApproval(record.id, request.id, 'once');
     await drain(stream);

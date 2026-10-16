@@ -70,6 +70,17 @@
   line-height: 1.55;
 }
 
+.chooseAction {
+  margin-top: 16px;
+  color: var(--brand-text);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.chooseAction:hover {
+  color: var(--text);
+}
+
 @media (max-width: 899px) {
   .layout,
   .mobileNavigation,

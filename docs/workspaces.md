@@ -68,9 +68,11 @@ The TUI switches among already-paired workspaces:
 /workspace leave
 /device list
 /device use host
-/device use <device_id>
+/device use <device name or id>
 /device use auto
 ```
+
+In a joined workspace, typing `@` in the TUI offers the workspace's online executors, as the Web composer does, and an `@device` mention in a message runs it on that device. In Local the TUI runs on this device only, so a message naming a workspace device is refused with the `/workspace join` command to use.
 
 Agent/ask commands and schedule management accept workspace selection:
 

@@ -64,8 +64,8 @@ export class WorkspaceRuns {
     // likewise work on the agent computer, which the host drives, and requests
     // about ~/.marifold, where the host keeps the profiles and skills.
     const management = mentionsSkillManagement(input.userTurn ?? input.objective);
-    const hostOwned = skill || management || mentionsAgentComputer(input.userTurn ?? input.objective)
-      || mentionsMarifoldState(input.userTurn ?? input.objective);
+    const computer = mentionsAgentComputer(input.userTurn ?? input.objective);
+    const hostOwned = skill || management || computer || mentionsMarifoldState(input.userTurn ?? input.objective);
     const mentioned = mention?.[2] ?? mention?.[3];
     const find = (value: string) => devices.filter(d => d.id === value || d.name.toLowerCase() === value.toLowerCase());
     // Accept a possessive ("@office's folder") when no device carries that exact name.
@@ -73,12 +73,14 @@ export class WorkspaceRuns {
     const name = mentioned && possessive !== mentioned && find(mentioned).length === 0 ? possessive : mentioned;
     const matches = name ? find(name) : [];
     if (name && matches.length !== 1) { throw new Error('The mentioned device is unknown or ambiguous. Select a device from the @ menu.'); }
-    // "install abc from @office's ~/x": the mention names where the source is and
-    // the run stays on the host. Any other @device still routes the run there.
-    const sourceMention = mention !== undefined && management && isSkillSourceMention(
+    // "install abc from @office's ~/x" or "copy @office's ~/x to your computer":
+    // the mention names where the source is and the run stays on the host, which
+    // has the skill tools and drives the agent computer. Any other @device
+    // still routes the run there.
+    const sourceMention = mention !== undefined && (computer || (management && isSkillSourceMention(
       input.objective.slice(0, mention.index! + mention[1].length),
       input.objective,
-    );
+    )));
     const explicit = name && !sourceMention ? matches[0]!.id : selection.executionDeviceId;
     const executionDeviceId =
       explicit === 'host'
@@ -116,7 +118,7 @@ export class WorkspaceRuns {
         ? ['Marifold skills are installed, updated, removed, and configured on the workspace host with its manage_skill tool, which this device run does not have. Use delegate_device with host for that work instead of searching Marifold directories on this device; if the source is on this device, name this device in the objective as the source device.']
         : []),
       ...(guestComputer
-        ? ['The agent computer belongs to the workspace host and its computer_* tools run only there. Use delegate_device with host for work on it.']
+        ? ['"Your computer" means the agent computer: an isolated Linux computer the workspace host drives, not the host and not this device. This run has no computer_* tools. Use delegate_device with host and an objective that says "on the agent computer" and names the computer_* tool to use; never write the result to the host\'s own files.']
         : []),
       ...(management && executionDeviceId === host.hostDeviceId
         ? [`Skill sources: when the user names no device, the source path is on the workspace host "${deviceName(host.hostDeviceId)}"; omit source_device. When the user names a device (an @device mention, a device name, or "my current device"), pass it as manage_skill source_device. Say which device the source was read from.`]

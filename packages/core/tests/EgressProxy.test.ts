@@ -1,4 +1,7 @@
+import * as fs from 'node:fs';
 import * as net from 'node:net';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { checkDestination, forbiddenAddress } from '../src/computer/EgressFilter';
 import { createEgressProxy, parseProxyRequest } from '../src/computer/EgressProxy';
@@ -73,5 +76,33 @@ describe('egress proxy through an upstream', () => {
     expect(await ask('GET http://mirrors.example/ubuntu/ HTTP/1.1\r\nHost: mirrors.example\r\n\r\n')).toContain('echo:GET /ubuntu/ HTTP/1.1');
     expect(await ask('CONNECT rebind.example:443 HTTP/1.1\r\n\r\n')).toMatch(/^HTTP\/1\.1 403/);
     expect(seen).toEqual(['CONNECT 93.184.216.34:80 HTTP/1.1']);
+  });
+});
+
+describe('egress proxy upstream file', () => {
+  it('follows a changed upstream file without a restart', async () => {
+    const seen: number[] = [];
+    const upstreamServer = (id: number) => net.createServer((socket) => {
+      socket.once('data', () => { seen.push(id); socket.end('HTTP/1.1 200 Connection established\r\n\r\n'); });
+    });
+    const first = await listen(upstreamServer(1));
+    const second = await listen(upstreamServer(2));
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'marifold-egress-'));
+    const file = path.join(dir, 'upstream');
+    fs.writeFileSync(file, `127.0.0.1:${first}\n`);
+    const proxyPort = await listen(createEgressProxy({ upstreamFile: file, lookup: publicLookup, log: () => undefined }));
+    const connect = () => new Promise<void>((resolve) => {
+      const socket = net.connect(proxyPort, '127.0.0.1', () => socket.write('CONNECT example.com:443 HTTP/1.1\r\n\r\n'));
+      socket.on('data', () => socket.destroy());
+      socket.on('close', () => resolve());
+    });
+    try {
+      await connect();
+      fs.writeFileSync(file, `127.0.0.1:${second}\n`);
+      await connect();
+      expect(seen).toEqual([1, 2]);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

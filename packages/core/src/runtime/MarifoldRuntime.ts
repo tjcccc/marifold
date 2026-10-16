@@ -21,6 +21,7 @@ import { WebSearchTool } from '../agent/tools/WebSearchTool';
 import { AskUserTool } from '../agent/tools/AskUserTool';
 import { InspectAttachmentTool } from '../agent/tools/InspectAttachmentTool';
 import { WriteFileTool } from '../agent/tools/WriteFileTool';
+import { CopyFileTool } from '../agent/tools/CopyFileTool';
 import { SkillManagementTool } from '../agent/tools/SkillManagementTool';
 import { SkillAppContextTool, SkillAppManagementTool } from '../agent/tools/SkillAppTools';
 import { ToolRegistry } from '../agent/ToolRegistry';
@@ -43,6 +44,7 @@ import type { MemoryEntry, MemoryKind, MemoryMutationResult, MemoryRememberResul
 import { ProfileResolver } from '../profiles/ProfileResolver';
 import { ProfileManager } from '../profiles/ProfileManager';
 import type { ProfileFileKind, ProfileInstructionsMigrationResult, ProfileSettingsMigrationResult } from '../profiles/ProfileManager';
+import { renameProfile, type ProfileRenameOutcome } from '../profiles/ProfileRename';
 import { Scheduler } from '../schedule/Scheduler';
 import { RunRegistry } from '../runs/RunRegistry';
 import { TelegramBridge } from '../channels/TelegramBridge';
@@ -330,6 +332,11 @@ export class MarifoldRuntime {
     this.sessionResolver.deleteProfileDisplay(name);
     // Recorded synchronously; the account goes now or on the computer's next use.
     void this.agentComputer.removeAccount(name).catch(() => undefined);
+  }
+
+  /** Rename a profile with its sessions, tasks, schedules, config references and computer account. */
+  renameProfile(from: string, to: string): Promise<ProfileRenameOutcome> {
+    return renameProfile({ loadedConfig: this.options.loadedConfig, profileManager: this.profileManager, agentComputer: this.agentComputer }, from, to);
   }
 
   /** The profile's stored avatar image (path + media type), if any. */
@@ -660,6 +667,7 @@ export class MarifoldRuntime {
     registry.register(new SearchAttachmentTool());
     registry.register(new ReadFileTool());
     registry.register(new WriteFileTool());
+    registry.register(new CopyFileTool());
     const deviceExecution = new DeviceExecution(this.options.loadedConfig.configPath);
     registry.register(new ShellExecTool(deviceExecution));
     registry.register(new SudoExecTool(deviceExecution));

@@ -1,4 +1,5 @@
 import { promises as dns } from 'node:dns';
+import * as fs from 'node:fs';
 import * as https from 'node:https';
 import * as net from 'node:net';
 import * as tls from 'node:tls';
@@ -14,6 +15,9 @@ const DOH = { address: '1.1.1.1', name: 'cloudflare-dns.com' };
 export interface EgressProxyOptions {
   /** `host:port` of the user's own HTTP proxy; absent connects directly. */
   upstream?: string;
+  /** A file holding the upstream `host:port` (empty: connect directly), read
+   * for each connection, so a changed proxy applies without a restart. */
+  upstreamFile?: string;
   lookup?: Lookup;
   log?: (line: string) => void;
 }
@@ -57,12 +61,19 @@ function refuse(socket: net.Socket, status: string, reason: string): void {
 
 export function createEgressProxy(options: EgressProxyOptions = {}): net.Server {
   const log = options.log ?? (line => process.stdout.write(`${line}\n`));
-  const upstream = options.upstream ? parseUpstream(options.upstream) : undefined;
   // Through an upstream, names are resolved over DNS-over-HTTPS through that
   // same upstream (local DNS may be poisoned where a proxy is needed), and the
   // tunnel is opened to the checked address, so the upstream never resolves a
   // name itself and DNS rebinding cannot steer it to a local address.
-  const lookup = options.lookup ?? (upstream ? upstreamLookup(upstream) : undefined);
+  let route: { value: string; upstream?: { host: string; port: number }; lookup?: Lookup } | undefined;
+  const currentRoute = () => {
+    const value = options.upstreamFile ? readUpstream(options.upstreamFile) : options.upstream ?? '';
+    if (route?.value !== value) {
+      const upstream = value ? parseUpstream(value) : undefined;
+      route = { value, upstream, lookup: options.lookup ?? (upstream ? upstreamLookup(upstream) : undefined) };
+    }
+    return route;
+  };
   return net.createServer((client) => {
     client.on('error', () => client.destroy());
     let buffered = Buffer.alloc(0);
@@ -85,6 +96,7 @@ export function createEgressProxy(options: EgressProxyOptions = {}): net.Server 
   async function forward(client: net.Socket, head: Buffer, rest: Buffer): Promise<void> {
     const request = parseProxyRequest(head.toString('latin1'));
     if (!request) { return refuse(client, '400 Bad Request', 'Only HTTP CONNECT and http:// proxy requests are supported.'); }
+    const { upstream, lookup } = currentRoute();
     const check = await checkDestination(request.host, true, lookup);
     if (!check.allowed) {
       log(`DENY ${request.method} ${request.host}:${request.port} (${check.reason})`);
@@ -202,6 +214,14 @@ function upstreamLookup(upstream: { host: string; port: number }): Lookup {
   };
 }
 
+function readUpstream(file: string): string {
+  try {
+    return fs.readFileSync(file, 'utf8').trim();
+  } catch {
+    return '';
+  }
+}
+
 function parseUpstream(value: string): { host: string; port: number } {
   const url = new URL(/^[a-z]+:\/\//i.test(value) ? value : `http://${value}`);
   if (url.protocol !== 'http:' || !url.port) { throw new Error('The upstream proxy must be http://host:port.'); }
@@ -210,7 +230,8 @@ function parseUpstream(value: string): { host: string; port: number } {
 
 if (require.main === module) {
   const port = Number(process.env.EGRESS_PORT ?? 8080);
-  createEgressProxy({ upstream: process.env.EGRESS_UPSTREAM || undefined }).listen(port, '0.0.0.0', () => {
-    process.stdout.write(`marifold egress proxy on :${port}${process.env.EGRESS_UPSTREAM ? ` via ${process.env.EGRESS_UPSTREAM}` : ''}\n`);
+  const upstreamFile = process.env.EGRESS_UPSTREAM_FILE || undefined;
+  createEgressProxy({ upstream: process.env.EGRESS_UPSTREAM || undefined, upstreamFile }).listen(port, '0.0.0.0', () => {
+    process.stdout.write(`marifold egress proxy on :${port}${upstreamFile ? ` (upstream from ${upstreamFile})` : ''}\n`);
   });
 }

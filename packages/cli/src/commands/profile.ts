@@ -1,6 +1,10 @@
+import * as path from 'node:path';
 import type { Command } from 'commander';
+import { createApiClient } from '@marifold/client';
 import { AgentComputer, ConfigManager, MarifoldError, ProfileManager } from '@marifold/core';
-import type { MemoryEntry } from '@marifold/core';
+import type { MemoryEntry, ProfileRenameOutcome } from '@marifold/core';
+import { getActiveServiceProcess } from '../service/ServiceProcess';
+import { localServiceSettings } from './workspace';
 import { InteractivePrompt } from '../input/InteractivePrompt';
 import { PromptAbortError, isPromptAbortError } from '../input/PromptAbort';
 import type { ConsolePrinter } from '../output/ConsolePrinter';
@@ -120,20 +124,23 @@ export function registerProfileCommand(program: Command, printer: ConsolePrinter
 
   profile
     .command('rename')
-    .description('Rename a stored profile.')
+    .description('Rename a profile with its sessions. Run it again with the same names to move sessions an earlier rename left behind.')
     .argument('<from>', 'Current profile name.')
     .argument('<to>', 'New profile name (lowercase letters, numbers, underscores, and hyphens; starts with a letter).')
     .action(async (from: string, to: string) => {
       try {
         const loadedConfig = loadConfig(program);
-        const result = new ProfileManager(loadedConfig.config.paths.profilesDir).rename(from, to);
-        await new AgentComputer(loadedConfig.configPath).renameAccount(from, to);
-        if (loadedConfig.config.default.profile === from) {
-          new ConfigManager(loadedConfig).setDefaultProfile(to);
-          process.stdout.write(`Default profile updated to '${to}'.\n`);
-        }
+        // A running service holds the config and runs in memory, so it does the rename.
+        const service = getActiveServiceProcess();
+        const result = service && path.resolve(service.configPath) === path.resolve(loadedConfig.configPath)
+          ? (await createApiClient(localServiceSettings(loadedConfig)).request<{ rename: ProfileRenameOutcome }>(
+            'POST', `/v1/profiles/${encodeURIComponent(from)}/rename`, { to })).rename
+          : await renameInProcess(program, from, to);
         process.stdout.write(`Renamed profile '${result.from}' to '${result.to}'.\n`);
-        process.stdout.write(`Moved ${result.fromPath} to ${result.toPath}\n`);
+        if (result.fromPath && result.toPath) { process.stdout.write(`Moved ${result.fromPath} to ${result.toPath}\n`); }
+        process.stdout.write(`Moved ${result.sessions} session(s), ${result.tasks} task record(s), ${result.schedules} schedule(s).\n`);
+        if (result.defaultProfile) { process.stdout.write(`Default profile updated to '${result.to}'.\n`); }
+        if (result.telegram) { process.stdout.write(`Telegram channel now runs as '${result.to}'.\n`); }
       } catch (error) {
         printer.printError(error);
         process.exitCode = 1;
@@ -238,4 +245,13 @@ function parsePositiveInteger(value: string): number {
   const parsed = Number.parseInt(value, 10);
   if (!Number.isFinite(parsed) || parsed <= 0) { throw new Error('Expected a positive integer.'); }
   return parsed;
+}
+
+async function renameInProcess(program: Command, from: string, to: string): Promise<ProfileRenameOutcome> {
+  const runtime = createRuntime(program);
+  try {
+    return await runtime.renameProfile(from, to);
+  } finally {
+    runtime.close();
+  }
 }

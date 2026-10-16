@@ -47,9 +47,9 @@ export interface CompletionItem {
 
 /**
  * Multi-line input with a block cursor, history, readline shortcuts,
- * a live completion menu for `/commands` and `$skills`, and image-drop tokens.
+ * a live completion menu for `/commands`, `$skills` and `@devices`, and image-drop tokens.
  *
- * - Typing `/` or `$` opens a menu of matching commands/skills with their
+ * - Typing `/`, `$` or `@` opens a menu of matching commands/skills/devices with their
  *   descriptions: ↑/↓ move, Tab/Enter accept, Esc dismisses.
  * - Dropping an image path inserts a green `[image #n]` token (indices reset
  *   each submitted message) and attaches the file to the next message.
@@ -68,6 +68,7 @@ export function InputBox({
   history,
   commands,
   skills,
+  devices = [],
   resizing = false,
 }: {
   onSubmit: (value: string, images: PromptImage[]) => void;
@@ -76,6 +77,8 @@ export function InputBox({
   history: InputHistoryEntry[];
   commands: CompletionItem[];
   skills: CompletionItem[];
+  /** Workspace devices for `@` mentions (empty outside a workspace). */
+  devices?: CompletionItem[];
   /** While the terminal is resizing, collapse to a single line and ignore
    * typing so Ink's erase math can't desync and duplicate the input box. */
   resizing?: boolean;
@@ -150,7 +153,7 @@ export function InputBox({
   const activeToken = tokens.find(token => cursor > token.start && cursor <= token.end);
   const sigil = activeToken?.sigil ?? '';
   const partial = activeToken?.name ?? '';
-  const pool = sigil === '/' ? commands : sigil === '$' ? skills : [];
+  const pool = sigil === '/' ? commands : sigil === '$' ? skills : sigil === '@' ? devices : [];
   const suggestions = sigil
     ? pool.filter(item => item.name.startsWith(partial)).slice(0, mouseEnabled ? Math.max(1, Math.min(MENU_LIMIT, Math.floor(rows / 4))) : MENU_LIMIT)
     : [];

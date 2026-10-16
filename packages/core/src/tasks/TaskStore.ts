@@ -151,6 +151,22 @@ export class TaskStore {
     return tasks.map(task => this.toSummary(task));
   }
 
+  /** Point a renamed profile's task records at its new name; unreadable
+   * files are skipped, and `updatedAt` stays as it was. */
+  reassignProfile(from: string, to: string): number {
+    if (!fs.existsSync(this.tasksDir)) { return 0; }
+    let moved = 0;
+    for (const entry of fs.readdirSync(this.tasksDir, { withFileTypes: true })) {
+      if (!entry.isFile() || !entry.name.endsWith('.json')) { continue; }
+      let task: TaskState;
+      try { task = this.readFile(path.join(this.tasksDir, entry.name)); } catch { continue; }
+      if (task.profile !== from) { continue; }
+      this.write({ ...task, profile: to });
+      moved += 1;
+    }
+    return moved;
+  }
+
   get(taskId: string): TaskState | undefined {
     this.assertSafeTaskId(taskId);
     const taskPath = this.taskPath(taskId);

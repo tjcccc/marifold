@@ -28,6 +28,7 @@ import { ReadAttachmentTool } from '../agent/tools/ReadAttachmentTool';
 import { SearchAttachmentTool } from '../agent/tools/SearchAttachmentTool';
 import { ReadFileTool } from '../agent/tools/ReadFileTool';
 import { WriteFileTool } from '../agent/tools/WriteFileTool';
+import { CopyFileTool } from '../agent/tools/CopyFileTool';
 import { ShellExecTool } from '../agent/tools/ShellExecTool';
 import { expandHome, marifoldHome } from './WorkspacePaths';
 import type { WorkspaceOperationContext } from './WorkspaceManager';
@@ -40,6 +41,7 @@ export function executionTools(device?: DeviceExecution): AgentTool[] {
     new SearchAttachmentTool(),
     new ReadFileTool(),
     new WriteFileTool(),
+    new CopyFileTool(),
     new ShellExecTool(device),
     new SudoExecTool(device),
     new ShellJobStatusTool(device),

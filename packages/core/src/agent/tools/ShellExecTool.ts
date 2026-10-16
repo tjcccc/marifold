@@ -21,7 +21,7 @@ export class ShellExecTool implements AgentTool {
       'When to use: run a focused test, build, formatter, program, or filesystem/process operation that dedicated tools cannot perform.',
       'When NOT to use: scoped text reads/writes or isolated Python package installs that dedicated tools support, or unnecessary demonstration commands. Scoped commands cannot access the network. Use full access only when the requested device operation needs account-level capabilities.',
       'Scoped access can write only the working directory, configured trusted folders, and private run directories—even after approval. Check shell_job_status for the device mode before requesting full access.',
-      'For an explicit output file elsewhere, use write_file instead of shell redirection.',
+      'For an explicit output file elsewhere, use write_file instead of shell redirection, and copy_file instead of cp or mv to reach files outside those folders (including earlier runs\' outputs).',
     ].join(' '),
     parameters: {
       type: 'object',

@@ -39,6 +39,10 @@ export interface AppProps {
   workspaceNotice?: string;
   workspaceCommand?: (args: string) => Promise<string>;
   deviceCommand?: (args: string) => Promise<string>;
+  /** Workspace devices offered for `@` mentions. */
+  devices?: CompletionItem[];
+  /** A reason to refuse a message before it runs (an @device outside its workspace). */
+  checkPrompt?: (text: string) => Promise<string | undefined>;
   loadedConfig: LoadedMarifoldConfig;
   initial: {
     profile: string;
@@ -66,7 +70,7 @@ type Overlay =
   | SessionsOverlay
   | { type: 'skills'; scope: SkillScope; profile?: string; items: SelectItem[]; title: string; emptyHint: string[] };
 
-export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCommand, fullscreen = false, workspaceNotice }: AppProps): React.ReactElement {
+export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCommand, devices, checkPrompt, fullscreen = false, workspaceNotice }: AppProps): React.ReactElement {
   const { exit, suspendTerminal } = useApp();
   const [state, dispatch] = useReducer(
     appReducer,
@@ -623,13 +627,16 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
         case 'skill':
           runSkill(parsed.name, parsed.argv);
           return;
-        case 'text':
+        case 'text': {
+          const refusal = await checkPrompt?.(parsed.text);
+          if (refusal) { notify(refusal, 'warn'); return; }
           startTextRun(parsed.text);
           return;
+        }
       }
     } catch (error) { notify(errorText(error), 'error'); }
     finally { submittingRef.current = false; }
-  }, [runtime, pendingSkill, fillSkillVariable, commandContext, notify, runSkill, startTextRun, steer]);
+  }, [runtime, pendingSkill, fillSkillVariable, commandContext, notify, runSkill, startTextRun, steer, checkPrompt]);
 
   const handleInterrupt = useCallback((reason: 'ctrl-c' | 'escape') => {
     if (stateRef.current.running) {
@@ -769,6 +776,7 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
           history={history}
           commands={commandItems}
           skills={skillItems}
+          devices={devices}
           resizing={resizing && !fullscreen}
           placeholder={pendingSkill ? `value for ${pendingSkill.missing[pendingSkill.index]}` : planNext ? 'planned · your next message will be planned step-by-step' : 'message the agent · /help'}
         />
