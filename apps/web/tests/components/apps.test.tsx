@@ -700,6 +700,8 @@ describe('AppsScreen', () => {
     expect(await screen.findByText('Which layout should I use?')).toBeTruthy();
     expect(request.mock.calls.filter(([, path]) => path === '/v1/apps/translator/instances')).toHaveLength(1);
     expect(request).toHaveBeenCalledWith('GET', '/v1/app-instances/app_builder');
+    // The sheet renders before the open settles; answers are ignored while it is busy.
+    await waitFor(() => expect(screen.getByText('Studio').closest('fieldset')?.disabled).toBe(false));
     fireEvent.click(screen.getByText('Studio'));
     fireEvent.click(screen.getByRole('button', { name: /Submit answers/ }));
 
