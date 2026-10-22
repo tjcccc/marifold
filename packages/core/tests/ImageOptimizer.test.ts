@@ -51,6 +51,9 @@ describe('prepareImageInputs', () => {
       }).png().toBuffer());
       const result = await prepareImageInputs([{ path: file }]);
       expect(result.images).toEqual([{ path: file, mediaType: 'image/png' }]);
+      // Workspace clients must send bytes; the remote device cannot read this path.
+      const inlined = await prepareImageInputs([{ path: file }], { inline: true });
+      expect(inlined.images).toEqual([{ data: (await fs.readFile(file)).toString('base64'), mediaType: 'image/png' }]);
     } finally {
       await fs.rm(dir, { recursive: true, force: true });
     }

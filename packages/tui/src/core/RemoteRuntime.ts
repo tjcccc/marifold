@@ -159,7 +159,10 @@ export class RemoteRuntime implements TuiRuntime {
   private async *run(options: AgentRunOptions): AsyncGenerator<AgentEvent, void, unknown> {
     const { signal, approvalHandler, userInputHandler, steering, ...input } = options;
     if (signal?.aborted) { return; }
-    if (input.images?.length) { input.images = (await prepareImageInputs(input.images)).images; }
+    // The workspace service cannot read this device's files, so paths become bytes here.
+    if (input.images?.length) {
+      input.images = (await prepareImageInputs(input.images, { inline: true, optimize: input.originalImages !== true })).images;
+    }
     const { run } = await this.api.request<{ run: RunRecord }>('POST', '/v1/runs', input);
     const post = (suffix: string, body: unknown) => this.api.request('POST', `/v1/runs/${run.id}/${suffix}`, body);
     const cancel = () => {

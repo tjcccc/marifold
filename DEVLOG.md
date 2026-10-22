@@ -2,6 +2,11 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-10-22 — v0.95.1 — TUI images reach a remote workspace
+
+- **TUI image attach in a workspace.** Attaching an image while connected to another device's workspace failed with "Expected images[0] to set exactly one of data or url." Small images (and `/attach-original`) were kept as a local file path, which the remote service rejects and could not read anyway. `prepareImageInputs` gains `inline`, and `RemoteRuntime` uses it so images always cross as bytes; it also honors `/attach-original` instead of optimizing on the client. Local runs, CLI and chat still pass paths. The Web UI was unaffected (the browser always sends bytes).
+- Validation: lint, core and TUI typecheck, `ImageOptimizer` (new inline assertion) and `RemoteRuntime` tests. Not verified live on OrbStack.
+
 ## 2026-10-16 — v0.95.0 — Profile rename keeps sessions, copy_file, TUI @device, instant proxy save
 
 - **Profile rename keeps its sessions.** Sessions are filed under the profile name (`sessions.profile_name`), and rename only moved the folder, so a renamed profile looked empty while `/agent/<old>` still listed them. `profiles/ProfileRename` moves the sessions and the profile pin in one transaction (the folder is moved back if that fails), plus task records, schedules, `default.profile`, the Telegram channel profile (the bridge reads it live) and the agent computer account. New `POST /v1/profiles/:name/rename`, which `marifold profile rename` uses while the service runs (in process otherwise); active runs must be cancelled first. Running it again on an already-renamed profile moves leftover records; `marifold doctor` lists sessions whose profile is gone with that command.

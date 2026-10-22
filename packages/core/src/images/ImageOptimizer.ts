@@ -35,6 +35,8 @@ export interface PreparedImages {
 export interface PrepareImageOptions {
   /** Validate and preserve original encoded bytes for this request. */
   optimize?: boolean;
+  /** Return local paths as base64 data so images can cross a service or device boundary. */
+  inline?: boolean;
 }
 
 /**
@@ -114,7 +116,7 @@ export async function prepareImageInputs(
 
     if (!shouldOptimize) {
       const mediaType = sourceMediaType ?? input.mediaType;
-      images.push(input.path ? { path: input.path, ...(mediaType ? { mediaType } : {}) } : {
+      images.push(input.path && !options.inline ? { path: input.path, ...(mediaType ? { mediaType } : {}) } : {
         data: source.toString('base64'),
         ...(mediaType ? { mediaType } : {}),
       });
@@ -167,7 +169,7 @@ export async function prepareImageInputs(
 
     if (candidate.length >= source.length && !mustConvert) {
       const mediaType = sourceMediaType ?? input.mediaType;
-      images.push(input.path ? { path: input.path, ...(mediaType ? { mediaType } : {}) } : {
+      images.push(input.path && !options.inline ? { path: input.path, ...(mediaType ? { mediaType } : {}) } : {
         data: source.toString('base64'),
         ...(mediaType ? { mediaType } : {}),
       });
