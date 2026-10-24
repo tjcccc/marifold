@@ -24,19 +24,20 @@ class InstallerTests(unittest.TestCase):
         (source / ".env").write_text("UNRELATED_SECRET=do-not-copy")
         return source
 
-    def test_dedicated_install_is_private_persistent_and_exclusive(self):
+    def test_install_is_private_persistent_and_exclusive(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             source = self.package(root)
             target = root / "install"
-            installer.prepare(source, target, None, "bridge.example.com")
+            installer.prepare(source, target, "bridge.example.com")
             config = json.loads((target / "compose.json").read_text())
             self.assertEqual(config["services"]["bridge"]["restart"], "unless-stopped")
-            self.assertEqual(config["services"]["redis"]["network_mode"], "host")
-            self.assertIn("redis-data:/data", config["services"]["redis"]["volumes"])
-            self.assertIn("bind 127.0.0.1", (target / "redis.conf").read_text())
-            self.assertIn("appendonly yes", (target / "redis.conf").read_text())
-            self.assertIn("maxmemory-policy noeviction", (target / "redis.conf").read_text())
+            self.assertEqual(config["services"]["bridge"]["volumes"], ["bridge-data:/app/data"])
+            self.assertIn("bridge-data", config["volumes"])
+            self.assertEqual(sorted(config["services"]), ["bridge", "https"])
+            self.assertIn("MARIFOLD_BRIDGE_DATABASE=/app/data/bridge.sqlite", (target / "bridge.env").read_text())
+            self.assertIn("chown node:node /app/data", (target / "package/Dockerfile").read_text())
+            self.assertEqual(json.loads((target / "installation.json").read_text())["schema"], installer.SCHEMA)
             self.assertEqual(target.stat().st_mode & 0o777, 0o700)
             self.assertEqual((target / "bridge.env").stat().st_mode & 0o777, 0o600)
             token = (target / "registration-token").read_text().strip()
@@ -44,27 +45,21 @@ class InstallerTests(unittest.TestCase):
             self.assertIn(token, (target / "bridge.env").read_text())
             self.assertFalse((target / "package/.env").exists())
             with self.assertRaises(FileExistsError):
-                installer.prepare(source, target, None, None)
+                installer.prepare(source, target, None)
             self.assertEqual((target / "registration-token").read_text().strip(), token)
 
-    def test_existing_redis_and_ingress_do_not_create_replacements(self):
+    def test_existing_ingress_does_not_create_caddy(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             source = self.package(root)
             target = root / "install"
-            url = "redis://marifold:abc%24def@127.0.0.1:6379/1"
-            installer.prepare(source, target, installer.validate_redis(url), None)
+            installer.prepare(source, target, None)
             config = json.loads((target / "compose.json").read_text())
             self.assertEqual(list(config["services"]), ["bridge"])
-            self.assertEqual(config["volumes"], {})
-            self.assertIn(url, (target / "bridge.env").read_text())
-            self.assertFalse((target / "redis.conf").exists())
+            self.assertEqual(config["volumes"], {"bridge-data": {}})
             self.assertFalse((target / "Caddyfile").exists())
 
     def test_invalid_inputs_rejected(self):
-        for url in ["https://example.com", "redis://example.com/0", "redis://localhost/0\nINJECT=yes", "redis://localhost/not-a-db", "rediss://example.com:bad/0", "redis://a:'x@localhost/0"]:
-            with self.subTest(url=url), self.assertRaises(ValueError):
-                installer.validate_redis(url)
         for domain in ["https://example.com", "example.com/path", "foo\nbar.com", "*.example.com", "bad..example.com"]:
             with self.subTest(domain=domain), self.assertRaises(ValueError):
                 installer.validate_domain(domain)
@@ -76,7 +71,7 @@ class InstallerTests(unittest.TestCase):
             (source / "dist/leak").symlink_to(source / ".env")
             target = root / "install"
             with self.assertRaises(ValueError):
-                installer.prepare(source, target, None, None)
+                installer.prepare(source, target, None)
             self.assertFalse(target.exists())
 
     def test_start_waits_for_health_and_never_prints_token(self):
@@ -93,7 +88,7 @@ class InstallerTests(unittest.TestCase):
     def update_fixture(self, root):
         source = self.package(root)
         target = root / "install"
-        installer.prepare(source, target, None, None)
+        installer.prepare(source, target, None)
         dockerfile = target / "package/Dockerfile"
         dockerfile.write_text(dockerfile.read_text().replace("node:24-bookworm-slim", "mirror.example.com/node:24-bookworm-slim"))
         return source, target
@@ -108,7 +103,7 @@ class InstallerTests(unittest.TestCase):
     def test_update_preserves_configuration_mirror_and_other_services(self):
         with tempfile.TemporaryDirectory() as temporary:
             source, target = self.update_fixture(Path(temporary))
-            retained = {name: (target / name).read_bytes() for name in ("bridge.env", "registration-token", "redis.conf", "installation.json")}
+            retained = {name: (target / name).read_bytes() for name in ("bridge.env", "registration-token", "installation.json")}
             before = json.loads((target / "compose.json").read_text())
             (source / "dist/serve.js").write_text("// updated bridge")
             with patch.object(installer, "run", side_effect=self.docker) as command, contextlib.redirect_stdout(io.StringIO()):
@@ -118,7 +113,7 @@ class InstallerTests(unittest.TestCase):
             self.assertEqual((package / "dist/serve.js").read_text(), "// updated bridge")
             self.assertIn("mirror.example.com", (package / "Dockerfile").read_text())
             self.assertFalse((package / ".env").exists())
-            self.assertEqual(after["services"]["redis"], before["services"]["redis"])
+            self.assertEqual(after["services"]["bridge"]["volumes"], before["services"]["bridge"]["volumes"])
             self.assertEqual(after["volumes"], before["volumes"])
             for name, contents in retained.items():
                 self.assertEqual((target / name).read_bytes(), contents)

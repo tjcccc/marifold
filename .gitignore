@@ -12,3 +12,7 @@ output/search-benchmark*.json
 
 # Claude Code agent worktrees
 .claude/worktrees/
+
+# Local Cloudflare Workers dev state and secrets (wrangler dev)
+.wrangler/
+.dev.vars

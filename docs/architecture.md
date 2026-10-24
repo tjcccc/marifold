@@ -7,7 +7,7 @@ marifold is a local-first, single-owner personal AI workspace: one person runs i
 - **CLI process** (`marifold …`): one-shot commands, `marifold agent`, and the TUI. Bare `marifold` loads the ESM TUI through a dynamic `import()` and runs it in the same process, either against a local `MarifoldRuntime` or against the local service as a remote runtime.
 - **Service process** (`marifold service`): the Fastify API, the static Web UI, the scheduler, the Telegram bridge, the run registry, and the workspace manager and executor. It binds to loopback by default; non-loopback binds accept only private-network peers.
 - **Web UI** (browser): a static React app served by the service; it reaches everything over the service HTTP/SSE API.
-- **Workspace bridge** (`apps/bridge`, a separate Node server, deployed with Redis): relays end-to-end encrypted messages between the devices of one workspace. It authenticates members and never sees message contents.
+- **Workspace bridge** (`apps/bridge`, deployed separately as a Cloudflare Worker with one Durable Object, or as a Node server): relays end-to-end encrypted messages between the devices of one workspace, with SQLite state. It authenticates members and never sees message contents.
 - **Device job workers**: detached Node processes that run approved full-access and `sudo_exec` shell jobs and record their results on disk, so jobs survive disconnects and service restarts.
 - **Providers**: model APIs (Ollama, OpenAI-compatible, Anthropic, ChatGPT, xAI, Copilot) reached through `@priest-ai/core`.
 
@@ -22,7 +22,7 @@ Each package is imported only through its `src/index.ts` entry point.
 - `packages/cli` (`marifold`): command parsing and terminal output; launches the TUI and the service.
 - `packages/workspace-protocol` (`@marifold/workspace-protocol`): wire types, limits, identities, signing, membership certificates, and encryption shared by core and the bridge. Must stay free of runtime and transport code.
 - `apps/web` (`@marifold/web`): the browser renderer. Imports `@marifold/core` only for types, only in `src/api/types.ts`.
-- `apps/bridge` (`@marifold/bridge`): the relay server. Depends only on `workspace-protocol`.
+- `apps/bridge` (`@marifold/bridge`): the relay server. `src/relay` is the platform-neutral, synchronous relay (routing, authentication, revocation, delivery) over a small SQLite port; `src/node` (Node `http` + `ws` + `node:sqlite`) and `src/cloudflare` (Worker + Durable Object, bundled by esbuild into `dist/cloudflare/worker.js`) are thin adapters. Depends only on `workspace-protocol`.
 - `@priest-ai/core` (external, `../priest-typescript`): model-side primitives.
 
 `@priest-ai/core` remains marifold-agnostic. marifold depends on it; it does not know about marifold. Since 2.4 it carries the model-side agent primitives — native tool-call transport, the `runWithTools` loop helper, structured stream events, cancellation, and image input. In 2.8 it also owns the OpenAI Responses transport, provider-neutral reasoning configuration, safe reasoning summaries, opaque continuation, and cached/reasoning token accounting. marifold owns concrete tools, approval policy, task state, and rendering. Priest owns talking to models; marifold owns acting on the world.
@@ -36,7 +36,7 @@ packages/tui  -> packages/core (local runtime and types)
 packages/core -> @priest-ai/core -> providers
 apps/web      -> packages/client (runtime); packages/core (types only)
 apps/bridge   -> packages/workspace-protocol
-packages/cli  -> apps/bridge (build-time only: staged for `marifold workspace bridge install`)
+packages/cli  -> apps/bridge (build-time only: staged for `marifold workspace bridge install` and `deploy cloudflare`)
 ```
 
 Enforcement: package manifests (pnpm resolves only declared dependencies), Biome `noImportCycles`, a `noRestrictedImports` override for `apps/web`, and the file-size ratchet in `pnpm lint`. `packages/core` has no dependency on the service, TUI, CLI, client, Web UI, or bridge.
@@ -148,6 +148,7 @@ Task state is stored as JSON files under `paths.tasks_dir`, defaulting to `~/.ma
 - 2026-10-13: a workspace belongs to one person, so other devices may reach Marifold state, but the rule follows the sending device: its own local request has no hard block on `~/.marifold` (approval each time), while a request from another workspace device gets default deny with a readable allowlist (`profiles`, `skills`, `apps`, `schedules`, `tasks`, `prompts`, `runs` and their configured paths; approval each time, never writable), because `config.toml`, workspace keys and the sessions database hold credentials and self-escalation paths. The agent computer is shared the same way: other full members see it and give or remove profile access; its lifecycle and settings stay with the host. Both are decided from the bridge-authenticated sender, not the client.
 - 2026-10-13: Think is a global switch rather than a per-profile setting, because profiles are faces of one agent and the effort level is a property of the request, not the persona. It asks for medium or low effort, never high, because marifold is not a coding agent. Effort fields are verified only for the providers in use (ChatGPT, xAI, Bailian, Ollama, plus Anthropic and Copilot); a one-time retry covers models that reject them instead of a per-model capability table.
 - 2026-10-14: Think was renamed Deep with no alias, because low and medium both reason; the switch sets depth, not whether the model thinks. `marifold doctor --fix` renames `[default].think` and SkillApp `think:` options; `/think` and the SkillApp compiler say it was renamed. The sessions database keeps its `think` metrics column.
+- 2026-10-24: the bridge is one relay instance with SQLite state; Redis and the Vercel adapter were removed. A personal bridge needs no horizontal scaling, and SQLite runs both in a Cloudflare Durable Object (free plan, no server) and next to a Node process. Frames delivered to an online device are held in memory until acknowledged (up to five seconds) and stored only otherwise, which keeps Durable Object writes near zero; a pending hold timer also keeps the object from hibernating. Each device chooses its own bridge proxy per workspace connection, with no `HTTPS_PROXY` fallback.
 - 2026-10-09: Biome enforces mechanical rules because typescript-eslint cannot use the TypeScript 7 native compiler; route bodies moved out of `MarifoldService` into route modules.
 
 ## Future areas

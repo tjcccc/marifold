@@ -8,7 +8,7 @@ import { randomBytes } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ArtifactWebRtc, DeviceExecution, encryptSudoPassword, resolveAgentConfig } from '@marifold/core';
-import { createBridge, MemoryRelayStore } from '../../../apps/bridge/src';
+import { createBridge } from '../../../apps/bridge/src';
 import { createMarifoldService } from '../src';
 import { remoteExecution, workspaceApiPath, workspaceHostOnlyRequest } from '../src/WorkspaceRoutes';
 import { cleanupTempDirs, fixtureLoadedConfig, tempDir } from './helpers';
@@ -46,7 +46,7 @@ function service(dir: string, guest = false) {
   return server;
 }
 async function bridge() {
-  const b = createBridge(new MemoryRelayStore(), 'a'.repeat(32));
+  const b = createBridge({ registrationToken: 'a'.repeat(32), database: ':memory:' });
   bridges.push(b);
   await new Promise<void>((r) => b.listen(0, '127.0.0.1', r));
   return `http://127.0.0.1:${(b.address() as { port: number }).port}`;
@@ -81,6 +81,23 @@ async function paired(executor = false) {
   };
 }
 describe('device-hosted workspaces', () => {
+  it('hosts on the bridge this device deployed without exposing its saved token', async () => {
+    const home = tempDir();
+    vi.stubEnv('HOME', home);
+    const host = service(tempDir());
+    const url = await bridge();
+    const deploy = path.join(home, '.marifold', 'bridge', 'cloudflare');
+    fs.mkdirSync(deploy, { recursive: true });
+    fs.writeFileSync(path.join(deploy, 'deployment.json'), JSON.stringify({ url: `${url}/` }));
+    fs.writeFileSync(path.join(deploy, 'registration-token'), `${'a'.repeat(32)}\n`);
+    const listed = await host.inject({ method: 'GET', url: '/v1/workspaces' });
+    expect(listed.json().savedBridgeUrl).toBe(url);
+    expect(listed.body).not.toContain('a'.repeat(32));
+    const other = await host.inject({ method: 'POST', url: '/v1/workspaces', payload: { name: 'Home', bridgeUrl: 'http://127.0.0.1:9' } });
+    expect(other.statusCode).toBe(400);
+    const created = await post(host, '/v1/workspaces', { name: 'Home', bridgeUrl: url });
+    expect(created.invitation).toBeTruthy();
+  });
   it.each(['host', 'guest'] as const)('preserves session ownership through the %s workspace facade', async device => {
     const p = await paired();
     const facade = p[device];

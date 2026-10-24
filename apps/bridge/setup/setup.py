@@ -2,7 +2,6 @@
 """Interactive Linux installer for a prepared Marifold bridge package."""
 
 import argparse
-import getpass
 import json
 import os
 from pathlib import Path
@@ -13,10 +12,11 @@ import socket
 import subprocess
 import sys
 import tempfile
-from urllib.parse import urlsplit
 
 PROJECT = "marifold-personal-bridge"
 DEFAULT_TARGET = Path("/opt/marifold-bridge")
+# Installation metadata version. Schema 1 installs used Redis and are not upgraded in place.
+SCHEMA = 2
 
 
 def run(args, cwd=None):
@@ -25,23 +25,6 @@ def run(args, cwd=None):
         # Tool output can contain supplied connection strings. Keep it off the terminal.
         raise RuntimeError(f"{args[0]} failed (exit {result.returncode}). Configuration is retained; see HOSTING.md for troubleshooting.")
     return result.stdout.strip()
-
-
-def validate_redis(value):
-    if any(c.isspace() or c in "'\"\\" for c in value):
-        raise ValueError("Redis URL must contain no whitespace or quotes; percent-encode password characters.")
-    try:
-        parsed = urlsplit(value)
-        port = parsed.port
-        valid = parsed.scheme in ("redis", "rediss") and parsed.hostname and not parsed.query and not parsed.fragment
-        valid = valid and re.fullmatch(r"/\d+|", parsed.path) and (port is None or 0 < port < 65536)
-    except ValueError:
-        valid = False
-    if not valid:
-        raise ValueError("Use a Redis TCP URL, optionally ending in /database_number.")
-    if parsed.scheme == "redis" and parsed.hostname not in ("127.0.0.1", "localhost", "::1"):
-        raise ValueError("Use rediss:// for Redis outside this server's loopback network.")
-    return value
 
 
 def validate_domain(value):
@@ -72,7 +55,7 @@ def write(path, value, mode=0o600):
     path.chmod(mode)
 
 
-def compose_config(dedicated, domain):
+def compose_config(domain):
     bridge = {
         "build": {"context": "./package"},
         "network_mode": "host",
@@ -80,6 +63,8 @@ def compose_config(dedicated, domain):
         "env_file": ["./bridge.env"],
         "user": "node",
         "read_only": True,
+        # SQLite: host registrations and revocations must survive container rebuilds.
+        "volumes": ["bridge-data:/app/data"],
         "cap_drop": ["ALL"],
         "security_opt": ["no-new-privileges:true"],
         "healthcheck": {
@@ -88,16 +73,7 @@ def compose_config(dedicated, domain):
         },
         "logging": {"driver": "json-file", "options": {"max-size": "10m", "max-file": "3"}},
     }
-    config = {"name": PROJECT, "services": {"bridge": bridge}, "volumes": {}}
-    if dedicated:
-        config["services"]["redis"] = {
-            "image": "redis:8.8", "network_mode": "host", "restart": "unless-stopped",
-            "command": ["redis-server", "/usr/local/etc/redis/redis.conf"],
-            "volumes": ["./redis.conf:/usr/local/etc/redis/redis.conf:ro", "redis-data:/data"],
-            "logging": bridge["logging"],
-        }
-        bridge["depends_on"] = ["redis"]
-        config["volumes"]["redis-data"] = {}
+    config = {"name": PROJECT, "services": {"bridge": bridge}, "volumes": {"bridge-data": {}}}
     if domain:
         config["services"]["https"] = {
             "image": "caddy:2", "network_mode": "host", "restart": "unless-stopped",
@@ -124,7 +100,7 @@ def validate_package(source):
     return required
 
 
-def prepare(source, target, redis_url, domain):
+def prepare(source, target, domain):
     required = validate_package(source)
     target.mkdir(mode=0o700)  # Exclusive creation: never overwrite an existing installation.
     package = target / "package"
@@ -138,21 +114,16 @@ def prepare(source, target, redis_url, domain):
     for item in package.rglob("*"):
         item.chmod(0o755 if item.is_dir() else 0o644)
     # Installer owns its dependency installation; user-selected local node_modules are excluded.
-    write(package / "Dockerfile", "FROM node:24-bookworm-slim\nWORKDIR /app\nCOPY package.json ./\nCOPY vendor ./vendor\nRUN npm install --omit=dev --ignore-scripts\nCOPY dist ./dist\nCOPY health.cjs ./health.cjs\nUSER node\nCMD [\"node\", \"dist/serve.js\"]\n", 0o644)
+    write(package / "Dockerfile", "FROM node:24-bookworm-slim\nWORKDIR /app\nCOPY package.json ./\nCOPY vendor ./vendor\nRUN npm install --omit=dev --ignore-scripts\nCOPY dist ./dist\nCOPY health.cjs ./health.cjs\nRUN mkdir -p /app/data && chown node:node /app/data\nUSER node\nCMD [\"node\", \"dist/serve.js\"]\n", 0o644)
     write(package / ".dockerignore", "*\n!package.json\n!vendor/\n!vendor/**\n!dist/\n!dist/**\n!health.cjs\n!Dockerfile\n", 0o644)
-    write(package / "health.cjs", "const Redis = require('ioredis');\nconst client = new Redis(process.env.MARIFOLD_BRIDGE_REDIS_URL, {lazyConnect: true, retryStrategy: () => null, connectTimeout: 3000, maxRetriesPerRequest: 0});\nclient.on('error', () => {});\nconst timeout = setTimeout(() => process.exit(1), 6000);\n(async () => { try { await client.connect(); await client.ping(); const response = await fetch('http://127.0.0.1:32143/health'); if (!response.ok) throw new Error(); clearTimeout(timeout); client.disconnect(); } catch { process.exit(1); } })();\n", 0o644)
+    write(package / "health.cjs", "const timeout = setTimeout(() => process.exit(1), 6000);\nfetch('http://127.0.0.1:32143/health').then((response) => { if (!response.ok) process.exit(1); clearTimeout(timeout); }, () => process.exit(1));\n", 0o644)
     token = secrets.token_hex(32)
-    dedicated = redis_url is None
-    if dedicated:
-        password = secrets.token_hex(32)
-        redis_url = f"redis://default:{password}@127.0.0.1:32144/0"
-        write(target / "redis.conf", f"bind 127.0.0.1\nport 32144\nprotected-mode yes\nrequirepass {password}\ndir /data\nappendonly yes\nappendfsync everysec\nsave 900 1\nmaxmemory 128mb\nmaxmemory-policy noeviction\n", 0o644)
-    write(target / "bridge.env", f"MARIFOLD_BRIDGE_REDIS_URL='{redis_url}'\nMARIFOLD_BRIDGE_REGISTRATION_TOKEN='{token}'\nHOST=127.0.0.1\nPORT=32143\n")
+    write(target / "bridge.env", f"MARIFOLD_BRIDGE_REGISTRATION_TOKEN='{token}'\nMARIFOLD_BRIDGE_DATABASE=/app/data/bridge.sqlite\nHOST=127.0.0.1\nPORT=32143\n")
     write(target / "registration-token", token + "\n")
     if domain:
         write(target / "Caddyfile", f"{domain} {{\n    reverse_proxy 127.0.0.1:32143\n}}\n", 0o644)
-    write(target / "compose.json", json.dumps(compose_config(dedicated, domain), indent=2) + "\n")
-    write(target / "installation.json", json.dumps({"schema": 1, "domain": domain, "dedicatedRedis": dedicated}) + "\n")
+    write(target / "compose.json", json.dumps(compose_config(domain), indent=2) + "\n")
+    write(target / "installation.json", json.dumps({"schema": SCHEMA, "domain": domain}) + "\n")
 
 
 def start(target):
@@ -161,7 +132,7 @@ def start(target):
     print("Building and starting the bridge. The first image download may take several minutes.", flush=True)
     run(command + ["up", "--detach", "--build", "--wait", "--wait-timeout", "180"])
     run(command + ["exec", "-T", "bridge", "node", "health.cjs"])
-    print("Bridge is running; Redis PING and local HTTP health passed.")
+    print("Bridge is running; local HTTP health passed.")
     print(f"Read your registration token locally: sudo cat {target}/registration-token")
     print(f"Service status: sudo docker compose -f {target}/compose.json ps")
     metadata = json.loads((target / "installation.json").read_text())
@@ -238,7 +209,7 @@ def update(source, target):
         except (RuntimeError, OSError, KeyboardInterrupt):
             raise RuntimeError(f"Update and automatic rollback failed. Configuration is restored; run docker compose -f {target}/compose.json up -d --no-deps --no-build --pull never bridge. Previous release: {backup}") from None
         raise RuntimeError("New bridge health failed; the previous bridge image was restored.") from None
-    print("Bridge updated. Local HTTP and Redis PING passed; verify your public HTTPS origin and paired devices.")
+    print("Bridge updated. Local HTTP health passed; verify your public HTTPS origin and paired devices.")
     print(f"Previous release retained for rollback: {backup}")
 
 
@@ -261,10 +232,13 @@ def main():
         for name in ("installation.json", "compose.json", "bridge.env"):
             if (target / name).is_symlink() or not (target / name).is_file():
                 raise ValueError("Incomplete installation; inspect retained files before recovery.")
-        if json.loads((target / "installation.json").read_text()).get("schema") != 1:
+        schema = json.loads((target / "installation.json").read_text()).get("schema")
+        if schema == 1:
+            raise ValueError("This installation uses Redis from an earlier marifold and cannot be updated in place. Remove it and install again; see HOSTING.md.")
+        if schema != SCHEMA:
             raise ValueError("Unrecognized installation metadata.")
         if args.update:
-            print("Update only the bridge container. Preserve Redis, Caddy, tokens and the configured image mirror. Retain the previous image for rollback.")
+            print("Update only the bridge container. Preserve its data volume, Caddy, tokens and the configured image mirror. Retain the previous image for rollback.")
             if confirm("Build and deploy the new bridge with a brief connection interruption?"):
                 update(Path(__file__).resolve().parent.parent, target)
             return
@@ -275,26 +249,18 @@ def main():
     if target.exists() or target.is_symlink():
         raise ValueError("/opt/marifold-bridge already exists. Use --start for a managed installation; setup will not overwrite it.")
     print("Marifold bridge setup: Docker Compose on Linux, persistent containers with reboot recovery.")
-    print("No changes to an existing Redis configuration, firewall rules, DNS or other projects.")
-    print("Redis: 1) Create a separate persistent Redis on loopback port 32144 (default). 2) Use an existing Redis URL.")
-    choice = input("Redis choice [1/2, default 1]: ").strip() or "1"
-    if choice not in ("1", "2"):
-        raise ValueError("Choose 1 or 2.")
-    redis_url = None
-    if choice == "2":
-        print("Existing Redis must allow PING and bridge commands, persistence and non-eviction. Setup only tests PING; it does not configure or scan that database.")
-        redis_url = validate_redis(getpass.getpass("Redis URL (hidden): "))
+    print("No changes to firewall rules, DNS or other projects. Bridge state lives in SQLite on a named Docker volume.")
     print("HTTPS: 1) Set up Caddy for a domain. 2) Use an existing proxy/Cloudflare Tunnel (default).")
     ingress = input("HTTPS choice [1/2, default 2]: ").strip() or "2"
     if ingress not in ("1", "2"):
         raise ValueError("Choose 1 or 2.")
     domain = validate_domain(input("Bridge domain: ")) if ingress == "1" else None
-    ports = [32143] + ([32144] if redis_url is None else []) + ([80, 443] if domain else [])
+    ports = [32143] + ([80, 443] if domain else [])
     for port in ports:
         check_port(port)
-    print(f"Install: {target}; Redis: {'separate container' if redis_url is None else 'existing endpoint (credentials hidden)'}; HTTPS: {domain or 'existing ingress'}.")
-    print("Downloads Node/Redis/Caddy images as needed, generates a private token, enables Docker at boot and starts services. Container restarts preserve named data volumes.")
-    if not confirm("Proceed with this installation and its selected Redis connection?"):
+    print(f"Install: {target}; HTTPS: {domain or 'existing ingress'}.")
+    print("Downloads Node/Caddy images as needed, generates a private token, enables Docker at boot and starts services. Container restarts preserve named data volumes.")
+    if not confirm("Proceed with this installation?"):
         print("Cancelled; no installation written.")
         return
     run(["systemctl", "enable", "--now", "docker"])
@@ -303,7 +269,7 @@ def main():
     if run(["docker", "volume", "ls", "--filter", f"label=com.docker.compose.project={PROJECT}", "--format", "{{.Name}}"]):
         raise ValueError("Volumes from an earlier installation exist; refusing to reuse data with new credentials.")
     source = Path(__file__).resolve().parent.parent
-    prepare(source, target, redis_url, domain)
+    prepare(source, target, domain)
     start(target)
 
 

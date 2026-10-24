@@ -3,12 +3,13 @@ import * as path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import type { Command } from 'commander';
 import { createApiClient, type ApiClient } from '@marifold/client';
-import type { LoadedMarifoldConfig, WorkspaceSummary } from '@marifold/core';
+import { savedBridgeToken, savedBridgeUrl, type LoadedMarifoldConfig, type WorkspaceSummary } from '@marifold/core';
 import { loadConfig } from './RuntimeFactory';
 import { getActiveServiceProcess } from '../service/ServiceProcess';
 import { InteractivePrompt } from '../input/InteractivePrompt';
 import { readSecretLine } from '../input/SecretPrompt';
 import type { ConsolePrinter } from '../output/ConsolePrinter';
+import { registerBridgeDeploy } from './bridgeDeploy';
 
 export function localServiceSettings(config: LoadedMarifoldConfig): { baseUrl: string; token?: string } {
   const state = getActiveServiceProcess();
@@ -30,7 +31,8 @@ export function registerWorkspaceCommand(program: Command, printer: ConsolePrint
   const group = program.command('workspace').description('Host or join a personal device-hosted workspace.');
   const bridge = group
     .command('bridge')
-    .description('Prepare, install or update a personal workspace bridge.');
+    .description('Deploy, prepare, install or update a personal workspace bridge.');
+  registerBridgeDeploy(bridge, printer);
   for (const mode of ['install', 'update'] as const) {
     const command = bridge.command(mode).description(mode === 'install'
       ? 'Install and start a persistent bridge on this Linux server with Docker Compose.'
@@ -55,7 +57,7 @@ export function registerWorkspaceCommand(program: Command, printer: ConsolePrint
   }
   bridge
     .command('prepare <directory>')
-    .description('Write a standalone Vercel deployment package; create no cloud resources.')
+    .description('Write a standalone Node bridge package for a Linux server; create no cloud resources.')
     .action((directory: string) => {
       try {
         const source = path.join(__dirname, '..', 'bridge-template');
@@ -65,7 +67,7 @@ export function registerWorkspaceCommand(program: Command, printer: ConsolePrint
         fs.mkdirSync(target, { mode: 0o700 });
         fs.cpSync(source, target, { recursive: true, errorOnExist: true, force: false });
         process.stdout.write(
-          `Prepared ${target}. Review README.md and .env.example, then configure Redis and deploy with Vercel. No cloud resources were created.\n`,
+          `Prepared ${target}. Copy it to your Linux server and run sudo bash setup.sh there, or see HOSTING.md. No cloud resources were created.\n`,
         );
       } catch (error) {
         printer.printError(error);
@@ -103,25 +105,29 @@ export function registerWorkspaceCommand(program: Command, printer: ConsolePrint
   group
     .command('create <name>')
     .description('Share this device’s existing local workspace through a running bridge.')
-    .option('--bridge <url>', 'Bridge HTTPS URL.')
+    .option('--bridge <url>', 'Bridge HTTPS URL; defaults to the bridge this device deployed.')
+    .option('--proxy <url>', 'Reach the bridge through this HTTP(S) proxy, e.g. http://127.0.0.1:7890 (this device only).')
     .action(
-      action(async (name: string, options: { bridge?: string }) => {
+      action(async (name: string, options: { bridge?: string; proxy?: string }) => {
         const api = client();
-        let bridgeUrl = options.bridge;
+        let bridgeUrl = options.bridge ?? savedBridgeUrl();
+        if (bridgeUrl && !options.bridge) { process.stdout.write(`Using the bridge this device deployed: ${bridgeUrl}\n`); }
         if (!bridgeUrl) {
           const prompt = new InteractivePrompt();
           try {
-            bridgeUrl = await prompt.readUserMessage('Bridge URL (deploy apps/bridge first): ');
+            bridgeUrl = await prompt.readUserMessage('Bridge URL (marifold workspace bridge deploy cloudflare): ');
           } finally {
             prompt.close();
           }
         }
         if (!bridgeUrl) { throw new Error('Bridge URL is required.'); }
-        const registrationToken = await secret('Bridge registration token: ');
+        const saved = savedBridgeToken(bridgeUrl);
+        if (saved) { process.stdout.write('Using the registration token saved when this device deployed the bridge.\n'); }
+        const registrationToken = saved ?? (await secret('Bridge registration token: '));
         const result = await api.request<{ workspace: WorkspaceSummary; invitation: string }>(
           'POST',
           '/v1/workspaces',
-          { name, bridgeUrl, registrationToken },
+          { name, bridgeUrl, registrationToken, ...(options.proxy ? { proxy: options.proxy } : {}) },
         );
         show(result.workspace);
         process.stdout.write(`Single-use invitation (15 minutes):\n${result.invitation}\n`);
@@ -131,8 +137,9 @@ export function registerWorkspaceCommand(program: Command, printer: ConsolePrint
     .command('add <url>')
     .description('Pair with a workspace using a single-use invitation.')
     .option('--executor', 'Allow this host to request approval-gated agent tools on this device.')
+    .option('--proxy <url>', 'Reach the bridge through this HTTP(S) proxy, e.g. http://127.0.0.1:7890 (this device only).')
     .action(
-      action(async (bridgeUrl: string, options: { executor?: boolean }) => {
+      action(async (bridgeUrl: string, options: { executor?: boolean; proxy?: string }) => {
         const api = client();
         const invitation = await secret('Workspace invitation: ');
         show(
@@ -140,6 +147,7 @@ export function registerWorkspaceCommand(program: Command, printer: ConsolePrint
             bridgeUrl,
             invitation,
             executor: options.executor === true,
+            ...(options.proxy ? { proxy: options.proxy } : {}),
           }),
         );
       }),
@@ -153,6 +161,16 @@ export function registerWorkspaceCommand(program: Command, printer: ConsolePrint
         const api = client();
         const workspace = await resolve(api, name);
         show(await api.request('PUT', `/v1/workspaces/${workspace.id}/executor`, { enabled: mode === 'on' }));
+      }),
+    );
+  group
+    .command('proxy <nameOrId> <urlOrDirect>')
+    .description('Reach this workspace’s bridge through an HTTP(S) proxy on this device, or "direct".')
+    .action(
+      action(async (name: string, value: string) => {
+        const api = client();
+        const w = await resolve(api, name);
+        show(await api.request('PUT', `/v1/workspaces/${w.id}/proxy`, { proxy: value === 'direct' ? null : value }));
       }),
     );
   group.command('list').action(action(async () => show(await client().request('GET', '/v1/workspaces'))));

@@ -12,31 +12,27 @@ Each Mac runs `marifold service`. CLI, TUI and the service-hosted Web UI use tha
 
 ## Setup
 
-Prepare a standalone Vercel deployment package:
+Deploy a bridge once. On Cloudflare (free plan, no server):
 
 ```sh
-marifold workspace bridge prepare ./marifold-bridge
+marifold workspace bridge deploy cloudflare
 ```
 
-Missing parent directories are created automatically; the destination directory must not already exist. Use `~/.marifold/bridge` for a directory under your home, or a relative path for a directory under your current working directory. It contains compiled bridge/protocol code, a dependency manifest, environment template and Vercel configuration. No personal data or secrets are copied. Follow its README to provision TCP Redis, review the provider plans, configure the environment and deploy. See the complete [bridge deployment guide](../apps/bridge/README.md). Cloud resource creation is manual in this version; both workspace creation screens accept a running bridge.
-
-For the prepared package at `~/.marifold/bridge`, follow the [Vercel project configuration](../apps/bridge/README.md#standalone-project-configuration) for project linking, Redis, environment variables and production deployment. For other providers, see the [hosting guide](../apps/bridge/HOSTING.md), including Cloudflare Tunnel, AWS EC2, and Aliyun ECS.
-
-On a Linux bridge server with Docker Engine/Compose and Python 3, run `marifold workspace bridge install` for guided Redis/HTTPS configuration and persistent service startup. Or transfer the prepared package and run `sudo bash setup.sh` there. See the [Linux installer](../apps/bridge/HOSTING.md#guided-linux-installer).
+It signs in to Cloudflare in the browser on first use, deploys the Worker with a generated registration token, and prints the bridge URL; `workspace create` and the Web UI on the same device then use the deployed URL and saved token automatically. On a Linux server with Docker, run `marifold workspace bridge install` there instead. See the [bridge README](../apps/bridge/README.md) and the [hosting guide](../apps/bridge/HOSTING.md) for both, updates, and moving a workspace to another bridge.
 
 On the host:
 
 ```sh
 marifold service start --daemon
-marifold workspace create Home --bridge https://your-bridge.vercel.app
-# Enter the bridge registration token. Marifold prints a single-use invitation.
+marifold workspace create Home --bridge https://marifold-bridge.you.workers.dev
+# Enter the bridge registration token unless this device deployed the bridge. marifold prints a single-use invitation.
 ```
 
 On the other Mac:
 
 ```sh
 marifold service start --daemon
-marifold workspace add https://your-bridge.vercel.app --executor
+marifold workspace add https://marifold-bridge.you.workers.dev --executor
 # Enter the invitation. Omit --executor for a viewing/requesting device.
 marifold workspace default Home
 ```
@@ -86,13 +82,17 @@ marifold schedule --workspace Home list
 
 Without `--workspace`, these use the configured startup default. Other standalone CLI configuration/profile commands retain their local behavior; shared profile, Skill and configuration management is available in the paired Web UI and TUI. A new guest needs no local provider authentication to use a configured host model. Local remains the fallback when the default workspace is unavailable at startup, except that `marifold --resume` and `marifold --sessions` stop with an error instead: Local's sessions are not a stand-in for the default workspace's. Clients briefly allow connections to initialize first. An explicitly selected offline workspace reports an error. A disconnected active conversation stays in its workspace, including its draft, and never silently submits work to Local.
 
-## Bridge proxy settings (planned)
+## Bridge proxy settings
 
-Each device should choose **Direct** (the default) or an explicit proxy for each local workspace connection. A bridge reachable directly, including one hosted on Aliyun or another provider, needs no proxy. Another connection may need one; home and office can use different settings for the same bridge.
+Each device chooses **Direct** (the default) or an HTTP(S) proxy for each local workspace connection, for example when `*.workers.dev` is unreachable from that network. Home and office can use different settings for the same bridge.
 
-This setting is device-local, never synchronized from the host, and separate from model-provider proxies. It belongs in local connection settings, not the deployed bridge's `.env`. It must cover registration, pairing, WebSocket connections and reconnects, and be available in CLI/Web UI before create/join.
+```sh
+marifold workspace create Home --bridge https://… --proxy http://127.0.0.1:7890
+marifold workspace add https://… --proxy http://127.0.0.1:7890
+marifold workspace proxy Home http://127.0.0.1:7890   # change later; "direct" clears it
+```
 
-This is a design requirement, **not an available option yet**. Current workspace connections do not use provider proxy settings. See the [connectivity notes](../apps/bridge/README.md#device-connectivity-and-proxies) for current limitations and hosting-provider distinctions.
+The Web UI offers the same field when hosting or joining, and as **Bridge proxy on this device** in each workspace's settings. The proxy covers registration, pairing, the WebSocket and every reconnect; changing it reconnects at once. It is device-local: stored with this device's connection, never synchronized from the host or sent to the bridge, and shown without credentials. Re-pairing keeps the saved proxy unless a new one is given. Model-provider proxies and `HTTPS_PROXY` do not apply to bridge connections. TLS to the bridge runs inside the proxy's CONNECT tunnel, so the proxy sees only the bridge hostname.
 
 ## Execution and paths
 
@@ -150,7 +150,7 @@ Do not copy live workspace state between Macs: it would duplicate device identit
 
 The bridge is a relay, with no model runtime or application API. Both endpoints connect outbound over WSS. HPKE (P-256, HKDF-SHA256, AES-256-GCM) protects content; Ed25519 endpoint signatures and authenticated headers bind workspace, sender, recipient, message ID and expiry. Membership verification pins the host identity. The relay sees public identities, routing, timing and packet sizes. It does not receive decrypted conversations or provider keys.
 
-Vercel WebSocket functions require Redis coordination because function instances and connections can rotate. Durable Redis inboxes contain at most 128 encrypted frames per recipient for five minutes. Messages expire after one minute. Large application payloads use authenticated chunks with acknowledgment, transfer-size limits and assembly expiry. Updated devices negotiate four chunks in flight per transfer, with eight bulk chunks total per connection; ordinary requests do not wait for a whole file transfer. Older receivers and relays retain sequential delivery. The relay delivers each inbox entry once per connection, replaying unacknowledged entries after reconnect instead of repeating them on every publish. Artifact downloads request up to 128 KiB per read with four reads ahead, preserving byte order and bounded memory; older hosts fall back to 32 KiB reads. Redis must preserve host and revocation metadata. Update both Mac services and the ECS bridge with `marifold workspace bridge update` to enable concurrent bulk transfers.
+The bridge is one relay instance with SQLite state (a Durable Object on Cloudflare). A frame delivered to an online device waits in memory up to five seconds for its acknowledgment and is stored only if the ack is late or the device disconnects; frames for an offline device are stored at once. Stored inboxes hold at most 128 encrypted frames per recipient for five minutes, and a full inbox closes the sender with code 1013 (retry later). Messages expire after one minute. Large application payloads use authenticated chunks with acknowledgment, transfer-size limits and assembly expiry. Updated devices negotiate four chunks in flight per transfer, with eight bulk chunks total per connection; ordinary requests do not wait for a whole file transfer. Older receivers and relays retain sequential delivery. The relay delivers each inbox entry once per connection, replaying unacknowledged entries after reconnect instead of repeating them on every publish. Artifact downloads request up to 128 KiB per read with four reads ahead, preserving byte order and bounded memory; older hosts fall back to 32 KiB reads. The bridge database must persist host registrations and revocations.
 
 An operation has a stable request ID and input hash. The receiving endpoint journals mutations before execution. Reconnection resends the same operation ID; completed results replay without repeating the effect. Reusing an ID with changed input is rejected. A process restart marks unfinished requests as interrupted/unknown; it never starts their model/tool loops again. Uncertain remote tool outcomes stop the run rather than invite the model to repeat an effect automatically.
 
@@ -160,9 +160,9 @@ One active request owns a conversation session. Another submission to that same 
 
 ## Verification and first deployment
 
-Automated coverage exercises encrypted pairing, tampering/wrong-scope rejection, single-use invitations, secret exclusion, live shared data, same-session conflicts, remote approvals, child delegation/artifacts, large transfers, reconnect deduplication, revocation, executor opt-out, process restart and real macOS sandbox isolation. Chromium covers workspace switching, defaults, separate drafts and direct connections. A disposable real Redis test covers independent relay instances and retained delivery.
+Automated coverage exercises encrypted pairing, tampering/wrong-scope rejection, single-use invitations, secret exclusion, live shared data, same-session conflicts, remote approvals, child delegation/artifacts, large transfers, reconnect deduplication, revocation, executor opt-out, process restart and real macOS sandbox isolation. Chromium covers workspace switching, defaults, separate drafts and direct connections. The bridge tests cover replay after reconnect, a relay rebuilt between frames (Durable Object hibernation), revocation and backpressure; the same paired-device flow runs against the Cloudflare Worker under `wrangler dev`. Proxy tests tunnel registration, pairing and TLS through a local CONNECT proxy.
 
-The remaining live acceptance step is a reviewed Vercel/TCP-Redis deployment with your actual host and MacBook. Verify a model response, a simple approved file write on each target, artifact download, concurrent separate sessions, bridge reconnect, host-offline behavior and device revocation before depending on it. These checks need your cloud account and second device; local tests do not claim to replace them.
+The remaining live acceptance step is a Cloudflare deployment with your actual host and MacBook. Verify a model response, a simple approved file write on each target, artifact download, concurrent separate sessions, bridge reconnect, host-offline behavior and device revocation before depending on it. These checks need your cloud account and second device; local tests do not claim to replace them.
 
 Cloud-owned workspaces, offline editing, automatic conflict merging, browser-only pairing, iOS, Keychain, role tiers, other deployment providers and automatic installation of privileged OS helpers are deferred. The optional standalone Tailscale workflow uses existing OS permissions; see [device execution](device-execution.md). The local HTTP service remains private-network-only.
 

@@ -1,4 +1,4 @@
-import { createBridge, MemoryRelayStore } from '../../../../apps/bridge/dist/index.js';
+import { createBridge } from '../../../../apps/bridge/dist/index.js';
 import * as fs from 'node:fs';
 import { createRequire } from 'node:module';
 import * as os from 'node:os';
@@ -145,7 +145,7 @@ const remoteServer = createMarifoldService({ loadedConfig: remoteLoadedConfig, s
 await remoteServer.listen({ host: '127.0.0.1', port: 32142 });
 process.stdout.write('Remote Marifold fixture listening at http://127.0.0.1:32142\n');
 
-const bridgeServer = createBridge(new MemoryRelayStore(), 'fixture-registration-token-32-characters');
+const bridgeServer = createBridge({ registrationToken: 'fixture-registration-token-32-characters', database: ':memory:' });
 await new Promise(resolve => bridgeServer.listen(32144, '127.0.0.1', resolve));
 const bridgeUrl = 'http://127.0.0.1:32144';
 const hosted = await remoteServer.inject({ method: 'POST', url: '/v1/workspaces', headers: { authorization: 'Bearer remote-fixture-token' }, payload: { name: 'Home workspace', bridgeUrl, registrationToken: 'fixture-registration-token-32-characters' } });

@@ -62,6 +62,8 @@ export interface WorkspaceSummary {
   hostDeviceId: string;
   online: boolean;
   versionError?: string;
+  /** This device's proxy for the bridge connection, without credentials. Device-local; absent means direct. */
+  proxy?: string;
 }
 export interface WorkspaceExecutionContext {
   workspaceId: string;

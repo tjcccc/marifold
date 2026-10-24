@@ -22,8 +22,11 @@ import type {
   WorkspaceSummary,
 } from '@marifold/workspace-protocol';
 import { MARIFOLD_VERSION } from './MarifoldVersion';
+import { bridgeProxy } from './bridge/BridgeProxy';
 
-export interface WorkspaceConnection extends Omit<WorkspaceSummary, 'online'> {
+export interface WorkspaceConnection extends Omit<WorkspaceSummary, 'online' | 'proxy'> {
+  /** Device-local proxy URL (may hold credentials); never sent to the host or bridge. */
+  proxy?: string;
   identity: PrivateIdentity;
   certificate: SignedMembership;
   host: PublicIdentity;
@@ -231,13 +234,14 @@ export class WorkspaceStore {
     identifier(connection.id);
     label(connection.name);
     bridgeOrigin(connection.bridgeUrl);
+    if (connection.proxy !== undefined) { bridgeProxy(connection.proxy); }
     this.writeIdentity(connection.id, connection.identity);
     const { identity: _identity, ...metadata } = connection;
     this.db
       .prepare('INSERT INTO connections VALUES (?,?) ON CONFLICT(id) DO UPDATE SET metadata=excluded.metadata')
       .run(connection.id, JSON.stringify(metadata));
   }
-  async create(name: string, bridgeUrl: string, deviceName: string): Promise<WorkspaceConnection> {
+  async create(name: string, bridgeUrl: string, deviceName: string, proxy?: string): Promise<WorkspaceConnection> {
     if (this.list().some((c) => c.role === 'host')) { throw new Error('This configuration already hosts a workspace.'); }
     const identity = await createIdentity();
     const id = randomId();
@@ -263,6 +267,7 @@ export class WorkspaceStore {
       identity,
       certificate,
       executor: true,
+      ...(proxy ? { proxy: bridgeProxy(proxy) } : {}),
     };
     this.save(connection);
     this.addDevice(certificate);

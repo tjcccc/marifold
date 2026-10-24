@@ -9,6 +9,13 @@ interface Props extends ConnectionPopoverProps {
   executionDevice?: string;
   onExecutionDevice: (id?: string) => void;
 }
+function sameOrigin(a: string, b: string): boolean {
+  try {
+    return new URL(a).origin === new URL(b).origin;
+  } catch {
+    return false;
+  }
+}
 export function WorkspacePopover(props: Props) {
   const dialog = useRef<HTMLDivElement>(null);
   const editor = useRef<HTMLDivElement>(null);
@@ -17,6 +24,8 @@ export function WorkspacePopover(props: Props) {
   const api = useMemo(() => createApiClient(apiSettings(local)), [local.token]);
   const [workspaces, setWorkspaces] = useState<WorkspaceSummary[]>([]);
   const [defaultId, setDefaultId] = useState('local');
+  // The bridge this device deployed; the service supplies its saved registration token.
+  const [savedBridgeUrl, setSavedBridgeUrl] = useState<string>();
   const active = props.store.servers.find((c) => c.id === props.store.activeId);
   const [selected, setSelected] = useState(active?.workspaceId ?? 'local');
   const [mode, setMode] = useState<'select' | 'create' | 'join' | 'direct'>('select');
@@ -25,6 +34,8 @@ export function WorkspacePopover(props: Props) {
   const [secret, setSecret] = useState('');
   const [executor, setExecutor] = useState(false);
   const [invitation, setInvitation] = useState('');
+  // This device's bridge proxy: the form value, and the editor for a saved connection.
+  const [proxy, setProxy] = useState('');
   const [devices, setDevices] = useState<Array<WorkspaceDevice & { host: boolean }>>([]);
   const sortedDevices = useMemo(() => [...devices].sort((a, b) => {
     if (a.host !== b.host) { return a.host ? -1 : 1; }
@@ -38,6 +49,7 @@ export function WorkspacePopover(props: Props) {
   const [deviceChoice, setDeviceChoice] = useState(props.executionDevice);
   const [confirmRemove, setConfirmRemove] = useState(false);
   const workspace = workspaces.find((w) => w.id === selected);
+  const tokenSaved = Boolean(savedBridgeUrl) && sameOrigin(url, savedBridgeUrl!);
   useLayoutEffect(() => {
     const node = editor.current;
     if (!node) { return; }
@@ -56,9 +68,13 @@ export function WorkspacePopover(props: Props) {
     return () => previous?.focus();
   }, []);
   async function refresh() {
-    const result = await api.request<{ workspaces: WorkspaceSummary[]; defaultId: string }>('GET', '/v1/workspaces');
+    const result = await api.request<{ workspaces: WorkspaceSummary[]; defaultId: string; savedBridgeUrl?: string }>(
+      'GET',
+      '/v1/workspaces',
+    );
     setWorkspaces(result.workspaces);
     setDefaultId(result.defaultId);
+    setSavedBridgeUrl(result.savedBridgeUrl);
   }
   useEffect(() => {
     let active = true;
@@ -78,6 +94,7 @@ export function WorkspacePopover(props: Props) {
   useEffect(() => {
     setDevices([]);
     setName(workspace?.name ?? '');
+    setProxy(workspace?.proxy ?? '');
     setConfirmRemove(false);
     if (!workspace?.online) { return; }
     let stopped = false;
@@ -125,6 +142,8 @@ export function WorkspacePopover(props: Props) {
   }
   function rejoin() {
     setUrl(workspace?.bridgeUrl ?? '');
+    // Empty keeps the saved proxy, including credentials the status view hides.
+    setProxy('');
     setExecutor(workspace?.executor === true);
     setSecret('');
     setInvitation('');
@@ -298,6 +317,28 @@ export function WorkspacePopover(props: Props) {
                         ))}
                       </div>
                     </section>
+                    <label className={styles.field}>
+                      Bridge proxy on this device
+                      <input
+                        value={proxy}
+                        placeholder="Direct"
+                        autoComplete="off"
+                        onChange={(e) => setProxy(e.target.value)}
+                        disabled={busy}
+                      />
+                    </label>
+                    <button
+                      className={styles.add}
+                      disabled={busy || proxy.trim() === (workspace.proxy ?? '')}
+                      onClick={() =>
+                        void perform(async () => {
+                          await api.request('PUT', `/v1/workspaces/${workspace.id}/proxy`, { proxy: proxy.trim() || null });
+                          await refresh();
+                        })
+                      }
+                    >
+                      {proxy.trim() ? 'Save proxy' : 'Connect directly'}
+                    </button>
                     {workspace.role === 'guest' && (
                       <button className={styles.add} disabled={busy || workspace.online} onClick={rejoin}>
                         Rejoin workspace
@@ -393,11 +434,19 @@ export function WorkspacePopover(props: Props) {
                 onClick={() => {
                   setMode('create');
                   setName('');
+                  setUrl(savedBridgeUrl ?? '');
+                  setProxy('');
                 }}
               >
                 Host this device
               </button>
-              <button className={styles.add} onClick={() => setMode('join')}>
+              <button
+                className={styles.add}
+                onClick={() => {
+                  setMode('join');
+                  setProxy('');
+                }}
+              >
                 Join workspace
               </button>
               <button className={styles.cancel} onClick={() => setMode('direct')}>
@@ -422,7 +471,12 @@ export function WorkspacePopover(props: Props) {
                   const result = await api.request<{ invitation: string; workspace: WorkspaceSummary }>(
                     'POST',
                     '/v1/workspaces',
-                    { name, bridgeUrl: url, registrationToken: secret },
+                    {
+                      name,
+                      bridgeUrl: url,
+                      ...(secret ? { registrationToken: secret } : {}),
+                      ...(proxy.trim() ? { proxy: proxy.trim() } : {}),
+                    },
                   );
                   setInvitation(result.invitation);
                   setSelected(result.workspace.id);
@@ -431,6 +485,7 @@ export function WorkspacePopover(props: Props) {
                     bridgeUrl: url,
                     invitation: secret,
                     executor,
+                    ...(proxy.trim() ? { proxy: proxy.trim() } : {}),
                   });
                   setSelected(result.workspace.id);
                 }
@@ -442,7 +497,7 @@ export function WorkspacePopover(props: Props) {
           >
             <div className={styles.sameOriginNote}>
               {mode === 'create'
-                ? 'Share this device’s existing profiles and sessions. Keep its service running so paired devices can connect. Use a deployed Marifold bridge; deploy the bridge package on Vercel with Redis, then enter its URL and registration token.'
+                ? 'Share this device’s existing profiles and sessions. Keep its service running so paired devices can connect. Deploy a bridge first (marifold workspace bridge deploy cloudflare), then enter its URL and registration token. A bridge deployed from this device needs no token.'
                 : 'Join your workspace with a single-use invitation from its host.'}
             </div>
             {mode === 'create' && (
@@ -457,15 +512,25 @@ export function WorkspacePopover(props: Props) {
                 type="url"
                 required
                 value={url}
-                placeholder="https://your-bridge.vercel.app"
+                placeholder="https://marifold-bridge.you.workers.dev"
                 onChange={(e) => setUrl(e.target.value)}
+              />
+            </label>
+            <label className={styles.field}>
+              Proxy (optional, this device only)
+              <input
+                value={proxy}
+                placeholder="Direct, or http://127.0.0.1:7890"
+                autoComplete="off"
+                onChange={(e) => setProxy(e.target.value)}
               />
             </label>
             <label className={styles.field}>
               {mode === 'create' ? 'Bridge registration token' : 'Invitation'}
               <input
                 type="password"
-                required
+                required={!(mode === 'create' && tokenSaved)}
+                placeholder={mode === 'create' && tokenSaved ? 'Saved on this device' : undefined}
                 autoComplete="off"
                 value={secret}
                 onChange={(e) => setSecret(e.target.value)}

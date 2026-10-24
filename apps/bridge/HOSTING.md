@@ -1,29 +1,42 @@
 # Bridge hosting guide
 
-Updated September 11, 2026. These are manual deployment recipes for the existing bridge. The standalone package has passed local smoke tests; Vercel, Cloudflare, AWS, and Aliyun live deployments remain unverified. Review current provider plans, limits, regions, and costs before creating resources.
+Updated October 24, 2026. Deploy only the bridge. Never upload `~/.marifold`, profiles, model credentials or the local marifold service: the bridge is an authenticated encrypted relay, and the personal application service stays on the owner's devices.
 
-Only deploy the bridge package. Never upload the parent `.marifold` directory, profiles, model credentials, or the local Marifold application service. The bridge is an authenticated encrypted relay; the personal application service remains on the owner's device.
+The bridge stores host registrations, revocations and pending encrypted frames in SQLite, so one relay instance serves a deployment. Choose a target reachable from your devices' actual networks, and test pairing from home and office before relying on it.
 
-## Choose a deployment
-
-For a Linux VM, start with the [guided installer](#guided-linux-installer). The manual systemd recipe below remains available for installations without Docker.
-
-| Provider | Recipe for the current code | Additional infrastructure |
+| Target | Recipe | Infrastructure you provide |
 | --- | --- | --- |
-| Vercel | Prepared Node function project | TLS TCP Redis |
-| Cloudflare | Named Tunnel to a persistent Node service | Always-on Linux server, domain, TCP Redis |
-| AWS | EC2 Linux instance with systemd and Caddy HTTPS | Domain, persistent TCP Redis |
-| Aliyun / Alibaba Cloud | ECS Linux instance with systemd and Caddy HTTPS | Domain, persistent TCP Redis |
+| Cloudflare Workers | [One command](#cloudflare-workers) | A Cloudflare account (free plan); optionally a domain |
+| Linux VM (Aliyun ECS, AWS EC2, …) | [Guided installer](#linux-server-guided-installer) | A server with Docker; a domain or existing HTTPS ingress |
+| Other Node 24 hosts | [Manual Node service](#manual-node-service) | A persistent disk and HTTPS in front |
 
-Cloudflare Tunnel provides the public HTTPS endpoint; it does not host the Node process. The current package contains no Workers or Containers deployment adapter. Those products would need separate integration and validation. Similarly, these AWS and Aliyun recipes use virtual machines, not Lambda or Function Compute.
+Vercel and other serverless hosts without persistent WebSockets are not supported in this version.
 
-Choose a region and hostname reachable from the owner's actual devices. A provider name does not guarantee reachability from mainland China. Test both HTTPS and paired WebSocket traffic from home and office before relying on a deployment.
+## Cloudflare Workers
 
-## Guided Linux installer
+```sh
+marifold workspace bridge deploy cloudflare [--name marifold-bridge]
+```
 
-On Aliyun ECS, AWS EC2, or another Linux server with systemd, install Docker Engine and its Compose plugin using the [official distribution instructions](https://docs.docker.com/engine/install/). Python 3 is also required. The installer checks these prerequisites; it does not replace existing Docker packages, change cloud security groups, or configure DNS. The server needs access to container/package registries for the first build.
+This runs a pinned `wrangler` through `npx` (Node.js with npm is required). On first use it opens the browser to sign in to Cloudflare and, for a new account, asks for a `workers.dev` subdomain. It uploads the prebuilt Worker from the installed marifold, creates its Durable Object, sets a newly generated registration token as a Worker secret in the same upload, and prints the URL. Nothing else on the account changes.
 
-If you pulled the Marifold repository onto the server:
+Files on this device, in `~/.marifold/bridge/cloudflare/` (folder mode 0700): `registration-token` (0600, reused by later deploys), `deployment.json` (the URL), and the generated `worker.js` and `wrangler.json`. Hosting the workspace on this device needs no token: `marifold workspace create <name>` uses the deployed URL and saved token, and the Web UI's **Host this device** form fills in the URL and leaves the token empty. Only another device asks for it (`cat ~/.marifold/bridge/cloudflare/registration-token`).
+
+Run the same command again after upgrading marifold to update the Worker. Updating keeps the Durable Object's data and the token. If wrangler needs a proxy to reach Cloudflare's API, set `HTTPS_PROXY` in that shell; it honors it.
+
+How it runs: one Durable Object named `relay` holds every connection (WebSocket Hibernation API) and its own SQLite storage, so the relay behaves like a single Node process. Health checks are answered by the Worker without waking the Durable Object. Hibernation keeps idle connections free of duration charges.
+
+Free-plan budget, measured on the local Workers runtime: a full pairing, a 1 MB transfer, a reconnect, a revocation and a re-pair wrote 9 SQLite rows in total. Frames that are acknowledged within five seconds are never stored, so routine traffic and status heartbeats write nothing. Each WebSocket connection is a request, and incoming messages are billed at 20:1. Check Cloudflare's current [Durable Objects limits](https://developers.cloudflare.com/durable-objects/platform/pricing/) before relying on the free plan.
+
+Reachability: `*.workers.dev` is often blocked or unstable from mainland China. Either give each device a [proxy](#device-proxies) or add a custom domain under the Worker's **Settings → Domains & Routes** in the Cloudflare dashboard, then use that origin as the bridge URL. A new bridge URL means creating the workspace again (see [Moving to another bridge](#moving-to-another-bridge)).
+
+Remove the deployment with `npx wrangler@4.151.3 delete --name marifold-bridge`, then delete `~/.marifold/bridge/cloudflare/`.
+
+## Linux server: guided installer
+
+On a Linux server with systemd, install Docker Engine and its Compose plugin using the [official instructions](https://docs.docker.com/engine/install/), plus Python 3. The installer checks these; it never replaces Docker packages, changes cloud security groups, or configures DNS. The first build needs access to the Node container image registry.
+
+With marifold built from the repository on the server:
 
 ```sh
 pnpm install --frozen-lockfile
@@ -31,47 +44,22 @@ pnpm -r build
 node packages/cli/dist/index.js workspace bridge install
 ```
 
-If the `marifold` command already points to that build, the final command is simply:
+If `marifold` already points to that build, run `marifold workspace bridge install`. It asks for sudo and runs on **this server**; the personal marifold service does not need to run there. Alternatively, on your Mac run `marifold workspace bridge prepare ./marifold-bridge`, copy that folder to the server (without `node_modules` or any `.env`), and run `sudo bash setup.sh` inside it. Node and pnpm are not needed on the server for this route: the bridge runs and installs its dependencies inside the Node container.
 
-```sh
-marifold workspace bridge install
-```
+The wizard asks one question: create **Caddy** HTTPS for a domain you control (point its DNS at the server and allow TCP 80/443), or keep an **existing** HTTPS proxy or Cloudflare Tunnel that forwards to `http://127.0.0.1:32143`. After you confirm, it generates the registration token, builds and starts the containers, waits for the bridge's health check, and prints the next steps. It never prints secrets.
 
-The CLI requests sudo when necessary and runs the installer on **this server**. You do not need to start the personal Marifold application service on the ECS. Alternatively, upload just a prepared bridge package (excluding `.env`, `.vercel` and `node_modules`), enter that directory on the server, and run:
-
-```sh
-sudo bash setup.sh
-```
-
-The standalone route does not require Node or pnpm on the VM: the bridge runtime and dependency installation run inside the Node container. Its image build uses npm independently of your development package-manager choice.
-
-The wizard asks for:
-
-1. **Redis:** create a dedicated persistent Redis on loopback port 32144 (default), or enter an existing Redis URL through a hidden prompt. Existing Redis remains unchanged; its credentials and permissions must already be configured. Startup checks connectivity, not the full persistence/ACL policy. If using the server's existing Redis, `127.0.0.1:6379` works because these Linux containers use host networking.
-2. **HTTPS:** create Caddy configuration for a domain you control, or keep an existing HTTPS proxy/Cloudflare Tunnel. For Caddy, point DNS at this server and allow TCP 80/443 in the cloud security group. Existing ingress should forward to `http://127.0.0.1:32143` on the same server.
-3. **Review and start:** confirm the destination and selected services. The wizard generates secrets, builds/starts containers, waits for bridge HTTP and Redis connectivity checks, and prints the next steps. It does not print secrets.
-
-The installation lives at `/opt/marifold-bridge` with owner-only access:
+The installation lives at `/opt/marifold-bridge` (mode 0700):
 
 | File/resource | Purpose |
 | --- | --- |
 | `compose.json` | Named project and restart policies |
-| `bridge.env` | Protected bridge connection URL and generated registration token |
-| `registration-token` | Protected copy of the token for the host creation prompt |
-| `package/` | Compiled bridge inputs and container build files; no personal state |
-| `redis.conf` | Dedicated Redis settings, only when selected |
-| Named Redis volume | Persistent AOF/snapshot data; never automatically deleted |
-| Named Caddy volumes | Certificate/configuration state, only when selected |
+| `bridge.env` | Registration token and database path |
+| `registration-token` | Copy of the token for the host's create prompt |
+| `package/` | Compiled bridge and container build files; no personal state |
+| Volume `bridge-data` | SQLite database (`/app/data/bridge.sqlite`); never deleted automatically |
+| Volumes `caddy-data`, `caddy-config` | Certificates, only with Caddy |
 
-Read the generated registration token **locally**, then enter it on your host Mac:
-
-```sh
-sudo cat /opt/marifold-bridge/registration-token
-```
-
-Docker is enabled at boot and containers use `restart: unless-stopped`. They return after reboot unless deliberately stopped. Dedicated Redis uses AOF with every-second fsync and a no-eviction policy with a 128 MiB data limit; provision monitoring and backups before relying on it. Persistence is not a backup. Other projects' Redis processes and configuration are left alone.
-
-Management commands:
+Read the token on the server with `sudo cat /opt/marifold-bridge/registration-token` and enter it when creating the workspace on your host. Docker starts at boot and containers use `restart: unless-stopped`.
 
 ```sh
 sudo docker compose -f /opt/marifold-bridge/compose.json ps
@@ -79,225 +67,86 @@ sudo docker compose -f /opt/marifold-bridge/compose.json logs --tail 50 bridge
 sudo docker compose -f /opt/marifold-bridge/compose.json restart bridge
 ```
 
-After editing `bridge.env`, use `up -d` to recreate containers with changed values; `restart` alone does not reload container environment configuration. Review logs locally before sharing them; never print `docker compose config` without `--quiet` because expanded configuration may contain secrets.
+After editing `bridge.env`, use `up -d` (not `restart`) to apply it. Never print `docker compose config` without `--quiet`, and never run `docker compose down -v` unless you mean to delete the bridge database and certificates.
 
-If startup fails, the installer exits with failure and keeps generated files and data. Fix the connection, registry access, or port problem and retry:
+If startup fails, files and data are kept. Fix the cause and retry with `marifold workspace bridge install --start` (or `sudo bash setup.sh --start`). A normal install refuses an existing directory, containers or volumes instead of overwriting them.
 
-```sh
-marifold workspace bridge install --start
-# Or, from the prepared package:
-sudo bash setup.sh --start
-```
+### Updates
 
-This reuses the original configuration/token. A normal install refuses an existing directory, containers, or volumes instead of overwriting them. It does not migrate an existing manual systemd deployment or upgrade an older installed package. Never use `docker compose down -v` unless you intend to destroy Redis and certificate volumes. Public HTTPS and real pairing remain separate acceptance checks after local health succeeds.
+Pull and rebuild marifold on the server, then run `marifold workspace bridge update` (or `sudo bash setup.sh --update` from a freshly prepared package). The updater builds the new release while the current container runs, preserves the installed Dockerfile (including a registry mirror), the token, the data volume and Caddy, and replaces only the bridge container. Devices reconnect briefly. A failed deployment or health check rolls back to the retained previous image.
 
-Installer validation covers generated configuration, permissions, input rejection, secret exclusion, collision protection and startup command sequencing in disposable fixtures. Docker execution, reboot recovery and live certificates still require the first Linux server trial; they have not been verified on this development Mac. Developers can run the installer fixtures with `python3 -B -m unittest discover -s apps/bridge/setup -p 'test_*.py'` from the repository.
+Installations made by marifold 0.95 and earlier used Redis (installation schema 1). They are not upgraded in place: the updater refuses them. Remove such an installation (below) and install again, then create the workspace on the new bridge.
 
-## Common package and Redis prerequisites
-
-Prepare once on the development Mac, or use your existing prepared directory:
+### Removing an installation
 
 ```sh
-marifold workspace bridge prepare ~/.marifold/bridge
-cd ~/.marifold/bridge
-npm install --ignore-scripts
+sudo docker compose -f /opt/marifold-bridge/compose.json down -v
+sudo rm -rf /opt/marifold-bridge
 ```
 
-Preparation refuses an existing destination; do not rerun it over a prepared package. It includes compiled `dist/`, `vendor/`, a manifest, and Vercel files. Linux deployments use `node dist/serve.js` and ignore `vercel.json` and the Vercel-specific API entry point. Install dependencies on the destination OS; do not transfer your Mac's `node_modules`.
+`down -v` deletes the bridge data and any Redis or Caddy volumes of that project. Close any firewall ports and DNS records you opened for it.
 
-Use a Redis service that supports the current `ioredis` client's TCP commands, Lua scripts, and pub/sub. A REST-only endpoint or an unvalidated cluster endpoint is insufficient. Start with a dedicated single-primary Redis-compatible endpoint; the bridge does not configure Redis Cluster discovery. Enable persistence, non-evicting storage, and backups: host identities and revocations must survive restarts. Use TLS (`rediss://`) for remote Redis and allow access only from the bridge's network where possible. Never expose an unauthenticated Redis port.
+## Manual Node service
 
-All deployments require:
+For a host that runs Node 24 directly, prepare the package (`marifold workspace bridge prepare ./marifold-bridge`), copy it to the host, then run `npm install --omit=dev --ignore-scripts` there; do not copy your Mac's `node_modules`. Configure:
 
 ```dotenv
-MARIFOLD_BRIDGE_REDIS_URL=rediss://default:REPLACE_ME@redis.example.com:6379
-MARIFOLD_BRIDGE_REGISTRATION_TOKEN=REPLACE_WITH_A_RANDOM_SECRET
-```
-
-Generate a separate registration secret using `openssl rand -hex 32`. Store it securely; it registers hosts and is not the guest invitation. Percent-encode reserved characters in Redis URL credentials. Do not commit real environment files or copy secrets into support messages.
-
-## Vercel
-
-### Using pnpm instead of npm
-
-The prepared package can use pnpm. Choose one package manager for this deployment directory. If switching from npm, move its `package-lock.json` and `node_modules` aside before reinstalling; do not deploy two competing lockfiles.
-
-```sh
-cd ~/.marifold/bridge
-pnpm install --ignore-scripts
-pnpm --version
-```
-
-Keep the resulting `pnpm-lock.yaml` and use the same exact pnpm version in deployment. For example, with pnpm **11.17.0**, replace only `installCommand` in the prepared `vercel.json` with:
-
-```json
-"installCommand": "npx --yes pnpm@11.17.0 install --frozen-lockfile --ignore-scripts"
-```
-
-This is a property to edit in the existing JSON object, not a replacement for the whole configuration. Match the version to the one used to create your lockfile. The explicit version avoids relying on Vercel's preinstalled pnpm default; the build needs registry access to fetch that version. Preserve all routing/function settings. On a Linux VM with that pnpm version installed, replace `npm ci` with `pnpm install --frozen-lockfile --ignore-scripts` and transfer `pnpm-lock.yaml` instead of `package-lock.json`. The runtime command remains `node dist/serve.js`.
-
-See [pnpm install](https://pnpm.io/cli/install) and [Vercel package-manager selection](https://vercel.com/docs/package-managers).
-
-### Deploy the project
-
-Use the [complete project configuration in README](README.md#standalone-project-configuration). The short sequence, after preparing the package, is:
-
-1. Run `npx vercel link` inside the prepared directory. Select the account and create/select the bridge project; no Git repository is required.
-2. Provision TLS TCP Redis and add the two variables above to the project's Production environment settings.
-3. Select Other as the framework, Node 24.x, and enable Fluid compute. Keep the generated empty build command, install command, function duration, and rewrites.
-4. Ensure Deployment Protection permits machine access to `/health`, `/v1/hosts`, and `/v1/connect` without an interactive login.
-5. Run `npx vercel --prod`, then use the stable production project URL for pairing. Redeploy after changing deployment environment variables.
-
-WebSocket connections can end at function duration limits and reconnect to another instance, so external Redis coordination is required. See [Vercel WebSockets](https://vercel.com/docs/functions/websockets).
-
-## Shared Linux service for AWS, Aliyun, and Cloudflare origins
-
-Use a dedicated Ubuntu/Debian-style Linux VM with systemd. Install Node.js **24.x** and npm using a supported [Node installation method](https://nodejs.org/en/download). Use a system-wide executable, not an interactive user's shell-only version-manager setup. Check `node --version` and `command -v node`.
-
-Transfer only the prepared package to a new deployment directory, such as `/opt/marifold-bridge`. Exclude `.env`, `.env.*`, `.vercel`, and `node_modules`; keep `.env.example` as a template if wanted. Retain `package-lock.json`, then run `npm ci --ignore-scripts` on the VM as the deployment user. The deployment user owns installation; the runtime account only needs read access to the package.
-
-On a fresh VM, create a dedicated runtime account and environment file:
-
-```sh
-sudo useradd --system --user-group --no-create-home --shell /usr/sbin/nologin marifold-bridge
-sudo install -m 600 /dev/null /etc/marifold-bridge.env
-sudoedit /etc/marifold-bridge.env
-```
-
-These creation commands are for a fresh installation; preserve existing accounts and environment files during updates. Fill the file using your actual values:
-
-```dotenv
-MARIFOLD_BRIDGE_REDIS_URL=rediss://default:REPLACE_ME@redis.example.com:6379
-MARIFOLD_BRIDGE_REGISTRATION_TOKEN=REPLACE_WITH_YOUR_GENERATED_SECRET
+MARIFOLD_BRIDGE_REGISTRATION_TOKEN=REPLACE_WITH_openssl_rand_-hex_32
+MARIFOLD_BRIDGE_DATABASE=/var/lib/marifold-bridge/bridge.sqlite
 HOST=127.0.0.1
 PORT=32143
 ```
 
-The Node entry point does not automatically read `.env`. This service unit loads the protected environment file. Create `/etc/systemd/system/marifold-bridge.service`:
+The entry point is `node dist/serve.js`; it does not read `.env` itself, so load the variables through your service manager. Keep the database on persistent storage writable only by the service account, put HTTPS in front (Caddy, nginx, or a Cloudflare Tunnel to `localhost:32143`), and keep port 32143 private. Forward the whole hostname without a path prefix, and allow noninteractive WebSocket clients: no login gates, bot challenges or caching on the bridge hostname.
+
+A minimal systemd unit:
 
 ```ini
 [Unit]
-Description=Marifold personal workspace bridge
+Description=marifold personal workspace bridge
 Wants=network-online.target
 After=network-online.target
 
 [Service]
-Type=simple
 User=marifold-bridge
 Group=marifold-bridge
 WorkingDirectory=/opt/marifold-bridge
 EnvironmentFile=/etc/marifold-bridge.env
 ExecStart=/usr/bin/node /opt/marifold-bridge/dist/serve.js
 Restart=on-failure
-RestartSec=5
-TimeoutStopSec=20
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectHome=true
 ProtectSystem=strict
+ReadWritePaths=/var/lib/marifold-bridge
 
 [Install]
 WantedBy=multi-user.target
 ```
 
-Replace `/usr/bin/node` with the system-wide path verified above if different. Ensure the runtime user can traverse/read the deployment directory. Then:
+## Device proxies
 
-```sh
-sudo systemctl daemon-reload
-sudo systemctl enable --now marifold-bridge
-sudo systemctl status marifold-bridge
-curl --fail http://127.0.0.1:32143/health
-```
+Each device chooses Direct (the default) or an HTTP(S) proxy for each workspace connection: `--proxy <url>` on `marifold workspace create` and `add`, `marifold workspace proxy <workspace> <url|direct>` later, and the same field in the Web UI. It applies to registration, pairing, the WebSocket and every reconnect. It is stored only on that device, never sent to the host or bridge, and status output omits its credentials. `HTTPS_PROXY` and model-provider proxies do not apply to bridge connections.
 
-Health identifies the process; pairing is still needed to verify Redis delivery. Check service logs locally when diagnosing errors and redact credentials before sharing them. Keep port 32143 private. Choose **one** ingress method below: Caddy for direct HTTPS, or Cloudflare Tunnel on the same VM.
+Never put a device's proxy in the server's environment: `127.0.0.1` there means the server.
 
-### Direct HTTPS with Caddy
+## Moving to another bridge
 
-Point a domain such as `bridge.example.com` at the VM's stable public IP. Install Caddy with its official system service. Configure `/etc/caddy/Caddyfile`:
+A workspace is registered on one bridge URL. To move it (for example from a Linux server to Cloudflare):
 
-```caddyfile
-bridge.example.com {
-    reverse_proxy 127.0.0.1:32143
-}
-```
+1. Deploy the new bridge.
+2. On the host: `marifold workspace remove <workspace>`, then `marifold workspace create <name> --bridge <new URL>`. Profiles, sessions and other data stay on the host; only the connection is replaced. It prints a new invitation.
+3. On each guest: `marifold workspace remove <workspace>`, then `marifold workspace add <new URL>` with a fresh invitation (`marifold workspace invite <workspace>` on the host for each further device).
+4. Remove the old bridge.
 
-Replace the example hostname. Allow inbound TCP 80 and 443 for this recipe, and ensure DNS resolves correctly for certificate issuance. Leave 32143 and Redis closed to public inbound traffic. Caddy handles HTTPS and reverse proxying; see the [reverse proxy guide](https://caddyserver.com/docs/quick-starts/reverse-proxy) and [service setup](https://caddyserver.com/docs/running#using-the-service).
+## Acceptance checklist
 
-```sh
-sudo caddy validate --config /etc/caddy/Caddyfile
-sudo systemctl reload caddy
-curl --fail https://bridge.example.com/health
-```
+Before relying on a bridge, verify from your real devices and networks:
 
-Use the whole hostname for this relay, without stripping `/v1/connect` or adding a path prefix. Avoid browser login gates, interactive bot challenges, and caching on bridge endpoints. Exercise WebSocket pairing after configuring the proxy.
-
-## AWS EC2
-
-1. Create a Linux EC2 instance in the chosen region, with persistent disk and a stable public address for direct HTTPS. Use a dedicated SSH key or your existing approved administrative access. Review instance, disk, IP, and transfer charges.
-2. Configure its security group: admin access only from your management network; TCP 80/443 for Caddy ingress; no public 32143 or Redis port. Keep outbound access needed for DNS, package installation, certificates, and the Redis endpoint. [EC2 security groups](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-security-groups.html)
-3. Provision a dedicated compatible Redis endpoint in the same region, preferably on a private network reachable from the instance. Enable TLS/authentication, persistence and backups; verify service command/endpoint compatibility before selecting a managed Redis offering. Do not assume all serverless cache products are interchangeable with this client's single-primary connection.
-4. Install the shared Linux service, point your DNS hostname at the stable address, and configure Caddy as above. Keep the environment file outside the package.
-5. Perform the acceptance checklist below, including an instance/service restart.
-
-An AWS load balancer is optional and not required for this one-owner initial recipe. Adding one requires separate TLS, WebSocket timeout, and cost review.
-
-## Aliyun / Alibaba Cloud ECS
-
-1. Select a Linux ECS instance, persistent disk, region, public bandwidth, and stable public IP/EIP appropriate to your devices. Review the region's domain and hosting prerequisites before purchase. For mainland hosting, consult [Alibaba Cloud's ICP filing guidance](https://www.alibabacloud.com/help/en/icp-filing/basic-icp-service/product-overview/what-is-an-icp-filing) and confirm the requirements for your intended endpoint with the provider.
-2. Configure the ECS security group for restricted administrative access and Caddy TCP 80/443. Keep the Node port and Redis private. See [ECS security group rules](https://www.alibabacloud.com/help/en/ecs/user-guide/security-group-rules).
-3. Provision persistent compatible TCP Redis in the same region/VPC. Check TLS, authentication, non-eviction, backups, Lua/pub/sub support, and endpoint mode. A managed Redis-compatible product still needs this compatibility check.
-4. Install the shared Linux service and Caddy. Configure DNS for the endpoint and complete applicable provider domain setup before certificate issuance/testing.
-5. Test from the actual mainland networks and devices, then complete acceptance. Direct is the intended connection mode when this endpoint is reachable.
-
-This recipe does not use Aliyun Function Compute or require Cloudflare in front of Aliyun. The same Node service layout can be adapted to another Linux VM provider, with that provider's firewall, DNS, and storage setup.
-
-## Cloudflare Tunnel
-
-This recipe needs an always-on server running the shared Linux service. It can be an AWS/Aliyun VM or another server. Cloudflare supplies the public endpoint and outbound tunnel, while that server supplies compute and reaches Redis.
-
-1. Add/control the intended domain in Cloudflare and install the bridge service on the origin VM. Confirm local health on `127.0.0.1:32143`.
-2. Create a named Cloudflare Tunnel in the dashboard. Install `cloudflared` on the **same VM** using the dashboard's OS-specific connector instructions; run it as a persistent service. Treat its connector token as a secret.
-3. Add a published application route for `bridge.example.com`, service type HTTP, service URL `localhost:32143`, with no path restriction. Cloudflare terminates public TLS; the origin HTTP hop is local to the VM. Do not use the private Marifold application service as the tunnel origin.
-4. Keep inbound Node/Redis ports closed. Allow the connector's documented outbound traffic. An origin using only Tunnel does not need public inbound 80/443 or a Caddy installation. Retain your separate administrative access.
-5. Ensure the bridge hostname allows noninteractive HTTP/WebSocket clients. The current client does not supply Cloudflare Access service-token headers and cannot complete browser challenges. Scope any exception to this relay hostname; do not remove protections from unrelated applications.
-6. Verify public health, pair two devices, and restart the connector to exercise reconnect. Use the stable hostname rather than a temporary Quick Tunnel URL.
-
-Follow the [official named-tunnel setup](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/get-started/create-remote-tunnel/). Cloudflare proxies WebSockets but connections can close during network updates; see [WebSocket behavior](https://developers.cloudflare.com/network/websockets/). This route does not guarantee reachability from every mainland network.
-
-## Local device proxies
-
-Bridge proxy support is **planned, not implemented**. The intended setting is local to each device's workspace connection: Direct by default, with an optional explicit proxy applied consistently to registration, pairing and WebSocket reconnects. Home and office may use different values for the same endpoint.
-
-This is independent of hosting provider and model-provider proxies. Never put a Mac's proxy address in the server environment file: `127.0.0.1` there means the server. Do not synchronize local proxy credentials. CLI/Web create/join and later connection editing should expose the setting when implemented. For now a VPN/TUN that routes the service process may supply connectivity; provider proxy settings do not configure workspace bridge traffic.
-
-## Acceptance, updates, and recovery
-
-For an installer-managed Linux deployment, pull and build Marifold on the server, then run the updater:
-
-```sh
-cd ~/repos/marifold
-git pull --ff-only
-pnpm install --frozen-lockfile
-pnpm -r build
-node packages/cli/dist/index.js workspace bridge update
-```
-
-With a linked CLI, the last command is `marifold workspace bridge update`. For a freshly prepared standalone package, use `sudo bash setup.sh --update` instead. `workspace bridge install --start` remains a restart/recovery command, not an upgrade.
-
-The updater targets the existing `/opt/marifold-bridge` installation. It builds a new release while the current container runs, preserves the installed Dockerfile (including a China registry mirror), and replaces only the bridge container. It preserves the environment file, registration token, Redis container/data and Caddy configuration. Connections briefly reconnect. Failed deployment or health checks trigger a rollback to the retained previous image. Build failures leave the running container and active configuration intact. Release directories and rollback configuration remain under `/opt/marifold-bridge`; the updater prints their location. This updater does not manage manual systemd or Vercel deployments.
-
-The v0.70.3 relay prevents repeated delivery of unacknowledged packets within a connection. Updated devices enable concurrent chunks only when both relay connections support this behavior. Upgrade the ECS bridge as well as both Macs to enable the throughput improvement; older relays retain sequential transfers. After updating, `/health` includes `"deliveryReplay":"on-reconnect"`.
-
-For every provider, verify before relying on the bridge:
-
-- HTTPS health responds without a login/challenge; then authenticated registration and pairing succeed. Health alone is not a Redis or end-to-end execution test.
-- The guest reads shared host data and receives a host-authenticated model answer.
-- An approved file write reaches the selected device; its artifact downloads.
-- Separate sessions run concurrently; the same session rejects competing runs.
-- Connection/service/ingress restart recovers without duplicate side effects.
-- Host offline behavior, guest executor opt-out, and device revocation work.
-- Redis metadata survives a planned restart and has a recovery procedure. Test backup/restore on disposable data before applying it to a real workspace.
-
-Retain the prior package for rollback. For a Linux update, stage dependencies in a separate release directory, stop/switch/restart the service during a planned interruption, and preserve the environment file and Redis data. For Vercel, retain the prior deployment and environment configuration. Recheck pairing and reconnect after a change. Do not flush Redis as a troubleshooting shortcut: losing host and revocation metadata can break existing workspaces.
-
-The remaining live acceptance work is shared with the repository's `docs/workspaces.md`. No provider resources are created by preparing this package or by saving this guide.
+- `/health` answers without a login or challenge; registration and pairing succeed.
+- A guest reads shared host data and gets a model answer from the host.
+- An approved file write reaches the selected device, and its artifact downloads.
+- Separate sessions run concurrently; the same session refuses a competing run.
+- A bridge or network interruption recovers without repeating side effects.
+- Host offline behavior, executor opt-out and device revocation work.
+- For a server: the database survives a container rebuild and a reboot.

@@ -193,7 +193,7 @@ The agent eval runs scripted objectives in sandboxed temp directories and report
 
 ## Personal workspaces across devices
 
-Host your existing local workspace and pair your other Macs through an encrypted bridge. Profiles, sessions, models, Skills, Apps and schedules stay on the host; approved agent tools can run on a paired Mac. The Web **Workspace** control and TUI `/workspace` switch between Local and paired workspaces. Existing direct private connections remain available. See [setup, permissions and recovery](docs/workspaces.md) and the [Vercel/Redis deployment guide](apps/bridge/README.md).
+Host your existing local workspace and pair your other Macs through an encrypted bridge. Profiles, sessions, models, Skills, Apps and schedules stay on the host; approved agent tools can run on a paired Mac. The Web **Workspace** control and TUI `/workspace` switch between Local and paired workspaces. Existing direct private connections remain available. Deploy the bridge with `marifold workspace bridge deploy cloudflare` (free Cloudflare plan) or on your own Linux server. See [setup, permissions and recovery](docs/workspaces.md) and the [bridge guide](apps/bridge/README.md).
 
 ## Commands
 

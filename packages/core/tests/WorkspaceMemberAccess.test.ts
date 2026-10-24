@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createBridge, MemoryRelayStore } from '../../../apps/bridge/src';
+import { createBridge } from '../../../apps/bridge/src';
 import { WorkspaceManager } from '../src/workspace/WorkspaceManager';
 
 const cleanup: Array<() => void> = [];
@@ -19,7 +19,7 @@ function manager() {
 
 describe('executor-only members', () => {
   it('only answer execution requests; full members keep their access', async () => {
-    const bridge = createBridge(new MemoryRelayStore(), 'e'.repeat(32));
+    const bridge = createBridge({ registrationToken: 'e'.repeat(32), database: ':memory:' });
     await new Promise<void>((resolve) => bridge.listen(0, '127.0.0.1', resolve));
     cleanup.push(() => {
       bridge.closeAllConnections();

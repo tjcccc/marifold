@@ -431,6 +431,13 @@ export {
 export { AgentComputer, upstreamFor } from './computer/AgentComputer';
 export type { AgentComputerInfo, AgentComputerSettings, AgentComputerStatus, DockerEnvironment } from './computer/AgentComputer';
 export { WorkspaceManager } from './workspace/WorkspaceManager';
+export {
+  BRIDGE_DEPLOYMENT_FILE,
+  BRIDGE_TOKEN_FILE,
+  cloudflareBridgeDirectory,
+  savedBridgeToken,
+  savedBridgeUrl,
+} from './workspace/bridge/BridgeDeployment';
 export { artifactReadLength, workspaceArtifactStream } from './workspace/WorkspaceArtifactTransfer';
 export type { ArtifactChunk } from './workspace/WorkspaceArtifactTransfer';
 export type { WorkspaceOperationContext } from './workspace/WorkspaceManager';

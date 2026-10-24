@@ -1,4 +1,5 @@
 import WebSocket from 'ws';
+import { bridgeProxyAgent } from './BridgeProxy';
 import { ChunkTransfers } from './ChunkTransfers';
 import {
   decryptMessage,
@@ -24,6 +25,8 @@ import type {
 export interface PeerOptions {
   appVersion: string;
   bridgeUrl: string;
+  /** Device-local HTTP(S) proxy for the bridge connection; absent means direct. */
+  proxy?: string;
   workspaceId: string;
   deviceId: string;
   hostDeviceId?: string;
@@ -166,7 +169,8 @@ export class BridgePeer {
     if (this.stopped) { return; }
     const url = new URL('/v1/connect', this.options.bridgeUrl);
     url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
-    const socket = new WebSocket(url, { maxPayload: 512 * 1024, perMessageDeflate: false });
+    const agent = this.options.proxy ? bridgeProxyAgent(this.options.proxy, url.protocol === 'wss:') : undefined;
+    const socket = new WebSocket(url, { maxPayload: 512 * 1024, perMessageDeflate: false, ...(agent ? { agent } : {}) });
     this.socket = socket;
     let closedLocally = false;
     socket.on('message', (bytes) => {

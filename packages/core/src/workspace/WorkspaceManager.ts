@@ -19,6 +19,7 @@ import type {
 } from '@marifold/workspace-protocol';
 import { WorkspaceStore, type WorkspaceConnection } from './WorkspaceStore';
 import { BridgePeer } from './bridge/BridgePeer';
+import { bridgeDispatcher, bridgeProxy, redactedProxy } from './bridge/BridgeProxy';
 import { MARIFOLD_VERSION, workspaceVersionError } from './MarifoldVersion';
 
 export interface WorkspaceOperationContext {
@@ -59,7 +60,7 @@ export class WorkspaceManager {
   list(): WorkspaceSummary[] {
     return this.store
       .list()
-      .map(({ id, name, role, bridgeUrl, deviceId, hostDeviceId, executor, certificate }) => ({
+      .map(({ id, name, role, bridgeUrl, deviceId, hostDeviceId, executor, certificate, proxy }) => ({
         id,
         name,
         role,
@@ -70,22 +71,26 @@ export class WorkspaceManager {
         ...(certificate.membership.access ? { access: certificate.membership.access } : {}),
         online: role === 'host' ? Boolean(this.peers.get(id)?.online) : this.hostStatus.get(id) === true,
         ...(this.versionErrors.has(id) ? { versionError: this.versionErrors.get(id) } : {}),
+        ...(proxy ? { proxy: redactedProxy(proxy) } : {}),
       }));
   }
   async create(
     name: string,
     url: string,
     registrationToken: string,
+    proxy?: string,
   ): Promise<{ workspace: WorkspaceSummary; invitation: string }> {
-    const c = await this.store.create(name, url, os.hostname());
+    const c = await this.store.create(name, url, os.hostname(), proxy);
     try {
-      const response = await fetch(`${c.bridgeUrl}/v1/hosts`, {
+      const dispatcher = bridgeDispatcher(c.proxy);
+      const init: RequestInit = {
         method: 'POST',
         headers: { authorization: `Bearer ${registrationToken}`, 'content-type': 'application/json' },
         body: JSON.stringify({ workspaceId: c.id, hostDeviceId: c.hostDeviceId, host: c.host }),
         signal: AbortSignal.timeout(10000),
         redirect: 'error',
-      });
+      };
+      const response = await fetch(`${c.bridgeUrl}/v1/hosts`, dispatcher ? ({ ...init, dispatcher } as RequestInit) : init);
       if (!response.ok) { throw new Error(`Bridge registration failed (HTTP ${response.status}).`); }
       const peer = this.connect(c);
       await peer.ready();
@@ -97,7 +102,7 @@ export class WorkspaceManager {
       throw error;
     }
   }
-  async add(url: string, token: string, executor = false): Promise<WorkspaceSummary> {
+  async add(url: string, token: string, executor = false, proxy?: string): Promise<WorkspaceSummary> {
     if (token.length > 16384) { throw new MarifoldError('WORKSPACE_INVALID', 'Invalid invitation.'); }
     const invitation = record(JSON.parse(Buffer.from(token, 'base64url').toString('utf8'))) as unknown as Invitation;
     if (
@@ -112,6 +117,8 @@ export class WorkspaceManager {
     if (versionError) { throw new MarifoldError('WORKSPACE_INVALID', versionError); }
     const workspaceId = identifier(invitation.workspaceId);
     const existing = this.store.list().find(c => c.id === workspaceId);
+    // Re-pairing keeps the saved connection's proxy unless a new one is given.
+    const viaProxy = proxy ? bridgeProxy(proxy) : existing?.proxy;
     if (existing) {
       if (existing.role === 'host') { throw new MarifoldError('WORKSPACE_CONFLICT', 'Workspace is hosted on this device.'); }
       if (existing.bridgeUrl !== invitation.bridgeUrl || JSON.stringify(existing.host) !== JSON.stringify(invitation.host)) {
@@ -133,6 +140,7 @@ export class WorkspaceManager {
     const temporary = new BridgePeer({
       appVersion: MARIFOLD_VERSION,
       bridgeUrl: invitation.bridgeUrl,
+      ...(viaProxy ? { proxy: viaProxy } : {}),
       workspaceId,
       deviceId: pendingId,
       identity,
@@ -165,6 +173,7 @@ export class WorkspaceManager {
         certificate,
         // An executor-only device exists to execute; its pairing turns the executor on.
         executor: executor || certificate.membership.access === 'executor',
+        ...(viaProxy ? { proxy: viaProxy } : {}),
       };
       if (existing) { this.onMembershipRemoved?.(c.id); }
       this.store.save(c);
@@ -298,11 +307,21 @@ export class WorkspaceManager {
     this.store.save({ ...connection, executor: enabled });
     await this.checkHost(this.store.get(connection.id));
   }
+  /** Sets or clears (`undefined`, direct) this device's proxy for one workspace and reconnects through it. */
+  setProxy(id: string, proxy: string | undefined): WorkspaceSummary {
+    const { proxy: _old, ...connection } = this.store.get(id);
+    this.store.save(proxy ? { ...connection, proxy: bridgeProxy(proxy) } : connection);
+    // The old connection's status no longer applies; the new one reports its own.
+    this.hostStatus.delete(connection.id);
+    this.connect(this.store.get(connection.id));
+    return this.list().find((w) => w.id === connection.id)!;
+  }
   private connect(c: WorkspaceConnection): BridgePeer {
     this.peers.get(c.id)?.close();
     const peer = new BridgePeer({
       appVersion: MARIFOLD_VERSION,
       bridgeUrl: c.bridgeUrl,
+      ...(c.proxy ? { proxy: c.proxy } : {}),
       workspaceId: c.id,
       deviceId: c.deviceId,
       hostDeviceId: c.hostDeviceId,

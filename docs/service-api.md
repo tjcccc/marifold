@@ -468,11 +468,12 @@ Workspace management is local to the service receiving the request. The service'
 
 | Method | Path | Body / result |
 | --- | --- | --- |
-| GET | `/v1/workspaces` | Public summaries and `defaultId`; no private keys |
-| POST | `/v1/workspaces` | `{name, bridgeUrl, registrationToken}` → workspace + invitation |
-| POST | `/v1/workspaces/join` | `{bridgeUrl, invitation, executor?}` → paired workspace |
+| GET | `/v1/workspaces` | Public summaries and `defaultId`; no private keys; `proxy` without credentials |
+| POST | `/v1/workspaces` | `{name, bridgeUrl, registrationToken?, proxy?}` → workspace + invitation; the token may be omitted for the bridge this device deployed (`savedBridgeUrl` in the list response, never the token) |
+| POST | `/v1/workspaces/join` | `{bridgeUrl, invitation, executor?, proxy?}` → paired workspace; re-pairing keeps the saved proxy when `proxy` is omitted |
 | PUT | `/v1/workspaces/default` | `{id}`; `local` or saved workspace ID/name |
 | PUT | `/v1/workspaces/:id/executor` | `{enabled}`; local guest opt-in/out |
+| PUT | `/v1/workspaces/:id/proxy` | `{proxy}`: an `http(s)://` proxy URL for this device's bridge connection, or `null` for direct; reconnects at once |
 | DELETE | `/v1/workspaces/:id` | Stop sharing/disconnect; preserve local application data |
 | POST | `/v1/workspaces/:id/manage/:operation` | `rename` (`{name}`), `invite` (`{access?: "executor"}` for an executor-only device), `devices`, `revoke` (`{deviceId}`) |
 | * | `/v1/workspaces/:id/api/v1/...` | Allowlisted host application operations |

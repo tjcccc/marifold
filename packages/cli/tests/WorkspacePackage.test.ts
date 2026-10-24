@@ -14,7 +14,12 @@ it.each(['bridge', 'missing/nested/bridge'])('prepares %s without copying person
     const pkg = JSON.parse(fs.readFileSync(path.join(output, 'package.json'), 'utf8'));
     expect(pkg.private).toBe(true);
     expect(pkg.dependencies['@marifold/workspace-protocol']).toBe('file:vendor/workspace-protocol');
-    expect(fs.existsSync(path.join(output, 'api/bridge.ts'))).toBe(true);
+    expect(Object.keys(pkg.dependencies).sort()).toEqual(['@marifold/workspace-protocol', 'ws']);
+    expect(fs.existsSync(path.join(output, 'dist/serve.js'))).toBe(true);
+    // The Node package carries neither the Vercel entry nor the Cloudflare bundle.
+    expect(fs.existsSync(path.join(output, 'api'))).toBe(false);
+    expect(fs.existsSync(path.join(output, 'vercel.json'))).toBe(false);
+    expect(fs.existsSync(path.join(output, 'dist/cloudflare'))).toBe(false);
     expect(fs.existsSync(path.join(output, 'HOSTING.md'))).toBe(true);
     expect(fs.existsSync(path.join(output, 'setup.sh'))).toBe(true);
     expect(fs.existsSync(path.join(output, 'setup/setup.py'))).toBe(true);

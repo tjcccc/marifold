@@ -8,7 +8,7 @@ import type { WorkspaceRequestContext } from './WorkspaceRequestContext';
 import * as fs from 'node:fs';
 import { type ArtifactTickets, artifactHeaders } from './ArtifactTickets';
 import type { FastifyInstance, FastifyReply } from 'fastify';
-import { createArtifactPreview, artifactPreviewVariant, isPreviewableArtifact, MarifoldError, type RunArtifact, artifactReadLength, type WorkspaceManager, type RunRegistry, type WorkspaceOperationContext } from '@marifold/core';
+import { createArtifactPreview, artifactPreviewVariant, isPreviewableArtifact, MarifoldError, type RunArtifact, artifactReadLength, type WorkspaceManager, type RunRegistry, type WorkspaceOperationContext, savedBridgeToken, savedBridgeUrl } from '@marifold/core';
 import { objectBody, requiredString } from './Validation';
 
 /** Only application resources can traverse the bridge. Device-local configuration
@@ -180,15 +180,27 @@ export function registerWorkspaceRoutes(
     ok: true,
     workspaces: manager.list(),
     defaultId: manager.store.defaultId(),
+    // The URL only; the saved registration token never leaves the service.
+    ...(savedBridgeUrl() ? { savedBridgeUrl: savedBridgeUrl() } : {}),
   }));
+  // A device-local bridge proxy; omitted, null or empty means direct.
+  const proxyField = (value: unknown): string | undefined => {
+    if (value === undefined || value === null || value === '') { return undefined; }
+    if (typeof value !== 'string') { throw new Error('proxy must be a string.'); }
+    return value;
+  };
   server.post('/v1/workspaces', async (request) => {
     const b = objectBody(request.body);
+    const bridgeUrl = requiredString(b.bridgeUrl, 'bridgeUrl');
+    // Empty means the token saved when this device deployed that bridge.
+    const token = b.registrationToken === undefined || b.registrationToken === '' ? savedBridgeToken(bridgeUrl) : b.registrationToken;
     return {
       ok: true,
       ...(await manager.create(
         requiredString(b.name, 'name'),
-        requiredString(b.bridgeUrl, 'bridgeUrl'),
-        requiredString(b.registrationToken, 'registrationToken'),
+        bridgeUrl,
+        requiredString(token, 'registrationToken'),
+        proxyField(b.proxy),
       )),
     };
   });
@@ -200,6 +212,7 @@ export function registerWorkspaceRoutes(
         requiredString(b.bridgeUrl, 'bridgeUrl'),
         requiredString(b.invitation, 'invitation'),
         b.executor === true,
+        proxyField(b.proxy),
       ),
     };
   });
@@ -215,6 +228,10 @@ export function registerWorkspaceRoutes(
     if (!body.enabled) { cancelExecution?.(id); }
     await manager.setExecutor(id, body.enabled);
     return { ok: true, enabled: body.enabled };
+  });
+  server.put<{ Params: { id: string } }>('/v1/workspaces/:id/proxy', async (request) => {
+    const body = objectBody(request.body);
+    return { ok: true, workspace: manager.setProxy(manager.store.get(request.params.id).id, proxyField(body.proxy)) };
   });
   server.delete<{ Params: { id: string } }>('/v1/workspaces/:id', async (request) => {
     const id = manager.store.get(request.params.id).id;

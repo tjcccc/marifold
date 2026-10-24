@@ -1,8 +1,10 @@
 import { mkdtempSync, rmSync, statSync } from 'node:fs';
+import { connect, createServer as createNetServer } from 'node:net';
+import type { Socket } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createBridge, MemoryRelayStore } from '../../../apps/bridge/src';
+import { createBridge } from '../../../apps/bridge/src';
 import { WorkspaceManager } from '../src/workspace/WorkspaceManager';
 import { BridgePeer } from '../src/workspace/bridge/BridgePeer';
 import { MARIFOLD_VERSION } from '../src/workspace/MarifoldVersion';
@@ -38,7 +40,7 @@ describe('workspace bridge', () => {
   });
 
   it('marks an existing pairing unavailable when the host reports another release', async () => {
-    const bridge = createBridge(new MemoryRelayStore(), 'v'.repeat(32));
+    const bridge = createBridge({ registrationToken: 'v'.repeat(32), database: ':memory:' });
     await new Promise<void>(resolve => bridge.listen(0, '127.0.0.1', resolve));
     cleanup.push(() => { bridge.closeAllConnections(); bridge.close(); });
     const url = `http://127.0.0.1:${(bridge.address() as { port: number }).port}`;
@@ -68,16 +70,23 @@ describe('workspace bridge', () => {
     );
   }, 20000);
   it('keeps ordinary requests responsive during concurrent encrypted file transfers', async () => {
-    class DelayedRelay extends MemoryRelayStore {
-      override async publish(workspace: string, device: string, packet: string) {
-        await new Promise(resolve => setTimeout(resolve, 10));
-        await super.publish(workspace, device, packet);
-      }
-    }
-    const bridge = createBridge(new DelayedRelay(), 'c'.repeat(32));
+    const bridge = createBridge({ registrationToken: 'c'.repeat(32), database: ':memory:' });
     await new Promise<void>(resolve => bridge.listen(0, '127.0.0.1', resolve));
     cleanup.push(() => { bridge.closeAllConnections(); bridge.close(); });
-    const url = `http://127.0.0.1:${(bridge.address() as { port: number }).port}`;
+    // A front that delays each forwarded chunk models a real network's latency.
+    const front = createNetServer((client) => {
+      const upstream = connect((bridge.address() as { port: number }).port, '127.0.0.1');
+      const delayed = (to: Socket) => (bytes: Buffer) => { setTimeout(() => to.write(bytes), 10); };
+      client.on('data', delayed(upstream));
+      upstream.on('data', delayed(client));
+      client.on('close', () => upstream.destroy());
+      upstream.on('close', () => client.destroy());
+      client.on('error', () => undefined);
+      upstream.on('error', () => undefined);
+    });
+    await new Promise<void>(resolve => front.listen(0, '127.0.0.1', resolve));
+    cleanup.push(() => { front.close(); });
+    const url = `http://127.0.0.1:${(front.address() as { port: number }).port}`;
     const host = manager();
     const guest = manager();
     const file = { data: 'unmodified file bytes '.repeat(100000) };
@@ -103,7 +112,7 @@ describe('workspace bridge', () => {
     expect(guest.list()[0].online).toBe(true);
   }, 20000);
   it('pairs, forwards only authenticated workspace operations, and deduplicates effects', async () => {
-    const bridge = createBridge(new MemoryRelayStore(), 'a'.repeat(32));
+    const bridge = createBridge({ registrationToken: 'a'.repeat(32), database: ':memory:' });
     await new Promise<void>((resolve) => bridge.listen(0, '127.0.0.1', resolve));
     cleanup.push(() => {
       bridge.closeAllConnections();
@@ -149,7 +158,7 @@ describe('workspace bridge', () => {
     }
   }, 20000);
   it('keeps a valid pairing when a fresh invitation arrives while the host is offline', async () => {
-    const bridge = createBridge(new MemoryRelayStore(), 'b'.repeat(32));
+    const bridge = createBridge({ registrationToken: 'b'.repeat(32), database: ':memory:' });
     await new Promise<void>((resolve) => bridge.listen(0, '127.0.0.1', resolve));
     cleanup.push(() => { bridge.closeAllConnections(); bridge.close(); });
     const url = `http://127.0.0.1:${(bridge.address() as { port: number }).port}`;
@@ -167,7 +176,7 @@ describe('workspace bridge', () => {
     expect(guest.store.get(joined.id)).toEqual(original);
   }, 40000);
   it('reconnects interrupted transfers without repeating effects and supports executor revocation', async () => {
-    const bridge = createBridge(new MemoryRelayStore(), 'b'.repeat(32));
+    const bridge = createBridge({ registrationToken: 'b'.repeat(32), database: ':memory:' });
     const sockets = new Set<import('node:net').Socket>();
     bridge.on('connection', (socket) => {
       sockets.add(socket);
