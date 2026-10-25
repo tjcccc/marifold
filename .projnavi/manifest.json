@@ -1,7 +1,7 @@
 {
   "version": 1,
   "projnaviVersion": "0.5.0",
-  "generatedAt": "2026-10-24T15:54:14.185Z",
+  "generatedAt": "2026-10-25T01:48:58.904Z",
   "root": ".",
   "files": {
     ".claude/skills/projnavi/SKILL.md": {
@@ -25,7 +25,7 @@
       "category": "docs"
     },
     "apps/bridge/package.json": {
-      "hash": "ffd63146bc5f64239aedf7e198685c2e83ff6aed9e243d820d6f0b4245b22f37",
+      "hash": "68bbb386fa9ea1cfda3e8fa2be88cecb1d3d2be6325fe8c6ea76b15027cd59e0",
       "size": 659,
       "category": "config"
     },
@@ -85,8 +85,8 @@
       "category": "test"
     },
     "apps/bridge/tests/LiveBridge.test.ts": {
-      "hash": "7ff7f829bb212f827c166bd236af88790fe34824b06c8db0425f4eed16542d1b",
-      "size": 3219,
+      "hash": "15ef1cf81e6fae5b1697d129c6459296f6c173c73aa0e625f5c275b986eb794a",
+      "size": 3555,
       "category": "test"
     },
     "apps/bridge/tests/Relay.test.ts": {
@@ -100,7 +100,7 @@
       "category": "config"
     },
     "apps/web/package.json": {
-      "hash": "2357d92a8efc7628df57c551a71b379da355e8f4c02dba2c476922fad1276304",
+      "hash": "68a1446724ce5176a7a31003c3033ef6906b4d8a927ab89e8d9965a31d610ecd",
       "size": 998,
       "category": "config"
     },
@@ -745,8 +745,8 @@
       "category": "docs"
     },
     "DEVLOG.md": {
-      "hash": "06095896af332461bdc93e736148ea42b6e84659f012e33c0ef592fa0f886152",
-      "size": 245986,
+      "hash": "ec08cbf675deda4d887b440b1c406bbf4559f5eaada1893a868d4053b38aa3ea",
+      "size": 246171,
       "category": "docs"
     },
     "docs/agent-computer.md": {
@@ -850,12 +850,12 @@
       "category": "docs"
     },
     "package.json": {
-      "hash": "c90714d2574184c639cb154abd41e7fc1fa758b11c400626c0f9c5506c6639d3",
+      "hash": "933bdc143c17a3dfe8a73135fd5dc6502609f43a3e2effee9cef21054ae3fb34",
       "size": 1272,
       "category": "config"
     },
     "packages/cli/package.json": {
-      "hash": "e3b098bc3ee6c3c7d0c4c450df3e85000a6fee323e49d5e5d2c49a14791cdc14",
+      "hash": "319de57a49481b50fa5c61b5c4d2d56695d54391819fdc7ee5f2c737ebc960cc",
       "size": 948,
       "category": "config"
     },
@@ -975,7 +975,7 @@
       "category": "source"
     },
     "packages/cli/src/index.ts": {
-      "hash": "5e3e702d3144d2d3aca94f901620a3456442886333b8271fa46adcdb81fda1e4",
+      "hash": "e30abd830f54a5399b6b4b565add203b77e6a37a3e4dea8f7527cbbba22caf95",
       "size": 5116,
       "category": "source"
     },
@@ -1105,7 +1105,7 @@
       "category": "config"
     },
     "packages/client/package.json": {
-      "hash": "b7fdb6ff477406a722911120c61024a205c64cab1cb6b65dd5ee1750c2e4fb44",
+      "hash": "6e02429f6078973922598450bdc2acd5bad92684d9c3f0758f1e24cbaaeabae2",
       "size": 451,
       "category": "config"
     },
@@ -1165,7 +1165,7 @@
       "category": "config"
     },
     "packages/core/package.json": {
-      "hash": "cfc68c5a5d675392080417740911271825df3f947a314a12373463c32ecaecbc",
+      "hash": "633c9c22cea8f33524172b888005360a39536056e25fc82cd17a871b424c8a58",
       "size": 1020,
       "category": "config"
     },
@@ -2320,7 +2320,7 @@
       "category": "config"
     },
     "packages/service/package.json": {
-      "hash": "c13a5213cb63ca71f962c6f80e0c6b1de7f8554d029d71a98bb6e08f52977552",
+      "hash": "14214a5cdf490adb3958776ce4563ad489ad176761e4f0f35b3824d8d60b3b57",
       "size": 731,
       "category": "config"
     },
@@ -2490,7 +2490,7 @@
       "category": "config"
     },
     "packages/tui/package.json": {
-      "hash": "ff135b009eb9b1b05f600d4188a201aed5859d0642b8e63501d69709c090c505",
+      "hash": "4b1741456948ecd47d076d2e25d624638f6a1c2936428ba953e107d3b53bd697",
       "size": 878,
       "category": "config"
     },
@@ -2790,7 +2790,7 @@
       "category": "config"
     },
     "packages/workspace-protocol/package.json": {
-      "hash": "48253211e42f61b9a0d94875a59fc726f144fa153652cfaac836851ab859552f",
+      "hash": "a9ad8a3ec630f0ccbf9fd9be76687c715361094dc495987935ec859faa791674",
       "size": 515,
       "category": "config"
     },
@@ -2907,8 +2907,8 @@
   },
   "notes": {
     ".projnavi/project.md": {
-      "hash": "6412468f06239ccf5f6de33cc60aa77dbfded7c5ea79665f83cf0e0c4e405610",
-      "size": 5649,
+      "hash": "c738df05775aeb03a5952bc140b5f2ddf06ec6f650917e98f9d0513a93d8a374",
+      "size": 5641,
       "category": "note"
     },
     ".projnavi/modules/agent.md": {
@@ -3168,7 +3168,7 @@
       ]
     },
     "packages/cli/src/index.ts": {
-      "hash": "5e3e702d3144d2d3aca94f901620a3456442886333b8271fa46adcdb81fda1e4",
+      "hash": "e30abd830f54a5399b6b4b565add203b77e6a37a3e4dea8f7527cbbba22caf95",
       "size": 5116,
       "category": "source",
       "claimIds": [

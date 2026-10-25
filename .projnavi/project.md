@@ -60,7 +60,7 @@ Detected Node package @marifold/workspace. Indexed 498 relevant files. Detected 
 - Package: `@marifold/workspace`
 - Package scripts: `agent-eval`, `build`, `check:versions`, `command-test`, `lint`, `marifold`, `memory-eval`, `test`, `typecheck`
 - Top-level directories: `.claude`, `apps`, `docs`, `examples`, `packages`, `scripts`, `spec`
-- Test files: `apps/bridge/tests/Bridge.test.ts`, `apps/bridge/tests/RedisRelay.test.ts`, `apps/bridge/tests/RelayDelivery.test.ts`, `apps/web/tests/api/chat.test.ts`, `apps/web/tests/api/client.test.ts`, `apps/web/tests/api/follow.test.ts`, `apps/web/tests/api/profiles.test.ts`, `apps/web/tests/api/sse.test.ts`, `apps/web/tests/components/app.test.tsx`, `apps/web/tests/components/apps.test.tsx`, `apps/web/tests/components/citations.test.tsx`, `apps/web/tests/components/config.test.tsx`
+- Test files: `apps/bridge/tests/Bridge.test.ts`, `apps/bridge/tests/LiveBridge.test.ts`, `apps/bridge/tests/Relay.test.ts`, `apps/web/tests/api/chat.test.ts`, `apps/web/tests/api/client.test.ts`, `apps/web/tests/api/follow.test.ts`, `apps/web/tests/api/profiles.test.ts`, `apps/web/tests/api/sse.test.ts`, `apps/web/tests/components/app.test.tsx`, `apps/web/tests/components/apps.test.tsx`, `apps/web/tests/components/citations.test.tsx`, `apps/web/tests/components/config.test.tsx`
 
 ## File Counts
 
