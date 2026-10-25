@@ -8,7 +8,7 @@ The primary surface is the **TUI** — an Ink/React terminal app launched by bar
 
 Underneath sits an approval-aware agent loop with native provider tool calling, provider-hosted search, and Responses reasoning continuity (through `@priest-ai/core` 3.x) plus control-block and Marifold web-search fallbacks, narrow built-in tools (file read/write, isolated shell, per-run Python packages, web search, profile delegation), capability-scoped run workspaces, config-driven approval policy, a `marifold agent` command, conversation file/image attachments, ChatGPT/Copilot OAuth, the model-driven `marifold.skillapp.v1`/`.v2` template contracts (with legacy App v0 compatibility), and cron-scheduled unattended runs hosted inside `marifold service` — alongside lightweight profile conversations, structured per-profile memory, model/provider management, config backup/import, the default-loopback Fastify service API with private LAN/Tailscale access for the owner's devices, and ephemeral task-state storage.
 
-For product direction and future scope, see [docs/vision.md](docs/vision.md) and [docs/roadmap.md](docs/roadmap.md). For the terminal app, see [docs/tui.md](docs/tui.md).
+For product direction and future scope, see [docs/vision.md](docs/vision.md) and [docs/roadmap.md](docs/roadmap.md). For the terminal app, see [docs/tui.md](docs/tui.md). For what changed in each release, see [CHANGELOG.md](CHANGELOG.md).
 
 ## What marifold Supports
 

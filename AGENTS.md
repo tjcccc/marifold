@@ -31,6 +31,7 @@ marifold is a local-first, single-owner personal AI workspace: profiles, convers
 
 - marifold uses synchronized Semantic Versioning: root `package.json` defines the release version. Keep every workspace manifest (`packages/*/package.json` and `apps/*/package.json`, including private packages) and `.version(...)` in `packages/cli/src/index.ts` equal to it. New workspace packages join this policy automatically. Run `pnpm check:versions` before publishing.
 - For a release checkpoint, update the matching `DEVLOG.md` heading and refresh `pnpm-lock.yaml` with pnpm when the manifest changes affect it.
+- `CHANGELOG.md` is the user-facing history: one entry per version published to npm, folding in unpublished versions since the previous one (Added / Changed / Removed / Fixed, plus Upgrading when users must act). Add it with the release checkpoint; keep tests, harnesses and internal refactors in `DEVLOG.md` only. A version that also gets a GitHub release keeps its notes in `docs/releases/v<version>.md` and links them from its entry.
 - After a version bump, rebuild from clean output before publishing. Verify packed package versions and the packed CLI's `--version` match the release version.
 - Publish only after `pnpm gate` (full gate on a clean, committed tree) passed on that exact commit. Every public package's `prepublishOnly` runs `scripts/release-check.mjs`, which refuses a dirty tree, a commit the gate has not passed, mismatched versions, or a built CLI reporting another version.
 

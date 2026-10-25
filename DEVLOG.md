@@ -2,6 +2,10 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-10-25 — docs — CHANGELOG and release notes
+
+- New user-facing `CHANGELOG.md`: one entry per npm-published version (0.60.0–0.96.0, unpublished versions folded into the next published one) plus a summary of 0.1.0–0.59.0; linked from the README. `docs/releases/` keeps the GitHub release notes for v0.60.0 and v0.96.0. `AGENTS.md` versioning rule: add the CHANGELOG entry with each release checkpoint. No version change (npm 0.96.0 is unchanged).
+
 ## 2026-10-24 — v0.96.0 — Bridge on Cloudflare, SQLite only, device proxies
 
 - **One relay, SQLite state.** `apps/bridge` is now a platform-neutral, synchronous relay (`src/relay`) with thin adapters: Node (`http` + `ws` + `node:sqlite`, `createBridge({ registrationToken, database })`) and Cloudflare (Worker + one Durable Object with hibernating WebSockets, bundled by esbuild into `dist/cloudflare/worker.js`). Redis, `RedisRelayStore`, `MemoryRelayStore` and the Vercel adapter (`api/bridge.ts`, `vercel.json`, the `/api/bridge` aliases) are gone. Wire protocol unchanged (`/health` version 1, `deliveryReplay: on-reconnect`), so devices need no change to talk to it.
