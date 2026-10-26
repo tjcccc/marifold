@@ -5,14 +5,15 @@ import Database from 'better-sqlite3';
 import { MarifoldError } from '../errors/MarifoldError';
 import { avatarImageProblem, findAvatarFile, removeAvatarFiles, writeAvatarFile } from '../images/AvatarFiles';
 import { ensureProjectSessionsTable, PROJECT_SESSIONS_TABLE } from '../sessions/ProjectSessionsTable';
+import { DEFAULT_ASSET_LIMIT_BYTES, deleteProjectAssetRows, ensureProjectAssetTables, PROJECT_ASSET_VERSIONS_TABLE, ProjectAssets } from './ProjectAssets';
 
 /**
  * Projects: shared places for ongoing work, kept in the sessions database next
  * to the sessions they hold (see docs/projects.md). A project has a roster of
  * invited profiles and a Lead, always on the roster, that answers when no one
  * is addressed. Sessions keep Priest's `profile_name`; membership in a project
- * is a row in `marifold_project_sessions`. Files a project owns (its icon) live
- * in `<projectsDir>/<id>/`.
+ * is a row in `marifold_project_sessions`. Files a project owns (its icon and
+ * stored assets) live in `<projectsDir>/<id>/`.
  */
 
 export const PROJECTS_TABLE = 'marifold_projects';
@@ -21,6 +22,8 @@ export const PROJECT_MEMBERS_TABLE = 'marifold_project_members';
 const NAME_MAX = 100;
 const DESCRIPTION_MAX = 500;
 const INSTRUCTIONS_MAX = 50_000;
+const ASSET_LIMIT_MIN = 1024 * 1024;
+const ASSET_LIMIT_MAX = 1024 ** 4;
 
 export interface ProjectSummary {
   id: string;
@@ -39,6 +42,8 @@ export interface ProjectSummary {
 
 export interface ProjectDetail extends ProjectSummary {
   instructions: string;
+  /** Stored assets may use this much, counting each distinct content once. */
+  assetLimitBytes: number;
 }
 
 export interface ProjectCreateInput {
@@ -57,6 +62,8 @@ export interface ProjectUpdate {
   instructions?: string;
   /** Joins the roster when not on it yet. */
   lead?: string;
+  /** `null` returns to the default (100 MB). */
+  assetLimitBytes?: number | null;
 }
 
 export interface SessionProject {
@@ -73,6 +80,7 @@ export function ensureProjectTables(db: Database.Database): void {
       description TEXT,
       instructions TEXT NOT NULL DEFAULT '',
       lead TEXT NOT NULL,
+      asset_limit_bytes INTEGER,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
@@ -83,17 +91,22 @@ export function ensureProjectTables(db: Database.Database): void {
       PRIMARY KEY (project_id, profile_name)
     );
   `);
+  const columns = db.prepare(`PRAGMA table_info(${PROJECTS_TABLE})`).all() as Array<{ name: string }>;
+  if (!columns.some(column => column.name === 'asset_limit_bytes')) { db.exec(`ALTER TABLE ${PROJECTS_TABLE} ADD COLUMN asset_limit_bytes INTEGER`); }
   ensureProjectSessionsTable(db);
+  ensureProjectAssetTables(db);
 }
 
-/** Rename a profile in every roster, Lead and floor. Runs inside the caller's
- * transaction (profile rename moves sessions and projects together). */
+/** Rename a profile in every roster, Lead, floor and asset version it saved.
+ * Runs inside the caller's transaction (profile rename moves sessions and
+ * projects together). */
 export function renameProjectProfile(db: Database.Database, from: string, to: string): void {
   ensureProjectTables(db);
   db.prepare(`DELETE FROM ${PROJECT_MEMBERS_TABLE} WHERE profile_name = ? AND project_id IN (SELECT project_id FROM ${PROJECT_MEMBERS_TABLE} WHERE profile_name = ?)`).run(from, to);
   db.prepare(`UPDATE ${PROJECT_MEMBERS_TABLE} SET profile_name = ? WHERE profile_name = ?`).run(to, from);
   db.prepare(`UPDATE ${PROJECTS_TABLE} SET lead = ? WHERE lead = ?`).run(to, from);
   db.prepare(`UPDATE ${PROJECT_SESSIONS_TABLE} SET floor = ? WHERE floor = ?`).run(to, from);
+  db.prepare(`UPDATE ${PROJECT_ASSET_VERSIONS_TABLE} SET saved_by = ? WHERE saved_by = ?`).run(to, from);
 }
 
 export interface ProjectStoreOptions {
@@ -102,12 +115,13 @@ export interface ProjectStoreOptions {
   /** Creates the sessions database with its session tables, so the
    * project tables never stand in a database without them. */
   createSessionsDb?: () => void;
-  /** Where each project's files go; projects have no icons without it. */
+  /** Where each project's files go; projects have no icons or assets without it. */
   projectsDir?: string;
   now?: () => Date;
 }
 
 export class ProjectStore {
+  readonly assets: ProjectAssets;
   private readonly profileExists?: (name: string) => boolean;
   private readonly createSessionsDb?: () => void;
   private readonly now: () => Date;
@@ -116,6 +130,13 @@ export class ProjectStore {
     this.profileExists = options.profileExists;
     this.createSessionsDb = options.createSessionsDb;
     this.now = options.now ?? (() => new Date());
+    this.assets = new ProjectAssets({
+      read: work => this.read(work),
+      write: work => this.write(work),
+      assetLimit: (db, projectId) => this.existing(db, projectId).asset_limit_bytes ?? DEFAULT_ASSET_LIMIT_BYTES,
+      projectDir: projectId => this.projectDir(projectId),
+      now: () => this.now(),
+    });
   }
 
   list(): ProjectSummary[] {
@@ -126,7 +147,7 @@ export class ProjectStore {
   get(id: string): ProjectDetail | undefined {
     return this.read(db => {
       const row = projectRow(db, id);
-      return row ? { ...this.withIcon(summary(db, row)), instructions: row.instructions } : undefined;
+      return row ? { ...this.withIcon(summary(db, row)), instructions: row.instructions, assetLimitBytes: row.asset_limit_bytes ?? DEFAULT_ASSET_LIMIT_BYTES } : undefined;
     });
   }
 
@@ -174,6 +195,7 @@ export class ProjectStore {
   update(id: string, patch: ProjectUpdate): ProjectDetail {
     const name = patch.name === undefined ? undefined : this.validName(patch.name);
     const lead = patch.lead === undefined ? undefined : this.validProfile(patch.lead);
+    const assetLimit = patch.assetLimitBytes === undefined || patch.assetLimitBytes === null ? patch.assetLimitBytes : validAssetLimit(patch.assetLimitBytes);
     this.write(db => {
       this.existing(db, id);
       const at = this.now().toISOString();
@@ -182,6 +204,7 @@ export class ProjectStore {
         db.prepare(`UPDATE ${PROJECTS_TABLE} SET description = ? WHERE id = ?`).run(patch.description === null ? null : validDescription(patch.description) ?? null, id);
       }
       if (patch.instructions !== undefined) { db.prepare(`UPDATE ${PROJECTS_TABLE} SET instructions = ? WHERE id = ?`).run(validInstructions(patch.instructions), id); }
+      if (assetLimit !== undefined) { db.prepare(`UPDATE ${PROJECTS_TABLE} SET asset_limit_bytes = ? WHERE id = ?`).run(assetLimit, id); }
       if (lead !== undefined) {
         addMember(db, id, lead, at);
         db.prepare(`UPDATE ${PROJECTS_TABLE} SET lead = ? WHERE id = ?`).run(lead, id);
@@ -191,21 +214,19 @@ export class ProjectStore {
     return this.get(id)!;
   }
 
-  /** Delete a project. Its sessions are kept and become ordinary sessions of
-   * the profile each was started with; returns how many. */
+  /** Delete a project with its icon and assets. Its sessions are kept and
+   * become ordinary sessions of the profile each was started with; returns how many. */
   delete(id: string): { sessions: number } {
     const deleted = this.write(db => {
       const { sessionCount: sessions } = summary(db, this.existing(db, id));
       db.prepare(`DELETE FROM ${PROJECT_SESSIONS_TABLE} WHERE project_id = ?`).run(id);
       db.prepare(`DELETE FROM ${PROJECT_MEMBERS_TABLE} WHERE project_id = ?`).run(id);
+      deleteProjectAssetRows(db, id);
       db.prepare(`DELETE FROM ${PROJECTS_TABLE} WHERE id = ?`).run(id);
       return { sessions };
     });
     const dir = this.projectDir(id);
-    if (dir) {
-      removeAvatarFiles(dir, 'icon');
-      try { fs.rmdirSync(dir); } catch { /* Absent, or still holding other files. */ }
-    }
+    if (dir) { fs.rmSync(dir, { recursive: true, force: true }); }
     return deleted;
   }
 
@@ -380,6 +401,7 @@ interface ProjectRow {
   description: string | null;
   instructions: string;
   lead: string;
+  asset_limit_bytes: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -423,6 +445,13 @@ function validDescription(value: string | undefined): string | undefined {
   const description = typeof value === 'string' ? value.trim() : '';
   if (description.length > DESCRIPTION_MAX) { throw MarifoldError.projectInvalid(`A project description is at most ${DESCRIPTION_MAX} characters.`); }
   return description || undefined;
+}
+
+function validAssetLimit(value: number): number {
+  if (!Number.isSafeInteger(value) || value < ASSET_LIMIT_MIN || value > ASSET_LIMIT_MAX) {
+    throw MarifoldError.projectInvalid('An asset limit is a whole number of bytes from 1 MB to 1 TB.');
+  }
+  return value;
 }
 
 function validInstructions(value: string): string {

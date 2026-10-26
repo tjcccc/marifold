@@ -91,8 +91,9 @@ Every non-2xx response uses one envelope:
 | `NETWORK_FORBIDDEN` | 403 | Public source address rejected by private-network mode |
 | `ORIGIN_FORBIDDEN` | 403 | Disallowed browser origin or Host for the active bind scope |
 | `NOT_FOUND` | 404 | Unknown route |
-| `TASK_NOT_FOUND`, `SESSION_NOT_FOUND`, `SCHEDULE_NOT_FOUND`, `RUN_NOT_FOUND`, `ARTIFACT_NOT_FOUND`, `APPROVAL_NOT_FOUND`, `USER_INPUT_NOT_FOUND`, `CONFIG_FILE_NOT_FOUND`, `PROJECT_NOT_FOUND` | 404 | Unknown resource |
+| `TASK_NOT_FOUND`, `SESSION_NOT_FOUND`, `SCHEDULE_NOT_FOUND`, `RUN_NOT_FOUND`, `ARTIFACT_NOT_FOUND`, `APPROVAL_NOT_FOUND`, `USER_INPUT_NOT_FOUND`, `CONFIG_FILE_NOT_FOUND`, `PROJECT_NOT_FOUND`, `PROJECT_ASSET_NOT_FOUND` | 404 | Unknown resource |
 | `PROJECT_MEMBER_REQUIRED` | 409 | A project message mentions a profile that is not on the project's roster; `details.profile` names it, so a client can offer "Invite painter?" |
+| `PROJECT_ASSET_LIMIT` | 413 | A stored asset would pass its project's limit, or one asset's 25 MB cap |
 | `PROVIDER_ERROR` | 502 | Upstream provider rejected the request or returned no usable response |
 | `RUN_LIMIT_EXCEEDED` | 429 | Too many active agent runs (default limit 5) |
 | anything else | 500 | Internal error |
@@ -195,24 +196,34 @@ A project is a named group of profiles (its roster, led by its **Lead**) whose s
 |---|---|
 | `GET /v1/projects` | Project summaries by name: `{ id, name, description?, icon?, lead, members, sessionCount, createdAt, updatedAt }`; `members` is the roster in join order; `icon` is `{ mediaType }` when the project has one |
 | `POST /v1/projects` → 201 | Body `{ name, lead?, members?, description?, instructions? }`. `lead` defaults to `default.profile`, and the Lead is always on the roster. Names are 1–100 characters, unique ignoring case; every profile must exist |
-| `GET /v1/projects/:id` | One project: a summary plus `instructions`. 404 `PROJECT_NOT_FOUND` |
-| `PATCH /v1/projects/:id` | Body `{ name?, description?: string \| null, instructions?, lead? }`; a new Lead joins the roster |
-| `DELETE /v1/projects/:id` | `{ sessions }`: its sessions are kept, as ordinary sessions of the profile each started with |
+| `GET /v1/projects/:id` | One project: a summary plus `instructions` and `assetLimitBytes`. 404 `PROJECT_NOT_FOUND` |
+| `PATCH /v1/projects/:id` | Body `{ name?, description?: string \| null, instructions?, lead?, assetLimitBytes?: number \| null }`; a new Lead joins the roster; the asset limit is 1 MB to 1 TB, `null` returns to the 100 MB default |
+| `DELETE /v1/projects/:id` | `{ sessions }`: its sessions are kept, as ordinary sessions of the profile each started with; its icon and assets are deleted |
 | `POST /v1/projects/:id/members` | Body `{ profile }`: invite a profile to the roster |
 | `DELETE /v1/projects/:id/members/:profile` | Dismiss a profile; its earlier replies stay in the transcripts. The Lead cannot be dismissed |
 | `GET /v1/projects/:id/sessions?limit=&archived=&q=` | The project's sessions, like `GET /v1/sessions`; each also lists `speakers`, the profiles that have replied in it, first speaker first |
 | `GET /v1/projects/:id/icon?thumbnail=1` | The project icon, like a profile avatar (`ETag`, `304`, a 256px `thumbnail`); 404 `ICON_NOT_FOUND` when it has none, so clients draw the folder |
 | `PUT /v1/projects/:id/icon` | Body `{ data, mediaType }`: base64 PNG, JPEG, or WebP, up to 2 MB. Returns `{ project }` |
 | `DELETE /v1/projects/:id/icon` | Back to the folder. Returns `{ removed, project }` |
+| `GET /v1/projects/:id/assets` | `{ assets, usage: { usedBytes, limitBytes } }`. Each asset by name: `{ id, name, description?, version, size, mediaType, sha256, savedBy?, createdAt, updatedAt }` for its latest version; `savedBy` is the profile that saved it, absent when the user did |
+| `POST /v1/projects/:id/assets` | Body `{ name, data, mediaType, description? }`, base64, so a file of up to about 18 MB fits the 25 MB request limit. A name that exists (ignoring case) gets a new version; 201 with `{ asset, newVersion: true }`, or 200 with `newVersion: false` when the content equals the latest version |
+| `POST /v1/projects/:id/assets/from-run` | Body `{ runId, artifactId, name?, description? }`: **Add to assets** for a run output, read from the device that ran it; `name` defaults to the file's name. Responds like an upload; 400 once the output is gone (outputs are kept for a day) |
+| `GET /v1/projects/:id/assets/:assetId/versions` | `{ versions }`, newest first: `{ version, size, mediaType, sha256, savedBy?, runId?, createdAt }` |
+| `GET /v1/projects/:id/assets/:assetId/content?version=` | The content (latest by default) as a download (`attachment`, `nosniff`, a sandbox CSP), never rendered on the service's origin |
+| `PATCH /v1/projects/:id/assets/:assetId` | Body `{ name?, description?: string \| null }`; names are 1–200 characters without `/` or `\`, unique ignoring case. Returns `{ asset }` |
+| `DELETE /v1/projects/:id/assets/:assetId` | Deletes every version; returns the remaining `{ assets, usage }` |
 | `POST /v1/sessions/:id/project` | Body `{ projectId }` moves an existing session into a project (its profile joins the roster and holds the floor); `{ projectId: null }` moves it out. Returns `{ project }` (the session's new link, or `null`) |
 
 All project routes are also reachable through a workspace, so a guest device sees the host's projects.
+
+**Stored assets** live on the host as `projects/<id>/assets/<sha256>` beside `sessions.db`. The limit counts each distinct content once across every version and asset; one version is at most 25 MB (saved run outputs; uploads stop at about 18 MB), so a guest can still download it through the workspace bridge. Renaming a profile relabels what it saved.
 
 **Who answers** a run in a project session is decided on the host, so every client and device routes alike:
 
 - Profiles are mentioned by name (`@dev_test`), never by display name. Mentions of roster profiles pick the speakers, in mention order. A mention of an existing profile off the roster fails with `PROJECT_MEMBER_REQUIRED`. Any other mention is left for [execution-device routing](#execution-device-mentions), which reads the text without the profile mentions: `@painter on @office …` means painter answers, executing on office.
 - No profile mention: the floor (the profile last addressed alone), else the Lead. One mention gives that profile the floor; several give it back to the Lead. Regenerating an earlier message leaves the floor alone.
 - Each speaker answers as its own run (below), with the project's block placed before the request's `instructions`: who it is, the roster with the Lead marked, and the project instructions.
+- Each speaker's run also gets the project's asset manifest (names, types, sizes, versions, descriptions; never content), read as that run starts, so a later speaker sees what an earlier one saved, and the tools `list_assets`, `read_asset` and `save_asset`. Saving needs no approval unless the profile denies writes. `save_asset` takes a file from the run's output folder, wherever the run executes, or text.
 
 ### Chat
 

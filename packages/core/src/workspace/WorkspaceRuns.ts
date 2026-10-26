@@ -7,7 +7,7 @@ import type { RunArtifact } from '../agent/RunArtifacts';
 import { portableTrustedFolders, type RunWorkspace } from '../agent/RunWorkspace';
 import {
   UncertainToolOutcomeError,
-  ToolRegistry,
+  type ToolRegistry,
   type ToolExecutionResult,
   type ToolRiskAssessment,
 } from '../agent/ToolRegistry';
@@ -18,6 +18,7 @@ import { mentionsAgentComputer } from '../computer/ComputerTools';
 import { mentionsMarifoldState } from './RemoteStateAccess';
 import type { RunStartInput } from '../runs/RunRegistry';
 import { SkillManagementTool } from '../agent/tools/SkillManagementTool';
+import { deviceRunOutputs, hostRunOutputs, projectAssetManifest, projectAssetTools, type RunOutputs } from '../projects/ProjectAssetTools';
 import { executionTools } from './WorkspaceExecutor';
 import type { WorkspaceManager, WorkspaceOperationContext } from './WorkspaceManager';
 
@@ -97,7 +98,11 @@ export class WorkspaceRuns {
   }
   createRunner(input: RunStartInput): AgentRunner {
     const execution = input.execution;
-    if (!execution) { return this.runtime.createAgentRunner(input.profile); }
+    if (!execution) {
+      if (!input.projectId) { return this.runtime.createAgentRunner(input.profile); }
+      const registry = this.runtime.createDefaultToolRegistry(input.profile);
+      return this.runtime.createAgentRunner(input.profile, registry, undefined, { contextInstructions: this.projectAssets(input, registry, hostRunOutputs) });
+    }
     const { workspaceId, executionDeviceId } = execution;
     const host = this.manager.store.get(workspaceId);
     const devices = this.manager.devices(workspaceId);
@@ -126,6 +131,11 @@ export class WorkspaceRuns {
       executionDeviceId === host.hostDeviceId
         ? this.runtime.createDefaultToolRegistry(input.profile)
         : this.runtime.createHostContextTools(input.profile);
+    // The agent loop runs here; a guest's outputs are read over the bridge.
+    let runId: string | undefined;
+    contextInstructions.push(...this.projectAssets(input, registry, executionDeviceId === host.hostDeviceId
+      ? hostRunOutputs
+      : deviceRunOutputs(body => this.manager.execute(workspaceId, executionDeviceId, 'executor.artifact', { runId, ...body }))));
     const skills = registry.get('manage_skill');
     if (skills instanceof SkillManagementTool) {
       skills.useSourceDevices({
@@ -186,7 +196,6 @@ export class WorkspaceRuns {
       const stateAccess = execution.originDeviceId !== host.hostDeviceId ? this.runtime.remoteStateAccess() : undefined;
       return this.runtime.createAgentRunner(input.profile, registry, undefined, { contextInstructions, ...(stateAccess ? { stateAccess } : {}) });
     }
-    let runId: string;
     let lease: ReturnType<typeof setInterval> | undefined;
     let signal: AbortSignal | undefined;
     const request = (operation: string, body: unknown, id?: string) =>
@@ -262,6 +271,14 @@ export class WorkspaceRuns {
         return (await request('executor.artifacts', { runId })) as RunArtifact[];
       },
     });
+  }
+
+  /** A project speaker's asset tools, and its manifest for the run instructions. */
+  private projectAssets(input: RunStartInput, registry: ToolRegistry, outputs: RunOutputs): string[] {
+    if (!input.projectId) { return []; }
+    const assets = this.runtime.projects.assets;
+    for (const tool of projectAssetTools({ assets, projectId: input.projectId, profile: input.profile, runId: input.registryRunId, outputs })) { registry.register(tool); }
+    return [projectAssetManifest(assets, input.projectId)];
   }
 }
 

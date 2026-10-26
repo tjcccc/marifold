@@ -17,6 +17,7 @@ import {
 } from '@marifold/core';
 import { registerWorkspaceRoutes, remoteExecution } from './WorkspaceRoutes';
 import { registerProfileRoutes } from './ProfileRoutes';
+import { registerProjectAssetRoutes, runOutputs } from './ProjectAssetRoutes';
 import { registerProjectRoutes } from './ProjectRoutes';
 import { optionalStringField } from './Validation';
 import { registerChatRoutes } from './ChatRoutes';
@@ -224,6 +225,7 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
   });
 
   registerProjectRoutes(server, runtime, () => options.loadedConfig.config.default.profile);
+  registerProjectAssetRoutes(server, runtime, runOutputs(runRegistry, workspaceManager));
   registerWorkspaceRoutes(server, workspaceManager, runRegistry, workspaceContext, (operation, input, context) => workspaceExecutor.handle(operation, input, context), security.token, id => { workspaceExecutor.cancelWorkspace(id); artifactTransfers.cancelWorkspace(id); }, artifactTickets, artifactTransfers);
   server.addHook('onClose', async () => workspaceExecutor.close());
 

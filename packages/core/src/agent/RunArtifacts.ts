@@ -41,6 +41,16 @@ export function resolveRunArtifact(runId: string, artifactId: string, runsDir = 
   return listResolvedArtifacts(outputDir).find(artifact => artifact.id === artifactId);
 }
 
+/** A file in a run's output folder by its id, with the same containment as downloads. */
+export function resolveWorkspaceArtifact(workspace: Pick<RunWorkspace, 'outputDir'>, artifactId: string): ResolvedRunArtifact | undefined {
+  return listResolvedArtifacts(workspace.outputDir).find(artifact => artifact.id === artifactId);
+}
+
+/** An output's id: from its path relative to the output folder, `/`-separated. */
+export function runArtifactId(relative: string): string {
+  return crypto.createHash('sha256').update(relative).digest('hex').slice(0, 24);
+}
+
 function listResolvedArtifacts(outputDir: string): ResolvedRunArtifact[] {
   let root: string;
   try {
@@ -78,7 +88,7 @@ function listResolvedArtifacts(outputDir: string): ResolvedRunArtifact[] {
         if (!stat.isFile() || stat.size > MAX_RUN_ARTIFACT_BYTES) { continue; }
         const relative = path.relative(root, real).split(path.sep).join('/');
         artifacts.push({
-          id: crypto.createHash('sha256').update(relative).digest('hex').slice(0, 24),
+          id: runArtifactId(relative),
           name: relative,
           mediaType: mediaTypeFor(relative),
           size: stat.size,
@@ -97,7 +107,7 @@ function isInside(candidate: string, root: string): boolean {
   return relative === '' || (!relative.startsWith(`..${path.sep}`) && relative !== '..' && !path.isAbsolute(relative));
 }
 
-function mediaTypeFor(name: string): string {
+export function mediaTypeFor(name: string): string {
   switch (path.extname(name).toLowerCase()) {
     case '.xlsx': return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
     case '.xls': return 'application/vnd.ms-excel';

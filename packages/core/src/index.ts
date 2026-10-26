@@ -244,6 +244,8 @@ export { ProjectStore } from './projects/ProjectStore';
 export type { ProjectCreateInput, ProjectDetail, ProjectSummary, ProjectUpdate, SessionProject } from './projects/ProjectStore';
 export { planProjectTurn, projectInstructions, routeProjectMessage } from './projects/ProjectTurns';
 export type { ProjectRoute, ProjectTurnPlan } from './projects/ProjectTurns';
+export { DEFAULT_ASSET_LIMIT_BYTES, formatBytes as formatAssetBytes, MAX_ASSET_BYTES, ProjectAssets } from './projects/ProjectAssets';
+export type { ProjectAsset, ProjectAssetUsage, ProjectAssetVersion } from './projects/ProjectAssets';
 export type { RunProjectTurn } from './runs/ProjectTurn';
 export { matchMention, mentionTokens, type MentionToken } from './agent/Mentions';
 export type { ProfileRenameOutcome } from './profiles/ProfileRename';

@@ -45,6 +45,7 @@ export class ProjectTurn {
     return {
       ...shared,
       profile: speaker,
+      projectId: this.plan.projectId,
       instructions: [...(this.plan.instructions[speaker] ?? []), ...(own ? instructions ?? [] : [])],
       ...(own && provider !== undefined ? { provider } : {}),
       ...(own && model !== undefined ? { model } : {}),

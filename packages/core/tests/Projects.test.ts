@@ -97,9 +97,11 @@ describe('projects', () => {
     await sessions.appendExchange('s1', 'dev_test', 'which engine?', 'Godot.');
     const game = runtime.projects.create({ name: 'Game', lead: 'dev_test', members: ['painter'] });
     runtime.projects.moveSession('s1', game.id);
+    runtime.projects.assets.save(game.id, { name: 'a.md', data: Buffer.from('a'), mediaType: 'text/markdown', savedBy: 'dev_test' });
 
     await runtime.renameProfile('dev_test', 'tester');
     expect(runtime.projects.get(game.id)).toMatchObject({ lead: 'tester', members: ['tester', 'painter'] });
+    expect(runtime.projects.assets.find(game.id, 'a.md')?.savedBy).toBe('tester');
     expect(runtime.projects.sessionProject('s1')?.floor).toBe('tester');
     expect(runtime.getSession('s1')?.projectId).toBe(game.id);
 

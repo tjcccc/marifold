@@ -5,7 +5,8 @@ import { objectBody, optionalStringField, parseBooleanQuery, parseLimitQuery, re
 
 /**
  * Projects (docs/projects.md): create, edit and delete them, manage the roster,
- * list a project's sessions, and move a session in or out. Who answers inside a
+ * list a project's sessions, and move a session in or out. Assets have their
+ * own routes (ProjectAssetRoutes). Who answers inside a
  * project session is decided when a run starts (`planProjectTurn`).
  */
 export function registerProjectRoutes(server: FastifyInstance, runtime: MarifoldRuntime, defaultProfile: () => string): void {
@@ -38,6 +39,9 @@ export function registerProjectRoutes(server: FastifyInstance, runtime: Marifold
     if (body.description !== undefined && body.description !== null && typeof body.description !== 'string') {
       throw MarifoldError.configInvalid('description must be a string or null.');
     }
+    if (body.assetLimitBytes !== undefined && body.assetLimitBytes !== null && typeof body.assetLimitBytes !== 'number') {
+      throw MarifoldError.configInvalid('assetLimitBytes must be a number of bytes or null.');
+    }
     return {
       ok: true,
       project: projects.update(request.params.id, {
@@ -45,6 +49,7 @@ export function registerProjectRoutes(server: FastifyInstance, runtime: Marifold
         ...(body.description !== undefined ? { description: body.description as string | null } : {}),
         ...optionalStringField('instructions', body.instructions),
         ...optionalStringField('lead', body.lead),
+        ...(body.assetLimitBytes !== undefined ? { assetLimitBytes: body.assetLimitBytes as number | null } : {}),
       }),
     };
   });

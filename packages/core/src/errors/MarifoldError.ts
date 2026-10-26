@@ -19,6 +19,8 @@ export type MarifoldErrorCode =
   | 'PROJECT_INVALID'
   | 'PROJECT_NOT_FOUND'
   | 'PROJECT_MEMBER_REQUIRED'
+  | 'PROJECT_ASSET_NOT_FOUND'
+  | 'PROJECT_ASSET_LIMIT'
   | 'SKILL_INVALID'
   | 'SKILL_NOT_FOUND'
   | 'APP_INVALID'
@@ -150,6 +152,15 @@ export class MarifoldError extends Error {
   /** A message mentions a profile that is not on the project's roster; clients offer to invite it. */
   static projectMemberRequired(projectId: string, profile: string): MarifoldError {
     return new MarifoldError('PROJECT_MEMBER_REQUIRED', `'${profile}' is not on this project's roster. Invite it first.`, { project_id: projectId, profile });
+  }
+
+  static projectAssetNotFound(projectId: string, asset: string): MarifoldError {
+    return new MarifoldError('PROJECT_ASSET_NOT_FOUND', `Asset not found: ${asset}`, { project_id: projectId, asset });
+  }
+
+  /** A save would pass the project's stored-asset limit, or one asset's size cap. */
+  static projectAssetLimit(projectId: string, message: string): MarifoldError {
+    return new MarifoldError('PROJECT_ASSET_LIMIT', message, { project_id: projectId });
   }
 
   static skillInvalid(message: string, source?: string): MarifoldError {

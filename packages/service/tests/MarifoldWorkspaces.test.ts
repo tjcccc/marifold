@@ -705,4 +705,56 @@ describe('device-hosted workspaces', () => {
     expect(session.turns.map((turn: { role: string; speaker?: string }) => turn.speaker ?? turn.role)).toEqual(['user', 'default', 'painter']);
     expect((await p.guest.inject(`${p.prefix}/v1/projects/${project.id}/sessions`)).json().sessions.map((s: { id: string }) => s.id)).toEqual(['g']);
   }, 20000);
+
+  it('keeps project assets on the host for a guest: upload, a guest-executed run reading and saving one, and Add to assets', async () => {
+    const p = await paired(true);
+    const { project } = await post(p.guest, `${p.prefix}/v1/projects`, { name: 'Game' });
+    const upload = await p.guest.inject({ method: 'POST', url: `${p.prefix}/v1/projects/${project.id}/assets`, payload: { name: 'brief.md', mediaType: 'text/markdown', data: Buffer.from('Pixel art, 32px.').toString('base64') } });
+    expect(upload.statusCode).toBe(201);
+    const requests: string[] = [];
+    const realFetch = globalThis.fetch;
+    vi.stubGlobal('fetch', vi.fn(async (input, init) => {
+      if (!String(input).includes('localhost:11434')) { return realFetch(input, init); }
+      requests.push(String(init?.body));
+      const output = /write generated deliverables to (.+?)\. Regular output files/.exec(requests[0]!)?.[1];
+      const replies = [
+        '<tool_call name="read_asset">{"name":"brief.md"}</tool_call>',
+        `<tool_call name="write_file">${JSON.stringify({ path: `${output}/sprites.csv`, content: 'name,size\nhero,32' })}</tool_call>`,
+        '<tool_call name="save_asset">{"path":"sprites.csv","description":"Sprite list"}</tool_call>',
+        'Saved the sprite list.',
+      ];
+      return new Response(JSON.stringify({ message: { content: replies[requests.length - 1] }, done: true, done_reason: 'stop' }), { headers: { 'content-type': 'application/json' } });
+    }));
+    const { run } = await post(p.guest, `${p.prefix}/v1/runs`, { objective: 'List the sprites.', sessionId: 'g', projectId: project.id });
+    expect(run.execution.executionDeviceId).toBe(p.device);
+    let current;
+    for (let i = 0; i < 250 && !current?.finishedAt; i++) {
+      await new Promise(resolve => setTimeout(resolve, 20));
+      current = (await p.host.inject(`/v1/runs/${run.id}`)).json().run;
+      expect(current.pendingApprovals).toEqual([]);
+    }
+    expect(current.status).toBe('completed');
+    expect(requests[0]).toContain('- brief.md (text/markdown, 16 B, v1)');
+    expect(requests[1]).toContain('Pixel art, 32px.');
+    expect(requests[3]).toContain('Saved sprites.csv as version 1 (17 B).');
+
+    const listed = (await p.guest.inject(`${p.prefix}/v1/projects/${project.id}/assets`)).json();
+    expect(listed.assets.map((a: { name: string; savedBy?: string }) => [a.name, a.savedBy])).toEqual([['brief.md', undefined], ['sprites.csv', 'default']]);
+    expect(listed.usage).toEqual({ usedBytes: 33, limitBytes: 100 * 1024 * 1024 });
+    const sprites = listed.assets[1];
+    const download = await p.guest.inject(`${p.prefix}/v1/projects/${project.id}/assets/${sprites.id}/content`);
+    expect(download.body).toBe('name,size\nhero,32');
+    expect(download.headers['content-disposition']).toMatch(/^attachment/);
+
+    // Add to assets reads the guest's output over the bridge; equal content adds no version.
+    const artifact = current.artifacts.find((a: { name: string }) => a.name === 'sprites.csv');
+    const again = await p.guest.inject({ method: 'POST', url: `${p.prefix}/v1/projects/${project.id}/assets/from-run`, payload: { runId: run.id, artifactId: artifact.id } });
+    expect(again.statusCode).toBe(200);
+    expect(again.json()).toMatchObject({ newVersion: false, asset: { id: sprites.id, version: 1 } });
+    const copy = await p.guest.inject({ method: 'POST', url: `${p.prefix}/v1/projects/${project.id}/assets/from-run`, payload: { runId: run.id, artifactId: artifact.id, name: 'sprites copy.csv' } });
+    expect(copy.statusCode).toBe(201);
+    expect((await p.guest.inject(`${p.prefix}/v1/projects/${project.id}/assets`)).json().usage.usedBytes).toBe(33);
+    const removed = await p.guest.inject({ method: 'DELETE', url: `${p.prefix}/v1/projects/${project.id}/assets/${sprites.id}` });
+    expect(removed.json().assets.map((a: { name: string }) => a.name)).toEqual(['brief.md', 'sprites copy.csv']);
+  }, 20000);
 });

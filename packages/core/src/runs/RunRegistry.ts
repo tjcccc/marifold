@@ -93,6 +93,8 @@ export interface RunStartInput {
   replyToUserTurnIndex?: number;
   /** Internal, set by the service boundary: the profiles answering a project message. */
   projectTurn?: ProjectTurnPlan;
+  /** Internal: the project a speaker's run belongs to, for its asset tools. */
+  projectId?: string;
   deep?: boolean;
   /** Staged for lazy inspect_attachment access during the agent run. */
   images?: ImageInput[];

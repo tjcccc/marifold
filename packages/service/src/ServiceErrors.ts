@@ -45,6 +45,7 @@ function statusCodeForError(error: MarifoldError): number {
     error.code === 'TASK_NOT_FOUND'
     || error.code === 'SCHEDULE_NOT_FOUND'
     || error.code === 'PROJECT_NOT_FOUND'
+    || error.code === 'PROJECT_ASSET_NOT_FOUND'
     || error.code === 'SKILL_NOT_FOUND'
     || error.code === 'APP_NOT_FOUND'
     || error.code === 'RUN_NOT_FOUND'
@@ -73,6 +74,7 @@ function statusCodeForError(error: MarifoldError): number {
   if (error.code === 'UNAUTHORIZED') { return 401; }
   if (error.code === 'NETWORK_FORBIDDEN' || error.code === 'ORIGIN_FORBIDDEN' || error.code === 'HOST_ONLY_SETTING') { return 403; }
   if (error.code === 'RUN_LIMIT_EXCEEDED') { return 429; }
+  if (error.code === 'PROJECT_ASSET_LIMIT') { return 413; }
   if (error.code === 'SESSION_BUSY' || error.code === 'SESSION_ARCHIVED' || error.code === 'WORKSPACE_CONFLICT' || error.code === 'PROJECT_MEMBER_REQUIRED') { return 409; }
   if (error.code === 'WORKSPACE_INVALID') { return 400; }
   if (error.code === 'WORKSPACE_OFFLINE') { return 503; }
