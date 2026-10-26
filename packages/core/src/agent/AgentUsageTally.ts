@@ -15,7 +15,10 @@ export function withUsageTally(engine: AgentEngine, total: AgentUsage): AgentEng
 
 function addUsage(total: AgentUsage, usage?: UsageInfo): void {
   if (!usage) { return; }
-  if (usage.inputTokens != null) { total.inputTokens = (total.inputTokens ?? 0) + usage.inputTokens; }
+  if (usage.inputTokens != null) {
+    total.inputTokens = (total.inputTokens ?? 0) + usage.inputTokens;
+    total.contextTokens = Math.max(total.contextTokens ?? 0, usage.inputTokens);
+  }
   if (usage.outputTokens != null) { total.outputTokens = (total.outputTokens ?? 0) + usage.outputTokens; }
   if (usage.cachedInputTokens != null) { total.cachedInputTokens = (total.cachedInputTokens ?? 0) + usage.cachedInputTokens; }
   if (usage.reasoningTokens != null) { total.reasoningTokens = (total.reasoningTokens ?? 0) + usage.reasoningTokens; }

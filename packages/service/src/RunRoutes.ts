@@ -199,6 +199,7 @@ function parseRunStartInput(value: unknown): RunStartInput {
     ...optionalStringField('sessionId', body.sessionId),
     ...optionalStringField('userTurn', body.userTurn),
     ...optionalNonNegativeIntegerField('replaceUserTurnIndex', body.replaceUserTurnIndex),
+    ...optionalNonNegativeIntegerField('maxContextTokens', body.maxContextTokens),
     ...optionalStringField('cwd', body.cwd),
     // Session folders (`/add-dir`) from any of the owner's devices: `~/…` only,
     // checked against this device's home; `~` (home writes) stays a profile setting.

@@ -31,8 +31,8 @@ import {
   PROFILE_DISPLAY_TABLE,
   SESSION_DISPLAY_TABLE,
 } from './SessionDisplayTables';
+import { COMPACTION_METADATA_KEY, readSessionCompaction, type SessionCompactionState, writeSessionCompaction } from './SessionCompaction';
 
-const COMPACTION_METADATA_KEY = '__compaction';
 const SESSION_TITLE_MAX_CHARS = 200;
 
 export interface SessionDisplayUpdate {
@@ -84,11 +84,8 @@ export class SessionResolver {
 
   constructor(private readonly sessionsDb: string) {}
 
-  /** Open a connection with crash-resilience pragmas. `journal_mode = WAL` is a
-   * persistent file property — set by any connection it sticks and is inherited
-   * by every later opener (including priest's session store), making interrupted
-   * writes far less likely to corrupt the file. `synchronous` and `busy_timeout`
-   * are per-connection, so they are reapplied on every open. */
+  /** Open with crash-resilience pragmas. WAL is a persistent file property every
+   * later opener inherits; `synchronous` and `busy_timeout` are per-connection. */
   private open(): Database.Database {
     const db = new Database(this.sessionsDb, { fileMustExist: true });
     db.pragma('journal_mode = WAL');
@@ -97,10 +94,8 @@ export class SessionResolver {
     return db;
   }
 
-  /** Read-only health check. Safe to run when the DB is corrupt (it is the whole
-   * point — `marifold doctor` must work when the app won't start), and never
-   * throws: failures are returned as `{ ok: false }`. Opens read/write like the
-   * app does, so a pass means the app can actually read the DB. */
+  /** Health check that never throws (`marifold doctor` must work when the app
+   * won't start). Opens read/write like the app, so a pass means it can read the DB. */
   checkIntegrity(): SessionDbHealth {
     if (!fs.existsSync(this.sessionsDb)) { return { ok: true, exists: false }; }
     let db: Database.Database;
@@ -351,6 +346,13 @@ export class SessionResolver {
     return id ? this.get(id) : undefined;
   }
 
+  /** Read the session's running summary, or merge a new one into it. */
+  compaction(sessionId: string, update?: Required<SessionCompactionState>): SessionCompactionState | undefined {
+    if (!fs.existsSync(this.sessionsDb)) { return undefined; }
+    const db = this.open();
+    try { return update ? writeSessionCompaction(db, sessionId, update) : readSessionCompaction(db, sessionId); } finally { db.close(); }
+  }
+
   get(sessionId: string): SessionDetail | undefined {
     if (!fs.existsSync(this.sessionsDb)) { return undefined; }
 
@@ -579,9 +581,8 @@ export class SessionResolver {
     }
   }
 
-  /** Return only the completed turns before a zero-based user-turn ordinal.
-   * Historical edits use this as model context so later exchanges cannot leak
-   * into the regenerated answer. `undefined` means the session/turn is absent. */
+  /** Completed turns before a zero-based user-turn ordinal: an edit's context, so
+   * later exchanges cannot leak into its answer. `undefined` = session/turn absent. */
   turnsBeforeUserTurn(sessionId: string, userTurnIndex: number): SessionTurnSummary[] | undefined {
     if (!Number.isInteger(userTurnIndex) || userTurnIndex < 0) {
       throw MarifoldError.configInvalid('userTurnIndex must be a non-negative integer.');
@@ -856,9 +857,8 @@ export class SessionResolver {
     }
   }
 
-  /** Persist content-free completion metadata against the newest user turn.
-   * Like attachments, the zero-based user-turn ordinal survives Priest's
-   * whole-session turn-row rewrites. */
+  /** Persist content-free completion metadata against the newest user turn (the
+   * user-turn ordinal survives Priest's whole-session turn-row rewrites). */
   saveLastResponseMetrics(sessionId: string, responseMetrics: ResponseMetrics): void {
     if (!fs.existsSync(this.sessionsDb)) { return; }
 

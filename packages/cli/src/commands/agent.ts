@@ -144,6 +144,10 @@ function renderAgentEvent(event: AgentEvent, style: TerminalStyle): void {
     case 'verification':
       process.stdout.write(`${event.passed ? style.dim(`verified: ${event.notes}`) : style.yellow(`not verified: ${event.notes}`)}\n`);
       break;
+    case 'compaction':
+      if (event.status === 'completed') { process.stdout.write(`${style.dim(`compacted: the first ${event.summarizedTurns ?? 0} turns are now a summary`)}\n`); }
+      if (event.status === 'failed') { process.stdout.write(`${style.yellow(`could not compact${event.message ? `: ${event.message}` : ''}`)}\n`); }
+      break;
     case 'error':
       process.stdout.write(`${style.red(`error [${event.code}]: ${event.message}`)}\n`);
       break;

@@ -47,8 +47,9 @@ export interface CommandContext {
   showContextWindow(): void | Promise<void>;
   /** Set the context budget for this session (tokens), or 0/undefined to disable. */
   setContextWindow(tokens?: number): void | Promise<void>;
-  /** Persist the context budget as the current profile's default (profile.toml). */
-  setDefaultContextWindow(tokens?: number): void | Promise<void>;
+  /** Persist the context budget as the current profile's default (profile.toml):
+   * a token count, `auto` (the model's window), or 0 (compaction off). */
+  setDefaultContextWindow(tokens: number | 'auto'): void | Promise<void>;
   /** Compact the current session now (model-backed). */
   compactNow(): void | Promise<void>;
   /** Trust a folder for the active profile — file writes there won't prompt. */
@@ -225,23 +226,25 @@ const COMMANDS: CommandSpec[] = [
   {
     name: 'context-window',
     aliases: ['ctx'],
-    summary: 'Context budget: /context-window, set <tokens|off> [default].',
+    summary: 'Context budget: /context-window, set <tokens|off|auto> [default].',
     run: (ctx, args) => {
       const parts = args.trim().split(/\s+/).filter(Boolean);
       if (parts.length === 0) { ctx.showContextWindow(); return; }
       if (parts[0].toLowerCase() !== 'set') {
-        ctx.notify('Usage: /context-window [set <tokens|off> [default]]', 'warn');
+        ctx.notify('Usage: /context-window [set <tokens|off|auto> [default]]', 'warn');
         return;
       }
       const toDefault = parts[2]?.toLowerCase() === 'default';
       const raw = (parts[1] ?? '').toLowerCase();
+      // `auto` follows the model, so it is saved to the profile.
+      if (raw === 'auto') { return ctx.setDefaultContextWindow('auto'); }
       if (raw === 'off') {
-        if (toDefault) { ctx.setDefaultContextWindow(undefined); } else { return ctx.setContextWindow(undefined); }
-        return;
+        if (toDefault) { return ctx.setDefaultContextWindow(0); }
+        return ctx.setContextWindow(0);
       }
       const tokens = parseTokens(raw);
       if (tokens == null) {
-        ctx.notify('Usage: /context-window set <tokens|off> [default] (e.g. 16000 or 16k)', 'warn');
+        ctx.notify('Usage: /context-window set <tokens|off|auto> [default] (e.g. 128k)', 'warn');
         return;
       }
       if (toDefault) { ctx.setDefaultContextWindow(tokens); } else { return ctx.setContextWindow(tokens); }

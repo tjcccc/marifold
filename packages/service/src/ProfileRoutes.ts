@@ -28,7 +28,8 @@ interface ProfilePatch {
   /** Both strings sets the override; both null clears it. */
   model?: { provider: string; model: string } | null;
   memories?: boolean | null;
-  maxContextTokens?: number | null;
+  /** A token count (0 = compaction off), `auto` (the model's window), or null to inherit. */
+  maxContextTokens?: number | 'auto' | null;
   sessionContextTurns?: number | 'all' | null;
   approval?: Partial<Record<ToolKind, ApprovalMode | null>>;
 }
@@ -308,10 +309,11 @@ function parseProfilePatch(value: unknown): ProfilePatch {
 
   if (body.maxContextTokens !== undefined) {
     if (body.maxContextTokens === null) { patch.maxContextTokens = null; }
-    else if (typeof body.maxContextTokens === 'number' && Number.isInteger(body.maxContextTokens) && body.maxContextTokens > 0) {
+    else if (body.maxContextTokens === 'auto'
+      || (typeof body.maxContextTokens === 'number' && Number.isInteger(body.maxContextTokens) && body.maxContextTokens >= 0)) {
       patch.maxContextTokens = body.maxContextTokens;
     } else {
-      throw MarifoldError.configInvalid('maxContextTokens must be a positive integer or null.');
+      throw MarifoldError.configInvalid('maxContextTokens must be "auto", a token count (0 = off), or null.');
     }
   }
 

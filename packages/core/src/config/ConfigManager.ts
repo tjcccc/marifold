@@ -11,6 +11,7 @@ import {
   resolveWebSearchConfig,
 } from './ConfigSchema';
 import { MarifoldError } from '../errors/MarifoldError';
+import { AUTO_CONTEXT_TOKENS, parseCompactAtPercent, parseContextTokens } from './ModelWindows';
 import { resolveAgentConfig } from '../agent/ApprovalPolicy';
 import type { AgentToolMode, ApprovalMode, ToolKind } from '../agent/ApprovalPolicy';
 import { expandHome, resolveUserPath } from '../workspace/WorkspacePaths';
@@ -380,7 +381,12 @@ export class ConfigManager {
         this.config.default.maxSystemChars = parseNumber(value, 'default.max_system_chars');
         return;
       case 'max_context_tokens':
-        this.config.default.maxContextTokens = parseNumber(value, 'default.max_context_tokens');
+        this.config.default.maxContextTokens = value.trim().toLowerCase() === AUTO_CONTEXT_TOKENS
+          ? AUTO_CONTEXT_TOKENS
+          : parseContextTokens(parseNumber(value, 'default.max_context_tokens'), 'default.max_context_tokens');
+        return;
+      case 'compact_at_percent':
+        this.config.default.compactAtPercent = parseCompactAtPercent(parseNumber(value, 'default.compact_at_percent'), 'default.compact_at_percent');
         return;
       case 'compaction_keep_turns':
         this.config.default.compactionKeepTurns = parseNumber(value, 'default.compaction_keep_turns');
@@ -587,7 +593,10 @@ export function renderMarifoldConfig(config: MarifoldConfig): string {
     optionalNumberLine('timeout_seconds', config.default.timeoutSeconds),
     optionalNumberLine('max_output_tokens', config.default.maxOutputTokens),
     optionalNumberLine('max_system_chars', config.default.maxSystemChars),
-    optionalNumberLine('max_context_tokens', config.default.maxContextTokens),
+    config.default.maxContextTokens === AUTO_CONTEXT_TOKENS
+      ? `max_context_tokens = ${tomlString(AUTO_CONTEXT_TOKENS)}`
+      : optionalNumberLine('max_context_tokens', config.default.maxContextTokens),
+    optionalNumberLine('compact_at_percent', config.default.compactAtPercent),
     optionalNumberLine('compaction_keep_turns', config.default.compactionKeepTurns),
     optionalNumberLine('session_context_turns', config.default.sessionContextTurns),
     `deep = ${config.default.deep}`,

@@ -2,7 +2,7 @@ import type React from 'react';
 import { Box, Text } from 'ink';
 import type { NoticeTone, TranscriptItem } from '../core/appState.js';
 import { Markdown } from './Markdown.js';
-import { ACCENT, DIM_ACCENT, COMMAND, DIM, SKILL } from './theme.js';
+import { ACCENT, DIM_ACCENT, COMMAND, DIM, SKILL, userTurnBackground } from './theme.js';
 
 const NOTICE_COLOR: Record<NoticeTone, string> = {
   info: 'gray',
@@ -24,9 +24,9 @@ export function topGap(kind: string, prevKind: string | undefined): 0 | 1 {
 export function TranscriptRow({ item }: { item: TranscriptItem }): React.ReactElement | null {
   switch (item.kind) {
     case 'user': {
-      // The submitted input is the divider between turns: framed with top and
-      // bottom accent rules. A `/command` and a `$skill` echo in their own
-      // colors; a plain message keeps the `>` prompt.
+      // The submitted input is the divider between turns: a full-width band
+      // in a shade off the terminal background. A `/command` and a `$skill`
+      // echo in their own colors; a plain message keeps the `>` prompt.
       const command = item.text.startsWith('/');
       const skill = item.text.startsWith('$');
       // For a skill, color only the `$name` head; the args stay default white.
@@ -34,13 +34,7 @@ export function TranscriptRow({ item }: { item: TranscriptItem }): React.ReactEl
       const head = sp === -1 ? item.text : item.text.slice(0, sp);
       const rest = sp === -1 ? '' : item.text.slice(sp);
       return (
-        <Box
-          borderStyle="single"
-          borderColor={DIM}
-          borderLeft={false}
-          borderRight={false}
-          width="100%"
-        >
+        <Box backgroundColor={userTurnBackground()} width="100%" paddingX={1}>
           {command ? (
             <Text color={COMMAND} bold>{item.text}</Text>
           ) : skill ? (

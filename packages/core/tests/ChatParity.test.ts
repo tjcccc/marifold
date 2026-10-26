@@ -406,7 +406,7 @@ describe('chat tool loop', () => {
     }));
 
     const config = baseConfig(dir, {
-      default: { provider: 'xai', model: 'grok-4.6', profile: 'default', deep: false },
+      default: { provider: 'xai', model: 'grok-4.6', profile: 'default', deep: false, maxContextTokens: 16000 },
       models: { options: ['xai/grok-4.6'] },
       providers: {
         xai: {
@@ -595,7 +595,7 @@ describe('chat tool loop', () => {
     }));
 
     const config = baseConfig(dir, {
-      default: { provider: 'xai', model: 'grok-4.6', profile: 'default', deep: false },
+      default: { provider: 'xai', model: 'grok-4.6', profile: 'default', deep: false, maxContextTokens: 16000 },
       models: { options: ['xai/grok-4.6'] },
       providers: {
         xai: {
@@ -667,7 +667,7 @@ describe('chat tool loop', () => {
     }));
 
     const config = baseConfig(dir, {
-      default: { provider: 'xai', model: 'grok-4.6', profile: 'default', deep: false },
+      default: { provider: 'xai', model: 'grok-4.6', profile: 'default', deep: false, maxContextTokens: 16000 },
       models: { options: ['xai/grok-4.6'] },
       providers: {
         xai: {

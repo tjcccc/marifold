@@ -15,6 +15,8 @@ import { App } from './ui/App.js';
 import { SelectList } from './ui/SelectList.js';
 import { errorText, sessionBusyText } from './ui/appHelpers.js';
 import type { TranscriptItemData } from './core/appState.js';
+import { bandColor, probeTerminalBackground } from './core/terminalBackground.js';
+import { setUserTurnBackground } from './ui/theme.js';
 
 /** This package's version, read from its own package.json at runtime so the
  * header banner never drifts from the published version. */
@@ -65,6 +67,9 @@ export async function runTui(options: RunTuiOptions): Promise<void> {
   }
 
   const fullscreen = resolveFullscreen(options.fullscreen, options.loadedConfig.config.tui);
+  // Before any renderer owns the terminal: shade the prompt band off its background.
+  const background = process.env.MARIFOLD_THEME ? undefined : await probeTerminalBackground(process.stdin, process.stdout);
+  if (background) { setUserTurnBackground(bandColor(background)); }
 
   if (options.service) {
     const local = new MarifoldRuntime({ loadedConfig: options.loadedConfig, environment: { interface: 'terminal' }, sessionOwner: TERMINAL_SESSION_OWNER });
@@ -153,7 +158,7 @@ export async function runTui(options: RunTuiOptions): Promise<void> {
       deep: settings.deep,
       cwd: process.cwd(),
       version: readVersion(),
-      maxContextTokens: settings.maxContextTokens ?? options.loadedConfig.config.default.maxContextTokens,
+      maxContextTokens: settings.maxContextTokens,
       ...(resumeSessionId ? { sessionId: resumeSessionId } : {}),
       ...(resumeArchived ? { sessionArchived: true } : {}),
       ...(resumeTranscript ? { transcript: resumeTranscript } : {}),

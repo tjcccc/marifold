@@ -289,10 +289,14 @@ describe('commands', () => {
     expect(calls.setDefaultContextWindow).toEqual([24000]);
 
     runCommand(ctx, 'context-window', 'set off');
-    expect(calls.setContextWindow).toEqual([undefined]);
+    expect(calls.setContextWindow).toEqual([0]);
 
     runCommand(ctx, 'ctx', 'set off default'); // alias + disable default
-    expect(calls.setDefaultContextWindow).toEqual([undefined]);
+    expect(calls.setDefaultContextWindow).toEqual([0]);
+
+    // `auto` follows the model, so it always saves to the profile.
+    runCommand(ctx, 'context-window', 'set auto');
+    expect(calls.setDefaultContextWindow).toEqual(['auto']);
   });
 
   it('rejects an invalid /context-window token argument', () => {

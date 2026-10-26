@@ -9,7 +9,10 @@ import type { RunArtifact } from './RunArtifacts';
  * and loop turns), as reported by the provider. Fields are undefined when the
  * provider does not report usage (e.g. some local models). */
 export interface AgentUsage {
+  /** Summed over every model call in the run (billing). */
   inputTokens?: number;
+  /** Largest single call's input: how full the context got (the gauge). */
+  contextTokens?: number;
   outputTokens?: number;
   totalTokens?: number;
   /** Portion of inputTokens served from the provider's prompt cache, when reported. */
@@ -64,4 +67,8 @@ export type AgentEvent =
    * never emit a separate model-authored self-grade. */
   | { type: 'verification'; passed: boolean; notes: string }
   | { type: 'error'; code: string; message: string }
+  /** The session's older turns are being folded into its summary, after the
+   * turn was saved and before `done`; `summarizedTurns` counts covered turns.
+   * `skipped`: every turn is already summarized or still in the kept tail. */
+  | { type: 'compaction'; status: 'running' | 'completed' | 'skipped' | 'failed'; summarizedTurns?: number; message?: string }
   | { type: 'done'; taskId: string; status: TaskStatus; summary?: string; usage?: AgentUsage };

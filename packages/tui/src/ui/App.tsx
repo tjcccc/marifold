@@ -29,6 +29,7 @@ import { useSideQuestion } from './useSideQuestion.js';
 import { ARCHIVED_SESSION_TEXT, useSessionArchive } from './useSessionArchive.js';
 import { SideQuestionPanel } from './SideQuestionPanel.js';
 import { useSkills } from './useSkills.js';
+import { useContextUpkeep } from './useContextUpkeep.js';
 import { copyToClipboard, errorText, sessionBusyText, sessionLostText, unwrapPath } from './appHelpers.js';
 
 const READ_FILE_CHAR_LIMIT = 100000;
@@ -206,6 +207,7 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
   const sideQuestion = useSideQuestion({ runtime, stateRef });
   const { isArchived, markArchived, setArchived } = useSessionArchive({ runtime, stateRef, notify });
   useEffect(() => { if (initial.sessionId && initial.sessionArchived) { markArchived(initial.sessionId, true); } }, []);
+  useContextUpkeep({ runtime, stateRef, running: state.running, dispatch });
   const { lostSessionRef, takeOver } = useSessionLease({ runtime, sessionId: state.sessionId, dispatch, stateRef, runGenerationRef, abortRef, notify });
 
   const refreshSkills = useCallback((profile = stateRef.current.profile) => {
@@ -459,7 +461,7 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
         displayName: runtime.getProfile(settings.profile).displayName,
         provider: settings.provider,
         model: settings.model,
-        maxContextTokens: settings.maxContextTokens ?? loadedConfig.config.default.maxContextTokens,
+        maxContextTokens: settings.maxContextTokens,
       });
       dispatch({ type: 'new_session', sessionId: undefined });
       sessionGrantsRef.current.clear();
@@ -517,7 +519,7 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
     remember,
     forget,
     deleteMemory,
-    showContextWindow: () => {
+    showContextWindow: async () => {
       const s = stateRef.current;
       if (s.maxContextTokens == null || s.maxContextTokens <= 0) {
         notify('Context budget: off (compaction disabled). Enable with /context-window set <tokens>.', 'info');
@@ -525,18 +527,21 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
       }
       const used = s.contextTokens;
       const pct = used != null ? ` · using ${used.toLocaleString()} (${Math.round((used / s.maxContextTokens) * 100)}%)` : ' · no turn measured yet';
-      notify(`Context budget: ${s.maxContextTokens.toLocaleString()} tokens${pct}. Compacts past ~80%.`, 'info');
+      let percent: number | undefined;
+      try { percent = runtime.resolveSettings({ profile: s.profile, provider: s.provider, model: s.model }).compactAtPercent; } catch { /* unknown */ }
+      const summarized = s.sessionId ? (await Promise.resolve(runtime.getSession(s.sessionId)).catch(() => undefined))?.summarizedTurns : undefined;
+      notify(`Context budget: ${s.maxContextTokens.toLocaleString()} tokens${pct}. ${percent ? `Compacts past ${percent}%.` : 'Automatic compaction is off (compact_at_percent = 0); /compact still works.'}${summarized ? ` ${summarized} earlier turns are summarized.` : ''}`, 'info');
     },
     setContextWindow: (tokens?: number) => {
-      dispatch({ type: 'set_context_budget', maxContextTokens: tokens });
+      dispatch({ type: 'set_context_budget', maxContextTokens: tokens, session: true });
       notify(tokens ? `Context budget set to ${tokens.toLocaleString()} tokens for this session.` : 'Compaction disabled for this session.', 'info');
     },
-    setDefaultContextWindow: async (tokens?: number) => {
+    setDefaultContextWindow: async (tokens: number | 'auto') => {
       try {
         const saved = await runtime.setProfileMaxContextTokens(stateRef.current.profile, tokens);
         dispatch({ type: 'set_context_budget', maxContextTokens: saved });
         notify(saved
-          ? `Default context budget for ${stateRef.current.profile} set to ${saved.toLocaleString()} tokens (this and future sessions).`
+          ? `Default context budget for ${stateRef.current.profile} set to ${saved.toLocaleString()} tokens${tokens === 'auto' ? ' (the model\'s window)' : ''} (this and future sessions).`
           : `Compaction disabled by default for ${stateRef.current.profile}.`, 'info');
       } catch (error) {
         notify(`Could not set default context budget: ${errorText(error)}`, 'error');

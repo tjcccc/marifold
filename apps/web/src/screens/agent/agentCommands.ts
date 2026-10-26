@@ -119,7 +119,7 @@ export async function runAgentCommand(context: AgentCommandContext, { name, args
       const budget = profileDetail?.settings.maxContextTokens;
       const window = profileDetail?.settings.sessionContextTurns;
       notify([
-        `Context budget: ${budget !== undefined ? `${budget} tokens` : 'default'}`,
+        `Context budget: ${budget === 'auto' ? "the model's window" : budget === 0 ? 'off' : budget !== undefined ? `${budget} tokens` : 'default'}`,
         `Turn window: ${window !== undefined ? `${window} turns` : 'all'}`,
         'Change these in Config → the profile.',
       ].join('\n'));

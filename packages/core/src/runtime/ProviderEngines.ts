@@ -1,4 +1,4 @@
-import { type JSONValue, type PriestConfig, PriestEngine } from '@priest-ai/core';
+import { COMPACTION_TRIGGER_RATIO, type JSONValue, type PriestConfig, PriestEngine } from '@priest-ai/core';
 import { type ChatGptRefreshedTokens, refreshChatGptAccessToken } from '../config/ChatGptTokenRefresh';
 import type { LoadedMarifoldConfig } from '../config/ConfigSchema';
 import { exchangeGitHubTokenForCopilotToken } from '../config/GitHubCopilotAuth';
@@ -103,7 +103,7 @@ export class ProviderEngines {
       timeoutSeconds: config.default.timeoutSeconds,
       maxOutputTokens: config.default.maxOutputTokens,
       maxSystemChars: config.default.maxSystemChars,
-      maxContextTokens: settings.maxContextTokens ?? config.default.maxContextTokens,
+      maxContextTokens: priestCompactionBudget(settings),
       compactionKeepTurns: config.default.compactionKeepTurns,
       sessionContextTurns: settings.sessionContextTurns ?? config.default.sessionContextTurns,
       reasoning: deepReasoning(this.deepTarget(settings.provider, settings.model), settings.deep),
@@ -119,4 +119,11 @@ export class ProviderEngines {
     const providerType = this.loadedConfig.config.providers[providerName]?.type;
     return { providerName, providerType, model, rejected: reasoningRejected(providerName, model) };
   }
+}
+
+/** Priest compacts past a fixed share of its budget, so hand it the budget
+ * that puts that point at the configured percentage (off when either is unset). */
+export function priestCompactionBudget(settings: Pick<MarifoldResolvedSettings, 'maxContextTokens' | 'compactAtPercent'>): number | undefined {
+  if (!settings.maxContextTokens || !settings.compactAtPercent) { return undefined; }
+  return Math.round(settings.maxContextTokens * settings.compactAtPercent / 100 / COMPACTION_TRIGGER_RATIO);
 }

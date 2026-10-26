@@ -44,7 +44,7 @@ export interface MarifoldRunRequest {
   /** Set false to omit the profile's INSTRUCTIONS.md (or legacy fallback) from the provider
    * request. Runtime safety framing and explicit instructions still apply. */
   profileContext?: boolean;
-  /** Session-scoped context-budget override (e.g. /context-window set N). Wins over profile/global. */
+  /** Session-scoped context-budget override (e.g. /context-window set N; 0 = off). Wins over profile/global. */
   maxContextTokens?: number;
   /** Cancels the in-flight provider request when aborted (e.g. ESC/Ctrl-C). Forwarded to the engine stream. */
   signal?: AbortSignal;
@@ -57,8 +57,10 @@ export interface MarifoldResolvedSettings {
   deep: boolean;
   /** The profile's default TUI mode (`agent` unless the profile overrides it). */
   mode: ProfileMode;
-  /** Per-profile conversation-context budget in tokens; undefined falls back to default.maxContextTokens. */
+  /** Resolved context budget in tokens (`auto` → the model's window); undefined = compaction off. */
   maxContextTokens?: number;
+  /** Compact past this percentage of the budget; undefined = automatic compaction off. */
+  compactAtPercent?: number;
   /** Per-profile cap on recent session turns replayed to the model; undefined falls back
    * to default.sessionContextTurns (and undefined there means replay all). */
   sessionContextTurns?: number;

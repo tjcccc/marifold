@@ -5,7 +5,7 @@ import { DeviceExecution } from '../agent/DeviceExecution';
 import { ShellJobStatusTool } from '../agent/tools/ShellJobStatusTool';
 import type { RuntimeEnvironment } from './RuntimeEnvironment';
 import type { RunStartInput, RunJournal } from '../runs/RunRegistry';
-import type { ImageInput, UsageInfo } from '@priest-ai/core';
+import { DEFAULT_COMPACTION_KEEP_TURNS, type ImageInput, type UsageInfo } from '@priest-ai/core';
 import * as path from 'path';
 import { AgentRunner } from '../agent/AgentRunner';
 import { type ApprovalMode, type MarifoldAgentConfig, type ToolKind, mergeAgentConfig, resolveAgentConfig } from '../agent/ApprovalPolicy';
@@ -30,6 +30,7 @@ import { ConfigManager } from '../config/ConfigManager';
 import type { ConfigAddProviderOptions } from '../config/ConfigManager';
 import { type LoadedMarifoldConfig, type ProfileDetail, type ProfileMode, type ProfileSummary, type ProviderType, resolveWebSearchConfig, type SessionDetail, type SessionSummary } from '../config/ConfigSchema';
 import { ProviderInspector } from '../config/ProviderInspector';
+import { type ContextTokensSetting, ModelWindows, resolveCompactAtPercent, resolveContextTokens } from '../config/ModelWindows';
 import type { ProviderModelList, ProviderStatus } from '../config/ProviderInspector';
 import { createSearchBackend } from '../search/createSearchBackend';
 import { formatSearchResults, type SearchBackend } from '../search/SearchBackend';
@@ -88,6 +89,7 @@ import type { TaskCreateInput, TaskEventInput, TaskListOptions, TaskState, TaskS
 import type { MarifoldAskResponse, MarifoldProviderToolDefinition, MarifoldResolvedSettings, MarifoldRunRequest, MarifoldWebSearchMode } from './MarifoldTypes';
 import { ProviderEngines } from './ProviderEngines';
 import { ChatTurns } from './ChatTurns';
+import { AgentCompaction, sessionHistory } from './AgentCompaction';
 import { SkillAppOperations } from './SkillAppOperations';
 import { AgentComputer } from '../computer/AgentComputer';
 import { agentComputerTools } from '../computer/ComputerTools';
@@ -102,6 +104,8 @@ export interface MarifoldRuntimeOptions {
   searchBackend?: SearchBackend;
   /** Lease owner for calls that name none, e.g. `local.terminal` for an in-process TUI. */
   sessionOwner?: string;
+  /** Background problems (such as a failed automatic compaction). */
+  log?: (message: string) => void;
 }
 
 export class MarifoldRuntime {
@@ -112,6 +116,8 @@ export class MarifoldRuntime {
   private readonly sessionOwner: string;
   private readonly providerFactory: ProviderFactory;
   private readonly engines: ProviderEngines;
+  private readonly agentCompaction: AgentCompaction;
+  private readonly modelWindows = new ModelWindows(provider => this.listProviderModels(provider));
   private readonly skillApps: SkillAppOperations;
   private readonly chat: ChatTurns;
   private readonly memoryStore: MemoryStore;
@@ -130,6 +136,8 @@ export class MarifoldRuntime {
     this.sessionResolver = new SessionResolver(config.paths.sessionsDb);
     this.providerFactory = new ProviderFactory(config, configPath);
     this.engines = new ProviderEngines(options.loadedConfig, this.providerFactory, this.profileResolver, this.sessionResolver);
+    this.agentCompaction = new AgentCompaction({ sessionResolver: this.sessionResolver, engines: this.engines,
+      keepTurns: options.loadedConfig.config.default.compactionKeepTurns ?? DEFAULT_COMPACTION_KEEP_TURNS, log: options.log });
     this.memoryStore = new MemoryStore(config.paths.profilesDir);
     this.taskStore = new TaskStore(config.paths.tasksDir);
     this.searchBackendOverridden = options.searchBackend !== undefined;
@@ -182,7 +190,9 @@ export class MarifoldRuntime {
     if (!provider || !model) { throw MarifoldError.missingProviderModel(configPath); }
     return {
       profile, provider, model, deep, mode,
-      maxContextTokens: request.maxContextTokens ?? profileSettings.maxContextTokens,
+      maxContextTokens: resolveContextTokens(request.maxContextTokens ?? profileSettings.maxContextTokens ?? config.default.maxContextTokens,
+        () => this.modelWindows.lookup(provider, model)),
+      compactAtPercent: resolveCompactAtPercent(profileSettings.compactAtPercent ?? config.default.compactAtPercent),
       sessionContextTurns: profileSettings.sessionContextTurns,
     };
   }
@@ -257,9 +267,10 @@ export class MarifoldRuntime {
     return this.profileManager.setMode(name, mode).mode;
   }
 
-  /** Persist (or clear) a profile's conversation-context budget in profile.toml. */
-  setProfileMaxContextTokens(name: string, tokens: number | undefined): number | undefined {
-    return this.profileManager.setMaxContextTokens(name, tokens).maxContextTokens;
+  /** Persist (or clear) a profile's context budget; returns the resolved token budget. */
+  setProfileMaxContextTokens(name: string, tokens: ContextTokensSetting | undefined): number | undefined {
+    this.profileManager.setMaxContextTokens(name, tokens);
+    return this.resolveSettings({ profile: name }).maxContextTokens;
   }
 
   /** Persist a per-profile approval decision into the profile's profile.toml
@@ -458,11 +469,7 @@ export class MarifoldRuntime {
     sessionId: string,
     request: Pick<MarifoldRunRequest, 'profile' | 'provider' | 'model' | 'deep' | 'maxContextTokens'>,
   ): Promise<{ compacted: boolean }> {
-    const settings = this.resolveSettings(request);
-    await this.engines.refreshCredentials(settings.provider);
-    const engine = this.engines.create(settings.provider, true);
-    const result = await engine.compactSession(sessionId, this.engines.priestConfig(settings));
-    return { compacted: result.compacted };
+    return { compacted: (await this.agentCompaction.compact(sessionId, this.resolveSettings(request))) !== undefined };
   }
 
   listSessions(limit?: number, profileName?: string, options?: SessionListOptions & { sessionOwner?: string }): SessionSummary[] {
@@ -505,7 +512,9 @@ export class MarifoldRuntime {
   }
 
   getSession(sessionId: string): SessionDetail | undefined {
-    return this.sessionResolver.get(sessionId);
+    const detail = this.sessionResolver.get(sessionId);
+    const compaction = detail ? this.sessionResolver.compaction(sessionId) : undefined;
+    return detail && sessionHistory(detail.turns, compaction)[0]?.role === 'summary' ? { ...detail, summarizedTurns: compaction?.summarizedThrough } : detail;
   }
 
   getSessionAttachment(
@@ -536,21 +545,15 @@ export class MarifoldRuntime {
     return this.sessionResolver.rename(fromSessionId, toSessionId);
   }
 
-  /**
-   * Effective agent config for a profile: the global `[agent]` with the
-   * profile's `[agent]` overrides (profile.toml) merged on top. Unset profile
-   * keys inherit global/defaults; `undefined` profile → global only.
-   */
+  /** Effective agent config for a profile: the global `[agent]` with the
+   * profile's `[agent]` overrides merged on top (`undefined` → global only). */
   resolveAgentConfigForProfile(profile?: string): MarifoldAgentConfig {
     const name = profile ?? this.options.loadedConfig.config.default.profile;
     return mergeAgentConfig(resolveAgentConfig(this.options.loadedConfig.config.agent), this.profileResolver.loadSettings(name).agent);
   }
 
-  /**
-   * Build an approval-aware agent runner over this runtime's engine wiring,
-   * TaskStore, and config policy. Pass a custom registry to replace the
-   * default file/shell/delegate tool set.
-   */
+  /** Build an approval-aware agent runner over this runtime's engine wiring,
+   * TaskStore, and config policy; a custom registry replaces the default tools. */
   createAgentRunner(
     profile?: string,
     registry?: ToolRegistry,
@@ -607,15 +610,12 @@ export class MarifoldRuntime {
         }
         await this.sessionResolver.appendExchange(sessionId, profile, userText, assistantText, images, responseMetrics);
       },
+      compactAfterTurn: (sessionId, settings, usage, signal) => this.agentCompaction.afterTurn(sessionId, settings, usage, signal),
       // Bounded cross-objective memory for non-lean tasks: replay the clean
-      // pairs (objective → answer) that persistTurn wrote, never raw framing.
-      loadRecentTurns: (sessionId, beforeUserTurnIndex) =>
-        (beforeUserTurnIndex === undefined
-          ? (this.sessionResolver.get(sessionId)?.turns ?? [])
-          : (this.sessionResolver.turnsBeforeUserTurn(sessionId, beforeUserTurnIndex)
-            ?? this.missingEditedTurn(sessionId, beforeUserTurnIndex)))
-          .filter(t => t.role === 'user' || t.role === 'assistant')
-          .map(t => ({ role: t.role as 'user' | 'assistant', content: t.content })),
+      // pairs (objective → answer) that persistTurn wrote after their summary.
+      loadRecentTurns: (sessionId, beforeUserTurnIndex) => (beforeUserTurnIndex === undefined
+        ? sessionHistory(this.sessionResolver.get(sessionId)?.turns ?? [], this.sessionResolver.compaction(sessionId))
+        : sessionHistory(this.sessionResolver.turnsBeforeUserTurn(sessionId, beforeUserTurnIndex) ?? this.missingEditedTurn(sessionId, beforeUserTurnIndex))),
       resolveBuiltInInstructions: (objective, resolvedProfile) => {
         if (runtimeOptions.deviceInstructions) { return [runtimeOptions.deviceInstructions]; }
         const { config } = this.options.loadedConfig;

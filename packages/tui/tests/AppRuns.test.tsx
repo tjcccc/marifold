@@ -228,6 +228,50 @@ describe('App run routing', () => {
     unmount();
   });
 
+  it('sends a /context-window session budget with agent runs, and the profile budget otherwise', async () => {
+    const { runtime, runSpy } = makeRuntime();
+    const { stdin, unmount } = render(<App runtime={runtime} loadedConfig={config} initial={{ ...initial(), maxContextTokens: 16000 }} />);
+    await delay();
+    stdin.write('hello');
+    await delay();
+    stdin.write('\r');
+    await vi.waitFor(() => expect(runSpy).toHaveBeenCalledTimes(1));
+    expect(runSpy.mock.calls[0][0].maxContextTokens).toBeUndefined();
+    await delay();
+    stdin.write('/context-window set 8k');
+    await delay();
+    stdin.write('\r');
+    await delay();
+    stdin.write('again');
+    await delay();
+    stdin.write('\r');
+    await vi.waitFor(() => expect(runSpy).toHaveBeenCalledTimes(2));
+    expect(runSpy.mock.calls[1][0].maxContextTokens).toBe(8000);
+    unmount();
+  });
+
+  it('reports a compaction as it happens and restarts the gauge', async () => {
+    const usage = { inputTokens: 9700, outputTokens: 10, contextTokens: 9700 };
+    let compact = false;
+    const { runtime } = makeRuntime({ agentRun: async function* () {
+      if (compact) { yield { type: 'compaction', status: 'completed', summarizedTurns: 4 }; }
+      yield { type: 'done', taskId: 't', status: 'completed', usage };
+    } });
+    const { stdin, lastFrame, unmount } = render(<App runtime={runtime} loadedConfig={config} initial={{ ...initial(), maxContextTokens: 10000 }} />);
+    await delay();
+    stdin.write('one');
+    await delay();
+    stdin.write('\r');
+    await vi.waitFor(() => expect(lastFrame()).toContain('9.7K/10K'));
+    compact = true;
+    stdin.write('two');
+    await delay();
+    stdin.write('\r');
+    await vi.waitFor(() => expect(lastFrame()?.replace(/\s+/g, ' ')).toContain('Compacted: the first 4 turns'));
+    await vi.waitFor(() => expect(lastFrame()).toContain('0/10K'));
+    unmount();
+  });
+
   it('/steps arms a one-shot forced plan for the next message', async () => {
     const { runtime, runSpy } = makeRuntime();
     const { stdin, unmount } = render(<App runtime={runtime} loadedConfig={config} initial={initial()} />);

@@ -83,7 +83,8 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
     corsOrigins: options.cors?.origins,
   });
 
-  const runtime = new MarifoldRuntime({ loadedConfig: options.loadedConfig });
+  // Called only after startup, once `server` exists.
+  const runtime = new MarifoldRuntime({ loadedConfig: options.loadedConfig, log: message => server.log.warn(message) });
   const server = fastify({ logger: options.logger ?? false, bodyLimit: BODY_LIMIT_BYTES });
   const artifactTickets = new ArtifactTickets();
   registerSecurity(server, {

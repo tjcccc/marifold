@@ -19,7 +19,7 @@ import { isDeepStrictEqual } from 'node:util';
 import { stripMemoryControls, type MemoryControlPayloads } from '../memory/MemoryControls';
 import { agentMemoryInstructions, type AgentMemoryAccess } from './AgentMemory';
 import { EARLIER_IMAGE_LIMIT, earlierImageContext, type SessionImageAccess } from './EarlierImages';
-import { buildHistoryContext, type HistoryTurn } from './AgentHistory';
+import { buildHistoryContext, historyBudgetChars, type HistoryTurn, windowTurns } from './AgentHistory';
 import type { MarifoldProviderToolDefinition, MarifoldResolvedSettings, MarifoldRunRequest, MarifoldWebSearchMode } from '../runtime/MarifoldTypes';
 import type { TaskState, TaskStatus, TaskStore } from '../tasks/TaskStore';
 import type { AgentEvent, AgentUsage } from './AgentEvents';
@@ -64,6 +64,8 @@ export interface AgentRunOptions {
   profile?: string;
   provider?: string;
   model?: string;
+  /** Session-scoped context budget (`/context-window set N`; 0 = off). */
+  maxContextTokens?: number;
   /** Images attached to the objective. Agent runs stage them read-only and
    * expose them lazily through inspect_attachment; chat remains native. */
   images?: ImageInput[];
@@ -150,7 +152,9 @@ export interface AgentRunnerDeps {
   taskStore: TaskStore;
   registry: ToolRegistry;
   agentConfig: MarifoldAgentConfig;
-  resolveSettings: (request: Pick<MarifoldRunRequest, 'profile' | 'provider' | 'model'>) => MarifoldResolvedSettings;
+  resolveSettings: (request: Pick<MarifoldRunRequest, 'profile' | 'provider' | 'model' | 'maxContextTokens'>) => MarifoldResolvedSettings;
+  /** After a completed turn was saved: compact the session when it is due. */
+  compactAfterTurn?: (sessionId: string, settings: MarifoldResolvedSettings, usage: AgentUsage, signal?: AbortSignal) => AsyncIterable<AgentEvent>;
   prepareEngine: (settings: MarifoldResolvedSettings) => Promise<AgentEngineContext>;
   /** Normalize and optimize image inputs before the first provider request. */
   prepareImages?: (images: ImageInput[], optimize: boolean) => Promise<ImageInput[]>;
@@ -276,15 +280,10 @@ export class AgentRunner {
     const recentTurns = !options.lean && options.sessionId && this.deps.loadRecentTurns
       ? this.deps.loadRecentTurns(options.sessionId, options.replaceUserTurnIndex)
       : [];
-    // Cap to the last N turns when the profile sets session_context_turns — the
-    // same turn window chat uses, so the knob means the same thing in both modes.
-    // The char budget (≈ the token budget) remains the secondary bound.
-    const windowedTurns = settings.sessionContextTurns != null
-      ? recentTurns.slice(Math.max(0, recentTurns.length - settings.sessionContextTurns))
-      : recentTurns;
+    // session_context_turns caps the turns as in chat; the char budget is secondary.
     const historyContext = buildHistoryContext(
-      windowedTurns,
-      settings.maxContextTokens ?? HISTORY_BUDGET_DEFAULT_CHARS,
+      windowTurns(recentTurns, settings.sessionContextTurns),
+      historyBudgetChars(settings.maxContextTokens, settings.compactAtPercent) ?? HISTORY_BUDGET_DEFAULT_CHARS,
     );
     // Earlier session images, offered by ID and loaded only if inspected.
     const earlierImageRefs = !options.lean && options.sessionId && this.deps.sessionImages
@@ -630,6 +629,7 @@ export class AgentRunner {
         }
       }
 
+      if (options.sessionId && options.replaceUserTurnIndex === undefined && this.deps.compactAfterTurn) { yield* this.deps.compactAfterTurn(options.sessionId, settings, usage, options.signal); }
       // Complete. No verification phase: a separate self-grading model call was
       // non-actionable (a failed grade didn't retry or fix anything) and models
       // self-grade unreliably — so it was pure token overhead. Real checks belong
@@ -853,7 +853,7 @@ export class AgentRunner {
       ...(risk.reason ? { escalationReason: risk.reason } : {}),
       ...(risk.targetPath ? { escalatedPath: risk.targetPath } : {}),
       ...(risk.persistable === false ? { persistable: false } : {}),
-      ...(risk.runGrantFolder ? { runGrant: { folder: risk.runGrantFolder, access: tool.kind === 'write' ? 'write' as const : 'read' as const } } : {}),
+      ...(risk.runGrantFolder ? { runGrant: { folder: risk.runGrantFolder, access: tool.kind === 'read' ? 'read' as const : 'write' as const } } : {}),
       ...(risk.sudo ? { sudo: risk.sudo } : {}),
       ...(risk.sensitiveGrant ? { sensitiveGrant: risk.sensitiveGrant } : {}),
     };

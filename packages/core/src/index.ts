@@ -176,6 +176,7 @@ export { ConfigLoader } from './config/ConfigLoader';
 export { exchangeGitHubTokenForCopilotToken } from './config/GitHubCopilotAuth';
 export type { GitHubCopilotToken } from './config/GitHubCopilotAuth';
 export { ProviderInspector } from './config/ProviderInspector';
+export { AUTO_CONTEXT_TOKENS, FALLBACK_CONTEXT_WINDOW, type ContextTokensSetting } from './config/ModelWindows';
 export type { ModelValidation, ProviderModelList, ProviderStatus, ProviderSummary } from './config/ProviderInspector';
 export { ProviderFactory } from './config/ProviderFactory';
 export {

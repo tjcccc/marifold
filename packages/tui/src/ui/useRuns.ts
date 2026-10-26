@@ -79,6 +79,7 @@ export function useRuns({
     beginRunApprovals();
     let usage: AgentUsage | undefined;
     let doneStatus: string | undefined;
+    let compacted = false;
     try {
       await runtime.acquireSession?.(sessionId);
       const runner = runtime.createAgentRunner(current.profile);
@@ -89,6 +90,8 @@ export function useRuns({
         provider: current.provider,
         model: current.model,
         sessionId,
+        // A `/context-window set` budget (0 = off) overrides the profile's for this session.
+        ...(current.sessionContextBudget ? { maxContextTokens: current.maxContextTokens ?? 0 } : {}),
         ...(sessionDirsRef.current.length > 0 ? { trustedFolders: [...sessionDirsRef.current] } : {}),
         // A workspace host resolves `~/…` on the execution device; a local run
         // already works in this directory.
@@ -111,6 +114,7 @@ export function useRuns({
       })) {
         // The session moved to another device; leave the task to it.
         if (runGenerationRef.current !== generation) { break; }
+        if (event.type === 'compaction' && event.status === 'completed') { compacted = true; }
         if (event.type === 'done') {
           usage = event.usage;
           doneStatus = event.status;
@@ -123,7 +127,10 @@ export function useRuns({
       if (runGenerationRef.current !== generation) { return; }
       dispatch({ type: 'set_running', running: false });
       abortRef.current = null;
-      if (usage?.inputTokens != null) { dispatch({ type: 'set_context_usage', tokens: usage.inputTokens }); }
+      // The fullest single model call, not the run's summed input; a compaction
+      // made that stale, so the gauge restarts until the next call measures it.
+      const context = compacted ? 0 : usage?.contextTokens ?? usage?.inputTokens;
+      if (context != null) { dispatch({ type: 'set_context_usage', tokens: context }); }
       if (controller.signal.aborted) {
         notify('Cancelled.', 'warn');
       } else {

@@ -1,3 +1,4 @@
+import type { ContextTokensSetting } from './ModelWindows';
 import type { MarifoldAgentConfig, PartialAgentConfig } from '../agent/ApprovalPolicy';
 import type { ResponseMetrics } from '../sessions/ResponseMetrics';
 
@@ -11,8 +12,12 @@ export interface MarifoldDefaultConfig {
   timeoutSeconds?: number;
   maxOutputTokens?: number;
   maxSystemChars?: number;
-  /** Conversation-context budget in tokens. Enables session compaction when set (unset = off). */
-  maxContextTokens?: number;
+  /** Conversation-context budget: a token count (0 = compaction off) or
+   * `auto`, the model's own window. Unset means `auto`. */
+  maxContextTokens?: ContextTokensSetting;
+  /** Compact when a turn's context passes this percentage of the budget
+   * (default 90; 0 = only `/compact`). Per-profile overridable. */
+  compactAtPercent?: number;
   /** Recent turns kept verbatim when compacting; older turns fold into the summary. */
   compactionKeepTurns?: number;
   /** Hard cap on recent session turns replayed to the model (undefined = all). Per-profile overridable. */
@@ -188,8 +193,10 @@ export interface ProfileSettings {
   memories: boolean;
   /** Legacy compatibility override; primary clients ignore it for ordinary messages. */
   mode?: ProfileMode;
-  /** Per-profile conversation-context budget in tokens; falls back to default.maxContextTokens. */
-  maxContextTokens?: number;
+  /** Per-profile conversation-context budget; falls back to default.maxContextTokens. */
+  maxContextTokens?: ContextTokensSetting;
+  /** Per-profile compaction threshold; falls back to default.compactAtPercent. */
+  compactAtPercent?: number;
   /** Per-profile cap on recent session turns replayed to the model (undefined = all);
    * falls back to default.sessionContextTurns. */
   sessionContextTurns?: number;
@@ -292,4 +299,6 @@ export interface SessionImageAttachment {
 
 export interface SessionDetail extends SessionSummary {
   turns: SessionTurnSummary[];
+  /** Leading turns folded into the running summary (omitted when none). */
+  summarizedTurns?: number;
 }

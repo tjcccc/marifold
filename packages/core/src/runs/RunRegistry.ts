@@ -100,6 +100,8 @@ export interface RunStartInput {
   cwd?: string;
   /** Session-only trusted folders (`/add-dir`), validated `~/…` entries. */
   trustedFolders?: string[];
+  /** Session-scoped context budget (`/context-window set N`; 0 = off). */
+  maxContextTokens?: number;
 }
 
 /** Snapshot view of a run for list/get responses. `status` is the TaskStatus
@@ -476,6 +478,7 @@ export class RunRegistry {
         lean: input.lean,
         cwd: input.cwd,
         trustedFolders: input.trustedFolders,
+        maxContextTokens: input.maxContextTokens,
         executionId: run.id,
         tags: ['service'],
         signal: run.abort.signal,

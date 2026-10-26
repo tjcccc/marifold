@@ -71,6 +71,7 @@ function parseUsage(value: unknown): AgentUsage | undefined {
   const usage: AgentUsage = {};
   for (const key of [
     'inputTokens',
+    'contextTokens',
     'outputTokens',
     'totalTokens',
     'cachedInputTokens',

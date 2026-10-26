@@ -29,6 +29,8 @@ export interface AppState {
   sessionId?: string;
   /** Conversation-context budget in tokens for the active profile (undefined = compaction off). */
   maxContextTokens?: number;
+  /** True when `/context-window set` chose this session's budget; runs then send it. */
+  sessionContextBudget?: boolean;
   /** Input tokens the last turn sent — drives the context gauge. */
   contextTokens?: number;
   transcript: TranscriptItem[];
@@ -103,7 +105,7 @@ export type AppAction =
   | { type: 'new_session'; sessionId?: string }
   | { type: 'set_session'; sessionId?: string }
   | { type: 'set_context_usage'; tokens?: number }
-  | { type: 'set_context_budget'; maxContextTokens?: number }
+  | { type: 'set_context_budget'; maxContextTokens?: number; session?: boolean }
   | { type: 'exit' };
 
 function withItem(state: AppState, item: TranscriptItemData): AppState {
@@ -146,6 +148,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         provider: action.provider,
         model: action.model,
         maxContextTokens: action.maxContextTokens,
+        sessionContextBudget: false,
         contextTokens: undefined,
       };
     case 'add_user':
@@ -204,7 +207,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
     case 'set_context_usage':
       return { ...state, contextTokens: action.tokens };
     case 'set_context_budget':
-      return { ...state, maxContextTokens: action.maxContextTokens };
+      return { ...state, maxContextTokens: action.maxContextTokens, sessionContextBudget: action.session === true };
     case 'exit':
       return { ...state, exiting: true };
     default:
@@ -245,6 +248,9 @@ function applyAgentEvent(state: AppState, event: AgentEvent): AppState {
       break;
     case 'reasoning':
       next = { ...next, activity: 'reasoning' };
+      break;
+    case 'compaction':
+      next = { ...next, activity: event.status === 'running' ? 'compacting conversation' : undefined };
       break;
     case 'approval_request':
       next = { ...next, approval: event.request };

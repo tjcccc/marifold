@@ -32,6 +32,9 @@ export interface ProviderModelList {
   reachable: boolean | null;
   models: string[];
   message: string;
+  /** Context window in tokens per model id (and alias), for providers whose
+   * listing reports one. */
+  contextWindows?: Record<string, number>;
 }
 
 export interface ModelValidation {
@@ -329,14 +332,17 @@ export class ProviderInspector {
       const records = providerName === 'chatgpt'
         ? body.models ?? body.data ?? []
         : body.data ?? body.models ?? [];
-      const models = [...new Set(filterOpenAICompatibleModels(providerName, records)
+      const listed = filterOpenAICompatibleModels(providerName, records);
+      const models = [...new Set(listed
         .map(model => modelId(providerName, model))
         .filter((id): id is string => typeof id === 'string'))]
         .sort();
+      const contextWindows = modelContextWindows(providerName, listed);
       return {
         reachable: true,
         models,
         message: `${models.length} model(s) available.`,
+        ...(Object.keys(contextWindows).length > 0 ? { contextWindows } : {}),
       };
     } catch (error) {
       return {
@@ -370,8 +376,15 @@ export class ProviderInspector {
 interface OpenAICompatibleModelRecord {
   id?: unknown;
   slug?: unknown;
+  aliases?: unknown;
+  /** xAI, OpenRouter. */
+  context_length?: unknown;
+  /** ChatGPT (Codex catalog). */
+  context_window?: unknown;
   capabilities?: {
     type?: unknown;
+    /** GitHub Copilot. */
+    limits?: { max_context_window_tokens?: unknown };
   };
   model_picker_enabled?: unknown;
   supported_endpoints?: unknown;
@@ -402,6 +415,20 @@ function filterOpenAICompatibleModels(providerName: string, models: OpenAICompat
     return model.supported_endpoints.includes('/chat/completions')
       || model.supported_endpoints.includes('/responses');
   });
+}
+
+/** Context windows the listing reports, keyed by model id and its aliases. */
+function modelContextWindows(providerName: string, models: OpenAICompatibleModelRecord[]): Record<string, number> {
+  const windows: Record<string, number> = {};
+  for (const model of models) {
+    const id = modelId(providerName, model);
+    const tokens = [model.context_length, model.context_window, model.capabilities?.limits?.max_context_window_tokens]
+      .find((value): value is number => typeof value === 'number' && Number.isInteger(value) && value > 0);
+    if (!id || tokens === undefined) { continue; }
+    const aliases = Array.isArray(model.aliases) ? model.aliases.filter((alias): alias is string => typeof alias === 'string') : [];
+    for (const name of [id, ...aliases]) { windows[name] = tokens; }
+  }
+  return windows;
 }
 
 function modelId(providerName: string, model: OpenAICompatibleModelRecord): string | undefined {

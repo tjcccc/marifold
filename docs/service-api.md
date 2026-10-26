@@ -152,7 +152,7 @@ Responses are `{ "ok": true, ... }` unless noted. Bodies are JSON.
 | `GET /v1/profiles/:name/avatar` | Raw avatar image bytes (`content-type` = stored media type, `ETag` + `no-cache`; honors `If-None-Match` with 304). 404 `AVATAR_NOT_FOUND` when unset. Auth'd clients fetch with headers and render a blob URL (`<img src>` can't send a bearer token) |
 | `PUT /v1/profiles/:name/avatar` | Body `{ data: <base64>, mediaType }` — store the avatar (PNG/JPEG/WebP, ≤1 MB; replaces any previous one). Returns the fresh profile detail (summaries carry `avatar?: { mediaType }`) |
 | `DELETE /v1/profiles/:name/avatar` | `{ removed: boolean }` + fresh profile detail |
-| `PATCH /v1/profiles/:name` | Update per-profile settings. Optional fields: `displayName` (single-line string up to 100 characters; blank or `null` clears to the profile-name fallback), `provider`+`model` (both strings, or both `null` to clear the override), `memories` (`boolean\|null`; a `think` field from older clients is ignored because Deep is global: `PATCH /v1/config` `default.deep`), `maxContextTokens` (`int\|null`), `sessionContextTurns` (`int ≥ 0\|"all"\|null`), `approval` (`{ read\|write\|shell\|network\|delegate: "allow"\|"ask"\|"deny"\|null }` — `null` clears the override so the kind inherits again). Absent = untouched. Returns the fresh profile detail. The older `mode` field remains accepted for wire compatibility but primary clients always run ordinary messages as Agent. |
+| `PATCH /v1/profiles/:name` | Update per-profile settings. Optional fields: `displayName` (single-line string up to 100 characters; blank or `null` clears to the profile-name fallback), `provider`+`model` (both strings, or both `null` to clear the override), `memories` (`boolean\|null`; a `think` field from older clients is ignored because Deep is global: `PATCH /v1/config` `default.deep`), `maxContextTokens` (`"auto"\|int ≥ 0\|null`; `0` turns compaction off, `null` inherits the global setting), `sessionContextTurns` (`int ≥ 0\|"all"\|null`), `approval` (`{ read\|write\|shell\|network\|delegate: "allow"\|"ask"\|"deny"\|null }` — `null` clears the override so the kind inherits again). Absent = untouched. Returns the fresh profile detail. The older `mode` field remains accepted for wire compatibility but primary clients always run ordinary messages as Agent. |
 | `PUT /v1/profiles/:name/files/:file` | Overwrite `INSTRUCTIONS.md` (`:file = instructions`); body `{ content }`. Returns the fresh profile detail. Deprecated `profile\|rules\|custom` aliases remain for unmigrated clients; `rules`/`custom` writes are rejected once canonical instructions exist |
 | `POST /v1/profiles/:name/trusted-folders` | Body `{ folder }` — add a trusted folder, stored as `~/…` inside home and `~` for home itself (safety refusals for broad/sensitive roots are 400) |
 | `GET /v1/folders?path=` | Folder picker: subfolders of `path` (`~` or `~/…`, default `~`) in this device's home as `{ path, parent?, folders: [{ name, path }], truncated }`. Names only; files, hidden folders and credential stores are left out; paths that resolve outside home are 400. Also reachable through a workspace |
@@ -360,11 +360,14 @@ Each SSE frame's `event:` name equals `data.type`. The union (verbatim from core
 { "type": "artifact", "artifact": { "id": "8d1f...", "name": "report.xlsx",
   "mediaType": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "size": 18432 } }
 { "type": "error", "code": "...", "message": "..." }
+{ "type": "compaction", "status": "completed", "summarizedTurns": 6 }   // after the turn is saved, before done; also running | skipped | failed (+ message)
 { "type": "done",  "taskId": "task_x", "status": "completed", "summary": "...",
-  "usage": { "inputTokens": 900, "outputTokens": 120, "totalTokens": 1020,
+  "usage": { "inputTokens": 900, "contextTokens": 600, "outputTokens": 120, "totalTokens": 1020,
              "cachedInputTokens": 0, "reasoningTokens": 80,
              "estimatedCostUSD": 0.001 } }                               // always the last event
 ```
+
+`usage.inputTokens` sums every model call in the run (what is billed); `contextTokens` is the largest single call's input, i.e. how full the context got. Clients show `contextTokens` against the profile's context budget.
 
 Tool `kind` is `read | write | shell | network | delegate | interaction`; the last value identifies `ask_user` and is not approval-controlled. Render unknown event types as no-ops — the union may grow within v1. A `text.phase` of `progress` identifies model commentary emitted before a tool call; `final` identifies the completed answer. Treat an omitted phase as `final` for compatibility with older streams. `reasoning.summary` is provider-designated safe summary text. Clients may show it as secondary progress, but must not expect or request a provider's opaque reasoning continuation payload; that remains inside the model transport.
 

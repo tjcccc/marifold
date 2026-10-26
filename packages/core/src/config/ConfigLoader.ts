@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import { parse } from 'smol-toml';
 import { type AgentApprovalConfig, type ApprovalMode, type AgentToolMode, type PartialAgentConfig, resolveAgentConfig } from '../agent/ApprovalPolicy';
 import { MarifoldError } from '../errors/MarifoldError';
+import { parseCompactAtPercent, parseContextTokens } from './ModelWindows';
 import {
   type LoadedMarifoldConfig,
   type MarifoldConfig,
@@ -141,7 +142,8 @@ export class ConfigLoader {
       timeoutSeconds: optionalNumber(raw.timeout_seconds, 'default.timeout_seconds'),
       maxOutputTokens: optionalNumber(raw.max_output_tokens, 'default.max_output_tokens'),
       maxSystemChars: optionalNumber(raw.max_system_chars, 'default.max_system_chars'),
-      maxContextTokens: optionalNumber(raw.max_context_tokens, 'default.max_context_tokens'),
+      maxContextTokens: parseContextTokens(raw.max_context_tokens, 'default.max_context_tokens'),
+      compactAtPercent: parseCompactAtPercent(raw.compact_at_percent, 'default.compact_at_percent'),
       compactionKeepTurns: optionalNumber(raw.compaction_keep_turns, 'default.compaction_keep_turns'),
       sessionContextTurns: optionalTurnWindow(raw.session_context_turns, 'default.session_context_turns'),
       deep: optionalBoolean(raw.deep, 'default.deep') ?? false,

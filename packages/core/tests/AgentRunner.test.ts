@@ -324,6 +324,8 @@ describe('AgentRunner', () => {
     const done = events.find(e => e.type === 'done') as Extract<AgentEvent, { type: 'done' }>;
     expect(done.usage).toEqual({
       inputTokens: 30,
+      // The fullest single call (the loop turn), not the sum.
+      contextTokens: 20,
       outputTokens: 13,
       totalTokens: 43,
       reasoningTokens: 3,
@@ -575,7 +577,7 @@ describe('AgentRunner', () => {
         model: 'test-model',
         deep: false,
         latencyMs: expect.any(Number),
-        usage: { inputTokens: 40, outputTokens: 10, totalTokens: 50 },
+        usage: { inputTokens: 40, contextTokens: 40, outputTokens: 10, totalTokens: 50 },
       }),
     );
   });

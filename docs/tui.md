@@ -33,6 +33,8 @@ fullscreen = false
 
 You can also use `marifold config set tui.fullscreen false`. Launch flags `--fullscreen` and `--no-fullscreen` override the setting for one launch. `MARIFOLD_FULLSCREEN=1` or `0` overrides the config as a shell preference; explicit launch flags take precedence over that environment variable.
 
+Submitted messages sit on a full-width band shaded just off your terminal theme's background: 6% lighter on a dark theme, 6% darker on a light one. At launch the TUI asks the terminal for its background color (OSC 11, answered by iTerm2, Terminal.app, Ghostty, kitty, WezTerm and most others). When the terminal does not answer, it falls back to `#EFEFEF` or `#0F0F0F`, picking light or dark from `COLORFGBG` (dark when unset); `MARIFOLD_THEME=light` or `dark` skips the query and forces that fallback.
+
 Full-screen mode keeps the composer below a bounded transcript viewport:
 
 - Mouse wheel and Page Up/Page Down scroll history. Scrolling up pauses automatic following while new replies arrive; reaching the bottom or Ctrl+End follows the latest output again. Submitting a new prompt also follows the latest turn.

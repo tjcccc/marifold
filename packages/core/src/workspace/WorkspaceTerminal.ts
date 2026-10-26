@@ -1,5 +1,6 @@
 import { record } from '@marifold/workspace-protocol';
 import type { MarifoldRuntime } from '../runtime/MarifoldRuntime';
+import { AUTO_CONTEXT_TOKENS } from '../config/ModelWindows';
 import type { ToolKind, ApprovalMode } from '../agent/ApprovalPolicy';
 
 /** Explicit terminal operations; deliberately no arbitrary runtime-method RPC. */
@@ -63,11 +64,12 @@ export async function workspaceTerminal(runtime: MarifoldRuntime, operation: str
       if (
         b.tokens !== undefined &&
         b.tokens !== null &&
-        (typeof b.tokens !== 'number' || !Number.isSafeInteger(b.tokens) || b.tokens <= 0)
+        b.tokens !== AUTO_CONTEXT_TOKENS &&
+        (typeof b.tokens !== 'number' || !Number.isSafeInteger(b.tokens) || b.tokens < 0)
       ) {
         throw new Error('Invalid context budget.');
       }
-      return runtime.setProfileMaxContextTokens(profile(), typeof b.tokens === 'number' ? b.tokens : undefined);
+      return runtime.setProfileMaxContextTokens(profile(), typeof b.tokens === 'number' || b.tokens === AUTO_CONTEXT_TOKENS ? b.tokens : undefined);
     }
     case 'memory.remember':
       return runtime.rememberMemory(profile(), 'auto_short', text('text'), text('sessionId', true) || undefined);

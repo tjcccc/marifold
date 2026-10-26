@@ -113,9 +113,10 @@ describe('MarifoldRuntime conversation compaction (end-to-end)', () => {
     tempDirs.push(dir);
     const runtime = runtimeFor(dir, makeConfig(dir, { maxContextTokens: 100 }));
     try {
-      // No profile.toml override → profile-level is undefined (global default is
-      // applied later in toPriestConfig, not here).
-      expect(runtime.resolveSettings({}).maxContextTokens).toBeUndefined();
+      // No profile.toml override → the global budget applies.
+      expect(runtime.resolveSettings({}).maxContextTokens).toBe(100);
+      // 0 turns compaction off.
+      expect(runtime.resolveSettings({ maxContextTokens: 0 }).maxContextTokens).toBeUndefined();
       // A session-scoped override wins.
       expect(runtime.resolveSettings({ maxContextTokens: 50 }).maxContextTokens).toBe(50);
     } finally {
@@ -123,7 +124,7 @@ describe('MarifoldRuntime conversation compaction (end-to-end)', () => {
     }
   });
 
-  it('does not compact when no budget is configured (backward compatible)', async () => {
+  it('does not compact while far below the auto budget (unset = the model window, 128K for Ollama)', async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'marifold-compaction-off-'));
     tempDirs.push(dir);
     stubOllama(200);
@@ -134,5 +135,83 @@ describe('MarifoldRuntime conversation compaction (end-to-end)', () => {
     }
     runtime.close();
     expect(readCompaction(path.join(dir, 'sessions.db'), 's').summary).toBeUndefined();
+  });
+});
+
+describe('agent-mode compaction', () => {
+  it('summarizes older agent turns past compact_at_percent without rewriting turns, and replays the summary', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'marifold-agent-compaction-'));
+    tempDirs.push(dir);
+    // 95 input tokens on a 100-token budget: past the default 90%.
+    stubOllama(95);
+    const config = makeConfig(dir, { maxContextTokens: 100, compactionKeepTurns: 2 });
+    const runtime = runtimeFor(dir, config);
+    const run = async (objective: string) => {
+      const types: string[] = [];
+      for await (const event of runtime.createAgentRunner('default').run({ objective, sessionId: 'a', cwd: dir })) {
+        types.push(event.type === 'compaction' ? `compaction:${event.status}` : event.type);
+      }
+      return types;
+    };
+    const turnIds = () => {
+      const db = new Database(config.paths.sessionsDb, { fileMustExist: true });
+      try { return (db.prepare('SELECT id FROM turns WHERE session_id = ? ORDER BY id').all('a') as Array<{ id: number }>).map(row => row.id); } finally { db.close(); }
+    };
+    try {
+      // Two turns are all kept verbatim: nothing to fold yet.
+      expect(await run('first')).toContain('compaction:skipped');
+      // Compacted inline, before the run reports done.
+      const events = await run('second');
+      expect(events.slice(-4)).toEqual(['compaction:running', 'compaction:completed', 'status', 'done']);
+      const before = turnIds();
+      expect(readCompaction(config.paths.sessionsDb, 'a').summary).toBe('SUMMARY');
+      expect(readCompaction(config.paths.sessionsDb, 'a').summarizedThrough).toBe(2);
+      // Only metadata changed: turn rows keep their ids.
+      expect(turnIds().slice(0, before.length)).toEqual(before);
+      const requests = (fetch as unknown as { mock: { calls: Array<[unknown, RequestInit]> } }).mock.calls;
+      const callsBefore = requests.length;
+      await run('third');
+      const next = String(requests[callsBefore][1].body);
+      expect(next).toContain('Summary of the earlier conversation: SUMMARY');
+      expect(next).not.toContain('User: first');
+    } finally {
+      runtime.close();
+    }
+  });
+
+  it('compacts against a session budget passed with the run (/context-window set), not the profile budget', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'marifold-agent-compaction-session-'));
+    tempDirs.push(dir);
+    stubOllama(95);
+    const config = makeConfig(dir, { maxContextTokens: 1_000_000, compactionKeepTurns: 2 });
+    const runtime = runtimeFor(dir, config);
+    try {
+      for (const objective of ['first', 'second']) {
+        for await (const _ of runtime.createAgentRunner('default').run({ objective, sessionId: 'a', cwd: dir, maxContextTokens: 100 })) { /* consume */ }
+      }
+      await vi.waitFor(() => expect(readCompaction(config.paths.sessionsDb, 'a').summary).toBe('SUMMARY'));
+      expect(runtime.getSession('a')?.summarizedTurns).toBe(2);
+    } finally {
+      runtime.close();
+    }
+  });
+
+  it('leaves agent sessions alone below the threshold or when compaction is off', async () => {
+    for (const overrides of [{ maxContextTokens: 1000 }, { maxContextTokens: 100, compactAtPercent: 0 }]) {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'marifold-agent-compaction-off-'));
+      tempDirs.push(dir);
+      stubOllama(95);
+      const config = makeConfig(dir, { ...overrides, compactionKeepTurns: 2 });
+      const runtime = runtimeFor(dir, config);
+      try {
+        for (const objective of ['first', 'second', 'third']) {
+          for await (const _ of runtime.createAgentRunner('default').run({ objective, sessionId: 'a', cwd: dir })) { /* consume */ }
+        }
+        await new Promise(resolve => setTimeout(resolve, 50));
+        expect(readCompaction(config.paths.sessionsDb, 'a').summary).toBeUndefined();
+      } finally {
+        runtime.close();
+      }
+    }
   });
 });

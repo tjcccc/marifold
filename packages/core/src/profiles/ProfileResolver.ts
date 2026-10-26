@@ -5,6 +5,7 @@ import type { Profile, ProfileLoader } from '@priest-ai/core';
 import { MarifoldError } from '../errors/MarifoldError';
 import type { ProfileDetail, ProfileFileSummary, ProfileMode, ProfileSettings, ProfileSummary } from '../config/ConfigSchema';
 import { parsePartialAgentConfig } from '../config/ConfigLoader';
+import { parseCompactAtPercent, parseContextTokens } from '../config/ModelWindows';
 import { defaultTrustedFolders, findProfileAvatar, normalizeProfileDisplayName } from './ProfileManager';
 import { parseProfileModel } from './ProfileModel';
 import {
@@ -60,7 +61,8 @@ export class ProfileResolver implements ProfileLoader {
       optionalString(raw.model, `${name}.profile.toml model`),
     );
     const memories = optionalBoolean(raw.memories, `${name}.profile.toml memories`) ?? true;
-    const maxContextTokens = optionalNumber(raw.max_context_tokens, `${name}.profile.toml max_context_tokens`);
+    const maxContextTokens = parseContextTokens(raw.max_context_tokens, `${name}.profile.toml max_context_tokens`);
+    const compactAtPercent = parseCompactAtPercent(raw.compact_at_percent, `${name}.profile.toml compact_at_percent`);
     const sessionContextTurns = optionalTurnWindow(raw.session_context_turns, `${name}.profile.toml session_context_turns`);
     const legacyThink = optionalBoolean(raw.think, `${name}.profile.toml think`);
     const parsedAgent = raw.agent !== undefined ? parsePartialAgentConfig(raw.agent, `${name}.profile.toml [agent]`) : undefined;
@@ -75,7 +77,7 @@ export class ProfileResolver implements ProfileLoader {
         name,
       );
     }
-    return { displayName, provider, model, modelSetting, memories, mode: rawMode as ProfileMode | undefined, maxContextTokens, sessionContextTurns, agent, ...(legacyThink !== undefined ? { legacyThink } : {}) };
+    return { displayName, provider, model, modelSetting, memories, mode: rawMode as ProfileMode | undefined, maxContextTokens, compactAtPercent, sessionContextTurns, agent, ...(legacyThink !== undefined ? { legacyThink } : {}) };
   }
 
   list(): ProfileSummary[] {

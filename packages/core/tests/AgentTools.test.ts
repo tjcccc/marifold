@@ -948,6 +948,35 @@ describe('ShellExecTool', () => {
       .toMatchObject({ escalate: true, persistable: false });
   });
 
+  it.skipIf(process.platform !== 'darwin')('asks to let a scoped command write one more folder, and keeps protected folders refused', async () => {
+    const home = fs.realpathSync(tempDir());
+    const dir = path.join(home, 'workspace');
+    for (const folder of ['workspace', 'Documents/old', '.ssh']) { fs.mkdirSync(path.join(home, folder), { recursive: true }); }
+    fs.writeFileSync(path.join(home, 'Documents', 'old', 'a.txt'), 'old');
+    const ctx = scopedContext(dir);
+    const tool = new ShellExecTool();
+    const documents = path.join(home, 'Documents');
+    const denied = await tool.execute({ command: 'printf x > ~/Documents/test.txt' }, ctx);
+    expect(denied.isError).toBe(true);
+    expect(denied.content).toContain('retry it with write_folder');
+    expect(tool.assessRisk({ command: 'true', write_folder: '~/Documents' }, ctx)).toEqual({
+      escalate: true, reason: `lets this sandboxed command create, edit and delete files in ${documents}`, targetPath: documents, runGrantFolder: documents,
+    });
+    // Already writable: no prompt.
+    expect(tool.assessRisk({ command: 'true', write_folder: dir }, ctx)).toEqual({ escalate: false, routine: true });
+    for (const folder of ['~', '~/.ssh', '~/Documents/missing', '/tmp']) {
+      expect(tool.assessRisk({ command: 'true', write_folder: folder }, ctx), folder).toMatchObject({ blocked: true });
+    }
+    const approved = await tool.execute({ command: 'printf new > ~/Documents/test.txt && rm -r ~/Documents/old', write_folder: '~/Documents' }, ctx);
+    expect(approved.isError, approved.content).toBeFalsy();
+    expect(fs.readFileSync(path.join(documents, 'test.txt'), 'utf8')).toBe('new');
+    expect(fs.existsSync(path.join(documents, 'old'))).toBe(false);
+    // The grant covers that folder only.
+    expect((await tool.execute({ command: 'printf x > ~/other.txt', write_folder: '~/Documents' }, ctx)).isError).toBe(true);
+    expect((await tool.execute({ command: 'printf x > ~/.ssh/k', write_folder: '~/.ssh' }, ctx)).isError).toBe(true);
+    expect(fs.existsSync(path.join(home, '.ssh', 'k'))).toBe(false);
+  });
+
   it('fails closed without an isolated run workspace', async () => {
     const result = await new ShellExecTool().execute({ command: 'printf unsafe' }, context(tempDir()));
     expect(result.isError).toBe(true);

@@ -7,6 +7,7 @@ import { MarifoldError } from '../errors/MarifoldError';
 import { ensureProfileMemoryFiles } from '../memory/MemoryStore';
 import { expandHome } from '../workspace/WorkspacePaths';
 import type { ProfileMode } from '../config/ConfigSchema';
+import { AUTO_CONTEXT_TOKENS, type ContextTokensSetting } from '../config/ModelWindows';
 import type { ApprovalMode, ToolKind } from '../agent/ApprovalPolicy';
 import { coversProtectedRoot, HOME_TRUSTED_FOLDER, SENSITIVE_HOME_ENTRIES, trustedFolderEntry } from '../agent/RunWorkspace';
 import {
@@ -56,9 +57,14 @@ model = "default"
 # Load this profile's structured memory into context (default true).
 # memories = true
 
-# Conversation-context budget in tokens; enables compaction past ~80%.
+# Conversation-context budget: "auto" = the model's own window (128K when the
+# provider doesn't report it), N tokens, or 0 = no compaction.
 # Falls back to default.max_context_tokens.
-# max_context_tokens = 16000
+# max_context_tokens = "auto"
+
+# Compact past this percentage of the budget (10–100; 0 = only /compact).
+# Falls back to default.compact_at_percent (90).
+# compact_at_percent = 90
 
 # Hard cap on recent session turns replayed each request: "all" = no cap,
 # N = last N, 0 = none. Falls back to default.session_context_turns.
@@ -237,14 +243,15 @@ export class ProfileManager {
     return { name, path: profileToml, mode };
   }
 
-  /** Persist (or clear, when tokens is undefined/0) the profile's context budget. */
-  setMaxContextTokens(name: string, tokens: number | undefined): { name: string; path: string; maxContextTokens?: number } {
+  /** Persist the profile's context budget (`auto`, a count, or 0 = off);
+   * undefined removes it so the global default applies. */
+  setMaxContextTokens(name: string, tokens: ContextTokensSetting | undefined): { name: string; path: string; maxContextTokens?: ContextTokensSetting } {
     assertSafeName(name);
     const profileDir = this.requireProfileDir(name);
     const profileToml = path.join(profileDir, 'profile.toml');
     const current = fs.existsSync(profileToml) ? fs.readFileSync(profileToml, 'utf-8') : PROFILE_TOML_STUB;
     fs.writeFileSync(profileToml, upsertMaxContextTokens(current, tokens));
-    return { name, path: profileToml, maxContextTokens: tokens && tokens > 0 ? tokens : undefined };
+    return { name, path: profileToml, ...(tokens !== undefined ? { maxContextTokens: tokens } : {}) };
   }
 
   /** Persist a per-profile approval decision into profile.toml as a dotted key
@@ -701,12 +708,13 @@ function realPathOrSelf(value: string): string {
   }
 }
 
-function upsertMaxContextTokens(text: string, tokens: number | undefined): string {
+function upsertMaxContextTokens(text: string, tokens: ContextTokensSetting | undefined): string {
   const lines = text.split(/\r?\n/).filter(line => !line.trimStart().startsWith('max_context_tokens ='));
   const cleaned = lines.join('\n').trimEnd();
-  if (tokens == null || tokens <= 0) { return cleaned ? `${cleaned}\n` : PROFILE_TOML_STUB; }
+  if (tokens === undefined) { return cleaned ? `${cleaned}\n` : PROFILE_TOML_STUB; }
   const prefix = cleaned ? `${cleaned}\n\n` : '';
-  return `${prefix}max_context_tokens = ${Math.round(tokens)}\n`;
+  const value = tokens === AUTO_CONTEXT_TOKENS ? JSON.stringify(AUTO_CONTEXT_TOKENS) : String(Math.max(0, Math.round(tokens)));
+  return `${prefix}max_context_tokens = ${value}\n`;
 }
 
 function assertSafeName(name: string): void {

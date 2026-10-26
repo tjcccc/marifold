@@ -68,6 +68,13 @@ export function agentEventToItems(event: AgentEvent): TranscriptItemData[] {
       }];
     case 'verification':
       return [{ kind: 'verification', passed: event.passed, notes: event.notes }];
+    case 'compaction':
+      if (event.status === 'completed') {
+        return [{ kind: 'notice', tone: 'info', text: `Compacted: the first ${event.summarizedTurns ?? 0} turns of this session are now a summary.` }];
+      }
+      return event.status === 'failed'
+        ? [{ kind: 'notice', tone: 'warn', text: `Could not compact this session${event.message ? `: ${event.message}` : ''}.` }]
+        : [];
     case 'error':
       return [{ kind: 'notice', tone: 'error', text: `Error [${event.code}]: ${event.message}` }];
     case 'done':
