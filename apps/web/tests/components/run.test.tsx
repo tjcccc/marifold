@@ -525,6 +525,7 @@ describe('Mobile workspace navigation', () => {
         theme="auto"
         connectionName="This server"
         onAgent={onAgent}
+        onProjects={() => {}}
         onApps={onApps}
         onOpenConnection={onOpenConnection}
         onThemeChange={onThemeChange}

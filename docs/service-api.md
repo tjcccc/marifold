@@ -160,7 +160,7 @@ Responses are `{ "ok": true, ... }` unless noted. Bodies are JSON.
 | `POST /v1/profiles/:name/rename` | Body `{ to }` — rename the profile with its sessions and profile pin (one transaction), task records, schedules, `default.profile`, the Telegram channel profile and its agent computer account; returns `{ rename: { from, to, fromPath?, toPath?, sessions, tasks, schedules, defaultProfile, telegram } }`. When `:name` no longer exists but `to` does, only the records still under `:name` move (repairing a rename from before 0.95). Active requests/runs for the profile must be cancelled first. `marifold profile rename` uses this route while the service runs |
 | `DELETE /v1/profiles/:name` | Remove the stored profile directory/JSON and its display metadata. Deletes instructions, memories, skills, and avatar but retains SQLite session history. The built-in/current-default profile cannot be removed, and active requests/runs must be cancelled first |
 | `GET /v1/profiles/:name/avatar` | Raw avatar image bytes (`content-type` = stored media type, `ETag` + `no-cache`; honors `If-None-Match` with 304). 404 `AVATAR_NOT_FOUND` when unset. Auth'd clients fetch with headers and render a blob URL (`<img src>` can't send a bearer token) |
-| `PUT /v1/profiles/:name/avatar` | Body `{ data: <base64>, mediaType }` — store the avatar (PNG/JPEG/WebP, ≤1 MB; replaces any previous one). Returns the fresh profile detail (summaries carry `avatar?: { mediaType }`) |
+| `PUT /v1/profiles/:name/avatar` | Body `{ data: <base64>, mediaType }` — store the avatar (PNG/JPEG/WebP, ≤2 MB; replaces any previous one). Returns the fresh profile detail (summaries carry `avatar?: { mediaType }`) |
 | `DELETE /v1/profiles/:name/avatar` | `{ removed: boolean }` + fresh profile detail |
 | `PATCH /v1/profiles/:name` | Update per-profile settings. Optional fields: `displayName` (single-line string up to 100 characters; blank or `null` clears to the profile-name fallback), `provider`+`model` (both strings, or both `null` to clear the override), `memories` (`boolean\|null`; a `think` field from older clients is ignored because Deep is global: `PATCH /v1/config` `default.deep`), `maxContextTokens` (`"auto"\|int ≥ 0\|null`; `0` turns compaction off, `null` inherits the global setting), `sessionContextTurns` (`int ≥ 0\|"all"\|null`), `approval` (`{ read\|write\|shell\|network\|delegate: "allow"\|"ask"\|"deny"\|null }` — `null` clears the override so the kind inherits again). Absent = untouched. Returns the fresh profile detail. The older `mode` field remains accepted for wire compatibility but primary clients always run ordinary messages as Agent. |
 | `PUT /v1/profiles/:name/files/:file` | Overwrite `INSTRUCTIONS.md` (`:file = instructions`); body `{ content }`. Returns the fresh profile detail. Deprecated `profile\|rules\|custom` aliases remain for unmigrated clients; `rules`/`custom` writes are rejected once canonical instructions exist |
@@ -193,14 +193,17 @@ A project is a named group of profiles (its roster, led by its **Lead**) whose s
 
 | Route | Returns |
 |---|---|
-| `GET /v1/projects` | Project summaries by name: `{ id, name, description?, lead, members, sessionCount, createdAt, updatedAt }`; `members` is the roster in join order |
+| `GET /v1/projects` | Project summaries by name: `{ id, name, description?, icon?, lead, members, sessionCount, createdAt, updatedAt }`; `members` is the roster in join order; `icon` is `{ mediaType }` when the project has one |
 | `POST /v1/projects` → 201 | Body `{ name, lead?, members?, description?, instructions? }`. `lead` defaults to `default.profile`, and the Lead is always on the roster. Names are 1–100 characters, unique ignoring case; every profile must exist |
 | `GET /v1/projects/:id` | One project: a summary plus `instructions`. 404 `PROJECT_NOT_FOUND` |
 | `PATCH /v1/projects/:id` | Body `{ name?, description?: string \| null, instructions?, lead? }`; a new Lead joins the roster |
 | `DELETE /v1/projects/:id` | `{ sessions }`: its sessions are kept, as ordinary sessions of the profile each started with |
 | `POST /v1/projects/:id/members` | Body `{ profile }`: invite a profile to the roster |
 | `DELETE /v1/projects/:id/members/:profile` | Dismiss a profile; its earlier replies stay in the transcripts. The Lead cannot be dismissed |
-| `GET /v1/projects/:id/sessions?limit=&archived=&q=` | The project's sessions, like `GET /v1/sessions` |
+| `GET /v1/projects/:id/sessions?limit=&archived=&q=` | The project's sessions, like `GET /v1/sessions`; each also lists `speakers`, the profiles that have replied in it, first speaker first |
+| `GET /v1/projects/:id/icon?thumbnail=1` | The project icon, like a profile avatar (`ETag`, `304`, a 256px `thumbnail`); 404 `ICON_NOT_FOUND` when it has none, so clients draw the folder |
+| `PUT /v1/projects/:id/icon` | Body `{ data, mediaType }`: base64 PNG, JPEG, or WebP, up to 2 MB. Returns `{ project }` |
+| `DELETE /v1/projects/:id/icon` | Back to the folder. Returns `{ removed, project }` |
 | `POST /v1/sessions/:id/project` | Body `{ projectId }` moves an existing session into a project (its profile joins the roster and holds the floor); `{ projectId: null }` moves it out. Returns `{ project }` (the session's new link, or `null`) |
 
 All project routes are also reachable through a workspace, so a guest device sees the host's projects.

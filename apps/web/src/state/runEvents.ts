@@ -1,6 +1,6 @@
 import type { AgentEvent } from '../api/types';
 import type { ThreadState, ToolRowState } from './threadTypes';
-import { append, emptyCard, findRunItem, insert, insertRunCard, markUserPersisted, updateRun } from './threadItems';
+import { append, emptyCard, findRunItem, insert, insertAfterRun, insertRunCard, markUserPersisted, updateRun } from './threadItems';
 
 // Applying live AgentEvents to a run card: status, plan, text, tools, approvals, questions, artifacts, and completion.
 
@@ -160,6 +160,15 @@ export function applyRunEvent(state: ThreadState, runId: string, seq: number, ev
           ? run.artifacts
           : [...run.artifacts, event.artifact],
       }));
+      break;
+
+    case 'handoff':
+      // The next profile answers the same message: its card follows this reply
+      // even while the message is being regenerated in place.
+      next = updateRun(next, runId, run => ({ ...run, lastSeq: seq }));
+      if (!findRunItem(next, event.runId)) {
+        next = insertAfterRun(next, runId, { kind: 'run', run: { ...emptyCard(event.runId), profile: event.profile } });
+      }
       break;
 
     case 'done':

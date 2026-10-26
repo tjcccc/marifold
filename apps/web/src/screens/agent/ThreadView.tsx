@@ -34,6 +34,10 @@ export interface ThreadViewProps {
   scrollToBottomRequest?: number;
   /** Bytes of a message still uploading before its run exists. */
   sendingBytes?: number;
+  /** In a project session: each reply opens with its speaker (avatar and name). */
+  renderSpeaker?: (profile: string) => ReactNode;
+  /** The speaker of replies saved without one (from before the session joined a project). */
+  defaultSpeaker?: string;
 }
 
 /** The conversation: user bubbles right, assistant markdown blocks, notices,
@@ -50,6 +54,8 @@ export function ThreadView({
   editingDisabled = false,
   scrollToBottomRequest = 0,
   sendingBytes,
+  renderSpeaker,
+  defaultSpeaker,
 }: ThreadViewProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const pinnedRef = useRef(true);
@@ -85,6 +91,7 @@ export function ThreadView({
       } else { finalItems.set(item.runId, item.id); }
     }
   }
+  const speakerHeaders = renderSpeaker ? replySpeakers(items, runs, proseRuns, workItems, defaultSpeaker) : undefined;
 
   return (
     <div ref={scrollRef} className={styles.scroll} onScroll={onScroll} role="log" aria-label="Conversation" aria-busy={loading}>
@@ -103,6 +110,7 @@ export function ThreadView({
         {items.map(item => (
           <ThreadItemView
             key={item.id}
+            speaker={speakerHeaders?.get(item.id) !== undefined ? renderSpeaker?.(speakerHeaders.get(item.id)!) : undefined}
             item={item}
             runs={runs}
             proseRuns={proseRuns}
@@ -141,7 +149,41 @@ export function ThreadView({
   );
 }
 
+/** The item that opens each reply, mapped to its speaker: the first one shown
+ * of a run (its card, thinking line, or text), or a saved reply. Mirrors the
+ * visibility rules in `ThreadItemView`. */
+function replySpeakers(
+  items: ThreadItem[],
+  runs: Map<string, RunCardState>,
+  proseRuns: Set<string>,
+  workItems: Map<string, ThreadItem[]>,
+  defaultSpeaker?: string,
+): Map<string, string> {
+  const headers = new Map<string, string>();
+  const opened = new Set<string>();
+  for (const item of items) {
+    let reply: string | undefined;
+    let speaker: string | undefined;
+    if (item.kind === 'run') {
+      const run = item.run;
+      const silent = !hasRunActivity(run) && !(workItems.get(run.runId)?.length)
+        && (isTrivialRun(run) || (run.status === 'running' && proseRuns.has(run.runId)));
+      if (silent) { continue; }
+      [reply, speaker] = [run.runId, run.profile];
+    } else if (item.kind === 'assistant') {
+      const run = item.runId ? runs.get(item.runId) : undefined;
+      if (run && (item.runPhase === 'progress' || item.runPhase === 'reasoning')) { continue; }
+      [reply, speaker] = [item.runId ?? item.id, run ? run.profile : item.speaker ?? defaultSpeaker];
+    }
+    if (reply === undefined || opened.has(reply)) { continue; }
+    opened.add(reply);
+    if (speaker) { headers.set(item.id, speaker); }
+  }
+  return headers;
+}
+
 function ThreadItemView({
+  speaker,
   item,
   runs,
   proseRuns,
@@ -169,6 +211,8 @@ function ThreadItemView({
   onCancelEditing: () => void;
   onPreviewImages: (images: PreviewImage[], index: number) => void;
   client?: ApiClient;
+  /** The reply's speaker header, on the item that opens it. */
+  speaker?: ReactNode;
 } & Pick<ThreadViewProps, 'onCancelRun' | 'onAnswerApproval' | 'onSubmitUserInput' | 'onToggleRun' | 'onEditUserMessage' | 'editingDisabled'>) {
   switch (item.kind) {
     case 'user': {
@@ -265,6 +309,7 @@ function ThreadItemView({
       const copyable = !secondary && !item.streaming && item.markdown.trim().length > 0;
       return (
         <div className={styles.assistant} data-run-phase={item.runPhase}>
+          {speaker}
           <AssistantMarkdown source={item.markdown} muted={secondary} run={run} client={client} />
           {item.streaming ? <span className={styles.cursor} aria-hidden /> : null}
           {run && finalItems.get(run.runId) === item.id && !item.streaming ? (
@@ -307,6 +352,7 @@ function ThreadItemView({
           if (proseRuns.has(run.runId)) { return null; }
           return (
             <div className={styles.thinking}>
+              {speaker}
               <span className={styles.thinkingLabel}>Thinking…</span>
               <button className={styles.cancelLink} onClick={() => onCancelRun(run.runId)}>
                 Cancel
@@ -319,6 +365,7 @@ function ThreadItemView({
       }
       return (
         <>
+          {speaker}
           <RunCard
             run={run}
             onCancel={() => onCancelRun(run.runId)}

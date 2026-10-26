@@ -82,6 +82,21 @@ export function listReplySpeakers(db: Database.Database, sessionId: string): Map
   return new Map(rows.map(row => [replyKey(row.u, row.r), row.profile]));
 }
 
+/** Who replied in each session, in order of first reply, for list rows. A
+ * session whose replies are not all recorded (it was moved into a project)
+ * starts with its own profile. */
+export function listSessionSpeakers(db: Database.Database, sessions: ReadonlyArray<{ id: string; profileName: string }>): Map<string, string[]> {
+  const recorded = hasTable(db, REPLY_SPEAKERS_TABLE)
+    ? db.prepare(`SELECT profile FROM ${REPLY_SPEAKERS_TABLE} WHERE session_id = ? ORDER BY user_turn_index, reply_index`)
+    : undefined;
+  const replies = db.prepare(`SELECT COUNT(*) AS count FROM turns WHERE session_id = ? AND role = 'assistant'`);
+  return new Map(sessions.map(session => {
+    const speakers = ((recorded?.all(session.id) ?? []) as Array<{ profile: string }>).map(row => row.profile);
+    const unrecorded = (replies.get(session.id) as { count: number }).count > speakers.length;
+    return [session.id, [...new Set([...(unrecorded && session.profileName ? [session.profileName] : []), ...speakers])]];
+  }));
+}
+
 /** Delete reply metrics and speakers: the whole session's, or a scope's. */
 export function deleteReplyRows(db: Database.Database, sessionId: string, scope?: ReplyScope): void {
   deleteRows(db, sessionId, [RESPONSE_METRICS_TABLE, REPLY_METRICS_TABLE, REPLY_SPEAKERS_TABLE], scope);

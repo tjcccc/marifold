@@ -90,3 +90,9 @@ export const WEB_COMMANDS: Suggestion[] = [
   { name: 'context-window', usage: '/context-window', description: 'Show the current context budget.' },
   { name: 'compact', usage: '/compact', description: 'Compact the current session now.' },
 ];
+
+/** Extra commands in a project session (they change the project's roster). */
+export const PROJECT_COMMANDS: Suggestion[] = [
+  { name: 'invite', usage: '/invite @profile', description: 'Invite a profile to this project.' },
+  { name: 'dismiss', usage: '/dismiss @profile', description: 'Remove a profile from this project; its replies stay.' },
+];

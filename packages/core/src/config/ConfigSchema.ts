@@ -270,6 +270,9 @@ export interface SessionSummary {
   /** First user message, whitespace-collapsed and truncated — the session's
    * fallback display title in list UIs. Absent for sessions without a user turn. */
   preview?: string;
+  /** In a project's session list: the profiles that replied, in order of
+   * their first reply. */
+  speakers?: string[];
 }
 
 export interface SessionTurnSummary {

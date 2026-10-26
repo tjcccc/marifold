@@ -1,11 +1,56 @@
 import type { ApiClient } from '../../api/client';
 import { sessionAttachmentPath } from '../../api/sessions';
-import type { SessionImageAttachment } from '../../api/types';
+import type { SessionDetail, SessionImageAttachment } from '../../api/types';
 import type { PreparedAttachment } from '../../lib/attachments';
-import type { UserAttachment } from '../../state/thread';
+import { officeKindForFile, splitInlineTextAttachments } from '../../lib/attachments';
+import type { ThreadAction, UserAttachment } from '../../state/thread';
 
 // Conversions between a session's stored attachments and the composer's
 // prepared attachments, for loading a transcript and resending an edited turn.
+
+/** A loaded session's turns as the thread shows them: replies with their
+ * metrics and speaker, user turns with their images and inlined files. */
+export function threadTurns(sessionId: string, turns: SessionDetail['turns']): Extract<ThreadAction, { type: 'session_loaded' }>['turns'] {
+  return turns.map(turn => {
+    if (turn.role === 'assistant') {
+      return {
+        role: turn.role,
+        content: turn.content,
+        ...(turn.responseMetrics ? {
+          responseMeta: {
+            mode: turn.responseMetrics.mode,
+            startedAt: turn.responseMetrics.startedAt,
+            finishedAt: turn.responseMetrics.finishedAt,
+            latencyMs: turn.responseMetrics.latencyMs,
+            usage: turn.responseMetrics.usage,
+          },
+        } : {}),
+        ...(turn.speaker ? { speaker: turn.speaker } : {}),
+      };
+    }
+    const restored = splitInlineTextAttachments(turn.content);
+    const attachments: UserAttachment[] = [
+      ...toUserAttachments(sessionId, turn.attachments ?? []),
+      ...restored.files.map(file => {
+        const officeKind = officeKindForFile(file.name);
+        return {
+          kind: 'text' as const,
+          name: file.name,
+          content: file.content,
+          ...(officeKind ? { officeKind } : {}),
+          ...(file.content.includes('[Office extraction truncated to fit the attachment text limit.]')
+            ? { truncated: true }
+            : {}),
+        };
+      }),
+    ];
+    return {
+      role: turn.role,
+      content: restored.prompt,
+      ...(attachments.length > 0 ? { attachments } : {}),
+    };
+  });
+}
 
 export function toUserAttachments(sessionId: string, attachments: SessionImageAttachment[]): UserAttachment[] {
   return attachments.flatMap((attachment, index) => {

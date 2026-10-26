@@ -22,7 +22,7 @@ function setup(deviceNames?: () => string[]) {
   const runtime = new MarifoldRuntime({ loadedConfig: { config, configPath: path.join(dir, 'config.toml'), foundConfig: true }, ...(deviceNames ? { deviceNames } : {}) });
   for (const name of ['painter', 'dev_test']) { runtime.initProfile(name); }
   const sessions = new SessionResolver(config.paths.sessionsDb);
-  return { runtime, sessions };
+  return { runtime, sessions, dir };
 }
 
 describe('projects', () => {
@@ -51,7 +51,7 @@ describe('projects', () => {
     expect(runtime.getSession('s1')?.projectId).toBe(game.id);
     expect(runtime.getSession('s2')?.projectId).toBeUndefined();
     expect(runtime.listSessions(50, 'painter').map(session => session.id)).toEqual(['s2']);
-    expect(runtime.listSessions(50, undefined, { projectId: game.id }).map(session => session.id)).toEqual(['s1']);
+    expect(runtime.listSessions(50, undefined, { projectId: game.id }).map(session => [session.id, session.speakers])).toEqual([['s1', ['painter']]]);
     // Clearing a profile's sessions leaves its project sessions alone.
     expect(runtime.clearSessions({ profileName: 'painter' }).ids).toEqual(['s2']);
     expect(runtime.getSession('s1')).toBeDefined();
@@ -113,6 +113,22 @@ describe('projects', () => {
     expect(() => runtime.initProfile('office')).toThrow(/device in this workspace is named 'office'/);
     await expect(runtime.renameProfile('painter', 'dev-id-1')).rejects.toThrow(/ambiguous/);
     expect(runtime.initProfile('studio').name).toBe('studio');
+  });
+
+  it('stores a project icon beside the database and removes it with the project', () => {
+    const { runtime, dir } = setup();
+    const game = runtime.projects.create({ name: 'Game', lead: 'default' });
+    expect(game.icon).toBeUndefined();
+    expect(() => runtime.projects.setIcon(game.id, Buffer.from('gif'), 'image/gif')).toThrow(/Unsupported icon type/);
+    expect(runtime.projects.setIcon(game.id, Buffer.from('png'), 'image/png').icon).toEqual({ mediaType: 'image/png' });
+    expect(runtime.projects.setIcon(game.id, Buffer.from('webp'), 'image/webp').icon).toEqual({ mediaType: 'image/webp' });
+    const stored = runtime.projects.icon(game.id)!;
+    expect(stored.path).toBe(path.join(dir, 'projects', game.id, 'icon.webp'));
+    expect(fs.readdirSync(path.dirname(stored.path))).toEqual(['icon.webp']);
+    expect(runtime.projects.list()[0]?.icon).toEqual({ mediaType: 'image/webp' });
+    expect(runtime.projects.icon('../proj_1')).toBeUndefined();
+    runtime.projects.delete(game.id);
+    expect(fs.existsSync(path.dirname(stored.path))).toBe(false);
   });
 
   it('reads an empty project list before the sessions database exists', () => {

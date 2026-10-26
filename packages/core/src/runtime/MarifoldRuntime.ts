@@ -140,7 +140,7 @@ export class MarifoldRuntime {
     this.profileResolver = new ProfileResolver(config.paths.profilesDir);
     this.profileManager = new ProfileManager(config.paths.profilesDir);
     this.sessionResolver = new SessionResolver(config.paths.sessionsDb);
-    this.projects = new ProjectStore(config.paths.sessionsDb, name => this.profileManager.exists(name), () => { this.sessionResolver.openStore(); });
+    this.projects = new ProjectStore(config.paths.sessionsDb, { profileExists: name => this.profileManager.exists(name), createSessionsDb: () => { this.sessionResolver.openStore(); }, projectsDir: path.join(path.dirname(config.paths.sessionsDb), 'projects') });
     this.providerFactory = new ProviderFactory(config, configPath);
     this.engines = new ProviderEngines(options.loadedConfig, this.providerFactory, this.profileResolver, this.sessionResolver);
     this.agentCompaction = new AgentCompaction({ sessionResolver: this.sessionResolver, engines: this.engines,

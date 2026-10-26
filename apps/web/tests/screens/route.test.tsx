@@ -46,7 +46,9 @@ function RouteHarness() {
     ? ['agent', route.profile, route.session].filter(Boolean).join(':')
     : route.view === 'config'
       ? ['config', route.section, route.item].filter(Boolean).join(':')
-      : ['apps', route.app].filter(Boolean).join(':');
+      : route.view === 'projects'
+        ? ['projects', route.project, route.session].filter(Boolean).join(':')
+        : ['apps', route.app].filter(Boolean).join(':');
   return (
     <>
       <span data-testid="route">{label}</span>

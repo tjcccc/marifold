@@ -1,4 +1,4 @@
-import type { SudoResponse, WorkspaceDevice } from '../../api/types';
+import type { SudoResponse } from '../../api/types';
 import { SeenRuns } from '../../lib/seenRuns';
 import { useWorkspaceChanges } from '../../state/workspaceChanges';
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
@@ -25,39 +25,36 @@ import {
 import type {
   ProfileDetail,
   ProfileSummary,
+  ProjectDetail,
   RunApprovalAction,
-  RunFileInput,
   RunRecord,
   SessionSummary,
   UserInputSubmission,
 } from '../../api/types';
-import type { Route } from '../../lib/route';
+import type { ChatRoute, Route } from '../../lib/route';
+import { afterLeadingMentions, answeringProfile, previewProjectRoute } from '../../lib/projectRouting';
+import { inviteProjectMember, listProjectSessions, moveSessionToProject } from '../../api/projects';
 import type { PreparedAttachment } from '../../lib/attachments';
-import {
-  fileToBase64,
-  inlineTextAttachments,
-  MAX_TOTAL_BYTES,
-  modelPromptWithAttachments,
-  officeKindForFile,
-  prepareFiles,
-  splitInlineTextAttachments,
-} from '../../lib/attachments';
+import { MAX_TOTAL_BYTES, prepareFiles } from '../../lib/attachments';
 import { parseCommand } from '../../lib/commandSyntax';
 import { splitModelChoice } from '../../lib/modelChoice';
 import { createClientId } from '../../lib/id';
 import { withPendingSession } from '../../lib/sessionSummaries';
 import { RunFollowers } from '../../state/followers';
-import type { ThreadState, UserAttachment } from '../../state/thread';
+import type { ThreadState } from '../../state/thread';
 import { activeRun, createThreadState, threadReducer } from '../../state/thread';
-import { preparedAttachmentsFromUser, toUserAttachments } from './sessionAttachments';
+import { preparedAttachmentsFromUser, threadTurns } from './sessionAttachments';
 import { runAgentCommand } from './agentCommands';
 import { useGlobalDeep } from './useGlobalDeep';
 import { useSessionLease } from './useSessionLease';
+import { useExecutionDevices } from './useExecutionDevices';
+import { useProject } from './useProject';
+import { messagePayload } from './messagePayload';
 
 
 export interface AgentControllerOptions {
   client: ApiClient;
-  route: Extract<Route, { view: 'agent' }>;
+  route: ChatRoute;
   navigate: (route: Route) => void;
   /** Called when a request fails auth so the App can open the connection popover. */
   onUnauthorized: () => void;
@@ -65,7 +62,19 @@ export interface AgentControllerOptions {
 
 export interface AgentController {
   profiles: ProfileSummary[];
+  /** The profile a message goes to: the selected one, or in a project the one
+   * that answers a message addressing no one (the floor, else the Lead). */
   profileName?: string;
+  /** The selected project in the Projects view, once loaded. */
+  project?: ProjectDetail;
+  projectMissing: boolean;
+  /** In a project session, who answers a message addressing no one. */
+  floor?: string;
+  selectProject: (id: string) => void;
+  refreshProject: () => Promise<void>;
+  inviteToProject: (profile: string) => Promise<void>;
+  /** Move a session into a project; the open conversation follows it there. */
+  moveSession: (id: string, projectId: string) => Promise<boolean>;
   profileDetail?: ProfileDetail;
   /** Skills for the composer's $-autocomplete (active-profile-scoped). */
   skills: SkillHint[];
@@ -129,28 +138,11 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
   const { client, route, navigate, onUnauthorized } = options;
 
   const [profilesLoading, setProfilesLoading] = useState(true);
-  const [sessionsLoading, setSessionsLoading] = useState(Boolean(route.profile));
+  const [sessionsLoading, setSessionsLoading] = useState(Boolean(route.view === 'agent' ? route.profile : route.project));
   const [profiles, setProfiles] = useState<ProfileSummary[]>([]);
   const [profileDetail, setProfileDetail] = useState<ProfileDetail | undefined>();
   const [skills, setSkills] = useState<SkillHint[]>([]);
-  const [devices, setDevices] = useState<SkillHint[]>([]);
-  useEffect(() => {
-    let stopped = false;
-    const refresh = async () => {
-      try {
-        const result = await client.request<{ devices: WorkspaceDevice[] }>('GET', '/v1/execution-devices');
-        if (stopped) { return; }
-        setDevices(result.devices.filter(d => d.online && d.executor).map(d => {
-          const duplicate = result.devices.filter(other => other.name.toLowerCase() === d.name.toLowerCase()).length > 1;
-          const name = duplicate || /["\r\n]/.test(d.name) ? d.id : /\s/.test(d.name) ? `"${d.name}"` : d.name;
-          return { name, usage: `@${name}`, description: `${d.name} · ${d.platform}${duplicate ? ` · ${d.id}` : ''}` };
-        }));
-      } catch { if (!stopped) { setDevices([]); } }
-    };
-    void refresh();
-    const timer = setInterval(() => void refresh(), 10_000);
-    return () => { stopped = true; clearInterval(timer); };
-  }, [client]);
+  const devices = useExecutionDevices(client);
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [persistedSessionIds, setPersistedSessionIds] = useState<ReadonlySet<string>>(() => new Set());
   const [sessionSearch, setSessionSearch] = useState('');
@@ -178,9 +170,19 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
   }, []);
   useEffect(() => () => { sessionLoadRef.current += 1; }, []);
 
-  const profileName = route.profile;
+  const routeProfile = route.view === 'agent' ? route.profile : undefined;
+  const projectId = route.view === 'projects' ? route.project : undefined;
+  const projectState = useProject(client, projectId);
+  const { project } = projectState;
+  const [floor, setFloor] = useState<string>();
+  const profileName = route.view === 'projects' ? (project ? answeringProfile(project, floor) : undefined) : routeProfile;
+  // What the session list, drafts and routes belong to: a profile or a project.
+  const scopeKey = projectId ? `project:${projectId}` : routeProfile;
+  const sessionRoute = useCallback((session?: string): ChatRoute => projectId
+    ? { view: 'projects', project: projectId, ...(session ? { session } : {}) }
+    : { view: 'agent', ...(routeProfile ? { profile: routeProfile } : {}), ...(session ? { session } : {}) }, [projectId, routeProfile]);
   const [attachmentDrafts, setAttachmentDrafts] = useState<Record<string, PreparedAttachment[]>>({});
-  const attachmentDraftKey = `${profileName ?? '_'}:${sessionId ?? 'new'}`;
+  const attachmentDraftKey = `${scopeKey ?? '_'}:${sessionId ?? 'new'}`;
   const attachments = attachmentDrafts[attachmentDraftKey] ?? [];
   const attachmentsRef = useRef(attachments);
   attachmentsRef.current = attachments;
@@ -203,10 +205,14 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
       refreshSessionsRef.current();
       refreshRunsRef.current();
       if (editedRunIdsRef.current.delete(runId)) {
-        seenRuns.add(runId);
+        // The answers an edit replaced were seen here; the reload must not banner them.
+        for (const id of [runId, ...threadRef.current.discardedRunIds]) { seenRuns.add(id); }
         reloadSessionRef.current();
       }
-    }, () => refreshSessionsRef.current()),
+    }, () => refreshSessionsRef.current(), (runId, nextRunId) => {
+      // A regenerated message reloads once its last speaker is done.
+      if (editedRunIdsRef.current.delete(runId)) { seenRuns.add(runId); editedRunIdsRef.current.add(nextRunId); }
+    }),
     [client, seenRuns],
   );
   useEffect(() => () => followers.stopAll(), [followers]);
@@ -261,7 +267,11 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
       );
       const finished: RunRecord[] = [];
       for (const run of mine) {
-        if (run.status === 'running') { followers.attach(run.id); }
+        if (run.status === 'running') {
+          // The record names the speaker, which a card made from events would not.
+          dispatch({ type: 'run_created', run });
+          followers.attach(run.id);
+        }
         else if (!threadRef.current.items.some(item => item.kind === 'run' && item.run.runId === run.id)) {
           finished.push(run);
         }
@@ -276,6 +286,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
       followers.stopAll();
       const loadId = resetThread(id);
       setSessionBlocked(false);
+      setFloor(undefined);
       if (!id) { return; }
       setSessionLoading(true);
       try {
@@ -284,47 +295,8 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
         const detail = await getSession(client, id);
         if (loadId !== sessionLoadRef.current) { return; }
         rememberPersistedSessionIds([id]);
-        dispatch({
-          type: 'session_loaded',
-          turns: detail.turns.map(turn => {
-            if (turn.role === 'assistant') {
-              return {
-                role: turn.role,
-                content: turn.content,
-                ...(turn.responseMetrics ? {
-                  responseMeta: {
-                    mode: turn.responseMetrics.mode,
-                    startedAt: turn.responseMetrics.startedAt,
-                    finishedAt: turn.responseMetrics.finishedAt,
-                    latencyMs: turn.responseMetrics.latencyMs,
-                    usage: turn.responseMetrics.usage,
-                  },
-                } : {}),
-              };
-            }
-            const restored = splitInlineTextAttachments(turn.content);
-            const attachments: UserAttachment[] = [
-              ...toUserAttachments(id, turn.attachments ?? []),
-              ...restored.files.map(file => {
-                const officeKind = officeKindForFile(file.name);
-                return {
-                  kind: 'text' as const,
-                  name: file.name,
-                  content: file.content,
-                  ...(officeKind ? { officeKind } : {}),
-                  ...(file.content.includes('[Office extraction truncated to fit the attachment text limit.]')
-                    ? { truncated: true }
-                    : {}),
-                };
-              }),
-            ];
-            return {
-              role: turn.role,
-              content: restored.prompt,
-              ...(attachments.length > 0 ? { attachments } : {}),
-            };
-          }),
-        });
+        setFloor(detail.floor);
+        dispatch({ type: 'session_loaded', turns: threadTurns(id, detail.turns) });
       } catch (error) {
         if (loadId !== sessionLoadRef.current) { return; }
         if (isSessionBusy(error)) { setSessionBlocked(true); }
@@ -398,17 +370,16 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
 
   // Session search/archive filters are server-backed so results are not
   // limited to whichever 50 rows happened to load first.
+  const fetchSessions = useCallback(() => {
+    const filters = { limit: 100, archived: showArchivedSessions, search: sessionSearch };
+    return projectId ? listProjectSessions(client, projectId, filters) : listSessions(client, { ...filters, profile: routeProfile });
+  }, [client, projectId, routeProfile, sessionSearch, showArchivedSessions]);
   useEffect(() => {
-    if (!profileName) { setSessionsLoading(false); return; }
+    if (!scopeKey) { setSessionsLoading(false); return; }
     let cancelled = false;
     setSessionsLoading(true);
     const timer = window.setTimeout(() => {
-      listSessions(client, {
-        profile: profileName,
-        limit: 100,
-        archived: showArchivedSessions,
-        search: sessionSearch,
-      }).then(result => {
+      fetchSessions().then(result => {
         if (!cancelled) {
           rememberPersistedSessionIds(result.map(session => session.id));
           setSessions(result);
@@ -423,7 +394,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [client, handleError, profileName, rememberPersistedSessionIds, sessionSearch, showArchivedSessions]);
+  }, [fetchSessions, handleError, scopeKey, rememberPersistedSessionIds, sessionSearch]);
 
   // External navigation (back/forward, deep link) → adopt the route's session.
   useEffect(() => {
@@ -461,14 +432,9 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
   }, [client, handleError]);
 
   const refreshSessions = useCallback(async (forSession = sessionId) => {
-    if (!profileName) { return; }
+    if (!scopeKey) { return; }
     try {
-      const result = await listSessions(client, {
-        profile: profileName,
-        limit: 100,
-        archived: showArchivedSessions,
-        search: sessionSearch,
-      });
+      const result = await fetchSessions();
       rememberPersistedSessionIds(result.map(session => session.id));
       setSessions(result);
       if (forSession && !result.some(session => session.id === forSession)) {
@@ -484,7 +450,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
     } catch {
       // List refresh is cosmetic; ignore failures.
     }
-  }, [client, forgetPersistedSessionId, profileName, rememberPersistedSessionIds, sessionId, sessionSearch, showArchivedSessions]);
+  }, [client, fetchSessions, forgetPersistedSessionId, scopeKey, rememberPersistedSessionIds, sessionId]);
   refreshSessionsRef.current = () => { void refreshSessions(); };
   const refreshRuns = useCallback(async () => {
     try {
@@ -497,7 +463,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
   reloadSessionRef.current = () => { if (sessionId) { void loadSession(sessionId); } };
 
   useWorkspaceChanges(client, () => {
-    void refreshProfiles(); void refreshSessions(); void refreshRuns();
+    void refreshProfiles(); void refreshSessions(); void refreshRuns(); void projectState.refresh();
     void getModels(client).then(models => setModelOptions(models.options)).catch(() => undefined);
     if (profileName) { void getSkills(client, profileName).then(setSkills).catch(() => undefined); }
     // An open transcript belongs to this view. Remote changes are adopted only
@@ -523,17 +489,19 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
     await loadSession(id);
   }, [takeOverLease, sessionId, handleError, loadSession]);
 
-  const selectProfile = useCallback(
-    (name: string) => {
+  const selectOwner = useCallback(
+    (next: ChatRoute) => {
       abortActiveChat();
       followers.stopAll();
       setSessionId(undefined);
       setSessionBlocked(false);
       resetThread();
-      navigate({ view: 'agent', profile: name });
+      navigate(next);
     },
     [abortActiveChat, followers, navigate, resetThread],
   );
+  const selectProfile = useCallback((name: string) => selectOwner({ view: 'agent', profile: name }), [selectOwner]);
+  const selectProject = useCallback((id: string) => selectOwner({ view: 'projects', project: id }), [selectOwner]);
 
   const showProfiles = useCallback(() => {
     abortActiveChat();
@@ -544,31 +512,31 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
     setSessions([]);
     setSkills([]);
     resetThread();
-    navigate({ view: 'agent' });
+    navigate(route.view === 'projects' ? { view: 'projects' } : { view: 'agent' });
     void refreshProfiles();
-  }, [abortActiveChat, followers, navigate, refreshProfiles, resetThread]);
+  }, [abortActiveChat, followers, navigate, refreshProfiles, resetThread, route.view]);
 
   const selectSession = useCallback(
     (id: string) => {
-      if (!profileName || id === sessionId) { return; }
+      if (!scopeKey || id === sessionId) { return; }
       abortActiveChat();
       setSessionId(id);
-      navigate({ view: 'agent', profile: profileName, session: id });
+      navigate(sessionRoute(id));
       void loadSession(id);
     },
-    [abortActiveChat, profileName, sessionId, navigate, loadSession],
+    [abortActiveChat, scopeKey, sessionId, navigate, sessionRoute, loadSession],
   );
 
   const newSession = useCallback(() => {
-    if (!profileName || (sessionId && !persistedSessionIds.has(sessionId))) { return; }
+    if (!scopeKey || (sessionId && !persistedSessionIds.has(sessionId))) { return; }
     const id = createClientId();
     abortActiveChat();
     followers.stopAll();
     setSessionId(id);
     resetThread(id);
-    navigate({ view: 'agent', profile: profileName, session: id });
+    navigate(sessionRoute(id));
     void loadSession(id);
-  }, [abortActiveChat, profileName, followers, navigate, persistedSessionIds, sessionId, resetThread, loadSession]);
+  }, [abortActiveChat, scopeKey, followers, navigate, sessionRoute, persistedSessionIds, sessionId, resetThread, loadSession]);
 
   const replaceSessionSummary = useCallback((updated: SessionSummary) => {
     rememberPersistedSessionIds([updated.id]);
@@ -602,19 +570,19 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
     try {
       await updateSession(client, id, { archived });
       setSessions(current => current.filter(session => session.id !== id));
-      if (archived && id === sessionId && profileName) {
+      if (archived && id === sessionId && scopeKey) {
         abortActiveChat();
         followers.stopAll();
         setSessionId(undefined);
         resetThread();
-        navigate({ view: 'agent', profile: profileName });
+        navigate(sessionRoute());
       }
       return true;
     } catch (error) {
       handleError(error);
       return false;
     }
-  }, [abortActiveChat, client, followers, handleError, navigate, profileName, sessionId, resetThread]);
+  }, [abortActiveChat, client, followers, handleError, navigate, sessionRoute, scopeKey, sessionId, resetThread]);
 
   const deleteSession = useCallback(async (id: string): Promise<boolean> => {
     try {
@@ -627,25 +595,44 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
       forgetPersistedSessionId(id);
       setSessions(current => current.filter(session => session.id !== id));
       setRuns(current => current.filter(run => run.sessionId !== id));
-      if (profileName) {
+      if (scopeKey) {
         setAttachmentDrafts(current => {
           const next = { ...current };
-          delete next[`${profileName}:${id}`];
+          delete next[`${scopeKey}:${id}`];
           return next;
         });
       }
-      if (id === sessionId && profileName) {
+      if (id === sessionId && scopeKey) {
         followers.stopAll();
         setSessionId(undefined);
         resetThread();
-        navigate({ view: 'agent', profile: profileName });
+        navigate(sessionRoute());
       }
       return true;
     } catch (error) {
       handleError(error);
       return false;
     }
-  }, [abortActiveChat, client, followers, forgetPersistedSessionId, handleError, navigate, profileName, sessionId, sessions, resetThread]);
+  }, [abortActiveChat, client, followers, forgetPersistedSessionId, handleError, navigate, sessionRoute, scopeKey, sessionId, sessions, resetThread]);
+
+  const moveSession = useCallback(async (id: string, target: string): Promise<boolean> => {
+    try {
+      await moveSessionToProject(client, id, target);
+      setSessions(current => current.filter(session => session.id !== id));
+      // The open conversation continues in its project; this page keeps its lease.
+      if (id === sessionId) { navigate({ view: 'projects', project: target, session: id }); }
+      return true;
+    } catch (error) {
+      handleError(error);
+      return false;
+    }
+  }, [client, handleError, navigate, sessionId]);
+
+  const inviteToProject = useCallback(async (name: string) => {
+    if (!projectId) { return; }
+    try { projectState.setProject(await inviteProjectMember(client, projectId, name)); }
+    catch (error) { handleError(error); }
+  }, [client, handleError, projectId, projectState.setProject]);
 
   const addFiles = useCallback(async (files: Iterable<File>) => {
     const result = await prepareFiles(files, attachmentsRef.current);
@@ -685,7 +672,9 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
       const running = activeRun(threadRef.current);
       if (running) {
         if (/(^|\s)@/.test(trimmed)) {
-          dispatch({ type: 'notice', tone: 'warn', text: 'Wait for this run to finish, or stop it, before starting a task on an @device.' });
+          dispatch({ type: 'notice', tone: 'warn', text: project
+            ? 'Wait for this reply to finish, or stop it, before addressing a profile or an @device.'
+            : 'Wait for this run to finish, or stop it, before starting a task on an @device.' });
           return false;
         }
         try {
@@ -697,10 +686,25 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
         }
       }
 
+      // In a project the host picks who answers; the preview sends the request's
+      // model settings and skill to that profile.
+      const routed = project ? previewProjectRoute(trimmed, project, floor, profiles.map(profile => profile.name)) : undefined;
+      if (routed?.uninvited) {
+        dispatch({ type: 'notice', tone: 'warn', text: `${routed.uninvited} isn't in this project. Invite it first.` });
+        return false;
+      }
+      const speaker = routed?.speakers[0] ?? profileName;
+      const skillText = project ? afterLeadingMentions(trimmed, project.members) : trimmed;
       let skill: ResolvedSkillInvocation | undefined;
-      if (trimmed.startsWith('$')) {
+      if (skillText.startsWith('$')) {
+        if (routed && routed.speakers.length > 1) {
+          dispatch({ type: 'notice', tone: 'warn', text: 'A skill runs for one profile; address a single profile.' });
+          return false;
+        }
         try {
-          skill = await resolveSkillInvocation(client, trimmed, profileName);
+          skill = await resolveSkillInvocation(client, skillText, speaker);
+          // Keep the mention: the host routes by the saved message.
+          skill = { ...skill, userTurn: trimmed.slice(0, trimmed.length - skillText.length) + skill.userTurn };
         } catch (error) {
           handleError(error);
           return false;
@@ -719,7 +723,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
       if (!sid) {
         sid = createClientId();
         setSessionId(sid);
-        navigate({ view: 'agent', profile: profileName, session: sid });
+        navigate(sessionRoute(sid));
       }
 
       try { await acquireSessionLease(client, sid); }
@@ -731,7 +735,8 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
       const pending = options.attachments ?? attachmentsRef.current;
       // Ordinary Web conversations are always agent runs. The chat transport
       // remains available only for explicitly chat-mode Skills and compatibility.
-      const mode = skill?.mode ?? 'agent';
+      // Project replies need agent runs (one per speaker).
+      const mode = project ? 'agent' : skill?.mode ?? 'agent';
       if (mode === 'chat' && pending.some(item => item.kind === 'file')) {
         dispatch({
           type: 'notice',
@@ -761,56 +766,8 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
           return next;
         });
       }
-      const imageAttachments = pending.filter(
-        (item): item is Extract<PreparedAttachment, { kind: 'image' }> => item.kind === 'image',
-      );
-      const images = await Promise.all(imageAttachments.map(async item => (
-        options.originalImages && item.originalFile
-          ? { data: await fileToBase64(item.originalFile), mediaType: item.originalFile.type || item.mediaType }
-          : { data: item.data, mediaType: item.mediaType }
-      )));
-      const textFiles = pending.filter(
-        (item): item is Extract<PreparedAttachment, { kind: 'text' }> => item.kind === 'text',
-      );
-      const stagedAttachments = pending.filter(item => item.kind !== 'image');
-      const files: RunFileInput[] = await Promise.all(stagedAttachments.map(async item => {
-        if (item.kind === 'file') {
-          return {
-            name: item.name,
-            mediaType: item.mediaType,
-            data: await fileToBase64(item.originalFile),
-          };
-        }
-        const source = item.originalFile ?? new Blob([item.content], { type: item.mediaType || 'text/plain' });
-        return {
-          name: item.name,
-          mediaType: item.mediaType || source.type || 'text/plain',
-          data: await fileToBase64(source),
-          inspectionText: item.content,
-        };
-      }));
-      // Chat has no local attachment tools, so readable files remain inline for
-      // parity. Agent runs stage every file behind bounded attachment tools;
-      // inlining the same document here would duplicate it in model context
-      // and defeats lazy handling for large Office/text inputs.
-      const prompt = modelPromptWithAttachments(skill?.prompt ?? trimmed, textFiles, mode);
-      // Keep the existing durable hidden attachment markers for historical
-      // edit/resend without putting them in the current Agent model request.
-      const durableUserTurn = mode === 'agent' && !skill && textFiles.length > 0
-        ? inlineTextAttachments(trimmed, textFiles)
-        : undefined;
-      const bubbleAttachments: UserAttachment[] = pending.map(item => {
-        if (item.kind === 'image') {
-          return { kind: 'image', name: item.name, previewUrl: `data:${item.mediaType};base64,${item.data}` };
-        }
-        if (item.kind === 'file') { return { kind: 'file', name: item.name }; }
-        return {
-              kind: 'text',
-              name: item.name,
-              content: item.content,
-              ...(item.officeKind ? { officeKind: item.officeKind } : {}),
-              ...(item.truncated ? { truncated: true } : {}),
-            };
+      const { images, files, prompt, durableUserTurn, bubbleAttachments } = await messagePayload(pending, {
+        text: trimmed, mode, ...(skill ? { skillPrompt: skill.prompt } : {}), ...(options.originalImages ? { originalImages: true } : {}),
       });
 
       if (options.replaceItemId) {
@@ -824,7 +781,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
         dispatch({ type: 'user_message', text: trimmed, attachments: bubbleAttachments });
         setSessions(current => withPendingSession(current, {
           id: sid,
-          profileName,
+          profileName: speaker,
           prompt: trimmed,
         }));
       }
@@ -898,7 +855,8 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
             instructions: skill.instructions,
             lean: true,
           } : durableUserTurn ? { userTurn: durableUserTurn } : {}),
-          profile: profileName,
+          profile: speaker,
+          ...(projectId ? { projectId } : {}),
           sessionId: sid,
           replaceUserTurnIndex: options.replaceUserTurnIndex,
           deep,
@@ -909,11 +867,15 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
           ...(options.originalImages ? { originalImages: true } : {}),
         });
         dispatch({ type: 'run_created', run });
+        // The host's rule: one mention takes the floor, several return it to the Lead.
+        if (routed?.floor !== undefined && options.replaceUserTurnIndex === undefined) { setFloor(routed.floor ?? undefined); }
         setRuns(current => [run, ...current.filter(item => item.id !== run.id)]);
         if (options.replaceUserTurnIndex !== undefined) { editedRunIdsRef.current.add(run.id); }
         followers.attach(run.id);
         return true;
       } catch (error) {
+        // The roster changed elsewhere: show it, so the composer offers the invite.
+        if (error instanceof MarifoldApiError && error.code === 'PROJECT_MEMBER_REQUIRED') { void projectState.refresh(); }
         handleError(error);
         void refreshSessions(sid);
         if (options.replaceUserTurnIndex !== undefined) { void loadSession(sid); }
@@ -923,7 +885,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
         setSendingBytes(undefined);
       }
     },
-    [client, profileName, sessionId, modelChoice, deep, followers, navigate, handleError, refreshSessions, loadSession, attachmentDraftKey],
+    [client, profileName, profiles, project, projectId, projectState.refresh, floor, sessionId, sessionRoute, modelChoice, deep, followers, navigate, handleError, refreshSessions, loadSession, attachmentDraftKey],
   );
 
   const stop = useCallback(async (): Promise<boolean> => {
@@ -946,8 +908,9 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
     (command: { name: string; args: string }) => runAgentCommand({
       client, dispatch, threadRef, profileName, profileDetail, modelChoice, deep, sessionId,
       newSession, setDeep, setModelChoice, sendMessage, refreshSessions, handleError, stop,
+      project, onProjectChange: projectState.setProject,
     }, command),
-    [client, profileName, profileDetail, modelChoice, deep, sessionId, newSession, setDeep, setModelChoice, setProfileDetail, sendMessage, refreshSessions, handleError, stop],
+    [client, profileName, profileDetail, modelChoice, deep, sessionId, newSession, setDeep, setModelChoice, setProfileDetail, sendMessage, refreshSessions, handleError, stop, project, projectState.setProject],
   );
 
   // `/command` is a deterministic web action, handled before steering so e.g.
@@ -1092,6 +1055,13 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
   return {
     profiles,
     profileName,
+    project,
+    projectMissing: projectState.missing,
+    floor,
+    selectProject,
+    refreshProject: projectState.refresh,
+    inviteToProject,
+    moveSession,
     profileDetail,
     skills,
     devices,

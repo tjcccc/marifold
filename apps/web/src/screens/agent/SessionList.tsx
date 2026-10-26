@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import type { SessionSummary } from '../../api/types';
 import { PinGlyph } from '../../components/PinGlyph';
+import { FolderGlyph } from '../../components/ProjectIcon';
 import { formatRelativeTime } from '../../lib/format';
 import { WorkspaceSidebar } from './WorkspaceSidebar';
 import styles from './SessionList.module.css';
@@ -30,6 +31,16 @@ export interface SessionListProps {
   onSetPinned: (id: string, pinned: boolean) => Promise<boolean>;
   onSetArchived: (id: string, archived: boolean) => Promise<boolean>;
   onDelete: (id: string) => Promise<boolean>;
+  /** Where the back arrow returns ("profiles" by default). */
+  backTo?: string;
+  /** The hero button's label (profile config by default). */
+  configureLabel?: string;
+  /** Shown beside a row's time, e.g. who spoke in a project session. */
+  rowAccessory?: (session: SessionSummary) => ReactNode;
+  /** Projects a session can move to, by name; enables "Move to project…". */
+  moveTargets?: Array<{ id: string; name: string; icon: ReactNode }>;
+  onMoveToProject?: (sessionId: string, projectId: string) => Promise<boolean>;
+  onMoveToNewProject?: (sessionId: string) => void;
   footer?: ReactNode;
 }
 
@@ -38,6 +49,8 @@ interface MenuState {
   top: number;
   left: number;
   trigger: HTMLButtonElement;
+  /** The project picker of "Move to project…" replaces the actions. */
+  moving?: boolean;
 }
 
 /** Second level of the primary sidebar stack: selected profile → sessions. */
@@ -73,6 +86,12 @@ export function SessionListContent({
   onSetPinned,
   onSetArchived,
   onDelete,
+  backTo = 'profiles',
+  configureLabel = `Open profile config for ${profileDisplayName}`,
+  rowAccessory,
+  moveTargets,
+  onMoveToProject,
+  onMoveToNewProject,
 }: SessionListContentProps) {
   const [menu, setMenu] = useState<MenuState | undefined>();
   const [renaming, setRenaming] = useState<SessionSummary | undefined>();
@@ -200,6 +219,14 @@ export function SessionListContent({
     if (saved) { setMenu(undefined); }
   }
 
+  async function moveTo(session: SessionSummary, projectId: string): Promise<void> {
+    if (busy || !onMoveToProject) { return; }
+    setBusy(true);
+    const moved = await onMoveToProject(session.id, projectId);
+    setBusy(false);
+    if (moved) { setMenu(undefined); }
+  }
+
   async function confirmDelete(): Promise<void> {
     if (!deleting || busy) { return; }
     setBusy(true);
@@ -211,7 +238,7 @@ export function SessionListContent({
   return (
     <>
       <div className={styles.profileHeader}>
-        <button className={styles.backButton} onClick={onBack} title="Back to profiles" aria-label="Back to profiles">
+        <button className={styles.backButton} onClick={onBack} title={`Back to ${backTo}`} aria-label={`Back to ${backTo}`}>
           <BackGlyph />
         </button>
         <span className={styles.headerTitle}>marifold</span>
@@ -221,8 +248,8 @@ export function SessionListContent({
           <button
             className={styles.profileAvatarButton}
             type="button"
-            title={`Open profile config for ${profileDisplayName}`}
-            aria-label={`Open profile config for ${profileDisplayName}`}
+            title={configureLabel}
+            aria-label={configureLabel}
             onClick={onConfigureProfile}
           >
             {profileAvatar}
@@ -279,8 +306,11 @@ export function SessionListContent({
                   <span className={styles.title}>{title}</span>
                   {session.pinned ? <span className={styles.pinIndicator} title="Pinned"><PinGlyph /></span> : null}
                 </span>
-                <span className={styles.sub}>
-                  {session.pending ? 'Saving…' : running ? 'Running…' : `${formatRelativeTime(session.updatedAt)} · ${session.turnCount} turns`}
+                <span className={styles.subLine}>
+                  <span className={styles.sub}>
+                    {session.pending ? 'Saving…' : running ? 'Running…' : `${formatRelativeTime(session.updatedAt)} · ${session.turnCount} turns`}
+                  </span>
+                  {rowAccessory?.(session)}
                 </span>
               </button>
               <button
@@ -298,7 +328,42 @@ export function SessionListContent({
         })}
       </div>
 
-      {menu ? createPortal(
+      {menu?.moving ? createPortal(
+        <div
+          ref={menuRef}
+          className={`${styles.actionMenu} ${styles.moveMenu}`}
+          role="menu"
+          aria-label={`Move ${sessionTitle(menu.session)} to a project`}
+          style={{ top: menu.top, left: menu.left }}
+        >
+          <button
+            className={styles.menuItem}
+            role="menuitem"
+            disabled={busy}
+            onClick={() => {
+              setMenu(undefined);
+              onMoveToNewProject?.(menu.session.id);
+            }}
+          >
+            <FolderGlyph size={17} plus />
+            <span>New project</span>
+          </button>
+          {moveTargets && moveTargets.length > 0 ? <div className={styles.menuSeparator} /> : null}
+          {moveTargets?.map(target => (
+            <button
+              key={target.id}
+              className={styles.menuItem}
+              role="menuitem"
+              disabled={busy}
+              onClick={() => void moveTo(menu.session, target.id)}
+            >
+              {target.icon}
+              <span className={styles.menuLabel}>{target.name}</span>
+            </button>
+          ))}
+        </div>,
+        document.body,
+      ) : menu ? createPortal(
         <div
           ref={menuRef}
           className={styles.actionMenu}
@@ -340,6 +405,19 @@ export function SessionListContent({
             <ArchiveGlyph />
             <span>{menu.session.archived ? 'Unarchive' : 'Archive'}</span>
           </button>
+          {onMoveToProject ? (
+            <button
+              className={styles.menuItem}
+              role="menuitem"
+              aria-haspopup="menu"
+              disabled={busy || menu.session.pending || runningSessionIds.has(menu.session.id)}
+              title={runningSessionIds.has(menu.session.id) ? 'Available when the running task ends' : undefined}
+              onClick={() => setMenu({ ...menu, moving: true, top: Math.max(8, Math.min(menu.top, window.innerHeight - 336)) })}
+            >
+              <FolderGlyph size={17} />
+              <span>Move to project…</span>
+            </button>
+          ) : null}
           <div className={styles.menuSeparator} />
           <button
             className={styles.menuItemDanger}

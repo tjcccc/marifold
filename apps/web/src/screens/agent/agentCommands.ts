@@ -1,9 +1,10 @@
 import type { Dispatch, MutableRefObject } from 'react';
 import type { ApiClient } from '../../api/client';
 import { deleteMemory, listMemories, rememberMemory } from '../../api/profiles';
+import { dismissProjectMember, inviteProjectMember } from '../../api/projects';
 import { compactSession } from '../../api/sessions';
-import type { ProfileDetail } from '../../api/types';
-import { WEB_COMMANDS } from '../../lib/commandSyntax';
+import type { ProfileDetail, ProjectDetail } from '../../api/types';
+import { PROJECT_COMMANDS, WEB_COMMANDS } from '../../lib/commandSyntax';
 import { splitModelChoice } from '../../lib/modelChoice';
 import { activeRun } from '../../state/thread';
 import type { ThreadAction, ThreadState } from '../../state/thread';
@@ -26,23 +27,27 @@ export interface AgentCommandContext {
   refreshSessions: () => Promise<void>;
   handleError: (error: unknown) => void;
   stop: () => Promise<boolean>;
+  /** In a project, `profileName` is the profile that answers next. */
+  project?: ProjectDetail;
+  onProjectChange: (project: ProjectDetail) => void;
 }
 
 /** Run one Web `/command`: a deterministic action, notice, or message send. */
 export async function runAgentCommand(context: AgentCommandContext, { name, args }: { name: string; args: string }): Promise<void> {
   const {
     client, dispatch, threadRef, profileName, profileDetail, modelChoice, deep, sessionId,
-    newSession, setDeep, setModelChoice, sendMessage, refreshSessions, handleError, stop,
+    newSession, setDeep, setModelChoice, sendMessage, refreshSessions, handleError, stop, project, onProjectChange,
   } = context;
   const notify = (text: string, tone: 'info' | 'warn' | 'error' = 'info') =>
     dispatch({ type: 'notice', tone, text });
   switch (name) {
     case 'help':
-      notify(WEB_COMMANDS.map(command => `${command.usage} — ${command.description}`).join('\n'));
+      notify([...WEB_COMMANDS, ...(project ? PROJECT_COMMANDS : [])].map(command => `${command.usage} — ${command.description}`).join('\n'));
       break;
     case 'status':
       notify([
-        `Profile: ${profileName ?? '—'}`,
+        ...(project ? [`Project: ${project.name} (Lead: ${project.lead})`] : []),
+        `${project ? 'Answers next' : 'Profile'}: ${profileName ?? '—'}`,
         `Model: ${modelChoice ?? 'Auto (profile default)'}`,
         `Deep: ${deep ? 'on' : 'off'}`,
         `Session: ${sessionId ?? 'new'}`,
@@ -137,6 +142,19 @@ export async function runAgentCommand(context: AgentCommandContext, { name, args
         });
         notify(result.compacted ? 'Compacted older turns in this session.' : 'Nothing to compact yet.');
         void refreshSessions();
+      } catch (error) {
+        handleError(error);
+      }
+      break;
+    }
+    case 'invite':
+    case 'dismiss': {
+      const target = /^@?"?([^"\s]+)"?$/.exec(args)?.[1];
+      if (!project) { notify(`/${name} works in a project session.`, 'warn'); break; }
+      if (!target) { notify(`Usage: /${name} @profile`, 'warn'); break; }
+      try {
+        onProjectChange(await (name === 'invite' ? inviteProjectMember : dismissProjectMember)(client, project.id, target));
+        notify(name === 'invite' ? `${target} joined ${project.name}.` : `${target} left ${project.name}; its replies stay.`);
       } catch (error) {
         handleError(error);
       }

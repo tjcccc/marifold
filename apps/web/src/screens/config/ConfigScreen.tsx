@@ -80,6 +80,7 @@ export interface ConfigScreenProps {
   connectionName: string;
   onDone: () => void;
   onOpenAgent: () => void;
+  onOpenProjects: () => void;
   onOpenApps: () => void;
 }
 
@@ -98,6 +99,7 @@ export function ConfigScreen({
   connectionName,
   onDone,
   onOpenAgent,
+  onOpenProjects,
   onOpenApps,
 }: ConfigScreenProps) {
   const { section, item } = route;
@@ -406,6 +408,7 @@ export function ConfigScreen({
           theme={theme}
           connectionName={connectionName}
           onAgent={onOpenAgent}
+          onProjects={onOpenProjects}
           onApps={onOpenApps}
           onOpenConnection={onOpenConnection}
           onThemeChange={onThemeChange}

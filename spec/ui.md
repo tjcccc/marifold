@@ -56,7 +56,7 @@ Rules:
 
 ### Layout
 
-- App shell (`App.tsx`): status notices (`role="status"`) above one `<main>` that hosts the Agent, Apps, or Config screen; connection and workspace popovers float above it.
+- App shell (`App.tsx`): status notices (`role="status"`) above one `<main>` that hosts the Agent, Projects, Apps, or Config screen; connection and workspace popovers float above it. Projects is the Agent screen with a project as the session owner: the same drill-down from a list to its sessions, a folder icon (`ProjectIcon`) where a profile shows its avatar, and `ProfileLabel` speaker headers on replies.
 - Desktop (900px and wider): a resizable primary sidebar (`ResizableSidebar`, 256px default, 200px minimum, at most 40% of the window, width persisted per sidebar, pointer and keyboard resizing) beside the working pane. Sidebars share `SidebarChrome` for the brand header, rows, and footer.
 - Mobile (899px and narrower): a separate touch layout, not compressed columns. It uses list-to-detail drill-down, a bottom tab bar, bottom sheets, safe-area padding, and visual-viewport sizing for the on-screen keyboard; see the README's "Mobile layout". The breakpoint is `(max-width: 899px)` in CSS and the shared `MOBILE_QUERY` in `lib/useMediaQuery.ts` (CSS media queries cannot read custom properties, so modules repeat the value).
 - Secondary breakpoints (560, 640, 720, 760, 360px) only adjust individual components.

@@ -60,6 +60,13 @@ export function insertRunCard(
   return replacingIndex === -1 ? append(state, item) : insert(state, replacingIndex + 1, item);
 }
 
+/** Place an item after everything a run has shown (its card and its text). */
+export function insertAfterRun(state: ThreadState, runId: string, item: NewThreadItem): ThreadState {
+  const last = state.items.findLastIndex(candidate => (candidate.kind === 'run' && candidate.run.runId === runId)
+    || (candidate.kind === 'assistant' && candidate.runId === runId));
+  return last === -1 ? append(state, item) : insert(state, last + 1, item);
+}
+
 export function findRunItem(state: ThreadState, runId: string): Extract<ThreadItem, { kind: 'run' }> | undefined {
   return state.items.find(
     (item): item is Extract<ThreadItem, { kind: 'run' }> => item.kind === 'run' && item.run.runId === runId,

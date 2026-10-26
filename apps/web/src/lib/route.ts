@@ -5,11 +5,15 @@ export type ConfigSection = 'profiles' | 'providers' | 'models' | 'agent' | 'web
 
 export type Route =
   | { view: 'agent'; profile?: string; session?: string }
+  | { view: 'projects'; project?: string; session?: string }
   | { view: 'apps'; app?: string }
   | { view: 'config'; section: ConfigSection; item?: string };
 
 const CONFIG_SECTIONS: ConfigSection[] = ['profiles', 'providers', 'models', 'agent', 'web-search', 'appearance', 'service', 'agent-computer'];
 const LEGACY_HASH_ROUTE = /^#\/(?:agent|apps|config)(?:\/|$)/;
+
+/** The two conversation views: a profile's sessions, or a project's. */
+export type ChatRoute = Extract<Route, { view: 'agent' | 'projects' }>;
 
 export function parsePath(pathname: string): Route {
   const parts = pathname
@@ -25,6 +29,12 @@ export function parsePath(pathname: string): Route {
     .filter(part => part.length > 0);
 
   switch (parts[0]) {
+    case 'projects':
+      return {
+        view: 'projects',
+        ...(parts[1] ? { project: parts[1] } : {}),
+        ...(parts[1] && parts[2] ? { session: parts[2] } : {}),
+      };
     case 'apps':
       return { view: 'apps', ...(parts[1] ? { app: parts[1] } : {}) };
     case 'config': {
@@ -55,10 +65,12 @@ export function formatPath(route: Route): string {
       if (route.item) { parts.push(encodeURIComponent(route.item)); }
       return parts.join('/');
     }
-    case 'agent': {
-      const parts = ['/agent'];
-      if (route.profile) {
-        parts.push(encodeURIComponent(route.profile));
+    case 'agent':
+    case 'projects': {
+      const owner = route.view === 'agent' ? route.profile : route.project;
+      const parts = [`/${route.view}`];
+      if (owner) {
+        parts.push(encodeURIComponent(owner));
         if (route.session) { parts.push(encodeURIComponent(route.session)); }
       }
       return parts.join('/');

@@ -11,7 +11,8 @@ import type {
   UserInputSubmission,
 } from './types';
 
-export async function startRun(client: ApiClient, input: RunStartInput): Promise<RunRecord> {
+/** `projectId` starts a new session in that project (see docs/service-api.md). */
+export async function startRun(client: ApiClient, input: RunStartInput & { projectId?: string }): Promise<RunRecord> {
   const body = await client.request<{ run: RunRecord }>('POST', '/v1/runs', input);
   return body.run;
 }

@@ -105,6 +105,25 @@ describe('followRun', () => {
 });
 
 describe('RunFollowers', () => {
+  it('follows the next speaker of a project turn, handing off before the first reports done', async () => {
+    const handoff: AgentEvent = { type: 'handoff', runId: 'run_2', profile: 'dev_test' };
+    const { client } = scriptedClient([
+      sseBody([{ id: 1, event: status }, { id: 2, event: handoff }, { id: 3, event: done }]),
+      sseBody([{ id: 1, event: status }, { id: 2, event: done }]),
+    ]);
+    const calls: string[] = [];
+    let resolveDone!: () => void;
+    const secondDone = new Promise<void>(resolve => { resolveDone = resolve; });
+    const followers = new RunFollowers(client, () => undefined, runId => {
+      calls.push(`done:${runId}`);
+      if (runId === 'run_2') { resolveDone(); }
+    }, undefined, (runId, next) => calls.push(`handoff:${runId}->${next}`));
+
+    followers.attach('run_1');
+    await secondDone;
+    expect(calls).toEqual(['handoff:run_1->run_2', 'done:run_1', 'done:run_2']);
+  });
+
   it('notifies the controller when a followed run reaches done', async () => {
     const { client } = scriptedClient([
       sseBody([{ id: 1, event: status }, { id: 2, event: done }]),

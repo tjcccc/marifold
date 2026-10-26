@@ -1,5 +1,6 @@
+import * as fs from 'fs';
 import type { FastifyInstance } from 'fastify';
-import { MarifoldError, type MarifoldRuntime, type ProjectDetail } from '@marifold/core';
+import { avatarThumbnail, MarifoldError, type MarifoldRuntime, type ProjectDetail } from '@marifold/core';
 import { objectBody, optionalStringField, parseBooleanQuery, parseLimitQuery, requiredString, stringArray } from './Validation';
 
 /**
@@ -50,6 +51,39 @@ export function registerProjectRoutes(server: FastifyInstance, runtime: Marifold
 
   // Its sessions are kept, as ordinary sessions of the profile each started with.
   server.delete<{ Params: { id: string } }>('/v1/projects/:id', async request => ({ ok: true, ...projects.delete(request.params.id) }));
+
+  // Raw image bytes like profile avatars; clients fetch with auth and show a blob URL.
+  server.get<{ Params: { id: string }; Querystring: { thumbnail?: string } }>('/v1/projects/:id/icon', async (request, reply) => {
+    if (request.query.thumbnail !== undefined && request.query.thumbnail !== '1') {
+      throw MarifoldError.projectInvalid('thumbnail must be 1 when supplied.');
+    }
+    existing(request.params.id);
+    const icon = projects.icon(request.params.id);
+    if (!icon) {
+      reply.status(404);
+      return { ok: false, error: { code: 'ICON_NOT_FOUND', message: `Project '${request.params.id}' has no icon.` } };
+    }
+    const stat = fs.statSync(icon.path);
+    const thumbnail = request.query.thumbnail === '1';
+    const etag = `"${Math.round(stat.mtimeMs)}-${stat.size}${thumbnail ? '-thumbnail-v1' : ''}"`;
+    if (request.headers['if-none-match'] === etag) {
+      reply.status(304);
+      return reply.send();
+    }
+    reply.header('content-type', thumbnail ? 'image/webp' : icon.mediaType);
+    reply.header('etag', etag);
+    reply.header('cache-control', 'no-cache');
+    return reply.send(thumbnail ? await avatarThumbnail(icon.path) : fs.createReadStream(icon.path));
+  });
+
+  server.put<{ Params: { id: string } }>('/v1/projects/:id/icon', async request => {
+    const body = objectBody(request.body);
+    const image = Buffer.from(requiredString(body.data, 'data'), 'base64');
+    if (image.length === 0) { throw MarifoldError.configInvalid('data must be non-empty base64.'); }
+    return { ok: true, project: projects.setIcon(request.params.id, image, requiredString(body.mediaType, 'mediaType')) };
+  });
+
+  server.delete<{ Params: { id: string } }>('/v1/projects/:id/icon', async request => ({ ok: true, ...projects.deleteIcon(request.params.id) }));
 
   server.post<{ Params: { id: string } }>('/v1/projects/:id/members', async request => ({
     ok: true,

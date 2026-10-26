@@ -15,22 +15,14 @@ import {
   resolveDirectoryProfileInstructions,
 } from './ProfileInstructions';
 import { assertNewProfileName } from './ProfileName';
+import { avatarImageProblem, findAvatarFile, removeAvatarFiles, writeAvatarFile } from '../images/AvatarFiles';
 import { PROFILE_DEFAULT_MODEL, parseProfileModel, profileModelValue } from './ProfileModel';
 
 const SAFE_PROFILE_NAME = /^[A-Za-z0-9_-]+$/;
 
-/** Accepted avatar media types → the stored file extension. */
-const AVATAR_MEDIA_TYPES: Record<string, string> = {
-  'image/png': 'png',
-  'image/jpeg': 'jpg',
-  'image/webp': 'webp',
-};
 /** Media assets (avatars, and future banners/exports) live under this subdir
  * so binaries don't clutter the profile root next to INSTRUCTIONS.md. */
 const ASSETS_DIR = 'assets';
-// The web client crops to 512² and compresses as WebP. Keep the existing limit
-// for API clients, older avatars and browsers that fall back to PNG.
-const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
 
 const PROFILE_INSTRUCTIONS_STUB = `# {name}
 
@@ -497,43 +489,16 @@ export class ProfileManager {
    * setAgentApproval). */
   setAvatar(name: string, image: Buffer, mediaType: string): { name: string; path: string; mediaType: string } {
     assertSafeName(name);
-    const ext = AVATAR_MEDIA_TYPES[mediaType];
-    if (!ext) {
-      throw MarifoldError.profileInvalid(
-        `Unsupported avatar type '${mediaType}'. Use image/png, image/jpeg, or image/webp.`,
-        name,
-      );
-    }
-    if (image.length === 0 || image.length > MAX_AVATAR_BYTES) {
-      throw MarifoldError.profileInvalid(`Avatar images must be between 1 byte and ${MAX_AVATAR_BYTES / 1024} KB.`, name);
-    }
-    const profileDir = path.join(this.profilesDir, name);
-    const assetsDir = path.join(profileDir, ASSETS_DIR);
-    fs.mkdirSync(assetsDir, { recursive: true });
-    this.removeAvatarFiles(profileDir); // clears both assets/ and any legacy root avatar
-    const filePath = path.join(assetsDir, `avatar.${ext}`);
-    fs.writeFileSync(filePath, image);
-    return { name, path: filePath, mediaType };
+    const problem = avatarImageProblem(image, mediaType, 'avatar');
+    if (problem) { throw MarifoldError.profileInvalid(problem, name); }
+    return { name, ...writeAvatarFile(path.join(this.profilesDir, name, ASSETS_DIR), 'avatar', image, mediaType) };
   }
 
   deleteAvatar(name: string): { name: string; removed: boolean } {
     assertSafeName(name);
     const profileDir = path.join(this.profilesDir, name);
     if (!fs.existsSync(profileDir)) { return { name, removed: false }; }
-    return { name, removed: this.removeAvatarFiles(profileDir) };
-  }
-
-  private removeAvatarFiles(profileDir: string): boolean {
-    let removed = false;
-    const assetsDir = path.join(profileDir, ASSETS_DIR);
-    for (const ext of Object.values(AVATAR_MEDIA_TYPES)) {
-      const filePath = path.join(assetsDir, `avatar.${ext}`);
-      if (fs.existsSync(filePath)) {
-        fs.rmSync(filePath, { force: true });
-        removed = true;
-      }
-    }
-    return removed;
+    return { name, removed: removeAvatarFiles(path.join(profileDir, ASSETS_DIR), 'avatar') };
   }
 
   private requireProfileDir(name: string): string {
@@ -562,12 +527,7 @@ export class ProfileManager {
 /** Locate a profile's avatar file. Shared with ProfileResolver so summaries
  * can flag avatars without duplicating the media-type mapping. */
 export function findProfileAvatar(profilesDir: string, name: string): { path: string; mediaType: string } | undefined {
-  const assetsDir = path.join(profilesDir, name, ASSETS_DIR);
-  for (const [mediaType, ext] of Object.entries(AVATAR_MEDIA_TYPES)) {
-    const filePath = path.join(assetsDir, `avatar.${ext}`);
-    if (fs.existsSync(filePath)) { return { path: filePath, mediaType }; }
-  }
-  return undefined;
+  return findAvatarFile(path.join(profilesDir, name, ASSETS_DIR), 'avatar');
 }
 
 function writeFile(filePath: string, content: string): string {

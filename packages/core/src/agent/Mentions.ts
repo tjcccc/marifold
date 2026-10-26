@@ -1,7 +1,9 @@
 /**
  * `@` mentions in a prompt: `@name` or `@"name with spaces"`, at the start or
- * after whitespace (so e-mail addresses never match), outside code. Devices
- * use them today; project sessions will also address profiles with them.
+ * after whitespace (so e-mail addresses never match), outside code. They name
+ * execution devices, and profiles in project sessions. The host parses them in
+ * `@marifold/core`; `@marifold/client` keeps an identical copy so composers can
+ * preview who answers (a client test keeps the two files the same).
  */
 export interface MentionToken {
   /** Index of the `@`. */

@@ -1,0 +1,37 @@
+.label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+.name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stack {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.stackItem {
+  display: inline-flex;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1.5px var(--canvas);
+}
+
+.stackItem + .stackItem {
+  margin-left: -5px;
+}
+
+.more {
+  margin-left: 4px;
+  font-size: 11px;
+  color: var(--text-3);
+}

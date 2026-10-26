@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import Database from 'better-sqlite3';
 import { MarifoldError } from '../errors/MarifoldError';
+import { avatarImageProblem, findAvatarFile, removeAvatarFiles, writeAvatarFile } from '../images/AvatarFiles';
 import { ensureProjectSessionsTable, PROJECT_SESSIONS_TABLE } from '../sessions/ProjectSessionsTable';
 
 /**
@@ -10,7 +11,8 @@ import { ensureProjectSessionsTable, PROJECT_SESSIONS_TABLE } from '../sessions/
  * to the sessions they hold (see docs/projects.md). A project has a roster of
  * invited profiles and a Lead, always on the roster, that answers when no one
  * is addressed. Sessions keep Priest's `profile_name`; membership in a project
- * is a row in `marifold_project_sessions`.
+ * is a row in `marifold_project_sessions`. Files a project owns (its icon) live
+ * in `<projectsDir>/<id>/`.
  */
 
 export const PROJECTS_TABLE = 'marifold_projects';
@@ -28,6 +30,9 @@ export interface ProjectSummary {
   /** Roster in join order; always contains the Lead. */
   members: string[];
   sessionCount: number;
+  /** Present when the project has an icon image (served at
+   * GET /v1/projects/:id/icon); clients show a folder otherwise. */
+  icon?: { mediaType: string };
   createdAt: string;
   updatedAt: string;
 }
@@ -91,27 +96,64 @@ export function renameProjectProfile(db: Database.Database, from: string, to: st
   db.prepare(`UPDATE ${PROJECT_SESSIONS_TABLE} SET floor = ? WHERE floor = ?`).run(to, from);
 }
 
+export interface ProjectStoreOptions {
+  /** Profiles must exist to be invited or lead; unchecked when omitted. */
+  profileExists?: (name: string) => boolean;
+  /** Creates the sessions database with its session tables, so the
+   * project tables never stand in a database without them. */
+  createSessionsDb?: () => void;
+  /** Where each project's files go; projects have no icons without it. */
+  projectsDir?: string;
+  now?: () => Date;
+}
+
 export class ProjectStore {
-  constructor(
-    private readonly sessionsDb: string,
-    /** Profiles must exist to be invited or lead; unchecked when omitted. */
-    private readonly profileExists?: (name: string) => boolean,
-    /** Creates the sessions database with its session tables, so the
-     * project tables never stand in a database without them. */
-    private readonly createSessionsDb?: () => void,
-    private readonly now: () => Date = () => new Date(),
-  ) {}
+  private readonly profileExists?: (name: string) => boolean;
+  private readonly createSessionsDb?: () => void;
+  private readonly now: () => Date;
+
+  constructor(private readonly sessionsDb: string, private readonly options: ProjectStoreOptions = {}) {
+    this.profileExists = options.profileExists;
+    this.createSessionsDb = options.createSessionsDb;
+    this.now = options.now ?? (() => new Date());
+  }
 
   list(): ProjectSummary[] {
     return this.read(db => (db.prepare(`SELECT * FROM ${PROJECTS_TABLE} ORDER BY name COLLATE NOCASE, id`).all() as ProjectRow[])
-      .map(row => summary(db, row)));
+      .map(row => this.withIcon(summary(db, row))));
   }
 
   get(id: string): ProjectDetail | undefined {
     return this.read(db => {
       const row = projectRow(db, id);
-      return row ? { ...summary(db, row), instructions: row.instructions } : undefined;
+      return row ? { ...this.withIcon(summary(db, row)), instructions: row.instructions } : undefined;
     });
+  }
+
+  /** The project's stored icon image, if any. */
+  icon(id: string): { path: string; mediaType: string } | undefined {
+    const dir = this.projectDir(id);
+    return dir ? findAvatarFile(dir, 'icon') : undefined;
+  }
+
+  /** Store the icon (PNG/JPEG/WebP, ≤2 MB), replacing any previous one. */
+  setIcon(id: string, image: Buffer, mediaType: string): ProjectDetail {
+    const project = this.get(id);
+    if (!project) { throw MarifoldError.projectNotFound(id); }
+    const dir = this.projectDir(id);
+    if (!dir) { throw MarifoldError.projectInvalid('Project icons are not available here.', id); }
+    const problem = avatarImageProblem(image, mediaType, 'icon');
+    if (problem) { throw MarifoldError.projectInvalid(problem, id); }
+    writeAvatarFile(dir, 'icon', image, mediaType);
+    return this.get(id)!;
+  }
+
+  deleteIcon(id: string): { removed: boolean; project: ProjectDetail } {
+    const project = this.get(id);
+    if (!project) { throw MarifoldError.projectNotFound(id); }
+    const dir = this.projectDir(id);
+    const removed = dir ? removeAvatarFiles(dir, 'icon') : false;
+    return { removed, project: this.get(id)! };
   }
 
   create(input: ProjectCreateInput): ProjectDetail {
@@ -152,13 +194,19 @@ export class ProjectStore {
   /** Delete a project. Its sessions are kept and become ordinary sessions of
    * the profile each was started with; returns how many. */
   delete(id: string): { sessions: number } {
-    return this.write(db => {
+    const deleted = this.write(db => {
       const { sessionCount: sessions } = summary(db, this.existing(db, id));
       db.prepare(`DELETE FROM ${PROJECT_SESSIONS_TABLE} WHERE project_id = ?`).run(id);
       db.prepare(`DELETE FROM ${PROJECT_MEMBERS_TABLE} WHERE project_id = ?`).run(id);
       db.prepare(`DELETE FROM ${PROJECTS_TABLE} WHERE id = ?`).run(id);
       return { sessions };
     });
+    const dir = this.projectDir(id);
+    if (dir) {
+      removeAvatarFiles(dir, 'icon');
+      try { fs.rmdirSync(dir); } catch { /* Absent, or still holding other files. */ }
+    }
+    return deleted;
   }
 
   invite(id: string, profile: string): ProjectDetail {
@@ -257,6 +305,17 @@ export class ProjectStore {
       db.prepare(`DELETE FROM ${PROJECT_MEMBERS_TABLE} WHERE profile_name = ?`).run(profile);
       db.prepare(`UPDATE ${PROJECT_SESSIONS_TABLE} SET floor = NULL WHERE floor = ?`).run(profile);
     });
+  }
+
+  /** Ids come from the store (`proj_<hex>`); anything else never names a directory. */
+  private projectDir(id: string): string | undefined {
+    if (!this.options.projectsDir || !/^proj_[0-9a-f]+$/.test(id)) { return undefined; }
+    return path.join(this.options.projectsDir, id);
+  }
+
+  private withIcon<T extends ProjectSummary>(project: T): T {
+    const icon = this.icon(project.id);
+    return icon ? { ...project, icon: { mediaType: icon.mediaType } } : project;
   }
 
   private existing(db: Database.Database, id: string): ProjectRow {

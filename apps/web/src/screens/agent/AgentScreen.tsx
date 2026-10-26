@@ -2,14 +2,20 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ApiClient } from '../../api/client';
 import type { CreateProfileInput } from '../../api/profiles';
 import { createProfileWithSetup } from '../../api/profiles';
+import { listProjects } from '../../api/projects';
+import type { ProjectDetail, ProjectSummary } from '../../api/types';
 import { Avatar } from '../../components/Avatar';
+import { ProfileLabel, ProfileStack } from '../../components/ProfileLabel';
+import { ProjectIcon } from '../../components/ProjectIcon';
 import { CreateProfileSheet } from '../../components/CreateProfileSheet';
 import { MobileNavigationBar } from '../../components/MobileNavigationBar';
 import { MobileWorkspaceNavigation } from '../../components/MobileWorkspaceNavigation';
 import { ResizableSidebar } from '../../components/ResizableSidebar';
 import { SidebarSystemFooter } from '../../components/SidebarChrome';
 import type { WorkspaceView } from '../../components/WorkspaceTabs';
-import type { Route } from '../../lib/route';
+import { PROJECT_COMMANDS, WEB_COMMANDS } from '../../lib/commandSyntax';
+import { previewProjectRoute } from '../../lib/projectRouting';
+import type { ChatRoute, Route } from '../../lib/route';
 import { MOBILE_QUERY, useMediaQuery } from '../../lib/useMediaQuery';
 import type { ThemePreference } from '../../theme/theme';
 import { AppsScreen } from '../apps/AppsScreen';
@@ -20,6 +26,8 @@ import { SessionArchivedBanner, SessionBlockedBanner } from './SessionBlockedBan
 import { InputBar } from './InputBar';
 import { useDeepAvailable } from './useGlobalDeep';
 import { ProfileSidebarContent } from './ProfileSidebar';
+import { ProjectSheet } from './ProjectSheet';
+import { ProjectSidebarContent } from './ProjectSidebar';
 import { SessionListContent, sessionTitle } from './SessionList';
 import { ThreadHeader } from './ThreadHeader';
 import { ThreadView } from './ThreadView';
@@ -31,7 +39,7 @@ const SIDEBARS_KEY = 'marifold.sidebars';
 
 export interface AgentScreenProps {
   client: ApiClient;
-  route: Extract<Route, { view: 'agent' }>;
+  route: ChatRoute;
   appName?: string;
   navigate: (route: Route) => void;
   onUnauthorized: () => void;
@@ -45,9 +53,21 @@ export interface AgentScreenProps {
   onWorkspaceViewChange: (view: WorkspaceView) => void;
 }
 
-/** Responsive Agent workspace: desktop sidebar or mobile navigation stack plus conversation. */
+/** Responsive Agent and Projects workspace: desktop sidebar or mobile
+ * navigation stack plus conversation. One screen per view (App keys it). */
 export function AgentScreen(props: AgentScreenProps) {
   const controller = useAgentController(props);
+  const projectView = props.route.view === 'projects';
+  const routeOwner = props.route.view === 'projects' ? props.route.project : props.route.profile;
+  const [projects, setProjects] = useState<ProjectSummary[]>([]);
+  const [projectsLoading, setProjectsLoading] = useState(true);
+  /** The project sheet: settings of `project`, else a new project (moving `moveSessionId` into it). */
+  const [projectSheet, setProjectSheet] = useState<{ project?: ProjectDetail; moveSessionId?: string }>();
+  const refreshProjects = useCallback(async () => {
+    try { setProjects(await listProjects(props.client)); } catch { /* The list stays as it was. */ }
+    finally { setProjectsLoading(false); }
+  }, [props.client]);
+  useEffect(() => { void refreshProjects(); }, [refreshProjects]);
   const deepAvailable = useDeepAvailable(props.client, controller.modelChoice, controller.profileDetail?.settings);
   const appsCatalog = useAppsCatalog(props.client, props.onUnauthorized, props.appName);
   const mobile = useMediaQuery(MOBILE_QUERY);
@@ -78,9 +98,9 @@ export function AgentScreen(props: AgentScreenProps) {
   }, [appsCatalog.selectedName, appsView, props.appName, props.navigate]);
 
   useEffect(() => {
-    if (!props.route.profile) { setMobileConversationOpen(false); }
+    if (!routeOwner) { setMobileConversationOpen(false); }
     else if (props.route.session) { setMobileConversationOpen(true); }
-  }, [props.route.profile, props.route.session]);
+  }, [routeOwner, props.route.session]);
 
   async function submitCreateProfile(input: CreateProfileInput): Promise<void> {
     setCreateBusy(true);
@@ -132,18 +152,30 @@ export function AgentScreen(props: AgentScreenProps) {
   const missingProfile = controller.profileName !== undefined && !controller.profilesLoading && controller.profiles.length > 0
     && !controller.profiles.some(profile => profile.name === controller.profileName);
   const openProfile = missingProfile ? undefined : controller.profileName;
+  const { project } = controller;
+  // A conversation is open once its profile, or its project, is known.
+  const conversationOpen = projectView ? project !== undefined : openProfile !== undefined;
   const currentSession = controller.sessions.find(session => session.id === controller.sessionId);
   const sessionArchived = currentSession?.archived === true;
   const mobileWorkspaceOpen = appsView
     ? mobileAppOpen && appsCatalog.selectedName !== undefined
-    : controller.profileName !== undefined && mobileConversationOpen;
+    : routeOwner !== undefined && controller.profileName !== undefined && mobileConversationOpen;
+  const profileNames = useMemo(() => controller.profiles.map(profile => profile.name), [controller.profiles]);
+  const roster = useMemo(() => project?.members.map(name => ({
+    name,
+    usage: `@${name}`,
+    description: `${controller.profiles.find(profile => profile.name === name)?.displayName ?? name}${name === project.lead ? ' · Lead' : ''}`,
+  })), [controller.profiles, project]);
   const sidebarFooter = mobile ? (
     <MobileWorkspaceNavigation
-      active={appsView ? 'apps' : 'agent'}
+      active={appsView ? 'apps' : projectView ? 'projects' : 'agent'}
       theme={props.theme}
       connectionName={props.connectionName}
       onAgent={() => {
-        if (appsView) { props.onWorkspaceViewChange('agent'); }
+        if (props.workspaceView !== 'agent') { props.onWorkspaceViewChange('agent'); }
+      }}
+      onProjects={() => {
+        if (props.workspaceView !== 'projects') { props.onWorkspaceViewChange('projects'); }
       }}
       onApps={() => {
         setMobileAppOpen(false);
@@ -165,9 +197,9 @@ export function AgentScreen(props: AgentScreenProps) {
 
   const navigation = (
     <WorkspaceSidebar
-      ariaLabel={appsView ? 'Apps' : openProfile ? 'Sessions' : 'Profiles'}
+      ariaLabel={appsView ? 'Apps' : conversationOpen ? 'Sessions' : projectView ? 'Projects' : 'Profiles'}
       footer={sidebarFooter}
-      showBrand={appsView || !openProfile}
+      showBrand={appsView || !conversationOpen}
     >
       {appsView ? (
         <AppsSidebarContent
@@ -181,6 +213,48 @@ export function AgentScreen(props: AgentScreenProps) {
             props.navigate({ view: 'apps', app: name });
             setMobileAppOpen(true);
           }}
+        />
+      ) : projectView && project ? (
+        <SessionListContent
+          sessions={controller.sessions}
+          loading={controller.sessionsLoading}
+          selected={controller.sessionId}
+          profileName={project.name}
+          profileAvatar={<ProjectIcon client={props.client} id={project.id} hasIcon={project.icon !== undefined} size={64} />}
+          configureLabel={`Project settings for ${project.name}`}
+          backTo="projects"
+          rowAccessory={session => <ProfileStack client={props.client} names={session.speakers ?? []} profiles={controller.profiles} />}
+          search={controller.sessionSearch}
+          onSearchChange={controller.setSessionSearch}
+          showArchived={controller.showArchivedSessions}
+          onShowArchivedChange={controller.setShowArchivedSessions}
+          runningSessionIds={controller.runningSessionIds}
+          onSelect={id => {
+            setMobileConversationOpen(true);
+            controller.selectSession(id);
+          }}
+          onNew={() => {
+            setMobileConversationOpen(true);
+            controller.newSession();
+          }}
+          onBack={controller.showProfiles}
+          onConfigureProfile={() => setProjectSheet({ project })}
+          onRename={controller.renameSession}
+          onSetPinned={controller.setSessionPinned}
+          onSetArchived={controller.setSessionArchived}
+          onDelete={controller.deleteSession}
+        />
+      ) : projectView ? (
+        <ProjectSidebarContent
+          client={props.client}
+          projects={projects}
+          loading={projectsLoading}
+          selected={props.route.view === 'projects' ? props.route.project : undefined}
+          onSelect={id => {
+            setMobileConversationOpen(false);
+            controller.selectProject(id);
+          }}
+          onCreate={() => setProjectSheet({})}
         />
       ) : openProfile ? (
         <SessionListContent
@@ -223,6 +297,17 @@ export function AgentScreen(props: AgentScreenProps) {
           onSetPinned={controller.setSessionPinned}
           onSetArchived={controller.setSessionArchived}
           onDelete={controller.deleteSession}
+          moveTargets={projects.map(candidate => ({
+            id: candidate.id,
+            name: candidate.name,
+            icon: <ProjectIcon client={props.client} id={candidate.id} hasIcon={candidate.icon !== undefined} size={18} />,
+          }))}
+          onMoveToProject={async (id, projectId) => {
+            const moved = await controller.moveSession(id, projectId);
+            if (moved) { void refreshProjects(); }
+            return moved;
+          }}
+          onMoveToNewProject={id => setProjectSheet({ moveSessionId: id })}
         />
       ) : (
         <ProfileSidebarContent
@@ -279,8 +364,8 @@ export function AgentScreen(props: AgentScreenProps) {
               if (appsView) { setMobileAppOpen(false); }
               else {
                 setMobileConversationOpen(false);
-                if (controller.profileName && props.route.session) {
-                  props.navigate({ view: 'agent', profile: controller.profileName });
+                if (routeOwner && props.route.session) {
+                  props.navigate(props.route.view === 'projects' ? { view: 'projects', project: routeOwner } : { view: 'agent', profile: routeOwner });
                 }
               }
             }}
@@ -289,9 +374,9 @@ export function AgentScreen(props: AgentScreenProps) {
           <ThreadHeader
             sessionTitle={appsView
               ? 'Apps'
-              : openProfile
+              : conversationOpen
                 ? (currentSession ? sessionTitle(currentSession) : 'New session')
-                : 'Profiles'}
+                : projectView ? 'Projects' : 'Profiles'}
             sidebarsHidden={sidebarsHidden}
             onToggleSidebars={toggleSidebars}
             view={props.workspaceView}
@@ -312,7 +397,7 @@ export function AgentScreen(props: AgentScreenProps) {
             />
           </div>
         ) : null}
-        {!appsView && openProfile ? (
+        {!appsView && conversationOpen ? (
           <>
             <CatchUpBanner
               runs={controller.thread.catchUp}
@@ -332,6 +417,10 @@ export function AgentScreen(props: AgentScreenProps) {
               onEditUserMessage={controller.resendEdited}
               editingDisabled={controller.steeringRun !== undefined || controller.sending}
               sendingBytes={controller.sendingBytes}
+              {...(project ? {
+                renderSpeaker: (name: string) => <ProfileLabel client={props.client} name={name} profiles={controller.profiles} />,
+                defaultSpeaker: currentSession?.profileName,
+              } : {})}
             />
             {controller.sessionBlocked && controller.sessionId ? (
               <SessionBlockedBanner onTakeOver={controller.takeOverSession} />
@@ -340,7 +429,7 @@ export function AgentScreen(props: AgentScreenProps) {
               <SessionArchivedBanner onUnarchive={() => controller.setSessionArchived(controller.sessionId!, false)} />
             ) : null}
             <InputBar
-              draftKey={`${props.connectionId}:${controller.profileName}:${controller.sessionId ?? 'new'}`}
+              draftKey={`${props.connectionId}:${project ? `project:${project.id}` : controller.profileName}:${controller.sessionId ?? 'new'}`}
               steering={controller.steeringRun !== undefined}
               responding={controller.responding}
               disabled={controller.sending || controller.sessionLoading || controller.sessionBlocked || sessionArchived}
@@ -355,6 +444,12 @@ export function AgentScreen(props: AgentScreenProps) {
               onRemoveAttachment={controller.removeAttachment}
               skills={controller.skills}
               devices={controller.devices}
+              {...(project ? {
+                roster,
+                commands: [...WEB_COMMANDS, ...PROJECT_COMMANDS],
+                recipient: (text: string) => previewProjectRoute(text, project, controller.floor, profileNames),
+                onInvite: (name: string) => void controller.inviteToProject(name),
+              } : {})}
               enterSubmits={!mobile}
               onSubmit={text => {
                 setScrollToBottomRequest(request => request + 1);
@@ -363,6 +458,17 @@ export function AgentScreen(props: AgentScreenProps) {
               onStop={() => void controller.stop()}
             />
           </>
+        ) : !appsView && projectView && controller.projectMissing ? (
+          <div className={styles.chooseProfile}>
+            <div className={styles.chooseTitle}>This project doesn’t exist</div>
+            <div className={styles.chooseHint}>It may have been deleted. Choose another project.</div>
+            <button type="button" className={styles.chooseAction} onClick={controller.showProfiles}>Back to projects</button>
+          </div>
+        ) : !appsView && projectView ? (
+          <div className={styles.chooseProfile}>
+            <div className={styles.chooseTitle}>{routeOwner ? 'Opening project…' : 'Choose a project'}</div>
+            <div className={styles.chooseHint}>A project gathers sessions, instructions, and the profiles working on them. Address a profile with @name.</div>
+          </div>
         ) : !appsView && missingProfile ? (
           <div className={styles.chooseProfile}>
             <div className={styles.chooseTitle}>Profile “{controller.profileName}” doesn’t exist</div>
@@ -376,6 +482,27 @@ export function AgentScreen(props: AgentScreenProps) {
           </div>
         ) : null}
       </div>
+      {projectSheet ? (
+        <ProjectSheet
+          client={props.client}
+          project={projectSheet.project}
+          profiles={controller.profiles}
+          onClose={() => setProjectSheet(undefined)}
+          onSaved={saved => {
+            const moving = projectSheet.moveSessionId;
+            setProjectSheet(undefined);
+            void refreshProjects();
+            if (moving) { void controller.moveSession(moving, saved.id).then(() => refreshProjects()); }
+            else if (projectSheet.project) { void controller.refreshProject(); }
+            else { controller.selectProject(saved.id); }
+          }}
+          onDeleted={() => {
+            setProjectSheet(undefined);
+            void refreshProjects();
+            controller.showProfiles();
+          }}
+        />
+      ) : null}
       {createOpen ? (
         <CreateProfileSheet
           existingNames={controller.profiles.map(profile => profile.name)}

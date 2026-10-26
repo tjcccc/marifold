@@ -19,6 +19,8 @@ export class RunFollowers {
     private readonly onDone?: (runId: string) => void,
     /** Runs when a run reports running; its session has saved the prompt by then. */
     private readonly onRunning?: (runId: string) => void,
+    /** Runs when the next profile of a project turn takes over; it is followed too. */
+    private readonly onHandoff?: (runId: string, nextRunId: string) => void,
   ) {}
 
   /** Idempotent: attaching an already-followed run is a no-op. */
@@ -51,6 +53,10 @@ export class RunFollowers {
         this.dispatch({ type: 'run_event', runId, seq, event });
         if (event.type === 'done') { this.onDone?.(runId); }
         if (event.type === 'status' && event.status === 'running') { this.onRunning?.(runId); }
+        if (event.type === 'handoff') {
+          this.onHandoff?.(runId, event.runId);
+          this.attach(event.runId);
+        }
       }
     } catch (error) {
       if (signal.aborted) { return; }

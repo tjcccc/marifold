@@ -604,6 +604,7 @@ describe('ConfigScreen provider creation', () => {
         connectionName="This server"
         onDone={() => {}}
         onOpenAgent={() => {}}
+        onOpenProjects={() => {}}
         onOpenApps={() => {}}
       />,
     );
@@ -672,6 +673,7 @@ describe('ConfigScreen mobile navigation', () => {
           connectionName="This server"
           onDone={() => {}}
           onOpenAgent={() => {}}
+          onOpenProjects={() => {}}
           onOpenApps={() => {}}
         />
       );

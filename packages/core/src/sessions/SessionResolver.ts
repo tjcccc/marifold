@@ -6,7 +6,7 @@ import type { SessionDetail, SessionSummary, SessionTurnSummary } from '../confi
 import { MarifoldError } from '../errors/MarifoldError';
 import type { ResponseMetrics } from './ResponseMetrics';
 import { listResponseMetrics, replyKey } from './ResponseMetricsTable';
-import { addReply, deleteReplyRows, lastReplyPosition, listReplySpeakers, recordReply, renameReplyRows, replaceExchange, type ReplyPosition, type ReplyRecord } from './SessionReplies';
+import { addReply, deleteReplyRows, lastReplyPosition, listReplySpeakers, listSessionSpeakers, recordReply, renameReplyRows, replaceExchange, type ReplyPosition, type ReplyRecord } from './SessionReplies';
 import {
   ATTACHMENTS_TABLE,
   DEFAULT_IMAGE_MEDIA_TYPE,
@@ -177,19 +177,12 @@ export class SessionResolver {
         GROUP BY s.id
         ORDER BY ${orderBy}
         LIMIT ?
-      `).all(...params) as Array<{
-        id: string;
-        profileName: string;
-        createdAt: string;
-        updatedAt: string;
-        title: string | null;
-        pinned: number;
-        archived: number;
-        turnCount: number;
-        preview: string | null;
-      }>;
+      `).all(...params) as Array<{ id: string; profileName: string; createdAt: string; updatedAt: string; title: string | null; pinned: number; archived: number; turnCount: number; preview: string | null }>;
+      // Project rows show who spoke; a profile's own sessions need not.
+      const speakers = options.projectId !== undefined ? listSessionSpeakers(db, rows) : undefined;
       return rows.map(row => {
         const preview = row.preview ? sessionPreview(row.preview) : '';
+        const rowSpeakers = speakers?.get(row.id) ?? [];
         return {
           id: row.id,
           profileName: row.profileName,
@@ -200,6 +193,7 @@ export class SessionResolver {
           ...(row.title ? { title: row.title } : {}),
           ...(row.pinned === 1 ? { pinned: true } : {}),
           ...(row.archived === 1 ? { archived: true } : {}),
+          ...(rowSpeakers.length > 0 ? { speakers: rowSpeakers } : {}),
         };
       });
     } catch (error) {

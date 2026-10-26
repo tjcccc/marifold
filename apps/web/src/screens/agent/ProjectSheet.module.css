@@ -1,0 +1,243 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: var(--scrim);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sheet {
+  width: min(460px, calc(100vw - 48px));
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sheet);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.title {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.identityRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.iconButton {
+  width: 52px;
+  height: 52px;
+  flex-shrink: 0;
+  border-radius: 22%;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.iconButton:hover {
+  outline: 1px dashed var(--brand-fill);
+}
+
+.iconPreview {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.fileInput {
+  display: none;
+}
+
+.nameInput,
+.instructions,
+.inviteSelect {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--separator);
+  border-radius: var(--radius-md);
+  padding: 8px 12px;
+  font-size: 14px;
+  background: var(--content);
+  color: var(--text);
+  outline: none;
+}
+
+.instructions {
+  resize: vertical;
+  font-family: inherit;
+  line-height: 1.45;
+}
+
+.inviteSelect {
+  font-size: 13px;
+  padding-right: 34px;
+}
+
+.nameInput:focus,
+.instructions:focus {
+  border-color: var(--brand-fill);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fieldLabel {
+  font-size: 13px;
+  color: var(--text-2);
+  font-weight: 500;
+}
+
+.roster {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--separator);
+  border-radius: var(--radius-md);
+}
+
+.member {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 4px 10px;
+  font-size: 13px;
+}
+
+.member + .member {
+  border-top: 1px solid var(--separator-soft);
+}
+
+.memberName {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.leadBadge {
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--brand-tint);
+  color: var(--brand-text);
+}
+
+.linkButton {
+  align-self: flex-start;
+  font-size: 12px;
+  color: var(--brand-text);
+}
+
+.removeButton {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  color: var(--text-3);
+  font-size: 16px;
+}
+
+.removeButton:hover {
+  background: var(--separator-soft);
+  color: var(--text);
+}
+
+.hint {
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+.problem {
+  font-size: 12.5px;
+  color: var(--danger);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.cancel,
+.save,
+.delete {
+  padding: 7px 14px;
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.cancel {
+  background: var(--surface-2);
+  color: var(--text-2);
+}
+
+.save {
+  background: var(--brand-fill);
+  color: var(--on-brand);
+  box-shadow: 0 1px 3px var(--brand-shadow);
+}
+
+.delete {
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  color: var(--danger);
+}
+
+.deleteLink {
+  font-size: 12.5px;
+  color: var(--danger);
+}
+
+.save:disabled,
+.cancel:disabled,
+.delete:disabled,
+.deleteLink:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+@media (max-width: 560px) {
+  .backdrop {
+    align-items: flex-end;
+  }
+
+  .sheet {
+    width: 100%;
+    max-height: calc(100vh - 24px);
+    padding: 20px 18px calc(18px + env(safe-area-inset-bottom));
+    border-radius: 18px 18px 0 0;
+  }
+
+  .nameInput,
+  .instructions,
+  .inviteSelect {
+    min-height: 44px;
+    font-size: 16px;
+  }
+
+  .cancel,
+  .save,
+  .delete {
+    min-height: 44px;
+    padding-inline: 18px;
+    font-size: 15px;
+  }
+}

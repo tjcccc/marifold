@@ -6,7 +6,7 @@ import { getStatus } from './api/misc';
 import { WorkspacePopover } from './components/WorkspacePopover';
 import type { WorkspaceSummary } from './api/types';
 import type { WorkspaceView } from './components/WorkspaceTabs';
-import type { Route } from './lib/route';
+import type { ChatRoute, Route } from './lib/route';
 import { visualViewportGeometry } from './lib/visualViewport';
 import { AgentScreen } from './screens/agent/AgentScreen';
 import { ConfigScreen } from './screens/config/ConfigScreen';
@@ -25,6 +25,7 @@ import { useTheme } from './theme/theme';
 import styles from './App.module.css';
 
 const LAST_AGENT_ROUTE_PREFIX = 'marifold.lastAgentRoute.';
+const LAST_PROJECTS_ROUTE_PREFIX = 'marifold.lastProjectsRoute.';
 const LAST_APPS_ROUTE_PREFIX = 'marifold.lastAppsRoute.';
 
 /** Root shell: clean-path desktop views and the service connection. */
@@ -42,20 +43,26 @@ export function App() {
   const [connectionProblem, setConnectionProblem] = useState<string | undefined>();
   const currentConnection = useMemo(() => activeConnection(connections), [connections]);
   const lastAgentRoute = useRef<Extract<Route, { view: 'agent' }>>(
-    route.view === 'agent' ? route : loadLastAgentRoute(currentConnection.id),
+    route.view === 'agent' ? route : loadLastChatRoute(currentConnection.id, 'agent'),
   );
+  const lastProjectsRoute = useRef<Extract<Route, { view: 'projects' }>>(
+    route.view === 'projects' ? route : loadLastChatRoute(currentConnection.id, 'projects'),
+  );
+  // Apps keep the conversation screen mounted: the chat view used last.
+  const lastChatView = useRef<ChatRoute['view']>(route.view === 'projects' ? 'projects' : 'agent');
   const lastAppsRoute = useRef<Extract<Route, { view: 'apps' }>>(
     route.view === 'apps' ? route : loadLastAppsRoute(currentConnection.id),
   );
-  const settingsReturnRoute = useRef<Extract<Route, { view: 'agent' | 'apps' }>>(
-    route.view === 'apps' ? route : lastAgentRoute.current,
+  const settingsReturnRoute = useRef<Extract<Route, { view: 'agent' | 'projects' | 'apps' }>>(
+    route.view === 'apps' || route.view === 'projects' ? route : lastAgentRoute.current,
   );
 
   useEffect(() => {
-    if (route.view !== 'agent') { return; }
-    lastAgentRoute.current = route;
+    if (route.view !== 'agent' && route.view !== 'projects') { return; }
+    if (route.view === 'agent') { lastAgentRoute.current = route; } else { lastProjectsRoute.current = route; }
+    lastChatView.current = route.view;
     try {
-      window.sessionStorage.setItem(lastAgentRouteKey(currentConnection.id), JSON.stringify(route));
+      window.sessionStorage.setItem(lastChatRouteKey(currentConnection.id, route.view), JSON.stringify(route));
     } catch {
       // In-memory continuity still works when storage is unavailable.
     }
@@ -139,6 +146,8 @@ export function App() {
   useEffect(() => {
     let cancelled = false;
     const local = connections.servers.find(c => c.id === THIS_SERVER_ID)!;
+    // A reload in Projects stays in Projects on the workspace it opens.
+    const startView = route.view === 'projects' ? 'projects' : 'agent';
     void startupWorkspaces<WorkspaceSummary>(createApiClient(apiSettings(local))).then(result => {
       if (cancelled) { return; }
       const preferred = result.workspaces.find(w => w.id === result.defaultId);
@@ -148,12 +157,12 @@ export function App() {
         : local;
       const next = upsertAndActivateConnection(connections, target);
       saveConnections(next); setConnections(next); setConnectionEpoch(epoch => epoch + 1);
-      navigate(loadLastAgentRoute(target.id));
+      navigate(loadLastChatRoute(target.id, startView));
       if (preferred && !preferred.online) { setWorkspaceNotice(preferred.versionError ?? `${preferred.name} is offline. Opened Local for this launch.`); }
     }).catch(() => {
       if (!cancelled && currentConnection.workspaceId) {
         const next = upsertAndActivateConnection(connections, local); saveConnections(next); setConnections(next);
-        setWorkspaceNotice('Workspace unavailable. Opened Local for this launch.'); navigate(loadLastAgentRoute(local.id));
+        setWorkspaceNotice('Workspace unavailable. Opened Local for this launch.'); navigate(loadLastChatRoute(local.id, startView));
       }
     }).finally(() => { if (!cancelled) { setOpeningWorkspace(false); } });
     return () => { cancelled = true; };
@@ -188,12 +197,15 @@ export function App() {
     setConnectionEpoch(epoch => epoch + 1);
     setConnectionProblem(undefined);
     if (switchingServers) {
-      const nextAgentRoute = loadLastAgentRoute(connection.id);
+      const nextAgentRoute = loadLastChatRoute(connection.id, 'agent');
+      const nextProjectsRoute = loadLastChatRoute(connection.id, 'projects');
       const nextAppsRoute = loadLastAppsRoute(connection.id);
       lastAgentRoute.current = nextAgentRoute;
+      lastProjectsRoute.current = nextProjectsRoute;
       lastAppsRoute.current = nextAppsRoute;
-      settingsReturnRoute.current = route.view === 'apps' ? nextAppsRoute : nextAgentRoute;
-      navigate(route.view === 'apps' ? nextAppsRoute : nextAgentRoute);
+      const next = route.view === 'apps' ? nextAppsRoute : route.view === 'projects' ? nextProjectsRoute : nextAgentRoute;
+      settingsReturnRoute.current = next;
+      navigate(next);
     }
     return undefined;
   }, [connections, currentConnection.id, navigate, route]);
@@ -207,7 +219,8 @@ export function App() {
     if (!removingActive) { return; }
     setConnectionEpoch(epoch => epoch + 1);
     const nextConnection = activeConnection(next);
-    const nextRoute = loadLastAgentRoute(nextConnection.id);
+    const nextRoute = loadLastChatRoute(nextConnection.id, 'agent');
+    lastProjectsRoute.current = loadLastChatRoute(nextConnection.id, 'projects');
     lastAppsRoute.current = loadLastAppsRoute(nextConnection.id);
     lastAgentRoute.current = nextRoute;
     settingsReturnRoute.current = nextRoute;
@@ -215,14 +228,17 @@ export function App() {
   }, [connections, navigate]);
 
   const onWorkspaceViewChange = useCallback((view: WorkspaceView) => {
-    if (view === 'agent') { navigate(lastAgentRoute.current); }
-    else { navigate(lastAppsRoute.current); }
+    navigate(view === 'agent' ? lastAgentRoute.current : view === 'projects' ? lastProjectsRoute.current : lastAppsRoute.current);
   }, [navigate]);
 
   const onOpenSettings = useCallback(() => {
-    if (route.view === 'agent' || route.view === 'apps') { settingsReturnRoute.current = route; }
+    if (route.view === 'agent' || route.view === 'projects' || route.view === 'apps') { settingsReturnRoute.current = route; }
     navigate({ view: 'config', section: 'profiles' });
   }, [navigate, route]);
+
+  const chatRoute: ChatRoute = route.view === 'agent' || route.view === 'projects'
+    ? route
+    : lastChatView.current === 'projects' ? lastProjectsRoute.current : lastAgentRoute.current;
 
   return (
     <div className={styles.shell}>
@@ -242,12 +258,14 @@ export function App() {
             connectionName={currentConnection.workspaceId && selectedDevice ? `${currentConnection.name} · tools: ${selectedDevice === 'host' ? 'host' : 'selected device'}` : currentConnection.name}
             onDone={() => navigate(settingsReturnRoute.current)}
             onOpenAgent={() => navigate(lastAgentRoute.current)}
+            onOpenProjects={() => navigate(lastProjectsRoute.current)}
             onOpenApps={() => navigate(lastAppsRoute.current)}
           />
         ) : (
           <AgentScreen
+            key={chatRoute.view}
             client={client}
-            route={route.view === 'agent' ? route : lastAgentRoute.current}
+            route={chatRoute}
             appName={route.view === 'apps' ? route.app : lastAppsRoute.current.app}
             navigate={navigate}
             onUnauthorized={onUnauthorized}
@@ -277,27 +295,27 @@ export function App() {
   );
 }
 
-function loadLastAgentRoute(connectionId: string): Extract<Route, { view: 'agent' }> {
+function loadLastChatRoute<V extends ChatRoute['view']>(connectionId: string, view: V): Extract<ChatRoute, { view: V }> {
+  const empty = { view } as Extract<ChatRoute, { view: V }>;
   try {
-    const value = JSON.parse(window.sessionStorage.getItem(lastAgentRouteKey(connectionId)) ?? 'null') as unknown;
-    if (!value || typeof value !== 'object' || !('view' in value) || value.view !== 'agent') {
-      return { view: 'agent' };
-    }
-    const candidate = value as { profile?: unknown; session?: unknown };
+    const value = JSON.parse(window.sessionStorage.getItem(lastChatRouteKey(connectionId, view)) ?? 'null') as unknown;
+    if (!value || typeof value !== 'object' || !('view' in value) || value.view !== view) { return empty; }
+    const candidate = value as { profile?: unknown; project?: unknown; session?: unknown };
+    const ownerKey = view === 'agent' ? 'profile' : 'project';
+    const owner = candidate[ownerKey];
+    if (typeof owner !== 'string') { return empty; }
     return {
-      view: 'agent',
-      ...(typeof candidate.profile === 'string' ? { profile: candidate.profile } : {}),
-      ...(typeof candidate.profile === 'string' && typeof candidate.session === 'string'
-        ? { session: candidate.session }
-        : {}),
-    };
+      view,
+      [ownerKey]: owner,
+      ...(typeof candidate.session === 'string' ? { session: candidate.session } : {}),
+    } as Extract<ChatRoute, { view: V }>;
   } catch {
-    return { view: 'agent' };
+    return empty;
   }
 }
 
-function lastAgentRouteKey(connectionId: string): string {
-  return `${LAST_AGENT_ROUTE_PREFIX}${encodeURIComponent(connectionId)}`;
+function lastChatRouteKey(connectionId: string, view: ChatRoute['view']): string {
+  return `${view === 'agent' ? LAST_AGENT_ROUTE_PREFIX : LAST_PROJECTS_ROUTE_PREFIX}${encodeURIComponent(connectionId)}`;
 }
 
 function loadLastAppsRoute(connectionId: string): Extract<Route, { view: 'apps' }> {

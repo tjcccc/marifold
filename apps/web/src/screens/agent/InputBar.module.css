@@ -156,6 +156,28 @@
   margin-left: auto;
 }
 
+/* Who answers a project message ("→ dev_test"), or the invite offer. */
+.recipient {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 12px;
+  color: var(--text-3);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.inviteButton {
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--brand-tint);
+  color: var(--brand-text);
+}
+
 .pill,
 .pillActive {
   padding: 4px 12px;

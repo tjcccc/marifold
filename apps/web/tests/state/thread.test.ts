@@ -153,6 +153,42 @@ describe('threadReducer', () => {
     });
   });
 
+  it('places the next speaker of a regenerated project message after the first, before later turns', () => {
+    let state = reduce(createThreadState('sess-1'), {
+      type: 'session_loaded',
+      turns: [
+        { role: 'user', content: 'Which engine?' },
+        { role: 'assistant', content: 'Godot.', speaker: 'default' },
+        { role: 'assistant', content: 'Unity.', speaker: 'dev_test' },
+        { role: 'user', content: 'Thanks' },
+        { role: 'assistant', content: 'Welcome.', speaker: 'dev_test' },
+      ],
+    });
+    const target = state.items.find(item => item.kind === 'user' && item.text === 'Which engine?')!;
+    const handoff: AgentEvent = { type: 'handoff', runId: 'run_2', profile: 'dev_test' };
+    state = reduce(
+      state,
+      { type: 'edit_user_message', itemId: target.id, text: 'Which engine for 2D?' },
+      { type: 'run_created', run: record },
+      ...runEvents('run_1', [{ type: 'text', text: 'Godot again.', phase: 'final' }, handoff, handoff, { type: 'done', taskId: 't1', status: 'failed' }]),
+      ...runEvents('run_2', [{ type: 'text', text: 'Defold.', phase: 'final' }, { type: 'done', taskId: 't2', status: 'completed' }]),
+    );
+
+    expect(state.items.map(item => item.kind === 'user' ? `user:${item.text}`
+      : item.kind === 'assistant' ? `assistant:${item.markdown}:${item.speaker ?? item.runId}`
+        : item.kind === 'run' ? `run:${item.run.runId}:${item.run.profile}` : item.kind)).toEqual([
+      'user:Which engine for 2D?',
+      'run:run_1:default',
+      'assistant:Godot again.:run_1',
+      'run:run_2:dev_test',
+      'assistant:Defold.:run_2',
+      'user:Thanks',
+      'assistant:Welcome.:dev_test',
+    ]);
+    // The second speaker's answer saved the message even though the first failed.
+    expect(state.items.find(item => item.id === target.id)).toMatchObject({ sessionUserTurnIndex: 0, replacing: undefined });
+  });
+
   it('chat errors close the streaming turn and add a notice', () => {
     const state = reduce(
       createThreadState(),

@@ -19,6 +19,7 @@ export type ThreadAction =
         content: string;
         attachments?: UserAttachment[];
         responseMeta?: ResponseMetaState;
+        speaker?: string;
       }>;
     }
   | { type: 'user_message'; text: string; attachments?: UserAttachment[] }
@@ -101,6 +102,7 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
                 kind: 'assistant',
                 markdown: turn.content,
                 ...(turn.responseMeta ? { responseMeta: turn.responseMeta } : {}),
+                ...(turn.speaker ? { speaker: turn.speaker } : {}),
               },
         );
       }
@@ -367,6 +369,7 @@ function matchingDurableResponseIndex(state: ThreadState, run: RunRecord): numbe
 function cardFromRecord(record: RunRecord): RunCardState {
   return {
     ...emptyCard(record.id),
+    profile: record.profile,
     status: record.status,
     taskId: record.taskId,
     startedAt: record.createdAt,

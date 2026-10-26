@@ -13,6 +13,8 @@ export interface ToolRowState {
 
 export interface RunCardState {
   runId: string;
+  /** The profile answering; in a project session each speaker is its own run. */
+  profile?: string;
   status: TaskStatus;
   taskId?: string;
   lastSeq: number;
@@ -88,6 +90,8 @@ export type ThreadItem =
       /** Completion metadata for a plain chat turn. Agent turns resolve the
        * equivalent data through their runId. */
       responseMeta?: ResponseMetaState;
+      /** A loaded project reply's profile; live replies use their run's. */
+      speaker?: string;
     }
   | { id: string; kind: 'run'; run: RunCardState }
   | { id: string; kind: 'notice'; tone: 'info' | 'warn' | 'error'; text: string };

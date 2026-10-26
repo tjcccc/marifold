@@ -51,7 +51,7 @@ Served same-origin, no CORS configuration needed; with a token configured, auth 
 
 ## Mobile layout
 
-Browsers below 900 px use a dedicated touch layout instead of compressing the desktop columns. Agent navigation drills from Profiles to Sessions to a full-screen conversation; Apps and Config use the same list-to-detail pattern. Agent, Apps, and Config share an icon-based bottom tab bar on their root/list screens. Config opens a compact action sheet for the active server connection, appearance, and full Settings. The mobile shell also includes safe-area padding, dynamic visual-viewport sizing and offset alignment for the on-screen keyboard, touch-visible actions, and bottom-sheet treatments for compact dialogs. Wider windows retain the resizable desktop sidebar and multi-column Config layout. In the mobile composer, Enter inserts a line break and only the Send button submits; desktop keeps Enter-to-send with Shift+Enter for a line break.
+Browsers below 900 px use a dedicated touch layout instead of compressing the desktop columns. Agent navigation drills from Profiles to Sessions to a full-screen conversation, and Projects from projects to their sessions the same way; Apps and Config use the same list-to-detail pattern. Agent, Projects, Apps, and Config share an icon-based bottom tab bar on their root/list screens. Config opens a compact action sheet for the active server connection, appearance, and full Settings. The mobile shell also includes safe-area padding, dynamic visual-viewport sizing and offset alignment for the on-screen keyboard, touch-visible actions, and bottom-sheet treatments for compact dialogs. Wider windows retain the resizable desktop sidebar and multi-column Config layout. In the mobile composer, Enter inserts a line break and only the Send button submits; desktop keeps Enter-to-send with Shift+Enter for a line break.
 
 ## Attachments
 
@@ -66,6 +66,10 @@ The Apps view renders global `~/.marifold/apps/<name>/skillapp.ts` bundles from 
 ## Profile navigation
 
 The primary sidebar treats profiles like contacts: 40 px avatars, one-line previews from the latest assistant response, a relative activity time, and recent-session ordering. Pinned profiles remain above the activity-sorted list and use the same glyph as pinned sessions. Each row's hover/focus menu can pin/unpin the profile or open its Config page.
+
+## Projects
+
+The **Projects** tab lists projects by name (folder icon unless one was chosen); a project's session rows show the avatars of the profiles that replied. Each reply shows its speaker's avatar and display name. The composer shows who answers next ("→ dev_test", following the host's rule: mentioned profiles in order, else the profile holding the floor, else the Lead), autocompletes `@` from the roster and then devices, and offers **Invite** instead of sending when a mentioned profile is not on the roster. `/invite @profile` and `/dismiss @profile` change the roster; Project settings (the gear in the session list) edit the name, icon, instructions, roster, and Lead, and delete the project, which returns its sessions to their profiles. A profile session's row menu offers **Move to project…**, with **New project** first. When several profiles answer one message, the thread follows each in turn.
 
 Profile Config includes confirmed removal for stored profiles. The configured default profile must be changed first, active requests must finish or be cancelled, and the built-in `default` profile cannot be removed. The user must type the exact profile name in the destructive dialog before its final action enables. Removal deletes the profile directory (instructions, memories, skills, and avatar) but preserves its SQLite conversation history. Memory and Agent permissions share one Advanced settings control. The area is collapsed whenever Profile Config opens and can be expanded manually for the current visit.
 

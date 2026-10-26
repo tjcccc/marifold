@@ -18,7 +18,7 @@ it('carries a password encrypted by the full Agent screen to the approval HTTP b
   vi.stubGlobal('crypto', webcrypto);
   const credentials = new SudoCredentials();
   const sudo = credentials.create('id -u');
-  const request = vi.fn(async (_method: string, _path: string, _body?: unknown) => ({ apps: [] }));
+  const request = vi.fn(async (_method: string, _path: string, _body?: unknown) => ({ apps: [], projects: [] }));
   const client = { request, baseUrl: '' } as unknown as ApiClient;
   const answer = vi.fn((runId, requestId, action, response) => answerApproval(client, runId, requestId, action, response));
   vi.mocked(useAgentController).mockReturnValue({

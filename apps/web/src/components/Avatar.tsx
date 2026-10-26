@@ -16,6 +16,24 @@ export interface AvatarProps {
   version?: number;
 }
 
+/** Lists repeat the same few avatars (a project's session rows show who
+ * spoke), and a workspace guest fetches each over the bridge: one fetch per
+ * profile serves every instance for a minute. An upload bumps `version`. */
+const SHARE_MS = 60_000;
+const sharedBlobs = new WeakMap<ApiClient, Map<string, { at: number; blob: Promise<Blob | undefined> }>>();
+
+function avatarBlob(client: ApiClient, name: string, version: number): Promise<Blob | undefined> {
+  let recent = sharedBlobs.get(client);
+  if (!recent) { recent = new Map(); sharedBlobs.set(client, recent); }
+  const key = `${name}\n${version}`;
+  const hit = recent.get(key);
+  if (hit && Date.now() - hit.at < SHARE_MS) { return hit.blob; }
+  const blob = fetchAvatarBlob(client, name);
+  recent.set(key, { at: Date.now(), blob });
+  blob.catch(() => recent.delete(key));
+  return blob;
+}
+
 /** Profile avatar: the stored image (fetched with auth → blob URL, since
  * `<img src>` can't carry a bearer token) or a marigold initial circle. */
 export function Avatar({ client, name, label = name, hasAvatar, size = 32, version = 0 }: AvatarProps) {
@@ -30,7 +48,7 @@ export function Avatar({ client, name, label = name, hasAvatar, size = 32, versi
     let objectUrl: string | undefined;
     (async () => {
       try {
-        const blob = await fetchAvatarBlob(client, name);
+        const blob = await avatarBlob(client, name, version);
         if (cancelled || !blob) { return; }
         objectUrl = URL.createObjectURL(blob);
         setUrl(objectUrl);

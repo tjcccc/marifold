@@ -87,6 +87,7 @@ describe('several replies to one message', () => {
         ['assistant', 'default'], ['assistant', 'painter'], ['assistant', 'dev_test'],
       ]);
       expect(turns.slice(3).every(turn => turn.responseMetrics?.model === 'gemma4:e4b')).toBe(true);
+      expect(runtime.listSessions(50, undefined, { projectId: runtime.projects.sessionProject('p')!.projectId })[0]?.speakers).toEqual(['default', 'painter', 'dev_test']);
 
       // The next message folds the whole exchange, labelled by speaker.
       expect(await run(runtime, dir, 'default', 'and the art style?')).toContain('compaction:completed');

@@ -4,13 +4,14 @@ import type { ThemePreference } from '../theme/theme';
 import { nextThemePreference } from '../theme/theme';
 import styles from './MobileWorkspaceNavigation.module.css';
 
-export type MobileWorkspaceView = 'agent' | 'apps' | 'config';
+export type MobileWorkspaceView = 'agent' | 'projects' | 'apps' | 'config';
 
 export interface MobileWorkspaceNavigationProps {
   active: MobileWorkspaceView;
   theme: ThemePreference;
   connectionName?: string;
   onAgent: () => void;
+  onProjects: () => void;
   onApps: () => void;
   onOpenConnection: () => void;
   onThemeChange: (theme: ThemePreference) => void;
@@ -23,6 +24,7 @@ export function MobileWorkspaceNavigation({
   theme,
   connectionName,
   onAgent,
+  onProjects,
   onApps,
   onOpenConnection,
   onThemeChange,
@@ -99,6 +101,15 @@ export function MobileWorkspaceNavigation({
           <span>Agent</span>
         </button>
         <button
+          className={active === 'projects' && !configOpen ? styles.tabSelected : styles.tab}
+          type="button"
+          aria-current={active === 'projects' ? 'page' : undefined}
+          onClick={() => run(onProjects)}
+        >
+          <ProjectsGlyph />
+          <span>Projects</span>
+        </button>
+        <button
           className={active === 'apps' && !configOpen ? styles.tabSelected : styles.tab}
           type="button"
           aria-current={active === 'apps' ? 'page' : undefined}
@@ -130,6 +141,14 @@ function AgentGlyph() {
       <path d="M7 18.5c1.3-1.2 3-1.8 5-1.8s3.7.6 5 1.8" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
       <circle cx="12" cy="9" r="4" fill="none" stroke="currentColor" strokeWidth="1.7" />
       <path d="m18.6 5.1.5-1.4.5 1.4 1.4.5-1.4.5-.5 1.4-.5-1.4-1.4-.5Z" fill="currentColor" />
+    </svg>
+  );
+}
+
+function ProjectsGlyph() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden focusable="false">
+      <path d="M3.5 7.5A1.5 1.5 0 0 1 5 6h4.2l2 2H19a1.5 1.5 0 0 1 1.5 1.5v8A1.5 1.5 0 0 1 19 19H5a1.5 1.5 0 0 1-1.5-1.5Z" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
     </svg>
   );
 }

@@ -32,6 +32,14 @@ export interface InputBarProps {
   /** Available skills for the `$` autocomplete (from GET /v1/skills). */
   skills?: SkillHint[];
   devices?: Suggestion[];
+  /** A project's profiles, offered before devices in the `@` autocomplete. */
+  roster?: Suggestion[];
+  /** The `/` commands offered; the Web set by default. */
+  commands?: Suggestion[];
+  /** Who answers the text as typed (a project's routing preview). A profile
+   * off the roster blocks sending and offers `onInvite` instead. */
+  recipient?: (text: string) => { speakers: string[]; uninvited?: string } | undefined;
+  onInvite?: (profile: string) => void;
   /** Plain Enter submits on desktop; mobile leaves it to the textarea as a line break. */
   enterSubmits?: boolean;
   onSubmit: (text: string) => void;
@@ -71,7 +79,9 @@ export function InputBar(props: InputBarProps) {
   }, [props.draftKey]);
 
   const menu = menuQuery(text, caret);
-  const source: Suggestion[] = menu?.sigil === '/' ? WEB_COMMANDS : menu?.sigil === '@' ? (props.devices ?? []) : (props.skills ?? []);
+  const mentions = [...(props.roster ?? []), ...(props.devices ?? [])];
+  const source: Suggestion[] = menu?.sigil === '/' ? (props.commands ?? WEB_COMMANDS) : menu?.sigil === '@' ? mentions : (props.skills ?? []);
+  const recipient = props.recipient?.(text);
   const matches = menu ? source.filter(item => (menu.sigil === '@' ? item.name.replace(/^"|"$/g, '').toLowerCase().startsWith(menu.query.toLowerCase()) : item.name.startsWith(menu.query))).slice(0, MAX_SUGGESTIONS) : [];
   const menuOpen = focused && !dismissed && matches.length > 0;
   const active = Math.min(activeIndex, Math.max(0, matches.length - 1));
@@ -110,7 +120,7 @@ export function InputBar(props: InputBarProps) {
 
   function submit(): void {
     const value = text.trim();
-    if (!value || props.disabled) { return; }
+    if (!value || props.disabled || recipient?.uninvited) { return; }
     props.onSubmit(value);
     setText('');
     removeDraft(props.draftKey);
@@ -285,7 +295,7 @@ export function InputBar(props: InputBarProps) {
       <div className={styles.bar}>
         <div className={styles.inputWrap}>
           {menuOpen ? (
-            <ul className={styles.menu} role="listbox" aria-label={sigil === '/' ? 'Commands' : sigil === '@' ? 'Devices' : 'Skills'}>
+            <ul className={styles.menu} role="listbox" aria-label={sigil === '/' ? 'Commands' : sigil === '@' ? (props.roster ? 'Profiles and devices' : 'Devices') : 'Skills'}>
               {matches.map((item, index) => (
                 <li
                   key={item.name}
@@ -368,6 +378,16 @@ export function InputBar(props: InputBarProps) {
               />
             </>
           ) : null}
+          {recipient?.uninvited ? (
+            <span className={styles.recipient} role="status">
+              {recipient.uninvited} isn’t in this project
+              <button type="button" className={styles.inviteButton} onClick={() => props.onInvite?.(recipient.uninvited!)}>
+                Invite
+              </button>
+            </span>
+          ) : recipient && recipient.speakers.length > 0 ? (
+            <span className={styles.recipient} title="Answers this message">→ {recipient.speakers.join(', ')}</span>
+          ) : null}
           <div className={styles.controls}>
             {props.deepAvailable === false ? null : (
               <button
@@ -391,7 +411,7 @@ export function InputBar(props: InputBarProps) {
             ) : (
               <button
                 className={styles.send}
-                disabled={props.disabled || text.trim().length === 0}
+                disabled={props.disabled || text.trim().length === 0 || recipient?.uninvited !== undefined}
                 aria-label={props.steering ? 'Send guidance' : 'Send'}
                 onClick={submit}
               >
