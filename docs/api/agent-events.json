@@ -147,6 +147,11 @@
     "summarizedTurns": 6
   },
   {
+    "type": "handoff",
+    "runId": "run_2",
+    "profile": "painter"
+  },
+  {
     "type": "done",
     "taskId": "task_1",
     "status": "completed",

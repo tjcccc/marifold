@@ -86,12 +86,13 @@ Every non-2xx response uses one envelope:
 | Code | HTTP | Meaning |
 |---|---|---|
 | `CONFIG_INVALID` | 400 | Malformed request body or parameter |
-| `PROFILE_INVALID`, `MEMORY_INVALID`, `TASK_INVALID`, `SCHEDULE_INVALID`, `AGENT_TOOL_INVALID`, `AGENT_RUN_INVALID` | 400 | Domain validation failed |
+| `PROFILE_INVALID`, `MEMORY_INVALID`, `TASK_INVALID`, `SCHEDULE_INVALID`, `AGENT_TOOL_INVALID`, `AGENT_RUN_INVALID`, `PROJECT_INVALID` | 400 | Domain validation failed |
 | `UNAUTHORIZED` | 401 | Missing/invalid bearer token |
 | `NETWORK_FORBIDDEN` | 403 | Public source address rejected by private-network mode |
 | `ORIGIN_FORBIDDEN` | 403 | Disallowed browser origin or Host for the active bind scope |
 | `NOT_FOUND` | 404 | Unknown route |
-| `TASK_NOT_FOUND`, `SESSION_NOT_FOUND`, `SCHEDULE_NOT_FOUND`, `RUN_NOT_FOUND`, `ARTIFACT_NOT_FOUND`, `APPROVAL_NOT_FOUND`, `USER_INPUT_NOT_FOUND`, `CONFIG_FILE_NOT_FOUND` | 404 | Unknown resource |
+| `TASK_NOT_FOUND`, `SESSION_NOT_FOUND`, `SCHEDULE_NOT_FOUND`, `RUN_NOT_FOUND`, `ARTIFACT_NOT_FOUND`, `APPROVAL_NOT_FOUND`, `USER_INPUT_NOT_FOUND`, `CONFIG_FILE_NOT_FOUND`, `PROJECT_NOT_FOUND` | 404 | Unknown resource |
+| `PROJECT_MEMBER_REQUIRED` | 409 | A project message mentions a profile that is not on the project's roster; `details.profile` names it, so a client can offer "Invite painter?" |
 | `PROVIDER_ERROR` | 502 | Upstream provider rejected the request or returned no usable response |
 | `RUN_LIMIT_EXCEEDED` | 429 | Too many active agent runs (default limit 5) |
 | anything else | 500 | Internal error |
@@ -180,11 +181,35 @@ Memories come from conversations (the model's hidden `memory_save` blocks plus a
 | `GET /v1/sessions?limit=&profile=&archived=&q=` | Sessions matching the active/archived view and optional case-insensitive title/first-prompt query, with pinned sessions first. Summaries may carry sidebar-only `title?`, `pinned?`, `archived?`, plus the first-user-message `preview?`, and `inUse: true` when a client other than the caller (by `x-marifold-session-owner`) holds the session |
 | `POST /v1/sessions/:id/lease` | Reserve or renew a session for this client. The `x-marifold-session-owner` header names the client app (`web`, `terminal`, …; lowercase, up to 32 characters). The service derives the owner as device plus app, where the device is this service (`local`) or, for requests forwarded through the workspace bridge, the bridge-authenticated device. So every browser and tab on this service's Web UI shares the session (on this machine or opening it over the network), as do its terminals, while another app or another workspace device sees it as in use and can take it over. A client's app claim is not an authorization boundary (any token holder can take over); only one process runs work in a session at a time. Reservations expire after 60 seconds without renewal; Web/TUI renew every 15 seconds. A running task keeps its session reserved for the owner that started it until the task ends, even if that client releases or disconnects; a release made meanwhile takes effect when the task ends. Conflicts return 409 `SESSION_BUSY`. A body of `{ "takeover": true }` moves a session held by another client to this one (the owner continuing on another device); the displaced client sees `SESSION_BUSY` at its next renewal, and a task running there keeps running and saves its turn. Local TUI processes share this lease storage with the service |
 | `DELETE /v1/sessions/:id/lease` | Release only the caller's reservation, using the same owner header. Clients release on session changes and exit/page close |
-| `GET /v1/sessions/:id` | Session detail with all turns. A user turn can be followed by several assistant turns (each a reply from a different profile in a project session). Assistant turns may include `speaker` (the profile that replied, recorded in project sessions; absent means the session's `profileName`) and durable `responseMetrics: { mode, provider, model, deep, startedAt, finishedAt, latencyMs, usage? }`; usage may carry input/output/total/cached/reasoning tokens and estimated USD cost. Embedded display-only images are references (`{ kind: "image", mediaType, ref: { userTurnIndex, attachmentIndex } }`) rather than base64; remote attachments retain `url`. Metrics and images are not replayed into model context. 404 `SESSION_NOT_FOUND` |
+| `GET /v1/sessions/:id` | Session detail with all turns. A user turn can be followed by several assistant turns (each a reply from a different profile in a project session). Assistant turns may include `speaker` (the profile that replied, recorded in project sessions; absent means the session's `profileName`) and durable `responseMetrics: { mode, provider, model, deep, startedAt, finishedAt, latencyMs, usage? }`; usage may carry input/output/total/cached/reasoning tokens and estimated USD cost. Embedded display-only images are references (`{ kind: "image", mediaType, ref: { userTurnIndex, attachmentIndex } }`) rather than base64; remote attachments retain `url`. Metrics and images are not replayed into model context. A project session also carries `projectId` and, when a profile holds it, `floor` (who answers a message without a mention; absent means the Lead). 404 `SESSION_NOT_FOUND` |
 | `GET /v1/sessions/:id/attachments/:userTurnIndex/:attachmentIndex` | Authenticated binary delivery for one embedded or local-path transcript image, with its stored image content type. `?thumbnail=1` generates a WebP on the host, capped at 480px and 80,000 bytes, for transcript display. The default preserves stored bytes or reads the original local file. Local paths stay server-only; moved/deleted source files return 404. This keeps large base64 payloads out of session JSON |
 | `PATCH /v1/sessions/:id` | Update sidebar-only metadata with `{ title?: string \| null, pinned?: boolean, archived?: boolean }`. `null` clears a custom title. Does not change the session id, transcript, model context, or conversation recency. Returns the updated session; 404 `SESSION_NOT_FOUND` |
 | `DELETE /v1/sessions/:id` | `{ deleted: boolean }`. Refuses with `AGENT_RUN_INVALID` while a run for that session is active, preventing its final save from recreating deleted history |
 | `POST /v1/sessions/:id/truncate` | Low-level destructive operation: body `{ fromUserTurnIndex }` deletes that user turn and everything after it. The Web UI does **not** use this for prompt editing. Returns `{ truncated, removedTurns }`; 404 `SESSION_NOT_FOUND` |
+
+### Projects
+
+A project is a named group of profiles (its roster, led by its **Lead**) whose sessions every roster profile can answer in; see [Projects](projects.md). Project sessions leave the per-profile session lists and are listed by project.
+
+| Route | Returns |
+|---|---|
+| `GET /v1/projects` | Project summaries by name: `{ id, name, description?, lead, members, sessionCount, createdAt, updatedAt }`; `members` is the roster in join order |
+| `POST /v1/projects` → 201 | Body `{ name, lead?, members?, description?, instructions? }`. `lead` defaults to `default.profile`, and the Lead is always on the roster. Names are 1–100 characters, unique ignoring case; every profile must exist |
+| `GET /v1/projects/:id` | One project: a summary plus `instructions`. 404 `PROJECT_NOT_FOUND` |
+| `PATCH /v1/projects/:id` | Body `{ name?, description?: string \| null, instructions?, lead? }`; a new Lead joins the roster |
+| `DELETE /v1/projects/:id` | `{ sessions }`: its sessions are kept, as ordinary sessions of the profile each started with |
+| `POST /v1/projects/:id/members` | Body `{ profile }`: invite a profile to the roster |
+| `DELETE /v1/projects/:id/members/:profile` | Dismiss a profile; its earlier replies stay in the transcripts. The Lead cannot be dismissed |
+| `GET /v1/projects/:id/sessions?limit=&archived=&q=` | The project's sessions, like `GET /v1/sessions` |
+| `POST /v1/sessions/:id/project` | Body `{ projectId }` moves an existing session into a project (its profile joins the roster and holds the floor); `{ projectId: null }` moves it out. Returns `{ project }` (the session's new link, or `null`) |
+
+All project routes are also reachable through a workspace, so a guest device sees the host's projects.
+
+**Who answers** a run in a project session is decided on the host, so every client and device routes alike:
+
+- Profiles are mentioned by name (`@dev_test`), never by display name. Mentions of roster profiles pick the speakers, in mention order. A mention of an existing profile off the roster fails with `PROJECT_MEMBER_REQUIRED`. Any other mention is left for [execution-device routing](#execution-device-mentions), which reads the text without the profile mentions: `@painter on @office …` means painter answers, executing on office.
+- No profile mention: the floor (the profile last addressed alone), else the Lead. One mention gives that profile the floor; several give it back to the Lead. Regenerating an earlier message leaves the floor alone.
+- Each speaker answers as its own run (below), with the project's block placed before the request's `instructions`: who it is, the roster with the Lead marked, and the project instructions.
 
 ### Chat
 
@@ -300,6 +325,8 @@ For a resolved skill, `objective` carries the model-facing prompt, `instructions
 
 With `sessionId`, optional `replaceUserTurnIndex` regenerates that historical exchange using only its earlier prefix as context, then replaces it in place; later exchanges retain their original order.
 
+**Project sessions.** A run on a session in a project follows [who answers](#projects). `projectId` starts a new session in that project (an existing session must be moved there first; another project's session is refused). Each speaker is one run, one after another on the session: the first saves the message (or replaces it, with `replaceUserTurnIndex`), and the others reply to it, seeing the earlier replies. The `201` returns the first speaker's run; when it ends, its stream emits `handoff` with the next speaker's run id just before `done`. Every speaker's RunRecord carries `projectTurn: { id, projectId, speakers, index }`. A failed speaker does not stop the others; cancelling any speaker stops the turn, as does a regenerated message whose first answer did not complete. The turn keeps its session reserved from the first speaker to the last: a client's release takes effect after the last, and after a takeover the remaining speakers run for the new owner. `provider`, `model`, `deep` and `instructions` apply only to the speaker named by `profile`. A skill (`lean`) was resolved for one profile, so it must route to exactly that profile. A new session's `profileName` is its first speaker.
+
 Local and base64 images are decoded and validated in core, limited to four and 16 MiB aggregate source bytes, MIME-corrected, and optimized before the provider request. URL images remain remote references. Set `originalImages: true` for a single request to preserve supported JPEG/PNG/WebP/GIF encoded bytes; validation and safety limits still apply. The TUI/Web UI expose this as `/attach-original <prompt>`.
 
 ```json
@@ -372,6 +399,7 @@ Each SSE frame's `event:` name equals `data.type`. The union (verbatim from core
   "mediaType": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "size": 18432 } }
 { "type": "error", "code": "...", "message": "..." }
 { "type": "compaction", "status": "completed", "summarizedTurns": 6 }   // after the turn is saved, before done; also running | skipped | failed (+ message)
+{ "type": "handoff", "runId": "run_2", "profile": "painter" }            // project turns: the next speaker's run, just before done
 { "type": "done",  "taskId": "task_x", "status": "completed", "summary": "...",
   "usage": { "inputTokens": 900, "contextTokens": 600, "outputTokens": 120, "totalTokens": 1020,
              "cachedInputTokens": 0, "reasoningTokens": 80,

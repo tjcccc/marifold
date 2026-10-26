@@ -677,4 +677,32 @@ describe('device-hosted workspaces', () => {
     expect(events.body).not.toContain('"isError":true');
     expect(events.body).toContain('The screenshot and workflow note are visible.');
   }, 20000);
+
+  it('answers a project message sent from a guest with each mentioned profile in turn, saved in the host session', async () => {
+    const p = await paired(true);
+    const realFetch = globalThis.fetch;
+    vi.stubGlobal('fetch', vi.fn(async (input, init) => String(input).includes('localhost:11434')
+      ? new Response(JSON.stringify({ message: { content: 'An answer.' }, done: true, done_reason: 'stop' }), { headers: { 'content-type': 'application/json' } })
+      : realFetch(input, init)));
+    for (const name of ['painter', 'critic']) { await post(p.guest, `${p.prefix}/v1/profiles`, { name }); }
+    const { project } = await post(p.guest, `${p.prefix}/v1/projects`, { name: 'Game', members: ['painter'] });
+    expect(project).toMatchObject({ lead: 'default', members: ['default', 'painter'] });
+
+    const outsider = await p.guest.inject({ method: 'POST', url: `${p.prefix}/v1/runs`, payload: { objective: '@critic thoughts?', sessionId: 'g', projectId: project.id } });
+    expect(outsider.statusCode).toBe(409);
+    expect(outsider.json().error).toMatchObject({ code: 'PROJECT_MEMBER_REQUIRED', details: { profile: 'critic' } });
+
+    const { run } = await post(p.guest, `${p.prefix}/v1/runs`, { objective: '@default @painter which engine?', sessionId: 'g', projectId: project.id });
+    expect(run).toMatchObject({ profile: 'default', projectTurn: { speakers: ['default', 'painter'], index: 0 }, execution: { executionDeviceId: p.device } });
+    let second;
+    for (let i = 0; i < 250 && !second?.finishedAt; i++) {
+      await new Promise(resolve => setTimeout(resolve, 20));
+      second = (await p.host.inject('/v1/runs')).json().runs.find((r: { projectTurn?: { index: number } }) => r.projectTurn?.index === 1);
+    }
+    expect(second).toMatchObject({ profile: 'painter', status: 'completed', sessionId: 'g', execution: { executionDeviceId: p.device } });
+    expect((await p.guest.inject(`${p.prefix}/v1/runs/${run.id}/events`)).body).toContain(`event: handoff\ndata: {"type":"handoff","runId":"${second.id}","profile":"painter"}`);
+    const session = (await p.guest.inject(`${p.prefix}/v1/sessions/g`)).json().session;
+    expect(session.turns.map((turn: { role: string; speaker?: string }) => turn.speaker ?? turn.role)).toEqual(['user', 'default', 'painter']);
+    expect((await p.guest.inject(`${p.prefix}/v1/projects/${project.id}/sessions`)).json().sessions.map((s: { id: string }) => s.id)).toEqual(['g']);
+  }, 20000);
 });

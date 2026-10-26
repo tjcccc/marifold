@@ -52,6 +52,7 @@ export const AGENT_EVENT_EXAMPLES: { [T in AgentEvent['type']]: ExampleOf<T> } =
   verification: { type: 'verification', passed: true, notes: 'deprecated: never emitted by current runners' },
   error: { type: 'error', code: 'AGENT_RUN_ERROR', message: 'The provider timed out.' },
   compaction: { type: 'compaction', status: 'completed', summarizedTurns: 6 },
+  handoff: { type: 'handoff', runId: 'run_2', profile: 'painter' },
   done: {
     type: 'done',
     taskId: 'task_1',

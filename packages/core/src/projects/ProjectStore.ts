@@ -96,6 +96,9 @@ export class ProjectStore {
     private readonly sessionsDb: string,
     /** Profiles must exist to be invited or lead; unchecked when omitted. */
     private readonly profileExists?: (name: string) => boolean,
+    /** Creates the sessions database with its session tables, so the
+     * project tables never stand in a database without them. */
+    private readonly createSessionsDb?: () => void,
     private readonly now: () => Date = () => new Date(),
   ) {}
 
@@ -150,8 +153,8 @@ export class ProjectStore {
    * the profile each was started with; returns how many. */
   delete(id: string): { sessions: number } {
     return this.write(db => {
-      this.existing(db, id);
-      const sessions = db.prepare(`DELETE FROM ${PROJECT_SESSIONS_TABLE} WHERE project_id = ?`).run(id).changes;
+      const { sessionCount: sessions } = summary(db, this.existing(db, id));
+      db.prepare(`DELETE FROM ${PROJECT_SESSIONS_TABLE} WHERE project_id = ?`).run(id);
       db.prepare(`DELETE FROM ${PROJECT_MEMBERS_TABLE} WHERE project_id = ?`).run(id);
       db.prepare(`DELETE FROM ${PROJECTS_TABLE} WHERE id = ?`).run(id);
       return { sessions };
@@ -211,6 +214,16 @@ export class ProjectStore {
         ON CONFLICT(session_id) DO UPDATE SET project_id = excluded.project_id, floor = excluded.floor`).run(sessionId, projectId, floor ?? null);
       touch(db, projectId, at);
       return { projectId, ...(floor ? { floor } : {}) };
+    });
+  }
+
+  /** Reserve a not-yet-created session for a project: its first run saves it
+   * there. A link row may precede its session (listings and counts join on
+   * sessions, so an unused one is invisible). */
+  claimSession(sessionId: string, projectId: string): void {
+    this.write(db => {
+      this.existing(db, projectId);
+      db.prepare(`INSERT INTO ${PROJECT_SESSIONS_TABLE} (session_id, project_id, floor) VALUES (?, ?, NULL) ON CONFLICT(session_id) DO NOTHING`).run(sessionId, projectId);
     });
   }
 
@@ -288,6 +301,7 @@ export class ProjectStore {
   }
 
   private write<T>(work: (db: Database.Database) => T): T {
+    if (!fs.existsSync(this.sessionsDb)) { this.createSessionsDb?.(); }
     fs.mkdirSync(path.dirname(this.sessionsDb), { recursive: true });
     const db = new Database(this.sessionsDb);
     try {
@@ -317,7 +331,10 @@ function projectRow(db: Database.Database, id: string): ProjectRow | undefined {
 
 function summary(db: Database.Database, row: ProjectRow): ProjectSummary {
   const members = (db.prepare(`SELECT profile_name AS name FROM ${PROJECT_MEMBERS_TABLE} WHERE project_id = ? ORDER BY joined_at, rowid`).all(row.id) as Array<{ name: string }>).map(member => member.name);
-  const sessions = db.prepare(`SELECT COUNT(*) AS count FROM ${PROJECT_SESSIONS_TABLE} WHERE project_id = ?`).get(row.id) as { count: number };
+  const hasSessions = db.prepare(`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'sessions'`).get();
+  const sessions = hasSessions
+    ? db.prepare(`SELECT COUNT(*) AS count FROM ${PROJECT_SESSIONS_TABLE} ps JOIN sessions s ON s.id = ps.session_id WHERE ps.project_id = ?`).get(row.id) as { count: number }
+    : { count: 0 };
   return {
     id: row.id,
     name: row.name,

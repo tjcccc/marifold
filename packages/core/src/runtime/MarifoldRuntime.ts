@@ -48,6 +48,7 @@ import { ProfileManager } from '../profiles/ProfileManager';
 import type { ProfileFileKind, ProfileInstructionsMigrationResult, ProfileSettingsMigrationResult } from '../profiles/ProfileManager';
 import { assertNotDeviceName, renameProfile, type ProfileRenameOutcome } from '../profiles/ProfileRename';
 import { ProjectStore } from '../projects/ProjectStore';
+import { projectTurnHooks } from '../projects/ProjectTurns';
 import { Scheduler } from '../schedule/Scheduler';
 import { RunRegistry } from '../runs/RunRegistry';
 import { TelegramBridge } from '../channels/TelegramBridge';
@@ -139,7 +140,7 @@ export class MarifoldRuntime {
     this.profileResolver = new ProfileResolver(config.paths.profilesDir);
     this.profileManager = new ProfileManager(config.paths.profilesDir);
     this.sessionResolver = new SessionResolver(config.paths.sessionsDb);
-    this.projects = new ProjectStore(config.paths.sessionsDb, name => this.profileManager.exists(name));
+    this.projects = new ProjectStore(config.paths.sessionsDb, name => this.profileManager.exists(name), () => { this.sessionResolver.openStore(); });
     this.providerFactory = new ProviderFactory(config, configPath);
     this.engines = new ProviderEngines(options.loadedConfig, this.providerFactory, this.profileResolver, this.sessionResolver);
     this.agentCompaction = new AgentCompaction({ sessionResolver: this.sessionResolver, engines: this.engines,
@@ -523,8 +524,8 @@ export class MarifoldRuntime {
     const detail = this.sessionResolver.get(sessionId);
     if (!detail) { return undefined; }
     const compaction = this.sessionResolver.compaction(sessionId);
-    const projectId = this.projects.sessionProject(sessionId)?.projectId;
-    return { ...detail, ...(sessionHistory(detail.turns, compaction)[0]?.role === 'summary' ? { summarizedTurns: compaction?.summarizedThrough } : {}), ...(projectId ? { projectId } : {}) };
+    const link = this.projects.sessionProject(sessionId);
+    return { ...detail, ...(sessionHistory(detail.turns, compaction)[0]?.role === 'summary' ? { summarizedTurns: compaction?.summarizedThrough } : {}), ...(link ? { projectId: link.projectId, ...(link.floor ? { floor: link.floor } : {}) } : {}) };
   }
 
   getSessionAttachment(
@@ -854,6 +855,7 @@ export class MarifoldRuntime {
         addProfileTrustedFolder: (profile, folder) => this.addProfileTrustedFolder(profile, folder),
         setProfileSensitiveReadGrant: (profile, grant, allowed) => this.setProfileSensitiveReadGrant(profile, grant, allowed),
         defaultProfile: () => this.options.loadedConfig.config.default.profile,
+        ...projectTurnHooks(this.projects, this.sessionResolver, this.sessionLeases, this.sessionOwner),
       },
       log,
     });
@@ -979,9 +981,7 @@ export class MarifoldRuntime {
   }
 
   private missingEditedTurn(sessionId: string, userTurnIndex: number): never {
-    throw MarifoldError.configInvalid(
-      `Cannot edit user turn ${userTurnIndex} because it is missing from session '${sessionId}'.`,
-    );
+    throw MarifoldError.configInvalid(`Cannot edit user turn ${userTurnIndex} because it is missing from session '${sessionId}'.`);
   }
 
 }

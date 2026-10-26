@@ -242,6 +242,9 @@ export type {
 export { orphanedSessionProfiles, renameProfile } from './profiles/ProfileRename';
 export { ProjectStore } from './projects/ProjectStore';
 export type { ProjectCreateInput, ProjectDetail, ProjectSummary, ProjectUpdate, SessionProject } from './projects/ProjectStore';
+export { planProjectTurn, projectInstructions, routeProjectMessage } from './projects/ProjectTurns';
+export type { ProjectRoute, ProjectTurnPlan } from './projects/ProjectTurns';
+export type { RunProjectTurn } from './runs/ProjectTurn';
 export { matchMention, mentionTokens, type MentionToken } from './agent/Mentions';
 export type { ProfileRenameOutcome } from './profiles/ProfileRename';
 export { ProfileResolver } from './profiles/ProfileResolver';

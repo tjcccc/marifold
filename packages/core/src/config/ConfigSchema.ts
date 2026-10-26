@@ -306,4 +306,6 @@ export interface SessionDetail extends SessionSummary {
   summarizedTurns?: number;
   /** The project this session belongs to; absent for an ordinary profile session. */
   projectId?: string;
+  /** In a project session, the profile that answers a message addressing no one; the Lead when absent. */
+  floor?: string;
 }

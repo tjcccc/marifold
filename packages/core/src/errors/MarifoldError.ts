@@ -18,6 +18,7 @@ export type MarifoldErrorCode =
   | 'SCHEDULE_NOT_FOUND'
   | 'PROJECT_INVALID'
   | 'PROJECT_NOT_FOUND'
+  | 'PROJECT_MEMBER_REQUIRED'
   | 'SKILL_INVALID'
   | 'SKILL_NOT_FOUND'
   | 'APP_INVALID'
@@ -144,6 +145,11 @@ export class MarifoldError extends Error {
 
   static projectNotFound(projectId: string): MarifoldError {
     return new MarifoldError('PROJECT_NOT_FOUND', `Project not found: ${projectId}`, { project_id: projectId });
+  }
+
+  /** A message mentions a profile that is not on the project's roster; clients offer to invite it. */
+  static projectMemberRequired(projectId: string, profile: string): MarifoldError {
+    return new MarifoldError('PROJECT_MEMBER_REQUIRED', `'${profile}' is not on this project's roster. Invite it first.`, { project_id: projectId, profile });
   }
 
   static skillInvalid(message: string, source?: string): MarifoldError {

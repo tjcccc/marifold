@@ -8,7 +8,7 @@ import { MarifoldError } from '../errors/MarifoldError';
 export class SessionLeases {
   private held = new Map<string, string>();
   /** Sessions reserved by running work in this process, by owner. */
-  private pinned = new Map<string, { owner: string; count: number; timer: ReturnType<typeof setInterval> }>();
+  private pinned = new Map<string, { owner: string; count: number; timer: ReturnType<typeof setInterval>; createdBy?: string }>();
   /** Releases refused while running work pinned the session, applied when it ends. */
   private releaseWhenUnpinned = new Set<string>();
   /** This process's claim on the sessions it runs work in (see `hold`). */
@@ -81,21 +81,23 @@ export class SessionLeases {
   /** Reserve a session for work started by `owner` until the returned function
    * is called, even if the owner's client disconnects or releases it meanwhile.
    * A lease the hold created is released at the end; an existing client lease
-   * is left to that client's renewal or expiry. Throws SESSION_BUSY like
-   * `acquire`. */
+   * is left to that client's renewal or expiry. A hold inside one (each
+   * speaker of a project turn) joins it: a release asked for meanwhile still
+   * waits for the outer work to end. Throws SESSION_BUSY like `acquire`. */
   hold(sessionId: string, owner: string): () => void {
     const pin = this.pinned.get(sessionId);
-    if (pin && pin.owner !== owner) { this.busy(); }
-    const created = !this.ownedBy(sessionId, owner);
-    // One app on a device may be open in several pages or terminals, but only
-    // one process runs work in a session at a time.
-    if (!pin) { this.claimRun(sessionId); }
-    try { this.acquire(sessionId, owner); } catch (error) {
-      if (!pin) { this.releaseRun(sessionId); }
-      throw error;
-    }
-    if (pin) { pin.count += 1; }
-    else {
+    if (pin) {
+      if (pin.owner !== owner) { this.busy(); }
+      pin.count += 1;
+    } else {
+      const created = !this.ownedBy(sessionId, owner);
+      // One app on a device may be open in several pages or terminals, but only
+      // one process runs work in a session at a time.
+      this.claimRun(sessionId);
+      try { this.acquire(sessionId, owner); } catch (error) {
+        this.releaseRun(sessionId);
+        throw error;
+      }
       // Renew for whoever owns the session now; a takeover moves the hold too.
       const timer = setInterval(() => {
         const current = this.pinned.get(sessionId);
@@ -104,7 +106,7 @@ export class SessionLeases {
         try { this.claimRun(sessionId); } catch { /* Kept by this process unless it stalled past expiry. */ }
       }, 15_000);
       timer.unref?.();
-      this.pinned.set(sessionId, { owner, count: 1, timer });
+      this.pinned.set(sessionId, { owner, count: 1, timer, ...(created ? { createdBy: owner } : {}) });
     }
     let done = false;
     return () => {
@@ -116,11 +118,16 @@ export class SessionLeases {
       this.pinned.delete(sessionId);
       this.releaseRun(sessionId);
       const deferred = this.releaseWhenUnpinned.delete(sessionId);
-      // A lease this hold created goes with it (a takeover's lease is another owner's and stays);
+      // A lease the first hold created goes with it (a takeover's lease is another owner's and stays);
       // a release its owner asked for during the work applies now.
-      if (created) { this.release(sessionId, owner); }
+      if (current.createdBy) { this.release(sessionId, current.createdBy); }
       if (deferred) { this.release(sessionId, current.owner); }
     };
+  }
+
+  /** The owner running work in this session runs for now (a takeover moves it). */
+  holder(sessionId: string): string | undefined {
+    return this.pinned.get(sessionId)?.owner;
   }
 
   private claimRun(sessionId: string): void {

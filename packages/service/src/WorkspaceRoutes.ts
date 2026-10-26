@@ -23,7 +23,7 @@ export function workspaceApiPath(method: string, raw: string): boolean {
   // The host's own Web UI may reach /v1/agent-computer through its workspace;
   // AgentComputerRoutes limits other devices to status and profile access.
   return (
-    /^\/v1\/(status|changes|ask|config|providers|models|profiles|sessions|skills|apps|app-instances|runs|tasks|schedules|terminal|agent-computer)(?:\/[A-Za-z0-9_%.-]+)*$/.test(
+    /^\/v1\/(status|changes|ask|config|providers|models|profiles|projects|sessions|skills|apps|app-instances|runs|tasks|schedules|terminal|agent-computer)(?:\/[A-Za-z0-9_%.-]+)*$/.test(
       pathname,
     ) &&
     !pathname.endsWith('/events') &&

@@ -71,4 +71,7 @@ export type AgentEvent =
    * turn was saved and before `done`; `summarizedTurns` counts covered turns.
    * `skipped`: every turn is already summarized or still in the kept tail. */
   | { type: 'compaction'; status: 'running' | 'completed' | 'skipped' | 'failed'; summarizedTurns?: number; message?: string }
+  /** Emitted by the run registry just before `done` when the next profile of a
+   * project turn answers the same message: follow run `runId` for its events. */
+  | { type: 'handoff'; runId: string; profile: string }
   | { type: 'done'; taskId: string; status: TaskStatus; summary?: string; usage?: AgentUsage };

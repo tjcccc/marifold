@@ -35,7 +35,7 @@ Each profile works as itself: its own model, provider, Deep setting, Skills, mem
 `@name` already selects an execution device in a run objective (`@office`, `@"Home Mac"`; see [service API](service-api.md#execution-device-mentions)). Projects reuse the same `@`, resolved by name: **roster profiles first, then devices**. `@painter on @office …` means painter answers, executing on the office Mac.
 
 - Profile and device names must not collide: creating or renaming a profile or device to a name used by the other is refused, so a mention is never ambiguous.
-- Matching follows device mentions: case-insensitive, `@"display name with spaces"` quoted, display name or id.
+- Matching follows device mentions: case-insensitive, ending at punctuation. Profiles match by name (`@dev_test`); devices by name or id, quoted when they contain spaces (`@"Home Mac"`).
 
 ### Who answers
 

@@ -14,6 +14,8 @@ import type { ResolvedRunArtifact, RunArtifact } from '../agent/RunArtifacts';
 import { isInsideAny } from '../agent/tools/WriteFileTool';
 import { MarifoldError } from '../errors/MarifoldError';
 import type { TaskStatus } from '../tasks/TaskStore';
+import type { ProjectTurnPlan, ProjectTurnStart } from '../projects/ProjectTurns';
+import { ProjectTurn, type RunProjectTurn } from './ProjectTurn';
 import {
   normalizeUserInputSubmission,
   type UserInputRequest,
@@ -35,6 +37,9 @@ export interface RunRegistryRuntime {
   addProfileTrustedFolder(profile: string, folder: string): string;
   setProfileSensitiveReadGrant(profile: string, grant: string, allowed: boolean): string;
   defaultProfile(): string;
+  /** Commit a project turn and hold its session as its first run starts (see `projectTurnHooks`). */
+  beginProjectTurn?(sessionId: string, plan: ProjectTurnPlan, options: { replaceUserTurnIndex?: number; sessionOwner?: string }): ProjectTurnStart;
+  userTurnCount?(sessionId: string): number;
 }
 
 export interface RunJournal {
@@ -84,6 +89,10 @@ export interface RunStartInput {
   userTurn?: string;
   /** Replace a persisted exchange instead of appending a new one. */
   replaceUserTurnIndex?: number;
+  /** Internal: a later speaker of a project turn replies to this saved message. */
+  replyToUserTurnIndex?: number;
+  /** Internal, set by the service boundary: the profiles answering a project message. */
+  projectTurn?: ProjectTurnPlan;
   deep?: boolean;
   /** Staged for lazy inspect_attachment access during the agent run. */
   images?: ImageInput[];
@@ -121,6 +130,8 @@ export interface RunRecord {
   usage?: AgentUsage;
   /** Generated files for this run. Absent on records from pre-artifact services. */
   artifacts?: RunArtifact[];
+  /** Set when this run is one profile's answer in a project turn. */
+  projectTurn?: RunProjectTurn;
   /** Sequence number of the newest buffered event (0 = none yet). */
   eventCount: number;
   pendingApprovals: ApprovalRequest[];
@@ -175,6 +186,10 @@ interface ActiveRun {
   runGrants: RunGrant[];
   waiters: Array<() => void>;
   evictTimer?: NodeJS.Timeout;
+  projectTurn?: RunProjectTurn;
+  /** Live turn state, and the next speaker's run once this one reported `done`. */
+  turn?: ProjectTurn;
+  next?: { run: ActiveRun; input: RunStartInput };
 }
 
 /**
@@ -228,11 +243,29 @@ export class RunRegistry {
     const active = [...this.runs.values()].filter(run => !run.finished).length;
     if (active >= this.maxActiveRuns) { throw MarifoldError.runLimitExceeded(this.maxActiveRuns); }
 
-    const profile = input.profile ?? this.runtime.defaultProfile();
     if (input.sessionId) {
       const owner = [...this.runs.values()].find(run => !run.finished && run.sessionId === input.sessionId);
       if (owner) { throw new MarifoldError('SESSION_BUSY', `Session is already running on ${owner.id}.`, { runId: owner.id, sessionId: input.sessionId }); }
     }
+    let turn: ProjectTurn | undefined;
+    if (input.projectTurn) {
+      if (!input.sessionId || !this.runtime.beginProjectTurn) { throw MarifoldError.agentRunInvalid('A project turn needs a session.'); }
+      turn = new ProjectTurn(input.projectTurn, input, this.runtime.beginProjectTurn(input.sessionId, input.projectTurn, { replaceUserTurnIndex: input.replaceUserTurnIndex, sessionOwner: input.sessionOwner }));
+      input = turn.speakerInput(0);
+    }
+    const run = this.launch(input, turn, 0);
+    // Detached pump: consume the run generator without blocking the caller,
+    // the same detachment the Telegram bridge uses so an approval answer
+    // arriving on a later request cannot deadlock the run.
+    void this.pump(run, input).catch(error => {
+      this.log?.(`Run ${run.id} pump failed: ${String(error)}`);
+    });
+    return this.toRecord(run);
+  }
+
+  /** Register a run (its pump starts separately). */
+  private launch(input: RunStartInput, turn: ProjectTurn | undefined, index: number): ActiveRun {
+    const profile = input.profile ?? this.runtime.defaultProfile();
     const run: ActiveRun = {
       id: this.createRunId(),
       execution: input.execution,
@@ -254,16 +287,11 @@ export class RunRegistry {
       runGrants: [],
       artifacts: [],
       waiters: [],
+      ...(turn ? { turn, projectTurn: turn.record(index) } : {}),
     };
     this.runs.set(run.id, run);
     this.journal?.save(this.toRecord(run));
-    // Detached pump: consume the run generator without blocking the caller,
-    // the same detachment the Telegram bridge uses so an approval answer
-    // arriving on a later request cannot deadlock the run.
-    void this.pump(run, input).catch(error => {
-      this.log?.(`Run ${run.id} pump failed: ${String(error)}`);
-    });
-    return this.toRecord(run);
+    return run;
   }
 
   startChild(parentRunId: string, input: RunStartInput): RunRecord {
@@ -443,6 +471,9 @@ export class RunRegistry {
     if (!run) { throw MarifoldError.runNotFound(runId); }
     if (!run.finished) { run.abort.abort(); }
     for (const child of this.runs.values()) { if (child.parentRunId === runId && !child.finished) { child.abort.abort(); } }
+    // Cancelling one speaker of a project turn stops everyone queued after it.
+    if (run.turn) { run.turn.cancelled = true; }
+    run.next?.run.abort.abort();
     return run.status;
   }
 
@@ -467,6 +498,7 @@ export class RunRegistry {
         sessionId: input.sessionId,
         userTurn: input.userTurn,
         replaceUserTurnIndex: input.replaceUserTurnIndex,
+        replyToUserTurnIndex: input.replyToUserTurnIndex,
         deep: input.deep,
         images: input.images,
         originalImages: input.originalImages,
@@ -497,11 +529,28 @@ export class RunRegistry {
       this.log?.(`Run ${run.id} failed: ${String(error)}`);
       this.append(run, { type: 'error', code: 'RUN_PUMP_FAILED', message: String(error) });
       this.append(run, { type: 'done', taskId: run.taskId ?? '', status: 'failed' });
+    } finally {
+      // The next speaker starts once this runner released the session; one
+      // cancelled before it started ends without answering. The turn's own
+      // hold goes last, so a lease it created goes with it.
+      const next = run.next;
+      if (next && !(this.closed || next.run.abort.signal.aborted || next.run.turn?.cancelled)) {
+        void this.pump(next.run, next.input).catch(error => { this.log?.(`Run ${next.run.id} pump failed: ${String(error)}`); });
+      } else {
+        if (next) { this.append(next.run, { type: 'done', taskId: '', status: 'cancelled', summary: 'Cancelled before this profile answered.' }); }
+        run.turn?.end();
+      }
     }
   }
 
   private append(run: ActiveRun, event: AgentEvent): void {
     if (run.finished) { return; }
+    if (event.type === 'done' && run.turn && run.projectTurn && run.sessionId && !this.closed
+      && run.turn.continuesAfter(run.projectTurn.index, event.status, this.runtime.userTurnCount?.(run.sessionId) ?? 0)) {
+      const input = run.turn.speakerInput(run.projectTurn.index + 1);
+      run.next = { run: this.launch(input, run.turn, run.projectTurn.index + 1), input };
+      this.append(run, { type: 'handoff', runId: run.next.run.id, profile: run.next.run.profile });
+    }
     if (event.type === 'status' && !run.taskId) { run.taskId = event.taskId; }
     run.lastSeq += 1;
     run.buffer.push({ seq: run.lastSeq, event });
@@ -661,6 +710,7 @@ export class RunRegistry {
       summary: run.summary,
       usage: run.usage,
       artifacts: [...run.artifacts],
+      ...(run.projectTurn ? { projectTurn: run.projectTurn } : {}),
       eventCount: run.lastSeq,
       pendingApprovals: [...this.pending.values()]
         .filter(entry => entry.runId === run.id || this.runs.get(entry.runId)?.parentRunId === run.id)

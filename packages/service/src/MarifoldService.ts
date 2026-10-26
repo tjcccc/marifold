@@ -1,4 +1,4 @@
-import { ArtifactWebRtc, DeviceExecution, MARIFOLD_VERSION } from '@marifold/core';
+import { ArtifactWebRtc, DeviceExecution, MARIFOLD_VERSION, planProjectTurn } from '@marifold/core';
 import { remoteArtifactDownload } from './RemoteArtifactDownload';
 import { requestEnvironment, requestOrigin } from './RequestEnvironment';
 import { registerWorkspaceScheduleRoutes } from './WorkspaceScheduleRoutes';
@@ -17,6 +17,8 @@ import {
 } from '@marifold/core';
 import { registerWorkspaceRoutes, remoteExecution } from './WorkspaceRoutes';
 import { registerProfileRoutes } from './ProfileRoutes';
+import { registerProjectRoutes } from './ProjectRoutes';
+import { optionalStringField } from './Validation';
 import { registerChatRoutes } from './ChatRoutes';
 import { registerConfigRoutes } from './ConfigRoutes';
 import { normalizeError } from './ServiceErrors';
@@ -173,14 +175,23 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
       const result = await workspaceManager.execute(e.workspaceId, e.executionDeviceId, 'executor.artifact', { runId: origin.run.id, artifactId: origin.artifactId, preview: true, variant }) as { data: string };
       return Buffer.from(result.data, 'base64');
     },
-    resolve: (input, body, request) => {
+    resolve: async (input, body, request) => {
       if (input.sessionId && activeSessionRequests.has(input.sessionId)) { throw new MarifoldError('SESSION_BUSY', 'Session already has an active request.', { sessionId: input.sessionId }); }
       // Refuse up front (409) instead of failing the run after it starts.
       if (input.sessionId) { runtime.assertSessionWritable(input.sessionId); }
-      return workspaceRuns.resolve({ ...input, sessionOwner: request.sessionOwner, environment: requestEnvironment(request, workspaceContext.resolve(request.headers)) }, {
-      workspaceId: typeof body.workspaceId === 'string' ? body.workspaceId : undefined,
-      executionDeviceId: typeof body.executionDeviceId === 'string' ? body.executionDeviceId : undefined,
-    }, workspaceContext.resolve(request.headers)); },
+      // In a project session the host decides who answers; device routing
+      // reads the text without the profile mentions.
+      const project = planProjectTurn({
+        projects: runtime.projects,
+        profileNames: () => runtime.listProfiles().map(profile => profile.name),
+        sessionExists: sessionId => runtime.getSession(sessionId) !== undefined,
+      }, input, optionalStringField('projectId', body.projectId).projectId);
+      const routed = await workspaceRuns.resolve({ ...input, ...project?.deviceText, sessionOwner: request.sessionOwner, environment: requestEnvironment(request, workspaceContext.resolve(request.headers)) }, {
+        workspaceId: typeof body.workspaceId === 'string' ? body.workspaceId : undefined,
+        executionDeviceId: typeof body.executionDeviceId === 'string' ? body.executionDeviceId : undefined,
+      }, workspaceContext.resolve(request.headers));
+      return project ? { ...routed, objective: input.objective, ...(input.userTurn !== undefined ? { userTurn: input.userTurn } : {}), projectTurn: project.plan } : routed;
+    },
     artifactAvailable: async (runId, artifactId) => {
       const origin = runRegistry.artifactOrigin(runId, artifactId);
       const execution = remoteExecution(workspaceManager, origin.run.execution);
@@ -212,6 +223,7 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
       || runRegistry.list().some(run => run.profile === profile && run.finishedAt === undefined),
   });
 
+  registerProjectRoutes(server, runtime, () => options.loadedConfig.config.default.profile);
   registerWorkspaceRoutes(server, workspaceManager, runRegistry, workspaceContext, (operation, input, context) => workspaceExecutor.handle(operation, input, context), security.token, id => { workspaceExecutor.cancelWorkspace(id); artifactTransfers.cancelWorkspace(id); }, artifactTickets, artifactTransfers);
   server.addHook('onClose', async () => workspaceExecutor.close());
 
