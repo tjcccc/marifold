@@ -91,6 +91,10 @@ export type {
   UserInputSubmissionAnswer,
 } from './agent/UserInput';
 export {
+  acceptedRemoteTrustedFolders,
+  coversProtectedRoot,
+  HOME_TRUSTED_FOLDER,
+  trustedFolderEntry,
   MAX_RUN_INPUT_BYTES,
   MAX_RUN_INSPECTION_TEXT_BYTES,
   RUN_WORKSPACE_RETENTION_MS,

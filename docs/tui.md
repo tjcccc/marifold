@@ -66,7 +66,7 @@ The alternate screen restores the prior shell display on exit; its transcript is
 
 ## Commands
 
-`/help` `/exit` (`/quit`) `/new` `/model` `/profile` `/resume [--archived]` `/takeover` `/archive` `/unarchive` `/deep on|off` `/clear` `/stop` `/btw <question>` `/permissions` `/skills` `/install-skill [--profile <name>] <path|url>` `/doctor [--fix]`, plus chat carry-overs `/read` `/image` `/attach-original <prompt>` `/remember` `/forget` `/delete-memory`.
+`/help` `/exit` (`/quit`) `/new` `/model` `/profile` `/resume [--archived]` `/takeover` `/archive` `/unarchive` `/deep on|off` `/clear` `/stop` `/btw <question>` `/permissions` `/trust-folder <path>` `/add-dir <path>` `/skills` `/install-skill [--profile <name>] <path|url>` `/doctor [--fix]`, plus chat carry-overs `/read` `/image` `/attach-original <prompt>` `/remember` `/forget` `/delete-memory`.
 
 - Typing a plain message while a task runs **steers** it: the text is queued and handed to the model on its next turn (skills, `/attach-original`, and images wait until the task ends).
 - `/btw <question>` asks a quick side question, running or idle. It is a one-off, tool-less call that sees the visible conversation (including the running task's progress). The answer opens in a panel below the run line (↑/↓ scroll, c copy, Esc close); it neither interrupts nor steers the task and is never saved to the session.
@@ -138,7 +138,7 @@ When a tool needs approval, the modal previews the tool's arguments (the file co
 - **persist `<kind>`** — write `allow` for this kind to `[agent.approval]` in config.
 - **deny**.
 
-Escalated calls (e.g. a write outside the working directory) always prompt, regardless of any grant. `/permissions` shows current modes and active session grants. Requests involving external/sensitive filesystem paths and package installation cannot be persisted, so their modal offers only **allow once** and **deny**.
+Escalated calls (e.g. a write outside the working directory) always prompt, regardless of any grant. `/permissions` shows current modes and active session grants. `/trust-folder <path>` saves a trusted folder to the profile (as `~/…` inside home, so it applies on every device); `/add-dir <path>` trusts one for this TUI session only. Both complete folder names with Tab. Folders that hold credentials, Marifold state or startup files are refused. A local TUI's runs work in the folder it was launched from; a workspace TUI sends that folder as `~/…`, so the run uses the same folder in the execution device's home when it exists there. Requests involving external/sensitive filesystem paths and package installation cannot be persisted, so their modal offers only **allow once** and **deny**.
 
 Every agent run has a private workspace under `~/.marifold/runs/<run-id>/`. User-facing `~` and `$HOME` paths continue to resolve to the real account home; the private run home is internal runtime state only. On macOS, shell commands run through the system sandbox with network disabled and writes limited to that run, the selected working folder, and configured in-home trusted folders. Python uses the run's `.venv`; network package installation is a separate one-time-approved `uv` tool. Approval never disables these hard limits, and shell execution fails closed when no supported sandbox backend is available.
 

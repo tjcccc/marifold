@@ -270,4 +270,16 @@ describe('RunWorkspace', () => {
     expect(() => listHomeFolders('~/outside-link', home)).toThrow(/inside home/);
     expect(() => listHomeFolders('~/.ssh', home)).toThrow(/private/);
   });
+
+  it('resolves a home-relative working folder on this device, falling back when it is missing or protected', () => {
+    const home = fs.realpathSync(tempDir());
+    fs.mkdirSync(path.join(home, 'tempfiles'));
+    fs.mkdirSync(path.join(home, '.ssh'));
+    const options = { runsDir: path.join(home, '.marifold', 'runs'), userHome: home };
+    expect(createRunWorkspace({ ...options, id: 'cwd_rel', cwd: '~/tempfiles' }).cwd).toBe(path.join(home, 'tempfiles'));
+    const missing = createRunWorkspace({ ...options, id: 'cwd_missing', cwd: '~/not-here' });
+    expect(missing.cwd).toBe(missing.workDir);
+    const sensitive = createRunWorkspace({ ...options, id: 'cwd_ssh', cwd: '~/.ssh' });
+    expect(sensitive.cwd).toBe(sensitive.workDir);
+  });
 });

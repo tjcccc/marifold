@@ -2,6 +2,14 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-10-26 — v0.100.0 — TUI `/add-dir`, workspace working folder, folder completion
+
+- **`/add-dir <path>`**: trusts a folder for this TUI session's runs only (`useApprovals.sessionDirsRef`, sent as `trustedFolders` on every run, stored `~/…` inside home). Refuses non-folders, home itself (points to `/trust-folder ~`), folders covering protected roots, and, in a workspace TUI, folders outside home. `/permissions` lists them.
+- **Runs API**: `POST /v1/runs` accepts `trustedFolders`, filtered to validated `~/…` entries (`acceptedRemoteTrustedFolders`, `~` dropped: home writes stay a profile setting); they reach guests through the existing portable entries. `cwd` may be `~/…`; `createRunWorkspace` resolves it in the device's home and falls back to the work folder when it is missing or covers a protected root (absolute cwds that do not exist now fall back too).
+- **Workspace TUI working folder**: a remote TUI sends its launch folder as `cwd` when it is inside home (`~/…`), so a run on the office Mac launched in `~/tempfiles` works there. A local TUI is unchanged (runs use `process.cwd()`).
+- **Folder completion**: `/trust-folder` and `/add-dir` complete folders from this device with Tab (`core/folderCompletion.ts`; `~`, `~/…`, relative; hidden folders after a `.`). Enter always submits the typed path.
+- Validation: lint, typecheck; tests core 637, service 104, TUI 144 (folder completion; `/add-dir` reaches the run without a cwd for local runs). Live: guest redeployed, `run-tui-workspace.cjs` 14/14 and `run-capacity.cjs 5` passed (regression only; the harness TUI does not launch inside its temp home, so the `~/…` cwd path and `/add-dir` were not exercised live).
+
 ## 2026-10-26 — v0.99.0 — Trusted folders on every device, home writes for default
 
 - **Stored home-relative.** In-home trusted folders are saved as `~/…` (`trustedFolderEntry`; profile add/remove, `config set agent.trusted_folders`), so one entry covers the same folder in every device's home; removal matches either form. `marifold doctor --fix` rewrites older absolute in-home entries (backup `profile.toml.bak-trusted-folders`). Folders outside home stay absolute and device-local.

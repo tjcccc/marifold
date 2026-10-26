@@ -183,13 +183,13 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
   }, []);
 
   const {
-    approvalHandler, resolveApproval, userInputHandler, resolveUserInput, trustFolderForProfile, cancelPrompts, beginRunApprovals,
+    approvalHandler, resolveApproval, userInputHandler, resolveUserInput, trustFolderForProfile, cancelPrompts, beginRunApprovals, sessionDirsRef, addSessionDir,
     sessionGrantsRef, sessionTrustedFoldersRef,
   } = useApprovals({ runtime, dispatch, stateRef, notify });
   const {
     runAgent, startTextRun, retryLast, stop, steeringCount, setSteeringCount, steeringRef,
     abortRef, runGenerationRef, pendingContextRef, pendingImagesRef,
-  } = useRuns({ runtime, dispatch, stateRef, deepRef, planNextRef, setPlanNext, notify, approvalHandler, userInputHandler, cancelPrompts, beginRunApprovals });
+  } = useRuns({ runtime, dispatch, stateRef, deepRef, planNextRef, setPlanNext, notify, approvalHandler, userInputHandler, cancelPrompts, beginRunApprovals, sessionDirsRef });
   const { pendingSkill, runSkill, fillSkillVariable } = useSkills({ runtime, dispatch, stateRef, planNextRef, setPlanNext, notify, runAgent });
 
   // Confirm a `--resume` launch with a notice below the replayed turns, so the
@@ -307,6 +307,7 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
       `Trusted folders: ${agent.trustedFolders.length ? agent.trustedFolders.join(', ') : '(none)'}`,
       `Session grants: ${grants.length ? grants.join(', ') : '(none)'}`,
       ...(sessionTrusted.length ? [`Trusted this session: ${sessionTrusted.join(', ')}`] : []),
+      ...(sessionDirsRef.current.length ? [`Added with /add-dir: ${sessionDirsRef.current.join(', ')}`] : []),
       '',
       'Writes outside the working dir and in-home trusted folders prompt; external paths always ask once.',
     ];
@@ -553,10 +554,11 @@ export function App({ runtime, loadedConfig, initial, workspaceCommand, deviceCo
       }).catch(error => notify(`Compaction failed: ${errorText(error)}`, 'error'));
     },
     trustFolder: trustFolderForProfile,
+    addDir: addSessionDir,
   }), [
     notify, stop, sideQuestion.ask, exit, openModelPicker, openProfilePicker, selectProfile, openSkills,
     showPermissions, showHelp, showStatus, copyLast, retryLast, showSessions, runDoctor, installSkill,
-    readFileCmd, setImage, remember, forget, deleteMemory, repaint, runtime, trustFolderForProfile, startTextRun, workspaceCommand, deviceCommand,
+    readFileCmd, setImage, remember, forget, deleteMemory, repaint, runtime, trustFolderForProfile, addSessionDir, startTextRun, workspaceCommand, deviceCommand,
   ]);
 
   const submittingRef = useRef(false);

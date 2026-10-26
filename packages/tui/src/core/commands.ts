@@ -53,6 +53,8 @@ export interface CommandContext {
   compactNow(): void | Promise<void>;
   /** Trust a folder for the active profile — file writes there won't prompt. */
   trustFolder(path: string): void | Promise<void>;
+  /** Trust a folder for this session's runs only. */
+  addDir(path: string): void | Promise<void>;
 }
 
 export interface CommandSpec {
@@ -135,6 +137,15 @@ const COMMANDS: CommandSpec[] = [
       const target = args.trim();
       if (!target) { ctx.notify('Usage: /trust-folder <path>', 'warn'); }
       else { return ctx.trustFolder(target); }
+    },
+  },
+  {
+    name: 'add-dir',
+    summary: 'Trust a folder for this session only: /add-dir <path> (scripts may write there).',
+    run: (ctx, args) => {
+      const target = args.trim();
+      if (!target) { ctx.notify('Usage: /add-dir <path>', 'warn'); }
+      else { return ctx.addDir(target); }
     },
   },
   {

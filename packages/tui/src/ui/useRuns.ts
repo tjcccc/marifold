@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from 'react';
 import type { Dispatch, MutableRefObject } from 'react';
 import { randomUUID } from 'crypto';
+import { trustedFolderEntry } from '@marifold/core';
 import type { AgentUsage, ApprovalDecision, ApprovalRequest, ImageInput, UserInputHandler } from '@marifold/core';
 import type { AppAction, AppState, NoticeTone } from '../core/appState.js';
 import type { TuiRuntime } from '../core/TuiRuntime.js';
@@ -19,6 +20,8 @@ interface RunOptions {
   cancelPrompts: () => void;
   /** Forget the previous run's "for this run" folder approvals. */
   beginRunApprovals: () => void;
+  /** `/add-dir` folders for this session (`~/…` or absolute). */
+  sessionDirsRef: MutableRefObject<string[]>;
 }
 
 /**
@@ -38,6 +41,7 @@ export function useRuns({
   userInputHandler,
   cancelPrompts,
   beginRunApprovals,
+  sessionDirsRef,
 }: RunOptions) {
   const abortRef = useRef<AbortController | null>(null);
   const steeringRef = useRef<string[]>([]);
@@ -48,6 +52,9 @@ export function useRuns({
   const runGenerationRef = useRef(0);
   // Last plain-text prompt, for `/retry`.
   const lastPromptRef = useRef<string | null>(null);
+
+  // The folder the TUI was launched in, home-relative when inside home.
+  const launchFolder = useRef(trustedFolderEntry(process.cwd())).current;
 
   // --- Runs ----------------------------------------------------------------
   const runAgent = useCallback(async (objective: string, options: { instructions?: string[]; userTurn?: string; lean?: boolean; forcePlan?: boolean; originalImages?: boolean } = {}) => {
@@ -82,6 +89,10 @@ export function useRuns({
         provider: current.provider,
         model: current.model,
         sessionId,
+        ...(sessionDirsRef.current.length > 0 ? { trustedFolders: [...sessionDirsRef.current] } : {}),
+        // A workspace host resolves `~/…` on the execution device; a local run
+        // already works in this directory.
+        ...(runtime.remote && launchFolder.startsWith('~/') ? { cwd: launchFolder } : {}),
         ...(options.instructions ? { instructions: options.instructions } : {}),
         ...(options.userTurn ? { userTurn: options.userTurn } : {}),
         ...(options.lean ? { lean: true } : {}),

@@ -135,12 +135,15 @@ export function createRunWorkspace(options: CreateRunWorkspaceOptions): RunWorks
   }
 
   const userHome = canonicalExistingPath(options.userHome ?? os.homedir());
-  const requestedCwd = canonicalExistingPath(options.cwd ?? process.cwd());
+  // `~/…` comes from another device (or a TUI) and means this device's home;
+  // a folder missing here falls back to the run's own work folder.
+  const cwdInput = options.cwd === '~' ? userHome : options.cwd?.startsWith('~/') ? path.join(userHome, options.cwd.slice(2)) : options.cwd;
+  const requestedCwd = canonicalExistingPath(cwdInput !== undefined && !isDirectory(cwdInput) ? workDir : cwdInput ?? process.cwd());
   // Never turn a broad/sensitive root into an implicit read-write capability.
   // A service launched from $HOME should work in the run scratch directory,
   // not silently grant the model the whole account.
   const appHome = options.runsDir ? path.dirname(canonicalExistingPath(options.runsDir)) : canonicalExistingPath(marifoldHome());
-  const cwd = isUnsafeBroadRoot(requestedCwd, userHome, appHome)
+  const cwd = isUnsafeBroadRoot(requestedCwd, userHome, appHome) || coversProtectedRoot(requestedCwd, userHome)
     ? canonicalExistingPath(workDir)
     : requestedCwd;
   const entries = resolveTrustedFolders(options.trustedFolders ?? [], userHome);

@@ -1,7 +1,8 @@
 import * as fs from 'fs';
+import * as os from 'os';
 import { type ArtifactTickets, artifactHeaders } from './ArtifactTickets';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { createArtifactPreview, artifactPreviewVariant, type ArtifactPreviewVariant, isPreviewableArtifact, MarifoldError, type RunApprovalAction, type RunRegistry, type RunStartInput } from '@marifold/core';
+import { acceptedRemoteTrustedFolders, createArtifactPreview, artifactPreviewVariant, HOME_TRUSTED_FOLDER, type ArtifactPreviewVariant, isPreviewableArtifact, MarifoldError, type RunApprovalAction, type RunRegistry, type RunStartInput } from '@marifold/core';
 import { SSE_HEADERS, startSseHeartbeat, writeSse, writeSseRetry } from './Sse';
 import {
   objectBody,
@@ -199,6 +200,11 @@ function parseRunStartInput(value: unknown): RunStartInput {
     ...optionalStringField('userTurn', body.userTurn),
     ...optionalNonNegativeIntegerField('replaceUserTurnIndex', body.replaceUserTurnIndex),
     ...optionalStringField('cwd', body.cwd),
+    // Session folders (`/add-dir`) from any of the owner's devices: `~/…` only,
+    // checked against this device's home; `~` (home writes) stays a profile setting.
+    ...(body.trustedFolders !== undefined
+      ? { trustedFolders: acceptedRemoteTrustedFolders(stringArray(body.trustedFolders, 'trustedFolders'), os.homedir()).filter(entry => entry !== HOME_TRUSTED_FOLDER) }
+      : {}),
     ...optionalBooleanField('deep', body.deep),
     ...optionalBooleanField('originalImages', body.originalImages),
     ...optionalBooleanField('forcePlan', body.forcePlan),

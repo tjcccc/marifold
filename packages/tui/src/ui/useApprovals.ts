@@ -1,6 +1,9 @@
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import { useCallback, useRef } from 'react';
 import type { Dispatch, MutableRefObject } from 'react';
-import { approvalSensitiveGrant, coveredByRunGrant, isInsideAny } from '@marifold/core';
+import { approvalSensitiveGrant, coveredByRunGrant, coversProtectedRoot, expandHome, isInsideAny, trustedFolderEntry } from '@marifold/core';
 import type { ApprovalDecision, ApprovalRequest, RunGrant, SudoResponse, ToolKind, UserInputHandler, UserInputSubmission } from '@marifold/core';
 import type { AppAction, AppState, NoticeTone } from '../core/appState.js';
 import type { TuiRuntime } from '../core/TuiRuntime.js';
@@ -118,6 +121,22 @@ export function useApprovals({ runtime, dispatch, stateRef, notify }: ApprovalOp
     }
   }, [runtime, notify]);
 
+  // `/add-dir`: trusted for this TUI session's runs only. Stored as `~/…` so it
+  // also applies when a run executes on another workspace device.
+  const sessionDirsRef = useRef<string[]>([]);
+  const addSessionDir = useCallback((folder: string) => {
+    const absolute = path.resolve(expandHome(folder));
+    let directory = false;
+    try { directory = fs.statSync(absolute).isDirectory(); } catch { /* reported below */ }
+    if (!directory) { return notify(`Not a folder: ${folder}`, 'warn'); }
+    const entry = trustedFolderEntry(absolute);
+    if (entry === '~') { return notify('Home is too broad for /add-dir; /trust-folder ~ lets scripts write in home without deleting.', 'warn'); }
+    if (coversProtectedRoot(absolute, os.homedir())) { return notify(`${entry} holds credentials, Marifold state or startup files; it cannot be trusted.`, 'warn'); }
+    if (runtime.remote && !entry.startsWith('~/')) { return notify('In a workspace, /add-dir accepts folders inside home only.', 'warn'); }
+    if (!sessionDirsRef.current.includes(entry)) { sessionDirsRef.current.push(entry); }
+    notify(`Added ${entry} for this session: scripts may write there.`, 'info');
+  }, [runtime, notify]);
+
   // "Always allow reading ~/.ssh": persist to the active profile + this session.
   const allowSensitiveRead = useCallback(async (grant: string) => {
     const profile = stateRef.current.profile;
@@ -151,5 +170,7 @@ export function useApprovals({ runtime, dispatch, stateRef, notify }: ApprovalOp
     beginRunApprovals,
     sessionGrantsRef,
     sessionTrustedFoldersRef,
+    sessionDirsRef,
+    addSessionDir,
   };
 }

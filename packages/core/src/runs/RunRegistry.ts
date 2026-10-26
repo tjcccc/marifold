@@ -96,7 +96,10 @@ export interface RunStartInput {
   maxIterations?: number;
   forcePlan?: boolean;
   lean?: boolean;
+  /** Working folder: absolute, or `~/…` resolved on the execution device. */
   cwd?: string;
+  /** Session-only trusted folders (`/add-dir`), validated `~/…` entries. */
+  trustedFolders?: string[];
 }
 
 /** Snapshot view of a run for list/get responses. `status` is the TaskStatus
@@ -472,6 +475,7 @@ export class RunRegistry {
         forcePlan: input.forcePlan,
         lean: input.lean,
         cwd: input.cwd,
+        trustedFolders: input.trustedFolders,
         executionId: run.id,
         tags: ['service'],
         signal: run.abort.signal,

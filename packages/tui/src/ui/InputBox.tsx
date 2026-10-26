@@ -1,4 +1,5 @@
 import { composerTokenBefore } from '@marifold/client';
+import { folderCompletion } from '../core/folderCompletion.js';
 import { inputTokens } from '../core/inputTokens.js';
 import type React from 'react';
 import { useContext, useEffect, useRef, useState } from 'react';
@@ -152,10 +153,12 @@ export function InputBox({
   const tokens = inputTokens(value);
   const activeToken = tokens.find(token => cursor > token.start && cursor <= token.end);
   const sigil = activeToken?.sigil ?? '';
-  const partial = activeToken?.name ?? '';
-  const pool = sigil === '/' ? commands : sigil === '$' ? skills : sigil === '@' ? devices : [];
-  const suggestions = sigil
-    ? pool.filter(item => item.name.startsWith(partial)).slice(0, mouseEnabled ? Math.max(1, Math.min(MENU_LIMIT, Math.floor(rows / 4))) : MENU_LIMIT)
+  // `/trust-folder <path>` and `/add-dir <path>` complete folders on this device.
+  const folder = sigil || cursor !== value.length ? undefined : folderCompletion(value);
+  const partial = folder?.partial ?? activeToken?.name ?? '';
+  const pool = folder ? folder.items : sigil === '/' ? commands : sigil === '$' ? skills : sigil === '@' ? devices : [];
+  const suggestions = sigil || folder
+    ? pool.filter(item => folder || item.name.startsWith(partial)).slice(0, mouseEnabled ? Math.max(1, Math.min(MENU_LIMIT, Math.floor(rows / 4))) : MENU_LIMIT)
     : [];
   const showMenu = menuOpen && suggestions.length > 0;
   const menuIdx = Math.min(menuIndex, Math.max(0, suggestions.length - 1));
@@ -172,6 +175,7 @@ export function InputBox({
 
   const insertNewline = () => set(`${value.slice(0, cursor)}\n${value.slice(cursor)}`, cursor + 1);
   const acceptSuggestion = (name: string) => {
+    if (folder) { return set(`${value.slice(0, folder.start)}${name}`); }
     if (!activeToken) { return; }
     const prefix = value.slice(0, activeToken.start);
     const token = `${sigil}${name}`;
@@ -206,7 +210,8 @@ export function InputBox({
       if (key.escape) { return setMenuOpen(false); }
       // Enter accepts the highlighted item unless it is already fully typed,
       // in which case it falls through and submits.
-      if (key.return && !key.shift && !key.meta && !key.ctrl && partial !== suggestions[menuIdx].name) {
+      // Folder paths accept with Tab only, so Enter submits the typed path.
+      if (!folder && key.return && !key.shift && !key.meta && !key.ctrl && partial !== suggestions[menuIdx].name) {
         return acceptSuggestion(suggestions[menuIdx].name);
       }
     }

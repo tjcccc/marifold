@@ -272,7 +272,7 @@ An agent run executes a multi-step objective with tools (file read/write, shell,
   "userTurn": "$summarize ~/notes",
   "profile": "default", "provider": "ollama", "model": "gemma4:e4b",
   "sessionId": "abc", "replaceUserTurnIndex": 1,
-  "cwd": "/Users/me/project", "deep": false,
+  "cwd": "/Users/me/project", "trustedFolders": ["~/tempfiles"], "deep": false,
   "originalImages": false,
   "images": [{ "data": "<base64>", "mediaType": "image/png" }, { "url": "https://..." }],
   "files": [{ "name": "v23.xlsx",
@@ -301,7 +301,7 @@ Local and base64 images are decoded and validated in core, limited to four and 1
   "eventCount": 0, "pendingApprovals": [], "pendingUserInputs": [] } }
 ```
 
-`status` is `running | blocked | completed | failed | cancelled`. Unset fields are omitted, not null: `taskId` appears once the first event lands, and `finishedAt` / `summary` / `usage` arrive with the terminal `done`. **Trust model:** `cwd`, configured in-home trusted folders, and the private run directories form the shell capability set. On macOS, shell network is denied and all other host writes remain blocked even after approval. External paths always require one-time approval; global/system runtime writes are refused. Auth + loopback is still an important access boundary — give tokens only to clients you'd let run the agent within those capabilities.
+`status` is `running | blocked | completed | failed | cancelled`. Unset fields are omitted, not null: `taskId` appears once the first event lands, and `finishedAt` / `summary` / `usage` arrive with the terminal `done`. `cwd` may be `~/…`, resolved in the execution device's home (a missing or protected folder falls back to the run's work folder). `trustedFolders` adds session-only trusted folders: `~/…` entries only, validated like profile folders; others are dropped. **Trust model:** `cwd`, configured in-home trusted folders, and the private run directories form the shell capability set. On macOS, shell network is denied and all other host writes remain blocked even after approval. External paths always require one-time approval; global/system runtime writes are refused. Auth + loopback is still an important access boundary — give tokens only to clients you'd let run the agent within those capabilities.
 
 | Route | Returns |
 |---|---|

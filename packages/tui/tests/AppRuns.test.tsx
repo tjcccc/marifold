@@ -1,3 +1,6 @@
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import { render } from 'ink-testing-library';
 import { describe, expect, it, vi } from 'vitest';
 import type { LoadedMarifoldConfig, MarifoldRuntime, SessionDetail, SessionSummary } from '@marifold/core';
@@ -239,6 +242,29 @@ describe('App run routing', () => {
     await vi.waitFor(() => expect(runSpy).toHaveBeenCalled());
     expect(runSpy.mock.calls[0][0]).toMatchObject({ objective: 'hello', forcePlan: true });
     unmount();
+  });
+
+  it('/add-dir trusts a folder for the runs of this session only', async () => {
+    const folder = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'marifold-add-dir-')));
+    const { runtime, runSpy } = makeRuntime();
+    const { stdin, lastFrame, unmount } = render(<App runtime={runtime} loadedConfig={config} initial={initial()} />);
+    try {
+      await delay();
+      stdin.write(`/add-dir ${folder}`);
+      await delay();
+      stdin.write('\r');
+      await vi.waitFor(() => expect(lastFrame()?.replace(/\s+/g, ' ')).toContain('Added'));
+      stdin.write('hello');
+      await delay();
+      stdin.write('\r');
+      await vi.waitFor(() => expect(runSpy).toHaveBeenCalled());
+      // A local run already works in the launch folder, so no cwd is sent.
+      expect(runSpy.mock.calls[0][0]).toMatchObject({ objective: 'hello', trustedFolders: [folder] });
+      expect(runSpy.mock.calls[0][0].cwd).toBeUndefined();
+    } finally {
+      unmount();
+      fs.rmSync(folder, { recursive: true, force: true });
+    }
   });
 
   it('/retry re-runs the last message (the prompt, not the "/retry" echo)', async () => {
