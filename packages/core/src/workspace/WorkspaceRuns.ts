@@ -110,7 +110,7 @@ export class WorkspaceRuns {
     const deviceName = (id: string) => devices.find(d => d.id === id)?.name ?? id;
     const requesting = deviceName(execution.originDeviceId);
     const contextInstructions = [
-      `Tools and paths belong to ${executionDeviceId === host.hostDeviceId ? 'the workspace host' : 'the selected execution device'}. For a named-device or host task, use list_devices to resolve the target and delegate_device if needed. For an existing file, use its published reference; do not recapture or recreate it merely to deliver it.`,
+      `Tools and paths belong to ${executionDeviceId === host.hostDeviceId ? `the workspace host "${deviceName(executionDeviceId)}"` : `the selected execution device "${deviceName(executionDeviceId)}"`}: run work there with your own tools, never delegate_device to it. For a task on another named device or the host, use list_devices to resolve the target and delegate_device if needed. For an existing file, use its published reference; do not recapture or recreate it merely to deliver it.`,
       ...(execution.originDeviceId !== executionDeviceId
         ? [`This request came from the device "${requesting}"; "my current device" or "this computer" means it.`]
         : []),
@@ -176,7 +176,11 @@ export class WorkspaceRuns {
             { workspaceId, senderDeviceId: execution.originDeviceId, hostDeviceId: host.hostDeviceId },
           );
           return this.delegate!(input.registryRunId!, child);
-        }, () => Boolean(registry.get('computer_exec'))),
+        }, () => Boolean(registry.get('computer_exec')), (selected) => {
+          const matches = this.manager.devices(workspaceId)
+            .filter((d) => d.id === selected || d.name === selected || ((selected === 'host' || selected === host.name) && d.host));
+          return matches.length === 1 && matches[0]!.id === executionDeviceId ? matches[0]!.name : undefined;
+        }),
       );
     }
     if (executionDeviceId === host.hostDeviceId) {

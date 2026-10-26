@@ -96,5 +96,10 @@ describe('agent computer', () => {
     const start = async () => { throw new Error('not used'); };
     expect(new DeviceDelegateTool(start).assessRisk().reason).not.toContain('agent computer');
     expect(new DeviceDelegateTool(start, () => true).assessRisk()).toMatchObject({ escalate: true, persistable: false, reason: expect.stringContaining('agent computer') });
+    // Delegating to the device the run already executes on is refused without a prompt.
+    const current = (device: string) => device === 'studio' ? 'studio' : undefined;
+    expect(new DeviceDelegateTool(start, () => false, current).assessRisk({ device: 'studio', objective: 'pwd' }))
+      .toMatchObject({ blocked: true, reason: expect.stringContaining('already executes on studio') });
+    expect(new DeviceDelegateTool(start, () => false, current).assessRisk({ device: 'host', objective: 'pwd' })).toMatchObject({ escalate: true });
   });
 });

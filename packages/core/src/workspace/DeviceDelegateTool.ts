@@ -27,15 +27,27 @@ export class DeviceDelegateTool implements AgentTool {
     },
   };
   /** `usesAgentComputer`: the run can also work on the agent computer, whose
-   * downloaded content could try to steer it, so the approval says so. */
+   * downloaded content could try to steer it, so the approval says so.
+   * `currentDevice`: names the device this run already executes on, when
+   * `device` refers to it; delegating there would only start a second run. */
   constructor(
     private readonly start: (device: string, objective: string) => Promise<DeviceChildRun>,
     private readonly usesAgentComputer: () => boolean = () => false,
+    private readonly currentDevice: (device: string) => string | undefined = () => undefined,
   ) {}
   summarizeCall(input: Record<string, JSONValue>): string {
     return `ask device ${String(input.device)} to ${String(input.objective).slice(0, 160)}`;
   }
-  assessRisk() {
+  assessRisk(input: Record<string, JSONValue> = {}) {
+    const current = typeof input.device === 'string' ? this.currentDevice(input.device) : undefined;
+    if (current) {
+      return {
+        escalate: false,
+        blocked: true,
+        persistable: false,
+        reason: `This run already executes on ${current}: use shell_exec and the file tools directly instead of delegate_device.`,
+      };
+    }
     return {
       escalate: true,
       persistable: false,

@@ -2,6 +2,12 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-10-26 — unreleased — No delegation to the run's own device
+
+- **Problem.** Office Mac TUI in Home with `/device use taojiachunstudio`: "run pwd with Python" made the model call `list_devices` then `delegate_device` to taojiachunstudio, the device the run already executed on. That started a second run behind a non-persistable approval, and the child would not inherit the launch folder.
+- **Fix.** Workspace run instructions now name the execution device and say to use its own tools, never `delegate_device` to it. `DeviceDelegateTool` takes a `currentDevice` resolver (same name/ID/host matching as delegation) and blocks such a call without a prompt, telling the model to use `shell_exec` and the file tools directly.
+- Validation: lint; core 637 (new blocked case in `AgentComputer.test.ts`); guest redeployed, `run-capacity.cjs 5` passed. Not reproduced live with a real model (harness model is mocked).
+
 ## 2026-10-26 — v0.100.0 — TUI `/add-dir`, workspace working folder, folder completion
 
 - **`/add-dir <path>`**: trusts a folder for this TUI session's runs only (`useApprovals.sessionDirsRef`, sent as `trustedFolders` on every run, stored `~/…` inside home). Refuses non-folders, home itself (points to `/trust-folder ~`), folders covering protected roots, and, in a workspace TUI, folders outside home. `/permissions` lists them.
