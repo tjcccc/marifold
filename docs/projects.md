@@ -1,6 +1,6 @@
 # Projects and Assets
 
-**Status: Projects implemented, unreleased (2026-10-27); Assets not yet.** The decisions below were agreed in discussion (2026-10-26). [`projects-plan.md`](projects-plan.md) tracks the slices and where the implementation deviates.
+**Status: Projects released in v0.103.0 (2026-10-27); Assets not yet.** The decisions below were agreed in discussion (2026-10-26). [`projects-plan.md`](projects-plan.md) tracks the slices and where the implementation deviates.
 
 A **Project** is a shared place for one piece of ongoing work: its own instructions, several conversations (sessions), the profiles invited to take part, and the files the work needs (**Assets**). Projects come before Artifacts because Artifacts, SkillApp results, and Workflow outputs all need a home wider than one session, and an Artifact is largely an HTML asset rendered live (see [Relation to Artifacts](#relation-to-artifacts)).
 

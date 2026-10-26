@@ -336,6 +336,10 @@
   color: var(--text);
 }
 
+.speakerBlock {
+  min-width: 0;
+}
+
 /* Inline "Thinking…" for a tool-less run — no card chrome, shimmer text. */
 .thinking {
   display: flex;

@@ -37,19 +37,19 @@ export function useGlobalDeep(client: ApiClient, onError: (error: unknown) => vo
  * (older service, model outside the list) counts as available.
  */
 export function useDeepAvailable(client: ApiClient, modelChoice: string | undefined, settings: ProfileSettings | undefined): boolean {
-  const [models, setModels] = useState<{ fallback?: string; deep?: string[] }>({});
+  const [models, setModels] = useState<{ fallback?: string; options?: string[]; deep?: string[] }>({});
   useEffect(() => {
     let cancelled = false;
     getModels(client)
       .then(view => {
         if (cancelled) { return; }
         const fallback = view.default.provider && view.default.model ? `${view.default.provider}/${view.default.model}` : undefined;
-        setModels({ fallback, deep: view.deepOptions });
+        setModels({ fallback, options: view.options, deep: view.deepOptions });
       })
       .catch(() => undefined);
     return () => { cancelled = true; };
   }, [client]);
   const pinned = settings?.provider && settings.model ? `${settings.provider}/${settings.model}` : undefined;
   const model = modelChoice ?? pinned ?? models.fallback;
-  return !models.deep || !model || models.deep.includes(model);
+  return !models.deep || !model || !models.options?.includes(model) || models.deep.includes(model);
 }

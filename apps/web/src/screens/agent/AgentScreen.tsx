@@ -13,8 +13,8 @@ import { MobileWorkspaceNavigation } from '../../components/MobileWorkspaceNavig
 import { ResizableSidebar } from '../../components/ResizableSidebar';
 import { SidebarSystemFooter } from '../../components/SidebarChrome';
 import type { WorkspaceView } from '../../components/WorkspaceTabs';
-import { PROJECT_COMMANDS, WEB_COMMANDS } from '../../lib/commandSyntax';
-import { previewProjectRoute } from '../../lib/projectRouting';
+import { PROJECT_COMMANDS, parseCommand, WEB_COMMANDS } from '../../lib/commandSyntax';
+import { commandProfiles, previewProjectRoute } from '../../lib/projectRouting';
 import type { ChatRoute, Route } from '../../lib/route';
 import { MOBILE_QUERY, useMediaQuery } from '../../lib/useMediaQuery';
 import type { ThemePreference } from '../../theme/theme';
@@ -161,11 +161,11 @@ export function AgentScreen(props: AgentScreenProps) {
     ? mobileAppOpen && appsCatalog.selectedName !== undefined
     : routeOwner !== undefined && controller.profileName !== undefined && mobileConversationOpen;
   const profileNames = useMemo(() => controller.profiles.map(profile => profile.name), [controller.profiles]);
-  const roster = useMemo(() => project?.members.map(name => ({
+  const profileSuggestion = (name: string) => ({
     name,
     usage: `@${name}`,
-    description: `${controller.profiles.find(profile => profile.name === name)?.displayName ?? name}${name === project.lead ? ' · Lead' : ''}`,
-  })), [controller.profiles, project]);
+    description: `${controller.profiles.find(profile => profile.name === name)?.displayName ?? name}${name === project?.lead ? ' · Lead' : ''}`,
+  });
   const sidebarFooter = mobile ? (
     <MobileWorkspaceNavigation
       active={appsView ? 'apps' : projectView ? 'projects' : 'agent'}
@@ -445,9 +445,13 @@ export function AgentScreen(props: AgentScreenProps) {
               skills={controller.skills}
               devices={controller.devices}
               {...(project ? {
-                roster,
+                mentions: (text: string) => {
+                  const only = commandProfiles(text, project, profileNames);
+                  return only ? only.map(profileSuggestion) : [...project.members.map(profileSuggestion), ...controller.devices];
+                },
                 commands: [...WEB_COMMANDS, ...PROJECT_COMMANDS],
-                recipient: (text: string) => previewProjectRoute(text, project, controller.floor, profileNames),
+                // A `/command` is not a message: nothing routes it.
+                recipient: (text: string) => parseCommand(text) ? undefined : previewProjectRoute(text, project, controller.floor, profileNames),
                 onInvite: (name: string) => void controller.inviteToProject(name),
               } : {})}
               enterSubmits={!mobile}

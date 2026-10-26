@@ -1,4 +1,5 @@
 import { matchMention, mentionTokens } from '@marifold/client';
+import { parseCommand } from './commandSyntax';
 
 /**
  * Who answers a project message, previewed in the composer by the host's own
@@ -38,6 +39,17 @@ export function previewProjectRoute(text: string, project: ProjectRoster, floor:
 /** The profile a message that addresses no one goes to. */
 export function answeringProfile(project: ProjectRoster, floor: string | undefined): string {
   return floor !== undefined && project.members.includes(floor) ? floor : project.lead;
+}
+
+/** The profiles a project command takes, for its `@` completion: `/invite`
+ * those off the roster, `/dismiss` the roster but its Lead. undefined for
+ * anything else. */
+export function commandProfiles(text: string, project: ProjectRoster, profileNames: readonly string[]): string[] | undefined {
+  switch (parseCommand(text)?.name) {
+    case 'invite': return profileNames.filter(name => !project.members.includes(name));
+    case 'dismiss': return project.members.filter(name => name !== project.lead);
+    default: return undefined;
+  }
 }
 
 /** The text after its leading roster mentions (`@painter, $skill …` → `$skill …`),

@@ -141,6 +141,14 @@ describe('markdown', () => {
     ]);
   });
 
+  it('keeps matched brackets in link text, as CommonMark does', () => {
+    expect(parseInline('Map.[[1]](https://you.co/jeju/) [a] b')).toEqual([
+      { type: 'text', text: 'Map.' },
+      { type: 'link', href: 'https://you.co/jeju/', children: [{ type: 'text', text: '[1]' }] },
+      { type: 'text', text: ' [a] b' },
+    ]);
+  });
+
   it('parses Markdown hard breaks without promoting ordinary soft breaks', () => {
     const blocks = parseMarkdown('おっ、即決ありがとう笑  \nいいよ、結婚しよ♡\nでも冗談だよ');
     expect(blocks).toHaveLength(1);

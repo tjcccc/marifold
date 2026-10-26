@@ -32,8 +32,9 @@ export interface InputBarProps {
   /** Available skills for the `$` autocomplete (from GET /v1/skills). */
   skills?: SkillHint[];
   devices?: Suggestion[];
-  /** A project's profiles, offered before devices in the `@` autocomplete. */
-  roster?: Suggestion[];
+  /** The `@` suggestions for the text as typed (a project's profiles, then
+   * devices); the devices alone when absent. */
+  mentions?: (text: string) => Suggestion[];
   /** The `/` commands offered; the Web set by default. */
   commands?: Suggestion[];
   /** Who answers the text as typed (a project's routing preview). A profile
@@ -79,7 +80,7 @@ export function InputBar(props: InputBarProps) {
   }, [props.draftKey]);
 
   const menu = menuQuery(text, caret);
-  const mentions = [...(props.roster ?? []), ...(props.devices ?? [])];
+  const mentions = props.mentions?.(text) ?? props.devices ?? [];
   const source: Suggestion[] = menu?.sigil === '/' ? (props.commands ?? WEB_COMMANDS) : menu?.sigil === '@' ? mentions : (props.skills ?? []);
   const recipient = props.recipient?.(text);
   const matches = menu ? source.filter(item => (menu.sigil === '@' ? item.name.replace(/^"|"$/g, '').toLowerCase().startsWith(menu.query.toLowerCase()) : item.name.startsWith(menu.query))).slice(0, MAX_SUGGESTIONS) : [];
@@ -295,7 +296,7 @@ export function InputBar(props: InputBarProps) {
       <div className={styles.bar}>
         <div className={styles.inputWrap}>
           {menuOpen ? (
-            <ul className={styles.menu} role="listbox" aria-label={sigil === '/' ? 'Commands' : sigil === '@' ? (props.roster ? 'Profiles and devices' : 'Devices') : 'Skills'}>
+            <ul className={styles.menu} role="listbox" aria-label={sigil === '/' ? 'Commands' : sigil === '@' ? (props.mentions ? 'Profiles and devices' : 'Devices') : 'Skills'}>
               {matches.map((item, index) => (
                 <li
                   key={item.name}

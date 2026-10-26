@@ -152,9 +152,6 @@ export function ProjectSheet({ client, project, profiles, onSaved, onDeleted, on
             onKeyDown={event => { if (event.key === 'Enter') { void save(); } }}
           />
         </div>
-        {icon || (icon === undefined && project?.icon) ? (
-          <button type="button" className={styles.linkButton} onClick={() => setIcon(null)}>Use the folder icon</button>
-        ) : null}
 
         {project ? (
           <>
@@ -222,6 +219,9 @@ export function ProjectSheet({ client, project, profiles, onSaved, onDeleted, on
             ) : (
               <button type="button" className={styles.deleteLink} disabled={busy} onClick={() => setConfirmDelete(true)}>Delete project</button>
             )
+          ) : null}
+          {!confirmDelete && (icon || (icon === undefined && project?.icon)) ? (
+            <button type="button" className={styles.linkButton} disabled={busy} onClick={() => setIcon(null)}>Remove icon</button>
           ) : null}
           <span className={styles.spacer} />
           <button type="button" className={styles.cancel} onClick={onClose} disabled={busy}>Cancel</button>

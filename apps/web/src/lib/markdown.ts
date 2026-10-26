@@ -213,8 +213,9 @@ function listItem(line: string): { ordered: boolean; text: string } | undefined 
   return undefined;
 }
 
+// Link text may hold matched brackets, as in CommonMark: `[[1]](url)` reads "[1]".
 const INLINE_PATTERN =
-  /((?: {2,}|\\)\n)|(`[^`]+`)|(\*\*[^*]+\*\*)|(\*[^*\s][^*]*\*)|(\[[^\]]+\]\(((?:https?:\/\/|sandbox:)[^\s)]+)(?:\s+"(source)")?\))/;
+  /((?: {2,}|\\)\n)|(`[^`]+`)|(\*\*[^*]+\*\*)|(\*[^*\s][^*]*\*)|(\[((?:[^[\]]|\[[^[\]]*\])+)\]\(((?:https?:\/\/|sandbox:)[^\s)]+)(?:\s+"(source)")?\))/;
 
 export function parseInline(text: string): InlineNode[] {
   const nodes: InlineNode[] = [];
@@ -238,9 +239,8 @@ export function parseInline(text: string): InlineNode[] {
     } else {
       // sandbox: targets are inert unless the renderer resolves them through
       // an artifact published for the same run.
-      const label = token.slice(1, token.indexOf(']'));
-      const href = match[6];
-      nodes.push({ type: 'link', href, ...(match[7] && /^https?:/.test(href) ? { citation: true } : {}), children: parseInline(label) });
+      const href = match[7];
+      nodes.push({ type: 'link', href, ...(match[8] && /^https?:/.test(href) ? { citation: true } : {}), children: parseInline(match[6]) });
     }
     rest = rest.slice(match.index + token.length);
   }

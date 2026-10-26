@@ -350,23 +350,21 @@ function ThreadItemView({
         if (isTrivialRun(run)) { return null; }
         if (run.status === 'running') {
           if (proseRuns.has(run.runId)) { return null; }
-          return (
+          return withSpeaker(speaker, (
             <div className={styles.thinking}>
-              {speaker}
               <span className={styles.thinkingLabel}>Thinking…</span>
               <button className={styles.cancelLink} onClick={() => onCancelRun(run.runId)}>
                 Cancel
               </button>
             </div>
-          );
+          ));
         }
         // failed / cancelled / blocked without activity → the card's status
         // footer is still the only place that tells the user what happened.
       }
       return (
         <>
-          {speaker}
-          <RunCard
+          {withSpeaker(speaker, <RunCard
             run={run}
             onCancel={() => onCancelRun(run.runId)}
             onAnswer={(requestId, action, sudoResponse) => onAnswerApproval(run.runId, requestId, action, sudoResponse)}
@@ -378,12 +376,17 @@ function ThreadItemView({
                 <AssistantMarkdown source={detail.markdown} muted run={run} client={client} />
               </div>
             ) : null)}
-          </RunCard>
+          </RunCard>)}
           {!finalItems.has(run.runId) && run.status !== 'running' ? <RunArtifacts client={client} runId={run.runId} artifacts={run.artifacts} /> : null}
         </>
       );
     }
   }
+}
+
+/** A speaker header kept with the block it heads, outside the thread's item gap. */
+function withSpeaker(speaker: ReactNode | undefined, content: ReactNode): ReactNode {
+  return speaker ? <div className={styles.speakerBlock}>{speaker}{content}</div> : content;
 }
 
 function AssistantMarkdown({
