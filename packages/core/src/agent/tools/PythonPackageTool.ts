@@ -3,6 +3,7 @@ import {
   ensurePythonEnvironment,
   findExecutable,
   pythonInVenv,
+  pythonInstallRoots,
   runScopedProcess,
 } from '../ScopedProcess';
 import type {
@@ -97,7 +98,7 @@ export class PythonPackageTool implements AgentTool {
       // Package build hooks are untrusted third-party code. While network is
       // enabled they may only see the disposable environment, never attached
       // files, the selected repository, or trusted host folders.
-      readRoots: installerRoots,
+      readRoots: [...installerRoots, ...pythonInstallRoots(ctx.workspace)],
       writeRoots: installerRoots,
       network: true,
       timeoutMs: 180_000,

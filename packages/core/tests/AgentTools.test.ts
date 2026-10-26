@@ -1,3 +1,4 @@
+import * as http from 'http';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -19,6 +20,7 @@ import { SkillManagementTool } from '../src/agent/tools/SkillManagementTool';
 import { SkillAppContextTool, SkillAppManagementTool } from '../src/agent/tools/SkillAppTools';
 import { AppStore } from '../src/app/AppStore';
 import { compileSkillApp } from '../src/app/SkillAppCompiler';
+import { preApproved } from '../src/agent/ApprovalPolicy';
 import { createRunWorkspace } from '../src/agent/RunWorkspace';
 import { capToolOutput, type ToolExecutionContext, ToolRegistry } from '../src/agent/ToolRegistry';
 import { SkillStore } from '../src/skill/SkillStore';
@@ -862,18 +864,50 @@ describe('ShellExecTool', () => {
     expect(fs.existsSync(outside)).toBe(false);
   });
 
-  it.skipIf(process.platform !== 'darwin')('keeps ungranted user-home files private with user-home shell semantics', async () => {
+  it.skipIf(process.platform !== 'darwin')('reads home like the file tools but never sensitive roots, symlinks into them, or the network', async () => {
     const home = tempDir();
     const dir = path.join(home, 'workspace');
     fs.mkdirSync(dir);
-    fs.writeFileSync(path.join(home, 'private.txt'), 'must-stay-private');
-    const result = await new ShellExecTool().execute(
-      { command: 'cat ~/private.txt' },
-      scopedContext(dir),
-    );
-
-    expect(result.isError).toBe(true);
-    expect(result.content).not.toContain('must-stay-private');
+    fs.mkdirSync(path.join(home, 'tempfiles', 'invoices'), { recursive: true });
+    fs.writeFileSync(path.join(home, 'tempfiles', 'invoices', 'a.csv'), 'amount\n129.90\n');
+    fs.mkdirSync(path.join(home, '.ssh'));
+    fs.writeFileSync(path.join(home, '.ssh', 'id_test'), 'secret-key');
+    fs.mkdirSync(path.join(home, '.marifold', 'profiles'), { recursive: true });
+    fs.writeFileSync(path.join(home, '.marifold', 'profiles', 'p.toml'), 'secret-state');
+    fs.symlinkSync(path.join(home, '.ssh', 'id_test'), path.join(home, 'tempfiles', 'link'));
+    const server = http.createServer((_request, response) => response.end('reached-host'));
+    await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+    const port = (server.address() as { port: number }).port;
+    const ctx = scopedContext(dir);
+    const tool = new ShellExecTool();
+    const run = (command: string) => tool.execute({ command }, ctx);
+    try {
+      const risk = tool.assessRisk({ command: 'cat ~/tempfiles/invoices/a.csv' }, ctx);
+      expect(risk).toEqual({ escalate: false, routine: true });
+      // Scoped runs need no prompt, but a profile with shell = "deny" still blocks them.
+      expect(preApproved(risk, 'ask', { sensitiveReadGrants: [] })).toBe(true);
+      expect(preApproved(risk, 'deny', { sensitiveReadGrants: [] })).toBe(false);
+      const routine = await run('cat ~/tempfiles/invoices/a.csv > "$MARIFOLD_OUTPUT_DIR/total.txt" && cat "$MARIFOLD_OUTPUT_DIR/total.txt"');
+      expect(routine.isError, routine.content).toBeFalsy();
+      expect(routine.content).toContain('129.90');
+      for (const command of [
+        'cat ~/.ssh/id_test',
+        'cat ~/tempfiles/link',
+        'cat ~/.marifold/profiles/p.toml',
+        // A child process inherits the sandbox.
+        "sh -c 'cat ~/.ssh/id_test'",
+        `curl -s --max-time 3 http://127.0.0.1:${port}/`,
+      ]) {
+        const result = await run(command);
+        expect(result.isError, command).toBe(true);
+        expect(result.content, command).not.toMatch(/secret-key|secret-state|reached-host/);
+      }
+      // Writes outside the run's folders stay refused even inside home.
+      expect((await run('printf x > ~/tempfiles/new.txt')).isError).toBe(true);
+      expect(fs.existsSync(path.join(home, 'tempfiles', 'new.txt'))).toBe(false);
+    } finally {
+      server.close();
+    }
   });
 
   it('fails closed without an isolated run workspace', async () => {

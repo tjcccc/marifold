@@ -2,6 +2,15 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-10-26 — v0.98.0 — Scoped Python without prompts
+
+- **Problem.** On the office Mac mini every Python script asked for approval, and scoped Python could not work at all: the sandbox denied the home (`uv venv` failed with "failed to read directory ~/.local/share/uv/python: Operation not permitted"), so the agent escalated routine data processing to full access, which asks per call.
+- **Sandbox reads** (`ScopedProcess.macSandboxProfile`): when the caller does not narrow reads, the home is readable except `sensitiveHostRoots` (credential stores, browser profiles, `~/.marifold`), denied at both the given and the real path; later rules reopen the run directories and trusted folders. Writes are unchanged (cwd, trusted folders, run dirs) because sandbox writes get no Trash copy. `pythonInstallRoots` adds uv's managed Python (`UV_PYTHON_INSTALL_DIR` / XDG data / the venv's `pyvenv.cfg` home) to the package tool's narrow read set.
+- **Approval:** scoped `shell_exec` returns `routine: true`, so it runs without a prompt (unattended too) unless the profile's shell mode is `deny`. External cwd roots and full access still ask per call. Python commands only create the uv venv when `uv` exists; system `python3` still runs without it.
+- Run instructions and the tool description: scoped shell reads home except sensitive roots, has no network, and a failed scoped command is reported instead of retried with `access=full`.
+- Validation: typecheck; core tests for AgentTools, RunWorkspace, FilePolicy, DeviceExecution (69). The new scoped test covers a home CSV read, denied `~/.ssh`/`~/.marifold`, a symlink into `~/.ssh`, a child `sh -c`, a local HTTP request, a home write, and the `ask`/`deny` pre-approval. Live from the built dist with the real home on this Mac: Python in the run's uv venv listed `~/Documents` and `~/Downloads`, `~/.ssh`, `~/.marifold/config.toml` and `~/Library/Keychains` were denied, a write to `~` was refused, and writing the output folder worked.
+- Limits: Linux still has no scoped sandbox (fails closed). Not verified on the office Mac mini or through a workspace guest.
+
 ## 2026-10-26 — v0.97.0 — File permissions for one owner
 
 - **Problem.** A run on the office Mac mini (a guest of the Home workspace) asked for every file call: `WorkspaceExecutor` forced `escalate`/`persistable: false` on all guest calls, host profile settings could not apply to guests, and with no folder/rename tools the agent fell back to full-access shell (per-call by design). Turning on the profile's write permission changed nothing, and the agent wrongly reported that no prompt appeared.

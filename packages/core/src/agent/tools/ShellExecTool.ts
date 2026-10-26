@@ -1,5 +1,5 @@
 import type { JSONValue } from '@priest-ai/core';
-import { ensurePythonEnvironment, runScopedProcess } from '../ScopedProcess';
+import { ensurePythonEnvironment, findExecutable, runScopedProcess } from '../ScopedProcess';
 import type { DeviceExecution } from '../DeviceExecution';
 import {
   type AgentTool,
@@ -9,17 +9,19 @@ import {
   type ToolRiskAssessment,
 } from '../ToolRegistry';
 
+const PYTHON_COMMAND = /(?:^|[\s;&|(`])(?:python(?:3(?:\.\d+)?)?|pip3?|uv)(?=\s|$|[;&|)`])/;
+
 export class ShellExecTool implements AgentTool {
   constructor(private readonly device?: DeviceExecution) {}
   readonly kind = 'shell' as const;
   readonly definition = {
     name: 'shell_exec',
     description: [
-      'Run a shell command. Default access=scoped uses the isolated workspace and a 60-second timeout.',
+      'Run a shell command. Default access=scoped runs in a sandbox without asking: it reads the user home except credential stores, browser profiles and marifold state, writes only the working directory, configured trusted folders and private run directories, has no network, and stops after 60 seconds.',
       'Explicit access=full requires device-local opt-in and approval for every call. It runs with the Marifold account filesystem, network, process, environment and application permissions, not automatic administrator rights.',
       'Full-access commands return a durable job ID immediately; use shell_job_status to retrieve completion. They continue after chat cancellation or bridge disconnection, with a 10-minute limit. Never blindly repeat a command after a lost response; inspect recent jobs first.',
       'When to use: run a focused test, build, formatter, program, or filesystem/process operation that dedicated tools cannot perform.',
-      'When NOT to use: scoped text reads/writes or isolated Python package installs that dedicated tools support, or unnecessary demonstration commands. Scoped commands cannot access the network. Use full access only when the requested device operation needs account-level capabilities.',
+      'When NOT to use: scoped text reads/writes or isolated Python package installs that dedicated tools support, or unnecessary demonstration commands. Scoped commands cannot access the network. Use full access only when the requested device operation needs account-level capabilities, never as a fallback when a scoped command fails during routine processing.',
       'Scoped access can write only the working directory, configured trusted folders, and private run directories—even after approval. Check shell_job_status for the device mode before requesting full access.',
       'For an explicit output file elsewhere, use write_file instead of shell redirection, and copy_file instead of cp or mv to reach files outside those folders (including earlier runs\' outputs).',
     ].join(' '),
@@ -63,7 +65,8 @@ export class ShellExecTool implements AgentTool {
         targetPath: ctx.workspace.externalRoots[0],
       };
     }
-    return { escalate: false };
+    // Enforced by the sandbox, so routine: no prompt unless shell is denied.
+    return { escalate: false, routine: true };
   }
 
   async execute(input: Record<string, JSONValue>, ctx: ToolExecutionContext): Promise<ToolExecutionResult> {
@@ -86,7 +89,9 @@ export class ShellExecTool implements AgentTool {
         isError: true,
       };
     }
-    if (/\b(?:python(?:3(?:\.\d+)?)?|pip3?|uv)\b/.test(command)) {
+    // Only commands that run Python get the run's environment. Without uv the
+    // system python3 still runs; package installs report that uv is missing.
+    if (PYTHON_COMMAND.test(command) && findExecutable(process.platform === 'win32' ? 'uv.exe' : 'uv')) {
       const environmentError = await ensurePythonEnvironment(ctx.workspace, ctx.outputLimit, ctx.signal);
       if (environmentError) { return environmentError; }
     }

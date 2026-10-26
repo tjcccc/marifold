@@ -2,7 +2,7 @@ import { spawn } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 import { capToolOutput, type ToolExecutionResult } from './ToolRegistry';
-import { isInside, type RunWorkspace } from './RunWorkspace';
+import { isInside, type RunWorkspace, sensitiveHostRoots } from './RunWorkspace';
 
 const DEFAULT_TIMEOUT_MS = 60_000;
 const MAX_BUFFER_BYTES = 10 * 1024 * 1024;
@@ -165,6 +165,23 @@ export async function ensurePythonEnvironment(
   return result.isError ? result : undefined;
 }
 
+/** Read-only folders a Python interpreter needs: uv's managed installations
+ * and the base installation the run's environment points to. Both may live
+ * under home, which a narrowed sandbox otherwise hides; they hold no secrets. */
+export function pythonInstallRoots(workspace: RunWorkspace): string[] {
+  const dataHome = process.env.XDG_DATA_HOME || path.join(workspace.userHome, '.local', 'share');
+  const roots = [process.env.UV_PYTHON_INSTALL_DIR || path.join(dataHome, 'uv', 'python')];
+  try {
+    const config = fs.readFileSync(path.join(workspace.venvDir, 'pyvenv.cfg'), 'utf8');
+    const home = /^home\s*=\s*(.+)$/m.exec(config)?.[1]?.trim();
+    // `home` is the interpreter's bin folder; its parent is the installation.
+    if (home) { roots.push(path.dirname(canonicalExisting(home))); }
+  } catch {
+    // No environment yet.
+  }
+  return [...new Set(roots.filter(root => fs.existsSync(root)).map(canonicalExisting))];
+}
+
 export function pythonInVenv(workspace: RunWorkspace): string {
   return process.platform === 'win32'
     ? path.join(workspace.venvDir, 'Scripts', 'python.exe')
@@ -190,9 +207,10 @@ function sandboxInvocation(options: ScopedProcessOptions): { executable: string;
 }
 
 /**
- * Seatbelt profile: leave the platform runtime readable, but hide user data
- * roots and make the whole host read-only except the explicit run capabilities.
- * Specific root allows override the broader home/Volumes denies.
+ * Seatbelt profile: leave the platform runtime readable and make the whole
+ * host read-only except the explicit run capabilities. Other accounts and
+ * external volumes stay hidden; the user's home is readable except sensitive
+ * roots unless the caller narrows reads. Later rules override earlier ones.
  */
 export function macSandboxProfile(
   workspace: RunWorkspace,
@@ -201,6 +219,13 @@ export function macSandboxProfile(
   capabilities: { readRoots?: string[]; writeRoots?: string[] } = {},
 ): string {
   const executablePath = canonicalExisting(executable);
+  // A default (unnarrowed) sandbox reads home like the file tools do, minus
+  // credential stores, browser profiles and marifold state. Narrowed sandboxes,
+  // such as package installs with network, see only their explicit roots.
+  const broadHomeReads = capabilities.readRoots === undefined;
+  const sensitiveReads = broadHomeReads
+    ? uniquePaths(sensitiveHostRoots(workspace.userHome).flatMap(root => [path.resolve(root), canonicalExisting(root)]))
+    : [];
   const readRoots = uniqueCanonical([
     ...(capabilities.readRoots ?? workspace.readRoots),
     ...pathDirectories(workspace, capabilities.readRoots === undefined),
@@ -239,6 +264,9 @@ export function macSandboxProfile(
     `(deny file-read* (subpath ${schemeString(workspace.userHome)}))`,
     `(deny file-read* (subpath ${schemeString('/Users')}))`,
     `(deny file-read* (subpath ${schemeString('/Volumes')}))`,
+    ...(broadHomeReads ? [`(allow file-read* (subpath ${schemeString(workspace.userHome)}))`] : []),
+    // Seatbelt checks real paths, so a symlink into one of these is refused too.
+    ...sensitiveReads.map(root => `(deny file-read* (subpath ${schemeString(root)}))`),
     `(allow file-read* (literal ${schemeString(executablePath)}))`,
     ...ancestorAllows,
     ...readAllows,
@@ -252,8 +280,8 @@ function scopedEnvironment(workspace: RunWorkspace): NodeJS.ProcessEnv {
     ? path.join(workspace.venvDir, 'Scripts')
     : path.join(workspace.venvDir, 'bin');
   return {
-    // Preserve normal shell path semantics without exposing the account:
-    // Seatbelt still denies the broad home and re-opens only explicit roots.
+    // Preserve normal shell path semantics; Seatbelt still hides sensitive
+    // roots and confines writes to the run's capabilities.
     HOME: workspace.userHome,
     USERPROFILE: workspace.userHome,
     TMPDIR: workspace.tempDir,
@@ -298,6 +326,10 @@ function pathDirectories(workspace: RunWorkspace, includeUserDirectories: boolea
         return false;
       }
     });
+}
+
+function uniquePaths(values: string[]): string[] {
+  return [...new Set(values)];
 }
 
 function uniqueCanonical(values: string[]): string[] {
