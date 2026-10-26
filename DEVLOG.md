@@ -2,6 +2,12 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-10-26 — Projects and Assets design
+
+- Drafted `docs/projects.md` from discussion with the user: Projects (instructions layered over each profile's own, a roster managed with `/invite @profile` and `/dismiss @profile`, a Lead that answers by default, a folder icon by default), `@` routing (roster profiles before devices, no name collisions, the last addressed profile keeps answering, several mentions answer one after another with no chain reactions), project-only Assets (stored with versions under a configurable 100 MB default, or linked as `@device/path` by device id, never counted), a short manifest instead of content in model context, the Web layout, and **Move to project…** (ChatGPT-style menu) for ordinary sessions. Group chat and Teams stay deferred.
+- Roadmap: Projects and Assets now come before Artifacts, which become HTML assets rendered in a sandbox.
+- Docs only; version unchanged.
+
 ## 2026-10-26 — v0.102.0 — Roadmap reset, API contract groundwork
 
 - **Direction.** The native macOS/iOS app is postponed: the Web UI stays the primary client until Artifacts, SkillApps, and Workflows are complete there, so product surface is built for one platform at a time. `docs/roadmap.md` now orders Next as Artifacts → SkillApp expansion → Workflows, with the Web backlog, bridge setup, the API contract, and alias profiles; Apple clients moved to Deferred with their prerequisites (`/v1/events` push, one-step phone pairing, generated Swift models).

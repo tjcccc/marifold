@@ -25,9 +25,10 @@ Direction and milestone ladder. History lives in `DEVLOG.md` (newest-first); thi
 
 ## Next
 
-The Web UI is the primary client until SkillApps, Workflows, and Artifacts are complete there, so new product surface is built for one platform at a time. In order:
+The Web UI is the primary client until Projects, Artifacts, SkillApps, and Workflows are complete there, so new product surface is built for one platform at a time. In order:
 
-- **Artifacts**: model-made live pages (HTML or small apps) rendered in a sandboxed panel beside the conversation, updated in place as new versions by later replies. Its safe rendering surface is shared with SkillApps (design previews, typed results, file export), and an artifact can later become a SkillApp.
+- **Projects and Assets**: shared places for ongoing work with project instructions, invited profiles addressed by `@` (a Lead answers by default), and stored or device-linked assets that later work builds on; design in [`projects.md`](projects.md). They come first because Artifacts, SkillApp results, and Workflow outputs need a home wider than one session.
+- **Artifacts**: model-made live pages (HTML or small apps), stored as project assets and rendered in a sandboxed panel beside the conversation, updated in place as new versions by later replies. Its safe rendering surface is shared with SkillApps (design previews, typed results, file export), and an artifact can later become a SkillApp.
 - **SkillApp expansion**: conditional visibility, repeaters, typed artifacts, richer design/canvas previews, controlled file export, `$app-creator`, and approval-aware effectful actions.
 - **Workflow composition**: chain native profiles, Skills, Apps, models, and external-agent aliases into multi-step flows; the living direction and open questions are in [`workflow-plan.md`](workflow-plan.md).
 - **Web UI backlog**: `/v1/events` push channel to replace 10s run polling and profile rename/delete UI.
