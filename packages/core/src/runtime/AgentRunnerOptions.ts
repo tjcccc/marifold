@@ -10,6 +10,8 @@ export interface AgentRunnerOptions {
   readOnlyFolders?: string[];
   readOnlyFiles?: string[];
   allowExternalReadOnlyFolders?: boolean;
+  /** A project's links on this device; see `CreateRunWorkspaceOptions.linkedFolders`. */
+  linkedFolders?: string[];
   /** Limits on this device's Marifold state for a run requested from another
    * workspace device. Local runs have no hard block there. */
   stateAccess?: AgentRunnerDeps['stateAccess'];

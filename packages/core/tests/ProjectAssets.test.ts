@@ -1,19 +1,22 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { MarifoldRuntime, planProjectTurn } from '../src';
+import { MarifoldRuntime, planProjectTurn, resolveAgentConfig } from '../src';
 import type { AgentEvent } from '../src/agent/AgentEvents';
 import { runArtifactId } from '../src/agent/RunArtifacts';
 import type { RunWorkspace } from '../src/agent/RunWorkspace';
 import type { ToolExecutionContext } from '../src/agent/ToolRegistry';
 import type { MarifoldConfig } from '../src/config/ConfigSchema';
-import { deviceRunOutputs, hostRunOutputs, outputRelativePath, projectAssetTools, type RunOutputs } from '../src/projects/ProjectAssetTools';
+import { deviceRunOutputs, hostRunOutputs, outputRelativePath, projectAssetManifest, projectAssetTools, type RunOutputs } from '../src/projects/ProjectAssetTools';
+import { ensureProjectAssetTables } from '../src/projects/ProjectAssets';
+import { type LinkDevice, type LinkRun, parseLinkTarget } from '../src/projects/ProjectLinks';
 import type { RunRegistry } from '../src/runs/RunRegistry';
 import type { WorkspaceManager } from '../src/workspace/WorkspaceManager';
 import { WorkspaceRuns } from '../src/workspace/WorkspaceRuns';
 
-// Stored project assets (docs/projects.md#assets): the store, the agent tools,
+// Project assets (docs/projects.md#assets): the store, links, the agent tools,
 // and the manifest each speaker's run gets.
 
 const dirs: string[] = [];
@@ -24,7 +27,7 @@ afterEach(() => {
   for (const dir of dirs.splice(0)) { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
-function setup() {
+function setup(toolMode?: 'control-block') {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'marifold-assets-'));
   dirs.push(dir);
   const config = {
@@ -33,6 +36,7 @@ function setup() {
     memory: { sizeLimit: 50000, contextLimit: 2400 },
     paths: { profilesDir: path.join(dir, 'profiles'), sessionsDb: path.join(dir, 'sessions.db'), tasksDir: path.join(dir, 'tasks') },
     providers: { ollama: { type: 'ollama', baseUrl: 'http://localhost:11434' } },
+    ...(toolMode ? { agent: resolveAgentConfig({ toolMode }) } : {}),
   } as MarifoldConfig;
   const runtime = new MarifoldRuntime({ loadedConfig: { config, configPath: path.join(dir, 'config.toml'), foundConfig: true } });
   for (const name of ['painter', 'dev_test']) { runtime.initProfile(name); }
@@ -47,8 +51,14 @@ function context(dir: string, outputLimit = 10_000): ToolExecutionContext & { wo
   return { cwd: dir, outputLimit, workspace };
 }
 
-function tools(setupResult: ReturnType<typeof setup>, outputs: RunOutputs = hostRunOutputs) {
-  const [list, read, save] = projectAssetTools({ assets: setupResult.assets, projectId: setupResult.game.id, profile: 'painter', runId: 'run_1', outputs });
+const DEVICES: LinkDevice[] = [
+  { id: 'dev_host', name: 'studio', host: true, online: true, executor: true },
+  { id: 'dev_office', name: 'office', host: false, online: true, executor: true },
+  { id: 'dev_home', name: 'Home Mac', host: false, online: false, executor: true },
+];
+
+function tools(setupResult: ReturnType<typeof setup>, outputs: RunOutputs = hostRunOutputs, links: LinkRun = { devices: [], delegate: false }) {
+  const [list, read, save] = projectAssetTools({ assets: setupResult.assets, projectId: setupResult.game.id, profile: 'painter', runId: 'run_1', outputs, links });
   return { list: list!, read: read!, save: save! };
 }
 
@@ -98,6 +108,72 @@ describe('project asset store', () => {
     const again = runtime.projects.create({ name: 'Game', lead: 'default' });
     expect(assets.list(again.id).assets).toEqual([]);
     expect(() => assets.list(game.id)).toThrow(/Project not found/);
+  });
+});
+
+describe('linked project assets', () => {
+  it('parses @device/path targets, with an untagged path on the sending device', () => {
+    const parse = (target: string, sender?: string) => parseLinkTarget(target, DEVICES, sender, 'p');
+    expect(parse('@office/~/notes')).toEqual({ deviceId: 'dev_office', path: '~/notes' });
+    expect(parse('@"Home Mac"/Volumes/data set')).toEqual({ deviceId: 'dev_home', path: '/Volumes/data set' });
+    expect(parse('@studio/~')).toEqual({ path: '~' });
+    expect(parse('~/notes', 'dev_office')).toEqual({ deviceId: 'dev_office', path: '~/notes' });
+    expect(parse('/srv/data', 'dev_host')).toEqual({ path: '/srv/data' });
+    expect(parse('~/notes')).toEqual({ path: '~/notes' });
+    expect(() => parse('@garage/~/x')).toThrow(/names no single workspace device/);
+    expect(() => parse('@office')).toThrow(/Write a link as @device\/~\/path/);
+    expect(() => parse('~/x', 'dev_gone')).toThrow(/not in this workspace/);
+  });
+
+  it('keeps links beside stored assets: unique names, no content, nothing counted', () => {
+    const { game, assets } = setup();
+    assets.save(game.id, { name: 'brief.md', data: Buffer.from('brief'), mediaType: 'text/markdown' });
+    const notes = assets.link(game.id, { path: '~/notes/./', description: 'Field notes' });
+    expect(notes).toMatchObject({ kind: 'linked', name: 'notes', path: '~/notes', description: 'Field notes' });
+    expect(notes).not.toHaveProperty('deviceId');
+    expect(assets.link(game.id, { deviceId: 'dev_office', path: '~/notes', name: 'office notes' })).toMatchObject({ deviceId: 'dev_office', path: '~/notes' });
+    expect(assets.link(game.id, { path: '/Volumes/data' }).name).toBe('data');
+    expect(() => assets.link(game.id, { path: '~/notes', name: 'again' })).toThrow("This is already linked as 'notes'.");
+    expect(() => assets.link(game.id, { path: '~/brief.md' })).toThrow("An asset named 'brief.md' already exists.");
+    for (const bad of ['notes', '~/a/../b', '~x', '']) {
+      expect(() => assets.link(game.id, { path: bad, name: 'bad' })).toThrow(/without "\.\."/);
+    }
+    expect(() => assets.save(game.id, { name: 'NOTES', data: Buffer.from('x'), mediaType: 'text/plain' })).toThrow(/is a linked asset/);
+    expect(() => assets.content(game.id, notes.id)).toThrow(/is linked, not stored/);
+    expect(assets.versions(game.id, notes.id)).toEqual([]);
+    const { assets: list, usage } = assets.list(game.id);
+    expect(list.map(asset => [asset.name, asset.kind])).toEqual([['brief.md', 'stored'], ['data', 'linked'], ['notes', 'linked'], ['office notes', 'linked']]);
+    expect(usage.usedBytes).toBe(5);
+    assets.delete(game.id, notes.id);
+    expect(assets.find(game.id, 'notes')).toBeUndefined();
+  });
+
+  it('adds the link columns to asset tables from before links', () => {
+    const db = new Database(':memory:');
+    db.exec(`CREATE TABLE marifold_project_assets (id TEXT PRIMARY KEY, project_id TEXT NOT NULL, name TEXT NOT NULL, description TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, UNIQUE (project_id, name COLLATE NOCASE));
+      INSERT INTO marifold_project_assets VALUES ('a1', 'p', 'old.md', NULL, 't', 't');`);
+    ensureProjectAssetTables(db);
+    ensureProjectAssetTables(db);
+    expect(db.prepare('SELECT kind, device_id, path FROM marifold_project_assets').get()).toEqual({ kind: 'stored', device_id: null, path: null });
+    db.close();
+  });
+
+  it('tells each run where a link is read: its own tools here, delegation to an online device', async () => {
+    const setupResult = setup();
+    const { game, assets } = setupResult;
+    assets.link(game.id, { path: '~/notes' });
+    assets.link(game.id, { deviceId: 'dev_office', path: '/srv/maps', name: 'maps' });
+    assets.link(game.id, { deviceId: 'dev_home', path: '~/photos', name: 'photos' });
+    const ctx = context(setupResult.dir);
+    const onOffice: LinkRun = { devices: DEVICES, deviceId: 'dev_office', delegate: true };
+    const { read, list } = tools(setupResult, hostRunOutputs, onOffice);
+    expect(await read.execute({ name: 'maps' }, ctx)).toMatchObject({ content: "maps is linked, not stored: @office/srv/maps, on this run's device; read it with your file tools at /srv/maps." });
+    expect(await read.execute({ name: 'notes' }, ctx)).toMatchObject({ content: 'notes is linked, not stored: @studio/~/notes, on studio; delegate_device studio to read it there.' });
+    expect((await list.execute({}, ctx)).content).toContain('- photos → @"Home Mac"/~/photos (Home Mac is offline)');
+    const manifest = projectAssetManifest(assets, game.id, { devices: DEVICES, delegate: false });
+    expect(manifest).toContain('None are stored yet.');
+    expect(manifest).toContain("- notes → @studio/~/notes (on this run's device; read it with your file tools at ~/notes)");
+    expect(manifest).toContain('- maps → @office/srv/maps (on office, which this run cannot reach)');
   });
 });
 
@@ -180,6 +256,35 @@ describe('project asset manifest', () => {
     expect(bodies[0]).toContain('## Project assets');
     expect(bodies[0]).toContain('There are none yet.');
     expect(bodies.at(-1)).toContain('- logo.png (image/png, 3 B, v1, saved by painter)');
+  });
+
+  it("grants a host run read access to the project's host links", async () => {
+    const setupResult = setup('control-block');
+    const { runtime, game, assets } = setupResult;
+    const linked = fs.mkdtempSync(path.join(os.tmpdir(), 'marifold-linked-'));
+    dirs.push(linked);
+    assets.link(game.id, { path: linked });
+    assets.link(game.id, { deviceId: 'dev_office', path: '/srv/maps', name: 'maps' });
+    let seen: RunWorkspace | undefined;
+    const registry = runtime.createDefaultToolRegistry.bind(runtime);
+    vi.spyOn(runtime, 'createDefaultToolRegistry').mockImplementation(profile => {
+      const tools = registry(profile);
+      tools.register({
+        kind: 'read',
+        definition: { name: 'probe', description: 'Probe the workspace.', parameters: { type: 'object', properties: {} } },
+        summarizeCall: () => 'probe',
+        assessRisk: () => ({ escalate: false }),
+        execute: async (_input, ctx) => { seen = ctx.workspace; return { content: 'ok' }; },
+      });
+      return tools;
+    });
+    const replies = ['<tool_call name="probe">{}</tool_call>', 'done'];
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(`${JSON.stringify({ message: { content: replies.shift() }, done: true, done_reason: 'stop', prompt_eval_count: 10, eval_count: 5 })}\n`, { status: 200, headers: { 'Content-Type': 'application/json' } })));
+    const runs = runtime.createRunRegistry(undefined, input => new WorkspaceRuns(runtime, {} as WorkspaceManager).createRunner(input));
+    cleanups.push(() => runs.close());
+    const run = runs.start({ objective: 'look', sessionId: 's', cwd: setupResult.dir, profile: 'default', projectId: game.id });
+    await drain(runs, run.id);
+    expect(seen?.readOnlyRoots).toContain(fs.realpathSync(linked));
   });
 });
 

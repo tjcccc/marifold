@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import type { FastifyInstance } from 'fastify';
-import { type ArtifactChunk, formatAssetBytes, MarifoldError, MAX_ASSET_BYTES, type MarifoldRuntime, type RunRegistry, type WorkspaceManager, workspaceArtifactStream } from '@marifold/core';
+import { type ArtifactChunk, formatAssetBytes, type LinkDevice, linkLocation, MarifoldError, MAX_ASSET_BYTES, type MarifoldRuntime, parseLinkTarget, type ProjectAsset, type RunRegistry, type WorkspaceManager, workspaceArtifactStream } from '@marifold/core';
 import { artifactHeaders } from './ArtifactTickets';
 import { objectBody, optionalStringField, requiredString } from './Validation';
 import { remoteExecution } from './WorkspaceRoutes';
@@ -47,15 +47,41 @@ export function runOutputs(runs: RunRegistry, manager: WorkspaceManager): (runId
   };
 }
 
-/**
- * Stored project assets (docs/projects.md#assets): list, upload, add a run's
- * output, versions, download, rename or describe, and delete. Content is
- * always served as a download, never rendered on this origin.
- */
-export function registerProjectAssetRoutes(server: FastifyInstance, runtime: MarifoldRuntime, runOutput: (runId: string, artifactId: string) => RunOutput): void {
-  const assets = runtime.projects.assets;
+/** The workspace devices a request sees, and the device that sent it (absent: this one). */
+export type LinkOrigin = (headers: Record<string, string | string[] | undefined>) => { devices: LinkDevice[]; senderDeviceId?: string };
 
-  server.get<{ Params: { id: string } }>('/v1/projects/:id/assets', async request => ({ ok: true, ...assets.list(request.params.id) }));
+/**
+ * Project assets (docs/projects.md#assets): list, upload, add a run's output,
+ * link a file or folder on a device, versions, download, rename or describe,
+ * and delete. Content is always served as a download, never rendered on this
+ * origin.
+ */
+export function registerProjectAssetRoutes(server: FastifyInstance, runtime: MarifoldRuntime, runOutput: (runId: string, artifactId: string) => RunOutput, origin: LinkOrigin): void {
+  const assets = runtime.projects.assets;
+  // Links carry their device's name and whether it can be reached now.
+  const located = (asset: ProjectAsset, devices: LinkDevice[]) => {
+    if (asset.kind !== 'linked') { return asset; }
+    const { deviceName, available } = linkLocation(asset, { devices, delegate: false });
+    return { ...asset, ...(deviceName ? { deviceName } : {}), available };
+  };
+  const listed = (projectId: string, headers: Record<string, string | string[] | undefined>) => {
+    const { devices } = origin(headers);
+    const { assets: list, usage } = assets.list(projectId);
+    return { ok: true, assets: list.map(asset => located(asset, devices)), usage };
+  };
+
+  server.get<{ Params: { id: string } }>('/v1/projects/:id/assets', async request => listed(request.params.id, request.headers));
+
+  // `target` is `@device/~/path`, `@device/` and an absolute path, or a bare
+  // path on the sending device.
+  server.post<{ Params: { id: string } }>('/v1/projects/:id/links', async (request, reply) => {
+    const body = objectBody(request.body);
+    const { devices, senderDeviceId } = origin(request.headers);
+    const target = parseLinkTarget(requiredString(body.target, 'target'), devices, senderDeviceId, request.params.id);
+    const asset = assets.link(request.params.id, { ...target, ...optionalStringField('name', body.name), ...optionalStringField('description', body.description) });
+    reply.status(201);
+    return { ok: true, asset: located(asset, devices) };
+  });
 
   // Base64 JSON like run uploads, so the service's request limit bounds it.
   server.post<{ Params: { id: string } }>('/v1/projects/:id/assets', async (request, reply) => {
@@ -114,17 +140,15 @@ export function registerProjectAssetRoutes(server: FastifyInstance, runtime: Mar
     if (body.description !== undefined && body.description !== null && typeof body.description !== 'string') {
       throw MarifoldError.configInvalid('description must be a string or null.');
     }
-    return {
-      ok: true,
-      asset: assets.update(request.params.id, request.params.assetId, {
-        ...optionalStringField('name', body.name),
-        ...(body.description !== undefined ? { description: body.description as string | null } : {}),
-      }),
-    };
+    const asset = assets.update(request.params.id, request.params.assetId, {
+      ...optionalStringField('name', body.name),
+      ...(body.description !== undefined ? { description: body.description as string | null } : {}),
+    });
+    return { ok: true, asset: located(asset, origin(request.headers).devices) };
   });
 
   server.delete<{ Params: { id: string; assetId: string } }>('/v1/projects/:id/assets/:assetId', async request => {
     assets.delete(request.params.id, request.params.assetId);
-    return { ok: true, ...assets.list(request.params.id) };
+    return listed(request.params.id, request.headers);
   });
 }

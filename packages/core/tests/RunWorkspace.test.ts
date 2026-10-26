@@ -283,3 +283,27 @@ describe('RunWorkspace', () => {
     expect(sensitive.cwd).toBe(sensitive.workDir);
   });
 });
+
+describe('linked project folders', () => {
+  it('grants reads of linked folders and files, also outside home, but never broad, app-state, sensitive, or denied roots', () => {
+    const home = tempDir();
+    const outside = tempDir();
+    for (const dir of ['notes', '.ssh', '.config/fish', 'private']) { fs.mkdirSync(path.join(home, dir), { recursive: true }); }
+    fs.writeFileSync(path.join(home, 'brief.md'), 'brief');
+    const workspace = createRunWorkspace({
+      id: 'run_links',
+      userHome: home,
+      runsDir: path.join(home, '.marifold', 'runs'),
+      deniedRoots: [path.join(home, 'private')],
+      linkedFolders: ['~/notes', outside, '~/brief.md', '~', '/', '~/.ssh', '~/.config', '~/.marifold/runs', '~/private', '~/missing', 'relative/notes'],
+    });
+    const real = (target: string) => fs.realpathSync(target);
+    expect(workspace.readOnlyRoots).toEqual(expect.arrayContaining([real(path.join(home, 'notes')), real(outside)]));
+    expect(workspace.readRoots).toEqual(expect.arrayContaining([real(path.join(home, 'notes')), real(outside)]));
+    expect(workspace.writeRoots).not.toContain(real(outside));
+    expect(workspace.readOnlyFiles).toContain(real(path.join(home, 'brief.md')));
+    for (const dropped of [home, '/', path.join(home, '.ssh'), path.join(home, '.config'), path.join(home, '.marifold', 'runs'), path.join(home, 'private')]) {
+      expect(workspace.readRoots).not.toContain(real(dropped));
+    }
+  });
+});

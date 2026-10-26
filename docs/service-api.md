@@ -205,25 +205,28 @@ A project is a named group of profiles (its roster, led by its **Lead**) whose s
 | `GET /v1/projects/:id/icon?thumbnail=1` | The project icon, like a profile avatar (`ETag`, `304`, a 256px `thumbnail`); 404 `ICON_NOT_FOUND` when it has none, so clients draw the folder |
 | `PUT /v1/projects/:id/icon` | Body `{ data, mediaType }`: base64 PNG, JPEG, or WebP, up to 2 MB. Returns `{ project }` |
 | `DELETE /v1/projects/:id/icon` | Back to the folder. Returns `{ removed, project }` |
-| `GET /v1/projects/:id/assets` | `{ assets, usage: { usedBytes, limitBytes } }`. Each asset by name: `{ id, name, description?, version, size, mediaType, sha256, savedBy?, createdAt, updatedAt }` for its latest version; `savedBy` is the profile that saved it, absent when the user did |
+| `GET /v1/projects/:id/assets` | `{ assets, usage: { usedBytes, limitBytes } }`, by name. A stored asset is `{ id, kind: 'stored', name, description?, version, size, mediaType, sha256, savedBy?, createdAt, updatedAt }` for its latest version; `savedBy` is the profile that saved it, absent when the user did. A linked one is `{ id, kind: 'linked', name, description?, deviceId?, path, deviceName?, available, createdAt, updatedAt }`: `deviceId` absent means the host, `deviceName` is the device's current name, and `available` is false while it is offline, has execution disabled, or left the workspace |
 | `POST /v1/projects/:id/assets` | Body `{ name, data, mediaType, description? }`, base64, so a file of up to about 18 MB fits the 25 MB request limit. A name that exists (ignoring case) gets a new version; 201 with `{ asset, newVersion: true }`, or 200 with `newVersion: false` when the content equals the latest version |
 | `POST /v1/projects/:id/assets/from-run` | Body `{ runId, artifactId, name?, description? }`: **Add to assets** for a run output, read from the device that ran it; `name` defaults to the file's name. Responds like an upload; 400 once the output is gone (outputs are kept for a day) |
+| `POST /v1/projects/:id/links` | Body `{ target, name?, description? }` links a file or folder on a workspace device: `@device/~/path`, `@device/` followed by an absolute path (`@office/Volumes/data`), or a bare `~/…` or absolute path on the device sending the request. `name` defaults to the last path part (`home` for `~`) and shares the stored assets' names; one device path is linked once. 201 with `{ asset }` |
 | `GET /v1/projects/:id/assets/:assetId/versions` | `{ versions }`, newest first: `{ version, size, mediaType, sha256, savedBy?, runId?, createdAt }` |
 | `GET /v1/projects/:id/assets/:assetId/content?version=` | The content (latest by default) as a download (`attachment`, `nosniff`, a sandbox CSP), never rendered on the service's origin |
 | `PATCH /v1/projects/:id/assets/:assetId` | Body `{ name?, description?: string \| null }`; names are 1–200 characters without `/` or `\`, unique ignoring case. Returns `{ asset }` |
-| `DELETE /v1/projects/:id/assets/:assetId` | Deletes every version; returns the remaining `{ assets, usage }` |
+| `DELETE /v1/projects/:id/assets/:assetId` | Deletes every version (a link only forgets its path); returns the remaining `{ assets, usage }` |
 | `POST /v1/sessions/:id/project` | Body `{ projectId }` moves an existing session into a project (its profile joins the roster and holds the floor); `{ projectId: null }` moves it out. Returns `{ project }` (the session's new link, or `null`) |
 
 All project routes are also reachable through a workspace, so a guest device sees the host's projects.
 
 **Stored assets** live on the host as `projects/<id>/assets/<sha256>` beside `sessions.db`. The limit counts each distinct content once across every version and asset; one version is at most 25 MB (saved run outputs; uploads stop at about 18 MB), so a guest can still download it through the workspace bridge. Renaming a profile relabels what it saved.
 
+**Linked assets** stay on their device and count nothing. They have no versions (`versions` is empty) and no content route (400); an upload or save under a linked name is refused (400).
+
 **Who answers** a run in a project session is decided on the host, so every client and device routes alike:
 
 - Profiles are mentioned by name (`@dev_test`), never by display name. Mentions of roster profiles pick the speakers, in mention order. A mention of an existing profile off the roster fails with `PROJECT_MEMBER_REQUIRED`. Any other mention is left for [execution-device routing](#execution-device-mentions), which reads the text without the profile mentions: `@painter on @office …` means painter answers, executing on office.
 - No profile mention: the floor (the profile last addressed alone), else the Lead. One mention gives that profile the floor; several give it back to the Lead. Regenerating an earlier message leaves the floor alone.
 - Each speaker answers as its own run (below), with the project's block placed before the request's `instructions`: who it is, the roster with the Lead marked, and the project instructions.
-- Each speaker's run also gets the project's asset manifest (names, types, sizes, versions, descriptions; never content), read as that run starts, so a later speaker sees what an earlier one saved, and the tools `list_assets`, `read_asset` and `save_asset`. Saving needs no approval unless the profile denies writes. `save_asset` takes a file from the run's output folder, wherever the run executes, or text.
+- Each speaker's run also gets the project's asset manifest (names, types, sizes, versions, descriptions; never content), read as that run starts, so a later speaker sees what an earlier one saved, and the tools `list_assets`, `read_asset` and `save_asset`. Saving needs no approval unless the profile denies writes. `save_asset` takes a file from the run's output folder, wherever the run executes, or text. Linked assets are listed with where to read them: with the run's own file tools when it executes on their device, which may then read them without asking (sensitive folders and marifold state excepted), or by `delegate_device` to that device. A run that `delegate_device` starts carries the project too.
 
 ### Chat
 

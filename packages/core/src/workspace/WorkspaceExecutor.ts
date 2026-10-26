@@ -151,6 +151,8 @@ export class WorkspaceExecutor {
           ...config.trustedFolders.filter(entry => entry !== HOME_TRUSTED_FOLDER),
           ...acceptedRemoteTrustedFolders(b.trustedFolders, os.homedir()),
         ],
+        // A project's links here: read-only, filtered against this device's own roots.
+        linkedFolders: Array.isArray(b.linkedFolders) ? b.linkedFolders.slice(0, 64).filter((entry): entry is string => typeof entry === 'string') : [],
         files: Array.isArray(b.files) ? (b.files as never) : undefined,
         images: Array.isArray(b.images) ? (b.images as never) : undefined,
         ...(this.runsDir ? { runsDir: this.runsDir } : {}),

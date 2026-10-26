@@ -225,7 +225,10 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
   });
 
   registerProjectRoutes(server, runtime, () => options.loadedConfig.config.default.profile);
-  registerProjectAssetRoutes(server, runtime, runOutputs(runRegistry, workspaceManager));
+  registerProjectAssetRoutes(server, runtime, runOutputs(runRegistry, workspaceManager), headers => {
+    const origin = workspaceContext.resolve(headers);
+    return { devices: workspaceRuns.devices(origin), ...(origin?.senderDeviceId ? { senderDeviceId: origin.senderDeviceId } : {}) };
+  });
   registerWorkspaceRoutes(server, workspaceManager, runRegistry, workspaceContext, (operation, input, context) => workspaceExecutor.handle(operation, input, context), security.token, id => { workspaceExecutor.cancelWorkspace(id); artifactTransfers.cancelWorkspace(id); }, artifactTickets, artifactTransfers);
   server.addHook('onClose', async () => workspaceExecutor.close());
 

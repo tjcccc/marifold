@@ -757,4 +757,40 @@ describe('device-hosted workspaces', () => {
     const removed = await p.guest.inject({ method: 'DELETE', url: `${p.prefix}/v1/projects/${project.id}/assets/${sprites.id}` });
     expect(removed.json().assets.map((a: { name: string }) => a.name)).toEqual(['brief.md', 'sprites copy.csv']);
   }, 20000);
+
+  it('links a folder on the device that sends it, and tells a project run there to read it with its own tools', async () => {
+    const p = await paired(true);
+    const { project } = await post(p.guest, `${p.prefix}/v1/projects`, { name: 'Game' });
+    const notes = tempDir();
+    fs.writeFileSync(path.join(notes, 'field.md'), 'Dragons nest in the north.');
+    const linked = await p.guest.inject({ method: 'POST', url: `${p.prefix}/v1/projects/${project.id}/links`, payload: { target: notes, name: 'notes' } });
+    expect(linked.statusCode).toBe(201);
+    expect(linked.json().asset).toMatchObject({ kind: 'linked', name: 'notes', deviceId: p.device, path: notes, available: true });
+    const maps = (await post(p.guest, `${p.prefix}/v1/projects/${project.id}/links`, { target: `@${p.hostDevice}/~/maps` })).asset;
+    expect(maps).toMatchObject({ name: 'maps', path: '~/maps', available: true });
+    expect(maps).not.toHaveProperty('deviceId');
+    const upload = await p.guest.inject({ method: 'POST', url: `${p.prefix}/v1/projects/${project.id}/assets`, payload: { name: 'notes', mediaType: 'text/plain', data: Buffer.from('x').toString('base64') } });
+    expect(upload.statusCode).toBe(400);
+
+    const requests: string[] = [];
+    const realFetch = globalThis.fetch;
+    vi.stubGlobal('fetch', vi.fn(async (input, init) => {
+      if (!String(input).includes('localhost:11434')) { return realFetch(input, init); }
+      requests.push(String(init?.body));
+      const replies = [`<tool_call name="read_file">${JSON.stringify({ path: path.join(notes, 'field.md') })}</tool_call>`, 'Dragons nest in the north.'];
+      return new Response(JSON.stringify({ message: { content: replies[requests.length - 1] }, done: true, done_reason: 'stop' }), { headers: { 'content-type': 'application/json' } });
+    }));
+    const { run } = await post(p.guest, `${p.prefix}/v1/runs`, { objective: 'Where do dragons nest?', sessionId: 'g', projectId: project.id });
+    expect(run.execution.executionDeviceId).toBe(p.device);
+    let current;
+    for (let i = 0; i < 250 && !current?.finishedAt; i++) {
+      await new Promise(resolve => setTimeout(resolve, 20));
+      current = (await p.host.inject(`/v1/runs/${run.id}`)).json().run;
+      expect(current.pendingApprovals).toEqual([]);
+    }
+    expect(current.status).toBe('completed');
+    expect(requests[0]).toContain(`(on this run's device; read it with your file tools at ${notes})`);
+    expect(requests[0]).toMatch(/- maps → @.+\/~\/maps \(on .+; delegate_device .+ to read it there\)/);
+    expect(requests[1]).toContain('Dragons nest in the north.');
+  }, 20000);
 });

@@ -5,13 +5,14 @@ import { mediaTypeFor, resolveWorkspaceArtifact, runArtifactId } from '../agent/
 import { type AgentTool, capToolOutput, requireStringInput, type ToolExecutionContext, type ToolExecutionResult, type ToolRiskAssessment } from '../agent/ToolRegistry';
 import { prepareImageInputs } from '../images/ImageOptimizer';
 import { type ArtifactChunk, workspaceArtifactStream } from '../workspace/WorkspaceArtifactTransfer';
-import { formatBytes, MAX_ASSET_BYTES, type ProjectAsset, type ProjectAssets } from './ProjectAssets';
+import { formatBytes, type LinkedProjectAsset, MAX_ASSET_BYTES, type ProjectAsset, type ProjectAssets, type StoredProjectAsset } from './ProjectAssets';
+import { linkLocation, type LinkRun } from './ProjectLinks';
 
 /**
  * A project run's asset tools (docs/projects.md#how-the-agent-sees-assets):
- * `list_assets` and `read_asset` over the project's stored assets, and
- * `save_asset`, which stores a file from this run's output folder, or text,
- * for every profile here. Saving changes only marifold's own store and keeps
+ * `list_assets` and `read_asset` over the project's stored assets, which also
+ * tell where each linked one is read, and `save_asset`, which stores a file
+ * from this run's output folder, or text, for every profile here. Saving changes only marifold's own store and keeps
  * earlier versions, so it needs no approval; a profile whose writes are denied
  * still cannot save.
  */
@@ -31,6 +32,7 @@ export interface ProjectAssetRun {
   profile?: string;
   runId?: string;
   outputs: RunOutputs;
+  links: LinkRun;
 }
 
 const MANIFEST_ROWS = 30;
@@ -43,20 +45,24 @@ const TEXT_TYPES: Record<string, string> = {
   '.svg': 'image/svg+xml',
 };
 const ROUTINE: ToolRiskAssessment = { escalate: false, routine: true };
+const LINKED_INTRO = 'Linked files and folders stay on their devices and are read there, never copied into the project:';
 
 /** A file the run cannot save, told to the model rather than failing the call. */
 class OutputRefusal extends Error {}
 
 /** The run instructions' short asset list: names and descriptions, never content. */
-export function projectAssetManifest(assets: ProjectAssets, projectId: string): string {
+export function projectAssetManifest(assets: ProjectAssets, projectId: string, links: LinkRun): string {
   const { assets: list, usage } = assets.list(projectId);
-  const intro = "Project assets are files this project keeps for every profile and session in it. Read one with read_asset. Save a deliverable the user wants kept, or material later work here needs, with save_asset (a name that exists gets a new version); not drafts or scratch files.";
+  const intro = "Project assets are files this project keeps for every profile and session in it. Read a stored one with read_asset. Save a deliverable the user wants kept, or material later work here needs, with save_asset (a name that exists gets a new version); not drafts or scratch files.";
   if (list.length === 0) { return ['## Project assets', `${intro} There are none yet.`].join('\n'); }
+  const stored = list.filter(isStored);
+  const linked = list.filter(isLinked);
+  const rows = (lines: string[]) => [...lines.slice(0, MANIFEST_ROWS), ...(lines.length > MANIFEST_ROWS ? [`- … and ${lines.length - MANIFEST_ROWS} more; list_assets shows them all.`] : [])];
   return [
     '## Project assets',
-    `${intro} ${list.length} stored, using ${formatBytes(usage.usedBytes)} of ${formatBytes(usage.limitBytes)}:`,
-    ...list.slice(0, MANIFEST_ROWS).map(asset => `- ${assetLine(asset)}`),
-    ...(list.length > MANIFEST_ROWS ? [`- … and ${list.length - MANIFEST_ROWS} more; list_assets shows them all.`] : []),
+    `${intro} ${stored.length > 0 ? `${stored.length} stored, using ${formatBytes(usage.usedBytes)} of ${formatBytes(usage.limitBytes)}:` : 'None are stored yet.'}`,
+    ...rows(stored.map(asset => `- ${assetLine(asset)}`)),
+    ...(linked.length > 0 ? [LINKED_INTRO, ...rows(linked.map(link => `- ${linkLine(link, links)}`))] : []),
   ].join('\n');
 }
 
@@ -123,16 +129,21 @@ function listAssetsTool(run: ProjectAssetRun): AgentTool {
     kind: 'read',
     definition: {
       name: 'list_assets',
-      description: "List this project's stored assets: name, type, size, latest version, who saved it, and description. Read content with read_asset.",
+      description: "List this project's assets: stored ones with type, size, latest version, who saved it, and description (read them with read_asset), and linked files and folders with where to read them.",
       parameters: { type: 'object', properties: {} },
     },
     summarizeCall: () => 'list project assets',
     assessRisk: () => ROUTINE,
     execute: async () => {
       const { assets, usage } = run.assets.list(run.projectId);
-      if (assets.length === 0) { return { content: 'This project has no stored assets.', summary: 'no assets' }; }
+      if (assets.length === 0) { return { content: 'This project has no assets.', summary: 'no assets' }; }
+      const stored = assets.filter(isStored);
+      const linked = assets.filter(isLinked);
       return {
-        content: [`${assets.length} assets, using ${formatBytes(usage.usedBytes)} of ${formatBytes(usage.limitBytes)}:`, ...assets.map(asset => `- ${assetLine(asset)}`)].join('\n'),
+        content: [
+          ...(stored.length > 0 ? [`${stored.length} stored, using ${formatBytes(usage.usedBytes)} of ${formatBytes(usage.limitBytes)}:`, ...stored.map(asset => `- ${assetLine(asset)}`)] : ['No stored assets.']),
+          ...(linked.length > 0 ? [LINKED_INTRO, ...linked.map(link => `- ${linkLine(link, run.links)}`)] : []),
+        ].join('\n'),
         summary: `${assets.length} assets`,
       };
     },
@@ -163,6 +174,10 @@ function readAssetTool(run: ProjectAssetRun): AgentTool {
       const name = requireStringInput(input, 'name', 'read_asset');
       const asset = run.assets.find(run.projectId, name);
       if (!asset) { return missing(run, name); }
+      if (asset.kind === 'linked') {
+        const where = linkLocation(asset, run.links);
+        return { content: `${asset.name} is linked, not stored: ${where.label}, ${where.note}.`, summary: `${asset.name} is linked` };
+      }
       const version = input.version === undefined ? undefined : input.version;
       if (version !== undefined && (typeof version !== 'number' || !Number.isSafeInteger(version) || version < 1)) {
         return { content: 'version must be a positive whole number.', isError: true, summary: 'invalid version' };
@@ -268,14 +283,27 @@ function saveAssetTool(run: ProjectAssetRun): AgentTool {
   };
 }
 
-function assetLine(asset: ProjectAsset): string {
+function isStored(asset: ProjectAsset): asset is StoredProjectAsset {
+  return asset.kind === 'stored';
+}
+
+function isLinked(asset: ProjectAsset): asset is LinkedProjectAsset {
+  return asset.kind === 'linked';
+}
+
+function linkLine(link: LinkedProjectAsset, run: LinkRun): string {
+  const where = linkLocation(link, run);
+  return `${link.name} → ${where.label} (${where.note})${link.description ? ` — ${link.description}` : ''}`;
+}
+
+function assetLine(asset: StoredProjectAsset): string {
   return `${asset.name} (${asset.mediaType.split(';')[0]}, ${formatBytes(asset.size)}, v${asset.version}${asset.savedBy ? `, saved by ${asset.savedBy}` : ''})${asset.description ? ` — ${asset.description}` : ''}`;
 }
 
 function missing(run: ProjectAssetRun, name: string): ToolExecutionResult {
   const names = run.assets.list(run.projectId).assets.map(asset => asset.name);
   return {
-    content: `No asset named '${name}'. ${names.length > 0 ? `Assets: ${names.slice(0, MANIFEST_ROWS).join(', ')}${names.length > MANIFEST_ROWS ? ', …' : ''}.` : 'This project has no stored assets.'}`,
+    content: `No asset named '${name}'. ${names.length > 0 ? `Assets: ${names.slice(0, MANIFEST_ROWS).join(', ')}${names.length > MANIFEST_ROWS ? ', …' : ''}.` : 'This project has no assets.'}`,
     isError: true,
     summary: `asset ${name} not found`,
   };

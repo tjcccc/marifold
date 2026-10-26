@@ -5,10 +5,12 @@ import type Database from 'better-sqlite3';
 import { MarifoldError } from '../errors/MarifoldError';
 
 /**
- * Stored project assets (docs/projects.md#assets): files a project keeps for
- * every profile and session in it. Each save of a name adds a version; content
- * is kept once per project as `<project dir>/assets/<sha256>`, and the
- * project's limit counts each distinct content once, across all versions.
+ * Project assets (docs/projects.md#assets): files a project keeps for every
+ * profile and session in it. A stored asset is content marifold keeps: each
+ * save of a name adds a version, content is kept once per project as
+ * `<project dir>/assets/<sha256>`, and the project's limit counts each
+ * distinct content once, across all versions. A linked asset is a file or
+ * folder on a workspace device, read live there and never counted.
  */
 
 export const PROJECT_ASSETS_TABLE = 'marifold_project_assets';
@@ -21,10 +23,16 @@ export const MAX_ASSET_BYTES = 25 * 1024 * 1024;
 const NAME_MAX = 200;
 const DESCRIPTION_MAX = 500;
 
-export interface ProjectAsset {
+interface ProjectAssetBase {
   id: string;
   name: string;
   description?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface StoredProjectAsset extends ProjectAssetBase {
+  kind: 'stored';
   /** The latest version's number and content. */
   version: number;
   size: number;
@@ -32,9 +40,17 @@ export interface ProjectAsset {
   sha256: string;
   /** The profile that saved the latest version; absent when the user did. */
   savedBy?: string;
-  createdAt: string;
-  updatedAt: string;
 }
+
+export interface LinkedProjectAsset extends ProjectAssetBase {
+  kind: 'linked';
+  /** The workspace device holding it; absent for the host (this device). */
+  deviceId?: string;
+  /** `~/…` (that device's home) or an absolute path there. */
+  path: string;
+}
+
+export type ProjectAsset = StoredProjectAsset | LinkedProjectAsset;
 
 export interface ProjectAssetVersion {
   version: number;
@@ -91,6 +107,9 @@ export function ensureProjectAssetTables(db: Database.Database): void {
       project_id TEXT NOT NULL,
       name TEXT NOT NULL,
       description TEXT,
+      kind TEXT NOT NULL DEFAULT 'stored',
+      device_id TEXT,
+      path TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       UNIQUE (project_id, name COLLATE NOCASE)
@@ -107,6 +126,11 @@ export function ensureProjectAssetTables(db: Database.Database): void {
       PRIMARY KEY (asset_id, version)
     );
   `);
+  // Databases from before linked assets.
+  const columns = db.prepare(`PRAGMA table_info(${PROJECT_ASSETS_TABLE})`).all() as Array<{ name: string }>;
+  if (!columns.some(column => column.name === 'kind')) {
+    db.exec(`ALTER TABLE ${PROJECT_ASSETS_TABLE} ADD COLUMN kind TEXT NOT NULL DEFAULT 'stored'; ALTER TABLE ${PROJECT_ASSETS_TABLE} ADD COLUMN device_id TEXT; ALTER TABLE ${PROJECT_ASSETS_TABLE} ADD COLUMN path TEXT;`);
+  }
 }
 
 /** Remove a deleted project's asset rows, inside its delete transaction; its
@@ -160,7 +184,7 @@ export class ProjectAssets {
    * beside them first and renamed into place after, so a failed save leaves
    * no file and a stored row never lacks its content.
    */
-  save(projectId: string, input: ProjectAssetSave): { asset: ProjectAsset; newVersion: boolean } {
+  save(projectId: string, input: ProjectAssetSave): { asset: StoredProjectAsset; newVersion: boolean } {
     const name = validName(input.name, projectId);
     const mediaType = validMediaType(input.mediaType, projectId);
     const description = input.description === undefined ? undefined : validDescription(input.description, projectId);
@@ -181,6 +205,7 @@ export class ProjectAssets {
         const limitBytes = this.host.assetLimit(db, projectId);
         const at = this.host.now().toISOString();
         const existing = db.prepare(`${LATEST_SELECT} WHERE a.project_id = ? AND a.name = ? COLLATE NOCASE`).get(projectId, name) as AssetRow | undefined;
+        if (existing?.kind === 'linked') { throw MarifoldError.projectInvalid(`'${existing.name}' is a linked asset; store this under another name.`, projectId); }
         const describe = (id: string) => {
           if (description !== undefined) { db.prepare(`UPDATE ${PROJECT_ASSETS_TABLE} SET description = ?, updated_at = ? WHERE id = ?`).run(description, at, id); }
         };
@@ -210,7 +235,7 @@ export class ProjectAssets {
         fs.renameSync(staged, blob);
         staged = undefined;
       }
-      return { asset: this.get(projectId, saved.id)!, newVersion: saved.newVersion };
+      return { asset: this.get(projectId, saved.id) as StoredProjectAsset, newVersion: saved.newVersion };
     } finally {
       if (staged) { fs.rmSync(staged, { force: true }); }
     }
@@ -220,6 +245,7 @@ export class ProjectAssets {
   content(projectId: string, assetId: string, version?: number): ProjectAssetContent {
     const found = this.host.read(db => {
       const asset = this.existing(db, projectId, assetId);
+      if (asset.kind === 'linked') { throw MarifoldError.projectInvalid(`'${asset.name}' is linked, not stored: it is read on its device.`, projectId); }
       const row = version === undefined
         ? db.prepare(`SELECT * FROM ${PROJECT_ASSET_VERSIONS_TABLE} WHERE asset_id = ? ORDER BY version DESC LIMIT 1`).get(assetId) as VersionRow | undefined
         : db.prepare(`SELECT * FROM ${PROJECT_ASSET_VERSIONS_TABLE} WHERE asset_id = ? AND version = ?`).get(assetId, version) as VersionRow | undefined;
@@ -229,6 +255,26 @@ export class ProjectAssets {
     const file = path.join(this.assetsDir(projectId), found.row.sha256);
     if (!fs.existsSync(file)) { throw MarifoldError.projectAssetNotFound(projectId, `${found.asset.name} (its stored file is missing)`); }
     return { path: file, name: found.asset.name, version: found.row.version, size: found.row.size, mediaType: found.row.media_type, sha256: found.row.sha256 };
+  }
+
+  /** Link a file or folder on a workspace device (`deviceId` absent: the host). */
+  link(projectId: string, input: { deviceId?: string; path: string; name?: string; description?: string }): LinkedProjectAsset {
+    const linkPath = validLinkPath(input.path, projectId);
+    const name = validName(input.name ?? (linkPath === '~' ? 'home' : path.posix.basename(linkPath)), projectId);
+    const description = input.description === undefined ? undefined : validDescription(input.description, projectId);
+    const id = `asset_${crypto.randomBytes(6).toString('hex')}`;
+    this.host.write(db => {
+      this.host.assetLimit(db, projectId);
+      const taken = db.prepare(`SELECT name, kind, device_id, path FROM ${PROJECT_ASSETS_TABLE} WHERE project_id = ? AND (name = ? COLLATE NOCASE OR (kind = 'linked' AND path = ? AND device_id IS ?))`)
+        .get(projectId, name, linkPath, input.deviceId ?? null) as { name: string; kind: string } | undefined;
+      if (taken) {
+        throw MarifoldError.projectInvalid(taken.name.toLowerCase() === name.toLowerCase() ? `An asset named '${taken.name}' already exists.` : `This is already linked as '${taken.name}'.`, projectId);
+      }
+      const at = this.host.now().toISOString();
+      db.prepare(`INSERT INTO ${PROJECT_ASSETS_TABLE} (id, project_id, name, description, kind, device_id, path, created_at, updated_at) VALUES (?, ?, ?, ?, 'linked', ?, ?, ?, ?)`)
+        .run(id, projectId, name, description ?? null, input.deviceId ?? null, linkPath, at, at);
+    });
+    return this.get(projectId, id) as LinkedProjectAsset;
   }
 
   /** Rename an asset or change its description (`null` clears it). */
@@ -299,15 +345,18 @@ export function formatBytes(bytes: number): string {
   return `${value >= 10 ? Math.round(value) : Math.round(value * 10) / 10} ${units[unit]}`;
 }
 
-/** Each asset with its latest version. */
+/** Each asset with its latest version (none for a linked one). */
 const LATEST_SELECT = `SELECT a.*, v.version, v.sha256, v.size, v.media_type, v.saved_by FROM ${PROJECT_ASSETS_TABLE} a
-  JOIN ${PROJECT_ASSET_VERSIONS_TABLE} v ON v.asset_id = a.id AND v.version = (SELECT MAX(version) FROM ${PROJECT_ASSET_VERSIONS_TABLE} WHERE asset_id = a.id)`;
+  LEFT JOIN ${PROJECT_ASSET_VERSIONS_TABLE} v ON v.asset_id = a.id AND v.version = (SELECT MAX(version) FROM ${PROJECT_ASSET_VERSIONS_TABLE} WHERE asset_id = a.id)`;
 
 interface AssetRow {
   id: string;
   project_id: string;
   name: string;
   description: string | null;
+  kind: 'stored' | 'linked';
+  device_id: string | null;
+  path: string | null;
   created_at: string;
   updated_at: string;
   version: number;
@@ -329,17 +378,24 @@ interface VersionRow {
 }
 
 function toAsset(row: AssetRow): ProjectAsset {
-  return {
+  const base = {
     id: row.id,
     name: row.name,
     ...(row.description ? { description: row.description } : {}),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+  if (row.kind === 'linked') {
+    return { ...base, kind: 'linked', ...(row.device_id ? { deviceId: row.device_id } : {}), path: row.path ?? '' };
+  }
+  return {
+    ...base,
+    kind: 'stored',
     version: row.version,
     size: row.size,
     mediaType: row.media_type,
     sha256: row.sha256,
     ...(row.saved_by ? { savedBy: row.saved_by } : {}),
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
   };
 }
 
@@ -376,6 +432,17 @@ function validDescription(value: string, projectId: string): string | undefined 
   const description = typeof value === 'string' ? value.trim() : '';
   if (description.length > DESCRIPTION_MAX) { throw MarifoldError.projectInvalid(`An asset description is at most ${DESCRIPTION_MAX} characters.`, projectId); }
   return description || undefined;
+}
+
+/** `~`, `~/…` or an absolute path, without `..`, normalized. */
+function validLinkPath(value: string, projectId: string): string {
+  const raw = typeof value === 'string' ? value.trim() : '';
+  const home = raw === '~' || raw.startsWith('~/');
+  const parts = (home ? raw.slice(1) : raw).split('/').filter(part => part !== '' && part !== '.');
+  if (raw.length > 1000 || /\p{Cc}/u.test(raw) || (!home && !raw.startsWith('/')) || parts.includes('..') || (!home && parts.length === 0)) {
+    throw MarifoldError.projectInvalid('A linked path is ~/… on its device, or an absolute path there, without "..".', projectId);
+  }
+  return home ? ['~', ...parts].join('/') : `/${parts.join('/')}`;
 }
 
 function validMediaType(value: string, projectId: string): string {

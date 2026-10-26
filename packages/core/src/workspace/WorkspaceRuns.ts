@@ -19,6 +19,7 @@ import { mentionsMarifoldState } from './RemoteStateAccess';
 import type { RunStartInput } from '../runs/RunRegistry';
 import { SkillManagementTool } from '../agent/tools/SkillManagementTool';
 import { deviceRunOutputs, hostRunOutputs, projectAssetManifest, projectAssetTools, type RunOutputs } from '../projects/ProjectAssetTools';
+import { linkedPathsOn, type LinkRun } from '../projects/ProjectLinks';
 import { executionTools } from './WorkspaceExecutor';
 import type { WorkspaceManager, WorkspaceOperationContext } from './WorkspaceManager';
 
@@ -101,7 +102,8 @@ export class WorkspaceRuns {
     if (!execution) {
       if (!input.projectId) { return this.runtime.createAgentRunner(input.profile); }
       const registry = this.runtime.createDefaultToolRegistry(input.profile);
-      return this.runtime.createAgentRunner(input.profile, registry, undefined, { contextInstructions: this.projectAssets(input, registry, hostRunOutputs) });
+      const project = this.projectAssets(input, registry, hostRunOutputs, { devices: [], delegate: false });
+      return this.runtime.createAgentRunner(input.profile, registry, undefined, { contextInstructions: project.instructions, linkedFolders: project.linkedFolders });
     }
     const { workspaceId, executionDeviceId } = execution;
     const host = this.manager.store.get(workspaceId);
@@ -131,11 +133,14 @@ export class WorkspaceRuns {
       executionDeviceId === host.hostDeviceId
         ? this.runtime.createDefaultToolRegistry(input.profile)
         : this.runtime.createHostContextTools(input.profile);
+    const delegates = Boolean(!input.parentRunId && !input.lean && input.registryRunId && this.delegate);
+    const onGuest = executionDeviceId === host.hostDeviceId ? undefined : executionDeviceId;
     // The agent loop runs here; a guest's outputs are read over the bridge.
     let runId: string | undefined;
-    contextInstructions.push(...this.projectAssets(input, registry, executionDeviceId === host.hostDeviceId
+    const project = this.projectAssets(input, registry, onGuest === undefined
       ? hostRunOutputs
-      : deviceRunOutputs(body => this.manager.execute(workspaceId, executionDeviceId, 'executor.artifact', { runId, ...body }))));
+      : deviceRunOutputs(body => this.manager.execute(workspaceId, executionDeviceId, 'executor.artifact', { runId, ...body })), { devices, ...(onGuest ? { deviceId: onGuest } : {}), delegate: delegates });
+    contextInstructions.push(...project.instructions);
     const skills = registry.get('manage_skill');
     if (skills instanceof SkillManagementTool) {
       skills.useSourceDevices({
@@ -161,7 +166,7 @@ export class WorkspaceRuns {
       executionDeviceId,
       devices: this.manager.devices(workspaceId),
     })));
-    if (!input.parentRunId && !input.lean && input.registryRunId && this.delegate) {
+    if (delegates) {
       registry.register(
         new DeviceDelegateTool(async (selected, objective) => {
           const matches = this.manager
@@ -178,6 +183,8 @@ export class WorkspaceRuns {
               deep: input.deep,
               files: input.files,
               images: input.images,
+              // The child gets the project's assets, and read access to its links on that device.
+              projectId: input.projectId,
             },
             { executionDeviceId: matches[0].id },
             { workspaceId, senderDeviceId: execution.originDeviceId, hostDeviceId: host.hostDeviceId },
@@ -194,7 +201,7 @@ export class WorkspaceRuns {
       // A request from another device may read the host's Marifold state with
       // approval, never its credentials or workspace keys, and never write it.
       const stateAccess = execution.originDeviceId !== host.hostDeviceId ? this.runtime.remoteStateAccess() : undefined;
-      return this.runtime.createAgentRunner(input.profile, registry, undefined, { contextInstructions, ...(stateAccess ? { stateAccess } : {}) });
+      return this.runtime.createAgentRunner(input.profile, registry, undefined, { contextInstructions, linkedFolders: project.linkedFolders, ...(stateAccess ? { stateAccess } : {}) });
     }
     let lease: ReturnType<typeof setInterval> | undefined;
     let signal: AbortSignal | undefined;
@@ -257,6 +264,8 @@ export class WorkspaceRuns {
           cwd: input.cwd,
           // Home-relative entries only; the device validates them against its own home.
           trustedFolders: portableTrustedFolders(options.trustedFolders ?? []),
+          // The project's links on this device; it checks them against its own roots.
+          linkedFolders: project.linkedFolders,
           files: options.files,
           images: options.images,
         })) as RunWorkspace;
@@ -273,12 +282,13 @@ export class WorkspaceRuns {
     });
   }
 
-  /** A project speaker's asset tools, and its manifest for the run instructions. */
-  private projectAssets(input: RunStartInput, registry: ToolRegistry, outputs: RunOutputs): string[] {
-    if (!input.projectId) { return []; }
+  /** A project run's asset tools, its manifest for the run instructions, and
+   * its links on the run's device, which the run's tools may read. */
+  private projectAssets(input: RunStartInput, registry: ToolRegistry, outputs: RunOutputs, links: LinkRun): { instructions: string[]; linkedFolders: string[] } {
+    if (!input.projectId) { return { instructions: [], linkedFolders: [] }; }
     const assets = this.runtime.projects.assets;
-    for (const tool of projectAssetTools({ assets, projectId: input.projectId, profile: input.profile, runId: input.registryRunId, outputs })) { registry.register(tool); }
-    return [projectAssetManifest(assets, input.projectId)];
+    for (const tool of projectAssetTools({ assets, projectId: input.projectId, profile: input.profile, runId: input.registryRunId, outputs, links })) { registry.register(tool); }
+    return { instructions: [projectAssetManifest(assets, input.projectId, links)], linkedFolders: linkedPathsOn(assets.list(input.projectId).assets, links.deviceId) };
   }
 }
 

@@ -170,4 +170,21 @@ describe('guest execution', () => {
       executor.close();
     }
   });
+
+  it("grants the host's linked project folders read-only, checked against this device's roots", async () => {
+    // App state is the runs folder's parent, as with ~/.marifold/runs.
+    const state = fs.mkdtempSync(path.join(os.tmpdir(), 'marifold-policy-state-'));
+    const runs = path.join(state, 'runs');
+    const linked = fs.mkdtempSync(path.join(os.tmpdir(), 'marifold-linked-'));
+    dirs.push(state, linked);
+    const executor = new WorkspaceExecutor(() => resolveAgentConfig({}), runs);
+    const context = { workspaceId: 'workspace', senderDeviceId: 'host', hostDeviceId: 'host' };
+    try {
+      const workspace = await executor.handle('executor.prepare', { runId: 'linked', linkedFolders: [linked, 7, '/', state] }, context) as RunWorkspace;
+      expect(workspace.readOnlyRoots).toEqual([fs.realpathSync(linked)]);
+      expect(workspace.writeRoots).not.toContain(fs.realpathSync(linked));
+    } finally {
+      executor.close();
+    }
+  });
 });

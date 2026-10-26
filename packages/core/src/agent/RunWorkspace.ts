@@ -106,6 +106,11 @@ export interface CreateRunWorkspaceOptions {
   /** Narrow exact-file capabilities. Unlike readOnlyFolders, these never widen
    * access to siblings in the containing directory. */
   readOnlyFiles?: string[];
+  /** A project's linked files and folders on this device (`~/…` or absolute):
+   * read-only, also outside home. Checked here, on the device that enforces
+   * them: broad roots, app state, denied roots, and anything holding or inside
+   * a sensitive or startup root are dropped, so reads there still ask. */
+  linkedFolders?: string[];
   files?: RunFileInput[];
   /** Prepared image inputs to stage alongside ordinary files for lazy,
    * attachment-scoped inspection during an agent run. */
@@ -152,7 +157,9 @@ export function createRunWorkspace(options: CreateRunWorkspaceOptions): RunWorks
   const readOnlyRoots = uniqueExistingDirectories(options.readOnlyFolders ?? [])
     .filter(folder => options.allowExternalReadOnlyFolders || isInside(folder, userHome))
     .filter(folder => !isUnsafeBroadReadRoot(folder, userHome, appHome));
-  const readOnlyFiles = uniqueExistingFiles(options.readOnlyFiles ?? []);
+  const linked = linkedReadPaths(options.linkedFolders ?? [], userHome, appHome, options.deniedRoots ?? []);
+  readOnlyRoots.push(...linked.folders.filter(folder => !readOnlyRoots.includes(folder)));
+  const readOnlyFiles = uniqueExistingFiles([...(options.readOnlyFiles ?? []), ...linked.files]);
   const runWriteRoots = [homeDir, workDir, outputDir, tempDir, cacheDir].map(canonicalExistingPath);
   const writeRoots = uniquePaths([cwd, ...trusted, ...runWriteRoots]);
   const readRoots = uniquePaths([...writeRoots, canonicalExistingPath(inputDir), ...readOnlyRoots]);
@@ -505,6 +512,26 @@ function isUnsafeBroadRoot(target: string, userHome: string, appHome: string): b
     || resolved === appHome
     || isInside(appHome, resolved)
     || isInside(resolved, appHome);
+}
+
+function linkedReadPaths(entries: string[], userHome: string, appHome: string, deniedRoots: string[]): { folders: string[]; files: string[] } {
+  const folders: string[] = [];
+  const files: string[] = [];
+  for (const entry of entries) {
+    if (entry.includes('\0')) { continue; }
+    const local = entry === '~' ? userHome : entry.startsWith('~/') ? path.join(userHome, entry.slice(2)) : entry;
+    if (!path.isAbsolute(local)) { continue; }
+    const resolved = canonicalExistingPath(local);
+    if (isUnsafeBroadRoot(resolved, userHome, appHome) || coversProtectedRoot(resolved, userHome)
+      || deniedRoots.some(root => isInside(resolved, root) || isInside(root, resolved))) { continue; }
+    try {
+      const stat = fs.statSync(resolved);
+      if (stat.isDirectory()) { folders.push(resolved); } else if (stat.isFile()) { files.push(resolved); }
+    } catch {
+      // Missing on this device: the link is unavailable here.
+    }
+  }
+  return { folders, files };
 }
 
 function isUnsafeBroadReadRoot(target: string, userHome: string, appHome: string): boolean {

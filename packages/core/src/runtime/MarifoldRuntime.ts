@@ -86,7 +86,7 @@ import {
 } from '../app/SkillAppInstanceRegistry';
 import { TaskStore } from '../tasks/TaskStore';
 import { defaultAppsDir, defaultSchedulesDir, defaultSkillsDir, expandHome, marifoldHome } from '../workspace/WorkspacePaths';
-import { HOME_TRUSTED_FOLDER } from '../agent/RunWorkspace';
+import { createRunWorkspace, HOME_TRUSTED_FOLDER } from '../agent/RunWorkspace';
 import type { TaskCreateInput, TaskEventInput, TaskListOptions, TaskState, TaskSummary, TaskUpdateInput } from '../tasks/TaskStore';
 import type { MarifoldAskResponse, MarifoldProviderToolDefinition, MarifoldResolvedSettings, MarifoldRunRequest, MarifoldWebSearchMode } from './MarifoldTypes';
 import { ProviderEngines } from './ProviderEngines';
@@ -579,7 +579,7 @@ export class MarifoldRuntime {
       environment: this.options.environment,
       stateAccess: runtimeOptions.stateAccess,
       contextInstructions: runtimeOptions.contextInstructions,
-      createWorkspace: runtimeOptions.createWorkspace,
+      createWorkspace: runtimeOptions.createWorkspace ?? (runtimeOptions.linkedFolders?.length ? async options => createRunWorkspace({ ...options, linkedFolders: runtimeOptions.linkedFolders }) : undefined),
       listArtifacts: runtimeOptions.listArtifacts,
       taskStore: this.taskStore,
       registry: registry ?? this.createDefaultToolRegistry(profile),
