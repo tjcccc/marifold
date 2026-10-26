@@ -6,7 +6,7 @@ A disposable OrbStack Linux guest with a local HTTPS bridge and a private test t
 
 A workspace belongs to one person. Hosting shares this device's existing local `.marifold` configuration, profiles, sessions, Skills, Apps and schedules. The host retains the model credentials and authoritative data. A guest joins a live view; it does not copy the host's database or become another host when disconnected.
 
-The host and every guest must run the exact same Marifold release. An invitation from a different release is rejected before pairing. Existing pairings remain unavailable after one device updates until the other device updates too; the Web workspace control shows a version mismatch warning. Update all devices together.
+The host and every guest must run the exact same Marifold release. An invitation from a different release is rejected before pairing. A device cannot join under the name of a profile on the host (`@name` would be ambiguous); rename that profile first. Existing pairings remain unavailable after one device updates until the other device updates too; the Web workspace control shows a version mismatch warning. Update all devices together.
 
 Each Mac runs `marifold service`. CLI, TUI and the service-hosted Web UI use that local service's outbound bridge connection, so neither Mac needs an inbound port or Tailscale. Browser-only pairing and native iOS clients are future work.
 

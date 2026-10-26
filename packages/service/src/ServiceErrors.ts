@@ -44,6 +44,7 @@ function statusCodeForError(error: MarifoldError): number {
   if (
     error.code === 'TASK_NOT_FOUND'
     || error.code === 'SCHEDULE_NOT_FOUND'
+    || error.code === 'PROJECT_NOT_FOUND'
     || error.code === 'SKILL_NOT_FOUND'
     || error.code === 'APP_NOT_FOUND'
     || error.code === 'RUN_NOT_FOUND'
@@ -60,6 +61,7 @@ function statusCodeForError(error: MarifoldError): number {
     || error.code === 'MEMORY_INVALID'
     || error.code === 'TASK_INVALID'
     || error.code === 'SCHEDULE_INVALID'
+    || error.code === 'PROJECT_INVALID'
     || error.code === 'AGENT_TOOL_INVALID'
     || error.code === 'AGENT_RUN_INVALID'
     || error.code === 'SKILL_INVALID'

@@ -40,6 +40,8 @@ it('routes inline device mentions and rejects conflicting targets', async () => 
   expect(result.execution?.executionDeviceId).toBe('guest');
   await expect(fixture().resolve({ objective: 'Close on @guest and @Home' }, {})).rejects.toThrow('one @device');
   await expect(fixture().resolve({ objective: 'Close on @missing' }, {})).rejects.toThrow('unknown');
+  expect((await fixture().resolve({ objective: '@guest, run id -u' }, {})).execution?.executionDeviceId).toBe('guest');
+  expect((await fixture().resolve({ objective: 'run `ls @guest` here' }, {})).execution?.executionDeviceId).toBe('home');
   expect((await fixture().resolve({ objective: 'Email me@example.com' }, {})).execution?.executionDeviceId).toBe('home');
 });
 

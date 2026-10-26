@@ -12,6 +12,7 @@ import {
   type ToolRiskAssessment,
 } from '../agent/ToolRegistry';
 import type { MarifoldRuntime } from '../runtime/MarifoldRuntime';
+import { matchMention, mentionTokens } from '../agent/Mentions';
 import { mentionsSkillManagement } from '../skill/BuiltInSkillManager';
 import { mentionsAgentComputer } from '../computer/ComputerTools';
 import { mentionsMarifoldState } from './RemoteStateAccess';
@@ -38,10 +39,10 @@ export class WorkspaceRuns {
     selection: { workspaceId?: string; executionDeviceId?: string },
     origin?: WorkspaceOperationContext,
   ): Promise<RunStartInput> {
-    const mentions = [...input.objective.matchAll(/(^|\s)@(?:"([^"\r\n]+)"|([^\s"]+))(?=\s|$)/g)];
+    const mentions = mentionTokens(input.objective);
     if (mentions.length > 1) { throw new Error('Select one @device per task.'); }
     const mention = mentions[0];
-    const task = mention ? (input.objective.slice(0, mention.index) + input.objective.slice(mention.index! + mention[0].length)).trim() : input.objective;
+    const task = mention ? (input.objective.slice(0, mention.at) + input.objective.slice(mention.end)).trim() : input.objective;
     if ((input.objective.startsWith('@') && !mention) || (mention && !task)) {
       throw new Error('Use @device with a task.');
     }
@@ -66,22 +67,18 @@ export class WorkspaceRuns {
     const management = mentionsSkillManagement(input.userTurn ?? input.objective);
     const computer = mentionsAgentComputer(input.userTurn ?? input.objective);
     const hostOwned = skill || management || computer || mentionsMarifoldState(input.userTurn ?? input.objective);
-    const mentioned = mention?.[2] ?? mention?.[3];
-    const find = (value: string) => devices.filter(d => d.id === value || d.name.toLowerCase() === value.toLowerCase());
-    // Accept a possessive ("@office's folder") when no device carries that exact name.
-    const possessive = mentioned?.replace(/['’]s$/i, '');
-    const name = mentioned && possessive !== mentioned && find(mentioned).length === 0 ? possessive : mentioned;
-    const matches = name ? find(name) : [];
-    if (name && matches.length !== 1) { throw new Error('The mentioned device is unknown or ambiguous. Select a device from the @ menu.'); }
+    // "@office's folder" and "@office," name the device too (matchMention).
+    const matches = mention ? matchMention(mention, devices, d => [d.id, d.name]).targets : [];
+    if (mention && matches.length !== 1) { throw new Error('The mentioned device is unknown or ambiguous. Select a device from the @ menu.'); }
     // "install abc from @office's ~/x" or "copy @office's ~/x to your computer":
     // the mention names where the source is and the run stays on the host, which
     // has the skill tools and drives the agent computer. Any other @device
     // still routes the run there.
     const sourceMention = mention !== undefined && (computer || (management && isSkillSourceMention(
-      input.objective.slice(0, mention.index! + mention[1].length),
+      input.objective.slice(0, mention.at),
       input.objective,
     )));
-    const explicit = name && !sourceMention ? matches[0]!.id : selection.executionDeviceId;
+    const explicit = mention && !sourceMention ? matches[0]!.id : selection.executionDeviceId;
     const executionDeviceId =
       explicit === 'host'
         ? connection.hostDeviceId

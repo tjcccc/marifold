@@ -31,6 +31,8 @@ import {
   PROFILE_DISPLAY_TABLE,
   SESSION_DISPLAY_TABLE,
 } from './SessionDisplayTables';
+import { profileActivity, type ProfileActivitySummary } from './ProfileActivityQuery';
+import { deleteProjectLinkForSession, ensureProjectSessionsTable, projectSessionFilter, renameProjectLink } from './ProjectSessionsTable';
 import { COMPACTION_METADATA_KEY, readSessionCompaction, type SessionCompactionState, writeSessionCompaction } from './SessionCompaction';
 
 const SESSION_TITLE_MAX_CHARS = 200;
@@ -49,7 +51,11 @@ export interface SessionListOptions {
   search?: string;
   /** `display` keeps pinned sessions first; `recent` ignores pin state. */
   order?: 'display' | 'recent';
+  /** Only this project's sessions; without it, only sessions in no project. */
+  projectId?: string;
 }
+
+export type { ProfileActivitySummary };
 
 /** Result of a session-DB integrity check (used by `marifold doctor`). */
 export interface SessionDbHealth {
@@ -70,13 +76,6 @@ export interface SessionTruncateResult {
 export interface SessionReplaceResult {
   found: boolean;
   replaced: boolean;
-}
-
-export interface ProfileActivitySummary {
-  profileName: string;
-  pinned?: boolean;
-  updatedAt?: string;
-  preview?: string;
 }
 
 export class SessionResolver {
@@ -135,9 +134,11 @@ export class SessionResolver {
     const db = this.open();
     try {
       ensureSessionDisplayTable(db);
+      ensureProjectSessionsTable(db);
       const search = options.search?.trim().toLowerCase() ?? '';
       const filters = [
         ...(profileName ? ['s.profile_name = ?'] : []),
+        projectSessionFilter('s', options.projectId),
         ['COALESCE(d.archived, 0) = ?'],
         ...(search ? [`(
           LOWER(COALESCE(d.title, '')) LIKE ?
@@ -151,6 +152,7 @@ export class SessionResolver {
       ].flat();
       const params: Array<string | number> = [
         ...(profileName ? [profileName] : []),
+        ...(options.projectId !== undefined ? [options.projectId] : []),
         options.archived ? 1 : 0,
         ...(search ? [`%${search}%`, `%${search}%`] : []),
         limit,
@@ -218,73 +220,12 @@ export class SessionResolver {
   }
 
   /** Contact-list metadata for every profile represented either by a session
-   * or a pinned display row. The latest session determines activity/preview. */
+   * or a pinned display row (see `ProfileActivity`). */
   profileActivity(): ProfileActivitySummary[] {
     if (!fs.existsSync(this.sessionsDb)) { return []; }
-
     const db = this.open();
     try {
-      ensureProfileDisplayTable(db);
-      const rows = db.prepare(`
-        SELECT
-          p.profile_name AS profileName,
-          p.pinned AS pinned,
-          s.updated_at AS updatedAt,
-          (
-            SELECT content
-            FROM turns
-            WHERE session_id = s.id AND role = 'assistant'
-            ORDER BY id DESC
-            LIMIT 1
-          ) AS response
-        FROM ${PROFILE_DISPLAY_TABLE} p
-        LEFT JOIN sessions s ON s.id = (
-          SELECT latest.id
-          FROM sessions latest
-          WHERE latest.profile_name = p.profile_name
-          ORDER BY latest.updated_at DESC, latest.id DESC
-          LIMIT 1
-        )
-        UNION ALL
-        SELECT
-          s.profile_name AS profileName,
-          0 AS pinned,
-          s.updated_at AS updatedAt,
-          (
-            SELECT content
-            FROM turns
-            WHERE session_id = s.id AND role = 'assistant'
-            ORDER BY id DESC
-            LIMIT 1
-          ) AS response
-        FROM sessions s
-        WHERE s.id = (
-          SELECT latest.id
-          FROM sessions latest
-          WHERE latest.profile_name = s.profile_name
-          ORDER BY latest.updated_at DESC, latest.id DESC
-          LIMIT 1
-        )
-        AND NOT EXISTS (
-          SELECT 1
-          FROM ${PROFILE_DISPLAY_TABLE} p
-          WHERE p.profile_name = s.profile_name
-        )
-      `).all() as Array<{
-        profileName: string;
-        pinned: number;
-        updatedAt: string | null;
-        response: string | null;
-      }>;
-      return rows.map(row => {
-        const preview = row.response ? firstLinePreview(row.response) : '';
-        return {
-          profileName: row.profileName,
-          ...(row.pinned === 1 ? { pinned: true } : {}),
-          ...(row.updatedAt ? { updatedAt: row.updatedAt } : {}),
-          ...(preview ? { preview } : {}),
-        };
-      });
+      return profileActivity(db);
     } catch (error) {
       throw this.storeError(`Could not list profile activity from ${this.sessionsDb}: ${String(error)}`);
     } finally {
@@ -328,10 +269,11 @@ export class SessionResolver {
     const db = this.open();
     let id: string | undefined;
     try {
+      ensureProjectSessionsTable(db);
       const row = db.prepare(`
         SELECT id
         FROM sessions
-        ${profileName ? 'WHERE profile_name = ?' : ''}
+        WHERE ${profileName ? 'profile_name = ? AND ' : ''}${projectSessionFilter('sessions')}
         ORDER BY updated_at DESC
         LIMIT 1
       `).get(...(profileName ? [profileName] : [])) as { id: string } | undefined;
@@ -457,13 +399,13 @@ export class SessionResolver {
 
   delete(sessionId: string): boolean {
     if (!fs.existsSync(this.sessionsDb)) { return false; }
-
     const db = this.open();
     try {
       const transaction = db.transaction(() => {
         deleteAttachmentsForSession(db, sessionId);
         deleteResponseMetricsForSession(db, sessionId);
         deleteDisplayForSession(db, sessionId);
+        deleteProjectLinkForSession(db, sessionId);
         db.prepare('DELETE FROM turns WHERE session_id = ?').run(sessionId);
         return db.prepare('DELETE FROM sessions WHERE id = ?').run(sessionId).changes;
       });
@@ -696,7 +638,9 @@ export class SessionResolver {
       const where: string[] = [];
       const params: string[] = [];
       if (options.profileName) {
-        where.push('profile_name = ?');
+        // A profile's own sessions: project sessions belong to their project.
+        ensureProjectSessionsTable(db);
+        where.push('profile_name = ?', projectSessionFilter('sessions'));
         params.push(options.profileName);
       }
       if (options.before) {
@@ -721,6 +665,7 @@ export class SessionResolver {
           deleteAttachmentsForSession(db, id);
           deleteResponseMetricsForSession(db, id);
           deleteDisplayForSession(db, id);
+          deleteProjectLinkForSession(db, id);
           deleteTurns.run(id);
           deleteSession.run(id);
         }
@@ -914,6 +859,7 @@ export class SessionResolver {
           db.prepare(`UPDATE ${SESSION_DISPLAY_TABLE} SET session_id = ? WHERE session_id = ?`)
             .run(toSessionId, fromSessionId);
         }
+        renameProjectLink(db, fromSessionId, toSessionId);
         db.prepare('UPDATE turns SET session_id = ? WHERE session_id = ?').run(toSessionId, fromSessionId);
         db.prepare('DELETE FROM sessions WHERE id = ?').run(fromSessionId);
       });
@@ -967,16 +913,4 @@ function sessionPreview(content: string): string {
   const flat = content.replace(/\s+/g, ' ').trim();
   if (flat.length <= PREVIEW_MAX_CHARS) { return flat; }
   return `${flat.slice(0, PREVIEW_MAX_CHARS - 1).trimEnd()}…`;
-}
-
-function firstLinePreview(content: string): string {
-  const first = content
-    .split(/\r?\n/)
-    .map(line => line.trim())
-    .find(Boolean)
-    ?.replace(/^#{1,6}\s+/, '')
-    .replace(/^[-*+]\s+/, '')
-    .replace(/^\d+[.)]\s+/, '') ?? '';
-  if (first.length <= PREVIEW_MAX_CHARS) { return first; }
-  return `${first.slice(0, PREVIEW_MAX_CHARS - 1).trimEnd()}…`;
 }

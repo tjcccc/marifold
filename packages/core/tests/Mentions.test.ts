@@ -1,0 +1,38 @@
+import { describe, expect, it } from 'vitest';
+import { matchMention, mentionTokens } from '../src/agent/Mentions';
+
+const names = ['dev_test', 'painter', 'STJC-M1P-2.local', 'Office Mac'];
+const match = (text: string) => {
+  const [mention] = mentionTokens(text);
+  if (!mention) { return undefined; }
+  const { targets, end } = matchMention(mention, names, name => [name]);
+  return { targets, rest: text.slice(end) };
+};
+
+describe('mentions', () => {
+  it('finds mentions at the start or after whitespace, never in e-mail addresses or code', () => {
+    expect(mentionTokens('@painter hi, ask @"Office Mac" too').map(m => m.token)).toEqual(['painter', 'Office Mac']);
+    expect(mentionTokens('mail me@example.com')).toEqual([]);
+    expect(mentionTokens('run `npm i @types/node` and\n```\n@scope/pkg\n```')).toEqual([]);
+  });
+
+  it('ends a name at punctuation, a possessive, CJK text, or a path', () => {
+    expect(match('@dev_test, which engine?')).toEqual({ targets: ['dev_test'], rest: ', which engine?' });
+    expect(match('@painter，给我一个提示词')?.targets).toEqual(['painter']);
+    expect(match('@painter给我一个提示词')).toEqual({ targets: ['painter'], rest: '给我一个提示词' });
+    expect(match("@stjc-m1p-2.local's ~/x")?.targets).toEqual(['STJC-M1P-2.local']);
+    expect(match('@"Office Mac", hello')).toEqual({ targets: ['Office Mac'], rest: ', hello' });
+    expect(match('@painter/~/tempfiles')?.rest).toBe('/~/tempfiles');
+  });
+
+  it('does not match a longer name or a partial quoted name', () => {
+    expect(match('@painter2 hi')?.targets).toEqual([]);
+    expect(match('@dev hi')?.targets).toEqual([]);
+    expect(match('@"Office" hi')?.targets).toEqual([]);
+  });
+
+  it('reports every candidate an ambiguous name matches', () => {
+    const [mention] = mentionTokens('@home run');
+    expect(matchMention(mention!, ['Home', 'home'], name => [name]).targets).toEqual(['Home', 'home']);
+  });
+});

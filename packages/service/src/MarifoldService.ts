@@ -83,8 +83,9 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
     corsOrigins: options.cors?.origins,
   });
 
-  // Called only after startup, once `server` exists.
-  const runtime = new MarifoldRuntime({ loadedConfig: options.loadedConfig, log: message => server.log.warn(message) });
+  // Called only after startup, once `server` and `workspaceRuns` exist.
+  const runtime = new MarifoldRuntime({ loadedConfig: options.loadedConfig, log: message => server.log.warn(message),
+    deviceNames: () => workspaceRuns.devices().flatMap(device => [device.name, device.id]) });
   const server = fastify({ logger: options.logger ?? false, bodyLimit: BODY_LIMIT_BYTES });
   const artifactTickets = new ArtifactTickets();
   registerSecurity(server, {
@@ -116,6 +117,7 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
   server.addHook('onClose', async () => artifactTransfers.close());
   const workspaceExecutor = new WorkspaceExecutor(() => runtime.resolveAgentConfigForProfile(), path.join(workspaceManager.store.directory, 'runs'), [options.loadedConfig.configPath, ...Object.values(options.loadedConfig.config.paths).filter((value): value is string => typeof value === 'string'), path.dirname(workspaceManager.store.directory)], artifactTransfers, new DeviceExecution(options.loadedConfig.configPath), workspaceId => workspaceManager.store.get(workspaceId).certificate.membership.access === 'executor' ? undefined : runtime.remoteStateAccess());
   const workspaceRuns = new WorkspaceRuns(runtime, workspaceManager);
+  workspaceManager.reservedNames = () => runtime.listProfiles().map(profile => profile.name);
   const workspaceContext = new WorkspaceRequestContext();
   registerSessionOwners(server, workspaceContext);
   const runRegistry = runtime.createRunRegistry(message => server.log.info(message), input => workspaceRuns.createRunner(input), workspaceManager.store.runJournal);

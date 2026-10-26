@@ -46,7 +46,8 @@ import type { MemoryEntry, MemoryKind, MemoryMutationResult, MemoryRememberResul
 import { ProfileResolver } from '../profiles/ProfileResolver';
 import { ProfileManager } from '../profiles/ProfileManager';
 import type { ProfileFileKind, ProfileInstructionsMigrationResult, ProfileSettingsMigrationResult } from '../profiles/ProfileManager';
-import { renameProfile, type ProfileRenameOutcome } from '../profiles/ProfileRename';
+import { assertNotDeviceName, renameProfile, type ProfileRenameOutcome } from '../profiles/ProfileRename';
+import { ProjectStore } from '../projects/ProjectStore';
 import { Scheduler } from '../schedule/Scheduler';
 import { RunRegistry } from '../runs/RunRegistry';
 import { TelegramBridge } from '../channels/TelegramBridge';
@@ -106,6 +107,8 @@ export interface MarifoldRuntimeOptions {
   sessionOwner?: string;
   /** Background problems (such as a failed automatic compaction). */
   log?: (message: string) => void;
+  /** Workspace device names and ids, which profile names must not reuse (`@name` would be ambiguous). */
+  deviceNames?: () => readonly string[];
 }
 
 export class MarifoldRuntime {
@@ -126,6 +129,7 @@ export class MarifoldRuntime {
   private readonly searchBackendOverridden: boolean;
   private readonly scheduleStore: ScheduleStore;
   readonly agentComputer: AgentComputer;
+  readonly projects: ProjectStore;
 
   constructor(private readonly options: MarifoldRuntimeOptions) {
     this.sessionOwner = options.sessionOwner ?? leaseOwnerId();
@@ -134,6 +138,7 @@ export class MarifoldRuntime {
     this.profileResolver = new ProfileResolver(config.paths.profilesDir);
     this.profileManager = new ProfileManager(config.paths.profilesDir);
     this.sessionResolver = new SessionResolver(config.paths.sessionsDb);
+    this.projects = new ProjectStore(config.paths.sessionsDb, name => this.profileManager.exists(name));
     this.providerFactory = new ProviderFactory(config, configPath);
     this.engines = new ProviderEngines(options.loadedConfig, this.providerFactory, this.profileResolver, this.sessionResolver);
     this.agentCompaction = new AgentCompaction({ sessionResolver: this.sessionResolver, engines: this.engines,
@@ -141,8 +146,7 @@ export class MarifoldRuntime {
     this.memoryStore = new MemoryStore(config.paths.profilesDir);
     this.taskStore = new TaskStore(config.paths.tasksDir);
     this.searchBackendOverridden = options.searchBackend !== undefined;
-    this.searchBackend = options.searchBackend
-      ?? createSearchBackend(resolveWebSearchConfig(config.webSearch));
+    this.searchBackend = options.searchBackend ?? createSearchBackend(resolveWebSearchConfig(config.webSearch));
     this.scheduleStore = new ScheduleStore(config.paths.schedulesDir ?? defaultSchedulesDir());
     this.agentComputer = new AgentComputer(configPath);
     // Closures, not bound methods: spies installed on this runtime later still apply.
@@ -340,12 +344,12 @@ export class MarifoldRuntime {
   /** Scaffold a new profile directory (same layout as `profile init`) and
    * return its detail. Duplicate or invalid names throw PROFILE_INVALID. */
   initProfile(name: string): ProfileDetail {
+    assertNotDeviceName(name, this.options.deviceNames);
     this.profileManager.init(name);
     return this.getProfile(name);
   }
 
-  /** Delete stored profile files while retaining session history. The current
-   * configured default must be changed first, matching the CLI guard. */
+  /** Delete stored profile files, keeping session history. Not the configured default (as in the CLI) or a project Lead. */
   deleteProfile(name: string): void {
     if (this.options.loadedConfig.config.default.profile === name) {
       throw MarifoldError.profileInvalid(
@@ -353,15 +357,18 @@ export class MarifoldRuntime {
         name,
       );
     }
+    const led = this.projects.ledBy(name);
+    if (led.length > 0) { throw MarifoldError.profileInvalid(`'${name}' leads ${led.map(project => `'${project}'`).join(', ')}. Choose another Lead first.`, name); }
     this.profileManager.delete(name);
     this.sessionResolver.deleteProfileDisplay(name);
+    this.projects.removeProfile(name);
     // Recorded synchronously; the account goes now or on the computer's next use.
     void this.agentComputer.removeAccount(name).catch(() => undefined);
   }
 
   /** Rename a profile with its sessions, tasks, schedules, config references and computer account. */
   renameProfile(from: string, to: string): Promise<ProfileRenameOutcome> {
-    return renameProfile({ loadedConfig: this.options.loadedConfig, profileManager: this.profileManager, agentComputer: this.agentComputer }, from, to);
+    return renameProfile({ loadedConfig: this.options.loadedConfig, profileManager: this.profileManager, agentComputer: this.agentComputer, deviceNames: this.options.deviceNames }, from, to);
   }
 
   /** The profile's stored avatar image (path + media type), if any. */
@@ -513,8 +520,10 @@ export class MarifoldRuntime {
 
   getSession(sessionId: string): SessionDetail | undefined {
     const detail = this.sessionResolver.get(sessionId);
-    const compaction = detail ? this.sessionResolver.compaction(sessionId) : undefined;
-    return detail && sessionHistory(detail.turns, compaction)[0]?.role === 'summary' ? { ...detail, summarizedTurns: compaction?.summarizedThrough } : detail;
+    if (!detail) { return undefined; }
+    const compaction = this.sessionResolver.compaction(sessionId);
+    const projectId = this.projects.sessionProject(sessionId)?.projectId;
+    return { ...detail, ...(sessionHistory(detail.turns, compaction)[0]?.role === 'summary' ? { summarizedTurns: compaction?.summarizedThrough } : {}), ...(projectId ? { projectId } : {}) };
   }
 
   getSessionAttachment(
@@ -713,18 +722,11 @@ export class MarifoldRuntime {
     return registry;
   }
 
-  /**
-   * Skill store over the shared skills dir ([paths].skills_dir) and the given
-   * profile's skills/ dir (profile skills shadow global ones). Defaults to the
-   * configured default profile.
-   */
+  /** Skill store over [paths].skills_dir and the profile's (default: the configured one) skills/ dir, which shadows it. */
   createSkillStore(profile?: string): SkillStore {
     const { config } = this.options.loadedConfig;
-    const resolvedProfile = profile ?? config.default.profile;
-    return new SkillStore({
-      globalDir: config.paths.skillsDir ?? defaultSkillsDir(),
-      profileDir: path.join(config.paths.profilesDir, resolvedProfile, 'skills'),
-    });
+    const profileDir = path.join(config.paths.profilesDir, profile ?? config.default.profile, 'skills');
+    return new SkillStore({ globalDir: config.paths.skillsDir ?? defaultSkillsDir(), profileDir });
   }
 
   listSkills(profile?: string, scope?: SkillScope): MarifoldSkill[] {
@@ -818,10 +820,7 @@ export class MarifoldRuntime {
     return this.scheduleStore.delete(scheduleId);
   }
 
-  /**
-   * Execute one schedule unattended: [agent.unattended] approval overrides
-   * apply and 'ask' degrades to deny. Records lastRunAt/lastTaskId.
-   */
+  /** Execute one schedule unattended ([agent.unattended] overrides; 'ask' denies); records lastRunAt/lastTaskId. */
   async runScheduleUnattended(scheduleId: string): Promise<{ taskId?: string; status: string }> {
     const schedule = this.scheduleStore.require(scheduleId);
     const result = await this.runScheduledAgent(schedule);
@@ -835,11 +834,7 @@ export class MarifoldRuntime {
 
   /** Scheduler for the long-running service process. Call start()/stop(). */
   createScheduler(log?: (message: string) => void): Scheduler {
-    return new Scheduler({
-      store: this.scheduleStore,
-      runSchedule: schedule => this.runScheduledAgent(schedule),
-      log,
-    });
+    return new Scheduler({ store: this.scheduleStore, runSchedule: schedule => this.runScheduledAgent(schedule), log });
   }
 
   /** Telegram bridge for the service process, or undefined when not configured,

@@ -1,3 +1,4 @@
+import { sameMentionName } from '../agent/Mentions';
 import { MarifoldError } from '../errors/MarifoldError';
 import * as os from 'node:os';
 import {
@@ -34,6 +35,8 @@ export class WorkspaceManager {
   private versionErrors = new Map<string, string>();
   private presence = new Map<string, { seen: number; platform: string; architecture: string; executor: boolean; version: string }>();
   onMembershipRemoved?: (workspaceId: string, deviceId?: string) => void;
+  /** Host profile names a joining device's name must not reuse (`@name` would be ambiguous). */
+  reservedNames?: () => readonly string[];
   /** A guest's membership was refused by the bridge (revoked or removed). The
    * host can no longer reach this device to cancel work it started here. */
   onPairingRefused?: (workspaceId: string) => void;
@@ -451,6 +454,9 @@ export class WorkspaceManager {
         const input = record(request.input);
         if (request.operation === 'join') {
           if (sender.certificate || typeof input.secret !== 'string') { throw new Error('Invalid pairing request.'); }
+          if (this.reservedNames?.().some(name => sameMentionName(name, String(input.name)))) {
+            throw new Error(`A profile on the host is named '${String(input.name)}', so @${String(input.name)} would be ambiguous. Rename that profile on the host, then join again.`);
+          }
           return {
             name: this.store.get(c.id).name,
             certificate: this.store.enroll(c.id, input.secret, randomId(), String(input.name), sender.identity),

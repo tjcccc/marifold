@@ -240,6 +240,9 @@ export type {
   ProfileRenameResult,
 } from './profiles/ProfileManager';
 export { orphanedSessionProfiles, renameProfile } from './profiles/ProfileRename';
+export { ProjectStore } from './projects/ProjectStore';
+export type { ProjectCreateInput, ProjectDetail, ProjectSummary, ProjectUpdate, SessionProject } from './projects/ProjectStore';
+export { matchMention, mentionTokens, type MentionToken } from './agent/Mentions';
 export type { ProfileRenameOutcome } from './profiles/ProfileRename';
 export { ProfileResolver } from './profiles/ProfileResolver';
 export { PROFILE_DEFAULT_MODEL, parseProfileModel, profileModelValue } from './profiles/ProfileModel';

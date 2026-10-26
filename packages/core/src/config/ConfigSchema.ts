@@ -301,4 +301,6 @@ export interface SessionDetail extends SessionSummary {
   turns: SessionTurnSummary[];
   /** Leading turns folded into the running summary (omitted when none). */
   summarizedTurns?: number;
+  /** The project this session belongs to; absent for an ordinary profile session. */
+  projectId?: string;
 }

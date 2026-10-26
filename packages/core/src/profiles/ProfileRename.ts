@@ -3,7 +3,9 @@ import Database from 'better-sqlite3';
 import type { AgentComputer } from '../computer/AgentComputer';
 import type { LoadedMarifoldConfig } from '../config/ConfigSchema';
 import { ConfigManager } from '../config/ConfigManager';
+import { sameMentionName } from '../agent/Mentions';
 import { MarifoldError } from '../errors/MarifoldError';
+import { renameProjectProfile } from '../projects/ProjectStore';
 import { ScheduleStore } from '../schedule/ScheduleStore';
 import { hasProfileDisplayTable, PROFILE_DISPLAY_TABLE } from '../sessions/SessionDisplayTables';
 import { TaskStore } from '../tasks/TaskStore';
@@ -11,7 +13,7 @@ import type { ProfileManager } from './ProfileManager';
 
 /**
  * A profile's name is also the key of everything kept outside its folder:
- * sessions and the profile pin in the sessions database, task and schedule
+ * sessions, the profile pin and project rosters in the sessions database, task and schedule
  * records, `default.profile`, the Telegram channel, and the agent computer
  * account. Renaming moves all of them, so nothing is left under the old name.
  */
@@ -33,6 +35,16 @@ export interface ProfileRenameDeps {
   loadedConfig: LoadedMarifoldConfig;
   profileManager: ProfileManager;
   agentComputer: AgentComputer;
+  /** Workspace device names and ids the new name must not reuse. */
+  deviceNames?: () => readonly string[];
+}
+
+/** Refuse a profile name a workspace device already answers to: `@name`
+ * would be ambiguous. Names that already collide stay as they are. */
+export function assertNotDeviceName(name: string, deviceNames?: () => readonly string[]): void {
+  if (deviceNames?.().some(device => sameMentionName(device, name))) {
+    throw MarifoldError.profileInvalid(`A device in this workspace is named '${name}', so @${name} would be ambiguous. Choose another profile name.`, name);
+  }
 }
 
 /**
@@ -46,6 +58,7 @@ export async function renameProfile(deps: ProfileRenameDeps, from: string, to: s
   const fromExists = profileManager.exists(from);
   let moved: { fromPath: string; toPath: string } | undefined;
   if (fromExists || !profileManager.exists(to)) {
+    assertNotDeviceName(to, deps.deviceNames);
     const result = profileManager.rename(from, to);
     moved = { fromPath: result.fromPath, toPath: result.toPath };
   } else if (!profileRecordCount(paths.sessionsDb, from)) {
@@ -95,7 +108,8 @@ function sessionCounts(sessionsDb: string): Map<string, number> {
   }
 }
 
-/** One transaction: the sessions and the profile pin move together or not at all. */
+/** One transaction: the sessions, the profile pin, and project rosters, Leads
+ * and floors move together or not at all. */
 function moveSessions(sessionsDb: string, from: string, to: string): number {
   if (!fs.existsSync(sessionsDb)) { return 0; }
   const db = new Database(sessionsDb, { fileMustExist: true });
@@ -104,6 +118,7 @@ function moveSessions(sessionsDb: string, from: string, to: string): number {
     return db.transaction(() => {
       const hasSessions = db.prepare(`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'sessions'`).get();
       const changes = hasSessions ? db.prepare('UPDATE sessions SET profile_name = ? WHERE profile_name = ?').run(to, from).changes : 0;
+      renameProjectProfile(db, from, to);
       if (hasProfileDisplayTable(db)) {
         db.prepare(`DELETE FROM ${PROFILE_DISPLAY_TABLE} WHERE profile_name = ? AND EXISTS (SELECT 1 FROM ${PROFILE_DISPLAY_TABLE} WHERE profile_name = ?)`).run(to, from);
         db.prepare(`UPDATE ${PROFILE_DISPLAY_TABLE} SET profile_name = ? WHERE profile_name = ?`).run(to, from);
