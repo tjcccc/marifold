@@ -1,13 +1,22 @@
 import type Database from 'better-sqlite3';
 import type { ResponseMetrics } from './ResponseMetrics';
 
-// Durable per-response metrics (mode, model, latency, usage), one row per
-// answered user turn.
+// Durable per-response metrics (mode, model, latency, usage). A user turn's
+// first reply keeps its row in the original table, which older Marifold
+// versions read and write; later replies (several profiles answering one
+// project message) go to a twin table keyed by reply index as well.
 
 export const RESPONSE_METRICS_TABLE = 'marifold_response_metrics';
+export const REPLY_METRICS_TABLE = 'marifold_reply_metrics';
+
+/** Map key for one reply: zero-based user-turn and reply ordinals. */
+export function replyKey(userTurnIndex: number, replyIndex: number): string {
+  return `${userTurnIndex}:${replyIndex}`;
+}
 
 interface ResponseMetricsRow {
   userTurnIndex: number;
+  replyIndex: number;
   mode: ResponseMetrics['mode'];
   provider: string;
   model: string;
@@ -23,11 +32,7 @@ interface ResponseMetricsRow {
   estimatedCostUSD: number | null;
 }
 
-export function ensureResponseMetricsTable(db: Database.Database): void {
-  db.exec(`
-      CREATE TABLE IF NOT EXISTS ${RESPONSE_METRICS_TABLE} (
-        session_id TEXT NOT NULL,
-        user_turn_index INTEGER NOT NULL CHECK (user_turn_index >= 0),
+const METRIC_COLUMNS = `
         mode TEXT NOT NULL CHECK (mode IN ('agent', 'chat')),
         provider TEXT NOT NULL,
         model TEXT NOT NULL,
@@ -40,7 +45,13 @@ export function ensureResponseMetricsTable(db: Database.Database): void {
         total_tokens INTEGER CHECK (total_tokens IS NULL OR total_tokens >= 0),
         cached_input_tokens INTEGER CHECK (cached_input_tokens IS NULL OR cached_input_tokens >= 0),
         reasoning_tokens INTEGER CHECK (reasoning_tokens IS NULL OR reasoning_tokens >= 0),
-        estimated_cost_usd REAL CHECK (estimated_cost_usd IS NULL OR estimated_cost_usd >= 0),
+        estimated_cost_usd REAL CHECK (estimated_cost_usd IS NULL OR estimated_cost_usd >= 0),`;
+
+export function ensureResponseMetricsTable(db: Database.Database): void {
+  db.exec(`
+      CREATE TABLE IF NOT EXISTS ${RESPONSE_METRICS_TABLE} (
+        session_id TEXT NOT NULL,
+        user_turn_index INTEGER NOT NULL CHECK (user_turn_index >= 0),${METRIC_COLUMNS}
         PRIMARY KEY (session_id, user_turn_index)
       );
       CREATE INDEX IF NOT EXISTS idx_marifold_response_metrics_finished
@@ -50,25 +61,42 @@ export function ensureResponseMetricsTable(db: Database.Database): void {
     `);
 }
 
+function ensureReplyMetricsTable(db: Database.Database): void {
+  db.exec(`
+      CREATE TABLE IF NOT EXISTS ${REPLY_METRICS_TABLE} (
+        session_id TEXT NOT NULL,
+        user_turn_index INTEGER NOT NULL CHECK (user_turn_index >= 0),
+        reply_index INTEGER NOT NULL CHECK (reply_index >= 1),${METRIC_COLUMNS}
+        PRIMARY KEY (session_id, user_turn_index, reply_index)
+      );
+    `);
+}
+
 export function hasResponseMetricsTable(db: Database.Database): boolean {
+  return hasTable(db, RESPONSE_METRICS_TABLE);
+}
+
+export function hasTable(db: Database.Database, name: string): boolean {
   return db.prepare(`
       SELECT 1
       FROM sqlite_master
       WHERE type = 'table' AND name = ?
-    `).get(RESPONSE_METRICS_TABLE) !== undefined;
+    `).get(name) !== undefined;
 }
 
+/** Store one reply's metrics; reply 0 (the default) is the user turn's first answer. */
 export function upsertResponseMetrics(
   db: Database.Database,
   sessionId: string,
   userTurnIndex: number,
   metrics: ResponseMetrics,
+  replyIndex = 0,
 ): void {
-  ensureResponseMetricsTable(db);
+  const keys = replyIndex > 0 ? ['session_id', 'user_turn_index', 'reply_index'] : ['session_id', 'user_turn_index'];
+  if (replyIndex > 0) { ensureReplyMetricsTable(db); } else { ensureResponseMetricsTable(db); }
   db.prepare(`
-      INSERT INTO ${RESPONSE_METRICS_TABLE} (
-        session_id,
-        user_turn_index,
+      INSERT INTO ${replyIndex > 0 ? REPLY_METRICS_TABLE : RESPONSE_METRICS_TABLE} (
+        ${keys.join(', ')},
         mode,
         provider,
         model,
@@ -82,8 +110,8 @@ export function upsertResponseMetrics(
         cached_input_tokens,
         reasoning_tokens,
         estimated_cost_usd
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(session_id, user_turn_index) DO UPDATE SET
+      ) VALUES (${keys.map(() => '?').join(', ')}, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(${keys.join(', ')}) DO UPDATE SET
         mode = excluded.mode,
         provider = excluded.provider,
         model = excluded.model,
@@ -100,6 +128,7 @@ export function upsertResponseMetrics(
     `).run(
     sessionId,
     userTurnIndex,
+    ...(replyIndex > 0 ? [replyIndex] : []),
     metrics.mode,
     metrics.provider,
     metrics.model,
@@ -116,11 +145,10 @@ export function upsertResponseMetrics(
   );
 }
 
-export function listResponseMetrics(db: Database.Database, sessionId: string): Map<number, ResponseMetrics> {
-  const byTurn = new Map<number, ResponseMetrics>();
-  if (!hasResponseMetricsTable(db)) { return byTurn; }
-  const rows = db.prepare(`
-      SELECT
+/** A session's reply metrics keyed by `replyKey`. */
+export function listResponseMetrics(db: Database.Database, sessionId: string): Map<string, ResponseMetrics> {
+  const byReply = new Map<string, ResponseMetrics>();
+  const columns = `
         user_turn_index AS userTurnIndex,
         mode,
         provider,
@@ -134,11 +162,13 @@ export function listResponseMetrics(db: Database.Database, sessionId: string): M
         total_tokens AS totalTokens,
         cached_input_tokens AS cachedInputTokens,
         reasoning_tokens AS reasoningTokens,
-        estimated_cost_usd AS estimatedCostUSD
-      FROM ${RESPONSE_METRICS_TABLE}
-      WHERE session_id = ?
-      ORDER BY user_turn_index ASC
-    `).all(sessionId) as ResponseMetricsRow[];
+        estimated_cost_usd AS estimatedCostUSD`;
+  const selects = [
+    ...(hasResponseMetricsTable(db) ? [`SELECT 0 AS replyIndex, ${columns} FROM ${RESPONSE_METRICS_TABLE} WHERE session_id = ?`] : []),
+    ...(hasTable(db, REPLY_METRICS_TABLE) ? [`SELECT reply_index AS replyIndex, ${columns} FROM ${REPLY_METRICS_TABLE} WHERE session_id = ?`] : []),
+  ];
+  if (selects.length === 0) { return byReply; }
+  const rows = db.prepare(selects.join(' UNION ALL ')).all(...selects.map(() => sessionId)) as ResponseMetricsRow[];
   for (const row of rows) {
     const usage = {
       ...(row.inputTokens !== null ? { inputTokens: row.inputTokens } : {}),
@@ -148,7 +178,7 @@ export function listResponseMetrics(db: Database.Database, sessionId: string): M
       ...(row.reasoningTokens !== null ? { reasoningTokens: row.reasoningTokens } : {}),
       ...(row.estimatedCostUSD !== null ? { estimatedCostUSD: row.estimatedCostUSD } : {}),
     };
-    byTurn.set(row.userTurnIndex, {
+    byReply.set(replyKey(row.userTurnIndex, row.replyIndex), {
       mode: row.mode,
       provider: row.provider,
       model: row.model,
@@ -159,12 +189,7 @@ export function listResponseMetrics(db: Database.Database, sessionId: string): M
       ...(Object.keys(usage).length > 0 ? { usage } : {}),
     });
   }
-  return byTurn;
-}
-
-export function deleteResponseMetricsForSession(db: Database.Database, sessionId: string): void {
-  if (!hasResponseMetricsTable(db)) { return; }
-  db.prepare(`DELETE FROM ${RESPONSE_METRICS_TABLE} WHERE session_id = ?`).run(sessionId);
+  return byReply;
 }
 
 function nonNegativeInteger(value: number | undefined): number | null {

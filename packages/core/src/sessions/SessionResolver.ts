@@ -5,13 +5,8 @@ import { type ImageInput, SQLiteSessionStore } from '@priest-ai/core';
 import type { SessionDetail, SessionSummary, SessionTurnSummary } from '../config/ConfigSchema';
 import { MarifoldError } from '../errors/MarifoldError';
 import type { ResponseMetrics } from './ResponseMetrics';
-import {
-  deleteResponseMetricsForSession,
-  hasResponseMetricsTable,
-  listResponseMetrics,
-  RESPONSE_METRICS_TABLE,
-  upsertResponseMetrics,
-} from './ResponseMetricsTable';
+import { listResponseMetrics, replyKey } from './ResponseMetricsTable';
+import { addReply, deleteReplyRows, lastReplyPosition, listReplySpeakers, recordReply, renameReplyRows, replaceExchange, type ReplyPosition, type ReplyRecord } from './SessionReplies';
 import {
   ATTACHMENTS_TABLE,
   DEFAULT_IMAGE_MEDIA_TYPE,
@@ -20,7 +15,6 @@ import {
   hasAttachmentPaths,
   hasAttachmentsTable,
   listAttachments,
-  replaceUserTurnAttachments,
 } from './SessionAttachmentsTable';
 import {
   deleteDisplayForSession,
@@ -33,7 +27,7 @@ import {
 } from './SessionDisplayTables';
 import { profileActivity, type ProfileActivitySummary } from './ProfileActivityQuery';
 import { deleteProjectLinkForSession, ensureProjectSessionsTable, projectSessionFilter, renameProjectLink } from './ProjectSessionsTable';
-import { COMPACTION_METADATA_KEY, readSessionCompaction, type SessionCompactionState, writeSessionCompaction } from './SessionCompaction';
+import { readSessionCompaction, type SessionCompactionState, writeSessionCompaction } from './SessionCompaction';
 
 const SESSION_TITLE_MAX_CHARS = 200;
 
@@ -403,7 +397,7 @@ export class SessionResolver {
     try {
       const transaction = db.transaction(() => {
         deleteAttachmentsForSession(db, sessionId);
-        deleteResponseMetricsForSession(db, sessionId);
+        deleteReplyRows(db, sessionId);
         deleteDisplayForSession(db, sessionId);
         deleteProjectLinkForSession(db, sessionId);
         db.prepare('DELETE FROM turns WHERE session_id = ?').run(sessionId);
@@ -470,9 +464,7 @@ export class SessionResolver {
    * ordinal is zero-based among user turns, so it remains stable even though
    * Priest rewrites SQLite turn ids whenever a session is saved. */
   truncateFromUserTurn(sessionId: string, userTurnIndex: number): SessionTruncateResult {
-    if (!Number.isInteger(userTurnIndex) || userTurnIndex < 0) {
-      throw MarifoldError.configInvalid('userTurnIndex must be a non-negative integer.');
-    }
+    assertUserTurnIndex(userTurnIndex);
     if (!fs.existsSync(this.sessionsDb)) { return { found: false, removedTurns: 0 }; }
 
     const db = this.open();
@@ -494,12 +486,7 @@ export class SessionResolver {
             WHERE session_id = ? AND user_turn_index >= ?
           `).run(sessionId, userTurnIndex);
         }
-        if (hasResponseMetricsTable(db)) {
-          db.prepare(`
-            DELETE FROM ${RESPONSE_METRICS_TABLE}
-            WHERE session_id = ? AND user_turn_index >= ?
-          `).run(sessionId, userTurnIndex);
-        }
+        deleteReplyRows(db, sessionId, { fromUserTurn: userTurnIndex });
         if (!target) { return 0; }
         const removedTurns = db.prepare(`
           DELETE FROM turns
@@ -526,9 +513,7 @@ export class SessionResolver {
   /** Completed turns before a zero-based user-turn ordinal: an edit's context, so
    * later exchanges cannot leak into its answer. `undefined` = session/turn absent. */
   turnsBeforeUserTurn(sessionId: string, userTurnIndex: number): SessionTurnSummary[] | undefined {
-    if (!Number.isInteger(userTurnIndex) || userTurnIndex < 0) {
-      throw MarifoldError.configInvalid('userTurnIndex must be a non-negative integer.');
-    }
+    assertUserTurnIndex(userTurnIndex);
     const detail = this.get(sessionId);
     if (!detail) { return undefined; }
     const before: SessionTurnSummary[] = [];
@@ -543,9 +528,9 @@ export class SessionResolver {
     return undefined;
   }
 
-  /** Replace one persisted user→assistant exchange in place. Later exchanges
-   * keep their ids/order and therefore remain visible and available as future
-   * model context. Attachments are replaced only when `images` is provided. */
+  /** Replace one persisted user→assistant exchange in place (see
+   * `SessionReplies.replaceExchange`); later exchanges stay visible and in
+   * future context. Attachments are replaced only when `images` is provided. */
   replaceExchange(
     sessionId: string,
     userTurnIndex: number,
@@ -553,74 +538,32 @@ export class SessionResolver {
     assistantText: string,
     images?: ImageInput[],
     responseMetrics?: ResponseMetrics,
+    speaker?: string,
   ): SessionReplaceResult {
-    if (!Number.isInteger(userTurnIndex) || userTurnIndex < 0) {
-      throw MarifoldError.configInvalid('userTurnIndex must be a non-negative integer.');
-    }
+    assertUserTurnIndex(userTurnIndex);
     if (!fs.existsSync(this.sessionsDb)) { return { found: false, replaced: false }; }
 
     const db = this.open();
     try {
-      const session = db.prepare('SELECT id, metadata FROM sessions WHERE id = ?').get(sessionId) as {
-        id: string;
-        metadata: string;
-      } | undefined;
-      if (!session) { return { found: false, replaced: false }; }
-      const target = db.prepare(`
-        SELECT id
-        FROM turns
-        WHERE session_id = ? AND role = 'user'
-        ORDER BY id ASC
-        LIMIT 1 OFFSET ?
-      `).get(sessionId, userTurnIndex) as { id: number } | undefined;
-      if (!target) { return { found: true, replaced: false }; }
-      const nextUser = db.prepare(`
-        SELECT id
-        FROM turns
-        WHERE session_id = ? AND role = 'user' AND id > ?
-        ORDER BY id ASC
-        LIMIT 1
-      `).get(sessionId, target.id) as { id: number } | undefined;
-      const assistant = db.prepare(`
-        SELECT id
-        FROM turns
-        WHERE session_id = ? AND role = 'assistant' AND id > ?
-          ${nextUser ? 'AND id < ?' : ''}
-        ORDER BY id ASC
-        LIMIT 1
-      `).get(...(nextUser ? [sessionId, target.id, nextUser.id] : [sessionId, target.id])) as { id: number } | undefined;
-      // An unanswered prompt (its run never finished) gains an answer only when newest.
-      if (!assistant && nextUser) { return { found: true, replaced: false }; }
-      const transaction = db.transaction(() => {
-        db.prepare('UPDATE turns SET content = ? WHERE id = ?').run(userText, target.id);
-        if (assistant) { db.prepare('UPDATE turns SET content = ? WHERE id = ?').run(assistantText, assistant.id); } else {
-          db.prepare("INSERT INTO turns (session_id, role, content, timestamp) VALUES (?, 'assistant', ?, strftime('%Y-%m-%dT%H:%M:%f000+00:00', 'now'))").run(sessionId, assistantText);
-        }
-        if (images !== undefined) { replaceUserTurnAttachments(db, sessionId, userTurnIndex, images); }
-        if (responseMetrics) {
-          upsertResponseMetrics(db, sessionId, userTurnIndex, responseMetrics);
-        } else if (hasResponseMetricsTable(db)) {
-          // Replacing response content without replacement metrics must not
-          // leave the old response's timing/model data attached to new prose.
-          db.prepare(`
-            DELETE FROM ${RESPONSE_METRICS_TABLE}
-            WHERE session_id = ? AND user_turn_index = ?
-          `).run(sessionId, userTurnIndex);
-        }
-        const metadata = JSON.parse(session.metadata) as Record<string, unknown>;
-        delete metadata[COMPACTION_METADATA_KEY];
-        db.prepare(`
-          UPDATE sessions
-          SET updated_at = strftime('%Y-%m-%dT%H:%M:%f000+00:00', 'now'),
-              metadata = ?
-          WHERE id = ?
-        `).run(JSON.stringify(metadata), sessionId);
-      });
-      transaction();
-      return { found: true, replaced: true };
+      return replaceExchange(db, sessionId, userTurnIndex, { userText, assistantText, images, responseMetrics, speaker });
     } catch (error) {
       if (error instanceof MarifoldError) { throw error; }
       throw this.storeError(`Could not replace exchange ${userTurnIndex} in session '${sessionId}': ${String(error)}`);
+    } finally {
+      db.close();
+    }
+  }
+
+  /** Another profile's answer to a saved user turn, after its earlier replies.
+   * Undefined when the session or the user turn is missing. */
+  addReply(sessionId: string, userTurnIndex: number, assistantText: string, record: ReplyRecord = {}): ReplyPosition | undefined {
+    assertUserTurnIndex(userTurnIndex);
+    if (!fs.existsSync(this.sessionsDb)) { return undefined; }
+    const db = this.open();
+    try {
+      return addReply(db, sessionId, userTurnIndex, assistantText, record);
+    } catch (error) {
+      throw this.storeError(`Could not add a reply in session '${sessionId}': ${String(error)}`);
     } finally {
       db.close();
     }
@@ -663,7 +606,7 @@ export class SessionResolver {
         const deleteSession = db.prepare('DELETE FROM sessions WHERE id = ?');
         for (const id of sessionIds) {
           deleteAttachmentsForSession(db, id);
-          deleteResponseMetricsForSession(db, id);
+          deleteReplyRows(db, id);
           deleteDisplayForSession(db, id);
           deleteProjectLinkForSession(db, id);
           deleteTurns.run(id);
@@ -738,6 +681,7 @@ export class SessionResolver {
     assistantText: string | undefined,
     images?: ImageInput[],
     responseMetrics?: ResponseMetrics,
+    speaker?: string,
   ): Promise<void> {
     const store = this.openStore();
     const session = (await store.get(sessionId)) ?? (await store.create(profileName, sessionId));
@@ -745,7 +689,7 @@ export class SessionResolver {
     if (assistantText !== undefined) { session.appendTurn('assistant', assistantText); }
     await store.save(session);
     this.saveLastUserTurnAttachments(sessionId, images);
-    if (responseMetrics) { this.saveLastResponseMetrics(sessionId, responseMetrics); }
+    if (assistantText !== undefined) { this.saveLastReply(sessionId, { responseMetrics, speaker }); }
   }
 
   /** Persist display-only image sources against the newest user turn. Priest
@@ -802,20 +746,16 @@ export class SessionResolver {
     }
   }
 
-  /** Persist content-free completion metadata against the newest user turn (the
-   * user-turn ordinal survives Priest's whole-session turn-row rewrites). */
-  saveLastResponseMetrics(sessionId: string, responseMetrics: ResponseMetrics): void {
+  /** Persist the newest reply's content-free metadata (completion metrics, and
+   * its speaker in a project session) by user-turn and reply ordinal, which
+   * survive Priest's whole-session turn-row rewrites. */
+  saveLastReply(sessionId: string, record: ReplyRecord): void {
     if (!fs.existsSync(this.sessionsDb)) { return; }
 
     const db = this.open();
     try {
-      const userTurns = db.prepare(`
-        SELECT COUNT(*) AS count
-        FROM turns
-        WHERE session_id = ? AND role = 'user'
-      `).get(sessionId) as { count: number };
-      if (userTurns.count === 0) { return; }
-      upsertResponseMetrics(db, sessionId, userTurns.count - 1, responseMetrics);
+      const at = lastReplyPosition(db, sessionId);
+      if (at) { recordReply(db, sessionId, at, record); }
     } catch (error) {
       throw this.storeError(`Could not save response metrics for session '${sessionId}' in ${this.sessionsDb}: ${String(error)}`);
     } finally {
@@ -851,10 +791,7 @@ export class SessionResolver {
           db.prepare(`UPDATE ${ATTACHMENTS_TABLE} SET session_id = ? WHERE session_id = ?`)
             .run(toSessionId, fromSessionId);
         }
-        if (hasResponseMetricsTable(db)) {
-          db.prepare(`UPDATE ${RESPONSE_METRICS_TABLE} SET session_id = ? WHERE session_id = ?`)
-            .run(toSessionId, fromSessionId);
-        }
+        renameReplyRows(db, fromSessionId, toSessionId);
         if (hasSessionDisplayTable(db)) {
           db.prepare(`UPDATE ${SESSION_DISPLAY_TABLE} SET session_id = ? WHERE session_id = ?`)
             .run(toSessionId, fromSessionId);
@@ -887,17 +824,22 @@ export class SessionResolver {
     `).all(sessionId) as SessionTurnSummary[];
     const attachments = listAttachments(db, sessionId);
     const responseMetrics = listResponseMetrics(db, sessionId);
+    const speakers = listReplySpeakers(db, sessionId);
     let userTurnIndex = -1;
+    let replyIndex = -1;
     return rows.map(row => {
-      if (row.role === 'user') { userTurnIndex += 1; }
+      if (row.role === 'user') { userTurnIndex += 1; replyIndex = -1; } else if (row.role === 'assistant') { replyIndex += 1; }
       const turnAttachments = row.role === 'user' ? attachments.get(userTurnIndex) : undefined;
-      const turnResponseMetrics = row.role === 'assistant' ? responseMetrics.get(userTurnIndex) : undefined;
+      const key = row.role === 'assistant' ? replyKey(userTurnIndex, replyIndex) : '';
+      const turnResponseMetrics = responseMetrics.get(key);
+      const speaker = speakers.get(key);
       return {
         role: row.role,
         content: row.content,
         timestamp: row.timestamp,
         ...(turnAttachments ? { attachments: turnAttachments } : {}),
         ...(turnResponseMetrics ? { responseMetrics: turnResponseMetrics } : {}),
+        ...(speaker ? { speaker } : {}),
       };
     });
   }
@@ -905,6 +847,10 @@ export class SessionResolver {
   private storeError(message: string): MarifoldError {
     return new MarifoldError('SESSION_STORE_ERROR', message, { sessionsDb: this.sessionsDb });
   }
+}
+
+function assertUserTurnIndex(index: number): void {
+  if (!Number.isInteger(index) || index < 0) { throw MarifoldError.configInvalid('userTurnIndex must be a non-negative integer.'); }
 }
 
 const PREVIEW_MAX_CHARS = 80;

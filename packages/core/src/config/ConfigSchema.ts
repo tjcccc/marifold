@@ -281,6 +281,9 @@ export interface SessionTurnSummary {
   attachments?: SessionImageAttachment[];
   /** Marifold-owned completion metadata for this assistant response. */
   responseMetrics?: ResponseMetrics;
+  /** The profile that gave this reply, recorded in project sessions, where
+   * several profiles answer; absent means the session's own profile. */
+  speaker?: string;
 }
 
 export interface SessionImageAttachment {

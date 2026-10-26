@@ -91,6 +91,7 @@ import type { MarifoldAskResponse, MarifoldProviderToolDefinition, MarifoldResol
 import { ProviderEngines } from './ProviderEngines';
 import { ChatTurns } from './ChatTurns';
 import { AgentCompaction, sessionHistory } from './AgentCompaction';
+import { agentSessionTurns } from './AgentSessionTurns';
 import { SkillAppOperations } from './SkillAppOperations';
 import { AgentComputer } from '../computer/AgentComputer';
 import { agentComputerTools } from '../computer/ComputerTools';
@@ -609,22 +610,8 @@ export class MarifoldRuntime {
         load: (memoryProfile, objective) => this.memoryForRequest(memoryProfile, true, objective),
         apply: (memoryProfile, objective, controls, sessionId) => applyTurnMemory(this.memoryStore, memoryProfile, objective, controls, { sessionId, sizeLimit: this.options.loadedConfig.config.memory.sizeLimit, promptForgets: false }),
       },
-      // Record the run as a tidy user→assistant exchange (the prompt when the
-      // run starts, its outcome when it ends) so resuming the session shows the
-      // result, not the agent's internal framing. Edits replace in one step.
-      persistTurn: async (sessionId, profile, userText, assistantText, images, replaceUserTurnIndex, responseMetrics) => {
-        if (replaceUserTurnIndex !== undefined) {
-          this.replaceEditedExchange(sessionId, replaceUserTurnIndex, userText ?? '', assistantText ?? '', images, responseMetrics);
-          return;
-        }
-        await this.sessionResolver.appendExchange(sessionId, profile, userText, assistantText, images, responseMetrics);
-      },
+      ...agentSessionTurns({ sessionResolver: this.sessionResolver, projects: this.projects, replaceEditedExchange: (...args) => this.replaceEditedExchange(...args), missingEditedTurn: (sessionId, userTurnIndex) => this.missingEditedTurn(sessionId, userTurnIndex) }),
       compactAfterTurn: (sessionId, settings, usage, signal) => this.agentCompaction.afterTurn(sessionId, settings, usage, signal),
-      // Bounded cross-objective memory for non-lean tasks: replay the clean
-      // pairs (objective → answer) that persistTurn wrote after their summary.
-      loadRecentTurns: (sessionId, beforeUserTurnIndex) => (beforeUserTurnIndex === undefined
-        ? sessionHistory(this.sessionResolver.get(sessionId)?.turns ?? [], this.sessionResolver.compaction(sessionId))
-        : sessionHistory(this.sessionResolver.turnsBeforeUserTurn(sessionId, beforeUserTurnIndex) ?? this.missingEditedTurn(sessionId, beforeUserTurnIndex))),
       resolveBuiltInInstructions: (objective, resolvedProfile) => {
         if (runtimeOptions.deviceInstructions) { return [runtimeOptions.deviceInstructions]; }
         const { config } = this.options.loadedConfig;
@@ -985,15 +972,9 @@ export class MarifoldRuntime {
     assistantText: string,
     images?: ImageInput[],
     responseMetrics?: ResponseMetrics,
+    speaker?: string,
   ): void {
-    const result = this.sessionResolver.replaceExchange(
-      sessionId,
-      userTurnIndex,
-      userText,
-      assistantText,
-      images,
-      responseMetrics,
-    );
+    const result = this.sessionResolver.replaceExchange(sessionId, userTurnIndex, userText, assistantText, images, responseMetrics, speaker);
     if (!result.replaced) { this.missingEditedTurn(sessionId, userTurnIndex); }
   }
 

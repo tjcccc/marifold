@@ -209,7 +209,7 @@ export class ChatTurns {
         if (request.userTurn) { this.host.sessionResolver.replaceLastUserTurn(request.sessionId, request.userTurn); }
         this.host.sessionResolver.replaceLastAssistantTurn(request.sessionId, stripped.text);
         this.host.sessionResolver.saveLastUserTurnAttachments(request.sessionId, historyImages);
-        this.host.sessionResolver.saveLastResponseMetrics(request.sessionId, responseMetrics);
+        this.host.sessionResolver.saveLastReply(request.sessionId, { responseMetrics });
       }
     }
     if (finalResponse.ok && memoryOn) {
@@ -408,7 +408,7 @@ export class ChatTurns {
             if (request.userTurn) { this.host.sessionResolver.replaceLastUserTurn(request.sessionId, request.userTurn); }
             this.host.sessionResolver.replaceLastAssistantTurn(request.sessionId, finalText);
             this.host.sessionResolver.saveLastUserTurnAttachments(request.sessionId, historyImages);
-            this.host.sessionResolver.saveLastResponseMetrics(request.sessionId, responseMetrics);
+            this.host.sessionResolver.saveLastReply(request.sessionId, { responseMetrics });
           }
         }
         if (memoryOn) {

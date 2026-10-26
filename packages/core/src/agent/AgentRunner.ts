@@ -19,7 +19,7 @@ import { isDeepStrictEqual } from 'node:util';
 import { stripMemoryControls, type MemoryControlPayloads } from '../memory/MemoryControls';
 import { agentMemoryInstructions, type AgentMemoryAccess } from './AgentMemory';
 import { EARLIER_IMAGE_LIMIT, earlierImageContext, type SessionImageAccess } from './EarlierImages';
-import { buildHistoryContext, historyBudgetChars, type HistoryTurn, windowTurns } from './AgentHistory';
+import { buildHistoryContext, historyBudgetChars, type HistoryTurn, sessionTurnTarget, type SessionTurnTarget, windowTurns } from './AgentHistory';
 import type { MarifoldProviderToolDefinition, MarifoldResolvedSettings, MarifoldRunRequest, MarifoldWebSearchMode } from '../runtime/MarifoldTypes';
 import type { TaskState, TaskStatus, TaskStore } from '../tasks/TaskStore';
 import type { AgentEvent, AgentUsage } from './AgentEvents';
@@ -77,6 +77,9 @@ export interface AgentRunOptions {
   /** Replace this persisted user→assistant exchange in place. Later turns are
    * preserved and excluded from this run's history context. */
   replaceUserTurnIndex?: number;
+  /** Answer this saved user turn with one more reply (several profiles answer
+   * one project message): the prompt is not saved again, earlier replies join the history. */
+  replyToUserTurnIndex?: number;
   /** Text to store as the user turn on resume (e.g. the full `$skill …`
    * invocation). Defaults to `objective` when omitted. */
   userTurn?: string;
@@ -168,7 +171,7 @@ export interface AgentRunnerDeps {
     userText: string | undefined,
     assistantText: string | undefined,
     images?: ImageInput[],
-    replaceUserTurnIndex?: number,
+    target?: SessionTurnTarget,
     responseMetrics?: ResponseMetrics,
   ) => Promise<void>;
   /** Profile memory for non-lean runs: recalled into context, and updated from
@@ -178,7 +181,7 @@ export interface AgentRunnerDeps {
   sessionImages?: SessionImageAccess;
   /** Load the session's clean turns (objective → answer pairs) for bounded
    * cross-objective memory on NON-lean runs. Lean/skill runs stay stateless. */
-  loadRecentTurns?: (sessionId: string, beforeUserTurnIndex?: number) => HistoryTurn[];
+  loadRecentTurns?: (sessionId: string, target?: SessionTurnTarget) => HistoryTurn[];
   /** Lazily attach app-owned instructions selected from the objective (for
    * example the built-in skill-manager guide). */
   resolveBuiltInInstructions?: (objective: string, profile: string) => string[];
@@ -275,32 +278,33 @@ export class AgentRunner {
       };
     }
     // Bounded cross-objective memory: inject a window of the recent clean
-    // session pairs so a NON-lean task can reference prior turns ("save the
+    // session turns so a NON-lean task can reference prior turns ("save the
     // above prompt"). Lean/skill runs stay stateless (isolated).
-    const recentTurns = !options.lean && options.sessionId && this.deps.loadRecentTurns
-      ? this.deps.loadRecentTurns(options.sessionId, options.replaceUserTurnIndex)
-      : [];
+    const target = sessionTurnTarget(options);
+    const recentTurns = !options.lean && options.sessionId && this.deps.loadRecentTurns ? this.deps.loadRecentTurns(options.sessionId, target) : [];
     // session_context_turns caps the turns as in chat; the char budget is secondary.
     const historyContext = buildHistoryContext(
       windowTurns(recentTurns, settings.sessionContextTurns),
       historyBudgetChars(settings.maxContextTokens, settings.compactAtPercent) ?? HISTORY_BUDGET_DEFAULT_CHARS,
+      settings.profile,
     );
     // Earlier session images, offered by ID and loaded only if inspected.
     const earlierImageRefs = !options.lean && options.sessionId && this.deps.sessionImages
-      ? this.deps.sessionImages.list(options.sessionId, options.replaceUserTurnIndex).slice(-EARLIER_IMAGE_LIMIT) : [];
+      ? this.deps.sessionImages.list(options.sessionId, target?.userTurnIndex).slice(-EARLIER_IMAGE_LIMIT) : [];
     // Save the prompt now (after reading the history it must not repeat), so
     // the session exists, and can be retried, before the run reports running;
     // the outcome follows at the end. An edit replaces its exchange only when done.
     const sessionImages = runOptions.images?.map((image, index) => options.images?.[index]?.path ? options.images[index] : image);
     let userTurnPersisted = false;
-    if (options.sessionId && this.deps.persistTurn && options.replaceUserTurnIndex === undefined) {
+    if (options.sessionId && this.deps.persistTurn && target === undefined) {
       if (!held) { this.deps.checkSession?.(options); }
       await this.deps.persistTurn(options.sessionId, settings.profile, options.userTurn ?? options.objective, undefined, sessionImages);
       userTurnPersisted = true;
     }
-    // A failure before the agent loop still answers the saved prompt.
+    // A reply answers a prompt saved before it. A failure before the agent loop still answers it.
+    const promptSaved = userTurnPersisted || target?.kind === 'reply';
     const answerEarlyFailure = async (message: string): Promise<void> => {
-      if (userTurnPersisted) { await this.deps.persistTurn?.(options.sessionId!, settings.profile, undefined, failedSessionOutcome(message)).catch(() => undefined); }
+      if (promptSaved && options.sessionId) { await this.deps.persistTurn?.(options.sessionId, settings.profile, undefined, failedSessionOutcome(message), undefined, target).catch(() => undefined); }
     };
     let preparedEngine: AgentEngineContext;
     try { preparedEngine = await this.deps.prepareEngine(settings); } catch (error) {
@@ -396,7 +400,7 @@ export class AgentRunner {
       if (sessionTurnPersisted || !options.sessionId || !this.deps.persistTurn) { return; }
       // A failed regeneration must leave the existing exchange intact. Ordinary
       // append-only runs still keep their submitted prompt and terminal state.
-      if (outcome !== 'completed' && options.replaceUserTurnIndex !== undefined) { return; }
+      if (outcome !== 'completed' && target?.kind === 'replace') { return; }
 
       // A held session stays this run's even after another device takes it
       // over, as does one that already saved this run's prompt: answer it.
@@ -421,10 +425,10 @@ export class AgentRunner {
         await this.deps.persistTurn(
           options.sessionId,
           settings.profile,
-          userTurnPersisted ? undefined : options.userTurn ?? options.objective,
+          promptSaved ? undefined : options.userTurn ?? options.objective,
           assistantText,
-          userTurnPersisted ? undefined : sessionImages,
-          options.replaceUserTurnIndex,
+          promptSaved ? undefined : sessionImages,
+          target,
           responseMetrics,
         );
       } catch (error) {
@@ -611,10 +615,7 @@ export class AgentRunner {
           kind: 'blocker',
           message: `Iteration cap of ${maxIterations} reached before the objective was completed.`,
         });
-        await persistSessionTurn(
-          failedSessionOutcome(`Stopped at the iteration cap of ${maxIterations} before completing the objective.`),
-          'failed',
-        );
+        await persistSessionTurn(failedSessionOutcome(`Stopped at the iteration cap of ${maxIterations} before completing the objective.`), 'failed');
         yield* this.finish(task.id, 'failed', 'Stopped at the iteration cap before completing the objective.', 'Re-run with a higher iteration cap or a narrower objective.', usage, workspace);
         return;
       }
@@ -629,11 +630,9 @@ export class AgentRunner {
         }
       }
 
-      if (options.sessionId && options.replaceUserTurnIndex === undefined && this.deps.compactAfterTurn) { yield* this.deps.compactAfterTurn(options.sessionId, settings, usage, options.signal); }
-      // Complete. No verification phase: a separate self-grading model call was
-      // non-actionable (a failed grade didn't retry or fix anything) and models
-      // self-grade unreliably — so it was pure token overhead. Real checks belong
-      // in tools the agent runs inside the loop, not a final self-assessment.
+      if (options.sessionId && target?.kind !== 'replace' && this.deps.compactAfterTurn) { yield* this.deps.compactAfterTurn(options.sessionId, settings, usage, options.signal); }
+      // Complete. No verification phase: a self-grading model call was
+      // non-actionable and unreliable; real checks are tools run in the loop.
       this.completePlanSteps(task.id, true);
       yield* this.finish(task.id, 'completed', finalText, undefined, usage, workspace);
     } catch (error) {

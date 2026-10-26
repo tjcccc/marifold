@@ -52,12 +52,17 @@ export class AgentCompaction {
     if (this.running.has(sessionId)) { return undefined; }
     this.running.add(sessionId);
     try {
-      const turns = (this.host.sessionResolver.get(sessionId)?.turns ?? []) as unknown as Turn[];
+      const detail = this.host.sessionResolver.get(sessionId);
+      const turns = detail?.turns ?? [];
       const existing = this.host.sessionResolver.compaction(sessionId) ?? {};
       const existingThrough = existing.summarizedThrough ?? 0;
-      const plan = planCompaction(turns, existingThrough, this.host.keepTurns);
+      const plan = exchangeAligned(planCompaction(turns as unknown as Turn[], existingThrough, this.host.keepTurns), turns, existingThrough);
       if (!plan) { return undefined; }
-      const [system, user] = buildSummaryMessages(existing.summary, plan.toSummarize);
+      // Several profiles answer in a project session: the summary keeps who said what.
+      const speakers = turns.some(turn => turn.speaker) ? detail?.profileName : undefined;
+      const labelled = speakers === undefined ? plan.toSummarize
+        : plan.toSummarize.map(turn => turn.role === 'assistant' ? { ...turn, content: `(${(turn as { speaker?: string }).speaker ?? speakers}) ${turn.content}` } : turn);
+      const [system, user] = buildSummaryMessages(existing.summary, labelled);
       await this.host.engines.refreshCredentials(settings.provider);
       const config = this.host.engines.priestConfig(settings);
       const response = await this.host.engines.create(settings.provider, false, false).run({
@@ -80,9 +85,22 @@ export class AgentCompaction {
   }
 }
 
+type SessionTurn = { role: string; content: string; speaker?: string };
+
+/** Never cut inside an exchange: the kept tail starts at a prompt, so its
+ * replies (several, in a project session) stay with it. */
+function exchangeAligned(plan: { toSummarize: Turn[]; summarizedThrough: number } | undefined, turns: SessionTurn[], existingThrough: number): { toSummarize: Turn[]; summarizedThrough: number } | undefined {
+  if (!plan) { return undefined; }
+  let through = plan.summarizedThrough;
+  while (through > existingThrough && through < turns.length && turns[through].role !== 'user') { through -= 1; }
+  if (through <= existingThrough) { return undefined; }
+  return { toSummarize: plan.toSummarize.slice(0, through - existingThrough), summarizedThrough: through };
+}
+
 /** Agent history for a session: its running summary (when one covers these
- * turns) followed by the user/assistant pairs after it. */
-export function sessionHistory(turns: Array<{ role: string; content: string }>, compaction?: { summary?: string; summarizedThrough?: number }): HistoryTurn[] {
+ * turns) followed by the turns after it. Each answer names its speaker: the
+ * recorded one, else the session's `owner` profile. */
+export function sessionHistory(turns: SessionTurn[], compaction?: { summary?: string; summarizedThrough?: number }, owner?: string): HistoryTurn[] {
   const through = compaction?.summary && compaction.summarizedThrough && compaction.summarizedThrough <= turns.length
     ? compaction.summarizedThrough
     : 0;
@@ -90,8 +108,30 @@ export function sessionHistory(turns: Array<{ role: string; content: string }>, 
     ...(through > 0 ? [{ role: 'summary' as const, content: compaction!.summary! }] : []),
     ...turns.slice(through)
       .filter(t => t.role === 'user' || t.role === 'assistant')
-      .map(t => ({ role: t.role as 'user' | 'assistant', content: t.content })),
+      .map(t => ({ role: t.role as 'user' | 'assistant', content: t.content, ...speakerOf(t, owner) })),
   ];
+}
+
+/** History before one saved prompt (a summary only when it ends before it),
+ * then, for a reply, the answers that prompt already has. Undefined when the
+ * prompt is missing. */
+export function historyBefore(turns: SessionTurn[], userTurnIndex: number, options: { compaction?: { summary?: string; summarizedThrough?: number }; owner?: string; withReplies?: boolean }): HistoryTurn[] | undefined {
+  let at = -1;
+  for (let index = 0, users = 0; index < turns.length && at === -1; index += 1) {
+    if (turns[index].role === 'user' && users++ === userTurnIndex) { at = index; }
+  }
+  if (at === -1) { return undefined; }
+  const next = turns.findIndex((turn, index) => index > at && turn.role === 'user');
+  const replies = options.withReplies ? turns.slice(at + 1, next === -1 ? turns.length : next).filter(turn => turn.role === 'assistant') : [];
+  return [
+    ...sessionHistory(turns.slice(0, at), options.compaction, options.owner),
+    ...replies.map(turn => ({ role: 'reply' as const, content: turn.content, ...speakerOf(turn, options.owner) })),
+  ];
+}
+
+function speakerOf(turn: SessionTurn, owner?: string): { speaker?: string } {
+  const speaker = turn.role === 'assistant' ? turn.speaker ?? owner : undefined;
+  return speaker ? { speaker } : {};
 }
 
 function textOf(content: string | Array<{ type: string; text?: string }>): string {

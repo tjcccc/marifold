@@ -563,14 +563,14 @@ describe('AgentRunner', () => {
       replaceUserTurnIndex: 1,
     }));
 
-    expect(loadRecentTurns).toHaveBeenCalledWith('sess-1', 1);
+    expect(loadRecentTurns).toHaveBeenCalledWith('sess-1', { kind: 'replace', userTurnIndex: 1 });
     expect(persistTurn).toHaveBeenCalledWith(
       'sess-1',
       'default',
       'Updated conversation 2',
       'Updated answer.',
       undefined,
-      1,
+      { kind: 'replace', userTurnIndex: 1 },
       expect.objectContaining({
         mode: 'agent',
         provider: 'mock',

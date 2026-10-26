@@ -6,6 +6,7 @@ import { ConfigManager } from '../config/ConfigManager';
 import { sameMentionName } from '../agent/Mentions';
 import { MarifoldError } from '../errors/MarifoldError';
 import { renameProjectProfile } from '../projects/ProjectStore';
+import { renameReplySpeaker } from '../sessions/SessionReplies';
 import { ScheduleStore } from '../schedule/ScheduleStore';
 import { hasProfileDisplayTable, PROFILE_DISPLAY_TABLE } from '../sessions/SessionDisplayTables';
 import { TaskStore } from '../tasks/TaskStore';
@@ -108,8 +109,8 @@ function sessionCounts(sessionsDb: string): Map<string, number> {
   }
 }
 
-/** One transaction: the sessions, the profile pin, and project rosters, Leads
- * and floors move together or not at all. */
+/** One transaction: the sessions, the profile pin, reply speakers, and project
+ * rosters, Leads and floors move together or not at all. */
 function moveSessions(sessionsDb: string, from: string, to: string): number {
   if (!fs.existsSync(sessionsDb)) { return 0; }
   const db = new Database(sessionsDb, { fileMustExist: true });
@@ -119,6 +120,7 @@ function moveSessions(sessionsDb: string, from: string, to: string): number {
       const hasSessions = db.prepare(`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'sessions'`).get();
       const changes = hasSessions ? db.prepare('UPDATE sessions SET profile_name = ? WHERE profile_name = ?').run(to, from).changes : 0;
       renameProjectProfile(db, from, to);
+      renameReplySpeaker(db, from, to);
       if (hasProfileDisplayTable(db)) {
         db.prepare(`DELETE FROM ${PROFILE_DISPLAY_TABLE} WHERE profile_name = ? AND EXISTS (SELECT 1 FROM ${PROFILE_DISPLAY_TABLE} WHERE profile_name = ?)`).run(to, from);
         db.prepare(`UPDATE ${PROFILE_DISPLAY_TABLE} SET profile_name = ? WHERE profile_name = ?`).run(to, from);

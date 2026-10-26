@@ -1,8 +1,8 @@
 # Projects v1 implementation plan
 
-**Status: slices 1–2 implemented, unreleased (2026-10-26).** Implements [`projects.md`](projects.md). Each release below ends with the user's own test before the version bump, as usual.
+**Status: slices 1–3 implemented, unreleased (2026-10-26).** Implements [`projects.md`](projects.md). Each release below ends with the user's own test before the version bump, as usual.
 
-Deviations so far: the project icon and the stored-asset limit get their columns with the features that use them (slices 5 and 6); profiles created by a CLI or local TUI without a running service skip the device-name check (it needs the service's device list); the Web composer's `@` detection (`useAgentController.ts`) moves to the shared parser in slice 5; the TUI's own `@` tokens (`inputTokens.ts`, highlighting and completion) stay until TUI project support.
+Deviations so far: the project icon and the stored-asset limit get their columns with the features that use them (slices 5 and 6); profiles created by a CLI or local TUI without a running service skip the device-name check (it needs the service's device list); the Web composer's `@` detection (`useAgentController.ts`) moves to the shared parser in slice 5; the TUI's own `@` tokens (`inputTokens.ts`, highlighting and completion) stay until TUI project support. Slice 3: the run option is `replyToUserTurnIndex` (an explicit user-turn ordinal, not "the current turn"), so slice 4 names the message it answers and a regenerated message mid-session gets its replies back in place; the first reply's metrics stay in the original table so older versions sharing a `sessions.db` keep working, and later replies' go to `marifold_reply_metrics`; speakers are recorded only in project sessions (a reply without one is the session profile's). Regenerating reply 0 removes the message's later replies, and slice 4 reruns the other speakers with `replyToUserTurnIndex`. A multi-reply session continued in chat mode (after leaving its project) replays consecutive, unlabelled assistant turns through Priest, so project runs stay in agent mode. The Web and TUI show consecutive replies as plain assistant messages until slice 5.
 
 ## Findings that shape the plan
 
@@ -34,13 +34,14 @@ Deviations so far: the project icon and the stored-asset limit get their columns
 
 - Allow consecutive assistant turns in a session. Response metrics move from "per user turn" to "per assistant turn" (with a migration that keeps existing rows), and each assistant turn records its `profile`.
 - Audit and adapt each pair assumption: `sessionHistory` (labels speakers: "dev_test: …"), compaction planning and the summary prompt (keep speaker labels), edit/regenerate (regenerating a multi-reply exchange reruns the same speakers), `turnsBeforeUserTurn`, the Web thread builder.
-- A run option `replyToCurrentUserTurn` lets speakers 2..N answer the already-saved user turn instead of saving it again.
+- A run option `replyToUserTurnIndex` lets speakers 2..N answer the already-saved user turn instead of saving it again.
 - Tests: ordinary sessions unchanged (existing suites); a 3-speaker exchange round-trips through history, compaction, metrics, and regenerate.
 
 ### 4. Project runs (core + service)
 
 - Routing on the host: for a project session, resolve profile mentions against the roster (unknown member → a typed error the client turns into "Invite painter?"), apply the floor rule (last addressed, else the Lead), and remove profile mentions before device parsing.
-- Instructions: profile instructions, then the project's instructions as an additional context block.
+- Instructions: profile instructions, then the project's instructions as an additional context block, which names the answering profile and the roster (history labels other speakers by name, and a compaction summary names every speaker, including the one answering).
+- Every speaker run gets the message's images (a reply run's history lists only earlier turns' images), and a new project session is linked to its project before its first outcome is saved, so the first reply records its speaker (`moveSession` needs an existing session).
 - Several mentions: a **project turn** in `RunRegistry` starts one run per speaker, in order, each with its own approvals; the next starts when the previous ends; cancelling cancels the rest. Each `RunRecord` carries `profile` so clients label it. After a multi-mention, the floor returns to the Lead.
 - Routes: `/v1/projects` (list, create, get, patch, delete), `/v1/projects/:id/members` (invite, dismiss), `/v1/projects/:id/sessions`, `POST /v1/sessions/:id/project` (move). Added to `workspaceApiPath`. `docs/service-api.md` updated; new run fields and events get examples in `AgentEventExamples.ts`.
 - Tests: routing and floor, instruction order, sequential speakers with cancel, memory written to each answering profile, route validation, guest forwarding.
