@@ -12,8 +12,10 @@ import * as path from 'node:path';
 import { digest, identifier, randomId, record } from '@marifold/workspace-protocol';
 import type { JSONValue } from '@priest-ai/core';
 import {
+  acceptedRemoteTrustedFolders,
   canonicalPath,
   createRunWorkspace,
+  HOME_TRUSTED_FOLDER,
   isInside,
   isInsideAnyRoot,
   MAX_RUN_INPUT_BYTES,
@@ -143,7 +145,12 @@ export class WorkspaceExecutor {
         ...(stateAccess ? { stateReadRoots: stateAccess.stateReadRoots } : {}),
         id: `ws_${context.workspaceId}_${runId}`,
         cwd: typeof b.cwd === 'string' ? b.cwd : undefined,
-        trustedFolders: config.trustedFolders,
+        // This device's own folders, minus its `~` (home script writes follow
+        // the requesting profile), plus validated home-relative requests.
+        trustedFolders: [
+          ...config.trustedFolders.filter(entry => entry !== HOME_TRUSTED_FOLDER),
+          ...acceptedRemoteTrustedFolders(b.trustedFolders, os.homedir()),
+        ],
         files: Array.isArray(b.files) ? (b.files as never) : undefined,
         images: Array.isArray(b.images) ? (b.images as never) : undefined,
         ...(this.runsDir ? { runsDir: this.runsDir } : {}),
@@ -184,7 +191,7 @@ export class WorkspaceExecutor {
     const toolContext: ToolExecutionContext = {
       workspace: run.workspace,
       cwd: run.workspace.cwd,
-      trustedFolders: this.config().trustedFolders,
+      trustedFolders: run.workspace.trustedRoots ?? [],
       outputLimit: this.config().toolOutputLimit,
       jobScope: context.workspaceId,
       signal: run.abort.signal,

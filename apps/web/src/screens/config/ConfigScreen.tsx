@@ -22,6 +22,7 @@ import {
   deleteMemory,
   deleteProfile,
   getProfile,
+  listHomeFolders,
   listMemories,
   restoreMemory,
   listProfiles,
@@ -120,6 +121,8 @@ export function ConfigScreen({
   const [providerAddError, setProviderAddError] = useState<string | undefined>();
   const [mobileLevel, setMobileLevel] = useState<MobileConfigLevel>(() => item ? 'detail' : 'sections');
   const previousItem = useRef(item);
+
+  const browseFolders = useCallback((folder: string) => listHomeFolders(client, folder), [client]);
 
   const go = useCallback(
     (nextSection: ConfigSection, nextItem?: string) =>
@@ -598,6 +601,7 @@ export function ConfigScreen({
               onAddTrustedFolder={folder => {
                 if (item) { void mutate(() => addTrustedFolder(client, item, folder)); }
               }}
+              onBrowseFolders={browseFolders}
               onRemoveTrustedFolder={folder => {
                 if (item) { void mutate(() => removeTrustedFolder(client, item, folder)); }
               }}

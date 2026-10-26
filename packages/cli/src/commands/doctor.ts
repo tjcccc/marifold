@@ -16,7 +16,7 @@ export function registerDoctorCommand(program: Command, printer: ConsolePrinter)
     .command('doctor')
     .description('Check Marifold health: configuration, profile instructions, and session database integrity.')
     .option('--profile <name>', 'Limit profile checks and migration to this profile.')
-    .option('--fix', 'Back up and migrate legacy profile instructions and model settings.')
+    .option('--fix', 'Back up and migrate legacy profile instructions, model settings, and trusted folders.')
     .action((options: { profile?: string; fix?: boolean }) => {
       const runtime = createRuntime(program);
       const out = process.stdout;
@@ -159,6 +159,24 @@ export function registerDoctorCommand(program: Command, printer: ConsolePrinter)
             out.write(`  ${target.name}: ✗ ${error instanceof Error ? error.message : String(error)}\n`);
             process.exitCode = 1;
           }
+        }
+
+        // Trusted folders — in-home entries are stored as `~/…` so one entry
+        // applies on every workspace device; --fix rewrites older absolute ones.
+        out.write('\nTrusted folders\n');
+        try {
+          const outdated = runtime.normalizeProfileTrustedFolders(options.fix === true);
+          if (outdated.length === 0) {
+            out.write('  ✓ stored home-relative\n');
+          } else if (options.fix) {
+            for (const name of outdated) { out.write(`  ${name}: ✓ rewritten as ~/… (backup: profile.toml.bak-trusted-folders)\n`); }
+          } else {
+            for (const name of outdated) { out.write(`  ${name}: ⚠ absolute paths inside home apply only on this device\n`); }
+            out.write('    Run `marifold doctor --fix` to store them as ~/… for every device.\n');
+          }
+        } catch (error) {
+          out.write(`  ✗ ${error instanceof Error ? error.message : String(error)}\n`);
+          process.exitCode = 1;
         }
 
         // Session database — read-only integrity check; safe even when corrupt.

@@ -74,6 +74,12 @@ export interface RunWorkspace {
   stateReadRoots?: string[];
   readRoots: string[];
   writeRoots: string[];
+  /** Trusted folders that became write roots (cwd and run dirs excluded). */
+  trustedRoots?: string[];
+  /** The profile trusts `~`: sandboxed scripts may create and modify files
+   * anywhere in home, but never delete or rename them, and never touch
+   * sensitive roots or login/startup configuration. */
+  homeScriptWrites?: boolean;
   /** Roots outside the user's home. Shell calls touching this capability set
    * remain escalated and can never become a persistent "always" grant. */
   externalRoots: string[];
@@ -88,6 +94,8 @@ export interface CreateRunWorkspaceOptions {
   stateReadRoots?: string[];
   id: string;
   cwd?: string;
+  /** Stored trusted folder entries: `~` (home script writes), `~/…`
+   * (resolved against this device's home), or absolute paths. */
   trustedFolders?: string[];
   /** Narrow app-owned folders exposed read-only to this run. Entries outside
    * the user's home remain approval-gated. */
@@ -135,8 +143,9 @@ export function createRunWorkspace(options: CreateRunWorkspaceOptions): RunWorks
   const cwd = isUnsafeBroadRoot(requestedCwd, userHome, appHome)
     ? canonicalExistingPath(workDir)
     : requestedCwd;
-  const trusted = uniqueExistingDirectories(options.trustedFolders ?? [])
-    .filter(folder => !isUnsafeBroadRoot(folder, userHome, appHome));
+  const entries = resolveTrustedFolders(options.trustedFolders ?? [], userHome);
+  const trusted = uniqueExistingDirectories(entries.folders)
+    .filter(folder => !isUnsafeBroadRoot(folder, userHome, appHome) && !coversProtectedRoot(folder, userHome));
   const readOnlyRoots = uniqueExistingDirectories(options.readOnlyFolders ?? [])
     .filter(folder => options.allowExternalReadOnlyFolders || isInside(folder, userHome))
     .filter(folder => !isUnsafeBroadReadRoot(folder, userHome, appHome));
@@ -164,6 +173,8 @@ export function createRunWorkspace(options: CreateRunWorkspaceOptions): RunWorks
     stateReadRoots: uniquePaths(options.stateReadRoots ?? []),
     readRoots,
     writeRoots,
+    trustedRoots: trusted,
+    ...(entries.homeScriptWrites ? { homeScriptWrites: true } : {}),
     externalRoots,
     files: [],
     attachments: [],
@@ -297,6 +308,83 @@ export const SENSITIVE_HOME_ENTRIES: readonly string[] = [
 
 export function sensitiveHostRoots(userHome: string): string[] {
   return SENSITIVE_HOME_ENTRIES.map(entry => path.join(userHome, ...entry.split('/')));
+}
+
+/** Login and startup configuration under home. Changing it alters what runs
+ * automatically, so file tools ask for each write and the sandbox never
+ * writes there unless a run root explicitly re-opens it. */
+export function startupConfigPaths(userHome: string): string[] {
+  return [
+    '.zshrc', '.zshenv', '.zprofile', '.zlogin', '.zlogout',
+    '.bashrc', '.bash_profile', '.bash_login', '.bash_logout', '.profile',
+    '.login', '.cshrc', '.tcshrc', '.xprofile', '.xinitrc', '.xsessionrc',
+    '.config/fish', '.config/autostart', '.config/systemd', '.config/environment.d',
+    'Library/LaunchAgents',
+  ].map(name => path.join(userHome, ...name.split('/')));
+}
+
+/** The trusted folder entry that grants sandboxed scripts home writes. */
+export const HOME_TRUSTED_FOLDER = '~';
+
+/** The stored form of a trusted folder: `~` for home itself, `~/…` inside
+ * home (so one entry applies to every device's home), absolute otherwise. */
+export function trustedFolderEntry(folder: string, userHome = os.homedir()): string {
+  const trimmed = folder.trim();
+  const expanded = trimmed === '~' ? userHome : trimmed.startsWith('~/') ? path.join(userHome, trimmed.slice(2)) : trimmed;
+  const resolved = canonicalExistingPath(expanded);
+  const home = canonicalExistingPath(userHome);
+  if (resolved === home) { return HOME_TRUSTED_FOLDER; }
+  if (!isInside(resolved, home)) { return resolved; }
+  return `~/${path.relative(home, resolved).split(path.sep).join('/')}`;
+}
+
+/** Stored entries expanded against one device's home. `~` never becomes a
+ * folder capability; it only turns on {@link RunWorkspace.homeScriptWrites}. */
+export function resolveTrustedFolders(entries: string[], userHome: string): { folders: string[]; homeScriptWrites: boolean } {
+  let homeScriptWrites = false;
+  const folders: string[] = [];
+  for (const entry of entries) {
+    if (entry === HOME_TRUSTED_FOLDER || entry === '~/') { homeScriptWrites = true; }
+    else if (entry.startsWith('~/')) { folders.push(path.join(userHome, entry.slice(2))); }
+    else if (path.isAbsolute(entry)) { folders.push(entry); }
+  }
+  return { folders: uniquePaths(folders), homeScriptWrites };
+}
+
+/** Entries that may travel to another workspace device: home-relative only.
+ * Absolute in-home paths are converted with this device's home; folders
+ * outside home stay on this device. */
+export function portableTrustedFolders(entries: string[], userHome = os.homedir()): string[] {
+  return [...new Set(entries.map(entry => trustedFolderEntry(entry, userHome)).filter(entry => entry.startsWith('~')))];
+}
+
+/** True when a folder is inside, or contains, a credential store, browser
+ * profile, Marifold state or startup configuration. Trusting it would reopen
+ * what the sandbox otherwise denies, so it never becomes a trusted folder. */
+export function coversProtectedRoot(folder: string, userHome: string): boolean {
+  const resolved = canonicalExistingPath(folder);
+  const home = canonicalExistingPath(userHome);
+  return [...sensitiveHostRoots(home), ...startupConfigPaths(home)].map(canonicalExistingPath)
+    .some(root => isInside(resolved, root) || isInside(root, resolved));
+}
+
+/** Validate home-relative entries another workspace device requested for a
+ * run here. Rejects anything that leaves this device's home (`..`, links),
+ * or covers sensitive roots, Marifold state, or startup configuration. */
+export function acceptedRemoteTrustedFolders(value: unknown, userHome: string): string[] {
+  if (!Array.isArray(value)) { return []; }
+  const home = canonicalExistingPath(userHome);
+  const accepted: string[] = [];
+  for (const entry of value.slice(0, 64)) {
+    if (typeof entry !== 'string') { continue; }
+    if (entry === HOME_TRUSTED_FOLDER) { accepted.push(entry); continue; }
+    if (!entry.startsWith('~/') || entry.includes('\0') || entry.split('/').some(part => part === '..')) { continue; }
+    const resolved = canonicalExistingPath(path.join(home, entry.slice(2)));
+    if (resolved === home || !isInside(resolved, home)) { continue; }
+    if (coversProtectedRoot(resolved, home)) { continue; }
+    accepted.push(`~/${path.relative(home, resolved).split(path.sep).join('/')}`);
+  }
+  return [...new Set(accepted)];
 }
 
 /** The folder a run-scoped grant (or a trust) for this target would cover:

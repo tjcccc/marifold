@@ -105,6 +105,12 @@ export function useApprovals({ runtime, dispatch, stateRef, notify }: ApprovalOp
     const profile = stateRef.current.profile;
     try {
       const resolved = await runtime.addProfileTrustedFolder(profile, folder);
+      // `~` only lets sandboxed scripts write in home; it never silences
+      // escalated file-tool writes such as startup configuration.
+      if (resolved === '~') {
+        notify(`Scripts for ${profile} may now create and edit files in home (never delete them).`, 'info');
+        return;
+      }
       sessionTrustedFoldersRef.current.add(resolved);
       notify(`Trusting ${resolved} for ${profile} (reads and writes here won't ask).`, 'info');
     } catch (error) {

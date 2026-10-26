@@ -82,7 +82,8 @@ import {
   type SkillAppInteractionHandlers,
 } from '../app/SkillAppInstanceRegistry';
 import { TaskStore } from '../tasks/TaskStore';
-import { defaultAppsDir, defaultSchedulesDir, defaultSkillsDir, marifoldHome } from '../workspace/WorkspacePaths';
+import { defaultAppsDir, defaultSchedulesDir, defaultSkillsDir, expandHome, marifoldHome } from '../workspace/WorkspacePaths';
+import { HOME_TRUSTED_FOLDER } from '../agent/RunWorkspace';
 import type { TaskCreateInput, TaskEventInput, TaskListOptions, TaskState, TaskSummary, TaskUpdateInput } from '../tasks/TaskStore';
 import type { MarifoldAskResponse, MarifoldProviderToolDefinition, MarifoldResolvedSettings, MarifoldRunRequest, MarifoldWebSearchMode } from './MarifoldTypes';
 import { ProviderEngines } from './ProviderEngines';
@@ -268,10 +269,16 @@ export class MarifoldRuntime {
     this.profileManager.setAgentApproval(name, kind, mode);
   }
 
-  /** Add a trusted folder capability to a profile. External folders still
-   * require approval per action. Returns the resolved absolute folder. */
+  /** Trust a folder for a profile (external ones still ask per action). Returns
+   * its absolute path here, or `~` for home, which widens only the sandbox. */
   addProfileTrustedFolder(name: string, folder: string): string {
-    return this.profileManager.addTrustedFolder(name, folder).folder;
+    const entry = this.profileManager.addTrustedFolder(name, folder).folder;
+    return entry === HOME_TRUSTED_FOLDER ? entry : path.resolve(expandHome(entry));
+  }
+
+  /** Profiles with absolute in-home trusted folders; `apply` rewrites them as `~/…`. */
+  normalizeProfileTrustedFolders(apply: boolean): string[] {
+    return this.profileManager.normalizeTrustedFolders(apply);
   }
 
   /** Allow (or stop allowing) a home-relative sensitive read root such as

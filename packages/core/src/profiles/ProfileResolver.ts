@@ -5,7 +5,7 @@ import type { Profile, ProfileLoader } from '@priest-ai/core';
 import { MarifoldError } from '../errors/MarifoldError';
 import type { ProfileDetail, ProfileFileSummary, ProfileMode, ProfileSettings, ProfileSummary } from '../config/ConfigSchema';
 import { parsePartialAgentConfig } from '../config/ConfigLoader';
-import { findProfileAvatar, normalizeProfileDisplayName } from './ProfileManager';
+import { defaultTrustedFolders, findProfileAvatar, normalizeProfileDisplayName } from './ProfileManager';
 import { parseProfileModel } from './ProfileModel';
 import {
   DEFAULT_MARIFOLD_PROFILE_INSTRUCTIONS,
@@ -44,7 +44,10 @@ export class ProfileResolver implements ProfileLoader {
   loadSettings(name: string): ProfileSettings {
     this.assertSafeName(name);
     const profileToml = path.join(this.profilesDir, name, 'profile.toml');
-    if (!fs.existsSync(profileToml)) { return { memories: true }; }
+    const startingFolders = defaultTrustedFolders(name);
+    if (!fs.existsSync(profileToml)) {
+      return startingFolders.length > 0 ? { memories: true, agent: { trustedFolders: startingFolders } } : { memories: true };
+    }
 
     const raw = this.readToml(profileToml);
     const displayName = normalizeProfileDisplayName(
@@ -60,7 +63,11 @@ export class ProfileResolver implements ProfileLoader {
     const maxContextTokens = optionalNumber(raw.max_context_tokens, `${name}.profile.toml max_context_tokens`);
     const sessionContextTurns = optionalTurnWindow(raw.session_context_turns, `${name}.profile.toml session_context_turns`);
     const legacyThink = optionalBoolean(raw.think, `${name}.profile.toml think`);
-    const agent = raw.agent !== undefined ? parsePartialAgentConfig(raw.agent, `${name}.profile.toml [agent]`) : undefined;
+    const parsedAgent = raw.agent !== undefined ? parsePartialAgentConfig(raw.agent, `${name}.profile.toml [agent]`) : undefined;
+    // An unset list keeps the profile's starting folders (`~` for default).
+    const agent = parsedAgent?.trustedFolders === undefined && startingFolders.length > 0
+      ? { ...parsedAgent, trustedFolders: startingFolders }
+      : parsedAgent;
     const rawMode = optionalString(raw.mode, `${name}.profile.toml mode`);
     if (rawMode !== undefined && rawMode !== 'agent' && rawMode !== 'chat') {
       throw MarifoldError.profileInvalid(

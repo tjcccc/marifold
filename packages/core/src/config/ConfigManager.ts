@@ -1,4 +1,5 @@
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import {
   type LoadedMarifoldConfig,
@@ -12,7 +13,8 @@ import {
 import { MarifoldError } from '../errors/MarifoldError';
 import { resolveAgentConfig } from '../agent/ApprovalPolicy';
 import type { AgentToolMode, ApprovalMode, ToolKind } from '../agent/ApprovalPolicy';
-import { resolveUserPath } from '../workspace/WorkspacePaths';
+import { expandHome, resolveUserPath } from '../workspace/WorkspacePaths';
+import { coversProtectedRoot, trustedFolderEntry } from '../agent/RunWorkspace';
 import { getProviderRegistryEntry, providerConfigFromRegistry } from './ProviderRegistry';
 import { writeFileAtomic } from '../util/atomicWrite';
 
@@ -479,7 +481,12 @@ export class ConfigManager {
         agent.toolMode = parseAgentToolMode(value);
         return;
       case 'trusted_folders':
-        agent.trustedFolders = value.split(',').map(folder => folder.trim()).filter(Boolean).map(resolveUserPath);
+        agent.trustedFolders = [...new Set(value.split(',').map(folder => folder.trim()).filter(Boolean).map(folder => trustedFolderEntry(expandHome(folder))))];
+        for (const entry of agent.trustedFolders) {
+          if (entry !== '~' && coversProtectedRoot(expandHome(entry), os.homedir())) {
+            throw MarifoldError.configInvalid(`Refusing to trust '${entry}': it covers credentials, Marifold state or startup files.`);
+          }
+        }
         return;
       default:
         throw MarifoldError.configInvalid(`Unknown config key: agent.${key}`);

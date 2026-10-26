@@ -243,6 +243,21 @@ describe('ProfileSettingsPage', () => {
     expect(handlers.onRemoveTrustedFolder).toHaveBeenCalledWith('/Users/me/blog');
   });
 
+  it('shows trusted folders outside Advanced and adds one chosen in the folder picker', async () => {
+    const load = vi.fn(async (folder: string) => folder === '~'
+      ? { path: '~', folders: [{ name: 'tempfiles', path: '~/tempfiles' }], truncated: false }
+      : { path: folder, parent: '~', folders: [], truncated: false });
+    const handlers = renderPage({ onBrowseFolders: load }, false);
+    expect(screen.getByText('/Users/me/blog')).toBeTruthy();
+    fireEvent.click(screen.getByText('Choose…'));
+    const dialog = screen.getByRole('dialog', { name: 'Choose a folder' });
+    fireEvent.click(await within(dialog).findByText('tempfiles'));
+    await within(dialog).findByText('No folders here.');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Choose this folder' }));
+    expect(handlers.onAddTrustedFolder).toHaveBeenCalledWith('~/tempfiles');
+    expect(screen.queryByRole('dialog', { name: 'Choose a folder' })).toBeNull();
+  });
+
   it('requires the profile name in a second confirmation dialog before removal', () => {
     const onDelete = vi.fn();
     const { unmount } = render(

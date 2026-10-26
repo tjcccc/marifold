@@ -2,10 +2,14 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
+import { listHomeFolders } from '../src/agent/HomeFolders';
 import {
+  acceptedRemoteTrustedFolders,
   createRunWorkspace,
   isProtectedSystemWrite,
+  portableTrustedFolders,
   resolveToolPath,
+  trustedFolderEntry,
 } from '../src/agent/RunWorkspace';
 import { macSandboxProfile } from '../src/agent/ScopedProcess';
 import { ReadFileTool } from '../src/agent/tools/ReadFileTool';
@@ -219,5 +223,51 @@ describe('RunWorkspace', () => {
     expect(explicitlyGranted.readOnlyRoots).toContain(fs.realpathSync(externalSkills));
     expect(explicitlyGranted.readRoots).toContain(fs.realpathSync(externalSkills));
     expect(explicitlyGranted.writeRoots).not.toContain(fs.realpathSync(externalSkills));
+  });
+
+  it('stores trusted folders home-relative and accepts only safe ones from another device', () => {
+    const home = fs.realpathSync(tempDir());
+    for (const folder of ['tempfiles/a', '.ssh', '.config/systemd', 'Library/LaunchAgents']) { fs.mkdirSync(path.join(home, folder), { recursive: true }); }
+    const outside = fs.realpathSync(tempDir());
+    fs.symlinkSync(outside, path.join(home, 'escape'));
+    fs.symlinkSync(path.join(home, '.ssh'), path.join(home, 'keys'));
+
+    expect(trustedFolderEntry(path.join(home, 'tempfiles'), home)).toBe('~/tempfiles');
+    expect(trustedFolderEntry('~/tempfiles/a/', home)).toBe('~/tempfiles/a');
+    expect(trustedFolderEntry(home, home)).toBe('~');
+    expect(trustedFolderEntry(outside, home)).toBe(outside);
+    // Folders outside home stay on this device; old absolute in-home entries travel as `~/…`.
+    expect(portableTrustedFolders([path.join(home, 'tempfiles'), outside, '~'], home)).toEqual(['~/tempfiles', '~']);
+
+    expect(acceptedRemoteTrustedFolders([
+      '~', '~/tempfiles', '~/tempfiles/a', '~/missing',
+      '/etc', outside, '~/../x', '~/escape', '~/keys', '~/.ssh', '~/.config', '~/.config/systemd', '~/Library/LaunchAgents', '~/.marifold', 42,
+    ], home)).toEqual(['~', '~/tempfiles', '~/tempfiles/a', '~/missing']);
+    expect(acceptedRemoteTrustedFolders('~/tempfiles', home)).toEqual([]);
+
+    // `~` turns on script home writes and never becomes a folder capability.
+    // Parents of protected roots would reopen them, so they never become write roots.
+    const workspace = createRunWorkspace({ id: 'run_trust', cwd: home, runsDir: path.join(home, '.marifold', 'runs'), userHome: home, trustedFolders: ['~', '~/tempfiles', '~/Library', '~/.config'] });
+    expect(workspace.homeScriptWrites).toBe(true);
+    expect(workspace.trustedRoots).toEqual([path.join(home, 'tempfiles')]);
+    expect(workspace.writeRoots).not.toContain(home);
+  });
+
+  it('lists home folders for the picker without files, hidden or sensitive folders', () => {
+    const home = fs.realpathSync(tempDir());
+    for (const folder of ['Documents/b', 'Library/Keychains', 'Library/Caches', '.ssh', 'tempfiles']) { fs.mkdirSync(path.join(home, folder), { recursive: true }); }
+    fs.writeFileSync(path.join(home, 'notes.txt'), 'x');
+    fs.symlinkSync(fs.realpathSync(tempDir()), path.join(home, 'outside-link'));
+
+    expect(listHomeFolders('~', home)).toEqual({
+      path: '~',
+      folders: [{ name: 'Documents', path: '~/Documents' }, { name: 'Library', path: '~/Library' }, { name: 'tempfiles', path: '~/tempfiles' }],
+      truncated: false,
+    });
+    expect(listHomeFolders('~/Library', home).folders.map(folder => folder.name)).toEqual(['Caches']);
+    expect(listHomeFolders(path.join(home, 'Documents'), home)).toMatchObject({ path: '~/Documents', parent: '~' });
+    expect(() => listHomeFolders('~/..', home)).toThrow(/inside home/);
+    expect(() => listHomeFolders('~/outside-link', home)).toThrow(/inside home/);
+    expect(() => listHomeFolders('~/.ssh', home)).toThrow(/private/);
   });
 });

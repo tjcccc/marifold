@@ -154,4 +154,20 @@ describe('guest execution', () => {
       executor.close();
     }
   });
+
+  it('takes home script writes from the requesting profile, never from its own default', async () => {
+    const runs = fs.mkdtempSync(path.join(os.tmpdir(), 'marifold-policy-runs-'));
+    dirs.push(runs);
+    const executor = new WorkspaceExecutor(() => resolveAgentConfig({ trustedFolders: ['~'] }), runs);
+    const context = { workspaceId: 'workspace', senderDeviceId: 'host', hostDeviceId: 'host' };
+    try {
+      const own = await executor.handle('executor.prepare', { runId: 'own' }, context) as RunWorkspace;
+      expect(own.homeScriptWrites).toBeUndefined();
+      const requested = await executor.handle('executor.prepare', { runId: 'requested', trustedFolders: ['~', '/etc', '~/../x'] }, context) as RunWorkspace;
+      expect(requested.homeScriptWrites).toBe(true);
+      expect(requested.trustedRoots).toEqual([]);
+    } finally {
+      executor.close();
+    }
+  });
 });

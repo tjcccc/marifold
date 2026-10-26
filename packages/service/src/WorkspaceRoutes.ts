@@ -19,7 +19,7 @@ export function workspaceApiPath(method: string, raw: string): boolean {
   }
   const pathname = raw.split('?')[0];
   if (/%2f|%5c|%2e/i.test(pathname) || pathname.split('/').some((p) => p === '.' || p === '..')) { return false; }
-  if (pathname === '/v1/execution-devices') { return method === 'GET'; }
+  if (pathname === '/v1/execution-devices' || pathname === '/v1/folders') { return method === 'GET'; }
   // The host's own Web UI may reach /v1/agent-computer through its workspace;
   // AgentComputerRoutes limits other devices to status and profile access.
   return (

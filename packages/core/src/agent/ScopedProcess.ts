@@ -2,7 +2,7 @@ import { spawn } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 import { capToolOutput, type ToolExecutionResult } from './ToolRegistry';
-import { isInside, type RunWorkspace, sensitiveHostRoots } from './RunWorkspace';
+import { isInside, type RunWorkspace, sensitiveHostRoots, startupConfigPaths } from './RunWorkspace';
 
 const DEFAULT_TIMEOUT_MS = 60_000;
 const MAX_BUFFER_BYTES = 10 * 1024 * 1024;
@@ -231,11 +231,21 @@ export function macSandboxProfile(
     ...pathDirectories(workspace, capabilities.readRoots === undefined),
   ]);
   const writeRoots = uniqueCanonical(capabilities.writeRoots ?? workspace.writeRoots);
+  // A profile that trusts `~` lets scripts create and modify files in home,
+  // never delete or rename them (no Trash covers sandbox writes), and never
+  // write credentials, browser data, Marifold state or startup configuration.
+  const homeWrites = workspace.homeScriptWrites === true && capabilities.writeRoots === undefined;
+  const protectedWrites = homeWrites
+    ? uniquePaths([...sensitiveHostRoots(workspace.userHome), ...startupConfigPaths(workspace.userHome)]
+      .flatMap(root => [path.resolve(root), canonicalExisting(root)]))
+    : [];
   const ancestorAllows = readRoots.map(
     root => `(allow file-read-metadata (path-ancestors ${schemeString(root)}))`,
   );
   const readAllows = readRoots.map(root => `(allow file-read* (subpath ${schemeString(root)}))`);
-  const writeAllows = writeRoots.map(root => `(allow file-write* (subpath ${schemeString(root)}))`);
+  // A narrower `file-write-unlink` deny beats a later `file-write*` allow, so
+  // run roots name it explicitly to keep deletes working inside them.
+  const writeAllows = writeRoots.map(root => `(allow file-write* file-write-unlink (subpath ${schemeString(root)}))`);
   return [
     '(version 1)',
     '(allow default)',
@@ -258,6 +268,11 @@ export function macSandboxProfile(
       + ' (global-name "com.apple.securityd.systemkeychain"))',
     '(deny file-write*)',
     `(allow file-write* (literal ${schemeString('/dev/null')}))`,
+    ...(homeWrites ? [
+      `(allow file-write* (subpath ${schemeString(workspace.userHome)}))`,
+      `(deny file-write-unlink (subpath ${schemeString(workspace.userHome)}))`,
+      ...protectedWrites.map(root => `(deny file-write* (subpath ${schemeString(root)}))`),
+    ] : []),
     ...writeAllows,
     // The real account and external volumes are private unless a selected
     // workspace/trusted root below explicitly re-opens a subtree.

@@ -4,7 +4,7 @@ import type { JSONValue } from '@priest-ai/core';
 import { record, randomId } from '@marifold/workspace-protocol';
 import type { AgentRunner } from '../agent/AgentRunner';
 import type { RunArtifact } from '../agent/RunArtifacts';
-import type { RunWorkspace } from '../agent/RunWorkspace';
+import { portableTrustedFolders, type RunWorkspace } from '../agent/RunWorkspace';
 import {
   UncertainToolOutcomeError,
   ToolRegistry,
@@ -245,6 +245,8 @@ export class WorkspaceRuns {
         const workspace = (await request('executor.prepare', {
           runId,
           cwd: input.cwd,
+          // Home-relative entries only; the device validates them against its own home.
+          trustedFolders: portableTrustedFolders(options.trustedFolders ?? []),
           files: options.files,
           images: options.images,
         })) as RunWorkspace;

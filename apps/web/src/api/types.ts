@@ -150,3 +150,4 @@ export interface PublicConfig {
 
 export type { WorkspaceSummary, WorkspaceDevice } from '@marifold/core';
 export type { AgentComputerStatus } from '@marifold/core';
+export type { HomeFolderListing } from '@marifold/core';

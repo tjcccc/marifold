@@ -105,6 +105,8 @@ export type {
   StagedRunAttachment,
   StagedRunFile,
 } from './agent/RunWorkspace';
+export { listHomeFolders } from './agent/HomeFolders';
+export type { HomeFolderListing } from './agent/HomeFolders';
 export {
   MAX_RUN_ARTIFACTS,
   MAX_RUN_ARTIFACT_BYTES,

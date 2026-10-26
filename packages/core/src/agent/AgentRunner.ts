@@ -369,7 +369,8 @@ export class AgentRunner {
     } }));
     const toolContext: ToolExecutionContext = {
       cwd: workspace.cwd,
-      trustedFolders: [...agentConfig.trustedFolders, ...(options.trustedFolders ?? [])],
+      // Resolved folders only: the `~` entry widens the sandbox, never file tools.
+      trustedFolders: workspace.trustedRoots ?? [],
       workspace,
       signal: options.signal,
       outputLimit: agentConfig.toolOutputLimit,
@@ -1000,7 +1001,7 @@ export class AgentRunner {
         ].join('\n')
       : 'No attachments were uploaded for this run.';
     const workspaceContext = [
-      `Working directory: ${workspace.cwd}. Relative tool paths resolve against it.`,
+      `Working directory: ${workspace.cwd}. Relative tool paths resolve against it.${workspace.homeScriptWrites ? ' This profile trusts home: scoped shell may also create and edit files anywhere in home, but cannot delete or rename them there (use move_path or trash_path), and never writes credential stores or startup files.' : ''}`,
       `User home: ${workspace.userHome}. In tool paths and shell commands, ~ refers to this directory.`,
       `Isolated run directory: ${workspace.rootDir}. Its internal runtime home is ${workspace.homeDir}.`,
       `${[attachments, ...earlierImageContext(workspace.earlierImages)].join('\n')}\nHonor explicit destination paths from the user; otherwise write generated deliverables to ${workspace.outputDir}. Regular output files are published to clients automatically. Follow the interface-specific file presentation guidance; never invent sandbox: or file: download URLs. Temporary scripts and environments belong in ${workspace.workDir}.`,

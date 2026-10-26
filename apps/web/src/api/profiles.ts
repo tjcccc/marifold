@@ -1,5 +1,5 @@
 import type { ApiClient } from './client';
-import type { ApprovalMode, MemoryEntry, ProfileDetail, ProfileMode, ProfileSummary, ToolKind } from './types';
+import type { ApprovalMode, HomeFolderListing, MemoryEntry, ProfileDetail, ProfileMode, ProfileSummary, ToolKind } from './types';
 
 /** Canonical instruction document plus deprecated aliases accepted by the service. */
 export type ProfileFileKind = 'instructions' | 'profile' | 'rules' | 'custom';
@@ -78,6 +78,11 @@ export async function addTrustedFolder(client: ApiClient, name: string, folder: 
     { folder },
   );
   return body.profile;
+}
+
+/** Subfolders of a folder in the service device's home, for the trusted-folder picker. */
+export async function listHomeFolders(client: ApiClient, folder: string): Promise<HomeFolderListing> {
+  return client.request<HomeFolderListing>('GET', `/v1/folders?path=${encodeURIComponent(folder)}`);
 }
 
 export async function removeTrustedFolder(client: ApiClient, name: string, folder: string): Promise<ProfileDetail> {

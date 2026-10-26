@@ -309,6 +309,13 @@ button.avatarButton:disabled {
   gap: 12px;
 }
 
+.folderLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
 .folderAdd {
   display: flex;
   gap: 8px;

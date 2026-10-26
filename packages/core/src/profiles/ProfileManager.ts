@@ -8,7 +8,7 @@ import { ensureProfileMemoryFiles } from '../memory/MemoryStore';
 import { expandHome } from '../workspace/WorkspacePaths';
 import type { ProfileMode } from '../config/ConfigSchema';
 import type { ApprovalMode, ToolKind } from '../agent/ApprovalPolicy';
-import { SENSITIVE_HOME_ENTRIES } from '../agent/RunWorkspace';
+import { coversProtectedRoot, HOME_TRUSTED_FOLDER, SENSITIVE_HOME_ENTRIES, trustedFolderEntry } from '../agent/RunWorkspace';
 import {
   PROFILE_INSTRUCTIONS_FILE,
   resolveDirectoryProfileInstructions,
@@ -359,18 +359,22 @@ export class ProfileManager {
     return { name, path: profileToml, ...result };
   }
 
-  /** Add a trusted folder capability to profile.toml. In-home writes may be
-   * silent; external folders still prompt. Refuses broad/sensitive roots. */
+  /** Add a trusted folder capability to profile.toml, stored home-relative
+   * (`~/…`) inside home so it applies on every workspace device. `~` itself
+   * lets sandboxed scripts write in home without deleting. In-home writes may
+   * be silent; external folders still prompt. Refuses broad/sensitive roots. */
   addTrustedFolder(name: string, folder: string): { name: string; path: string; folder: string } {
     assertSafeName(name);
-    const resolved = path.resolve(expandHome(folder));
-    assertSafeTrustedFolder(resolved);
+    const entry = trustedFolderEntry(expandHome(folder));
+    if (entry !== HOME_TRUSTED_FOLDER) { assertSafeTrustedFolder(path.resolve(expandHome(entry))); }
     const profileDir = path.join(this.profilesDir, name);
     fs.mkdirSync(profileDir, { recursive: true });
     const profileToml = path.join(profileDir, 'profile.toml');
     const current = fs.existsSync(profileToml) ? fs.readFileSync(profileToml, 'utf-8') : PROFILE_TOML_STUB;
-    fs.writeFileSync(profileToml, upsertTrustedFolder(current, resolved));
-    return { name, path: profileToml, folder: resolved };
+    const folders = profileTrustedFolders(name, current);
+    if (!folders.includes(entry)) { folders.push(entry); }
+    fs.writeFileSync(profileToml, renderTrustedFolders(current, folders));
+    return { name, path: profileToml, folder: entry };
   }
 
   /** Add or remove a home-relative sensitive read root (`~/.ssh`) in the
@@ -392,18 +396,44 @@ export class ProfileManager {
     return { name, path: profileToml, grant: normalized };
   }
 
-  /** Remove a trusted folder from the profile's profile.toml. Compares against
-   * the resolved absolute path (same normalization addTrustedFolder applies). */
+  /** Remove a trusted folder from the profile's profile.toml. Entries compare
+   * in stored form, so `/Users/me/x` also removes `~/x` and vice versa. */
   removeTrustedFolder(name: string, folder: string): { name: string; path: string; folder: string; removed: boolean } {
     assertSafeName(name);
-    const resolved = path.resolve(expandHome(folder));
+    const entry = trustedFolderEntry(expandHome(folder));
     const profileDir = this.requireProfileDir(name);
     const profileToml = path.join(profileDir, 'profile.toml');
     const current = fs.existsSync(profileToml) ? fs.readFileSync(profileToml, 'utf-8') : PROFILE_TOML_STUB;
-    const folders = parseTrustedFolders(current);
-    const next = folders.filter(entry => entry !== resolved);
+    const folders = profileTrustedFolders(name, current);
+    const next = folders.filter(candidate => trustedFolderEntry(expandHome(candidate)) !== entry);
     fs.writeFileSync(profileToml, renderTrustedFolders(current, next));
-    return { name, path: profileToml, folder: resolved, removed: next.length !== folders.length };
+    return { name, path: profileToml, folder: entry, removed: next.length !== folders.length };
+  }
+
+  /** `doctor`: profiles whose in-home trusted folders are stored as absolute
+   * paths. With `apply`, rewrites them home-relative (`~/…`) after a backup so
+   * they apply on every workspace device. */
+  normalizeTrustedFolders(apply: boolean): string[] {
+    const changed: string[] = [];
+    if (!fs.existsSync(this.profilesDir)) { return changed; }
+    for (const entry of fs.readdirSync(this.profilesDir, { withFileTypes: true })) {
+      const profileToml = path.join(this.profilesDir, entry.name, 'profile.toml');
+      if (!entry.isDirectory() || !SAFE_PROFILE_NAME.test(entry.name) || !fs.existsSync(profileToml)) { continue; }
+      const current = fs.readFileSync(profileToml, 'utf-8');
+      const folders = parseAgentStringListOrUndefined(current, 'trusted_folders');
+      if (!folders) { continue; }
+      // Only in-home absolute entries change; folders outside home stay as written.
+      const next = [...new Set(folders.map(folder => {
+        const entry = trustedFolderEntry(expandHome(folder));
+        return entry.startsWith('~') ? entry : folder;
+      }))];
+      if (next.join('\n') === folders.join('\n')) { continue; }
+      changed.push(entry.name);
+      if (!apply) { continue; }
+      fs.copyFileSync(profileToml, `${profileToml}.bak-trusted-folders`);
+      fs.writeFileSync(profileToml, renderTrustedFolders(current, next));
+    }
+    return changed;
   }
 
   rename(from: string, to: string): ProfileRenameResult {
@@ -617,31 +647,35 @@ function upsertFlatLine(text: string, key: string, rendered: string | undefined)
 
 /** Read a string list under `[agent]` (dotted or table form parses the same). */
 function parseAgentStringList(text: string, key: string): string[] {
+  return parseAgentStringListOrUndefined(text, key) ?? [];
+}
+
+/** Like {@link parseAgentStringList}, but `undefined` when the key is unset. */
+function parseAgentStringListOrUndefined(text: string, key: string): string[] | undefined {
   try {
     const parsed = parse(text) as { agent?: Record<string, unknown> };
     const existing = parsed.agent?.[key];
     if (Array.isArray(existing)) { return existing.filter((v): v is string => typeof v === 'string'); }
   } catch { /* unparseable — start fresh */ }
-  return [];
+  return undefined;
 }
 
-function parseTrustedFolders(text: string): string[] {
-  return parseAgentStringList(text, 'trusted_folders');
+/** The profile's stored trusted folders. The built-in `default` profile
+ * trusts `~` until its list is set (see {@link defaultTrustedFolders}). */
+function profileTrustedFolders(name: string, text: string): string[] {
+  return parseAgentStringListOrUndefined(text, 'trusted_folders') ?? defaultTrustedFolders(name);
 }
 
-/** Rewrite the trusted_folders line for the given list (empty list removes it). */
+/** Trusted folders a profile starts with: the `default` profile is the
+ * everyday assistant, so its scripts may write (not delete) in home. */
+export function defaultTrustedFolders(name: string): string[] {
+  return name === 'default' ? [HOME_TRUSTED_FOLDER] : [];
+}
+
+/** Rewrite the trusted_folders line. An empty list is written explicitly, so
+ * removing the default profile's `~` does not bring it back. */
 function renderTrustedFolders(text: string, folders: string[]): string {
-  return upsertFlatLine(
-    text,
-    'agent.trusted_folders',
-    folders.length > 0 ? `[${folders.map(tomlString).join(', ')}]` : undefined,
-  );
-}
-
-function upsertTrustedFolder(text: string, folder: string): string {
-  const folders = parseTrustedFolders(text);
-  if (!folders.includes(folder)) { folders.push(folder); }
-  return renderTrustedFolders(text, folders);
+  return upsertFlatLine(text, 'agent.trusted_folders', `[${folders.map(tomlString).join(', ')}]`);
 }
 
 /** Refuse trusting roots that would grant the agent far too much. */
@@ -650,11 +684,10 @@ function assertSafeTrustedFolder(folder: string): void {
   // narrower one.
   const resolved = realPathOrSelf(folder);
   const home = realPathOrSelf(os.homedir());
-  const sensitive = [path.join(home, '.ssh'), path.join(home, '.marifold')];
   const tooBroad = resolved === path.parse(resolved).root // filesystem root
     || resolved === home
-    // an ancestor of (or equal to) a sensitive dir.
-    || sensitive.some(s => s === resolved || !path.relative(resolved, s).startsWith('..'));
+    // inside, or an ancestor of, credentials, Marifold state or startup files.
+    || coversProtectedRoot(resolved, home);
   if (tooBroad) {
     throw MarifoldError.profileInvalid(`Refusing to trust '${folder}' — too broad or sensitive a folder.`, folder);
   }

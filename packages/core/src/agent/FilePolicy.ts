@@ -14,6 +14,7 @@ import {
   isSensitiveHostPath,
   type RunWorkspace,
   sensitiveHostRoots,
+  startupConfigPaths,
 } from './RunWorkspace';
 import type { ToolRiskAssessment } from './ToolRegistry';
 
@@ -29,18 +30,6 @@ import type { ToolRiskAssessment } from './ToolRegistry';
  */
 
 const BLOCKED_STATE = 'This path contains device-local or other-workspace state.';
-
-/** Login and startup configuration under home. Changing it alters what runs
- * automatically, so writes there always ask. */
-function startupConfigPaths(userHome: string): string[] {
-  return [
-    '.zshrc', '.zshenv', '.zprofile', '.zlogin', '.zlogout',
-    '.bashrc', '.bash_profile', '.bash_login', '.bash_logout', '.profile',
-    '.login', '.cshrc', '.tcshrc', '.xprofile', '.xinitrc', '.xsessionrc',
-    '.config/fish', '.config/autostart', '.config/systemd', '.config/environment.d',
-    'Library/LaunchAgents',
-  ].map(name => path.join(userHome, ...name.split('/')));
-}
 
 export function isStartupConfigPath(target: string, workspace: RunWorkspace): boolean {
   return isInsideAnyRoot(target, startupConfigPaths(workspace.userHome));

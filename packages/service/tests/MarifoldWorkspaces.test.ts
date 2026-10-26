@@ -141,6 +141,8 @@ describe('device-hosted workspaces', () => {
     expect(response.statusCode, response.body).toBe(200);
     expect(response.json().devices.map((d: { id: string }) => d.id)).toEqual(expect.arrayContaining([p.hostDevice, p.device]));
     expect(workspaceApiPath('POST', '/v1/execution-devices')).toBe(false);
+    expect(workspaceApiPath('GET', '/v1/folders?path=~%2Fdocs')).toBe(true);
+    expect(workspaceApiPath('POST', '/v1/folders')).toBe(false);
   });
   it('lets another device give profile access to the host computer but nothing else', async () => {
     const p = await paired();

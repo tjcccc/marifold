@@ -1,0 +1,156 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: var(--scrim);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sheet {
+  width: min(440px, calc(100vw - 48px));
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sheet);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.title {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.pathRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.upButton {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-size: 16px;
+}
+
+.upButton:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.path {
+  font-size: 12.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.list {
+  height: min(320px, 50vh);
+  overflow-y: auto;
+  border: 1px solid var(--separator);
+  border-radius: var(--radius-md);
+  background: var(--content);
+  display: flex;
+  flex-direction: column;
+}
+
+.folder {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  font-size: 13px;
+  text-align: left;
+  color: var(--text);
+  border-bottom: 1px solid var(--separator-soft);
+}
+
+.folder:hover {
+  background: var(--brand-tint);
+}
+
+.folderIcon {
+  color: var(--text-3);
+  font-size: 11px;
+}
+
+.empty {
+  padding: 12px;
+  font-size: 12.5px;
+  color: var(--text-3);
+}
+
+.problem {
+  padding: 12px;
+  font-size: 12.5px;
+  color: var(--danger);
+}
+
+.hint {
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.cancel {
+  padding: 7px 14px;
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-weight: 600;
+  background: var(--surface-2);
+  color: var(--text-2);
+}
+
+.choose {
+  padding: 7px 14px;
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-weight: 600;
+  background: var(--brand-fill);
+  color: var(--on-brand);
+  box-shadow: 0 1px 3px var(--brand-shadow);
+}
+
+.choose:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+@media (max-width: 560px) {
+  .backdrop {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .sheet {
+    width: 100%;
+    padding: 20px 18px calc(18px + env(safe-area-inset-bottom));
+    border-radius: 18px 18px 0 0;
+  }
+
+  .folder {
+    min-height: 44px;
+    font-size: 15px;
+  }
+
+  .cancel,
+  .choose {
+    min-height: 44px;
+    padding-inline: 18px;
+    font-size: 15px;
+  }
+}

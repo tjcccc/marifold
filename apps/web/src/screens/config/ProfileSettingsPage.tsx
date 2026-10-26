@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import type { ProfileFileKind, ProfilePatchInput } from '../../api/profiles';
-import type { ApprovalMode, MarifoldAgentConfig, MemoryEntry, ProfileDetail } from '../../api/types';
+import type { ApprovalMode, HomeFolderListing, MarifoldAgentConfig, MemoryEntry, ProfileDetail } from '../../api/types';
+import { FolderPickerSheet } from '../../components/FolderPickerSheet';
 import { AvatarCropper } from '../../components/AvatarCropper';
 import { SegmentedControl } from '../../components/SegmentedControl';
 import { formatRelativeTime } from '../../lib/format';
@@ -19,6 +20,8 @@ export interface ProfileSettingsPageProps {
   onSaveFile: (file: ProfileFileKind, content: string) => void;
   onAddTrustedFolder: (folder: string) => void;
   onRemoveTrustedFolder: (folder: string) => void;
+  /** Lists folders in the service device's home for the Choose… picker. */
+  onBrowseFolders?: (folder: string) => Promise<HomeFolderListing>;
   onRevokeSensitiveRead: (grant: string) => void;
   onMemoryAction: (id: string, mode: 'forget' | 'delete' | 'restore') => void;
   onDelete?: () => void;
@@ -46,12 +49,12 @@ export function ProfileSettingsPage(props: ProfileSettingsPageProps) {
   const active = memories.filter(entry => entry.status === 'active');
   const forgotten = memories.filter(entry => entry.status !== 'active');
   const profileFolders = detail.settings.agent?.trustedFolders ?? [];
-  const inheritedFolders = effective.trustedFolders.filter(folder => !profileFolders.includes(folder));
   const sensitiveGrants = detail.settings.agent?.sensitiveReadGrants ?? [];
   const modelValue = detail.settings.provider && detail.settings.model
     ? `${detail.settings.provider}/${detail.settings.model}`
     : '';
   const [newFolder, setNewFolder] = useState('');
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [displayName, setDisplayName] = useState(detail.settings.displayName ?? '');
   const [cropFile, setCropFile] = useState<File | undefined>();
   const [removeOpen, setRemoveOpen] = useState(false);
@@ -295,6 +298,76 @@ export function ProfileSettingsPage(props: ProfileSettingsPageProps) {
         </div>
       </section>
 
+      <section className={styles.group} aria-label="Trusted folders">
+        <div className={styles.groupTitle}>Trusted folders</div>
+        <div className={styles.card}>
+          {effective.trustedFolders.length === 0 ? <div className={styles.emptyRow}>No trusted folders.</div> : null}
+          {effective.trustedFolders.map(folder => (
+            <div key={folder} className={styles.folderRow}>
+              <span className={styles.folderLabel}>
+                <code>{folder === '~' ? 'Home (~)' : folder}</code>
+                {folder === '~' ? <span className={styles.inheritedTag}>scripts can't delete</span> : null}
+              </span>
+              {profileFolders.includes(folder) ? (
+                <button
+                  className={styles.smallButton}
+                  disabled={busy}
+                  onClick={() => props.onRemoveTrustedFolder(folder)}
+                >
+                  Remove
+                </button>
+              ) : (
+                <span className={styles.inheritedTag}>global</span>
+              )}
+            </div>
+          ))}
+          <div className={styles.folderAdd}>
+            {props.onBrowseFolders ? (
+              <button className={styles.smallButton} disabled={busy} onClick={() => setPickerOpen(true)}>
+                Choose…
+              </button>
+            ) : null}
+            <input
+              className={styles.input}
+              placeholder="~/folder or /path/to/folder"
+              aria-label="New trusted folder"
+              value={newFolder}
+              disabled={busy}
+              onChange={event => setNewFolder(event.target.value)}
+              onKeyDown={event => {
+                if (event.key === 'Enter' && newFolder.trim()) {
+                  props.onAddTrustedFolder(newFolder.trim());
+                  setNewFolder('');
+                }
+              }}
+            />
+            <button
+              className={styles.smallButton}
+              disabled={busy || !newFolder.trim()}
+              onClick={() => {
+                props.onAddTrustedFolder(newFolder.trim());
+                setNewFolder('');
+              }}
+            >
+              Add
+            </button>
+          </div>
+        </div>
+        <div className={styles.groupHint}>
+          Scripts the agent runs can write in trusted folders without asking. Folders inside home are saved as ~/… and apply on every workspace device. Script writes skip the Trash, so trust working folders, not your whole Documents.
+        </div>
+        {pickerOpen && props.onBrowseFolders ? (
+          <FolderPickerSheet
+            load={props.onBrowseFolders}
+            onClose={() => setPickerOpen(false)}
+            onChoose={folder => {
+              setPickerOpen(false);
+              props.onAddTrustedFolder(folder);
+            }}
+          />
+        ) : null}
+      </section>
+
       <button
         type="button"
         className={styles.advancedToggle}
@@ -418,49 +491,6 @@ export function ProfileSettingsPage(props: ProfileSettingsPageProps) {
                 );
               })}
             </div>
-            <div className={styles.card}>
-              <div className={styles.rowLine}>
-                <span className={styles.rowLabel}>Trusted folders</span>
-              </div>
-              {inheritedFolders.map(folder => (
-                <div key={folder} className={styles.folderRow}>
-                  <code>{folder}</code>
-                  <span className={styles.inheritedTag}>global</span>
-                </div>
-              ))}
-              {profileFolders.map(folder => (
-                <div key={folder} className={styles.folderRow}>
-                  <code>{folder}</code>
-                  <button
-                    className={styles.smallButton}
-                    disabled={busy}
-                    onClick={() => props.onRemoveTrustedFolder(folder)}
-                  >
-                    Remove
-                  </button>
-                </div>
-              ))}
-              <div className={styles.folderAdd}>
-                <input
-                  className={styles.input}
-                  placeholder="/path/to/folder"
-                  aria-label="New trusted folder"
-                  value={newFolder}
-                  disabled={busy}
-                  onChange={event => setNewFolder(event.target.value)}
-                />
-                <button
-                  className={styles.smallButton}
-                  disabled={busy || !newFolder.trim()}
-                  onClick={() => {
-                    props.onAddTrustedFolder(newFolder.trim());
-                    setNewFolder('');
-                  }}
-                >
-                  Add
-                </button>
-              </div>
-            </div>
             {sensitiveGrants.length > 0 ? (
               <div className={styles.card}>
                 <div className={styles.rowLine}>
@@ -481,7 +511,7 @@ export function ProfileSettingsPage(props: ProfileSettingsPageProps) {
               </div>
             ) : null}
             <div className={styles.groupHint}>
-              On every device, file tools create, edit, move, and trash files inside your home without asking unless writes are set to Deny; overwritten and trashed items go to the Trash. Credential stores and browser data ask before reading, and writes outside home, to credentials, or to startup settings ask every time. Trusted folders also open a folder to shell commands.
+              On every device, file tools create, edit, move, and trash files inside your home without asking unless writes are set to Deny; overwritten and trashed items go to the Trash. Credential stores and browser data ask before reading, and writes outside home, to credentials, or to startup settings ask every time. Trusted folders (above) also open a folder to scripts.
             </div>
           </section>
         </div>

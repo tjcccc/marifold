@@ -3,6 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import {
   type ApprovalMode,
   avatarThumbnail,
+  listHomeFolders,
   MarifoldError,
   type MarifoldRuntime,
   type ProfileFileKind,
@@ -174,6 +175,12 @@ export function registerProfileRoutes(
     const body = objectBody(request.body);
     const folder = runtime.addProfileTrustedFolder(name, requiredString(body.folder, 'folder'));
     return { ok: true, folder, profile: runtime.getProfile(name) };
+  });
+
+  // Folder picker for trusted folders: subfolder names inside this device's
+  // home only (never files, hidden folders, or credential stores).
+  server.get<{ Querystring: { path?: string } }>('/v1/folders', async request => {
+    return listHomeFolders(typeof request.query.path === 'string' ? request.query.path : '~');
   });
 
   // Folder in the body, not the path — trusted folders contain slashes.

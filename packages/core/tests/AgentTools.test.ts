@@ -910,6 +910,44 @@ describe('ShellExecTool', () => {
     }
   });
 
+  it.skipIf(process.platform !== 'darwin')('lets a home-trusting profile write in home but never delete, rename, or touch protected files', async () => {
+    const home = fs.realpathSync(tempDir());
+    for (const folder of ['docs', 'work', '.ssh', 'Library/LaunchAgents']) { fs.mkdirSync(path.join(home, folder), { recursive: true }); }
+    fs.writeFileSync(path.join(home, 'docs', 'a.txt'), 'old');
+    fs.writeFileSync(path.join(home, 'work', 'scratch.txt'), 'old');
+    fs.writeFileSync(path.join(home, '.zshrc'), 'rc');
+    fs.symlinkSync(path.join(home, '.zshrc'), path.join(home, 'docs', 'rc-link'));
+    const workspace = createRunWorkspace({
+      id: 'home_writes', cwd: home, userHome: home, runsDir: path.join(home, '.marifold', 'runs'), trustedFolders: ['~', '~/work'],
+    });
+    expect(workspace.homeScriptWrites).toBe(true);
+    expect(workspace.trustedRoots).toEqual([path.join(home, 'work')]);
+    const tool = new ShellExecTool();
+    const run = (command: string) => tool.execute({ command }, { cwd: workspace.cwd, workspace, outputLimit: 100000 });
+    for (const command of ['printf new > ~/docs/new.txt', 'printf edited > ~/docs/a.txt', 'mkdir ~/docs/sub', 'rm ~/work/scratch.txt', 'printf x > "$MARIFOLD_OUTPUT_DIR/out.txt" && rm "$MARIFOLD_OUTPUT_DIR/out.txt"']) {
+      const result = await run(command);
+      expect(result.isError, `${command}: ${result.content}`).toBeFalsy();
+    }
+    expect(fs.readFileSync(path.join(home, 'docs', 'a.txt'), 'utf8')).toBe('edited');
+    expect(fs.existsSync(path.join(home, 'work', 'scratch.txt'))).toBe(false);
+    for (const command of [
+      'rm ~/docs/a.txt', 'rmdir ~/docs/sub', 'mv ~/docs/new.txt ~/docs/renamed.txt', 'printf x > ~/.zshrc', 'printf x > ~/docs/rc-link',
+      'printf x > ~/Library/LaunchAgents/evil.plist', 'printf x > ~/.ssh/authorized_keys', 'printf x > ~/.marifold/config.toml',
+    ]) {
+      const result = await run(command);
+      expect(result.isError, command).toBe(true);
+    }
+    expect(fs.readFileSync(path.join(home, '.zshrc'), 'utf8')).toBe('rc');
+    expect(fs.existsSync(path.join(home, 'docs', 'a.txt'))).toBe(true);
+    expect(fs.existsSync(path.join(home, 'docs', 'renamed.txt'))).toBe(false);
+    for (const file of ['Library/LaunchAgents/evil.plist', '.ssh/authorized_keys', '.marifold/config.toml']) {
+      expect(fs.existsSync(path.join(home, file)), file).toBe(false);
+    }
+    // File tools never treat `~` as a trusted folder: a startup file still asks.
+    expect(new WriteFileTool().assessRisk({ path: '~/.zshrc', content: '' }, { cwd: workspace.cwd, workspace, trustedFolders: workspace.trustedRoots }))
+      .toMatchObject({ escalate: true, persistable: false });
+  });
+
   it('fails closed without an isolated run workspace', async () => {
     const result = await new ShellExecTool().execute({ command: 'printf unsafe' }, context(tempDir()));
     expect(result.isError).toBe(true);

@@ -210,13 +210,46 @@ describe('ProfileResolver', () => {
     expect(new ProfileResolver(root).loadSettings('blogger').agent?.trustedFolders).toEqual(['/tmp/my-blog', '/tmp/other']);
 
     // Sensitive / too-broad roots are refused.
-    expect(() => pm.addTrustedFolder('blogger', os.homedir())).toThrow(/too broad|sensitive/i);
     expect(() => pm.addTrustedFolder('blogger', '/')).toThrow(/too broad|sensitive/i);
     expect(() => pm.addTrustedFolder('blogger', path.join(os.homedir(), '.ssh'))).toThrow(/too broad|sensitive/i);
-    // A symlink to home is home.
+    // Parents of credential stores or startup files would reopen them.
+    expect(() => pm.addTrustedFolder('blogger', '~/Library')).toThrow(/too broad|sensitive/i);
+    expect(() => pm.addTrustedFolder('blogger', '~/.config')).toThrow(/too broad|sensitive/i);
+    // Home itself is the `~` entry (script writes without deletes), also through a link.
     const alias = path.join(root, 'home-alias');
     fs.symlinkSync(os.homedir(), alias);
-    expect(() => pm.addTrustedFolder('blogger', alias)).toThrow(/too broad|sensitive/i);
+    expect(pm.addTrustedFolder('blogger', alias).folder).toBe('~');
+    expect(new ProfileResolver(root).loadSettings('blogger').agent?.trustedFolders).toEqual(['/tmp/my-blog', '/tmp/other', '~']);
+  });
+
+  it('stores in-home folders home-relative and starts default with home trusted', () => {
+    const root = tempDir();
+    const pm = new ProfileManager(root);
+    const resolver = new ProfileResolver(root);
+    const inside = fs.mkdtempSync(path.join(os.homedir(), '.marifold-trust-test-'));
+    tempDirs.push(inside);
+    const entry = `~/${path.basename(inside)}`;
+    // The built-in default trusts `~` until its list is set; adding keeps it.
+    expect(resolver.loadSettings('default').agent?.trustedFolders).toEqual(['~']);
+    expect(pm.addTrustedFolder('default', inside).folder).toBe(entry);
+    expect(resolver.loadSettings('default').agent?.trustedFolders).toEqual(['~', entry]);
+    // Removing by absolute path matches the stored `~/…` entry; removing `~`
+    // writes an explicit empty list so home does not come back.
+    expect(pm.removeTrustedFolder('default', inside).removed).toBe(true);
+    expect(pm.removeTrustedFolder('default', '~').removed).toBe(true);
+    expect(resolver.loadSettings('default').agent?.trustedFolders).toEqual([]);
+    // Other profiles start with nothing trusted.
+    expect(resolver.loadSettings('blogger').agent?.trustedFolders).toBeUndefined();
+
+    // doctor --fix rewrites older absolute in-home entries, after a backup.
+    fs.mkdirSync(path.join(root, 'old'));
+    fs.writeFileSync(path.join(root, 'old', 'profile.toml'), `agent.trusted_folders = [${JSON.stringify(inside)}, "/tmp/x"]\n`);
+    expect(pm.normalizeTrustedFolders(false)).toEqual(['old']);
+    expect(resolver.loadSettings('old').agent?.trustedFolders).toEqual([inside, '/tmp/x']);
+    expect(pm.normalizeTrustedFolders(true)).toEqual(['old']);
+    expect(resolver.loadSettings('old').agent?.trustedFolders).toEqual([entry, '/tmp/x']);
+    expect(fs.existsSync(path.join(root, 'old', 'profile.toml.bak-trusted-folders'))).toBe(true);
+    expect(pm.normalizeTrustedFolders(true)).toEqual([]);
   });
 
   it('persists approval for a profile with no pre-existing directory (e.g. default)', () => {
