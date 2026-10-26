@@ -29,7 +29,7 @@ Revocation does not interrupt already-started jobs. Cancelling a conversation or
 - `shell_exec` with `access: "full"` runs `/bin/sh` as the Marifold OS account on macOS or Linux. It inherits that process's environment and can access its files, network, processes, applications, and credentials. Full access is a trust grant for that account; scoped protections of Marifold state and attachments do not constrain an approved full-access command.
 - Full-access calls require individual approval, even when shell policy is `allow`. They cannot persist an “Always” or “Trust” grant, and “Allow folder for this run” never covers them (it applies only to file reads and writes). Shell policy `deny` still blocks them, and unattended runs without an approval handler fail closed.
 - Full access does not grant root, macOS Automation, Accessibility, or Full Disk Access permissions. Configure required OS permissions on the execution device. Marifold does not collect administrator passwords or install sudo privileges.
-- Dedicated file and attachment tools retain their existing scope. Use an explicitly approved full-access shell command for broader device operations.
+- Dedicated file tools (`read_file`, `write_file`, `copy_file`, `make_directory`, `move_path`, `trash_path`) and attachment tools keep their own policy: routine work inside home needs no prompt, deletions and overwrites go to the Trash. Prefer them over full-access shell for ordinary file work; use an explicitly approved full-access command for broader device operations.
 
 Full access is never an automatic fallback for a missing sandbox. Linux scoped shell execution remains unsupported; Linux full access requires the same explicit local opt-in and per-command approval as macOS.
 

@@ -69,6 +69,7 @@ interface Harness {
   engines: ScriptedEngine[];
   grants: Array<{ profile: string; kind: string; mode: string }>;
   folders: Array<{ profile: string; folder: string }>;
+  sensitive: Array<{ profile: string; grant: string; allowed: boolean }>;
 }
 
 function makeRegistry(
@@ -79,6 +80,7 @@ function makeRegistry(
   const engines: ScriptedEngine[] = [];
   const grants: Harness['grants'] = [];
   const folders: Harness['folders'] = [];
+  const sensitive: Harness['sensitive'] = [];
   const registry = new RunRegistry({
     runtime: {
       createAgentRunner: () => {
@@ -101,12 +103,16 @@ function makeRegistry(
         folders.push({ profile, folder });
         return folder;
       },
+      setProfileSensitiveReadGrant: (profile, grant, allowed) => {
+        sensitive.push({ profile, grant, allowed });
+        return grant;
+      },
       defaultProfile: () => 'default',
     },
     ...options,
   });
   registries.push(registry);
-  return { registry, engines, grants, folders };
+  return { registry, engines, grants, folders, sensitive };
 }
 
 /** Pull from an events generator until the predicate matches (or it ends).
@@ -403,6 +409,32 @@ describe('RunRegistry', () => {
     const next = (second.matched!.event as Extract<AgentEvent, { type: 'approval_request' }>).request;
     expect(next.id).toBe('call_1');
     registry.answerApproval(record.id, next.id, 'once');
+    const { matched: done } = await pullUntil(stream, doneEvent);
+    expect(done!.event).toMatchObject({ type: 'done', status: 'completed' });
+  });
+
+  it('"trust" on a sensitive read persists that root and silences it for the rest of the run', async () => {
+    const reader = fakeTool({
+      name: 'read_key',
+      assessRisk: () => ({ escalate: true, reason: 'credentials', targetPath: '/home/u/.ssh/id', sensitiveGrant: '~/.ssh' }),
+    });
+    const { registry, sensitive, folders } = makeRegistry([
+      response({ toolCalls: [{ id: 'call_0', name: 'read_key', arguments: {} }] }),
+      response({ toolCalls: [{ id: 'call_1', name: 'read_key', arguments: { again: true } }] }),
+      response({ text: 'Done.' }),
+    ], [reader]);
+
+    const record = registry.start({ objective: 'Read my key.', cwd: tempDir() });
+    const stream = registry.events(record.id, 0);
+    const { matched } = await pullUntil(stream, e => e.type === 'approval_request');
+    const request = (matched!.event as Extract<AgentEvent, { type: 'approval_request' }>).request;
+    expect(request.sensitiveGrant).toBe('~/.ssh');
+    registry.answerApproval(record.id, request.id, 'trust');
+    expect(sensitive).toEqual([{ profile: 'default', grant: '~/.ssh', allowed: true }]);
+    expect(folders).toEqual([]); // a read grant never becomes a (shell-writable) trusted folder
+
+    // The second read of the same root is answered by the run's grant: the run
+    // completes without another answer.
     const { matched: done } = await pullUntil(stream, doneEvent);
     expect(done!.event).toMatchObject({ type: 'done', status: 'completed' });
   });

@@ -409,7 +409,9 @@ describe('device-hosted workspaces', () => {
       await new Promise((r) => setTimeout(r, 20));
     }
     expect(current.status).toBe('completed');
-    expect(answered.size).toBe(2);
+    // Only the delegation asks: the child's write into its own run output is
+    // routine file work on either device.
+    expect(answered.size).toBe(1);
     expect(count).toBe(5);
     expect(prompts[2]).not.toContain('name="delegate_device"');
     expect(prompts[0]).not.toContain('Device context (metadata)');

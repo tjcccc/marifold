@@ -4,7 +4,6 @@ import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { approvalTrustFolder, coveredByRunGrant, type ApprovalRequest } from '../src/agent/ApprovalPolicy';
 import { runGrantFolder, type RunWorkspace } from '../src/agent/RunWorkspace';
-import { ReadFileTool } from '../src/agent/tools/ReadFileTool';
 
 const dirs: string[] = [];
 afterEach(() => { for (const dir of dirs.splice(0)) { fs.rmSync(dir, { recursive: true, force: true }); } });
@@ -38,16 +37,6 @@ describe('runGrantFolder', () => {
     expect(runGrantFolder(userHome, ws)).toBeUndefined();
     const request: ApprovalRequest = { id: 'r', tool: 'read_file', kind: 'read', summary: 's', input: {}, escalated: true, escalatedPath: userHome };
     expect(approvalTrustFolder(request)).toBeUndefined(); // no "[t]rust (/Users)"
-  });
-
-  it('is offered by read_file only for persistable in-home escalations', () => {
-    const userHome = home();
-    const ws = workspace(userHome);
-    const tool = new ReadFileTool();
-    const risk = tool.assessRisk({ path: path.join(userHome, 'docs', 'a.md') }, { cwd: userHome, outputLimit: 1000, workspace: { ...ws, readRoots: [], readOnlyFiles: [] } as never });
-    expect(risk).toMatchObject({ escalate: true, runGrantFolder: path.join(userHome, 'docs') });
-    const outside = tool.assessRisk({ path: '/etc/hosts' }, { cwd: userHome, outputLimit: 1000, workspace: { ...ws, readRoots: [], readOnlyFiles: [] } as never });
-    expect(outside.runGrantFolder).toBeUndefined();
   });
 });
 

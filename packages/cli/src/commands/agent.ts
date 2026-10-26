@@ -49,7 +49,7 @@ export function registerAgentCommand(program: Command, printer: ConsolePrinter):
           // silently cross the non-persistable host/network boundary.
           ? ((request: ApprovalRequest) => request.persistable === false
             ? promptForApproval(prompt, style, request)
-            : Promise.resolve({ approved: true }))
+            : Promise.resolve({ approved: true, source: 'policy' as const }))
           : ((request: ApprovalRequest) => promptForApproval(prompt, style, request));
         const events = runner.run({
           cwd: options.cwd,

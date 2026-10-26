@@ -19,6 +19,7 @@ export interface ProfileSettingsPageProps {
   onSaveFile: (file: ProfileFileKind, content: string) => void;
   onAddTrustedFolder: (folder: string) => void;
   onRemoveTrustedFolder: (folder: string) => void;
+  onRevokeSensitiveRead: (grant: string) => void;
   onMemoryAction: (id: string, mode: 'forget' | 'delete' | 'restore') => void;
   onDelete?: () => void;
   deleteDisabledReason?: string;
@@ -46,6 +47,7 @@ export function ProfileSettingsPage(props: ProfileSettingsPageProps) {
   const forgotten = memories.filter(entry => entry.status !== 'active');
   const profileFolders = detail.settings.agent?.trustedFolders ?? [];
   const inheritedFolders = effective.trustedFolders.filter(folder => !profileFolders.includes(folder));
+  const sensitiveGrants = detail.settings.agent?.sensitiveReadGrants ?? [];
   const modelValue = detail.settings.provider && detail.settings.model
     ? `${detail.settings.provider}/${detail.settings.model}`
     : '';
@@ -459,7 +461,28 @@ export function ProfileSettingsPage(props: ProfileSettingsPageProps) {
                 </button>
               </div>
             </div>
-            <div className={styles.groupHint}>The agent still narrates everything it does.</div>
+            {sensitiveGrants.length > 0 ? (
+              <div className={styles.card}>
+                <div className={styles.rowLine}>
+                  <span className={styles.rowLabel}>Sensitive folders it may read</span>
+                </div>
+                {sensitiveGrants.map(grant => (
+                  <div key={grant} className={styles.folderRow}>
+                    <code>{grant}</code>
+                    <button
+                      className={styles.smallButton}
+                      disabled={busy}
+                      onClick={() => props.onRevokeSensitiveRead(grant)}
+                    >
+                      Revoke
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+            <div className={styles.groupHint}>
+              On every device, file tools create, edit, move, and trash files inside your home without asking unless writes are set to Deny; overwritten and trashed items go to the Trash. Credential stores and browser data ask before reading, and writes outside home, to credentials, or to startup settings ask every time. Trusted folders also open a folder to shell commands.
+            </div>
           </section>
         </div>
       ) : null}

@@ -108,24 +108,19 @@ describe('RunWorkspace', () => {
     fs.symlinkSync('loop', path.join(cwd, 'loop'));
     fs.symlinkSync('missing-inside.txt', path.join(cwd, 'inside'));
 
-    // The destination, not the link inside cwd, is what an approval or a
-    // "trust folder" decision must apply to.
+    // The destination, not the link inside cwd, is what an approval decision
+    // applies to: a link into LaunchAgents is a startup-configuration write.
     expect(write.assessRisk({ path: 'escape', content: '' }, context)).toMatchObject({
       escalate: true,
-      persistable: true,
+      persistable: false,
       targetPath: path.join(fs.realpathSync(outside), 'agent.plist'),
     });
     expect(write.assessRisk({ path: 'keys/authorized_keys', content: '' }, context)).toMatchObject({ escalate: true, persistable: false });
-    expect(new ReadFileTool().assessRisk({ path: 'notes' }, context)).toMatchObject({
-      escalate: true,
-      targetPath: fs.realpathSync(path.join(home, 'notes.txt')),
-    });
-    expect(write.assessRisk({ path: 'inside', content: '' }, context)).toMatchObject({
-      escalate: false,
-      targetPath: path.join(fs.realpathSync(cwd), 'missing-inside.txt'),
-    });
+    expect(new ReadFileTool().assessRisk({ path: 'keys/id_ed25519' }, context)).toMatchObject({ escalate: true, sensitiveGrant: '~/.ssh' });
+    expect(new ReadFileTool().assessRisk({ path: 'notes' }, context)).toEqual({ escalate: false });
+    expect(write.assessRisk({ path: 'inside', content: '' }, context)).toEqual({ escalate: false, routine: true });
     // A link loop stays unresolved here because opening it fails with ELOOP.
-    expect(write.assessRisk({ path: 'loop', content: '' }, context)).toMatchObject({ escalate: false, targetPath: path.join(fs.realpathSync(cwd), 'loop') });
+    expect(write.assessRisk({ path: 'loop', content: '' }, context)).toEqual({ escalate: false, routine: true });
     expect(() => fs.writeFileSync(path.join(cwd, 'loop'), 'x')).toThrow(/ELOOP/);
   });
 

@@ -57,6 +57,8 @@ export async function workspaceTerminal(runtime: MarifoldRuntime, operation: str
     }
     case 'profile.trust':
       return runtime.addProfileTrustedFolder(profile(), text('folder'));
+    case 'profile.sensitive-read':
+      return runtime.setProfileSensitiveReadGrant(profile(), text('grant'), b.allowed !== false);
     case 'profile.context': {
       if (
         b.tokens !== undefined &&

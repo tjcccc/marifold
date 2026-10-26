@@ -13,6 +13,7 @@ type AsyncMethods =
   | 'getSessionAttachment'
   | 'setProfileAgentApproval'
   | 'addProfileTrustedFolder'
+  | 'setProfileSensitiveReadGrant'
   | 'migrateProfileInstructions'
   | 'installSkillFromText'
   | 'installSkillFromFile'

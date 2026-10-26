@@ -29,6 +29,7 @@ import type {
   ApprovalRequest,
   MarifoldAgentConfig,
 } from './ApprovalPolicy';
+import { preApproved } from './ApprovalPolicy';
 import {
   buildControlBlockInstructions,
   formatControlBlockResult,
@@ -704,7 +705,8 @@ export class AgentRunner {
         state.webSourceUrls = [...new Set([...(state.webSourceUrls ?? []),
           ...result.webResearch.sourceUrls.filter(url => typeof url === 'string')])].slice(0, 40);
       }
-      content = result.content;
+      // Lets the agent report prompts truthfully instead of inferring them.
+      content = decision.source === 'user' ? `${result.content}\n[The user approved this call in a prompt.]` : result.content;
       isError = result.isError ?? false;
       resultSummary = result.summary ?? summary;
       if (!isError && result.images?.length) {
@@ -818,21 +820,16 @@ export class AgentRunner {
       yield { type: 'approval_decision', requestId: call.id, approved: false, source: 'policy', reason };
       return { approved: false, reason };
     }
-    // Tools set `trusted` only for narrow pre-authorized capabilities such as
-    // current-run attachments and eligible in-home trusted folders.
-    if (risk.trusted) {
-      yield { type: 'approval_decision', requestId: call.id, approved: true, source: 'policy' };
-      return { approved: true };
-    }
     const approval = options.unattended
       ? { ...this.deps.agentConfig.approval, ...(this.deps.agentConfig.unattended ?? {}) }
       : this.deps.agentConfig.approval;
     let mode = approval[tool.kind];
-    if (risk.escalate && mode === 'allow') { mode = 'ask'; }
-
+    // Trusted capabilities, routine home file work, and granted sensitive reads.
+    if (preApproved(risk, mode, this.deps.agentConfig)) { mode = 'allow'; }
+    else if (risk.escalate && mode === 'allow') { mode = 'ask'; }
     if (mode === 'allow') {
       yield { type: 'approval_decision', requestId: call.id, approved: true, source: 'policy' };
-      return { approved: true };
+      return { approved: true, source: 'policy' };
     }
     if (mode === 'deny') {
       yield { type: 'approval_decision', requestId: call.id, approved: false, source: 'policy', reason: `${tool.kind} tools are denied by policy` };
@@ -857,9 +854,12 @@ export class AgentRunner {
       ...(risk.persistable === false ? { persistable: false } : {}),
       ...(risk.runGrantFolder ? { runGrant: { folder: risk.runGrantFolder, access: tool.kind === 'write' ? 'write' as const : 'read' as const } } : {}),
       ...(risk.sudo ? { sudo: risk.sudo } : {}),
+      ...(risk.sensitiveGrant ? { sensitiveGrant: risk.sensitiveGrant } : {}),
     };
     yield { type: 'approval_request', request };
-    const decision = await options.approvalHandler(request);
+    // Handlers mark answers from a grant they already hold as `policy`.
+    const answer = await options.approvalHandler(request);
+    const decision = { ...answer, source: answer.source ?? 'user' };
     if (risk.sudo && decision.approved && (decision.sudoResponse?.id !== risk.sudo.id || risk.sudo.expiresAt <= Date.now())) {
       decision.approved = false;
       decision.reason = 'A fresh encrypted sudo authorization is required; this client did not supply one.';
@@ -869,7 +869,7 @@ export class AgentRunner {
       type: 'approval_decision',
       requestId: call.id,
       approved: decision.approved,
-      source: 'user',
+      source: decision.source,
       ...(decision.reason ? { reason: decision.reason } : {}),
     };
     return decision;
@@ -1007,7 +1007,7 @@ export class AgentRunner {
       ...(this.deps.registry.get('ask_user')?.kind === 'interaction' ? [
         'ask_user is optional. Use it only when essential information is missing and a reasonable assumption could materially change the result. Otherwise proceed. Batch all currently known questions into one call, and call it without other tools in that response.',
       ] : []),
-      'shell_exec defaults to scoped access: no network and writes limited to the working directory, configured trusted folders, and private run directories. If shell_job_status reports full mode on this device, explicit shell_exec access=full can use the OS account’s normal permissions after per-call approval; it does not grant administrator rights. For user-authorized commands that require sudo authentication, use sudo_exec and its secure requester-side password dialog; never ask for passwords through chat or ask_user, or put them in tool arguments/files. Full-access calls return durable job IDs: retrieve completion with shell_job_status before claiming success, and inspect recent jobs after a lost response rather than retrying the command. Use write_file for an explicit output path elsewhere, and copy_file (not cp) to copy a file to or from a folder outside this run. Use python_package_install for approved Python dependencies; it installs only into this run’s disposable uv environment.',
+      'shell_exec defaults to scoped access: no network and writes limited to the working directory, configured trusted folders, and private run directories. If shell_job_status reports full mode on this device, explicit shell_exec access=full can use the OS account’s normal permissions after per-call approval; it does not grant administrator rights. For user-authorized commands that require sudo authentication, use sudo_exec and its secure requester-side password dialog; never ask for passwords through chat or ask_user, or put them in tool arguments/files. Full-access calls return durable job IDs: retrieve completion with shell_job_status before claiming success, and inspect recent jobs after a lost response rather than retrying the command. For ordinary file work anywhere on the device use the file tools, not shell: write_file, copy_file, make_directory, move_path (rename/move), and trash_path (delete: moves to the Trash). Inside the user’s home they need no approval, except for credential stores. A tool result ending with “[The user approved this call in a prompt.]” means the user answered a prompt for it; without that line, no prompt appeared. Use python_package_install for approved Python dependencies; it installs only into this run’s disposable uv environment.',
     ].join('\n');
     // Lean run (skills): minimal framing — the instructions are authoritative,
     // and we ask for only the final output to avoid plan/preamble/reasoning prose.

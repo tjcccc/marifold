@@ -2,17 +2,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import type { JSONValue } from '@priest-ai/core';
 import { expandHome } from '../../workspace/WorkspacePaths';
-import {
-  canonicalPath,
-  isDeniedRunPath,
-  isInsideAnyRoot,
-  isOutsideUserHome,
-  isProtectedSystemWrite,
-  isReadOnlyStatePath,
-  isSensitiveHostPath,
-  runGrantFolder,
-  resolveToolPath,
-} from '../RunWorkspace';
+import { assessFileWrite, trashPreviousVersion } from '../FilePolicy';
+import { canonicalPath, isInside, resolveToolPath } from '../RunWorkspace';
 import { type AgentTool, requireStringInput, type ToolExecutionContext, type ToolExecutionResult, type ToolRiskAssessment } from '../ToolRegistry';
 import { formatBytes } from './ReadFileTool';
 
@@ -21,7 +12,7 @@ export class WriteFileTool implements AgentTool {
   readonly definition = {
     name: 'write_file',
     description: [
-      'Create or fully overwrite a local text file, creating parent directories as needed.',
+      'Create or fully overwrite a local text file, creating parent directories as needed. An overwritten file\'s previous version goes to the Trash.',
       'When to use: the objective requires a concrete file at an explicit path or a complete small/generated file.',
       'When NOT to use: merely answering a question, speculative files the user did not request, or shell output that can remain in the response.',
     ].join(' '),
@@ -44,49 +35,7 @@ export class WriteFileTool implements AgentTool {
   assessRisk(input: Record<string, JSONValue>, ctx: ToolExecutionContext): ToolRiskAssessment {
     if (typeof input.path !== 'string') { return { escalate: false }; }
     const target = canonicalPath(resolveToolPath(input.path, ctx.workspace, ctx.cwd));
-    if (ctx.workspace && isDeniedRunPath(target, ctx.workspace)) { return { escalate: false, blocked: true, persistable: false, reason: 'This path contains device-local or other-workspace state.' }; }
-    if (ctx.workspace && isReadOnlyStatePath(target, ctx.workspace)) { return { escalate: false, blocked: true, persistable: false, reason: 'Marifold state on this device is read-only for requests from another workspace device.' }; }
-    if (ctx.workspace) {
-      if (isProtectedSystemWrite(target, ctx.workspace)) {
-        return {
-          blocked: true,
-          escalate: false,
-          persistable: false,
-          reason: `system path ${target} is read-only for agent runs`,
-          targetPath: target,
-        };
-      }
-      if (isInsideAnyRoot(target, ctx.workspace.writeRoots)) {
-        // A configured trusted folder remains auto-approved only inside the
-        // user's home. External roots must be approved for every action.
-        const trusted = isInsideAny(target, ctx.trustedFolders);
-        if (trusted && !isOutsideUserHome(target, ctx.workspace)) {
-          return { escalate: false, trusted: true };
-        }
-        if (isOutsideUserHome(target, ctx.workspace)) {
-          return {
-            escalate: true,
-            persistable: false,
-            reason: `writing ${target} is outside the user's home directory`,
-            targetPath: target,
-          };
-        }
-        // A guest executor still asks for these; let it offer "for this run".
-        const grantFolder = runGrantFolder(target, ctx.workspace);
-        return grantFolder ? { escalate: false, targetPath: target, runGrantFolder: grantFolder } : { escalate: false };
-      }
-      const nonPersistable = isOutsideUserHome(target, ctx.workspace) || isSensitiveHostPath(target, ctx.workspace);
-      const grantFolder = nonPersistable ? undefined : runGrantFolder(target, ctx.workspace);
-      return {
-        escalate: true,
-        persistable: !nonPersistable,
-        reason: nonPersistable
-          ? `writing ${target} is outside this run's persistent filesystem scope`
-          : `target ${target} is outside the working directory and trusted folders`,
-        targetPath: target,
-        ...(grantFolder ? { runGrantFolder: grantFolder } : {}),
-      };
-    }
+    if (ctx.workspace) { return assessFileWrite(target, ctx.workspace); }
     // A write inside a trusted folder is auto-approved — checked before the
     // workspace so a trusted folder set as cwd (e.g. a channel's outbox) is
     // silent, not merely non-escalated (which still asks under write=ask).
@@ -101,17 +50,16 @@ export class WriteFileTool implements AgentTool {
       ctx.workspace,
       ctx.cwd,
     );
-    if (ctx.workspace && isDeniedRunPath(target, ctx.workspace)) { return { content: 'Path is isolated from this workspace.', summary: 'blocked workspace state access', isError: true }; }
-    if (ctx.workspace && isReadOnlyStatePath(target, ctx.workspace)) { return { content: 'Marifold state is read-only for this request.', summary: 'blocked workspace state write', isError: true }; }
-    if (ctx.workspace && isProtectedSystemWrite(target, ctx.workspace)) {
-      return {
-        content: `Refused to write protected system path ${target}.`,
-        summary: `refused protected write to ${target}`,
-        isError: true,
-      };
+    if (ctx.workspace) {
+      const policy = assessFileWrite(canonicalPath(target), ctx.workspace);
+      if (policy.blocked) { return { content: `Refused to write ${target}: ${policy.reason}.`, summary: `refused write to ${target}`, isError: true }; }
     }
     const content = typeof input.content === 'string' ? input.content : '';
+    let previous: string | undefined;
     try {
+      // An overwrite is undoable: the old content goes to the Trash first.
+      // The run's own scratch files are not worth keeping.
+      if (ctx.workspace && !isInside(target, ctx.workspace.rootDir)) { previous = await trashPreviousVersion(target, ctx.workspace.userHome); }
       fs.mkdirSync(path.dirname(target), { recursive: true });
       fs.writeFileSync(target, content);
     } catch (error) {
@@ -123,7 +71,7 @@ export class WriteFileTool implements AgentTool {
     }
     const size = formatBytes(Buffer.byteLength(content, 'utf-8'));
     return {
-      content: `Wrote ${size} to ${target}.`,
+      content: `Wrote ${size} to ${target}.${previous ? ` The previous version is in ${previous}.` : ''}`,
       summary: `wrote ${size} to ${target}`,
     };
   }

@@ -8,6 +8,7 @@ import { ensureProfileMemoryFiles } from '../memory/MemoryStore';
 import { expandHome } from '../workspace/WorkspacePaths';
 import type { ProfileMode } from '../config/ConfigSchema';
 import type { ApprovalMode, ToolKind } from '../agent/ApprovalPolicy';
+import { SENSITIVE_HOME_ENTRIES } from '../agent/RunWorkspace';
 import {
   PROFILE_INSTRUCTIONS_FILE,
   resolveDirectoryProfileInstructions,
@@ -70,10 +71,14 @@ model = "default"
 # agent.approval.shell = "allow"
 # agent.approval.write = "ask"
 
-# Folders (outside the project) where this profile may write files without
-# asking — a flat allowlist. Add with /trust-folder or the "Always" approval
-# button. e.g. a profile that writes a daily blog:
+# File tools already create, edit, move, and trash files inside your home
+# without asking (unless write = "deny"). Trusted folders additionally open a
+# folder to sandboxed shell commands. e.g. a profile that writes a daily blog:
 # agent.trusted_folders = ["~/my_docs/blog"]
+
+# Sensitive folders this profile may read without asking, added by an
+# "Always allow" answer, e.g.:
+# agent.sensitive_read_grants = ["~/.ssh"]
 `;
 
 export interface ProfileInitResult {
@@ -368,6 +373,25 @@ export class ProfileManager {
     return { name, path: profileToml, folder: resolved };
   }
 
+  /** Add or remove a home-relative sensitive read root (`~/.ssh`) in the
+   * profile's `agent.sensitive_read_grants`. Only known sensitive roots qualify. */
+  setSensitiveReadGrant(name: string, grant: string, allowed: boolean): { name: string; path: string; grant: string } {
+    assertSafeName(name);
+    const entry = grant.trim().replace(/^~\//, '').replace(/\/+$/, '');
+    if (!SENSITIVE_HOME_ENTRIES.includes(entry) || entry === '.marifold') {
+      throw MarifoldError.profileInvalid(`'${grant}' is not a sensitive folder Marifold recognizes.`, name);
+    }
+    const normalized = `~/${entry}`;
+    const profileDir = path.join(this.profilesDir, name);
+    fs.mkdirSync(profileDir, { recursive: true });
+    const profileToml = path.join(profileDir, 'profile.toml');
+    const current = fs.existsSync(profileToml) ? fs.readFileSync(profileToml, 'utf-8') : PROFILE_TOML_STUB;
+    const grants = parseAgentStringList(current, 'sensitive_read_grants').filter(value => value !== normalized);
+    if (allowed) { grants.push(normalized); }
+    fs.writeFileSync(profileToml, upsertFlatLine(current, 'agent.sensitive_read_grants', grants.length > 0 ? `[${grants.map(tomlString).join(', ')}]` : undefined));
+    return { name, path: profileToml, grant: normalized };
+  }
+
   /** Remove a trusted folder from the profile's profile.toml. Compares against
    * the resolved absolute path (same normalization addTrustedFolder applies). */
   removeTrustedFolder(name: string, folder: string): { name: string; path: string; folder: string; removed: boolean } {
@@ -591,14 +615,18 @@ function upsertFlatLine(text: string, key: string, rendered: string | undefined)
   return `${prefix}${key} = ${rendered}\n`;
 }
 
-/** Read the profile's trusted_folders (dotted or table form parses the same). */
-function parseTrustedFolders(text: string): string[] {
+/** Read a string list under `[agent]` (dotted or table form parses the same). */
+function parseAgentStringList(text: string, key: string): string[] {
   try {
-    const parsed = parse(text) as { agent?: { trusted_folders?: unknown } };
-    const existing = parsed.agent?.trusted_folders;
+    const parsed = parse(text) as { agent?: Record<string, unknown> };
+    const existing = parsed.agent?.[key];
     if (Array.isArray(existing)) { return existing.filter((v): v is string => typeof v === 'string'); }
   } catch { /* unparseable — start fresh */ }
   return [];
+}
+
+function parseTrustedFolders(text: string): string[] {
+  return parseAgentStringList(text, 'trusted_folders');
 }
 
 /** Rewrite the trusted_folders line for the given list (empty list removes it). */

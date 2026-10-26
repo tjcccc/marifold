@@ -793,10 +793,8 @@ describe('WriteFileTool', () => {
     const tool = new WriteFileTool();
     const target = path.join(fs.realpathSync(home), 'tempfiles', 'test.md');
 
-    expect(tool.assessRisk({ path: '~/tempfiles/test.md', content: '# test\ntest\n' }, ctx)).toMatchObject({
-      escalate: true,
-      targetPath: target,
-    });
+    // Ordinary writes inside home are routine: no prompt unless writes are denied.
+    expect(tool.assessRisk({ path: '~/tempfiles/test.md', content: '# test\ntest\n' }, ctx)).toEqual({ escalate: false, routine: true });
     const result = await tool.execute({ path: '~/tempfiles/test.md', content: '# test\ntest\n' }, ctx);
 
     expect(result.isError, result.content).toBeFalsy();

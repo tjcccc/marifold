@@ -1,5 +1,5 @@
 import type { JSONValue } from '@priest-ai/core';
-import { canonicalPath, isDeniedRunPath, isInside, isSensitiveHostPath, resolveToolPath, sensitiveHostRoots } from '../agent/RunWorkspace';
+import { canonicalPath, isDeniedRunPath, isInside, isSensitiveHostPath, resolveToolPath, runGrantFolder, sensitiveHostRoots } from '../agent/RunWorkspace';
 import { ReadFileTool } from '../agent/tools/ReadFileTool';
 import {
   type AgentTool,
@@ -128,7 +128,12 @@ export class ComputerPutTool implements AgentTool {
     if (!isInside(target, ctx.workspace.rootDir) && roots.some(root => isInside(target, root) || isInside(root, target))) {
       return { escalate: false, blocked: true, persistable: false, reason: `${target} is or contains credentials or Marifold state, which never go to the agent computer` };
     }
-    return this.reader.assessRisk({ path: input.source }, ctx);
+    const read = this.reader.assessRisk({ path: input.source }, ctx);
+    if (read.blocked || read.escalate || isInside(target, ctx.workspace.rootDir)) { return read; }
+    // Reads are free on the user's devices, but handing a file to the
+    // internet-connected computer is an export: ask, per call or per run.
+    const grantFolder = runGrantFolder(target, ctx.workspace);
+    return { escalate: true, reason: `gives the agent computer ${target}`, targetPath: target, ...(grantFolder ? { runGrantFolder: grantFolder } : {}) };
   }
   async execute(input: Record<string, JSONValue>, ctx: ToolExecutionContext): Promise<ToolExecutionResult> {
     const workspace = ctx.workspace;

@@ -28,6 +28,7 @@ import {
   putAvatar,
   putProfileFile,
   removeTrustedFolder,
+  revokeSensitiveRead,
   updateProfile,
 } from '../../api/profiles';
 import type { CreateProfileInput, ProfileFileKind, ProfilePatchInput } from '../../api/profiles';
@@ -599,6 +600,9 @@ export function ConfigScreen({
               }}
               onRemoveTrustedFolder={folder => {
                 if (item) { void mutate(() => removeTrustedFolder(client, item, folder)); }
+              }}
+              onRevokeSensitiveRead={grant => {
+                if (item) { void mutate(() => revokeSensitiveRead(client, item, grant)); }
               }}
               onMemoryAction={(id, mode) => {
                 if (!item) { return; }

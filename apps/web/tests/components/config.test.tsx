@@ -61,6 +61,7 @@ function renderPage(overrides: Partial<ProfileSettingsPageProps> = {}, expandAdv
     onSaveFile: vi.fn(),
     onAddTrustedFolder: vi.fn(),
     onRemoveTrustedFolder: vi.fn(),
+    onRevokeSensitiveRead: vi.fn(),
     onMemoryAction: vi.fn(),
   };
   render(
@@ -168,6 +169,7 @@ describe('ProfileSettingsPage', () => {
         onSaveFile={() => {}}
         onAddTrustedFolder={() => {}}
         onRemoveTrustedFolder={() => {}}
+        onRevokeSensitiveRead={() => {}}
         onMemoryAction={() => {}}
       />,
     );
@@ -252,6 +254,7 @@ describe('ProfileSettingsPage', () => {
         onSaveFile={() => {}}
         onAddTrustedFolder={() => {}}
         onRemoveTrustedFolder={() => {}}
+        onRevokeSensitiveRead={() => {}}
         onMemoryAction={() => {}}
         onDelete={onDelete}
       />,
@@ -277,6 +280,7 @@ describe('ProfileSettingsPage', () => {
         onSaveFile={() => {}}
         onAddTrustedFolder={() => {}}
         onRemoveTrustedFolder={() => {}}
+        onRevokeSensitiveRead={() => {}}
         onMemoryAction={() => {}}
         onDelete={() => {}}
         deleteDisabledReason="Choose another default profile first."
@@ -678,6 +682,7 @@ describe('Global settings pages', () => {
         agent={{
           approval: { read: 'allow', write: 'ask', shell: 'ask', network: 'ask', delegate: 'allow' },
           trustedFolders: [],
+          sensitiveReadGrants: [],
           maxIterations: 20,
           toolOutputLimit: 100000,
           toolMode: 'auto',

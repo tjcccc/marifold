@@ -119,6 +119,7 @@ shell = "deny"
     expect(loaded.config.agent).toEqual({
       approval: { read: 'allow', write: 'ask', shell: 'deny', network: 'ask', delegate: 'allow' },
       trustedFolders: [],
+      sensitiveReadGrants: [],
       maxIterations: 8,
       toolOutputLimit: 100000,
       toolMode: 'control-block',

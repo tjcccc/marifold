@@ -22,7 +22,7 @@ export interface ToolExecutionContext {
    * relative paths against it and treat it as the workspace boundary. */
   cwd: string;
   /** Extra absolute folders trusted for file writes (outside the workspace).
-   * In-home entries auto-approve writes; external entries still prompt. */
+   * They widen the shell sandbox; external entries still prompt. */
   trustedFolders?: string[];
   /** Per-run filesystem/process capability set. Shell execution fails closed
    * when this is absent instead of falling back to unrestricted host access. */
@@ -60,6 +60,12 @@ export interface ToolRiskAssessment {
    * example an uploaded attachment or eligible in-home trusted folder) and is
    * auto-approved regardless of the tool kind's approval mode. */
   trusted?: boolean;
+  /** Ordinary file work in the user's home (see FilePolicy): approved without
+   * a prompt unless the tool kind's mode is `deny`. */
+  routine?: boolean;
+  /** Home-relative sensitive root of an escalated read (e.g. `~/.ssh`). The
+   * user may allow it persistently; a profile grant approves it silently. */
+  sensitiveGrant?: string;
   /** Absolute target path of an escalated file call, so a client can offer to
    * trust its folder. */
   targetPath?: string;

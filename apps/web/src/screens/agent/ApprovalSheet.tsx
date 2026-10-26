@@ -20,7 +20,8 @@ export interface ApprovalSheetProps {
 /**
  * The trust surface (design 1a/1b): the run is paused on this decision.
  * Allow once is the safe default (⌘⏎/Ctrl⏎); the middle button persists —
- * "Trust this folder" for an escalated file write, else "Always allow <kind>".
+ * "Trust this folder" for an escalated file write, "Always allow reading
+ * <root>" for a sensitive read, else "Always allow <kind>".
  * "Allow folder for this run" approves the shown folder until the run ends.
  */
 export function ApprovalSheet({ request, busy, onAnswer }: ApprovalSheetProps) {
@@ -68,7 +69,10 @@ export function ApprovalSheet({ request, busy, onAnswer }: ApprovalSheetProps) {
   // (home, above it, or a sensitive root) can't be trusted or always allowed.
   const trustFolder = !request.sudo && request.persistable !== false && request.escalated
     && request.escalatedPath !== undefined && request.runGrant !== undefined;
-  const canPersist = !request.sudo && request.persistable !== false && (trustFolder || request.escalatedPath === undefined);
+  // A sensitive read (e.g. ~/.ssh) may be allowed for the profile from now on.
+  const sensitiveGrant = !request.sudo && request.persistable !== false ? request.sensitiveGrant : undefined;
+  const canPersist = !request.sudo && request.persistable !== false
+    && (trustFolder || sensitiveGrant !== undefined || request.escalatedPath === undefined);
   const runGrant = request.sudo ? undefined : request.runGrant;
 
   return (
@@ -113,9 +117,11 @@ export function ApprovalSheet({ request, busy, onAnswer }: ApprovalSheetProps) {
           <button
             className={styles.persist}
             disabled={busy}
-            onClick={() => onAnswer(trustFolder ? 'trust' : 'always')}
+            onClick={() => onAnswer(trustFolder || sensitiveGrant ? 'trust' : 'always')}
           >
-            {trustFolder ? 'Trust this folder' : `Always allow ${KIND_ACTION_LABEL[request.kind]}`}
+            {trustFolder ? 'Trust this folder'
+              : sensitiveGrant ? `Always allow reading ${sensitiveGrant}`
+                : `Always allow ${KIND_ACTION_LABEL[request.kind]}`}
           </button>
         ) : null}
         {runGrant ? (

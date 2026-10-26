@@ -5,6 +5,7 @@ export type { AgentEngineContext, AgentRunnerDeps, AgentRunOptions } from './age
 export type { AgentEvent, AgentUsage } from './agent/AgentEvents';
 export type { UsageInfo } from '@priest-ai/core';
 export {
+  approvalSensitiveGrant,
   approvalTrustFolder,
   coveredByRunGrant,
   DEFAULT_AGENT_CONFIG,

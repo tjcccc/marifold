@@ -6,7 +6,7 @@ import * as crypto from 'crypto';
 import type { ImageInput } from '@priest-ai/core';
 import type { AgentEvent, AgentUsage } from '../agent/AgentEvents';
 import type { AgentRunner } from '../agent/AgentRunner';
-import { approvalTrustFolder, coveredByRunGrant, type ApprovalDecision, type ApprovalMode, type ApprovalRequest, type RunGrant, type ToolKind } from '../agent/ApprovalPolicy';
+import { approvalSensitiveGrant, approvalTrustFolder, coveredByRunGrant, type ApprovalDecision, type ApprovalMode, type ApprovalRequest, type RunGrant, type ToolKind } from '../agent/ApprovalPolicy';
 import { RUN_WORKSPACE_RETENTION_MS } from '../agent/RunWorkspace';
 import type { RunFileInput } from '../agent/RunWorkspace';
 import { resolveRunArtifact } from '../agent/RunArtifacts';
@@ -33,6 +33,7 @@ export interface RunRegistryRuntime {
   createAgentRunner(profile?: string, input?: RunStartInput): AgentRunner | Promise<AgentRunner>;
   setProfileAgentApproval(profile: string, kind: ToolKind, mode: ApprovalMode): void;
   addProfileTrustedFolder(profile: string, folder: string): string;
+  setProfileSensitiveReadGrant(profile: string, grant: string, allowed: boolean): string;
   defaultProfile(): string;
 }
 
@@ -163,6 +164,8 @@ interface ActiveRun {
   steeringQueue: string[];
   grantedKinds: Set<ToolKind>;
   trustedFolders: string[];
+  /** Sensitive read roots allowed persistently during this run. */
+  sensitiveGrants: string[];
   /** Folders approved for this run only (never persisted). */
   runGrants: RunGrant[];
   waiters: Array<() => void>;
@@ -207,7 +210,7 @@ export class RunRegistry {
         summary: interrupted ? 'Interrupted by host restart. Completed effects were not replayed.' : record.summary,
         finishedAt: record.finishedAt ?? new Date().toISOString(), finished: true,
         buffer: events, firstSeq: events[0]?.seq ?? record.eventCount + 1, lastSeq: record.eventCount,
-        abort: new AbortController(), steeringQueue: [], grantedKinds: new Set(), trustedFolders: [], runGrants: [], waiters: [],
+        abort: new AbortController(), steeringQueue: [], grantedKinds: new Set(), trustedFolders: [], sensitiveGrants: [], runGrants: [], waiters: [],
       };
       if (interrupted) { const event: SequencedEvent = { seq: ++run.lastSeq, event: { type: 'done', taskId: record.taskId ?? '', status: 'failed', summary: run.summary } }; run.buffer.push(event); this.journal?.save(this.toRecord(run), event); }
       this.runs.set(run.id, run);
@@ -242,6 +245,7 @@ export class RunRegistry {
       steeringQueue: [],
       grantedKinds: new Set(),
       trustedFolders: [],
+      sensitiveGrants: [],
       runGrants: [],
       artifacts: [],
       waiters: [],
@@ -365,6 +369,12 @@ export class RunRegistry {
       case 'trust': {
         if (entry.request.persistable === false) {
           throw MarifoldError.agentRunInvalid('This capability must be approved one call at a time and cannot be trusted persistently.');
+        }
+        const sensitiveGrant = approvalSensitiveGrant(entry.request);
+        if (sensitiveGrant) {
+          run.sensitiveGrants.push(this.runtime.setProfileSensitiveReadGrant(run.profile, sensitiveGrant, true));
+          entry.settle({ approved: true });
+          return { requestId, approved: true };
         }
         const trustFolder = approvalTrustFolder(entry.request);
         if (!trustFolder) {
@@ -535,13 +545,15 @@ export class RunRegistry {
    * otherwise park the request until a client answers, the timeout fires, or
    * the run is cancelled. Mirrors TelegramBridge.requestApproval. */
   private handleApproval(run: ActiveRun, request: ApprovalRequest): Promise<ApprovalDecision> {
-    if (!request.escalated && run.grantedKinds.has(request.kind)) { return Promise.resolve({ approved: true }); }
-    if (coveredByRunGrant(request, run.runGrants)) { return Promise.resolve({ approved: true }); }
+    const granted: ApprovalDecision = { approved: true, source: 'policy' };
+    if (!request.escalated && run.grantedKinds.has(request.kind)) { return Promise.resolve(granted); }
+    if (coveredByRunGrant(request, run.runGrants)) { return Promise.resolve(granted); }
+    if (request.sensitiveGrant && run.sensitiveGrants.includes(request.sensitiveGrant)) { return Promise.resolve(granted); }
     if (request.persistable !== false
         && request.escalated
         && request.escalatedPath
         && isInsideAny(request.escalatedPath, run.trustedFolders)) {
-      return Promise.resolve({ approved: true });
+      return Promise.resolve(granted);
     }
 
     return new Promise<ApprovalDecision>(resolve => {

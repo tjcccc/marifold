@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import * as os from 'os';
 import * as path from 'path';
 import { Box, Text, useInput } from 'ink';
-import { approvalTrustFolder, encryptSudoPassword, type ApprovalRequest, type PriestJSONValue, type SudoResponse } from '@marifold/core';
+import { approvalSensitiveGrant, approvalTrustFolder, encryptSudoPassword, type ApprovalRequest, type PriestJSONValue, type SudoResponse } from '@marifold/core';
 import { ACCENT, ATTACHMENT, DIM } from './theme.js';
 
 /** The folder a "trust" action would add, for an escalated file call. */
@@ -11,11 +11,12 @@ export function trustTargetFolder(request: ApprovalRequest): string | undefined 
   return approvalTrustFolder(request);
 }
 
-/** Whether `[t]` applies: trusting a folder, or allowing an ordinary call's
- * kind. An escalated path with no trustable folder (home, above it, or a
- * sensitive root) offers neither: "allow always" would not cover it. */
+/** Whether `[t]` applies: trusting a folder, allowing a sensitive read root,
+ * or allowing an ordinary call's kind. Any other escalated path offers none:
+ * "allow always" would not cover it. */
 export function canAlwaysAllow(request: ApprovalRequest): boolean {
-  return request.persistable !== false && (trustTargetFolder(request) !== undefined || !request.escalatedPath);
+  return request.persistable !== false
+    && (trustTargetFolder(request) !== undefined || approvalSensitiveGrant(request) !== undefined || !request.escalatedPath);
 }
 
 function tildify(p: string): string {
@@ -95,11 +96,14 @@ export function ApprovalModal({
     else if (ch === 'r' && request.runGrant) { onResolve('run'); }
   });
 
-  // The "always" action: trust this folder (escalated write), else allow this kind.
+  // The "always" action: trust this folder (escalated write), allow reading
+  // a sensitive root, else allow this kind.
   const trustFolder = trustTargetFolder(request);
+  const sensitiveGrant = approvalSensitiveGrant(request);
   const alwaysLabel = trustFolder
     ? `rust (${tildify(trustFolder)}) and allow always`
-    : `rust ${request.kind} (allow always)`;
+    : sensitiveGrant ? `rust: always allow reading ${sensitiveGrant}`
+      : `rust ${request.kind} (allow always)`;
 
   return (
     <Box borderStyle="round" borderColor="yellow" flexDirection="column" paddingX={1}>

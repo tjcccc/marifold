@@ -1,6 +1,6 @@
 import { useCallback, useRef } from 'react';
 import type { Dispatch, MutableRefObject } from 'react';
-import { coveredByRunGrant, isInsideAny } from '@marifold/core';
+import { approvalSensitiveGrant, coveredByRunGrant, isInsideAny } from '@marifold/core';
 import type { ApprovalDecision, ApprovalRequest, RunGrant, SudoResponse, ToolKind, UserInputHandler, UserInputSubmission } from '@marifold/core';
 import type { AppAction, AppState, NoticeTone } from '../core/appState.js';
 import type { TuiRuntime } from '../core/TuiRuntime.js';
@@ -24,6 +24,7 @@ export function useApprovals({ runtime, dispatch, stateRef, notify }: ApprovalOp
   const userInputResolverRef = useRef<((submission: UserInputSubmission | undefined) => void) | null>(null);
   const sessionGrantsRef = useRef<Set<ToolKind>>(new Set());
   const sessionTrustedFoldersRef = useRef<Set<string>>(new Set());
+  const sessionSensitiveGrantsRef = useRef<Set<string>>(new Set());
   // "For this run" folder approvals. Kept here (not on the service) because
   // remote runs already show the prompt before the TUI answers it.
   const runGrantsRef = useRef<RunGrant[]>([]);
@@ -34,13 +35,14 @@ export function useApprovals({ runtime, dispatch, stateRef, notify }: ApprovalOp
     // can't see them, so the App layer applies them: a kind grant for ordinary
     // calls, a trusted folder for escalated writes inside it.
     if (!request.escalated && sessionGrantsRef.current.has(request.kind)) {
-      return Promise.resolve({ approved: true });
+      return Promise.resolve({ approved: true, source: 'policy' });
     }
     if (request.persistable !== false && request.escalated && request.escalatedPath
         && isInsideAny(request.escalatedPath, [...sessionTrustedFoldersRef.current])) {
-      return Promise.resolve({ approved: true });
+      return Promise.resolve({ approved: true, source: 'policy' });
     }
-    if (coveredByRunGrant(request, runGrantsRef.current)) { return Promise.resolve({ approved: true }); }
+    if (coveredByRunGrant(request, runGrantsRef.current)) { return Promise.resolve({ approved: true, source: 'policy' }); }
+    if (request.sensitiveGrant && sessionSensitiveGrantsRef.current.has(request.sensitiveGrant)) { return Promise.resolve({ approved: true, source: 'policy' }); }
     dispatch({ type: 'set_approval', request });
     return new Promise<ApprovalDecision>(resolve => {
       approvalResolverRef.current = resolve;
@@ -62,7 +64,9 @@ export function useApprovals({ runtime, dispatch, stateRef, notify }: ApprovalOp
     }
     if (choice === 'always' && canAlwaysAllow(request)) {
       const folder = trustTargetFolder(request);
+      const sensitiveGrant = approvalSensitiveGrant(request);
       if (folder) { trustFolderForProfile(folder); }   // escalated write → trust the folder
+      else if (sensitiveGrant) { allowSensitiveRead(sensitiveGrant); } // sensitive read → allow that root
       else { persistApprovalKind(request.kind); }       // ordinary call → allow this kind
     }
     resolve({ approved: true, ...(sudoResponse ? { sudoResponse } : {}) });
@@ -105,6 +109,18 @@ export function useApprovals({ runtime, dispatch, stateRef, notify }: ApprovalOp
       notify(`Trusting ${resolved} for ${profile} (reads and writes here won't ask).`, 'info');
     } catch (error) {
       notify(`Could not trust folder: ${errorText(error)}`, 'error');
+    }
+  }, [runtime, notify]);
+
+  // "Always allow reading ~/.ssh": persist to the active profile + this session.
+  const allowSensitiveRead = useCallback(async (grant: string) => {
+    const profile = stateRef.current.profile;
+    sessionSensitiveGrantsRef.current.add(grant);
+    try {
+      await runtime.setProfileSensitiveReadGrant(profile, grant, true);
+      notify(`Reading ${grant} is now allowed for ${profile}.`, 'info');
+    } catch (error) {
+      notify(`Could not persist the grant: ${errorText(error)}`, 'error');
     }
   }, [runtime, notify]);
 

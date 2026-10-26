@@ -45,7 +45,7 @@ describe('workspace recovery and device boundaries', () => {
       ] as const) {
         const call = { runId: 'image_run', tool: 'inspect_attachment', input: { attachment_id: id } };
         const risk = await executor.handle('executor.assess', call, context) as ToolRiskAssessment & { grant: string };
-        expect(risk).toMatchObject({ trusted: true, escalate: false, persistable: false, blocked: false });
+        expect(risk).toMatchObject({ trusted: true, escalate: false, blocked: false });
         const result = await executor.handle('executor.execute', { ...call, grant: risk.grant }, context) as ToolExecutionResult;
         expect(JSON.parse(JSON.stringify(result)).images).toEqual([image]);
         await expect(executor.handle('executor.execute', { ...call, grant: risk.grant }, context)).rejects.toThrow('invalid or expired');
@@ -53,7 +53,8 @@ describe('workspace recovery and device boundaries', () => {
       const read = await executor.handle('executor.assess', {
         runId: 'image_run', tool: 'read_file', input: { path: workspace.workDir },
       }, context) as ToolRiskAssessment;
-      expect(read).toMatchObject({ trusted: false, escalate: true, blocked: true });
+      // This device's own deny still wins over the requesting profile's policy.
+      expect(read).toMatchObject({ trusted: false, blocked: true });
       const invalid = { runId: 'image_run', tool: 'inspect_attachment', input: { attachment_id: '/etc/passwd' } };
       const risk = await executor.handle('executor.assess', invalid, context) as { grant: string };
       const result = await executor.handle('executor.execute', { ...invalid, grant: risk.grant }, context) as ToolExecutionResult;
@@ -97,6 +98,7 @@ describe('workspace recovery and device boundaries', () => {
       createAgentRunner: () => { throw new Error('Must not recreate the screenshot'); },
       setProfileAgentApproval: () => undefined,
       addProfileTrustedFolder: (_p, f) => f,
+      setProfileSensitiveReadGrant: (_p, g) => g,
       defaultProfile: () => 'default',
     } });
     try {
@@ -301,6 +303,7 @@ describe('workspace recovery and device boundaries', () => {
         },
         setProfileAgentApproval: () => undefined,
         addProfileTrustedFolder: (_p, f) => f,
+      setProfileSensitiveReadGrant: (_p, g) => g,
         defaultProfile: () => 'default',
       },
     });

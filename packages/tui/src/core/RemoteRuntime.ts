@@ -127,6 +127,8 @@ export class RemoteRuntime implements TuiRuntime {
     this.mutate('profile.approval', { profile, kind, mode });
   addProfileTrustedFolder: TuiRuntime['addProfileTrustedFolder'] = (profile, folder) =>
     this.mutate('profile.trust', { profile, folder });
+  setProfileSensitiveReadGrant: TuiRuntime['setProfileSensitiveReadGrant'] = (profile, grant, allowed) =>
+    this.mutate('profile.sensitive-read', { profile, grant, allowed });
   migrateProfileInstructions: TuiRuntime['migrateProfileInstructions'] = (profile) =>
     this.mutate('profile.migrate', { profile });
   installSkillFromText: TuiRuntime['installSkillFromText'] = (

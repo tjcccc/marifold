@@ -1,7 +1,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import type { JSONValue } from '@priest-ai/core';
-import { isDeniedRunPath, isProtectedSystemWrite, isReadOnlyStatePath, resolveToolPath } from '../RunWorkspace';
+import { assessFileRead, assessFileWrite, combineRisks, trashPreviousVersion } from '../FilePolicy';
+import { canonicalPath, isInside, resolveToolPath } from '../RunWorkspace';
 import { type AgentTool, requireStringInput, type ToolExecutionContext, type ToolExecutionResult, type ToolRiskAssessment } from '../ToolRegistry';
 import { formatBytes, ReadFileTool } from './ReadFileTool';
 import { WriteFileTool } from './WriteFileTool';
@@ -9,8 +10,8 @@ import { WriteFileTool } from './WriteFileTool';
 /**
  * Copies one file, text or binary, inside the Marifold process. Unlike `cp`
  * in shell_exec, whose sandbox is fixed to the run's own folders, it is
- * checked like a read of the source plus a write of the destination, so the
- * same approvals, run grants and trusted folders apply.
+ * checked like a read of the source plus a write of the destination (see
+ * FilePolicy).
  */
 export class CopyFileTool implements AgentTool {
   readonly kind = 'write' as const;
@@ -19,7 +20,7 @@ export class CopyFileTool implements AgentTool {
     description: [
       'Copy one file (text or binary) to another path on this device, creating parent folders as needed.',
       'When to use: copying a file the user named, or an earlier run\'s output, to a folder such as ~/tempfiles. Prefer it over cp in shell_exec, whose sandbox cannot reach folders outside this run.',
-      'A destination that is an existing folder receives the file under its own name.',
+      'A destination that is an existing folder receives the file under its own name. A replaced file\'s previous version goes to the Trash.',
     ].join(' '),
     parameters: {
       type: 'object',
@@ -42,43 +43,22 @@ export class CopyFileTool implements AgentTool {
 
   assessRisk(input: Record<string, JSONValue>, ctx: ToolExecutionContext): ToolRiskAssessment {
     if (typeof input.source !== 'string' || typeof input.destination !== 'string') { return { escalate: false }; }
-    const source = this.read.assessRisk({ path: input.source }, ctx);
-    const target = destinationPath(input.source, input.destination, ctx);
-    const destination = this.write.assessRisk({ path: target }, ctx);
-    for (const risk of [source, destination]) {
-      if (risk.blocked) { return risk; }
-    }
-    const escalate = source.escalate || destination.escalate;
-    if (!escalate) {
-      return source.trusted && destination.trusted ? { escalate: false, trusted: true } : { escalate: false };
-    }
-    const reason = [source, destination].filter(risk => risk.escalate && risk.reason).map(risk => risk.reason).join('; ');
-    const persistable = source.persistable !== false && destination.persistable !== false;
-    // One folder can be granted or trusted per approval, and the grant is a
-    // write grant, so it is offered only when the destination alone escalates.
-    if (!source.escalate) {
-      return {
-        escalate: true,
-        persistable,
-        reason,
-        ...(destination.targetPath ? { targetPath: destination.targetPath } : {}),
-        ...(destination.runGrantFolder ? { runGrantFolder: destination.runGrantFolder } : {}),
-      };
-    }
-    return { escalate: true, persistable, reason };
+    const source = readSide(this.read.assessRisk({ path: input.source }, ctx));
+    const destination = this.write.assessRisk({ path: destinationPath(input.source, input.destination, ctx) }, ctx);
+    return combineRisks(source, destination);
   }
 
   async execute(input: Record<string, JSONValue>, ctx: ToolExecutionContext): Promise<ToolExecutionResult> {
     const source = resolveToolPath(requireStringInput(input, 'source', 'copy_file'), ctx.workspace, ctx.cwd);
     const target = destinationPath(source, requireStringInput(input, 'destination', 'copy_file'), ctx);
-    if (ctx.workspace && (isDeniedRunPath(source, ctx.workspace) || isDeniedRunPath(target, ctx.workspace))) {
-      return { content: 'Path is isolated from this workspace.', summary: 'blocked workspace state access', isError: true };
+    if (ctx.workspace) {
+      const policy = combineRisks(readSide(assessFileRead(canonicalPath(source), ctx.workspace)), assessFileWrite(canonicalPath(target), ctx.workspace));
+      if (policy.blocked) { return { content: `Refused to copy ${source} to ${target}: ${policy.reason}.`, summary: `refused copy to ${target}`, isError: true }; }
     }
-    if (ctx.workspace && (isReadOnlyStatePath(target, ctx.workspace) || isProtectedSystemWrite(target, ctx.workspace))) {
-      return { content: `Refused to write ${target}.`, summary: `refused protected write to ${target}`, isError: true };
-    }
+    let previous: string | undefined;
     try {
       if (!fs.statSync(source).isFile()) { throw new Error('the source is not a file'); }
+      if (ctx.workspace && !isInside(target, ctx.workspace.rootDir)) { previous = await trashPreviousVersion(target, ctx.workspace.userHome); }
       fs.mkdirSync(path.dirname(target), { recursive: true });
       fs.copyFileSync(source, target);
     } catch (error) {
@@ -89,8 +69,14 @@ export class CopyFileTool implements AgentTool {
       };
     }
     const size = formatBytes(fs.statSync(target).size);
-    return { content: `Copied ${size} from ${source} to ${target}.`, summary: `copied ${size} to ${target}` };
+    return { content: `Copied ${size} from ${source} to ${target}.${previous ? ` The replaced file's previous version is in ${previous}.` : ''}`, summary: `copied ${size} to ${target}` };
   }
+}
+
+/** A source read that needs no prompt leaves the copy as routine as its
+ * destination; the copy itself is a write. */
+function readSide(risk: ToolRiskAssessment): ToolRiskAssessment {
+  return risk.blocked || risk.escalate ? risk : { escalate: false, routine: true };
 }
 
 /** The destination file: inside the destination when it is an existing folder. */

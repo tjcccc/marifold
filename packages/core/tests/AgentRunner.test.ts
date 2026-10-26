@@ -352,7 +352,7 @@ describe('AgentRunner', () => {
     expect(context).toContain(`User home: ${os.homedir()}.`);
     expect(context).toContain('~ refers to this directory');
     expect(context).not.toContain('~ is the isolated run home');
-    expect(context).toContain('Use write_file for an explicit output path elsewhere');
+    expect(context).toContain('trash_path (delete: moves to the Trash)');
   });
 
   it('prefers provider-hosted search and hides the Marifold fallback tool', async () => {

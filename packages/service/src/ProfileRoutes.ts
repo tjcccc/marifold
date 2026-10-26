@@ -185,6 +185,15 @@ export function registerProfileRoutes(
     return { ok: true, removed, profile: runtime.getProfile(name) };
   });
 
+  // Grants are added by an approval answer; settings can only revoke them.
+  server.delete<{ Params: { name: string } }>('/v1/profiles/:name/sensitive-read-grants', async request => {
+    const name = request.params.name;
+    runtime.getProfile(name);
+    const body = objectBody(request.body);
+    const grant = runtime.setProfileSensitiveReadGrant(name, requiredString(body.grant, 'grant'), false);
+    return { ok: true, grant, profile: runtime.getProfile(name) };
+  });
+
   server.delete<{
     Params: { name: string; id: string };
     Querystring: { mode?: string };

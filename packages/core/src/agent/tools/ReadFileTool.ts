@@ -1,13 +1,11 @@
 import * as fs from 'fs';
 import type { JSONValue } from '@priest-ai/core';
+import { assessFileRead } from '../FilePolicy';
 import {
   canonicalPath,
   isDeniedRunPath,
   isInsideAnyRoot,
   isExactPath,
-  isOutsideUserHome,
-  isSensitiveHostPath,
-  runGrantFolder,
   resolveToolPath,
 } from '../RunWorkspace';
 import {
@@ -32,7 +30,7 @@ export class ReadFileTool implements AgentTool {
   readonly definition = {
     name: 'read_file',
     description: [
-      'Read one local UTF-8 text file with bounded output, or list one known directory level.',
+      'Read one local UTF-8 text file with bounded output, or list one directory level (entries ending in / are folders).',
       'When to use: inspect an exact path, read source or instructions before acting, or confirm a written file.',
       'When NOT to use: broad content search, binary-file extraction, facts already available in context, or speculative filesystem exploration.',
     ].join(' '),
@@ -52,14 +50,9 @@ export class ReadFileTool implements AgentTool {
   assessRisk(input: Record<string, JSONValue>, ctx: ToolExecutionContext): ToolRiskAssessment {
     if (typeof input.path !== 'string' || !ctx.workspace) { return { escalate: false }; }
     const target = canonicalPath(resolveToolPath(input.path, ctx.workspace, ctx.cwd));
-    if (ctx.workspace && isDeniedRunPath(target, ctx.workspace)) { return { escalate: false, blocked: true, persistable: false, reason: 'This path contains device-local or other-workspace state.' }; }
-    if (isInsideAnyRoot(target, ctx.workspace.readRoots) || isExactPath(target, ctx.workspace.readOnlyFiles)) {
-      if (this.options.strictWorkspace) { return { escalate: false, trusted: true }; }
-      // A guest executor still asks for these; let it offer "for this run".
-      const grantFolder = isInsideAnyRoot(target, ctx.workspace.readRoots) ? runGrantFolder(target, ctx.workspace) : undefined;
-      return grantFolder ? { escalate: false, targetPath: target, runGrantFolder: grantFolder } : { escalate: false };
-    }
     if (this.options.strictWorkspace) {
+      if (isDeniedRunPath(target, ctx.workspace)) { return { escalate: false, blocked: true, persistable: false, reason: 'This path contains device-local or other-workspace state.' }; }
+      if (isInsideAnyRoot(target, ctx.workspace.readRoots) || isExactPath(target, ctx.workspace.readOnlyFiles)) { return { escalate: false, trusted: true }; }
       return {
         escalate: false,
         blocked: true,
@@ -67,17 +60,7 @@ export class ReadFileTool implements AgentTool {
         targetPath: target,
       };
     }
-    const nonPersistable = isOutsideUserHome(target, ctx.workspace) || isSensitiveHostPath(target, ctx.workspace);
-    const grantFolder = nonPersistable ? undefined : runGrantFolder(target, ctx.workspace);
-    return {
-      escalate: true,
-      persistable: !nonPersistable,
-      reason: nonPersistable
-        ? `reading ${target} is outside this run's persistent filesystem scope`
-        : `reading ${target} is outside this run's working and trusted folders`,
-      targetPath: target,
-      ...(grantFolder ? { runGrantFolder: grantFolder } : {}),
-    };
+    return assessFileRead(target, ctx.workspace);
   }
 
   async execute(input: Record<string, JSONValue>, ctx: ToolExecutionContext): Promise<ToolExecutionResult> {
@@ -105,7 +88,9 @@ export class ReadFileTool implements AgentTool {
       try {
         const stat = fs.fstatSync(fd);
         if (stat.isDirectory()) {
-          const entries = fs.readdirSync(target).sort((a, b) => a.localeCompare(b));
+          const entries = fs.readdirSync(target, { withFileTypes: true })
+            .map(entry => (entry.isDirectory() ? `${entry.name}/` : entry.name))
+            .sort((a, b) => a.localeCompare(b));
           return {
             content: entries.join('\n'),
             summary: `listed ${entries.length} entries in ${target}`,

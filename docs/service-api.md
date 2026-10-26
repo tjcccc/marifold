@@ -156,6 +156,7 @@ Responses are `{ "ok": true, ... }` unless noted. Bodies are JSON.
 | `PUT /v1/profiles/:name/files/:file` | Overwrite `INSTRUCTIONS.md` (`:file = instructions`); body `{ content }`. Returns the fresh profile detail. Deprecated `profile\|rules\|custom` aliases remain for unmigrated clients; `rules`/`custom` writes are rejected once canonical instructions exist |
 | `POST /v1/profiles/:name/trusted-folders` | Body `{ folder }` — add a trusted folder (safety refusals for broad/sensitive roots are 400) |
 | `DELETE /v1/profiles/:name/trusted-folders` | Body `{ folder }` (in the body — folders contain slashes) — `{ removed: boolean }` + fresh profile detail |
+| `DELETE /v1/profiles/:name/sensitive-read-grants` | Body `{ grant }` (e.g. `"~/.ssh"`) — stop allowing silent reads of that sensitive root; returns `{ grant }` + fresh profile detail. Grants are added by a `trust` approval answer |
 | `GET /v1/profiles/:name/memories?all=&limit=` | Structured memory records; `all=true` includes superseded |
 | `DELETE /v1/profiles/:name/memories/:id?mode=forget\|delete` | Exact-by-id: `forget` (default) supersedes the entry (recoverable); `delete` removes it permanently. Returns the fresh active list |
 | `POST /v1/profiles/:name/memories/:id/restore` | Make a forgotten or replaced (superseded) entry active again; an active entry with the same conflict key is superseded in its place. Returns `{ restored, memories }` (the fresh active list) |
@@ -394,13 +395,13 @@ The default live-run wait is 30 minutes. Cancellation resolves it immediately. U
    - `once` — approve this call only.
    - `run` — only when the request carries `runGrant` (`{ folder, access }`): approve and allow file calls under that folder for the rest of this run, without persisting anything. A `write` grant also covers reads; a `read` grant never covers writes. The tool offers `runGrant` only for in-home folders other than home itself, never for sensitive or Marifold state, shell, or sudo, and it works for guest-device calls that cannot be trusted persistently. A grant answered for a delegated child stays with the child. Otherwise `400 AGENT_RUN_INVALID`.
    - `always` — when `request.persistable !== false`, approve and persist "always allow `<kind>`" to the profile (future runs inherit it); later same-kind calls in this run stop asking.
-   - `trust` — only when the request is persistable and has an `escalatedPath` (an out-of-workspace file write): approve and persist the target's folder as trusted. Otherwise `400 AGENT_RUN_INVALID`.
+   - `trust` — only when the request is persistable and either carries `sensitiveGrant` (a read of a credential store or other sensitive root, e.g. `"~/.ssh"`: approve and persist that root in the profile's `agent.sensitive_read_grants`; later reads of it in this run and future runs stop asking) or has an `escalatedPath` with a trustable folder (approve and persist that folder as trusted). Otherwise `400 AGENT_RUN_INVALID`.
    - `deny` — reject; the model sees an error tool result and continues.
 
    Returns `{ ok, requestId, approved }`. Unknown/expired/already answered → `404 APPROVAL_NOT_FOUND`.
 3. The stream emits `approval_decision` (`source: "user"`), so every attached client converges — then `tool_result`.
 
-UX note for approval dialogs: mirror the TUI/Telegram wording — **Allow once** (safe default) / **Allow folder for this run** (when `runGrant` is present; show its folder) / **Always allow \<kind\>** or **Trust folder** (when `escalatedPath` is present and `persistable !== false`) / **Deny**.
+UX note for approval dialogs: mirror the TUI/Telegram wording — **Allow once** (safe default) / **Allow folder for this run** (when `runGrant` is present; show its folder) / **Always allow \<kind\>**, **Always allow reading \<sensitiveGrant\>**, or **Trust folder** (when `escalatedPath` is present and `persistable !== false`) / **Deny**. Ordinary file-tool work inside home never reaches this dialog (it is approved by policy unless writes are denied).
 
 ### Tasks (durable layer)
 

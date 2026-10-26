@@ -89,6 +89,16 @@ export async function removeTrustedFolder(client: ApiClient, name: string, folde
   return body.profile;
 }
 
+/** Stop allowing silent reads of a sensitive folder such as `~/.ssh`. */
+export async function revokeSensitiveRead(client: ApiClient, name: string, grant: string): Promise<ProfileDetail> {
+  const body = await client.request<{ profile: ProfileDetail }>(
+    'DELETE',
+    `/v1/profiles/${encodeURIComponent(name)}/sensitive-read-grants`,
+    { grant },
+  );
+  return body.profile;
+}
+
 /** Scaffold a new profile (POST /v1/profiles). Duplicate/invalid names are 400. */
 export async function createProfile(client: ApiClient, name: string): Promise<ProfileDetail> {
   const body = await client.request<{ profile: ProfileDetail }>('POST', '/v1/profiles', { name });

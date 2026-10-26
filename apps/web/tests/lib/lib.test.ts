@@ -90,6 +90,7 @@ describe('permissions', () => {
       {
         approval: { read: 'allow', write: 'ask', shell: 'deny', network: 'ask', delegate: 'allow' },
         trustedFolders: ['/a'],
+        sensitiveReadGrants: [],
         maxIterations: 20,
         toolOutputLimit: 100000,
         toolMode: 'auto',

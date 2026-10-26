@@ -282,18 +282,21 @@ export function isReadOnlyStatePath(target: string, workspace: RunWorkspace): bo
   return !isInsideAnyRoot(target, [workspace.rootDir]) && isInsideAnyRoot(target, workspace.stateReadRoots ?? []);
 }
 
-/** Account data that is never granted persistently: runs approve each access
- * once, and SkillApps cannot declare it. */
+/** Home-relative account data that may hold credentials or private data:
+ * writes ask for each call, reads ask unless the profile allows that root
+ * (`sensitive_read_grants`), and SkillApps cannot declare it. */
+export const SENSITIVE_HOME_ENTRIES: readonly string[] = [
+  '.ssh', '.gnupg', '.marifold', 'Library/Keychains', '.password-store',
+  // Common credential stores.
+  '.aws', '.azure', '.kube', '.docker', '.netrc', '.git-credentials', '.npmrc', '.pypirc',
+  '.config/gh', '.config/gcloud', '.config/hub',
+  // Browser profiles: cookies, saved passwords, and history.
+  'Library/Application Support/Google/Chrome', 'Library/Application Support/Firefox', 'Library/Safari',
+  'Library/Cookies', '.config/google-chrome', '.config/chromium', '.mozilla',
+];
+
 export function sensitiveHostRoots(userHome: string): string[] {
-  return [
-    path.join(userHome, '.ssh'),
-    path.join(userHome, '.gnupg'),
-    path.join(userHome, '.marifold'),
-    path.join(userHome, 'Library', 'Keychains'),
-    // Common credential stores.
-    ...['.aws', '.azure', '.kube', '.docker', '.netrc', '.git-credentials', '.npmrc', '.pypirc'].map(name => path.join(userHome, name)),
-    ...[['gh'], ['gcloud'], ['hub']].map(parts => path.join(userHome, '.config', ...parts)),
-  ];
+  return SENSITIVE_HOME_ENTRIES.map(entry => path.join(userHome, ...entry.split('/')));
 }
 
 /** The folder a run-scoped grant (or a trust) for this target would cover:

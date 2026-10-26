@@ -21,6 +21,9 @@ export interface MarifoldAgentConfig {
   /** Extra filesystem capabilities outside the working directory. In-home
    * entries are auto-approved; entries outside $HOME still prompt per action. */
   trustedFolders: string[];
+  /** Sensitive read roots the user chose to "Always allow", home-relative
+   * (e.g. `~/.ssh`) so one grant applies on every device of the workspace. */
+  sensitiveReadGrants: string[];
   maxIterations: number;
   toolOutputLimit: number;
   toolMode: AgentToolMode;
@@ -43,6 +46,7 @@ export const DEFAULT_AGENT_CONFIG: MarifoldAgentConfig = {
     delegate: 'allow',
   },
   trustedFolders: [],
+  sensitiveReadGrants: [],
   maxIterations: 20,
   toolOutputLimit: 100000,
   toolMode: 'auto',
@@ -52,6 +56,7 @@ export interface PartialAgentConfig {
   approval?: Partial<AgentApprovalConfig>;
   unattended?: Partial<AgentApprovalConfig>;
   trustedFolders?: string[];
+  sensitiveReadGrants?: string[];
   maxIterations?: number;
   toolOutputLimit?: number;
   toolMode?: AgentToolMode;
@@ -63,10 +68,41 @@ export function resolveAgentConfig(partial?: PartialAgentConfig): MarifoldAgentC
     approval: { ...DEFAULT_AGENT_CONFIG.approval, ...(partial?.approval ?? {}) },
     ...(partial?.unattended && Object.keys(partial.unattended).length > 0 ? { unattended: { ...partial.unattended } } : {}),
     trustedFolders: [...(partial?.trustedFolders ?? DEFAULT_AGENT_CONFIG.trustedFolders)],
+    sensitiveReadGrants: [...(partial?.sensitiveReadGrants ?? DEFAULT_AGENT_CONFIG.sensitiveReadGrants)],
     maxIterations: partial?.maxIterations ?? DEFAULT_AGENT_CONFIG.maxIterations,
     toolOutputLimit: partial?.toolOutputLimit ?? DEFAULT_AGENT_CONFIG.toolOutputLimit,
     toolMode: partial?.toolMode ?? DEFAULT_AGENT_CONFIG.toolMode,
   };
+}
+
+/** A profile's `[agent]` overrides merged over the effective global config.
+ * Trusted folders and sensitive read grants are additive. */
+export function mergeAgentConfig(global: MarifoldAgentConfig, override: PartialAgentConfig | undefined): MarifoldAgentConfig {
+  if (!override) { return global; }
+  const unattended = { ...(global.unattended ?? {}), ...(override.unattended ?? {}) };
+  return {
+    approval: { ...global.approval, ...(override.approval ?? {}) },
+    ...(Object.keys(unattended).length > 0 ? { unattended } : {}),
+    trustedFolders: [...new Set([...global.trustedFolders, ...(override.trustedFolders ?? [])])],
+    sensitiveReadGrants: [...new Set([...global.sensitiveReadGrants, ...(override.sensitiveReadGrants ?? [])])],
+    maxIterations: override.maxIterations ?? global.maxIterations,
+    toolOutputLimit: override.toolOutputLimit ?? global.toolOutputLimit,
+    toolMode: override.toolMode ?? global.toolMode,
+  };
+}
+
+/** True when policy alone approves a call before any prompt: a tool-trusted
+ * capability, routine file work the kind's mode does not deny, or a sensitive
+ * read the profile already allows. */
+export function preApproved(
+  risk: import('./ToolRegistry').ToolRiskAssessment,
+  mode: ApprovalMode,
+  config: Pick<MarifoldAgentConfig, 'sensitiveReadGrants'>,
+): boolean {
+  if (risk.trusted) { return true; }
+  if (mode === 'deny') { return false; }
+  if (risk.routine && !risk.escalate) { return true; }
+  return risk.sensitiveGrant !== undefined && config.sensitiveReadGrants.includes(risk.sensitiveGrant);
 }
 
 export interface ApprovalRequest {
@@ -93,6 +129,9 @@ export interface ApprovalRequest {
    * run ("Allow <folder> for this run"). Never persisted; absent for shell,
    * sudo, sensitive, and out-of-home calls. */
   runGrant?: RunGrant;
+  /** Home-relative sensitive root (e.g. `~/.ssh`) an "always" answer to this
+   * read would allow for the profile. Never present for writes. */
+  sensitiveGrant?: string;
 }
 
 /** The folder a "trust" answer would add to the profile: the same folder a
@@ -125,7 +164,14 @@ function isWithin(target: string, folder: string): boolean {
   return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
 }
 
+/** The sensitive read root an "always"/"trust" answer would persist, if any. */
+export function approvalSensitiveGrant(request: ApprovalRequest): string | undefined {
+  return request.persistable !== false && !request.sudo ? request.sensitiveGrant : undefined;
+}
+
 export interface ApprovalDecision {
+  /** Who approved: policy (no prompt) or the user. Set by the runner. */
+  source?: 'policy' | 'user';
   sudoResponse?: import('./SudoCredentials').SudoResponse;
   approved: boolean;
   reason?: string;

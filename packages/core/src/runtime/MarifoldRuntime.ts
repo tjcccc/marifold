@@ -8,7 +8,7 @@ import type { RunStartInput, RunJournal } from '../runs/RunRegistry';
 import type { ImageInput, UsageInfo } from '@priest-ai/core';
 import * as path from 'path';
 import { AgentRunner } from '../agent/AgentRunner';
-import { type ApprovalMode, type MarifoldAgentConfig, type ToolKind, resolveAgentConfig } from '../agent/ApprovalPolicy';
+import { type ApprovalMode, type MarifoldAgentConfig, type ToolKind, mergeAgentConfig, resolveAgentConfig } from '../agent/ApprovalPolicy';
 import { DelegateTool } from '../agent/tools/DelegateTool';
 import { PythonPackageTool } from '../agent/tools/PythonPackageTool';
 import { ReadAttachmentTool } from '../agent/tools/ReadAttachmentTool';
@@ -22,6 +22,7 @@ import { AskUserTool } from '../agent/tools/AskUserTool';
 import { InspectAttachmentTool } from '../agent/tools/InspectAttachmentTool';
 import { WriteFileTool } from '../agent/tools/WriteFileTool';
 import { CopyFileTool } from '../agent/tools/CopyFileTool';
+import { fileManagementTools } from '../agent/tools/FileManagementTools';
 import { SkillManagementTool } from '../agent/tools/SkillManagementTool';
 import { SkillAppContextTool, SkillAppManagementTool } from '../agent/tools/SkillAppTools';
 import { ToolRegistry } from '../agent/ToolRegistry';
@@ -271,6 +272,12 @@ export class MarifoldRuntime {
    * require approval per action. Returns the resolved absolute folder. */
   addProfileTrustedFolder(name: string, folder: string): string {
     return this.profileManager.addTrustedFolder(name, folder).folder;
+  }
+
+  /** Allow (or stop allowing) a home-relative sensitive read root such as
+   * `~/.ssh` for a profile. Returns the normalized grant. */
+  setProfileSensitiveReadGrant(name: string, grant: string, allowed: boolean): string {
+    return this.profileManager.setSensitiveReadGrant(name, grant, allowed).grant;
   }
 
   /** Remove a trusted folder from a profile. Returns whether it was present. */
@@ -528,20 +535,8 @@ export class MarifoldRuntime {
    * keys inherit global/defaults; `undefined` profile → global only.
    */
   resolveAgentConfigForProfile(profile?: string): MarifoldAgentConfig {
-    const global = resolveAgentConfig(this.options.loadedConfig.config.agent);
     const name = profile ?? this.options.loadedConfig.config.default.profile;
-    const override = this.profileResolver.loadSettings(name).agent;
-    if (!override) { return global; }
-    const unattended = { ...(global.unattended ?? {}), ...(override.unattended ?? {}) };
-    return {
-      approval: { ...global.approval, ...(override.approval ?? {}) },
-      ...(Object.keys(unattended).length > 0 ? { unattended } : {}),
-      // Trusted folders are additive: a profile adds to any global ones.
-      trustedFolders: [...new Set([...global.trustedFolders, ...(override.trustedFolders ?? [])])],
-      maxIterations: override.maxIterations ?? global.maxIterations,
-      toolOutputLimit: override.toolOutputLimit ?? global.toolOutputLimit,
-      toolMode: override.toolMode ?? global.toolMode,
-    };
+    return mergeAgentConfig(resolveAgentConfig(this.options.loadedConfig.config.agent), this.profileResolver.loadSettings(name).agent);
   }
 
   /**
@@ -667,7 +662,7 @@ export class MarifoldRuntime {
     registry.register(new SearchAttachmentTool());
     registry.register(new ReadFileTool());
     registry.register(new WriteFileTool());
-    registry.register(new CopyFileTool());
+    for (const tool of [new CopyFileTool(), ...fileManagementTools()]) { registry.register(tool); }
     const deviceExecution = new DeviceExecution(this.options.loadedConfig.configPath);
     registry.register(new ShellExecTool(deviceExecution));
     registry.register(new SudoExecTool(deviceExecution));
@@ -866,10 +861,9 @@ export class MarifoldRuntime {
       journal,
       runtime: {
         createAgentRunner: (profile, input) => runnerForRun && input ? runnerForRun(input) : this.createAgentRunner(profile),
-        setProfileAgentApproval: (profile, kind, mode) => {
-          this.setProfileAgentApproval(profile, kind, mode);
-        },
+        setProfileAgentApproval: (profile, kind, mode) => this.setProfileAgentApproval(profile, kind, mode),
         addProfileTrustedFolder: (profile, folder) => this.addProfileTrustedFolder(profile, folder),
+        setProfileSensitiveReadGrant: (profile, grant, allowed) => this.setProfileSensitiveReadGrant(profile, grant, allowed),
         defaultProfile: () => this.options.loadedConfig.config.default.profile,
       },
       log,

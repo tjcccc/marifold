@@ -29,6 +29,7 @@ import { SearchAttachmentTool } from '../agent/tools/SearchAttachmentTool';
 import { ReadFileTool } from '../agent/tools/ReadFileTool';
 import { WriteFileTool } from '../agent/tools/WriteFileTool';
 import { CopyFileTool } from '../agent/tools/CopyFileTool';
+import { fileManagementTools } from '../agent/tools/FileManagementTools';
 import { ShellExecTool } from '../agent/tools/ShellExecTool';
 import { expandHome, marifoldHome } from './WorkspacePaths';
 import type { WorkspaceOperationContext } from './WorkspaceManager';
@@ -42,6 +43,7 @@ export function executionTools(device?: DeviceExecution): AgentTool[] {
     new ReadFileTool(),
     new WriteFileTool(),
     new CopyFileTool(),
+    ...fileManagementTools(),
     new ShellExecTool(device),
     new SudoExecTool(device),
     new ShellJobStatusTool(device),
@@ -200,16 +202,16 @@ export class WorkspaceExecutor {
       for (const [id, g] of run.grants) { if (g.expires < Date.now()) { run.grants.delete(id); } }
       if (run.grants.size >= 128) { throw new Error('Too many outstanding execution grants.'); }
       if (!blocked) { run.grants.set(grant, { hash, expires: Date.now() + 6 * 60 * 1000, ...(risk.sudo ? { sudoId: risk.sudo.id } : {}) }); }
+      // Workspace devices belong to one user: the requesting run applies its
+      // profile policy to this device's own assessment (routine home file
+      // work stays silent, escalated calls ask). Only this device's `deny`
+      // and hard blocks are enforced here; `trusted` stays attachment-only.
       return {
         ...risk,
         blocked,
         grant,
-        persistable: false,
         trusted: trustedAttachment,
-        escalate: !trustedAttachment,
-        reason: blocked
-          ? (risk.reason ?? 'Denied by execution device policy.')
-          : (risk.reason ?? (trustedAttachment ? 'Read access granted by this upload.' : 'Approve this call on the selected device.')),
+        ...(blocked ? { reason: risk.reason ?? 'Denied by execution device policy.' } : {}),
       };
     }
     if (operation !== 'executor.execute') { throw new Error('Unsupported executor operation.'); }

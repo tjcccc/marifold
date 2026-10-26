@@ -309,10 +309,14 @@ export function parsePartialAgentConfig(raw: unknown, label: string): PartialAge
   const trustedFolders = obj.trusted_folders !== undefined
     ? optionalStringArray(obj.trusted_folders, `${label}.trusted_folders`)
     : undefined;
+  const sensitiveReadGrants = obj.sensitive_read_grants !== undefined
+    ? optionalStringArray(obj.sensitive_read_grants, `${label}.sensitive_read_grants`)
+    : undefined;
   return {
     approval: normalizeApprovalModes(optionalObject(obj.approval, `${label}.approval`), `${label}.approval`),
     unattended: normalizeApprovalModes(optionalObject(obj.unattended, `${label}.unattended`), `${label}.unattended`),
     ...(trustedFolders ? { trustedFolders } : {}),
+    ...(sensitiveReadGrants ? { sensitiveReadGrants } : {}),
     maxIterations: optionalPositiveInteger(obj.max_iterations, `${label}.max_iterations`),
     toolOutputLimit: optionalNonNegativeNumber(obj.tool_output_limit, `${label}.tool_output_limit`),
     toolMode: optionalToolMode(obj.tool_mode, `${label}.tool_mode`),

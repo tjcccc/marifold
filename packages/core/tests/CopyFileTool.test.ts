@@ -24,18 +24,39 @@ it('copies a binary file into an existing folder outside the run', async () => {
   fs.mkdirSync(path.join(home, 'tempfiles'));
   const tool = new CopyFileTool();
   const input = { source, destination: '~/tempfiles' };
-  // Only the destination is outside the run, so its folder can be granted.
-  expect(tool.assessRisk(input, ctx)).toMatchObject({ escalate: true, runGrantFolder: path.join(home, 'tempfiles') });
+  // A copy into an ordinary home folder is routine.
+  expect(tool.assessRisk(input, ctx)).toEqual({ escalate: false, routine: true });
   const result = await tool.execute(input, ctx);
   expect(result.isError).toBeUndefined();
   expect(fs.readFileSync(path.join(home, 'tempfiles', 'report.bin'))).toEqual(Buffer.from([0, 255, 1, 254]));
 });
 
-it('offers no folder grant when the source is outside the run', () => {
+it('asks before copying out of a credential store, offering a persistent read grant', () => {
   const { home, ctx } = setup();
-  fs.mkdirSync(path.join(home, 'docs'));
-  fs.writeFileSync(path.join(home, 'docs', 'a.txt'), 'a');
-  const risk = new CopyFileTool().assessRisk({ source: '~/docs/a.txt', destination: '~/tempfiles/a.txt' }, ctx);
-  expect(risk.escalate).toBe(true);
-  expect(risk.runGrantFolder).toBeUndefined(); // a write grant must never cover the source folder
+  fs.mkdirSync(path.join(home, '.ssh'));
+  fs.writeFileSync(path.join(home, '.ssh', 'id_ed25519'), 'key');
+  const risk = new CopyFileTool().assessRisk({ source: '~/.ssh/id_ed25519', destination: '~/tempfiles/key' }, ctx);
+  expect(risk).toMatchObject({ escalate: true, sensitiveGrant: '~/.ssh' });
+  expect(risk.runGrantFolder).toBeUndefined();
 });
+
+it('keeps the replaced file in the Trash', async () => {
+  const { home, rootDir, ctx } = setup();
+  const source = path.join(rootDir, 'output', 'new.txt');
+  fs.writeFileSync(source, 'new');
+  fs.mkdirSync(path.join(home, 'docs'));
+  fs.writeFileSync(path.join(home, 'docs', 'a.txt'), 'old');
+  const result = await new CopyFileTool().execute({ source, destination: '~/docs/a.txt' }, ctx);
+  expect(result.isError, result.content).toBeUndefined();
+  expect(fs.readFileSync(path.join(home, 'docs', 'a.txt'), 'utf8')).toBe('new');
+  expect(fs.readdirSync(path.join(home, 'docs'))).toEqual(['a.txt']);
+  const trashed = trashEntries(home);
+  expect(trashed).toHaveLength(1);
+  expect(trashed[0].content).toBe('old');
+});
+
+/** Items moved to this test home's Trash (macOS .Trash or the XDG layout). */
+function trashEntries(home: string): Array<{ name: string; content: string }> {
+  const dir = process.platform === 'darwin' ? path.join(home, '.Trash') : path.join(home, '.local', 'share', 'Trash', 'files');
+  return fs.readdirSync(dir).map(name => ({ name, content: fs.readFileSync(path.join(dir, name), 'utf8') }));
+}

@@ -4,7 +4,7 @@ import { basename, dirname, extname, join, resolve, sep } from 'path';
 import { createLinkedAbort } from '@priest-ai/core';
 import type { MarifoldRuntime } from '../runtime/MarifoldRuntime';
 import type { TelegramChannelConfig } from '../config/ConfigSchema';
-import { approvalTrustFolder, type ApprovalDecision, type ApprovalRequest, type ToolKind } from '../agent/ApprovalPolicy';
+import { approvalSensitiveGrant, approvalTrustFolder, type ApprovalDecision, type ApprovalRequest, type ToolKind } from '../agent/ApprovalPolicy';
 import { proxyDispatcher } from '../util/proxy';
 import { respond } from './respond';
 
@@ -110,6 +110,7 @@ export class TelegramBridge {
   // stop re-prompting for that kind/folder for the bridge's lifetime.
   private readonly grantedKinds = new Set<ToolKind>();
   private readonly trustedFolders: string[] = [];
+  private readonly sensitiveGrants = new Set<string>();
   private offset = 0;
   private running = false;
   private busy = false; // one text turn at a time
@@ -383,20 +384,23 @@ export class TelegramBridge {
    * "Always"/"Trust" also persist to the profile (future runs) and to the
    * session (no re-prompt this run). */
   private async requestApproval(chatId: number, request: ApprovalRequest): Promise<ApprovalDecision> {
-    if (!request.escalated && this.grantedKinds.has(request.kind)) { return { approved: true }; }
+    if (!request.escalated && this.grantedKinds.has(request.kind)) { return { approved: true, source: 'policy' }; }
     if (request.persistable !== false
         && request.escalated
         && request.escalatedPath
         && isInsideAny(request.escalatedPath, this.trustedFolders)) {
-      return { approved: true };
+      return { approved: true, source: 'policy' };
     }
+    if (request.sensitiveGrant && this.sensitiveGrants.has(request.sensitiveGrant)) { return { approved: true, source: 'policy' }; }
 
     const token = randomUUID();
     // An escalated path that can't be trusted (home, above it, sensitive) gets no
     // persistent button: "always allow <kind>" would not cover escalated calls.
     const trustFolder = approvalTrustFolder(request);
+    const sensitiveGrant = approvalSensitiveGrant(request);
     const alwaysButton = trustFolder
       ? { text: '🛡 Trust folder', callback_data: `appr:${token}:trust` }
+      : sensitiveGrant ? { text: `🛡 Always allow reading ${sensitiveGrant}`, callback_data: `appr:${token}:trust` }
       : request.escalatedPath ? undefined : { text: `🛡 Always allow ${request.kind}`, callback_data: `appr:${token}:always` };
     const keyboard: InlineKeyboard = {
       inline_keyboard: [
@@ -416,7 +420,14 @@ export class TelegramBridge {
     // broad or sensitive folders; the user still approved this call, so a
     // refused folder falls back to allowing it once.
     let trustRefused: string | undefined;
-    if (action === 'trust' && trustFolder) {
+    if (action === 'trust' && sensitiveGrant) {
+      try {
+        this.sensitiveGrants.add(this.runtime.setProfileSensitiveReadGrant(this.profile, sensitiveGrant, true));
+      } catch (error) {
+        trustRefused = errorMessage(error);
+        this.log?.(`Could not allow reading ${sensitiveGrant}: ${trustRefused}`);
+      }
+    } else if (action === 'trust' && trustFolder) {
       try {
         const folder = this.runtime.addProfileTrustedFolder(this.profile, trustFolder);
         if (!this.trustedFolders.includes(folder)) { this.trustedFolders.push(folder); }
