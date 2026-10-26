@@ -1,4 +1,4 @@
-import { ArtifactWebRtc, DeviceExecution } from '@marifold/core';
+import { ArtifactWebRtc, DeviceExecution, MARIFOLD_VERSION } from '@marifold/core';
 import { remoteArtifactDownload } from './RemoteArtifactDownload';
 import { requestEnvironment, requestOrigin } from './RequestEnvironment';
 import { registerWorkspaceScheduleRoutes } from './WorkspaceScheduleRoutes';
@@ -269,6 +269,7 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
     ok: true,
     service: 'marifold',
     apiVersion: API_VERSION,
+    version: MARIFOLD_VERSION,
     localOnly: true,
     configPath: options.loadedConfig.configPath,
     foundConfig: options.loadedConfig.foundConfig,

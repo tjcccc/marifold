@@ -1,0 +1,162 @@
+[
+  {
+    "type": "status",
+    "taskId": "task_1",
+    "status": "running"
+  },
+  {
+    "type": "plan",
+    "taskId": "task_1",
+    "plan": [
+      {
+        "id": "step_1",
+        "text": "Read the notes",
+        "status": "in_progress",
+        "createdAt": "2026-10-26T12:00:00.000Z",
+        "updatedAt": "2026-10-26T12:00:00.000Z"
+      }
+    ]
+  },
+  {
+    "type": "step",
+    "taskId": "task_1",
+    "stepId": "step_1",
+    "text": "Read the notes",
+    "status": "completed"
+  },
+  {
+    "type": "text",
+    "text": "The notes list three open items.",
+    "phase": "final"
+  },
+  {
+    "type": "reasoning",
+    "summary": "Checking the notes before answering."
+  },
+  {
+    "type": "steering",
+    "taskId": "task_1",
+    "text": "Keep it short."
+  },
+  {
+    "type": "tool_request",
+    "call": {
+      "id": "call_1",
+      "tool": "write_file",
+      "kind": "write",
+      "input": {
+        "path": "~/notes.md",
+        "content": "hi"
+      },
+      "summary": "write 2B to ~/notes.md"
+    }
+  },
+  {
+    "type": "approval_request",
+    "request": {
+      "id": "call_1",
+      "tool": "write_file",
+      "kind": "write",
+      "summary": "write 2B to ~/notes.md",
+      "input": {
+        "path": "~/notes.md",
+        "content": "hi"
+      },
+      "escalated": true,
+      "escalationReason": "outside the trusted folders",
+      "escalatedPath": "/Users/me/notes.md",
+      "persistable": true,
+      "runGrant": {
+        "folder": "/Users/me",
+        "access": "write"
+      }
+    }
+  },
+  {
+    "type": "approval_decision",
+    "requestId": "call_1",
+    "approved": true,
+    "source": "user"
+  },
+  {
+    "type": "user_input_request",
+    "request": {
+      "id": "call_2",
+      "questions": [
+        {
+          "id": "tone",
+          "header": "Tone",
+          "question": "Which tone?",
+          "options": [
+            {
+              "id": "formal",
+              "label": "Formal"
+            },
+            {
+              "id": "casual",
+              "label": "Casual",
+              "description": "Relaxed"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "type": "user_input_response",
+    "response": {
+      "requestId": "call_2",
+      "answers": [
+        {
+          "questionId": "tone",
+          "optionId": "formal",
+          "value": "Formal"
+        }
+      ]
+    }
+  },
+  {
+    "type": "tool_result",
+    "callId": "call_1",
+    "tool": "write_file",
+    "summary": "wrote 2B to ~/notes.md",
+    "isError": false
+  },
+  {
+    "type": "artifact",
+    "artifact": {
+      "id": "art_1",
+      "name": "report.pdf",
+      "mediaType": "application/pdf",
+      "size": 18432
+    }
+  },
+  {
+    "type": "verification",
+    "passed": true,
+    "notes": "deprecated: never emitted by current runners"
+  },
+  {
+    "type": "error",
+    "code": "AGENT_RUN_ERROR",
+    "message": "The provider timed out."
+  },
+  {
+    "type": "compaction",
+    "status": "completed",
+    "summarizedTurns": 6
+  },
+  {
+    "type": "done",
+    "taskId": "task_1",
+    "status": "completed",
+    "summary": "The notes list three open items.",
+    "usage": {
+      "inputTokens": 900,
+      "contextTokens": 600,
+      "outputTokens": 120,
+      "totalTokens": 1020,
+      "cachedInputTokens": 0
+    }
+  }
+]

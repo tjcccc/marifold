@@ -111,6 +111,15 @@ data: {"type":"tool_request", ...}
 - **Runs stream** (`/v1/runs/:id/events`) is *resumable*: every frame has an `id:` sequence number, a `retry: 3000` hint is sent at open, and a reconnect with `Last-Event-ID: <seq>` (or `?after=<seq>`) replays only later events. Very old events can drop out of the buffer (it is bounded); backfill from the run's durable task record (`GET /v1/tasks/:taskId`).
 - **Chat stream** (`/v1/chat/stream`) is *one-shot*: it is a POST whose reconnect would re-run the prompt, so it has no ids and no resume. Events: optional `reasoning` (`{"text": "..."}`) safe-summary fragments, `chunk` (`{"text": "..."}`) answer fragments, then `done` (`{"latencyMs": 1234, "usage": {"inputTokens": 120, "outputTokens": 30, "totalTokens": 150}}`). `usage` is omitted when the provider does not report it. On failure an `error` event (error envelope shape) is followed by an empty `done`. Opaque provider reasoning continuation is never serialized. Client disconnect aborts the in-flight model call.
 
+## Compatibility
+
+The service and its clients are released together today, but the contract is kept stable for clients that are not (a future native app):
+
+- **Additive within `v1`.** New routes, optional request fields, response fields, `AgentEvent` variants, and enum values may appear in any release. Clients ignore fields and event types they do not know; the Web UI and TUI already treat unknown run events as no-ops.
+- **Breaking means `v2`.** Removing or renaming a field, changing its type or meaning, or making an optional request field required changes `apiVersion` (`GET /health`, `GET /v1/status`); `v1` routes then stay until clients move.
+- **Version check.** A client reads `apiVersion` to decide whether it can talk to the service at all, and `version` (the marifold release) for features added later in `v1`.
+- **Wire examples.** [`docs/api/agent-events.json`](api/agent-events.json) holds one example of every `AgentEvent` variant, generated from `packages/core/src/contract/AgentEventExamples.ts`. Adding a variant without an example fails to compile, and `tests/ApiContract.test.ts` fails until the file is regenerated (`UPDATE_API_CONTRACT=1 pnpm --filter @marifold/core exec vitest run tests/ApiContract.test.ts`).
+
 ## Route reference
 
 Responses are `{ "ok": true, ... }` unless noted. Bodies are JSON.
@@ -120,7 +129,7 @@ Responses are `{ "ok": true, ... }` unless noted. Bodies are JSON.
 | Route | Returns |
 |---|---|
 | `GET /health` | `{ ok, service: "marifold", apiVersion: "v1" }` — auth-exempt liveness probe |
-| `GET /v1/status` | config path, `default` settings, state paths |
+| `GET /v1/status` | `apiVersion`, `version` (the marifold release, e.g. `"0.101.0"`), config path, `default` settings, state paths |
 
 ### Config, providers, models
 
@@ -329,6 +338,8 @@ For a paired workspace, POST to the workspace-prefixed artifact access route on 
 An optional [experimental WebRTC download transport](workspaces.md#experimental-direct-file-downloads) can replace bridge file bytes while retaining authenticated bridge signaling. Remote download responses expose `X-Marifold-Transfer: webrtc` or `bridge`; bridge responses also expose `X-Marifold-Direct-Fallback: disabled` or `unavailable`. Local disk downloads and image variants do not use this experiment.
 
 #### The AgentEvent stream
+
+One example of every variant is checked in as [`docs/api/agent-events.json`](api/agent-events.json); clients in other languages should decode it in their tests (see [Compatibility](#compatibility)).
 
 Each SSE frame's `event:` name equals `data.type`. The union (verbatim from core — the same contract the TUI renders):
 

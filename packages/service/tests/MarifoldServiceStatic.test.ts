@@ -1,3 +1,4 @@
+import { MARIFOLD_VERSION } from '@marifold/core';
 import * as fs from 'fs';
 import * as path from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -147,6 +148,7 @@ describe('MarifoldService static hosting', () => {
         headers: { authorization: 'Bearer sekret' },
       });
       expect(withToken.statusCode).toBe(200);
+      expect(withToken.json()).toMatchObject({ apiVersion: 'v1', version: MARIFOLD_VERSION });
     } finally {
       await server.close();
     }

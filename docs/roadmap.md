@@ -21,15 +21,23 @@ Direction and milestone ladder. History lives in `DEVLOG.md` (newest-first); thi
 - **v0.63–v0.69 — documents, Skills, and agent-first**: a local document workspace with generated artifacts, protected skill management, the mobile Web workspace, model-driven and profile-backed SkillApps with an interactive builder, unified profile instructions, and ordinary messages always running as Agent tasks.
 - **v0.70–v0.77 — device-hosted workspaces**: a personal bridge relay connecting the owner's devices, cross-device delegation and downloads, built-in web research, image variants, and device-local full execution with requester-side sudo.
 - **v0.78–v0.81 — terminal and robustness**: the full-screen TUI, exclusive sessions with takeover between devices, security and workspace hardening, and enforced code standards (lint rules, a publish gate, and module splits).
+- **v0.83–v0.102 — the agent computer, permissions, and context**: sessions saved on send and agent memory in runs; the agent computer (a VM with an account per profile) and executor-only devices; global Deep; bridge on Cloudflare with device proxies; one-owner file permissions with Trash-backed writes, home-relative trusted folders, scoped Python and `write_folder` approvals, `/add-dir`; a context budget that follows the model with inline agent compaction; API-contract groundwork.
 
 ## Next
 
-- **Bridge setup**: simplify installation and configuration, reducing manual steps for bringing a personal bridge online and pairing devices.
-- **App expansion**: conditional visibility, repeaters, typed artifacts, richer design/canvas previews, controlled file export, `$app-creator`, and approval-aware effectful actions.
-- **Web UI backlog**: `/v1/events` push channel to replace 10s run polling and profile rename/delete UI.
-- **Workflow composition**: chain native profiles, Skills, Apps, models, and external-agent aliases into multi-step flows; the living direction and open questions are in [`workflow-plan.md`](workflow-plan.md).
-- **Apple clients** and alias profiles for Codex/Claude Code and other external agents.
+The Web UI is the primary client until SkillApps, Workflows, and Artifacts are complete there, so new product surface is built for one platform at a time. In order:
 
+- **Artifacts**: model-made live pages (HTML or small apps) rendered in a sandboxed panel beside the conversation, updated in place as new versions by later replies. Its safe rendering surface is shared with SkillApps (design previews, typed results, file export), and an artifact can later become a SkillApp.
+- **SkillApp expansion**: conditional visibility, repeaters, typed artifacts, richer design/canvas previews, controlled file export, `$app-creator`, and approval-aware effectful actions.
+- **Workflow composition**: chain native profiles, Skills, Apps, models, and external-agent aliases into multi-step flows; the living direction and open questions are in [`workflow-plan.md`](workflow-plan.md).
+- **Web UI backlog**: `/v1/events` push channel to replace 10s run polling and profile rename/delete UI.
+- **Bridge setup**: simplify installation and configuration, reducing manual steps for bringing a personal bridge online and pairing devices.
+- **Stable API contract** (ongoing, alongside the above): additive changes within `v1`, checked-in wire examples, and a reported service version (see Compatibility in [`service-api.md`](service-api.md)), so a later native client does not drift.
+- **Alias profiles** for Codex/Claude Code and other external agents.
+
+## Deferred
+
+- **Apple clients (macOS, iOS)**: postponed until the Web UI is complete, to avoid building for two platforms at once. They will be clients of the same service; before they start they need the `/v1/events` push channel, one-step bridge pairing for a phone, and generated Swift models from the API contract.
 ## Provider-hosted web search
 
 The native-search foundation is implemented in priest protocol 2.9: `provider_tools` is separate from caller-executed function tools, and OpenAI- style Responses maps `{type: "web_search"}` to its hosted tool. Marifold enables that path for OpenAI API, ChatGPT subscription, xAI/Grok, and verified Bailian/Alibaba model families, prefers it over the DuckDuckGo, Firecrawl, or Ollama Cloud `WebSearchTool` fallback, and retries once through that fallback when the provider rejects hosted search before producing output. Bailian's model-aware matrix covers both Responses tools and Chat Completions `enable_search`; unknown models remain on fallback unless explicitly overridden. It reports search as unavailable when neither path exists.

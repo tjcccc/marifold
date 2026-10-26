@@ -439,6 +439,7 @@ export {
 export { AgentComputer, upstreamFor } from './computer/AgentComputer';
 export type { AgentComputerInfo, AgentComputerSettings, AgentComputerStatus, DockerEnvironment } from './computer/AgentComputer';
 export { WorkspaceManager } from './workspace/WorkspaceManager';
+export { MARIFOLD_VERSION } from './workspace/MarifoldVersion';
 export {
   BRIDGE_DEPLOYMENT_FILE,
   BRIDGE_TOKEN_FILE,

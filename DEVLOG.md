@@ -2,6 +2,13 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-10-26 — v0.102.0 — Roadmap reset, API contract groundwork
+
+- **Direction.** The native macOS/iOS app is postponed: the Web UI stays the primary client until Artifacts, SkillApps, and Workflows are complete there, so product surface is built for one platform at a time. `docs/roadmap.md` now orders Next as Artifacts → SkillApp expansion → Workflows, with the Web backlog, bridge setup, the API contract, and alias profiles; Apple clients moved to Deferred with their prerequisites (`/v1/events` push, one-step phone pairing, generated Swift models).
+- **API contract groundwork.** `docs/service-api.md` gains a Compatibility section: additive within `v1`, unknown fields and event types ignored, breaking changes bump `apiVersion`. `packages/core/src/contract/AgentEventExamples.ts` holds one example per `AgentEvent` variant under a mapped type, so a new variant without an example fails to compile; `tests/ApiContract.test.ts` keeps `docs/api/agent-events.json` equal to it (`UPDATE_API_CONTRACT=1` regenerates). `GET /v1/status` reports `version` (the marifold release; `MARIFOLD_VERSION` is now exported from core). AGENTS.md and the projnavi AgentEvent flow carry the rule.
+- Not done yet: a machine-readable schema for request/response bodies (a JSON-schema generator would need its own TypeScript 5 compiler API, since the repo builds with TypeScript 7); left until a non-TypeScript client starts.
+- Validation: lint, typecheck, build; tests core 649, service 104 (status reports the version), TUI 150, Web 282, CLI 36.
+
 ## 2026-10-26 — v0.101.0 — `compact_at_percent`, agent-mode summaries, honest context gauge
 
 - **`compact_at_percent`** (`[default]` and per profile; default 90, 10–100, `0` = only `/compact`, 1–9 refused so a typo cannot disable it). Chat: priest's trigger is a fixed 80% of its budget, so `priestCompactionBudget` hands it `budget × percent / 80`. Priest is unchanged.

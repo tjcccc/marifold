@@ -5,6 +5,8 @@ import type { ProfileMode } from './types';
 export interface ServiceStatus {
   service: string;
   apiVersion: string;
+  /** The service's marifold release, e.g. `0.101.0`. Absent before v0.102. */
+  version?: string;
   configPath: string;
   foundConfig: boolean;
   default: { provider?: string; model?: string; profile: string };
