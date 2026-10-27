@@ -59,7 +59,7 @@ Rules:
 - App shell (`App.tsx`): status notices (`role="status"`) above one `<main>` that hosts the Agent, Projects, Apps, or Config screen; connection and workspace popovers float above it. Projects is the Agent screen with a project as the session owner: the same drill-down from a list to its sessions, a folder icon (`ProjectIcon`) where a profile shows its avatar, and `ProfileLabel` speaker headers on replies.
 - Desktop (900px and wider): a resizable primary sidebar (`ResizableSidebar`, 256px default, 200px minimum, at most 40% of the window, width persisted per sidebar, pointer and keyboard resizing) beside the working pane. Sidebars share `SidebarChrome` for the brand header, rows, and footer.
 - Mobile (899px and narrower): a separate touch layout, not compressed columns. It uses list-to-detail drill-down, a bottom tab bar, bottom sheets, safe-area padding, and visual-viewport sizing for the on-screen keyboard; see the README's "Mobile layout". The breakpoint is `(max-width: 899px)` in CSS and the shared `MOBILE_QUERY` in `lib/useMediaQuery.ts` (CSS media queries cannot read custom properties, so modules repeat the value).
-- Secondary breakpoints (560, 640, 720, 760, 360px) only adjust individual components.
+- Secondary breakpoints (560, 640, 720, 760, 360px) only adjust individual components; 1100px is where a project's Assets column stops sitting beside the conversation: narrower, it opens over it only when asked (it would cover the composer), and a press in the conversation closes it.
 
 ### Components and patterns
 
@@ -69,6 +69,14 @@ Rules:
 - **Icons** are inline SVG components or small inline `<svg>` elements. `MarigoldLogo` is the brand mark and is colored with `--brand-fill`.
 - **Focus:** inputs and controls show focus with a `--brand-fill` border or a 2px `--brand-fill` outline (`--brand-tint` for softer rings, `--danger` mixes on invalid fields).
 - **Feedback:** progress uses small spinners or shimmer, plus explicit text such as "Sending…" or "Opening workspace…". Errors use `--danger` text with the reason, not color alone.
+
+### Project assets
+
+- A project session's **Assets** toggle (`aria-pressed`, beside the Agent/Apps switch) shows a column of cards beside the conversation (`ProjectAssetsPanel`), 316px by default and resizable from 280px to 40% of the row by its left edge like the sidebar (`ResizableSidebar side="right"`, width kept in `marifold.assetsWidth`), with 14px padding on every side so the thread's scrollbar never touches the cards: rounded `--surface` cards with a `--separator` border and `--radius-lg`, a header button that collapses the card (`aria-expanded`, chevron) with a one-line summary on the right, and rows with a 26px type tile. Linked rows use a `--brand-tint` folder tile and `--font-mono` for `@device/path`.
+- Row actions (download, more) appear on hover or focus with a pointer and always on touch. Hover backgrounds sit under `@media (hover: hover)` so they do not stick after a tap.
+- Storage shows as a 4px bar in `--brand-fill`, turning `--warning` (with the summary text) at 90% of the limit, with a note on what still fits.
+- Uploads show an indeterminate sliding bar: fetch reports no upload progress.
+- Phones reuse the cards with 44px targets: in a bottom sheet over the session (opened from the navigation bar's folder button) and, Assets only, under the project header in the session list.
 
 ### Motion
 

@@ -1,5 +1,5 @@
 import type { ApiClient } from './client';
-import type { PublicConfig } from './types';
+import type { PublicConfig, WorkspaceDevice } from './types';
 import type { ProfileMode } from './types';
 
 export interface ServiceStatus {
@@ -169,4 +169,32 @@ export async function setDefaultModel(client: ApiClient, provider: string, model
 export async function setConfigValue(client: ApiClient, key: string, value: string): Promise<PublicConfig> {
   const body = await client.request<{ config: PublicConfig }>('PATCH', '/v1/config', { key, value });
   return body.config;
+}
+
+export interface ExecutionDevices {
+  devices: Array<WorkspaceDevice & { host?: boolean }>;
+  /** The device asking; absent without a workspace. */
+  deviceId?: string;
+}
+
+/** The active workspace's devices, online or not. */
+export async function listExecutionDevices(client: ApiClient): Promise<ExecutionDevices> {
+  const { devices, deviceId } = await client.request<ExecutionDevices>('GET', '/v1/execution-devices');
+  return { devices, ...(deviceId ? { deviceId } : {}) };
+}
+
+/** The serving device's own execution mode. Only `marifold execution mode
+ * full` on that device turns full access on; the Web UI may turn it off. */
+export interface DeviceExecutionView {
+  mode: 'scoped' | 'full';
+  /** The device's host name, as workspaces list it. */
+  device: string;
+}
+
+export async function getDeviceExecution(client: ApiClient): Promise<DeviceExecutionView> {
+  return client.request('GET', '/v1/device-execution');
+}
+
+export async function turnOffFullAccess(client: ApiClient): Promise<DeviceExecutionView> {
+  return client.request('PUT', '/v1/device-execution', { mode: 'scoped' });
 }

@@ -8,6 +8,7 @@ import type { Route } from '../../src/lib/route';
 import { AddProviderSheet } from '../../src/components/AddProviderSheet';
 import { CreateProfileSheet } from '../../src/components/CreateProfileSheet';
 import { ProfileSettingsPage } from '../../src/screens/config/ProfileSettingsPage';
+import { DevicePage } from '../../src/screens/config/DevicePage';
 import type { ProfileSettingsPageProps } from '../../src/screens/config/ProfileSettingsPage';
 
 afterEach(() => {
@@ -594,6 +595,7 @@ describe('ConfigScreen provider creation', () => {
     render(
       <ConfigScreen
         client={client as never}
+        localClient={client as never}
         route={{ view: 'config', section: 'providers', item: 'ollama' }}
         navigate={() => {}}
         onUnauthorized={() => {}}
@@ -661,6 +663,7 @@ describe('ConfigScreen mobile navigation', () => {
       return (
         <ConfigScreen
           client={client as never}
+          localClient={client as never}
           route={route}
           navigate={next => {
             if (next.view === 'config') { setRoute(next); }
@@ -787,5 +790,21 @@ describe('ServicePage', () => {
     fireEvent.change(webDir, { target: { value: '/srv/web2' } });
     fireEvent.click(screen.getByText('Save'));
     expect(onSave).toHaveBeenCalledWith('web_dir', '/srv/web2');
+  });
+});
+
+describe('DevicePage', () => {
+  it('shows how to turn full access on locally, and turns it off', async () => {
+    let mode = 'full';
+    const request = vi.fn(async (method: string, _path: string, body?: { mode: string }) => {
+      if (method === 'PUT') { mode = body!.mode; }
+      return { mode, device: 'studio' };
+    });
+    render(<DevicePage client={{ request } as never} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Turn off' }));
+    expect(await screen.findByText('Off')).toBeTruthy();
+    expect(request).toHaveBeenCalledWith('PUT', '/v1/device-execution', { mode: 'scoped' });
+    expect(screen.getByText('marifold execution mode full')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Turn off' })).toBeNull();
   });
 });

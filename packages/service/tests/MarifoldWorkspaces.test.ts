@@ -140,9 +140,15 @@ describe('device-hosted workspaces', () => {
     const response = await p.guest.inject({ method: 'GET', url: `${p.prefix}/v1/execution-devices` });
     expect(response.statusCode, response.body).toBe(200);
     expect(response.json().devices.map((d: { id: string }) => d.id)).toEqual(expect.arrayContaining([p.hostDevice, p.device]));
+    // The device asking: the bridge's sender, else the host itself.
+    expect(response.json().deviceId).toBe(p.device);
+    expect((await p.host.inject({ method: 'GET', url: '/v1/execution-devices' })).json().deviceId).toBe(p.hostDevice);
     expect(workspaceApiPath('POST', '/v1/execution-devices')).toBe(false);
     expect(workspaceApiPath('GET', '/v1/folders?path=~%2Fdocs')).toBe(true);
     expect(workspaceApiPath('POST', '/v1/folders')).toBe(false);
+    // Another device never reads or changes this device's full access.
+    expect(workspaceApiPath('GET', '/v1/device-execution')).toBe(false);
+    expect(workspaceApiPath('PUT', '/v1/device-execution')).toBe(false);
   });
   it('lets another device give profile access to the host computer but nothing else', async () => {
     const p = await paired();
@@ -753,6 +759,7 @@ describe('device-hosted workspaces', () => {
     expect(again.json()).toMatchObject({ newVersion: false, asset: { id: sprites.id, version: 1 } });
     const copy = await p.guest.inject({ method: 'POST', url: `${p.prefix}/v1/projects/${project.id}/assets/from-run`, payload: { runId: run.id, artifactId: artifact.id, name: 'sprites copy.csv' } });
     expect(copy.statusCode).toBe(201);
+    expect(copy.json().asset).toMatchObject({ savedBy: 'default', runIds: [run.id] });
     expect((await p.guest.inject(`${p.prefix}/v1/projects/${project.id}/assets`)).json().usage.usedBytes).toBe(33);
     const removed = await p.guest.inject({ method: 'DELETE', url: `${p.prefix}/v1/projects/${project.id}/assets/${sprites.id}` });
     expect(removed.json().assets.map((a: { name: string }) => a.name)).toEqual(['brief.md', 'sprites copy.csv']);

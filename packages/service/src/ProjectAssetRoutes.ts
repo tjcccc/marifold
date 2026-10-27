@@ -9,6 +9,8 @@ import { remoteExecution } from './WorkspaceRoutes';
 /** A run output as "Add to assets" reads it: from this device, or over the
  * bridge from the device that ran it. */
 export interface RunOutput {
+  /** The profile whose run made it. */
+  profile: string;
   name: string;
   mediaType: string;
   size: number;
@@ -18,11 +20,13 @@ export interface RunOutput {
 /** Run outputs by id, with the same provenance and containment as downloads. */
 export function runOutputs(runs: RunRegistry, manager: WorkspaceManager): (runId: string, artifactId: string) => RunOutput {
   return (runId, artifactId) => {
-    const artifact = runs.require(runId).artifacts?.find(candidate => candidate.id === artifactId);
+    const run = runs.require(runId);
+    const artifact = run.artifacts?.find(candidate => candidate.id === artifactId);
     if (!artifact) { throw MarifoldError.artifactNotFound(runId, artifactId); }
     const origin = runs.artifactOrigin(runId, artifactId);
     const execution = remoteExecution(manager, origin.run.execution);
     return {
+      profile: run.profile,
       name: artifact.name,
       mediaType: artifact.mediaType,
       size: artifact.size,
@@ -61,8 +65,8 @@ export function registerProjectAssetRoutes(server: FastifyInstance, runtime: Mar
   // Links carry their device's name and whether it can be reached now.
   const located = (asset: ProjectAsset, devices: LinkDevice[]) => {
     if (asset.kind !== 'linked') { return asset; }
-    const { deviceName, available } = linkLocation(asset, { devices, delegate: false });
-    return { ...asset, ...(deviceName ? { deviceName } : {}), available };
+    const { deviceName, available, unavailable } = linkLocation(asset, { devices, delegate: false });
+    return { ...asset, ...(deviceName ? { deviceName } : {}), available, ...(unavailable ? { unavailable } : {}) };
   };
   const listed = (projectId: string, headers: Record<string, string | string[] | undefined>) => {
     const { devices } = origin(headers);
@@ -115,6 +119,7 @@ export function registerProjectAssetRoutes(server: FastifyInstance, runtime: Mar
       name: body.name === undefined ? path.posix.basename(output.name) : requiredString(body.name, 'name'),
       data,
       mediaType: output.mediaType,
+      savedBy: output.profile,
       runId,
       ...optionalStringField('description', body.description),
     });

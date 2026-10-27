@@ -1,0 +1,46 @@
+.intro {
+  margin-top: 4px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-2);
+}
+
+.pathRow {
+  display: flex;
+  gap: 8px;
+}
+
+.path {
+  flex: 1;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+}
+
+.pathRow > button {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.pair {
+  display: flex;
+  gap: 10px;
+}
+
+.pair > * {
+  flex: 1;
+  min-width: 0;
+}
+
+.pair > .wide {
+  flex: 1.4;
+}
+
+@media (max-width: 560px) {
+  .pair {
+    flex-direction: column;
+  }
+
+  .path {
+    font-size: 16px;
+  }
+}

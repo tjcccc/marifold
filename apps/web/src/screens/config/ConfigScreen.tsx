@@ -52,6 +52,7 @@ import { ProfileSettingsPage } from './ProfileSettingsPage';
 import { ProvidersPage } from './ProvidersPage';
 import { ServicePage } from './ServicePage';
 import { AgentComputerPage } from './AgentComputerPage';
+import { DevicePage } from './DevicePage';
 import { WebSearchPage } from './WebSearchPage';
 import styles from './ConfigScreen.module.css';
 
@@ -63,6 +64,7 @@ const SECTIONS: Array<{ id: ConfigSection; label: string }> = [
   { id: 'web-search', label: 'Web search' },
   { id: 'appearance', label: 'Appearance' },
   { id: 'service', label: 'Service' },
+  { id: 'device', label: 'This device' },
   { id: 'agent-computer', label: 'Agent computer' },
 ];
 
@@ -70,6 +72,8 @@ type MobileConfigLevel = 'sections' | 'items' | 'detail';
 
 export interface ConfigScreenProps {
   client: ApiClient;
+  /** The service serving this page, for settings of this device only. */
+  localClient: ApiClient;
   route: Extract<Route, { view: 'config' }>;
   navigate: (route: Route) => void;
   onUnauthorized: () => void;
@@ -89,6 +93,7 @@ export interface ConfigScreenProps {
  * fresh state replaces local state (no optimistic writes). */
 export function ConfigScreen({
   client,
+  localClient,
   route,
   navigate,
   onUnauthorized,
@@ -712,6 +717,8 @@ export function ConfigScreen({
             onSave={(key, value) => void writeConfig(`service.${key}`, value)}
           />
         ) : null}
+
+        {section === 'device' ? <DevicePage client={localClient} /> : null}
 
         {section === 'agent-computer' ? <AgentComputerPage client={client} /> : null}
 

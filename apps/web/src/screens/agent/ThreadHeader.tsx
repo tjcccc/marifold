@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import type { WorkspaceView } from '../../components/WorkspaceTabs';
 import { WorkspaceToolbar } from '../../components/WorkspaceToolbar';
 import styles from './ThreadHeader.module.css';
@@ -8,6 +9,8 @@ export interface ThreadHeaderProps {
   onToggleSidebars: () => void;
   view: WorkspaceView;
   onViewChange: (view: WorkspaceView) => void;
+  /** Beside the Agent/Apps switch, e.g. the project's Assets toggle. */
+  trailing?: ReactNode;
 }
 
 /** Right-workspace toolbar: sidebar toggle, location, and Agent/Apps switch. */
@@ -17,11 +20,13 @@ export function ThreadHeader({
   onToggleSidebars,
   view,
   onViewChange,
+  trailing,
 }: ThreadHeaderProps) {
   return (
     <WorkspaceToolbar
       view={view}
       onViewChange={onViewChange}
+      trailing={trailing}
       leading={(
         <>
           <button

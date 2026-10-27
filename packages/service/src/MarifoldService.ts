@@ -26,6 +26,7 @@ import { normalizeError } from './ServiceErrors';
 import { registerSessionRoutes } from './SessionRoutes';
 import { registerSkillAppRoutes } from './SkillAppRoutes';
 import { registerAgentComputerRoutes } from './AgentComputerRoutes';
+import { registerDeviceExecutionRoutes } from './DeviceExecutionRoutes';
 import { registerTaskRoutes } from './TaskRoutes';
 import { ArtifactTickets, artifactHeaders } from './ArtifactTickets';
 import { registerRunRoutes } from './RunRoutes';
@@ -118,7 +119,9 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
 
   const artifactTransfers = new ArtifactWebRtc();
   server.addHook('onClose', async () => artifactTransfers.close());
-  const workspaceExecutor = new WorkspaceExecutor(() => runtime.resolveAgentConfigForProfile(), path.join(workspaceManager.store.directory, 'runs'), [options.loadedConfig.configPath, ...Object.values(options.loadedConfig.config.paths).filter((value): value is string => typeof value === 'string'), path.dirname(workspaceManager.store.directory)], artifactTransfers, new DeviceExecution(options.loadedConfig.configPath), workspaceId => workspaceManager.store.get(workspaceId).certificate.membership.access === 'executor' ? undefined : runtime.remoteStateAccess());
+  const deviceExecution = new DeviceExecution(options.loadedConfig.configPath);
+  registerDeviceExecutionRoutes(server, deviceExecution);
+  const workspaceExecutor = new WorkspaceExecutor(() => runtime.resolveAgentConfigForProfile(), path.join(workspaceManager.store.directory, 'runs'), [options.loadedConfig.configPath, ...Object.values(options.loadedConfig.config.paths).filter((value): value is string => typeof value === 'string'), path.dirname(workspaceManager.store.directory)], artifactTransfers, deviceExecution, workspaceId => workspaceManager.store.get(workspaceId).certificate.membership.access === 'executor' ? undefined : runtime.remoteStateAccess());
   const workspaceRuns = new WorkspaceRuns(runtime, workspaceManager);
   workspaceManager.reservedNames = () => runtime.listProfiles().map(profile => profile.name);
   const workspaceContext = new WorkspaceRequestContext();
@@ -164,9 +167,13 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
   };
   const hasActiveSessionRequest = (sessionId: string): boolean =>
     (activeSessionRequests.get(sessionId) ?? 0) > 0;
-  server.get('/v1/execution-devices', async request => ({
-    ok: true, devices: workspaceRuns.devices(workspaceContext.resolve(request.headers)),
-  }));
+  server.get('/v1/execution-devices', async request => {
+    const origin = workspaceContext.resolve(request.headers);
+    const devices = workspaceRuns.devices(origin);
+    // The device asking: the bridge's sender, else this service's own device.
+    const deviceId = origin?.senderDeviceId ?? devices.find(device => device.host)?.id;
+    return { ok: true, devices, ...(deviceId ? { deviceId } : {}) };
+  });
   registerRunRoutes(server, runRegistry, {
     tickets: artifactTickets,
     preview: async (runId, artifactId, variant) => {

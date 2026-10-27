@@ -12,28 +12,35 @@ export interface ResizableSidebarProps {
   storageKey?: string;
   defaultWidth?: number;
   ariaLabel?: string;
+  /** The edge the sidebar sits on; its handle is on the opposite side. */
+  side?: 'left' | 'right';
+  minWidth?: number;
 }
 
-/** Persistent desktop primary-sidebar width with pointer and keyboard resizing. */
+/** Persistent desktop sidebar width with pointer and keyboard resizing. */
 export function ResizableSidebar({
   children,
   storageKey = DEFAULT_STORAGE_KEY,
   defaultWidth = DEFAULT_SIDEBAR_WIDTH,
   ariaLabel = 'Resize sidebar',
+  side = 'left',
+  minWidth = MIN_SIDEBAR_WIDTH,
 }: ResizableSidebarProps) {
   const frameRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ x: number; width: number } | undefined>(undefined);
-  const [width, setWidth] = useState(() => loadSidebarWidth(storageKey, defaultWidth));
+  const [width, setWidth] = useState(() => loadSidebarWidth(storageKey, defaultWidth, minWidth));
+  // A right-hand sidebar grows as its left-edge handle moves left.
+  const direction = side === 'right' ? -1 : 1;
   const [dragging, setDragging] = useState(false);
 
   function maximumWidth(): number {
     const measuredWidth = frameRef.current?.parentElement?.getBoundingClientRect().width ?? 0;
     const workspaceWidth = measuredWidth > 0 ? measuredWidth : window.innerWidth;
-    return Math.max(MIN_SIDEBAR_WIDTH, Math.floor(workspaceWidth * 0.4));
+    return Math.max(minWidth, Math.floor(workspaceWidth * 0.4));
   }
 
   function updateWidth(next: number, persist: boolean): void {
-    const clamped = Math.min(maximumWidth(), Math.max(MIN_SIDEBAR_WIDTH, Math.round(next)));
+    const clamped = Math.min(maximumWidth(), Math.max(minWidth, Math.round(next)));
     setWidth(clamped);
     if (!persist) { return; }
     try {
@@ -51,7 +58,7 @@ export function ResizableSidebar({
 
   function onPointerMove(event: PointerEvent<HTMLDivElement>): void {
     if (!dragRef.current) { return; }
-    updateWidth(dragRef.current.width + event.clientX - dragRef.current.x, false);
+    updateWidth(dragRef.current.width + direction * (event.clientX - dragRef.current.x), false);
   }
 
   function finishResize(event: PointerEvent<HTMLDivElement>): void {
@@ -66,9 +73,9 @@ export function ResizableSidebar({
 
   function onKeyDown(event: KeyboardEvent<HTMLDivElement>): void {
     let next: number | undefined;
-    if (event.key === 'ArrowLeft') { next = width - KEYBOARD_STEP; }
-    else if (event.key === 'ArrowRight') { next = width + KEYBOARD_STEP; }
-    else if (event.key === 'Home') { next = MIN_SIDEBAR_WIDTH; }
+    if (event.key === 'ArrowLeft') { next = width - direction * KEYBOARD_STEP; }
+    else if (event.key === 'ArrowRight') { next = width + direction * KEYBOARD_STEP; }
+    else if (event.key === 'Home') { next = minWidth; }
     else if (event.key === 'End') { next = maximumWidth(); }
     if (next === undefined) { return; }
     event.preventDefault();
@@ -76,14 +83,14 @@ export function ResizableSidebar({
   }
 
   return (
-    <div ref={frameRef} className={styles.frame} style={{ width }}>
+    <div ref={frameRef} className={side === 'right' ? styles.frameRight : styles.frame} style={{ width, minWidth }}>
       <div className={styles.content}>{children}</div>
       <div
-        className={`${styles.handle}${dragging ? ` ${styles.handleActive}` : ''}`}
+        className={`${side === 'right' ? styles.handleRight : styles.handle}${dragging ? ` ${styles.handleActive}` : ''}`}
         role="separator"
         aria-label={ariaLabel}
         aria-orientation="vertical"
-        aria-valuemin={MIN_SIDEBAR_WIDTH}
+        aria-valuemin={minWidth}
         aria-valuemax={maximumWidth()}
         aria-valuenow={width}
         tabIndex={0}
@@ -98,11 +105,11 @@ export function ResizableSidebar({
   );
 }
 
-function loadSidebarWidth(storageKey: string, defaultWidth: number): number {
+function loadSidebarWidth(storageKey: string, defaultWidth: number, minWidth: number): number {
   try {
     const stored = Number(window.localStorage.getItem(storageKey));
-    if (Number.isFinite(stored) && stored >= MIN_SIDEBAR_WIDTH) {
-      const maximum = Math.max(MIN_SIDEBAR_WIDTH, Math.floor(window.innerWidth * 0.4));
+    if (Number.isFinite(stored) && stored >= minWidth) {
+      const maximum = Math.max(minWidth, Math.floor(window.innerWidth * 0.4));
       return Math.min(maximum, stored);
     }
   } catch {

@@ -40,6 +40,8 @@ export interface StoredProjectAsset extends ProjectAssetBase {
   sha256: string;
   /** The profile that saved the latest version; absent when the user did. */
   savedBy?: string;
+  /** Runs whose outputs were saved as a version, so clients can mark them as kept. */
+  runIds?: string[];
 }
 
 export interface LinkedProjectAsset extends ProjectAssetBase {
@@ -346,7 +348,8 @@ export function formatBytes(bytes: number): string {
 }
 
 /** Each asset with its latest version (none for a linked one). */
-const LATEST_SELECT = `SELECT a.*, v.version, v.sha256, v.size, v.media_type, v.saved_by FROM ${PROJECT_ASSETS_TABLE} a
+const LATEST_SELECT = `SELECT a.*, v.version, v.sha256, v.size, v.media_type, v.saved_by,
+  (SELECT group_concat(DISTINCT run_id) FROM ${PROJECT_ASSET_VERSIONS_TABLE} WHERE asset_id = a.id) AS run_ids FROM ${PROJECT_ASSETS_TABLE} a
   LEFT JOIN ${PROJECT_ASSET_VERSIONS_TABLE} v ON v.asset_id = a.id AND v.version = (SELECT MAX(version) FROM ${PROJECT_ASSET_VERSIONS_TABLE} WHERE asset_id = a.id)`;
 
 interface AssetRow {
@@ -364,6 +367,7 @@ interface AssetRow {
   size: number;
   media_type: string;
   saved_by: string | null;
+  run_ids: string | null;
 }
 
 interface VersionRow {
@@ -396,6 +400,7 @@ function toAsset(row: AssetRow): ProjectAsset {
     mediaType: row.media_type,
     sha256: row.sha256,
     ...(row.saved_by ? { savedBy: row.saved_by } : {}),
+    ...(row.run_ids ? { runIds: row.run_ids.split(',') } : {}),
   };
 }
 

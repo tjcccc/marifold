@@ -143,6 +143,9 @@ export function App() {
     [currentConnection.baseUrl, currentConnection.token, currentConnection.workspaceId],
   );
 
+  const localServer = connections.servers.find(c => c.id === THIS_SERVER_ID)!;
+  const localClient = useMemo(() => createApiClient(apiSettings(localServer)), [localServer.baseUrl, localServer.token]);
+
   useEffect(() => {
     let cancelled = false;
     const local = connections.servers.find(c => c.id === THIS_SERVER_ID)!;
@@ -248,6 +251,7 @@ export function App() {
         {openingWorkspace ? <div role="status" className={styles.workspaceNotice}>Opening workspace…</div> : route.view === 'config' ? (
           <ConfigScreen
             client={client}
+            localClient={localClient}
             route={route}
             navigate={navigate}
             onUnauthorized={onUnauthorized}

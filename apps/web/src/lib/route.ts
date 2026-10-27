@@ -1,7 +1,7 @@
 /** Small dependency-free route model for the desktop Web UI. Pure path
  * parsing/formatting lives here; browser History API glue lives in screens. */
 
-export type ConfigSection = 'profiles' | 'providers' | 'models' | 'agent' | 'web-search' | 'appearance' | 'service' | 'agent-computer';
+export type ConfigSection = 'profiles' | 'providers' | 'models' | 'agent' | 'web-search' | 'appearance' | 'service' | 'device' | 'agent-computer';
 
 export type Route =
   | { view: 'agent'; profile?: string; session?: string }
@@ -9,7 +9,7 @@ export type Route =
   | { view: 'apps'; app?: string }
   | { view: 'config'; section: ConfigSection; item?: string };
 
-const CONFIG_SECTIONS: ConfigSection[] = ['profiles', 'providers', 'models', 'agent', 'web-search', 'appearance', 'service', 'agent-computer'];
+const CONFIG_SECTIONS: ConfigSection[] = ['profiles', 'providers', 'models', 'agent', 'web-search', 'appearance', 'service', 'device', 'agent-computer'];
 const LEGACY_HASH_ROUTE = /^#\/(?:agent|apps|config)(?:\/|$)/;
 
 /** The two conversation views: a profile's sessions, or a project's. */

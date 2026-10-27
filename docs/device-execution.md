@@ -11,11 +11,11 @@ marifold execution mode
 marifold execution mode full
 ```
 
-For a nondefault config, put `--config /absolute/path/config.toml` before `execution`. The setting is per device/config, outside shared configuration and HTTP configuration APIs. A service restart is not required. Guest executor opt-in is still required for delegation.
+For a nondefault config, put `--config /absolute/path/config.toml` before `execution`. The setting is per device/config, outside shared configuration and HTTP configuration APIs. A service restart is not required. **Settings › This device** in the Web UI shows the mode of the device serving the page and the command to run; it can turn full access off but never on (`GET`/`PUT /v1/device-execution`, which the workspace bridge does not forward), so nothing that reaches the service can grant itself account-level commands. Guest executor opt-in is still required for delegation.
 
 Ask Home: “On my MacBook Pro, check the execution mode, then use full access to run `id -un` and `uname -s`. Retrieve the job result.” Approve the command in the requesting conversation. Test this harmless operation before a network restart. The result must identify the MacBook Pro's OS account and platform.
 
-To disable future full-access commands:
+To disable future full-access commands, use **Turn off** in Settings › This device, or:
 
 ```sh
 marifold execution mode scoped
@@ -25,7 +25,7 @@ Revocation does not interrupt already-started jobs. Cancelling a conversation or
 
 ## Capability and approval
 
-- `shell_exec` defaults to `access: "scoped"`: the macOS sandbox runs without a prompt (unless the profile sets `shell = "deny"`), reads the home except credential stores, browser profiles and `~/.marifold`, has no network, and writes only the working folder, trusted folders and the run's private directories; a profile that trusts `~` (the `default` profile does by default) may also create and edit files in home, never delete or rename them. A failed scoped command is reported, not retried with full access.
+- `shell_exec` defaults to `access: "scoped"`: the macOS sandbox runs without a prompt (unless the profile sets `shell = "deny"`), reads the home except credential stores, browser profiles and `~/.marifold`, has no network, cannot send Apple Events (so `osascript` cannot control applications), and writes only the working folder, trusted folders and the run's private directories; a profile that trusts `~` (the `default` profile does by default) may also create and edit files in home, never delete or rename them. A failed scoped command is reported, not retried with full access. When `osascript` fails in the sandbox (macOS reports the application as not running, `-600`), the result says that controlling an application needs full access and, if full access is off, that the owner can enable it with `marifold execution mode full`.
 - `shell_exec` with `access: "full"` runs `/bin/sh` as the Marifold OS account on macOS or Linux. It inherits that process's environment and can access its files, network, processes, applications, and credentials. Full access is a trust grant for that account; scoped protections of Marifold state and attachments do not constrain an approved full-access command.
 - Full-access calls require individual approval, even when shell policy is `allow`. They cannot persist an “Always” or “Trust” grant, and “Allow folder for this run” never covers them (it applies only to file reads and writes). Shell policy `deny` still blocks them, and unattended runs without an approval handler fail closed.
 - Full access does not grant root, macOS Automation, Accessibility, or Full Disk Access permissions. Configure required OS permissions on the execution device. Marifold does not collect administrator passwords or install sudo privileges.

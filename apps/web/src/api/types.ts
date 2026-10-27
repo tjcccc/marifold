@@ -155,3 +155,14 @@ export interface PublicConfig {
 export type { WorkspaceSummary, WorkspaceDevice } from '@marifold/core';
 export type { AgentComputerStatus } from '@marifold/core';
 export type { HomeFolderListing } from '@marifold/core';
+export type { LinkedProjectAsset, ProjectAssetUsage, ProjectAssetVersion, StoredProjectAsset } from '@marifold/core';
+import type { LinkedProjectAsset, LinkLocation, ProjectAssetUsage, StoredProjectAsset } from '@marifold/core';
+
+/** A project asset as the service lists it: a link also carries its
+ * device's current name and whether, or why not, that device can be reached. */
+export type ListedProjectAsset = StoredProjectAsset | (LinkedProjectAsset & Pick<LinkLocation, 'deviceName' | 'available' | 'unavailable'>);
+
+export interface ProjectAssetList {
+  assets: ListedProjectAsset[];
+  usage: ProjectAssetUsage;
+}

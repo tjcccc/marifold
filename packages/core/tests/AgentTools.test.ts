@@ -13,6 +13,7 @@ import { ReadAttachmentTool } from '../src/agent/tools/ReadAttachmentTool';
 import { ReadFileTool } from '../src/agent/tools/ReadFileTool';
 import { SearchAttachmentTool } from '../src/agent/tools/SearchAttachmentTool';
 import { ShellExecTool } from '../src/agent/tools/ShellExecTool';
+import type { DeviceExecution } from '../src/agent/DeviceExecution';
 import { ReadWebPageTool } from '../src/agent/tools/ReadWebPageTool';
 import { WebSearchTool } from '../src/agent/tools/WebSearchTool';
 import { isInsideWorkspace, WriteFileTool } from '../src/agent/tools/WriteFileTool';
@@ -864,6 +865,19 @@ describe('ShellExecTool', () => {
     expect(fs.existsSync(outside)).toBe(false);
   });
 
+  it.skipIf(process.platform !== 'darwin')('explains that scoped commands cannot control applications, and how full access helps', async () => {
+    const command = { command: `osascript -e 'tell application "Finder" to count windows'` };
+    const device = (mode: string) => ({ mode: () => mode }) as unknown as DeviceExecution;
+    const off = await new ShellExecTool(device('scoped')).execute(command, scopedContext(tempDir()));
+    expect(off.isError).toBe(true);
+    expect(off.content).toContain('(-600)');
+    expect(off.content).toContain('cannot send Apple Events');
+    expect(off.content).toContain('marifold execution mode full');
+    const on = await new ShellExecTool(device('full')).execute(command, scopedContext(tempDir()));
+    expect(on.content).toContain('retry it with that');
+    expect(on.content).not.toContain('write_folder');
+  });
+
   it.skipIf(process.platform !== 'darwin')('reads home like the file tools but never sensitive roots, symlinks into them, or the network', async () => {
     const home = tempDir();
     const dir = path.join(home, 'workspace');
@@ -964,6 +978,10 @@ describe('ShellExecTool', () => {
     });
     // Already writable: no prompt.
     expect(tool.assessRisk({ command: 'true', write_folder: dir }, ctx)).toEqual({ escalate: false, routine: true });
+    // Options a model fills in empty mean "left out", not an invalid folder.
+    expect(tool.assessRisk({ command: 'true', access: '', write_folder: '' }, ctx)).toEqual({ escalate: false, routine: true });
+    expect(tool.assessRisk({ command: 'true', access: null, write_folder: null }, ctx)).toEqual({ escalate: false, routine: true });
+    expect(tool.assessRisk({ command: 'true', write_folder: 3 }, ctx)).toMatchObject({ blocked: true });
     for (const folder of ['~', '~/.ssh', '~/Documents/missing', '/tmp']) {
       expect(tool.assessRisk({ command: 'true', write_folder: folder }, ctx), folder).toMatchObject({ blocked: true });
     }

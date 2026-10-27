@@ -64,6 +64,8 @@ export interface LinkLocation {
   deviceName?: string;
   /** The device can be reached: online with execution enabled (always for the host). */
   available: boolean;
+  /** Why it cannot be reached. */
+  unavailable?: 'removed' | 'offline' | 'execution-off';
   /** For the model: how this run reads it, or why it cannot. */
   note: string;
 }
@@ -71,8 +73,9 @@ export interface LinkLocation {
 export function linkLocation(link: LinkedProjectAsset, run: LinkRun): LinkLocation {
   const device = link.deviceId === undefined ? run.devices.find(candidate => candidate.host) : run.devices.find(candidate => candidate.id === link.deviceId);
   const label = device ? `@${/\s/.test(device.name) ? `"${device.name}"` : device.name}/${link.path.replace(/^\//, '')}` : link.path;
-  const available = link.deviceId === undefined || Boolean(device?.online && device.executor);
-  const base = { label, ...(device ? { deviceName: device.name } : {}), available };
+  const unavailable = link.deviceId === undefined ? undefined
+    : !device ? 'removed' as const : !device.online ? 'offline' as const : !device.executor ? 'execution-off' as const : undefined;
+  const base = { label, ...(device ? { deviceName: device.name } : {}), available: unavailable === undefined, ...(unavailable ? { unavailable } : {}) };
   if (link.deviceId === run.deviceId) { return { ...base, note: `on this run's device; read it with your file tools at ${link.path}` }; }
   if (!device) { return { ...base, note: 'its device is no longer in this workspace' }; }
   if (!device.online) { return { ...base, note: `${device.name} is offline` }; }

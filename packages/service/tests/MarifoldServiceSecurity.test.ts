@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
+import { DeviceExecution } from '@marifold/core';
 import { createMarifoldService, startMarifoldService } from '../src';
 import { cleanupTempDirs, fixtureLoadedConfig, tempDir } from './helpers';
 
@@ -7,6 +8,26 @@ afterEach(() => {
 });
 
 describe('MarifoldService security', () => {
+  it('shows the device execution mode and turns full access off, never on', async () => {
+    const loadedConfig = fixtureLoadedConfig(tempDir());
+    const server = createMarifoldService({ loadedConfig, scheduler: false });
+    try {
+      const device = new DeviceExecution(loadedConfig.configPath);
+      expect((await server.inject({ method: 'GET', url: '/v1/device-execution' })).json()).toMatchObject({ mode: 'scoped' });
+      const refused = await server.inject({ method: 'PUT', url: '/v1/device-execution', payload: { mode: 'full' } });
+      expect(refused.statusCode).toBe(400);
+      expect(refused.json().error.message).toContain('marifold execution mode full');
+      expect(device.mode()).toBe('scoped');
+      device.setMode('full');
+      expect((await server.inject({ method: 'GET', url: '/v1/device-execution' })).json().mode).toBe('full');
+      const off = await server.inject({ method: 'PUT', url: '/v1/device-execution', payload: { mode: 'scoped' } });
+      expect(off.json()).toMatchObject({ mode: 'scoped' });
+      expect(device.mode()).toBe('scoped');
+    } finally {
+      await server.close();
+    }
+  });
+
   it('listens on the wildcard host in tokenless private mode', async () => {
     const result = await startMarifoldService({
       loadedConfig: fixtureLoadedConfig(tempDir()),

@@ -69,6 +69,10 @@
   font-weight: 650;
 }
 
+.headerAccessory {
+  padding: 0 12px 4px;
+}
+
 .header {
   display: flex;
   align-items: center;

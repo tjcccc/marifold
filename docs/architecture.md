@@ -49,7 +49,7 @@ Enforcement: package manifests (pnpm resolves only declared dependencies), Biome
 - **Model, tool, and remote output**: treated as untrusted. CLI output strips terminal control sequences, the TUI drops device-control strings from every frame, and the Web UI renders Markdown without raw HTML.
 - **SkillApp templates** (`packages/core/src/app`): statically compiled; read permissions are declared, resolved to real paths, and refused for Marifold private state and sensitive account data. A selected profile Skill's `reads:` files pass the same `HostReadGrants` check before joining a SkillApp run's exact-file grants.
 - **Agent computer** (`packages/core/src/computer`): one Docker container on an internal network, driven with `docker exec` argument arrays; no bind mounts (only a named `/home` volume), socket, privilege, or Marifold credentials inside. Its only exit is `EgressProxy`, which refuses local and private destinations. Files enter only through `computer_put`, which follows the device's read approvals and refuses credential stores and Marifold state. See `docs/agent-computer.md`.
-- **Device execution** (`DeviceExecution`, `DeviceExecutionWorker`): full access is a local opt-in per device; `sudo` passwords travel encrypted for one use and are never stored; durable jobs are scoped to the workspace that started them.
+- **Device execution** (`DeviceExecution`, `DeviceExecutionWorker`): full access is a local opt-in per device (the service shows it and may turn it off, never on, and the bridge forwards neither route); `sudo` passwords travel encrypted for one use and are never stored; durable jobs are scoped to the workspace that started them.
 
 ## Core subsystems
 

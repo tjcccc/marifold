@@ -8,6 +8,16 @@
   color: var(--text-2);
 }
 
+.avatar,
+.avatarInactive {
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.avatarInactive {
+  filter: grayscale(1);
+}
+
 .name {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -20,13 +30,18 @@
   flex-shrink: 0;
 }
 
-.stackItem {
+.stackItem,
+.stackItemInactive {
   display: inline-flex;
   border-radius: 50%;
   box-shadow: 0 0 0 1.5px var(--canvas);
 }
 
-.stackItem + .stackItem {
+.stackItemInactive {
+  filter: grayscale(1);
+}
+
+:is(.stackItem, .stackItemInactive) + :is(.stackItem, .stackItemInactive) {
   margin-left: -5px;
 }
 

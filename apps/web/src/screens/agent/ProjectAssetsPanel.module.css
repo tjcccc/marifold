@@ -1,0 +1,621 @@
+/* Project assets cards (spec/ui.md#project-assets). */
+
+.panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.card {
+  border: 1px solid var(--separator);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+
+.cardHeader {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 6px 6px 4px;
+}
+
+.cardToggle {
+  flex: 1;
+  min-width: 0;
+  height: 32px;
+  padding: 0 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: var(--radius-md);
+  color: var(--text);
+  text-align: left;
+}
+
+.cardToggle:focus-visible {
+  outline: 2px solid var(--brand-fill);
+  outline-offset: -2px;
+}
+
+.cardToggle > svg {
+  flex-shrink: 0;
+  color: var(--text-2);
+}
+
+@media (hover: hover) {
+  .row:hover {
+    background: var(--surface-2);
+  }
+}
+
+.cardTitle {
+  font-weight: 600;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.summary,
+.summaryWarn {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+.summaryWarn {
+  color: var(--warning);
+  font-weight: 600;
+}
+
+.addButton {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  color: var(--text-2);
+}
+
+.addButton:hover,
+.addButton[aria-expanded='true'] {
+  background: var(--surface-3);
+  color: var(--text);
+}
+
+.meter {
+  height: 4px;
+  margin: 0 14px 10px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  overflow: hidden;
+}
+
+.meterFill,
+.meterFillWarn {
+  height: 100%;
+  background: var(--brand-fill);
+}
+
+.meterFillWarn {
+  background: var(--warning);
+}
+
+.note {
+  margin: -2px 14px 12px;
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+.inlineLink {
+  color: var(--brand-text);
+  font-size: inherit;
+}
+
+.inlineLink:hover {
+  text-decoration: underline;
+}
+
+.problem {
+  margin: 0 10px 10px;
+  padding: 7px 8px 7px 10px;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+  color: var(--danger);
+  font-size: 12.5px;
+  overflow-wrap: anywhere;
+}
+
+.problem > span {
+  flex: 1;
+}
+
+.dismiss {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  border-radius: var(--radius-sm);
+  color: inherit;
+  font-size: 15px;
+  line-height: 1;
+}
+
+.problemText {
+  font-size: 12.5px;
+  color: var(--danger);
+  overflow-wrap: anywhere;
+}
+
+.rows {
+  padding: 0 6px 8px;
+  display: flex;
+  flex-direction: column;
+}
+
+.group {
+  padding: 6px 8px 2px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+.empty {
+  padding: 4px 8px 6px;
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+.row {
+  min-height: 40px;
+  padding: 6px 8px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-radius: var(--radius-md);
+}
+
+.row:focus-within {
+  background: var(--surface-2);
+}
+
+.tile,
+.tileLinked {
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text-2);
+}
+
+.row:hover .tile {
+  background: var(--surface-3);
+}
+
+.tileLinked {
+  background: var(--brand-tint);
+  color: var(--brand-text);
+}
+
+.rowText {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.rowName,
+.rowMeta,
+.rowMetaMono {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rowMeta,
+.rowMetaMono {
+  font-size: 11.5px;
+  color: var(--text-2);
+}
+
+.rowMetaMono {
+  min-width: 0;
+  font-family: var(--font-mono);
+}
+
+/* A link's place truncates; why it cannot be read stays whole. */
+.metaLine {
+  display: flex;
+  gap: 4px;
+  min-width: 0;
+}
+
+.metaNote {
+  flex-shrink: 0;
+  font-size: 11.5px;
+  color: var(--text-2);
+}
+
+.rowAction {
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  color: var(--text-2);
+  opacity: 0;
+}
+
+.row:hover .rowAction,
+.row:focus-within .rowAction,
+.rowAction[aria-expanded='true'],
+.row[data-touch] .rowAction {
+  opacity: 1;
+}
+
+.rowAction:hover,
+.rowAction[aria-expanded='true'] {
+  background: var(--surface-3);
+  color: var(--text);
+}
+
+.rowAction:disabled,
+.versionDownload:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.added {
+  flex-shrink: 0;
+  font-size: 11.5px;
+  color: var(--text-3);
+}
+
+.addPill {
+  flex-shrink: 0;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--brand-tint);
+  color: var(--brand-text);
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.addPill:hover {
+  background: color-mix(in srgb, var(--brand-fill) 22%, transparent);
+}
+
+.addPill:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* Uploads report no progress (fetch cannot), so the bar slides. */
+.progress {
+  height: 3px;
+  margin: 3px 0 2px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  overflow: hidden;
+}
+
+.progress > span {
+  display: block;
+  width: 40%;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--brand-fill);
+  animation: assetUpload 1.2s ease-in-out infinite;
+}
+
+@keyframes assetUpload {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(250%); }
+}
+
+.versions {
+  margin: 2px 8px 6px 44px;
+  padding: 6px 0 2px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border-top: 1px solid var(--separator-soft);
+}
+
+.versionsTitle {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+.version {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.versionNumber {
+  width: 24px;
+  font-weight: 600;
+}
+
+.versionMeta {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-2);
+}
+
+.versionDownload {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  color: var(--text-2);
+}
+
+.versionDownload:hover {
+  background: var(--surface-3);
+  color: var(--text);
+}
+
+.fileInput {
+  display: none;
+}
+
+.dropOverlay {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px dashed var(--brand-fill);
+  border-radius: var(--radius-lg);
+  background: var(--brand-tint);
+  color: var(--brand-text);
+  font-weight: 600;
+  pointer-events: none;
+}
+
+.menu {
+  position: fixed;
+  z-index: 80;
+  padding: 5px;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--separator);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sheet);
+}
+
+.menuItem,
+.menuItemDanger,
+.menuItemTwoLine {
+  width: 100%;
+  min-height: 32px;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  text-align: left;
+  font-size: 13px;
+}
+
+.menuItemTwoLine {
+  display: flex;
+  flex-direction: column;
+}
+
+.menuItemTitle {
+  font-weight: 600;
+}
+
+.menuItemHint {
+  font-size: 11.5px;
+  color: var(--text-2);
+}
+
+.menuItem:hover,
+.menuItem:focus-visible,
+.menuItemTwoLine:hover,
+.menuItemTwoLine:focus-visible {
+  background: var(--brand-tint);
+  outline: none;
+}
+
+.menuItemDanger {
+  color: var(--danger);
+}
+
+.menuItemDanger:hover,
+.menuItemDanger:focus-visible {
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+  outline: none;
+}
+
+.menuSeparator {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--separator);
+}
+
+.dialogBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: var(--scrim);
+}
+
+.dialog {
+  width: min(380px, 100%);
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: var(--surface);
+  border: 1px solid var(--separator);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sheet);
+}
+
+.dialogTitle {
+  font-size: 16px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.dialogDescription {
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-2);
+}
+
+.dialogInput {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--separator);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+  resize: vertical;
+}
+
+.dialogInput:focus {
+  border-color: var(--brand-fill);
+  outline: none;
+}
+
+.dialogActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.dialogCancel,
+.dialogPrimary,
+.dialogDelete {
+  min-width: 76px;
+  padding: 7px 13px;
+  border-radius: 8px;
+  font-weight: 600;
+}
+
+.dialogCancel {
+  background: var(--surface-2);
+  color: var(--text-2);
+}
+
+.dialogPrimary {
+  background: var(--brand-fill);
+  color: var(--on-brand);
+}
+
+.dialogDelete {
+  background: var(--danger);
+  color: white;
+}
+
+.dialogCancel:disabled,
+.dialogPrimary:disabled,
+.dialogDelete:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+/* Phone: the sheet and the session list use 44px targets. */
+.panel[data-variant='sheet'],
+.panel[data-variant='list'] {
+  font-size: 14px;
+}
+
+.panel[data-variant='sheet'] .cardHeader,
+.panel[data-variant='list'] .cardHeader {
+  padding: 4px;
+  gap: 2px;
+}
+
+.panel[data-variant='sheet'] .cardToggle,
+.panel[data-variant='list'] .cardToggle {
+  height: auto;
+  min-height: 44px;
+  padding: 0 10px;
+}
+
+.panel[data-variant='sheet'] .summary,
+.panel[data-variant='sheet'] .summaryWarn,
+.panel[data-variant='list'] .summary,
+.panel[data-variant='list'] .summaryWarn {
+  font-size: 13px;
+}
+
+.panel[data-variant='sheet'] .addButton,
+.panel[data-variant='list'] .addButton,
+.panel[data-variant='sheet'] .rowAction {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-md);
+}
+
+.panel[data-variant='sheet'] .row {
+  min-height: 48px;
+  padding: 0 0 0 10px;
+}
+
+.panel[data-variant='sheet'] .rowMeta,
+.panel[data-variant='sheet'] .rowMetaMono {
+  font-size: 12px;
+}
+
+.panel[data-variant='sheet'] .addPill {
+  min-height: 32px;
+  margin-right: 6px;
+  padding: 0 12px;
+  font-size: 12.5px;
+}
+
+@media (hover: none) {
+  .rowAction {
+    opacity: 1;
+  }
+
+  .menuItem,
+  .menuItemDanger,
+  .menuItemTwoLine {
+    min-height: 44px;
+    font-size: 15px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .progress > span {
+    width: 100%;
+    animation: none;
+    opacity: 0.5;
+  }
+}

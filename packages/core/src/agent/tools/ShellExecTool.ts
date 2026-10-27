@@ -15,6 +15,10 @@ import {
 const PYTHON_COMMAND = /(?:^|[\s;&|(`])(?:python(?:3(?:\.\d+)?)?|pip3?|uv)(?=\s|$|[;&|)`])/;
 const SANDBOX_DENIAL = /Operation not permitted|Permission denied|Read-only file system|EPERM|EACCES/;
 const WRITE_FOLDER_HINT = 'If the command must write a folder outside the working directory and trusted folders, retry it with write_folder set to that folder so the user can approve it; do not switch to access=full for that.';
+// The sandbox denies Apple Events, which osascript reports as the target not
+// running (-600), an invalid connection (-609) or no authorization (-1743).
+const APP_CONTROL_DENIAL = /\((?:-600|-609|-1743)\)/;
+const APP_CONTROL_HINT = 'Scoped commands cannot send Apple Events, so they cannot control applications and report a running application as not running. Do not retry this scoped.';
 
 export class ShellExecTool implements AgentTool {
   constructor(private readonly device?: DeviceExecution) {}
@@ -22,11 +26,11 @@ export class ShellExecTool implements AgentTool {
   readonly definition = {
     name: 'shell_exec',
     description: [
-      'Run a shell command. Default access=scoped runs in a sandbox without asking: it reads the user home except credential stores, browser profiles and marifold state, writes only the working directory, configured trusted folders and private run directories, has no network, and stops after 60 seconds.',
+      'Run a shell command. Default access=scoped runs in a sandbox without asking: it reads the user home except credential stores, browser profiles and marifold state, writes only the working directory, configured trusted folders and private run directories, has no network, cannot control applications (osascript, AppleScript, JXA), and stops after 60 seconds.',
       'Explicit access=full requires device-local opt-in and approval for every call. It runs with the Marifold account filesystem, network, process, environment and application permissions, not automatic administrator rights.',
       'Full-access commands return a durable job ID immediately; use shell_job_status to retrieve completion. They continue after chat cancellation or bridge disconnection, with a 10-minute limit. Never blindly repeat a command after a lost response; inspect recent jobs first.',
       'When to use: run a focused test, build, formatter, program, or filesystem/process operation that dedicated tools cannot perform.',
-      'When NOT to use: scoped text reads/writes or isolated Python package installs that dedicated tools support, or unnecessary demonstration commands. Scoped commands cannot access the network. Use full access only when the requested device operation needs account-level capabilities, never as a fallback when a scoped command fails during routine processing.',
+      'When NOT to use: scoped text reads/writes or isolated Python package installs that dedicated tools support, or unnecessary demonstration commands. Scoped commands cannot access the network. Use full access only when the requested device operation needs account-level capabilities, such as controlling an application, never as a fallback when a scoped command fails during routine processing.',
       'Scoped access writes only the working directory, configured trusted folders, and private run directories. When the task needs a scoped command to write another existing folder in home, set write_folder to it: the user is asked to approve that folder (creating, editing and deleting inside it), and the command stays sandboxed. Check shell_job_status for the device mode before requesting full access.',
       'For an explicit output file elsewhere, use write_file instead of shell redirection, and copy_file instead of cp or mv to reach files outside those folders (including earlier runs\' outputs).',
     ].join(' '),
@@ -42,15 +46,18 @@ export class ShellExecTool implements AgentTool {
   };
 
   summarizeCall(input: Record<string, JSONValue>): string {
-    const folder = input.access !== 'full' && typeof input.write_folder === 'string' ? ` (may write ${input.write_folder})` : '';
-    return `${input.access === 'full' ? '[FULL DEVICE ACCESS; continues after disconnect] ' : ''}run \`${typeof input.command === 'string' ? input.command : '<missing command>'}\`${folder}`;
+    const access = option(input.access);
+    const requested = option(input.write_folder);
+    const folder = access !== 'full' && typeof requested === 'string' ? ` (may write ${requested})` : '';
+    return `${access === 'full' ? '[FULL DEVICE ACCESS; continues after disconnect] ' : ''}run \`${typeof input.command === 'string' ? input.command : '<missing command>'}\`${folder}`;
   }
 
   assessRisk(input: Record<string, JSONValue>, ctx: ToolExecutionContext): ToolRiskAssessment {
-    if (input.access !== undefined && input.access !== 'scoped' && input.access !== 'full') {
+    const access = option(input.access);
+    if (access !== undefined && access !== 'scoped' && access !== 'full') {
       return { blocked: true, escalate: false, reason: 'Invalid shell access mode.' };
     }
-    if (input.access === 'full') {
+    if (access === 'full') {
       return { blocked: this.device?.mode() !== 'full', escalate: true, persistable: false,
         reason: this.device?.mode() === 'full'
           ? 'Full device access as the Marifold OS user. This job continues after cancellation or disconnect; approval applies to this command only.'
@@ -90,8 +97,9 @@ export class ShellExecTool implements AgentTool {
   async execute(input: Record<string, JSONValue>, ctx: ToolExecutionContext): Promise<ToolExecutionResult> {
     const command = requireStringInput(input, 'command', 'shell_exec');
     if (ctx.signal?.aborted) { throw new Error('Run cancelled before shell execution.'); }
-    if (input.access !== undefined && input.access !== 'scoped' && input.access !== 'full') { throw new Error('Invalid shell access mode.'); }
-    if (input.access === 'full') {
+    const access = option(input.access);
+    if (access !== undefined && access !== 'scoped' && access !== 'full') { throw new Error('Invalid shell access mode.'); }
+    if (access === 'full') {
       if (!this.device) { throw new Error('Full device execution is unavailable.'); }
       const job = await this.device.start(command, ctx.cwd, {
         ...process.env,
@@ -132,6 +140,11 @@ export class ShellExecTool implements AgentTool {
       successSummary: `ran \`${command}\` in isolated workspace`,
       failureSummary: `\`${command}\` failed in isolated workspace`,
     });
+    if (result.isError && APP_CONTROL_DENIAL.test(result.content)) {
+      return { ...result, content: `${result.content}\n${APP_CONTROL_HINT} ${this.device?.mode() === 'full'
+        ? 'Controlling an application needs access=full; retry it with that.'
+        : 'Full access is off on this device: tell the user that controlling the application needs it, and that they can enable it locally with marifold execution mode full.'}` };
+    }
     return result.isError && SANDBOX_DENIAL.test(result.content)
       ? { ...result, content: `${result.content}\n${WRITE_FOLDER_HINT}` }
       : result;
@@ -142,9 +155,10 @@ export class ShellExecTool implements AgentTool {
  * an existing folder in home, never home itself, a sensitive or startup root,
  * or a folder containing one. */
 function writeFolder(input: Record<string, JSONValue>, workspace: RunWorkspace): { folder: string } | { error: string } | undefined {
-  if (input.write_folder === undefined) { return undefined; }
-  if (typeof input.write_folder !== 'string' || !input.write_folder.trim()) { return { error: 'write_folder must be a folder path.' }; }
-  const raw = input.write_folder.trim();
+  const value = option(input.write_folder);
+  if (value === undefined) { return undefined; }
+  if (typeof value !== 'string') { return { error: 'write_folder must be a folder path.' }; }
+  const raw = value.trim();
   const expanded = raw === '~' ? workspace.userHome : raw.startsWith('~/') ? path.join(workspace.userHome, raw.slice(2)) : path.resolve(workspace.cwd, raw);
   const resolved = canonicalPath(expanded);
   if (!isDirectory(resolved)) { return { error: `write_folder ${raw} is not an existing folder; create it with a file tool first or name its parent.` }; }
@@ -154,6 +168,12 @@ function writeFolder(input: Record<string, JSONValue>, workspace: RunWorkspace):
     return { error: `write_folder ${raw} cannot be granted: it must be a folder inside home, not home itself, and not contain private or startup files.` };
   }
   return { folder };
+}
+
+/** An optional input, or undefined when left out: models that fill every
+ * schema field send "" or null for an option they do not mean to use. */
+function option(value: JSONValue | undefined): JSONValue | undefined {
+  return value === null || (typeof value === 'string' && !value.trim()) ? undefined : value;
 }
 
 function isDirectory(target: string): boolean {

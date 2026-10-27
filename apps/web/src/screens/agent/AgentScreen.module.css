@@ -116,3 +116,41 @@
     animation: none;
   }
 }
+
+/* The conversation, and in a project the Assets column beside it
+ * (spec/ui.md#project-assets); below 1100px the column opens over it. */
+.conversationRow {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+.conversation {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* From 1100px: a resizable column beside the thread (ResizableSidebar). */
+.assetsColumn {
+  height: 100%;
+  padding: 14px;
+  overflow-y: auto;
+}
+
+/* Narrower: a fixed-width panel over the thread. */
+.assetsOverlay {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 20;
+  width: 316px;
+  padding: 14px;
+  overflow-y: auto;
+  background: var(--content);
+  border-left: 1px solid var(--separator);
+  box-shadow: var(--shadow-sheet);
+}

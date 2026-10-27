@@ -1,11 +1,18 @@
-.frame {
+.frame,
+.frameRight {
   position: relative;
-  min-width: 200px;
   max-width: 40%;
   height: 100%;
   flex-shrink: 0;
   border-right: 1px solid var(--separator-soft);
   background: var(--canvas);
+}
+
+/* A secondary column on the right, on the content's own background. */
+.frameRight {
+  border-right: none;
+  border-left: 1px solid var(--separator-soft);
+  background: transparent;
 }
 
 .content {
@@ -14,7 +21,8 @@
   overflow: hidden;
 }
 
-.handle {
+.handle,
+.handleRight {
   position: absolute;
   top: 0;
   right: -4px;
@@ -26,7 +34,13 @@
   outline: none;
 }
 
-.handle::after {
+.handleRight {
+  right: auto;
+  left: -4px;
+}
+
+.handle::after,
+.handleRight::after {
   content: '';
   position: absolute;
   top: 0;
@@ -39,12 +53,15 @@
 
 .handle:hover::after,
 .handle:focus-visible::after,
+.handleRight:hover::after,
+.handleRight:focus-visible::after,
 .handleActive::after {
   background: var(--brand-fill);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .handle::after {
+  .handle::after,
+  .handleRight::after {
     transition: none;
   }
 }

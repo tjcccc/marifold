@@ -19,7 +19,8 @@ export interface DeviceJob {
   scope?: string;
 }
 
-/** Local-only policy: intentionally absent from config APIs and workspace RPC. */
+/** Local policy: absent from config APIs and workspace RPC. The service shows
+ * it and may turn it off; only the local CLI turns it on. */
 export class DeviceExecution {
   readonly sudo = new SudoCredentials();
   readonly directory: string;

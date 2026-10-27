@@ -247,7 +247,7 @@ export type { ProjectRoute, ProjectTurnPlan } from './projects/ProjectTurns';
 export { DEFAULT_ASSET_LIMIT_BYTES, formatBytes as formatAssetBytes, MAX_ASSET_BYTES, ProjectAssets } from './projects/ProjectAssets';
 export type { LinkedProjectAsset, ProjectAsset, ProjectAssetUsage, ProjectAssetVersion, StoredProjectAsset } from './projects/ProjectAssets';
 export { linkLocation, parseLinkTarget } from './projects/ProjectLinks';
-export type { LinkDevice } from './projects/ProjectLinks';
+export type { LinkDevice, LinkLocation } from './projects/ProjectLinks';
 export type { RunProjectTurn } from './runs/ProjectTurn';
 export { matchMention, mentionTokens, type MentionToken } from './agent/Mentions';
 export type { ProfileRenameOutcome } from './profiles/ProfileRename';

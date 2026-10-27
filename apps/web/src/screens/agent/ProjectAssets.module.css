@@ -1,0 +1,93 @@
+.toggle {
+  height: 28px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 9px;
+  border-radius: var(--radius-sm);
+  color: var(--text-2);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.toggle:hover {
+  background: var(--separator-soft);
+  color: var(--text);
+}
+
+.toggle[aria-pressed='true'] {
+  background: var(--surface-3);
+  color: var(--text);
+}
+
+.sheetButton {
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  color: var(--brand-text);
+}
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: flex-end;
+  background: var(--scrim);
+}
+
+.sheet {
+  width: 100%;
+  height: min(640px, calc(100dvh - 56px));
+  padding: 8px 12px calc(16px + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  background: var(--canvas);
+  box-shadow: var(--shadow-sheet);
+}
+
+.grabber {
+  align-self: center;
+  width: 36px;
+  height: 5px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: var(--surface-3);
+}
+
+.sheetHeader {
+  display: flex;
+  align-items: center;
+  padding: 0 4px;
+}
+
+.sheetTitle {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.done {
+  min-height: 44px;
+  padding: 0 6px;
+  color: var(--brand-text);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.sheetBody {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}

@@ -24,6 +24,7 @@ import { useAppsCatalog } from '../apps/useAppsCatalog';
 import { CatchUpBanner } from './CatchUpBanner';
 import { SessionArchivedBanner, SessionBlockedBanner } from './SessionBlockedBanner';
 import { InputBar } from './InputBar';
+import { AssetsSheetButton, AssetsToggle, ProjectAssets, ProjectAssetsSheet } from './ProjectAssets';
 import { useDeepAvailable } from './useGlobalDeep';
 import { ProfileSidebarContent } from './ProfileSidebar';
 import { ProjectSheet } from './ProjectSheet';
@@ -36,6 +37,10 @@ import { WorkspaceSidebar } from './WorkspaceSidebar';
 import styles from './AgentScreen.module.css';
 
 const SIDEBARS_KEY = 'marifold.sidebars';
+const ASSETS_KEY = 'marifold.assetsColumn';
+const ASSETS_WIDTH_KEY = 'marifold.assetsWidth';
+/** Where the Assets column fits beside the conversation; AgentScreen.module.css repeats it. */
+const ASSETS_BESIDE_QUERY = '(min-width: 1100px)';
 
 export interface AgentScreenProps {
   client: ApiClient;
@@ -71,9 +76,16 @@ export function AgentScreen(props: AgentScreenProps) {
   const deepAvailable = useDeepAvailable(props.client, controller.modelChoice, controller.profileDetail?.settings);
   const appsCatalog = useAppsCatalog(props.client, props.onUnauthorized, props.appName);
   const mobile = useMediaQuery(MOBILE_QUERY);
+  const assetsBeside = useMediaQuery(ASSETS_BESIDE_QUERY);
   const [sidebarsHidden, setSidebarsHidden] = useState(
     () => localStorage.getItem(SIDEBARS_KEY) === 'hidden',
   );
+  const [assetsShown, setAssetsShown] = useState(() => {
+    try { return localStorage.getItem(ASSETS_KEY) !== 'hidden'; } catch { return true; }
+  });
+  // Narrower, the column covers the composer, so it opens only on request and closes on a press in the conversation.
+  const [assetsOverlay, setAssetsOverlay] = useState(false);
+  const [assetsSheetOpen, setAssetsSheetOpen] = useState(false);
   const [appBusy, setAppBusy] = useState(false);
   const [dropActive, setDropActive] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
@@ -127,6 +139,17 @@ export function AgentScreen(props: AgentScreenProps) {
     });
   }
 
+  function toggleAssets(): void {
+    if (!assetsBeside) {
+      setAssetsOverlay(open => !open);
+      return;
+    }
+    setAssetsShown(shown => {
+      try { localStorage.setItem(ASSETS_KEY, shown ? 'hidden' : 'shown'); } catch { /* Shown or hidden for this page only. */ }
+      return !shown;
+    });
+  }
+
   function onDragOver(event: React.DragEvent): void {
     if (![...event.dataTransfer.types].includes('Files')) { return; }
     event.preventDefault();
@@ -157,6 +180,16 @@ export function AgentScreen(props: AgentScreenProps) {
   const conversationOpen = projectView ? project !== undefined : openProfile !== undefined;
   const currentSession = controller.sessions.find(session => session.id === controller.sessionId);
   const sessionArchived = currentSession?.archived === true;
+  const projectConversation = !appsView && conversationOpen ? project : undefined;
+  const assetsColumn = assetsBeside ? assetsShown : assetsOverlay;
+  const assetsProps = project ? {
+    client: props.client,
+    projectId: project.id,
+    ...(controller.sessionId ? { sessionId: controller.sessionId } : {}),
+    responding: controller.responding,
+    limitBytes: project.assetLimitBytes,
+    onOpenSettings: () => setProjectSheet({ project }),
+  } : undefined;
   const mobileWorkspaceOpen = appsView
     ? mobileAppOpen && appsCatalog.selectedName !== undefined
     : routeOwner !== undefined && controller.profileName !== undefined && mobileConversationOpen;
@@ -223,7 +256,15 @@ export function AgentScreen(props: AgentScreenProps) {
           profileAvatar={<ProjectIcon client={props.client} id={project.id} hasIcon={project.icon !== undefined} size={64} />}
           configureLabel={`Project settings for ${project.name}`}
           backTo="projects"
-          rowAccessory={session => <ProfileStack client={props.client} names={session.speakers ?? []} profiles={controller.profiles} />}
+          rowAccessory={session => (
+            <ProfileStack
+              client={props.client}
+              names={session.speakers ?? []}
+              profiles={controller.profiles}
+              inactive={name => !project.members.includes(name)}
+            />
+          )}
+          headerAccessory={mobile && assetsProps ? <ProjectAssets {...assetsProps} variant="list" /> : undefined}
           search={controller.sessionSearch}
           onSearchChange={controller.setSessionSearch}
           showArchived={controller.showArchivedSessions}
@@ -360,6 +401,7 @@ export function AgentScreen(props: AgentScreenProps) {
               ? appsCatalog.selected?.app.title ?? appsCatalog.selectedInvalid?.name ?? 'Apps'
               : currentSession ? sessionTitle(currentSession) : 'New session'}
             backLabel={appsView ? 'Apps' : 'Sessions'}
+            trailing={projectConversation ? <AssetsSheetButton onOpen={() => setAssetsSheetOpen(true)} /> : undefined}
             onBack={() => {
               if (appsView) { setMobileAppOpen(false); }
               else {
@@ -381,6 +423,7 @@ export function AgentScreen(props: AgentScreenProps) {
             onToggleSidebars={toggleSidebars}
             view={props.workspaceView}
             onViewChange={props.onWorkspaceViewChange}
+            trailing={projectConversation ? <AssetsToggle shown={assetsColumn} onToggle={toggleAssets} /> : undefined}
           />
         )}
         {appsMounted ? (
@@ -398,70 +441,87 @@ export function AgentScreen(props: AgentScreenProps) {
           </div>
         ) : null}
         {!appsView && conversationOpen ? (
-          <>
-            <CatchUpBanner
-              runs={controller.thread.catchUp}
-              onShow={controller.expandCatchUp}
-              onDismiss={controller.dismissCatchUp}
-            />
-            <ThreadView
-              client={props.client}
-              key={controller.sessionId ?? 'new-session'}
-              items={controller.thread.items}
-              loading={controller.sessionLoading}
-              scrollToBottomRequest={scrollToBottomRequest}
-              onCancelRun={runId => void controller.cancel(runId)}
-              onAnswerApproval={(runId, requestId, action, sudoResponse) => void controller.answer(runId, requestId, action, sudoResponse)}
-              onSubmitUserInput={(runId, requestId, submission) => void controller.answerInput(runId, requestId, submission)}
-              onToggleRun={controller.toggleRun}
-              onEditUserMessage={controller.resendEdited}
-              editingDisabled={controller.steeringRun !== undefined || controller.sending}
-              sendingBytes={controller.sendingBytes}
-              {...(project ? {
-                renderSpeaker: (name: string) => <ProfileLabel client={props.client} name={name} profiles={controller.profiles} />,
-                defaultSpeaker: currentSession?.profileName,
-              } : {})}
-            />
-            {controller.sessionBlocked && controller.sessionId ? (
-              <SessionBlockedBanner onTakeOver={controller.takeOverSession} />
+          <div className={styles.conversationRow}>
+            <div className={styles.conversation} onPointerDown={!assetsBeside && assetsOverlay ? () => setAssetsOverlay(false) : undefined}>
+              <CatchUpBanner
+                runs={controller.thread.catchUp}
+                onShow={controller.expandCatchUp}
+                onDismiss={controller.dismissCatchUp}
+              />
+              <ThreadView
+                client={props.client}
+                key={controller.sessionId ?? 'new-session'}
+                items={controller.thread.items}
+                loading={controller.sessionLoading}
+                scrollToBottomRequest={scrollToBottomRequest}
+                onCancelRun={runId => void controller.cancel(runId)}
+                onAnswerApproval={(runId, requestId, action, sudoResponse) => void controller.answer(runId, requestId, action, sudoResponse)}
+                onSubmitUserInput={(runId, requestId, submission) => void controller.answerInput(runId, requestId, submission)}
+                onToggleRun={controller.toggleRun}
+                onEditUserMessage={controller.resendEdited}
+                editingDisabled={controller.steeringRun !== undefined || controller.sending}
+                sendingBytes={controller.sendingBytes}
+                {...(project ? {
+                  renderSpeaker: (name: string) => (
+                    <ProfileLabel client={props.client} name={name} profiles={controller.profiles} inactive={!project.members.includes(name)} />
+                  ),
+                  defaultSpeaker: currentSession?.profileName,
+                } : {})}
+              />
+              {controller.sessionBlocked && controller.sessionId ? (
+                <SessionBlockedBanner onTakeOver={controller.takeOverSession} />
+              ) : null}
+              {sessionArchived && controller.sessionId ? (
+                <SessionArchivedBanner onUnarchive={() => controller.setSessionArchived(controller.sessionId!, false)} />
+              ) : null}
+              <InputBar
+                draftKey={`${props.connectionId}:${project ? `project:${project.id}` : controller.profileName}:${controller.sessionId ?? 'new'}`}
+                steering={controller.steeringRun !== undefined}
+                responding={controller.responding}
+                disabled={controller.sending || controller.sessionLoading || controller.sessionBlocked || sessionArchived}
+                deep={controller.deep}
+                deepAvailable={deepAvailable}
+                onToggleDeep={() => controller.setDeep(!controller.deep)}
+                modelOptions={controller.modelOptions}
+                modelChoice={controller.modelChoice}
+                onSelectModel={controller.setModelChoice}
+                attachments={controller.attachments}
+                onAttachFiles={files => void controller.addFiles(files)}
+                onRemoveAttachment={controller.removeAttachment}
+                skills={controller.skills}
+                devices={controller.devices}
+                {...(project ? {
+                  mentions: (text: string) => {
+                    const only = commandProfiles(text, project, profileNames);
+                    return only ? only.map(profileSuggestion) : [...project.members.map(profileSuggestion), ...controller.devices];
+                  },
+                  commands: [...WEB_COMMANDS, ...PROJECT_COMMANDS],
+                  // A `/command` is not a message: nothing routes it.
+                  recipient: (text: string) => parseCommand(text) ? undefined : previewProjectRoute(text, project, controller.floor, profileNames),
+                  onInvite: (name: string) => void controller.inviteToProject(name),
+                } : {})}
+                enterSubmits={!mobile}
+                onSubmit={text => {
+                  setScrollToBottomRequest(request => request + 1);
+                  void controller.send(text);
+                }}
+                onStop={() => void controller.stop()}
+              />
+            </div>
+            {!mobile && assetsColumn && assetsProps ? (
+              assetsBeside ? (
+                <ResizableSidebar side="right" storageKey={ASSETS_WIDTH_KEY} defaultWidth={316} minWidth={280} ariaLabel="Resize project assets">
+                  <aside className={styles.assetsColumn} aria-label="Project assets">
+                    <ProjectAssets {...assetsProps} variant="column" />
+                  </aside>
+                </ResizableSidebar>
+              ) : (
+                <aside className={styles.assetsOverlay} aria-label="Project assets">
+                  <ProjectAssets {...assetsProps} variant="column" />
+                </aside>
+              )
             ) : null}
-            {sessionArchived && controller.sessionId ? (
-              <SessionArchivedBanner onUnarchive={() => controller.setSessionArchived(controller.sessionId!, false)} />
-            ) : null}
-            <InputBar
-              draftKey={`${props.connectionId}:${project ? `project:${project.id}` : controller.profileName}:${controller.sessionId ?? 'new'}`}
-              steering={controller.steeringRun !== undefined}
-              responding={controller.responding}
-              disabled={controller.sending || controller.sessionLoading || controller.sessionBlocked || sessionArchived}
-              deep={controller.deep}
-              deepAvailable={deepAvailable}
-              onToggleDeep={() => controller.setDeep(!controller.deep)}
-              modelOptions={controller.modelOptions}
-              modelChoice={controller.modelChoice}
-              onSelectModel={controller.setModelChoice}
-              attachments={controller.attachments}
-              onAttachFiles={files => void controller.addFiles(files)}
-              onRemoveAttachment={controller.removeAttachment}
-              skills={controller.skills}
-              devices={controller.devices}
-              {...(project ? {
-                mentions: (text: string) => {
-                  const only = commandProfiles(text, project, profileNames);
-                  return only ? only.map(profileSuggestion) : [...project.members.map(profileSuggestion), ...controller.devices];
-                },
-                commands: [...WEB_COMMANDS, ...PROJECT_COMMANDS],
-                // A `/command` is not a message: nothing routes it.
-                recipient: (text: string) => parseCommand(text) ? undefined : previewProjectRoute(text, project, controller.floor, profileNames),
-                onInvite: (name: string) => void controller.inviteToProject(name),
-              } : {})}
-              enterSubmits={!mobile}
-              onSubmit={text => {
-                setScrollToBottomRequest(request => request + 1);
-                void controller.send(text);
-              }}
-              onStop={() => void controller.stop()}
-            />
-          </>
+          </div>
         ) : !appsView && projectView && controller.projectMissing ? (
           <div className={styles.chooseProfile}>
             <div className={styles.chooseTitle}>This project doesn’t exist</div>
@@ -486,6 +546,9 @@ export function AgentScreen(props: AgentScreenProps) {
           </div>
         ) : null}
       </div>
+      {assetsSheetOpen && mobile && projectConversation && assetsProps ? (
+        <ProjectAssetsSheet {...assetsProps} projectName={projectConversation.name} onClose={() => setAssetsSheetOpen(false)} />
+      ) : null}
       {projectSheet ? (
         <ProjectSheet
           client={props.client}

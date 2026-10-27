@@ -21,7 +21,7 @@ export async function createProject(
 export async function updateProject(
   client: ApiClient,
   id: string,
-  patch: { name?: string; instructions?: string; lead?: string },
+  patch: { name?: string; instructions?: string; lead?: string; assetLimitBytes?: number | null },
 ): Promise<ProjectDetail> {
   return (await client.request<{ project: ProjectDetail }>('PATCH', projectPath(id), patch)).project;
 }

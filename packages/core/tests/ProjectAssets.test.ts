@@ -11,7 +11,7 @@ import type { ToolExecutionContext } from '../src/agent/ToolRegistry';
 import type { MarifoldConfig } from '../src/config/ConfigSchema';
 import { deviceRunOutputs, hostRunOutputs, outputRelativePath, projectAssetManifest, projectAssetTools, type RunOutputs } from '../src/projects/ProjectAssetTools';
 import { ensureProjectAssetTables } from '../src/projects/ProjectAssets';
-import { type LinkDevice, type LinkRun, parseLinkTarget } from '../src/projects/ProjectLinks';
+import { type LinkDevice, type LinkRun, linkLocation, parseLinkTarget } from '../src/projects/ProjectLinks';
 import type { RunRegistry } from '../src/runs/RunRegistry';
 import type { WorkspaceManager } from '../src/workspace/WorkspaceManager';
 import { WorkspaceRuns } from '../src/workspace/WorkspaceRuns';
@@ -72,6 +72,7 @@ describe('project asset store', () => {
     expect(assets.save(game.id, { name: 'report.md', data: Buffer.from('v2!'), mediaType: 'text/markdown', savedBy: 'painter', runId: 'run_1' }).asset)
       .toMatchObject({ version: 2, size: 3, savedBy: 'painter', description: 'Weekly report' });
     expect(assets.versions(game.id, first.asset.id).map(version => [version.version, version.runId])).toEqual([[2, 'run_1'], [1, undefined]]);
+    expect(assets.get(game.id, first.asset.id)).toMatchObject({ runIds: ['run_1'] });
     expect(fs.readFileSync(assets.content(game.id, first.asset.id, 1).path, 'utf8')).toBe('v1');
     // A copy under another name is stored and counted once.
     assets.save(game.id, { name: 'copy.md', data: Buffer.from('v2!'), mediaType: 'text/markdown' });
@@ -174,6 +175,10 @@ describe('linked project assets', () => {
     expect(manifest).toContain('None are stored yet.');
     expect(manifest).toContain("- notes → @studio/~/notes (on this run's device; read it with your file tools at ~/notes)");
     expect(manifest).toContain('- maps → @office/srv/maps (on office, which this run cannot reach)');
+    // Lists say why a link cannot be read now.
+    const link = (deviceId: string) => ({ kind: 'linked' as const, id: 'a', name: 'a', createdAt: '', updatedAt: '', deviceId, path: '~/a' });
+    const run: LinkRun = { devices: [...DEVICES, { id: 'dev_quiet', name: 'quiet', host: false, online: true, executor: false }], delegate: false };
+    expect(['dev_office', 'dev_home', 'dev_quiet', 'dev_gone'].map(id => linkLocation(link(id), run).unavailable)).toEqual([undefined, 'offline', 'execution-off', 'removed']);
   });
 });
 

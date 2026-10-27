@@ -7,6 +7,8 @@ export interface FolderPickerSheetProps {
   load: (folder: string) => Promise<HomeFolderListing>;
   onChoose: (folder: string) => void;
   onClose: () => void;
+  /** The note under the list (what choosing a trusted folder allows by default). */
+  hint?: (folder: string) => string;
 }
 
 /** Browse folders in home and choose one. Browsers never reveal a picked
@@ -70,7 +72,7 @@ export function FolderPickerSheet(props: FolderPickerSheetProps) {
           {shown?.truncated ? <div className={styles.empty}>Showing the first {shown.folders.length} folders.</div> : null}
         </div>
         <div className={styles.hint}>
-          {current === '~'
+          {props.hint ? props.hint(current) : current === '~'
             ? 'Choosing home lets scripts create and edit files anywhere in home, but never delete or rename them.'
             : `Saved as ${current}: the same folder in home on every device.`}
         </div>

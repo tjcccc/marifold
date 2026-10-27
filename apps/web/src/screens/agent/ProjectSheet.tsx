@@ -1,5 +1,6 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ApiClient } from '../../api/client';
+import { listProjectAssets } from '../../api/projectAssets';
 import {
   createProject,
   deleteProject,
@@ -13,6 +14,7 @@ import type { ProfileSummary, ProjectDetail } from '../../api/types';
 import { AvatarCropper } from '../../components/AvatarCropper';
 import { ProjectIcon } from '../../components/ProjectIcon';
 import { fileToBase64 } from '../../lib/attachments';
+import { DEFAULT_LIMIT_BYTES, formatStorage, limitBytes, limitParts, type LimitUnit } from '../../lib/projectAssets';
 import styles from './ProjectSheet.module.css';
 
 const ICON_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp']);
@@ -37,13 +39,31 @@ export function ProjectSheet({ client, project, profiles, onSaved, onDeleted, on
   /** A new icon to upload, or `null` to remove the current one. */
   const [icon, setIcon] = useState<{ data: string; mediaType: string } | null>();
   const [cropping, setCropping] = useState<File>();
+  const initialLimit = limitParts(project?.assetLimitBytes ?? DEFAULT_LIMIT_BYTES);
+  const [limitValue, setLimitValue] = useState(initialLimit.value);
+  const [limitUnit, setLimitUnit] = useState<LimitUnit>(initialLimit.unit);
+  /** "Use default" sends `null`, so the project follows the default. */
+  const [limitDefault, setLimitDefault] = useState(false);
+  const [usedBytes, setUsedBytes] = useState<number>();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string>();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const label = (profile: string) => profiles.find(candidate => candidate.name === profile)?.displayName ?? profile;
   const invitable = profiles.filter(profile => !members.includes(profile.name));
-  const canSave = name.trim().length > 0 && !busy;
+  const typedLimit = limitBytes(limitValue, limitUnit);
+  const canSave = name.trim().length > 0 && !busy && (!project || limitDefault || typedLimit !== undefined);
+  const projectId = project?.id;
+
+  useEffect(() => {
+    if (!projectId) { return; }
+    let cancelled = false;
+    listProjectAssets(client, projectId).then(
+      list => { if (!cancelled) { setUsedBytes(list.usage.usedBytes); } },
+      () => undefined,
+    );
+    return () => { cancelled = true; };
+  }, [client, projectId]);
 
   async function save(): Promise<void> {
     if (!canSave) { return; }
@@ -54,6 +74,8 @@ export function ProjectSheet({ client, project, profiles, onSaved, onDeleted, on
         ? await updateProject(client, project.id, {
             ...(name.trim() !== project.name ? { name: name.trim() } : {}),
             ...(instructions !== project.instructions ? { instructions } : {}),
+            ...(limitDefault ? { assetLimitBytes: null }
+              : typedLimit !== undefined && typedLimit !== project.assetLimitBytes ? { assetLimitBytes: typedLimit } : {}),
           })
         : await createProject(client, { name: name.trim() });
       if (project) {
@@ -204,6 +226,55 @@ export function ProjectSheet({ client, project, profiles, onSaved, onDeleted, on
                 </select>
               ) : null}
               <span className={styles.hint}>The Lead answers when a message addresses no one. Address others with @name.</span>
+            </div>
+
+            <div className={styles.field}>
+              <label className={styles.fieldLabel} htmlFor="project-asset-limit">Asset storage limit</label>
+              <div className={styles.limitRow}>
+                <input
+                  id="project-asset-limit"
+                  className={`${styles.nameInput} ${styles.limitInput}`}
+                  inputMode="decimal"
+                  value={limitValue}
+                  onChange={event => {
+                    setLimitValue(event.target.value);
+                    setLimitDefault(false);
+                  }}
+                />
+                <select
+                  className={`${styles.inviteSelect} ${styles.limitUnit}`}
+                  aria-label="Unit"
+                  value={limitUnit}
+                  onChange={event => {
+                    setLimitUnit(event.target.value as LimitUnit);
+                    setLimitDefault(false);
+                  }}
+                >
+                  <option value="MB">MB</option>
+                  <option value="GB">GB</option>
+                </select>
+                <button
+                  type="button"
+                  className={styles.linkButton}
+                  onClick={() => {
+                    const fallback = limitParts(DEFAULT_LIMIT_BYTES);
+                    setLimitValue(fallback.value);
+                    setLimitUnit(fallback.unit);
+                    setLimitDefault(true);
+                  }}
+                >
+                  Use default
+                </button>
+              </div>
+              {usedBytes !== undefined && typedLimit ? (
+                <div className={styles.meter} aria-hidden>
+                  <div className={styles.meterFill} style={{ width: `${Math.min(1, usedBytes / typedLimit) * 100}%` }} />
+                </div>
+              ) : null}
+              <span className={styles.hint}>
+                {usedBytes !== undefined ? `Using ${formatStorage(usedBytes)}. ` : ''}
+                Stored assets count once per content, across all versions; linked ones never count. 1 MB to 1 TB; the default is {formatStorage(DEFAULT_LIMIT_BYTES)}.
+              </span>
             </div>
           </>
         ) : null}

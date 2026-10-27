@@ -1,6 +1,6 @@
 # Projects and Assets
 
-**Status: Projects released in v0.103.0 (2026-10-27); Assets not yet.** The decisions below were agreed in discussion (2026-10-26). [`projects-plan.md`](projects-plan.md) tracks the slices and where the implementation deviates.
+**Status: Projects released in v0.103.0 and Assets in v0.104.0 (2026-10-27).** The decisions below were agreed in discussion (2026-10-26). [`projects-plan.md`](projects-plan.md) tracks the slices and where the implementation deviates.
 
 A **Project** is a shared place for one piece of ongoing work: its own instructions, several conversations (sessions), the profiles invited to take part, and the files the work needs (**Assets**). Projects come before Artifacts because Artifacts, SkillApp results, and Workflow outputs all need a home wider than one session, and an Artifact is largely an HTML asset rendered live (see [Relation to Artifacts](#relation-to-artifacts)).
 
@@ -103,9 +103,12 @@ This keeps per-turn cost low, in line with the token-saving goal.
 ## Web UI
 
 - A **Projects** entry beside the **Agent** tab at the top right.
-- Left column: the project list. Clicking a project turns it into that project's session list with a back arrow, the same drill-down as profiles (works on phones). Each session row shows small avatars of the profiles who spoke in it.
-- Conversation: each reply shows the speaker's avatar and display name. The composer shows the answering profile and autocompletes `@` from the roster first, then devices.
-- An **Assets** panel per project lists stored and linked assets with device, version, and availability; add by upload, from a run output ("Add to assets"), or by link (`@device/path`, with folder completion on the local device).
+- Left column: the project list. Clicking a project turns it into that project's session list with a back arrow, the same drill-down as profiles (works on phones). Each session row shows small avatars of the profiles who spoke in it, in monochrome for those no longer in the project.
+- Conversation: each reply shows the speaker's avatar (in monochrome once the speaker is no longer in the project) and display name. The composer shows the answering profile and autocompletes `@` from the roster first, then devices.
+- **Assets**, beside the Agent/Apps switch in a project session, shows a column of cards (spec/ui.md#project-assets):
+  - **Assets**: how many, and the storage used of the limit; stored rows (version, size, who saved it) and linked rows (`@device/path`, and why profiles cannot read it now: offline, execution off, or device removed). A row downloads, shows its versions, renames, describes, uploads a new version, or deletes (a link is removed). The **+** menu uploads files (up to 18 MB each) or links a file or folder: a device, a path on it (`~` is that device's home), a name, and a description; Browse lists the host's folders.
+  - **Outputs**: this session's run outputs, each **In assets** or with **Add to assets**.
+  - The column is resizable by its left edge (280px at least, like the sidebar) and keeps its width. Below 1100px wide it opens over the conversation only when asked, and a press in the conversation closes it. On phones a folder button in the session's navigation bar opens the cards in a bottom sheet, and the project's session list shows the Assets card. Files dropped on the column upload; dropped on the conversation, they attach to the message.
 - Project settings: name, icon, instructions, roster, Lead, stored-asset limit.
 - A profile session's row menu gains **Move to project…**, which opens a scrollable menu (like ChatGPT's): **New project** with a folder-plus icon at the top, a divider, then every project with its icon, sorted by name. Choosing a project moves the session at once; **New project** opens the create dialog (name, icon) and moves the session into the new project when it is created.
 

@@ -41,6 +41,8 @@ export interface SessionListProps {
   moveTargets?: Array<{ id: string; name: string; icon: ReactNode }>;
   onMoveToProject?: (sessionId: string, projectId: string) => Promise<boolean>;
   onMoveToNewProject?: (sessionId: string) => void;
+  /** Under the profile or project header, e.g. a project's Assets card on phones. */
+  headerAccessory?: ReactNode;
   footer?: ReactNode;
 }
 
@@ -92,6 +94,7 @@ export function SessionListContent({
   moveTargets,
   onMoveToProject,
   onMoveToNewProject,
+  headerAccessory,
 }: SessionListContentProps) {
   const [menu, setMenu] = useState<MenuState | undefined>();
   const [renaming, setRenaming] = useState<SessionSummary | undefined>();
@@ -257,6 +260,7 @@ export function SessionListContent({
         ) : null}
         <span className={styles.profileName}>{profileDisplayName}</span>
       </div>
+      {headerAccessory ? <div className={styles.headerAccessory}>{headerAccessory}</div> : null}
       <div className={styles.header}>
         <span>{showArchived ? 'Archived' : 'Sessions'}</span>
         <span className={styles.headerActions}>
