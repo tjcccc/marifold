@@ -84,7 +84,7 @@ export function RunCard({ children, run, onCancel, onAnswer, onSubmitInput, onTo
 
           {run.steering.map((text, index) => (
             <div key={index} className={styles.steeringPill}>
-              Guidance applied — “{text}”
+              Queued message read — “{text}”
             </div>
           ))}
 

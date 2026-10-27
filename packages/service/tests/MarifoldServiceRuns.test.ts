@@ -502,11 +502,16 @@ Transform {{text}} into the final prompt.
       // must be drained before the next (second) model turn.
       const steered = await postJson(base, `/v1/runs/${run.id}/steer`, { text: 'prefer bullet points' });
       expect(steered.status).toBe(202);
+      const withdrawn = await postJson(base, `/v1/runs/${run.id}/steer`, { text: 'actually use prose' });
+      const { id } = await withdrawn.json() as { id: string };
+      const removed = await fetch(`${base}/v1/runs/${run.id}/steer/${id}`, { method: 'DELETE' });
+      expect(await removed.json()).toMatchObject({ withdrawn: true });
       await postJson(base, `/v1/runs/${run.id}/approvals/${requestId}`, { action: 'once' });
 
       const { seen } = await pullFrames(frames, frame => frame.event === 'done');
       expect(seen.some(f => f.event === 'steering' && f.data.text === 'prefer bullet points')).toBe(true);
       expect(JSON.stringify(captured[1])).toContain('prefer bullet points');
+      expect(JSON.stringify(captured[1])).not.toContain('actually use prose');
     } finally {
       await server.close();
     }

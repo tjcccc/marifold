@@ -45,6 +45,9 @@ export interface InputBarProps {
   enterSubmits?: boolean;
   onSubmit: (text: string) => void;
   onStop: () => void;
+  /** Prompts typed while a reply is in progress, oldest first, shown above the composer. */
+  queued?: Array<{ id: string; text: string }>;
+  onWithdrawQueued?: (id: string) => void;
 }
 
 /** The composer (design 1a): attach +, textarea, Deep pill, model chip,
@@ -69,8 +72,8 @@ export function InputBar(props: InputBarProps) {
       ? [{ src: `data:${attachment.mediaType};base64,${attachment.data}`, alt: attachment.name }]
       : [],
   );
-  // Steering rides an active run — attachments can't join mid-task.
-  const canAttach = props.onAttachFiles !== undefined && !props.steering;
+  // A queued prompt is text only, so files wait until the reply is done.
+  const canAttach = props.onAttachFiles !== undefined && !props.responding;
 
   useEffect(() => {
     const restored = readDraft(props.draftKey);
@@ -236,6 +239,27 @@ export function InputBar(props: InputBarProps) {
 
   return (
     <div className={styles.wrap}>
+      {props.queued && props.queued.length > 0 ? (
+        <ul className={styles.queue} aria-label="Queued messages">
+          {props.queued.map(item => (
+            <li key={item.id} className={styles.queued}>
+              <span className={styles.queuedLabel}>Queued</span>
+              <span className={styles.queuedText} title={item.text}>{item.text}</span>
+              {props.onWithdrawQueued ? (
+                <button
+                  type="button"
+                  className={styles.queuedRemove}
+                  aria-label={`Remove queued message: ${item.text}`}
+                  title="Remove"
+                  onClick={() => props.onWithdrawQueued?.(item.id)}
+                >
+                  ×
+                </button>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      ) : null}
       {attachments.length > 0 ? (
         <div className={styles.chips}>
           {attachments.map((attachment, index) => (
@@ -330,7 +354,9 @@ export function InputBar(props: InputBarProps) {
             rows={2}
             value={text}
             placeholder={
-              props.steering ? 'Reply — the run keeps going; guidance is picked up mid-task' : 'Message the agent…'
+              props.steering
+                ? 'Queue a message — the agent reads it at its next step, or after this reply'
+                : props.responding ? 'Queue a message — it goes out when this reply finishes' : 'Message the agent…'
             }
             onChange={event => {
               const next = event.target.value;
@@ -409,16 +435,15 @@ export function InputBar(props: InputBarProps) {
               >
                 <span className={styles.stopIcon} aria-hidden />
               </button>
-            ) : (
-              <button
-                className={styles.send}
-                disabled={props.disabled || text.trim().length === 0 || recipient?.uninvited !== undefined}
-                aria-label={props.steering ? 'Send guidance' : 'Send'}
-                onClick={submit}
-              >
-                ↑
-              </button>
-            )}
+            ) : null}
+            <button
+              className={styles.send}
+              disabled={props.disabled || text.trim().length === 0 || recipient?.uninvited !== undefined}
+              aria-label={props.responding ? 'Queue message' : 'Send'}
+              onClick={submit}
+            >
+              ↑
+            </button>
           </div>
         </div>
       </div>

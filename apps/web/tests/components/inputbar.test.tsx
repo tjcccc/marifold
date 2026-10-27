@@ -217,27 +217,38 @@ describe('InputBar composer interactions', () => {
     expect(onSubmit).toHaveBeenCalledWith('$make\nthis image cinematic');
   });
 
-  it('replaces Send with an always-available Stop response button while responding', () => {
+  it('keeps Send beside Stop while responding, and lists queued prompts with a remove button', () => {
     const onSubmit = vi.fn();
     const onStop = vi.fn();
+    const onWithdraw = vi.fn();
     render(
       <InputBar
-        steering={false}
+        steering
         responding
-        disabled
         deep={false}
         onToggleDeep={() => {}}
         modelOptions={[]}
         onSelectModel={() => {}}
         onSubmit={onSubmit}
         onStop={onStop}
+        queued={[{ id: 'q1', text: 'use bullet points' }, { id: 'q2', text: 'then summarize' }]}
+        onWithdrawQueued={onWithdraw}
       />,
     );
 
-    expect(screen.queryByRole('button', { name: 'Send' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Stop response' }));
     expect(onStop).toHaveBeenCalledOnce();
-    expect(onSubmit).not.toHaveBeenCalled();
+    const send = screen.getByRole('button', { name: 'Queue message' }) as HTMLButtonElement;
+    expect(send.disabled).toBe(true);
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'keep it short' } });
+    fireEvent.click(send);
+    expect(onSubmit).toHaveBeenCalledWith('keep it short');
+
+    const queue = screen.getByRole('list', { name: 'Queued messages' });
+    expect(queue.textContent).toContain('Queueduse bullet points');
+    expect(queue.textContent).toContain('Queuedthen summarize');
+    fireEvent.click(screen.getByRole('button', { name: 'Remove queued message: then summarize' }));
+    expect(onWithdraw).toHaveBeenCalledWith('q2');
   });
 
   it('lets Enter commit an IME composition without submitting it', () => {

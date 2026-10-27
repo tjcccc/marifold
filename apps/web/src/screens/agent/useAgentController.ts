@@ -12,7 +12,8 @@ import {
   listProfiles,
   setProfilePinned as setProfilePinnedRequest,
 } from '../../api/profiles';
-import { answerApproval, answerUserInput, cancelRun, listRuns, startRun, steerRun } from '../../api/runs';
+import { answerApproval, answerUserInput, cancelRun, listRuns, startRun } from '../../api/runs';
+import { usePromptQueue, type PromptQueue } from './usePromptQueue';
 import {
   acquireSessionLease,
   deleteSessionWhenIdle,
@@ -96,6 +97,8 @@ export interface AgentController {
   profilesLoading: boolean;
   sessionsLoading: boolean;
   steeringRun?: string;
+  /** Prompts typed while a reply is in progress (`usePromptQueue`). */
+  promptQueue: PromptQueue;
   /** True while the selected conversation has a live chat or agent response. */
   responding: boolean;
   sending: boolean;
@@ -233,6 +236,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
     [onUnauthorized],
   );
   const [deep, setDeep] = useGlobalDeep(client, handleError);
+  const promptQueue = usePromptQueue(client, thread, sending || chatResponding || activeRun(thread) !== undefined, text => sendMessage(text), handleError);
 
   const rememberPersistedSessionIds = useCallback((ids: Iterable<string>) => {
     setPersistedSessionIds(current => {
@@ -677,14 +681,9 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
             : 'Wait for this run to finish, or stop it, before starting a task on an @device.' });
           return false;
         }
-        try {
-          await steerRun(client, running.runId, trimmed);
-          return true;
-        } catch (error) {
-          handleError(error);
-          return false;
-        }
+        return promptQueue.enqueue(trimmed, running.runId);
       }
+      if (chatResponding) { return promptQueue.enqueue(trimmed); }
 
       // In a project the host picks who answers; the preview sends the request's
       // model settings and skill to that profile.
@@ -885,7 +884,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
         setSendingBytes(undefined);
       }
     },
-    [client, profileName, profiles, project, projectId, projectState.refresh, floor, sessionId, sessionRoute, modelChoice, deep, followers, navigate, handleError, refreshSessions, loadSession, attachmentDraftKey],
+    [client, profileName, profiles, project, projectId, projectState.refresh, floor, sessionId, sessionRoute, modelChoice, deep, followers, navigate, handleError, refreshSessions, loadSession, attachmentDraftKey, chatResponding, promptQueue.enqueue],
   );
 
   const stop = useCallback(async (): Promise<boolean> => {
@@ -1083,6 +1082,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
     profilesLoading,
     sessionsLoading,
     steeringRun: activeRun(thread)?.runId,
+    promptQueue,
     responding: chatResponding || activeRun(thread) !== undefined,
     sending,
     deep,

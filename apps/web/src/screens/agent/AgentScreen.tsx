@@ -478,7 +478,10 @@ export function AgentScreen(props: AgentScreenProps) {
                 draftKey={`${props.connectionId}:${project ? `project:${project.id}` : controller.profileName}:${controller.sessionId ?? 'new'}`}
                 steering={controller.steeringRun !== undefined}
                 responding={controller.responding}
-                disabled={controller.sending || controller.sessionLoading || controller.sessionBlocked || sessionArchived}
+                // While a reply streams, a submission joins the queue instead of sending.
+                disabled={(controller.sending && !controller.responding) || controller.sessionLoading || controller.sessionBlocked || sessionArchived}
+                queued={controller.promptQueue.queued}
+                onWithdrawQueued={controller.promptQueue.withdraw}
                 deep={controller.deep}
                 deepAvailable={deepAvailable}
                 onToggleDeep={() => controller.setDeep(!controller.deep)}

@@ -28,7 +28,7 @@ it('carries a password encrypted by the full Agent screen to the approval HTTP b
         rows: [], inputResponses: [], steering: [], denials: [], errors: [], artifacts: [], collapsed: false,
         approval: { id: 'approval', tool: 'sudo_exec', kind: 'shell', summary: 'id -u', input: { command: 'id -u' }, escalated: true, persistable: false, sudo },
       },
-    }] }, answer,
+    }] }, answer, promptQueue: { queued: [], enqueue: vi.fn(), withdraw: vi.fn() },
   } as unknown as AgentController);
   render(<AgentScreen client={client} route={{ view: 'agent', profile: 'tester' }} navigate={vi.fn()}
     onUnauthorized={vi.fn()} theme="light" onThemeChange={vi.fn()} onOpenConnection={vi.fn()} onOpenSettings={vi.fn()}

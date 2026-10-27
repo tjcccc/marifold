@@ -179,7 +179,8 @@ interface ActiveRun {
   firstSeq: number;
   lastSeq: number;
   abort: AbortController;
-  steeringQueue: string[];
+  /** Guidance not yet read by the runner; the id lets a client withdraw it. */
+  steeringQueue: Array<{ id: string; text: string }>;
   grantedKinds: Set<ToolKind>;
   trustedFolders: string[];
   /** Sensitive read roots allowed persistently during this run. */
@@ -458,12 +459,26 @@ export class RunRegistry {
   }
 
   /** Queue mid-run guidance; the runner drains it before its next iteration
-   * and emits a `steering` event so attached clients see it land. */
-  steer(runId: string, text: string): void {
+   * and emits a `steering` event so attached clients see it land. Returns the
+   * note's id for `withdrawSteering`. */
+  steer(runId: string, text: string): string {
     const run = this.runs.get(runId);
     if (!run) { throw MarifoldError.runNotFound(runId); }
     if (run.finished) { throw MarifoldError.agentRunInvalid(`Run ${runId} already finished; steering only applies to a running task.`); }
-    run.steeringQueue.push(text);
+    const id = `steer_${crypto.randomBytes(6).toString('hex')}`;
+    run.steeringQueue.push({ id, text });
+    return id;
+  }
+
+  /** Remove queued guidance the runner has not read yet; false once it has
+   * (or the run ended without reading it). */
+  withdrawSteering(runId: string, steeringId: string): boolean {
+    const run = this.runs.get(runId);
+    if (!run) { throw MarifoldError.runNotFound(runId); }
+    const index = run.finished ? -1 : run.steeringQueue.findIndex(note => note.id === steeringId);
+    if (index === -1) { return false; }
+    run.steeringQueue.splice(index, 1);
+    return true;
   }
 
   /** Idempotent: aborts an active run (resolving any pending approval so the
@@ -516,7 +531,7 @@ export class RunRegistry {
         executionId: run.id,
         tags: ['service'],
         signal: run.abort.signal,
-        steering: () => run.steeringQueue.splice(0),
+        steering: () => run.steeringQueue.splice(0).map(note => note.text),
         approvalHandler: request => this.handleApproval(run, request),
         userInputHandler: request => this.handleUserInput(run, request),
       });

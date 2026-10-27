@@ -140,10 +140,14 @@ export function registerRunRoutes(server: FastifyInstance, registry: RunRegistry
 
   server.post<{ Params: { id: string } }>('/v1/runs/:id/steer', async (request, reply) => {
     const body = objectBody(request.body);
-    registry.steer(request.params.id, requiredString(body.text, 'text'));
+    const id = registry.steer(request.params.id, requiredString(body.text, 'text'));
     reply.status(202);
-    return { ok: true, queued: true };
+    return { ok: true, queued: true, id };
   });
+
+  server.delete<{ Params: { id: string; steeringId: string } }>('/v1/runs/:id/steer/:steeringId', async request => (
+    { ok: true, withdrawn: registry.withdrawSteering(request.params.id, request.params.steeringId) }
+  ));
 
   server.post<{ Params: { id: string } }>('/v1/runs/:id/cancel', async (request, reply) => {
     const status = registry.cancel(request.params.id);

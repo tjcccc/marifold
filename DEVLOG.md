@@ -2,6 +2,19 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-10-27 — v0.105.0 — Queued prompts in the Web composer
+
+- **Queue** (`screens/agent/usePromptQueue.ts`, `state/promptQueue.ts`): while a reply is in progress the composer keeps **Send** beside **Stop**, so guidance can be sent from a phone too (Enter adds a line there). What is sent is listed above the composer as **Queued**, oldest first (the usual term in Claude Code and Codex; one label, since whether a run takes another step is not known ahead). On a running agent it is steering: it leaves the list when the run reads it (the run card shows it, as before) and **×** withdraws it until then. During a chat reply, or left unread when a run ends (Stop included, and the final answer, which never reads queued guidance), the queued prompts go out as one message joined in the order typed once the session is idle, so nothing typed is dropped. Attachments wait until the reply is done.
+- **Service**: `POST /v1/runs/:id/steer` returns the note's `id`; `DELETE /v1/runs/:id/steer/:steeringId` withdraws it (`withdrawn: false` once read or after the run ended). `RunRegistry.withdrawSteering`.
+- Validation: lint, typecheck; tests core 682, service 108, Web 303 (queue settling and joining, Send beside Stop with the list and its remove button). Preview (headless, host page, the mock now pauses on a question for "ask me"): Send and Stop both shown, two notes queued, one withdrawn, the run read only the other ("guidance read: GUIDE-one"), the list emptied; then two notes queued on a paused run and Stop sent them as one "GUIDE-three / GUIDE-four" message.
+- Not covered: a page reload loses its list (guidance already queued on the service still reaches the run, but unread leftovers are not sent); a run executing on another workspace device was not tried.
+
+## 2026-10-27 — v0.105.0 — Editing a reply in a reopened session
+
+- **Fix** (Web, all sessions): editing a message in a session reopened from the list or a reload showed "While you were away" for the answers the edit replaced. A saved reply matched to its finished run on load now keeps the run's id (`matchedRunId`, `state/thread.ts`) even when the run made no files and so gets no card, and an edit or a discard marks those runs seen with the ones whose cards it removes.
+- `TODO.md` now lists the Projects follow-ups after v1: the deferred group chat, Teams, TUI projects and asset search, plus the smaller gaps (no ETag through the workspace proxy, only a leading `@` highlighted, "In assets" as a guess, turning full access on from a native app).
+- Validation: lint, typecheck; Web tests 300 (the reload test now also edits the message and checks the matched run is discarded).
+
 ## 2026-10-27 — v0.104.0 — Projects slice 6c: assets in the Web UI
 
 - **Assets column** (`screens/agent/ProjectAssets.tsx`, `ProjectAssetsPanel.tsx`, `useProjectAssets.ts`, `lib/projectAssets.ts`): in a project session an **Assets** toggle beside the Agent/Apps switch shows a 316px column of collapsible cards beside the conversation (remembered); below 1100px it opens over the conversation only when asked and closes on a press there, since it would cover the composer. **Assets** shows the count and storage used of the limit (warning color and a note on what fits at 90%), stored rows (version, size, who saved it; download, versions with their downloads, rename, describe, upload a new version, delete with all versions) and linked rows (`@device/path` and why it cannot be read now; rename, describe, remove link). Its **+** uploads files (18 MB each, checked before encoding) or opens the link sheet. **Outputs** lists the session's run outputs from `GET /v1/runs?sessionId=`, each **In assets** or **+ Add to assets**. Files dropped on the column upload; dropped on the conversation they still attach.

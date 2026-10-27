@@ -66,6 +66,11 @@ Shipped history lives in `DEVLOG.md` and the `docs/roadmap.md` ladder; this list
 - Bridge setup: fewer manual steps to bring a personal bridge online and pair devices.
 - Agent computer, follow-ups (`docs/agent-computer.md`): snapshots (`docker commit`) before risky work; a Web terminal and file browser; giving new profiles access automatically; a `marifold computer` CLI; Playwright/`uv` presets; verify the Docker Desktop, Colima and Linux Docker paths (only OrbStack was tested live); stop the image build when its create is cancelled.
 - Run-scoped approvals, follow-ups (from step 2 of the 2026-10-12 workspace plan): the agent proposing a grant up front ("read ~/x for this task") instead of the user granting at the first prompt; the `marifold agent` CLI prompt offering "for this run"; remote TUI sessions answering server-side `run` grants made from another client (the TUI keeps its own per-run grants and posts `once`).
+- Projects, after v1 (v0.104.0; deferred list in `docs/projects.md#deferred`): group chat and Teams (design notes below), Projects in the TUI (`/invite`, `/dismiss`, `@` routing), and asset search with automatic descriptions for large linked folders. Smaller gaps:
+  - The workspace proxy forwards no ETag, so a guest downloads avatars and project icons again on every view.
+  - The Web composer and message bubbles highlight only a leading `@` mention; routing already reads every mention.
+  - "In assets" on a run output is a guess (an asset by the output's name saved by one of its runs); make it exact when Artifacts records which output became which asset.
+  - Turning full access on from a native app instead of the CLI, with the app's signed identity holding macOS Automation permission (the Web UI only shows it and turns it off).
 
 ### Platform
 

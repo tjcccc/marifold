@@ -65,7 +65,7 @@ Rules:
 
 - **Sheets** (`*Sheet.tsx`) are modal or inline panels on `--surface` with `--radius-lg` and `--shadow-sheet`. Modal sheets and confirmation dialogs sit over `--scrim` and become bottom sheets on mobile; the connection popover uses a lighter blurred tint instead. The in-thread Approval and Question sheets are framed with a `--brand-tint` border and outline so they read as requests for the owner.
 - **Banners** (`CatchUpBanner`, `SessionBlockedBanner`) sit at the top of the thread for state the owner must notice, with one primary action and an optional dismiss.
-- **Controls:** `SegmentedControl` for small exclusive choices, native `<select>` with the chevron from `base.css`, and circular Send/Stop in the composer. Primary actions fill with `--brand-fill` and label with `--on-brand`.
+- **Controls:** `SegmentedControl` for small exclusive choices, native `<select>` with the chevron from `base.css`, and circular Send/Stop in the composer (both while a reply is in progress, Stop first). Prompts queued meanwhile sit in compact rows above the composer (`--surface-2`, `--radius-md`, a "Queued" label in `--text-3`, one line of text, and a remove ×). Primary actions fill with `--brand-fill` and label with `--on-brand`.
 - **Icons** are inline SVG components or small inline `<svg>` elements. `MarigoldLogo` is the brand mark and is colored with `--brand-fill`.
 - **Focus:** inputs and controls show focus with a `--brand-fill` border or a 2px `--brand-fill` outline (`--brand-tint` for softer rings, `--danger` mixes on invalid fields).
 - **Feedback:** progress uses small spinners or shimmer, plus explicit text such as "Sending…" or "Opening workspace…". Errors use `--danger` text with the reason, not color alone.

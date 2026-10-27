@@ -473,6 +473,9 @@ describe('threadReducer', () => {
 
     expect(state.catchUp).toEqual([]);
     expect(state.items.map(item => item.kind)).toEqual(['user', 'assistant']);
+    // Editing the message replaces that reply, so its run is not bannered later.
+    const edited = reduce(state, { type: 'edit_user_message', itemId: state.items[0].id, text: 'Write two notes.' });
+    expect(edited.discardedRunIds).toEqual(['run_1']);
   });
 
   it('toggle_run_details flips collapsed', () => {

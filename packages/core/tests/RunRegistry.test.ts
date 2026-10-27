@@ -584,13 +584,17 @@ describe('RunRegistry', () => {
     const stream = registry.events(record.id, 0);
     // Steer after iteration 1 is in flight so the note lands on iteration 2.
     const { seen: head } = await pullUntil(stream, e => e.type === 'tool_request');
-    registry.steer(record.id, 'prefer the short answer');
+    const kept = registry.steer(record.id, 'prefer the short answer');
+    // A withdrawn note never reaches the model; one already read cannot be withdrawn.
+    expect(registry.withdrawSteering(record.id, registry.steer(record.id, 'never mind'))).toBe(true);
     release();
 
     const events = [...head, ...await drain(stream)];
-    const steering = events.find(({ event }) => event.type === 'steering');
-    expect(steering!.event).toMatchObject({ type: 'steering', text: 'prefer the short answer' });
+    const steering = events.filter(({ event }) => event.type === 'steering');
+    expect(steering.map(({ event }) => event)).toEqual([expect.objectContaining({ type: 'steering', text: 'prefer the short answer' })]);
     expect(engines[0].requests[1].userContext?.join('\n')).toContain('prefer the short answer');
+    expect(engines[0].requests[1].userContext?.join('\n')).not.toContain('never mind');
+    expect(registry.withdrawSteering(record.id, kept)).toBe(false);
 
     expect(() => registry.steer(record.id, 'too late')).toThrow(/already finished/);
   });

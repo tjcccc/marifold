@@ -84,7 +84,7 @@ describe('RunCard', () => {
     render(<RunCard run={cardFixture()} onCancel={onCancel} onAnswer={() => {}} onToggle={() => {}} />);
     expect(screen.getByText(/Working — write summary\.md/)).toBeTruthy();
     expect(screen.getByText('1:24')).toBeTruthy();
-    expect(screen.getByText('Guidance applied — “keep it under one page”')).toBeTruthy();
+    expect(screen.getByText('Queued message read — “keep it under one page”')).toBeTruthy();
     fireEvent.click(screen.getByText('Cancel'));
     expect(onCancel).toHaveBeenCalledOnce();
   });
@@ -106,7 +106,7 @@ describe('RunCard', () => {
 
     render(<RunArtifacts client={client} runId={run.runId} artifacts={run.artifacts} />);
     expect(screen.getByRole('button', { name: /Download report\.pdf/ })).toBeTruthy();
-    expect(screen.queryByText('Guidance applied — “keep it under one page”')).toBeNull();
+    expect(screen.queryByText('Queued message read — “keep it under one page”')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: /report\.pdf/ }));
 
     await waitFor(() => expect(click).toHaveBeenCalled());
@@ -344,7 +344,7 @@ describe('InputBar', () => {
         onStop={() => {}}
       />,
     );
-    expect(screen.getByPlaceholderText(/guidance is picked up mid-task/)).toBeTruthy();
+    expect(screen.getByPlaceholderText(/reads it at its next step/)).toBeTruthy();
   });
 });
 

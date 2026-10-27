@@ -368,7 +368,8 @@ Local and base64 images are decoded and validated in core, limited to four and 1
 | `GET /v1/downloads/:ticket` | Streams one file with Content-Length and the issued attachment/inline disposition. Ticket replaces bearer authentication for this URL only; network, Host, and Origin restrictions still apply |
 | `POST /v1/runs/:id/inputs/:requestId` | Submit every answer for one clarification checkpoint (below) |
 | `POST /v1/runs/:id/approvals/:requestId` | Answer an approval (below) |
-| `POST /v1/runs/:id/steer` `{ "text": "..." }` → 202 | Queue mid-run guidance; applied before the next model turn, echoed as a `steering` event |
+| `POST /v1/runs/:id/steer` `{ "text": "..." }` → 202 `{ queued, id }` | Queue mid-run guidance; applied before the next model turn, echoed as a `steering` event |
+| `DELETE /v1/runs/:id/steer/:steeringId` → `{ withdrawn }` | Take back queued guidance the run has not read; `withdrawn: false` once it has, or after the run ended |
 | `POST /v1/runs/:id/cancel` → 202 | Idempotent; returns current `status`. Unblocks a pending clarification or approval immediately; the run finishes `cancelled` |
 
 Web clients treat the `artifact` event as authoritative. A model-authored `sandbox:` Markdown target is only a presentation hint: it may resolve to an exact filename in the same run's artifact list, then download by opaque ID. Clients must never fetch or navigate directly to the host path in that target.

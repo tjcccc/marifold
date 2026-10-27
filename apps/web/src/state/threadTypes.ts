@@ -92,6 +92,9 @@ export type ThreadItem =
       responseMeta?: ResponseMetaState;
       /** A loaded project reply's profile; live replies use their run's. */
       speaker?: string;
+      /** The finished run a loaded reply was matched to, kept without its
+       * card so an edit that replaces the reply can mark the run seen. */
+      matchedRunId?: string;
     }
   | { id: string; kind: 'run'; run: RunCardState }
   | { id: string; kind: 'notice'; tone: 'info' | 'warn' | 'error'; text: string };

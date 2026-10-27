@@ -123,7 +123,7 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
       const nextUserOffset = state.items.slice(index + 1).findIndex(item => item.kind === 'user');
       const suffixIndex = nextUserOffset === -1 ? state.items.length : index + 1 + nextUserOffset;
       const replacedItems = state.items.slice(index + 1, suffixIndex);
-      const discardedRunIds = replacedItems.flatMap(item => item.kind === 'run' ? [item.run.runId] : []);
+      const discardedRunIds = runIdsOf(replacedItems);
       const edited: Extract<ThreadItem, { kind: 'user' }> = {
         ...target,
         text: action.text,
@@ -244,6 +244,8 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
           if ((run.artifacts?.length ?? 0) > 0) {
             next = { ...next, items: next.items.map((item, index) => index === durableResponseIndex && item.kind === 'assistant' ? { ...item, runId: run.id, runPhase: 'final' as const } : item) };
             next = insert(next, durableResponseIndex, { kind: 'run', run: cardFromRecord(run) });
+          } else {
+            next = { ...next, items: next.items.map((item, index) => index === durableResponseIndex && item.kind === 'assistant' ? { ...item, matchedRunId: run.id } : item) };
           }
           continue;
         }
@@ -272,9 +274,7 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
     case 'discard_from': {
       const index = state.items.findIndex(item => item.id === action.itemId);
       if (index === -1) { return state; }
-      const discardedRunIds = state.items
-        .slice(index)
-        .flatMap(item => item.kind === 'run' ? [item.run.runId] : []);
+      const discardedRunIds = runIdsOf(state.items.slice(index));
       return {
         ...state,
         items: state.items.slice(0, index),
@@ -333,6 +333,13 @@ const RUN_RESPONSE_MATCH_TOLERANCE_MS = 1_000;
 /** Match a transient run registry record to the durable assistant exchange it
  * produced. Registry timestamps bracket the same execution recorded in
  * response metrics, with only a few milliseconds of persistence overhead. */
+/** The runs behind these items: their cards, and replies matched to a run on load. */
+function runIdsOf(items: ThreadItem[]): string[] {
+  return items.flatMap(item => item.kind === 'run'
+    ? [item.run.runId]
+    : item.kind === 'assistant' && item.matchedRunId ? [item.matchedRunId] : []);
+}
+
 function matchingDurableResponseIndex(state: ThreadState, run: RunRecord): number {
   const runStartedAt = Date.parse(run.createdAt);
   const runFinishedAt = run.finishedAt ? Date.parse(run.finishedAt) : undefined;

@@ -54,8 +54,19 @@ export async function answerUserInput(
   );
 }
 
-export async function steerRun(client: ApiClient, runId: string, text: string): Promise<void> {
-  await client.request('POST', `/v1/runs/${encodeURIComponent(runId)}/steer`, { text });
+/** Queue guidance for the run's next step; resolves to the note's id. */
+export async function steerRun(client: ApiClient, runId: string, text: string): Promise<string | undefined> {
+  const body = await client.request<{ id?: string }>('POST', `/v1/runs/${encodeURIComponent(runId)}/steer`, { text });
+  return body.id;
+}
+
+/** Take back guidance the run has not read; false once it has. */
+export async function withdrawSteering(client: ApiClient, runId: string, steeringId: string): Promise<boolean> {
+  const body = await client.request<{ withdrawn: boolean }>(
+    'DELETE',
+    `/v1/runs/${encodeURIComponent(runId)}/steer/${encodeURIComponent(steeringId)}`,
+  );
+  return body.withdrawn;
 }
 
 export async function cancelRun(client: ApiClient, runId: string): Promise<TaskStatus> {
