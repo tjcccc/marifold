@@ -268,7 +268,9 @@ export type {
   SequencedEvent,
 } from './runs/RunRegistry';
 export { TelegramBridge } from './channels/TelegramBridge';
-export type { TelegramBridgeDeps } from './channels/TelegramBridge';
+export type { TelegramBridgeDeps, TelegramBridgeStatus, TelegramIgnoredSender } from './channels/TelegramBridge';
+export { TelegramChannel } from './channels/TelegramChannel';
+export type { TelegramChannelDeps, TelegramChannelState, TelegramChannelUpdate, TelegramChannelView, TelegramTokenSource } from './channels/TelegramChannel';
 export { proxyDispatcher } from './util/proxy';
 export { fetchWithTransientRetry, isTransientFetchError } from './util/fetchRetry';
 export type { TransientFetchRetryOptions } from './util/fetchRetry';

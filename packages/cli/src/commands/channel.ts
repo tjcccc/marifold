@@ -90,6 +90,7 @@ export function registerChannelCommand(program: Command, printer: ConsolePrinter
             allowlist,
             profile,
             defaultMode: 'agent',
+            ...(existing?.proxy !== undefined ? { proxy: existing.proxy } : {}),
           },
         };
         const savedPath = new ConfigManager(loaded).save();

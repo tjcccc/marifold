@@ -1,4 +1,4 @@
-import { ArtifactWebRtc, DeviceExecution, MARIFOLD_VERSION, planProjectTurn } from '@marifold/core';
+import { ArtifactWebRtc, DeviceExecution, MARIFOLD_VERSION, planProjectTurn, TelegramChannel } from '@marifold/core';
 import { remoteArtifactDownload } from './RemoteArtifactDownload';
 import { requestEnvironment, requestOrigin } from './RequestEnvironment';
 import { registerWorkspaceScheduleRoutes } from './WorkspaceScheduleRoutes';
@@ -27,6 +27,7 @@ import { registerSessionRoutes } from './SessionRoutes';
 import { registerSkillAppRoutes } from './SkillAppRoutes';
 import { registerAgentComputerRoutes } from './AgentComputerRoutes';
 import { registerDeviceExecutionRoutes } from './DeviceExecutionRoutes';
+import { registerChannelRoutes } from './ChannelRoutes';
 import { registerTaskRoutes } from './TaskRoutes';
 import { ArtifactTickets, artifactHeaders } from './ArtifactTickets';
 import { registerRunRoutes } from './RunRoutes';
@@ -38,6 +39,9 @@ export interface MarifoldServiceOptions {
   /** Address the HTTP server will bind to. Defaults to loopback. */
   host?: string;
   logger?: boolean;
+  /** Sink for background messages (scheduler, Telegram bridge). Defaults to
+   * the Fastify logger, which is silent unless `logger` is on. */
+  backgroundLog?: (message: string) => void;
   /** Run the schedule scheduler inside this service process. Default true.
    * Schedules only fire while the service is running. */
   scheduler?: boolean;
@@ -105,17 +109,20 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
   try { workspaceManager = new WorkspaceManager(options.loadedConfig.configPath); }
   catch (error) { runtime.close(); throw error; }
 
+  const backgroundLog = options.backgroundLog ?? ((message: string) => server.log.info(message));
   const scheduler = (options.scheduler ?? true)
-    ? runtime.createScheduler(message => server.log.info(message))
+    ? runtime.createScheduler(backgroundLog)
     : undefined;
   scheduler?.start();
 
   // Messaging bridge(s) run inside the same long-lived process as the HTTP API
   // and scheduler, so one `marifold service` powers everything (TUI, future
   // Web/desktop/mobile, Telegram).
-  const telegramBridge = runtime.createTelegramBridge(message => server.log.info(message));
-  telegramBridge?.start();
-  (server as ServiceWithBridge).marifoldTelegram = telegramBridge ? { profile: telegramBridge.profile } : undefined;
+  const telegram = new TelegramChannel({ runtime, loadedConfig: options.loadedConfig, log: backgroundLog });
+  telegram.start();
+  const telegramProfile = telegram.activeProfile;
+  (server as ServiceWithBridge).marifoldTelegram = telegramProfile ? { profile: telegramProfile } : undefined;
+  registerChannelRoutes(server, telegram);
 
   const artifactTransfers = new ArtifactWebRtc();
   server.addHook('onClose', async () => artifactTransfers.close());
@@ -243,7 +250,7 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
   if (webDir) { registerStaticRoutes(server, webDir); }
 
   server.addHook('onClose', async () => {
-    telegramBridge?.stop();
+    telegram.stop();
     scheduler?.stop();
     runRegistry.close();
     skillAppInstances.close();

@@ -39,7 +39,8 @@ export type MarifoldErrorCode =
   | 'ORIGIN_FORBIDDEN'
   | 'HOST_ONLY_SETTING'
   | 'WORKSPACE_INVALID'
-  | 'WORKSPACE_CONFLICT';
+  | 'WORKSPACE_CONFLICT'
+  | 'CHANNEL_ERROR';
 
 export class MarifoldError extends Error {
   readonly code: MarifoldErrorCode;
@@ -237,6 +238,11 @@ export class MarifoldError extends Error {
 
   static hostOnlySetting(message: string): MarifoldError {
     return new MarifoldError('HOST_ONLY_SETTING', message);
+  }
+
+  /** A messaging channel's upstream (e.g. the Telegram Bot API) refused or was unreachable. */
+  static channelError(message: string): MarifoldError {
+    return new MarifoldError('CHANNEL_ERROR', message);
   }
 
   static workspaceAlreadyInitialized(configPath: string): MarifoldError {

@@ -164,6 +164,9 @@ export interface TelegramChannelConfig {
   allowlist: number[];
   /** Profile whose model + permissions the bot runs under. */
   profile: string;
+  /** HTTP(S) proxy for Telegram API calls (Telegram is blocked in some
+   * regions). Falls back to the service's `HTTPS_PROXY`/`HTTP_PROXY` env. */
+  proxy?: string;
   /** Legacy compatibility field. Primary channel messages always use Agent. */
   defaultMode: ProfileMode;
 }

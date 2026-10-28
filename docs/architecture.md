@@ -5,7 +5,7 @@ marifold is a local-first, single-owner personal AI workspace: one person runs i
 ## Runtime pieces
 
 - **CLI process** (`marifold …`): one-shot commands, `marifold agent`, and the TUI. Bare `marifold` loads the ESM TUI through a dynamic `import()` and runs it in the same process, either against a local `MarifoldRuntime` or against the local service as a remote runtime.
-- **Service process** (`marifold service`): the Fastify API, the static Web UI, the scheduler, the Telegram bridge, the run registry, and the workspace manager and executor. It binds to loopback by default; non-loopback binds accept only private-network peers.
+- **Service process** (`marifold service`): the Fastify API, the static Web UI, the scheduler, the Telegram bridge (owned by `TelegramChannel`, which applies settings edits live and restarts the bridge for a token or on/off change), the run registry, and the workspace manager and executor. It binds to loopback by default; non-loopback binds accept only private-network peers.
 - **Web UI** (browser): a static React app served by the service; it reaches everything over the service HTTP/SSE API.
 - **Workspace bridge** (`apps/bridge`, deployed separately as a Cloudflare Worker with one Durable Object, or as a Node server): relays end-to-end encrypted messages between the devices of one workspace, with SQLite state. It authenticates members and never sees message contents.
 - **Device job workers**: detached Node processes that run approved full-access and `sudo_exec` shell jobs and record their results on disk, so jobs survive disconnects and service restarts.

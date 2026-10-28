@@ -53,6 +53,7 @@ import { ProvidersPage } from './ProvidersPage';
 import { ServicePage } from './ServicePage';
 import { AgentComputerPage } from './AgentComputerPage';
 import { DevicePage } from './DevicePage';
+import { TelegramPage } from './TelegramPage';
 import { WebSearchPage } from './WebSearchPage';
 import styles from './ConfigScreen.module.css';
 
@@ -62,6 +63,7 @@ const SECTIONS: Array<{ id: ConfigSection; label: string }> = [
   { id: 'providers', label: 'Providers' },
   { id: 'models', label: 'Models' },
   { id: 'web-search', label: 'Web search' },
+  { id: 'channels', label: 'Channels' },
   { id: 'appearance', label: 'Appearance' },
   { id: 'service', label: 'Service' },
   { id: 'device', label: 'This device' },
@@ -203,6 +205,7 @@ export function ConfigScreen({
       const first = Object.keys(config.providers).sort()[0];
       if (first) { go('providers', first); }
     }
+    else if (section === 'channels') { go('channels', 'telegram'); } // the only channel so far
   }, [section, item, config, go, mobile]);
 
   // Profile detail for the selected profile.
@@ -719,6 +722,7 @@ export function ConfigScreen({
         ) : null}
 
         {section === 'device' ? <DevicePage client={localClient} /> : null}
+        {section === 'channels' && (item ?? 'telegram') === 'telegram' ? <TelegramPage client={localClient} /> : null}
 
         {section === 'agent-computer' ? <AgentComputerPage client={client} /> : null}
 

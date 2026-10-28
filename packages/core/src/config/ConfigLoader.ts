@@ -118,6 +118,7 @@ export class ConfigLoader {
       botToken: optionalString(raw.bot_token, 'channel.telegram.bot_token'),
       allowlist,
       profile: optionalString(raw.profile, 'channel.telegram.profile') ?? 'default',
+      proxy: optionalString(raw.proxy, 'channel.telegram.proxy'),
       defaultMode: (mode as ProfileMode | undefined) ?? 'agent',
     };
   }

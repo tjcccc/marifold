@@ -661,6 +661,7 @@ export function renderMarifoldConfig(config: MarifoldConfig): string {
     optionalStringLine('bot_token', tg.botToken),
     `allowlist = [${tg.allowlist.join(', ')}]`,
     `profile = ${tomlString(tg.profile)}`,
+    optionalStringLine('proxy', tg.proxy),
   ].filter(Boolean).join('\n');
 
   const svc = config.service;

@@ -51,7 +51,6 @@ import { ProjectStore } from '../projects/ProjectStore';
 import { projectTurnHooks } from '../projects/ProjectTurns';
 import { Scheduler } from '../schedule/Scheduler';
 import { RunRegistry } from '../runs/RunRegistry';
-import { TelegramBridge } from '../channels/TelegramBridge';
 import { type ScheduleCreateInput, type ScheduleState, ScheduleStore, type ScheduleUpdateInput } from '../schedule/ScheduleStore';
 import {
   SessionResolver,
@@ -823,25 +822,6 @@ export class MarifoldRuntime {
   /** Scheduler for the long-running service process. Call start()/stop(). */
   createScheduler(log?: (message: string) => void): Scheduler {
     return new Scheduler({ store: this.scheduleStore, runSchedule: schedule => this.runScheduledAgent(schedule), log });
-  }
-
-  /** Telegram bridge for the service process, or undefined when not configured,
-   * disabled, or missing a resolvable token. Call start()/stop(). */
-  createTelegramBridge(log?: (message: string) => void): TelegramBridge | undefined {
-    const config = this.options.loadedConfig.config.channels?.telegram;
-    if (!config || config.enabled === false) { return undefined; }
-    const token = config.botTokenEnv ? process.env[config.botTokenEnv] : config.botToken;
-    if (!token) {
-      log?.(`Telegram channel configured but no bot token resolved${config.botTokenEnv ? ` (env ${config.botTokenEnv} unset)` : ''} — bridge not started.`);
-      return undefined;
-    }
-    return new TelegramBridge({
-      runtime: this,
-      token,
-      config,
-      log,
-      profilesDir: this.options.loadedConfig.config.paths.profilesDir,
-    });
   }
 
   /** Live run-session registry for the service process: start/attach/approve/

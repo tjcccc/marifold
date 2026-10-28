@@ -20,6 +20,8 @@ const APPROVAL_TIMEOUT_MS = 5 * 60 * 1000; // auto-deny if the user never taps
 const OUTBOX_SENT_DIR = 'sent'; // delivered files are moved here to keep them
 const IMAGE_EXTS = new Set(['.jpg', '.jpeg', '.png', '.gif', '.webp']);
 const DOWNLOAD_ATTEMPTS = 3; // Telegram downloads can transiently fail behind a proxy
+const IGNORED_SENDERS_KEPT = 10; // recent non-allowlisted senders, for one-click allow
+const TEST_MESSAGE = '✅ Test message from marifold — this bot can reach you.';
 
 // Injected atop the agent's system prompt so it knows the outbox mechanics.
 const OUTBOX_INSTRUCTIONS = [
@@ -43,7 +45,7 @@ interface TelegramUpdate {
   update_id: number;
   message?: {
     chat?: { id?: number };
-    from?: { id?: number };
+    from?: { id?: number; first_name?: string; last_name?: string; username?: string };
     text?: string;
     caption?: string;
     document?: { file_id: string; file_name?: string };
@@ -57,6 +59,28 @@ interface TelegramUpdate {
 }
 
 interface TelegramFileRef { fileId: string; name: string }
+
+/** A non-allowlisted sender the bridge ignored recently (newest first). */
+export interface TelegramIgnoredSender {
+  id: number;
+  name?: string;
+  username?: string;
+  at: string;
+}
+
+/** Live bridge health. Errors are token-redacted. */
+export interface TelegramBridgeStatus {
+  polling: boolean;
+  /** A text turn is in progress. */
+  busy: boolean;
+  /** From getMe, once Telegram was reachable. */
+  botUsername?: string;
+  /** Last successful getUpdates (ISO). */
+  lastPollAt?: string;
+  /** Current poll failure and when it started (ISO). */
+  pollError?: { message: string; since: string };
+  ignoredSenders: TelegramIgnoredSender[];
+}
 
 interface TelegramResponse<T> {
   ok: boolean;
@@ -76,7 +100,8 @@ export interface TelegramBridgeDeps {
    * profile's inbox/outbox under `<profilesDir>/<profile>/`. */
   profilesDir: string;
   log?: (message: string) => void;
-  /** Injectable for tests; defaults to global fetch (proxied via undici). */
+  /** Injectable for tests; defaults to global fetch (proxied via undici through
+   * `config.proxy`, else the `HTTPS_PROXY`/`HTTP_PROXY` env). */
   fetchImpl?: typeof fetch;
 }
 
@@ -85,8 +110,8 @@ export interface TelegramBridgeDeps {
  * via getUpdates, runs the allowlisted sender's turn through `respond()` under
  * the configured profile, and sends the reply back. **Attended in agent mode:**
  * tool approvals prompt the user with inline buttons and the run waits for the
- * tap. Single-user / one-turn-at-a-time. Network calls go through the proxy
- * (Telegram is often blocked).
+ * tap. Single-user / one-turn-at-a-time. Network calls go through
+ * `[channel.telegram].proxy` or the env proxy (Telegram is often blocked).
  */
 export class TelegramBridge {
   /** Profile the bot runs as — surfaced so the service can report it. Read
@@ -112,8 +137,17 @@ export class TelegramBridge {
   private readonly trustedFolders: string[] = [];
   private readonly sensitiveGrants = new Set<string>();
   private offset = 0;
+  // Last poll failure, so an outage logs once (and its recovery) instead of
+  // every backoff cycle.
+  private pollError?: string;
+  private pollErrorSince?: string;
+  private lastPollAt?: string;
+  private botUsername?: string;
+  private fetchingBotName = false;
+  private readonly ignoredSenders: TelegramIgnoredSender[] = [];
   private running = false;
   private busy = false; // one text turn at a time
+  private idleWaiters: Array<() => void> = [];
   private pendingApproval?: { token: string; resolve: (action: ApprovalAction) => void };
   private abort?: AbortController;
 
@@ -122,8 +156,40 @@ export class TelegramBridge {
     this.token = deps.token;
     this.config = deps.config;
     this.profilesDir = deps.profilesDir;
-    this.log = deps.log;
+    // Telegram URLs embed the token; keep it out of anything logged.
+    this.log = deps.log ? message => deps.log?.(this.redact(message)) : undefined;
     this.fetchImpl = deps.fetchImpl ?? fetch;
+  }
+
+  status(): TelegramBridgeStatus {
+    return {
+      polling: this.running,
+      busy: this.busy,
+      ...(this.botUsername ? { botUsername: this.botUsername } : {}),
+      ...(this.lastPollAt ? { lastPollAt: this.lastPollAt } : {}),
+      ...(this.pollError !== undefined ? { pollError: { message: this.pollError, since: this.pollErrorSince ?? '' } } : {}),
+      ignoredSenders: this.ignoredSenders.map(sender => ({ ...sender })),
+    };
+  }
+
+  /** Resolves once no text turn is in progress (at once when idle). */
+  whenIdle(): Promise<void> {
+    if (!this.busy) { return Promise.resolve(); }
+    return new Promise(resolveIdle => { this.idleWaiters.push(resolveIdle); });
+  }
+
+  /** Send a fixed test message to `chatId` (a user's private chat id equals
+   * their user id). Throws the token-redacted Telegram error. */
+  async sendTest(chatId: number): Promise<void> {
+    try {
+      await this.call('sendMessage', { chat_id: chatId, text: TEST_MESSAGE }, SEND_TIMEOUT_MS);
+    } catch (error) {
+      throw new Error(this.redact(errorMessage(error)));
+    }
+  }
+
+  private redact(text: string): string {
+    return this.token ? text.split(this.token).join('<token>') : text;
   }
 
   private outboxDir(): string {
@@ -139,6 +205,8 @@ export class TelegramBridge {
     this.running = true;
     this.abort = new AbortController();
     this.log?.(`Telegram bridge started (profile ${this.profile}, agent mode, ${this.config.allowlist.length} allowed user(s)).`);
+    // getMe answers at once, so status shows contact before the first long poll returns.
+    void this.fetchBotName();
     void this.loop();
   }
 
@@ -150,7 +218,15 @@ export class TelegramBridge {
   private async loop(): Promise<void> {
     while (this.running) {
       try {
-        for (const update of await this.getUpdates()) {
+        const updates = await this.getUpdates();
+        this.lastPollAt = new Date().toISOString();
+        if (this.pollError !== undefined) {
+          this.pollError = undefined;
+          this.pollErrorSince = undefined;
+          this.log?.('Telegram polling recovered.');
+        }
+        if (!this.botUsername) { void this.fetchBotName(); }
+        for (const update of updates) {
           if (!this.running) { break; }
           this.offset = update.update_id + 1;
           // Detached: a turn may block on an approval whose callback_query only
@@ -159,7 +235,12 @@ export class TelegramBridge {
         }
       } catch (error) {
         if (!this.running) { break; } // aborted by stop()
-        this.log?.(`Telegram poll error: ${errorMessage(error)}`);
+        const message = this.redact(errorMessage(error));
+        if (message !== this.pollError) {
+          this.pollError = message;
+          this.pollErrorSince = new Date().toISOString();
+          this.log?.(`Telegram poll error: ${message}${this.config.proxy ? '' : ' (if Telegram is blocked here, set [channel.telegram].proxy)'}`);
+        }
         await this.sleep(ERROR_BACKOFF_MS);
       }
     }
@@ -179,6 +260,7 @@ export class TelegramBridge {
     if (chatId === undefined || !message) { return; }
     if (fromId === undefined || !this.config.allowlist.includes(fromId)) {
       this.log?.(`Ignored message from non-allowlisted user ${fromId ?? '?'}`);
+      if (fromId !== undefined) { this.rememberIgnored(fromId, message.from); }
       return;
     }
 
@@ -206,6 +288,30 @@ export class TelegramBridge {
       await this.runTurn(chatId, text);
     } finally {
       this.busy = false;
+      const waiters = this.idleWaiters;
+      this.idleWaiters = [];
+      for (const resolveIdle of waiters) { resolveIdle(); }
+    }
+  }
+
+  private rememberIgnored(id: number, from: NonNullable<TelegramUpdate['message']>['from']): void {
+    const name = [from?.first_name, from?.last_name].filter(Boolean).join(' ') || undefined;
+    const existing = this.ignoredSenders.findIndex(sender => sender.id === id);
+    if (existing >= 0) { this.ignoredSenders.splice(existing, 1); }
+    this.ignoredSenders.unshift({ id, ...(name ? { name } : {}), ...(from?.username ? { username: from.username } : {}), at: new Date().toISOString() });
+    this.ignoredSenders.length = Math.min(this.ignoredSenders.length, IGNORED_SENDERS_KEPT);
+  }
+
+  private async fetchBotName(): Promise<void> {
+    if (this.fetchingBotName) { return; }
+    this.fetchingBotName = true;
+    try {
+      const me = await this.call<{ username?: string }>('getMe', {}, SEND_TIMEOUT_MS);
+      if (me?.username) { this.botUsername = me.username; }
+    } catch {
+      // Retried after the next successful poll.
+    } finally {
+      this.fetchingBotName = false;
     }
   }
 
@@ -341,7 +447,7 @@ export class TelegramBridge {
     for (let attempt = 1; attempt <= DOWNLOAD_ATTEMPTS; attempt++) {
       const link = createLinkedAbort(FILE_TIMEOUT_MS, this.abort?.signal);
       const init: Record<string, unknown> = { signal: link.signal };
-      const dispatcher = proxyDispatcher();
+      const dispatcher = proxyDispatcher(this.config.proxy);
       if (dispatcher) { init.dispatcher = dispatcher; }
       try {
         const response = await this.fetchImpl(url, init as RequestInit);
@@ -367,7 +473,7 @@ export class TelegramBridge {
 
     const link = createLinkedAbort(FILE_TIMEOUT_MS, this.abort?.signal);
     const init: Record<string, unknown> = { method: 'POST', body: form, signal: link.signal };
-    const dispatcher = proxyDispatcher();
+    const dispatcher = proxyDispatcher(this.config.proxy);
     if (dispatcher) { init.dispatcher = dispatcher; }
     try {
       const response = await this.fetchImpl(`${TELEGRAM_API_BASE}/bot${this.token}/${method}`, init as RequestInit);
@@ -548,7 +654,7 @@ export class TelegramBridge {
       body: JSON.stringify(params),
       signal: link.signal,
     };
-    const dispatcher = proxyDispatcher();
+    const dispatcher = proxyDispatcher(this.config.proxy);
     if (dispatcher) { init.dispatcher = dispatcher; }
     try {
       const response = await this.fetchImpl(`${TELEGRAM_API_BASE}/bot${this.token}/${method}`, init as RequestInit);
@@ -630,5 +736,10 @@ function chunkText(text: string, max: number): string[] {
 }
 
 function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+  if (!(error instanceof Error)) { return String(error); }
+  // fetch reports network failures as a bare "fetch failed"; the reason
+  // (ETIMEDOUT, ECONNREFUSED, …) is on `cause`.
+  const cause = error.cause as { code?: unknown; message?: unknown } | undefined;
+  const detail = typeof cause?.code === 'string' ? cause.code : typeof cause?.message === 'string' ? cause.message : undefined;
+  return detail && !error.message.includes(detail) ? `${error.message} (${detail})` : error.message;
 }

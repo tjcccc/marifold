@@ -95,6 +95,7 @@ Every non-2xx response uses one envelope:
 | `PROJECT_MEMBER_REQUIRED` | 409 | A project message mentions a profile that is not on the project's roster; `details.profile` names it, so a client can offer "Invite painter?" |
 | `PROJECT_ASSET_LIMIT` | 413 | A stored asset would pass its project's limit, or one asset's 25 MB cap |
 | `PROVIDER_ERROR` | 502 | Upstream provider rejected the request or returned no usable response |
+| `CHANNEL_ERROR` | 502 | A messaging channel's upstream (the Telegram Bot API) refused or was unreachable |
 | `RUN_LIMIT_EXCEEDED` | 429 | Too many active agent runs (default limit 5) |
 | anything else | 500 | Internal error |
 
@@ -501,6 +502,16 @@ Managed via `marifold schedule ...`; schedules fire only while the service runs.
 | DELETE | `/v1/agent-computer` | Removes every container, network, and image this configuration created |
 
 Never forwarded through a workspace bridge. See `docs/agent-computer.md`.
+
+### Telegram channel (device-local)
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/v1/channels/telegram` | `{telegram: {configured, enabled, profile, allowlist, proxy?, token, state, bridge?}}`. `token` says only where the bot token comes from: `{source: "config"}`, `{source: "env", env, set}`, or `{source: "missing"}`. `state` is `polling`, `restarting` (waiting for the reply in progress), `off`, `no-token`, or `not-configured`. `bridge` (while running) has `polling`, `busy`, `botUsername?`, `lastPollAt?`, `pollError? {message, since}`, and `ignoredSenders` (the last 10 non-allowlisted senders: `id`, `name?`, `username?`, `at`) |
+| PATCH | `/v1/channels/telegram` | `{enabled?, profile?, allowlist?, proxy?, botToken?}`; creates `[channel.telegram]` when missing. `botToken` is write-only and replaces `bot_token_env`; `proxy: ""` clears it (http/https URLs only); the profile must exist. Profile, allowlist and proxy apply to the running bot at once; a new token or `enabled` change restarts it, after the reply in progress. Unknown fields are refused with 400 |
+| POST | `/v1/channels/telegram/test` | `{userId?}` (an allowlisted id, default the first); sends a fixed test message. 400 when the user is not allowlisted or the bot is not running; 502 `CHANNEL_ERROR` with Telegram's reason when it refuses ("chat not found" means that user has not sent `/start`) |
+
+Responses and errors never contain the bot token. Never forwarded through a workspace bridge.
 
 ## Client recipes
 

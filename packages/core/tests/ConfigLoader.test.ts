@@ -151,8 +151,10 @@ bot_token_env = "MARIFOLD_TG_TOKEN"
 allowlist = [123, 456]
 profile = "messenger"
 default_mode = "agent"
+proxy = "http://127.0.0.1:7890"
 `);
-    const tg = new ConfigLoader().load({ configPath }).config.channels?.telegram;
+    const loaded = new ConfigLoader().load({ configPath });
+    const tg = loaded.config.channels?.telegram;
     expect(tg).toEqual({
       enabled: undefined,
       botTokenEnv: 'MARIFOLD_TG_TOKEN',
@@ -160,7 +162,11 @@ default_mode = "agent"
       allowlist: [123, 456],
       profile: 'messenger',
       defaultMode: 'agent',
+      proxy: 'http://127.0.0.1:7890',
     });
+    // A ConfigManager rewrite must keep the proxy.
+    new ConfigManager(loaded).setValue('default.model', 'gemma4:e4b');
+    expect(new ConfigLoader().load({ configPath }).config.channels?.telegram?.proxy).toBe('http://127.0.0.1:7890');
 
     fs.writeFileSync(configPath, '[default]\nprofile = "default"\n[channel.telegram]\nprofile = "x"\ndefault_mode = "wizard"\n');
     expect(() => new ConfigLoader().load({ configPath })).toThrow(/default_mode/);

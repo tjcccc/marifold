@@ -1,7 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { mkdtemp, readdir, readFile, rm, writeFile } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
+import { ProxyAgent } from 'undici';
 import { TelegramBridge } from '../src/channels/TelegramBridge';
 import type { MarifoldRuntime } from '../src';
 import type { ProfileMode, TelegramChannelConfig } from '../src/config/ConfigSchema';
@@ -95,6 +96,27 @@ describe('TelegramBridge.handleUpdate', () => {
     expect(sent).toHaveLength(1);
     expect(sent[0].text).not.toContain('/agent');
     expect(sent[0].text).not.toContain('/chat');
+  });
+
+  it('sends API calls through [channel.telegram].proxy', async () => {
+    // Clear the env proxy so only the configured one can produce a dispatcher.
+    for (const key of ['HTTPS_PROXY', 'https_proxy', 'HTTP_PROXY', 'http_proxy']) { vi.stubEnv(key, ''); }
+    const dispatchers: unknown[] = [];
+    const fetchImpl = (async (_url: string | URL, init?: { dispatcher?: unknown }) => {
+      dispatchers.push(init?.dispatcher);
+      return json({ ok: true, result: { message_id: 1 } });
+    }) as unknown as typeof fetch;
+    const bridge = new TelegramBridge({
+      runtime: {} as MarifoldRuntime,
+      token: 'TKN',
+      config: { allowlist: [42], profile: 'messenger', defaultMode: 'agent', proxy: 'http://127.0.0.1:7890' },
+      fetchImpl,
+      profilesDir: '/tmp/marifold-test-profiles',
+    });
+    await bridge.handleUpdate(msg('/help'));
+    expect(dispatchers).toHaveLength(1);
+    expect(dispatchers[0]).toBeInstanceOf(ProxyAgent);
+    vi.unstubAllEnvs();
   });
 
   it('/deep on|off toggles, and warns when the provider does not support it', async () => {

@@ -146,6 +146,8 @@ async function runService(
       host: options.host,
       port: parsePort(options.port),
       logger: Boolean(options.log),
+      // Lands in service.log for the daemon (its stdout), the terminal otherwise.
+      backgroundLog: message => process.stdout.write(`${new Date().toISOString()} ${message}\n`),
       auth: { token },
       cors: { origins: corsOrigins },
       web: { dir: webDir },
