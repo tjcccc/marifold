@@ -2,6 +2,11 @@
 
 Cross-session development log. Newest first. Keep entries short: what shipped, what was verified, what's open.
 
+## 2026-10-28 — v0.106.0 — Artifacts design agreed
+
+- **`docs/artifacts.md`** (design, not built): one artifact library at `~/.marifold/artifacts/` (own `artifacts.db`; each artifact a folder bundle named by a short id, a full copy per version; folders are category rows, never directories) for profiles in any session, project, or schedule. Profiles save with `save_artifact` from their output folder (no approval; versions keep old content) and see only their session's, their project's, or `@[title]`-mentioned artifacts (`@[` is a new token beside `@name`; the user's own Skills use `#`). Viewer: CSP sandbox without `allow-same-origin`, every source limited to the version's bundle (no CDNs or remote images), `/v1/artifact-views/<ticket>/` with a sliding expiry, the only route answering `Origin: null`; Markdown rendered by the app. Schedules can deliver into a folder (code files it, `Keep latest N` prunes only untouched delivered ones into Recently deleted). Plan: library and viewer → projects and workspaces → scheduled delivery → polish.
+- `docs/projects.md` and `docs/roadmap.md` no longer describe artifacts as project assets.
+
 ## 2026-10-28 — v0.106.0 — Settings › Channels (Telegram)
 
 - **Web** (`screens/config/TelegramPage.tsx` at `config/channels/telegram`, local client like This device): one page per channel, so its cards (**Bot**, **Allowed users**) are Telegram's own; a channel list like Providers comes with a second channel. Status (Connected as @bot, Connecting…, "Can't reach Telegram since … : fetch failed (ETIMEDOUT)", Restarting after the current reply, Off, Needs a bot token), on/off, profile, a write-only bot token field (placeholder says where the current one comes from), proxy, allowed user ids (add, remove, **Send test message**), and recently ignored senders with **Allow**, so finding your id is "message the bot, press Allow". Refreshes every 5 s while open. `Toggle`/`EditableText` moved from `WebSearchPage` into `SettingsFields.tsx` to be shared.

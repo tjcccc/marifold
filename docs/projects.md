@@ -2,7 +2,7 @@
 
 **Status: Projects released in v0.103.0 and Assets in v0.104.0 (2026-10-27).** The decisions below were agreed in discussion (2026-10-26). [`projects-plan.md`](projects-plan.md) tracks the slices and where the implementation deviates.
 
-A **Project** is a shared place for one piece of ongoing work: its own instructions, several conversations (sessions), the profiles invited to take part, and the files the work needs (**Assets**). Projects come before Artifacts because Artifacts, SkillApp results, and Workflow outputs all need a home wider than one session, and an Artifact is largely an HTML asset rendered live (see [Relation to Artifacts](#relation-to-artifacts)).
+A **Project** is a shared place for one piece of ongoing work: its own instructions, several conversations (sessions), the profiles invited to take part, and the files the work needs (**Assets**). Projects come before Artifacts because Artifacts, SkillApp results, and Workflow outputs all need a home wider than one session (see [Relation to Artifacts](#relation-to-artifacts)).
 
 The name follows Claude and ChatGPT, where "Projects" already means instructions + files + many chats, so it needs no explanation. In the UI, a folder on disk is a "folder", never a "project folder", to avoid the coding sense of the word.
 
@@ -125,7 +125,7 @@ Today a session belongs to one profile, and session ownership, takeover between 
 
 ## Relation to Artifacts
 
-An Artifact is a stored HTML (or small app) asset rendered live in a sandboxed panel beside the conversation, with versions from later replies. Building Assets first leaves Artifacts mostly as the viewer and its sandbox, which SkillApps reuse.
+Superseded on 2026-10-28: profiles make artifacts outside projects too, so artifacts live in their own library, and a project's artifacts are library items that record the project and show in its Assets column. See [`artifacts.md`](artifacts.md#relation-to-projects).
 
 ## Deferred
 
