@@ -19,6 +19,9 @@ export interface ServiceSecurityOptions extends ResolvedServiceSecurityOptions {
   /** Explicit listen host, used as an allowed Host value in private mode. */
   boundHost: string;
   authorizeArtifact?: (request: FastifyRequest) => boolean;
+  /** Artifact view pages (`ArtifactViews`): a sandboxed frame's requests carry
+   * `Origin: null` and no token, so a live view ticket skips both checks. */
+  authorizeView?: (request: FastifyRequest) => boolean;
 }
 
 export function resolveSecurityOptions(
@@ -43,14 +46,22 @@ const LOOPBACK_HOST = /^(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/i;
 const QUERY_TOKEN_PATHS = /^\/v1\/runs\/[^/]+\/events(\?|$)/;
 
 /**
- * One onRequest hook enforcing, in order: the browser origin allowlist (with
- * preflight short-circuit), a bind-scope Host check, and optional bearer auth.
+ * One onRequest hook enforcing, in order: the private-network check, the
+ * browser origin allowlist (with preflight short-circuit), a bind-scope Host
+ * check, and optional bearer auth. Artifact view pages skip the origin and
+ * token checks only (`authorizeView`).
  * Runs before route matching, so unknown routes are protected too.
  */
 export function registerSecurity(server: FastifyInstance, options: ServiceSecurityOptions): void {
   server.addHook('onRequest', async (request, reply) => {
     if (options.access === 'private' && !isPrivateNetworkAddress(request.ip)) {
       throw MarifoldError.networkForbidden(request.ip);
+    }
+
+    const host = request.headers.host;
+    if (options.authorizeView?.(request)) {
+      if (typeof host === 'string' && host !== '' && !isAllowedHost(host, options)) { throw MarifoldError.originForbidden(host); }
+      return;
     }
 
     const origin = request.headers.origin;
@@ -69,7 +80,6 @@ export function registerSecurity(server: FastifyInstance, options: ServiceSecuri
       }
     }
 
-    const host = request.headers.host;
     if (typeof host === 'string' && host !== '' && !isAllowedHost(host, options)) {
       throw MarifoldError.originForbidden(host);
     }

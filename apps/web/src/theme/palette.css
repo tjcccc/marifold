@@ -39,6 +39,8 @@
 
   /* Modal backdrop behind sheets and confirmation dialogs. */
   --scrim: color-mix(in srgb, #000 36%, transparent);
+  /* Behind an artifact page, which expects a browser's white page in both modes. */
+  --page-canvas: #ffffff;
 
   /* Elevation */
   --shadow-card: 0 1px 3px light-dark(rgba(0, 0, 0, 0.08), rgba(0, 0, 0, 0.5));

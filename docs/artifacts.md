@@ -1,6 +1,6 @@
 # Artifacts
 
-**Status: design agreed 2026-10-28; not built.** Agreed in discussion: one artifact library under `~/.marifold/artifacts/` for every profile and project, each artifact a folder bundle named by a short id, folders as metadata (a category table) rather than directories, the recommendations in [Decisions](#decisions), and `@[artifact]` mentions. Details such as limits and tool names may still change during implementation; deviations go in the DEVLOG.
+**Status: design agreed 2026-10-28; steps 1 and 2 built for v0.107.0 ([plan and deviations](artifacts-plan.md)).** Agreed in discussion: one artifact library under `~/.marifold/artifacts/` for every profile and project, each artifact a folder bundle named by a short id, folders as metadata (a category table) rather than directories, the recommendations in [Decisions](#decisions), and `@[artifact]` mentions. Details such as limits and tool names may still change during implementation; deviations go in the DEVLOG.
 
 An **Artifact** is a page a profile makes for the user to read or use: a report, a dashboard, a small interactive HTML app, or a Markdown document with images. Artifacts live in one **artifact library** per marifold service, organised into folders, and update in place as new versions when a later reply changes them. Any profile can make one, in an ordinary session, in a project session, or from a schedule.
 
@@ -97,7 +97,7 @@ There is no delete tool: deleting is the user's action.
 
 ### Permissions
 
-Saving into the library needs no approval: it is marifold-owned and reversible, since versions keep earlier content. That matches saving a project asset today.
+Saving into the library needs no approval: it is marifold-owned and reversible, since versions keep earlier content. That matches saving a project asset today. A profile creates an artifact only when the user's message asks for one (it mentions "artifact", or names or picks one), enforced in code, not just the prompt; otherwise it may only save new versions of artifacts in scope, and a page it was asked to make stays a run output, which the user can save with **Save as artifact**.
 
 A profile may read and update:
 

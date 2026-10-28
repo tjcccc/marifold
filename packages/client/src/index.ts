@@ -6,8 +6,8 @@ export { followRunEvents } from './followRun';
 export { startupWorkspaces } from './workspaceStartup';
 
 export { composerTokenBefore } from './composerTokens';
-export { matchMention, mentionTokens } from './mentions';
-export type { MentionToken } from './mentions';
+export { artifactMentions, matchMention, mentionTokens } from './mentions';
+export type { ArtifactMention, MentionToken } from './mentions';
 
 export {
   acquireSessionLease,

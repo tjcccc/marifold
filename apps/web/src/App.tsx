@@ -53,8 +53,9 @@ export function App() {
   const lastAppsRoute = useRef<Extract<Route, { view: 'apps' }>>(
     route.view === 'apps' ? route : loadLastAppsRoute(currentConnection.id),
   );
-  const settingsReturnRoute = useRef<Extract<Route, { view: 'agent' | 'projects' | 'apps' }>>(
-    route.view === 'apps' || route.view === 'projects' ? route : lastAgentRoute.current,
+  const lastArtifactsRoute = useRef<Extract<Route, { view: 'artifacts' }>>(route.view === 'artifacts' ? route : { view: 'artifacts' });
+  const settingsReturnRoute = useRef<Extract<Route, { view: 'agent' | 'projects' | 'apps' | 'artifacts' }>>(
+    route.view === 'apps' || route.view === 'projects' || route.view === 'artifacts' ? route : lastAgentRoute.current,
   );
 
   useEffect(() => {
@@ -67,6 +68,10 @@ export function App() {
       // In-memory continuity still works when storage is unavailable.
     }
   }, [currentConnection.id, route]);
+
+  useEffect(() => {
+    if (route.view === 'artifacts') { lastArtifactsRoute.current = route; }
+  }, [route]);
 
   useEffect(() => {
     if (route.view !== 'apps') { return; }
@@ -206,7 +211,8 @@ export function App() {
       lastAgentRoute.current = nextAgentRoute;
       lastProjectsRoute.current = nextProjectsRoute;
       lastAppsRoute.current = nextAppsRoute;
-      const next = route.view === 'apps' ? nextAppsRoute : route.view === 'projects' ? nextProjectsRoute : nextAgentRoute;
+      lastArtifactsRoute.current = { view: 'artifacts' };
+      const next = route.view === 'apps' ? nextAppsRoute : route.view === 'artifacts' ? lastArtifactsRoute.current : route.view === 'projects' ? nextProjectsRoute : nextAgentRoute;
       settingsReturnRoute.current = next;
       navigate(next);
     }
@@ -231,11 +237,11 @@ export function App() {
   }, [connections, navigate]);
 
   const onWorkspaceViewChange = useCallback((view: WorkspaceView) => {
-    navigate(view === 'agent' ? lastAgentRoute.current : view === 'projects' ? lastProjectsRoute.current : lastAppsRoute.current);
+    navigate(view === 'agent' ? lastAgentRoute.current : view === 'projects' ? lastProjectsRoute.current : view === 'artifacts' ? lastArtifactsRoute.current : lastAppsRoute.current);
   }, [navigate]);
 
   const onOpenSettings = useCallback(() => {
-    if (route.view === 'agent' || route.view === 'projects' || route.view === 'apps') { settingsReturnRoute.current = route; }
+    if (route.view !== 'config') { settingsReturnRoute.current = route; }
     navigate({ view: 'config', section: 'profiles' });
   }, [navigate, route]);
 
@@ -264,6 +270,7 @@ export function App() {
             onOpenAgent={() => navigate(lastAgentRoute.current)}
             onOpenProjects={() => navigate(lastProjectsRoute.current)}
             onOpenApps={() => navigate(lastAppsRoute.current)}
+            onOpenArtifacts={() => navigate(lastArtifactsRoute.current)}
           />
         ) : (
           <AgentScreen
@@ -271,6 +278,7 @@ export function App() {
             client={client}
             route={chatRoute}
             appName={route.view === 'apps' ? route.app : lastAppsRoute.current.app}
+            artifactsRoute={route.view === 'artifacts' ? route : lastArtifactsRoute.current}
             navigate={navigate}
             onUnauthorized={onUnauthorized}
             theme={theme}

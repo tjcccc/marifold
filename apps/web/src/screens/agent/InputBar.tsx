@@ -4,7 +4,7 @@ import type { SkillHint } from '../../api/misc';
 import { ImagePreviewDialog } from '../../components/ImagePreviewDialog';
 import type { PreviewImage } from '../../components/ImagePreviewDialog';
 import type { OfficeFileKind, PreparedAttachment } from '../../lib/attachments';
-import { menuQuery, highlightTokens, WEB_COMMANDS } from '../../lib/commandSyntax';
+import { artifactQuery, menuQuery, highlightTokens, WEB_COMMANDS } from '../../lib/commandSyntax';
 import type { Suggestion } from '../../lib/commandSyntax';
 import styles from './InputBar.module.css';
 
@@ -45,6 +45,11 @@ export interface InputBarProps {
   enterSubmits?: boolean;
   onSubmit: (text: string) => void;
   onStop: () => void;
+  /** Library artifacts for the `@[` picker (`detail` is its second line); asked for when it opens. */
+  artifacts?: Array<{ id: string; title: string; detail: string }>;
+  onArtifactPickerOpen?: () => void;
+  /** A picked artifact: the text gets `@[Title]`, the run its id. */
+  onPickArtifact?: (artifact: { id: string; title: string }) => void;
   /** Prompts typed while a reply is in progress, oldest first, shown above the composer. */
   queued?: Array<{ id: string; text: string }>;
   onWithdrawQueued?: (id: string) => void;
@@ -82,11 +87,16 @@ export function InputBar(props: InputBarProps) {
     setDismissed(false);
   }, [props.draftKey]);
 
-  const menu = menuQuery(text, caret);
+  const artifactMenu = props.onPickArtifact ? artifactQuery(text, caret) : undefined;
+  const menu = artifactMenu ? undefined : menuQuery(text, caret);
   const mentions = props.mentions?.(text) ?? props.devices ?? [];
   const source: Suggestion[] = menu?.sigil === '/' ? (props.commands ?? WEB_COMMANDS) : menu?.sigil === '@' ? mentions : (props.skills ?? []);
   const recipient = props.recipient?.(text);
-  const matches = menu ? source.filter(item => (menu.sigil === '@' ? item.name.replace(/^"|"$/g, '').toLowerCase().startsWith(menu.query.toLowerCase()) : item.name.startsWith(menu.query))).slice(0, MAX_SUGGESTIONS) : [];
+  const matches = artifactMenu
+    ? (props.artifacts ?? []).filter(item => item.title.toLowerCase().includes(artifactMenu.query.toLowerCase())).slice(0, MAX_SUGGESTIONS).map(item => ({ name: item.id, usage: item.title, description: item.detail }))
+    : menu ? source.filter(item => (menu.sigil === '@' ? item.name.replace(/^"|"$/g, '').toLowerCase().startsWith(menu.query.toLowerCase()) : item.name.startsWith(menu.query))).slice(0, MAX_SUGGESTIONS) : [];
+  const pickerOpening = artifactMenu !== undefined;
+  useEffect(() => { if (pickerOpening) { props.onArtifactPickerOpen?.(); } }, [pickerOpening]);
   const menuOpen = focused && !dismissed && matches.length > 0;
   const active = Math.min(activeIndex, Math.max(0, matches.length - 1));
   const sigil = menu?.sigil ?? '$';
@@ -135,10 +145,12 @@ export function InputBar(props: InputBarProps) {
   }
 
   function complete(item: Suggestion): void {
-    const head = `${sigil}${item.name}`;
-    const suffix = menu ? text.slice(menu.end) : '';
-    const separator = suffix.length === 0 ? ' ' : '';
-    const prefix = menu ? text.slice(0, menu.start) : '';
+    const range = artifactMenu ?? menu;
+    const head = artifactMenu ? `@[${item.usage}]` : `${sigil}${item.name}`;
+    if (artifactMenu) { props.onPickArtifact?.({ id: item.name, title: item.usage }); }
+    const suffix = range ? text.slice(range.end) : '';
+    const separator = suffix.length === 0 || (artifactMenu && !/^\s/.test(suffix)) ? ' ' : '';
+    const prefix = range ? text.slice(0, range.start) : '';
     const completed = `${prefix}${head}${separator}${suffix}`;
     const completedCaret = prefix.length + head.length + (separator.length > 0 || suffix.length > 0 ? 1 : 0);
     completionCaretRef.current = completedCaret;
@@ -320,7 +332,7 @@ export function InputBar(props: InputBarProps) {
       <div className={styles.bar}>
         <div className={styles.inputWrap}>
           {menuOpen ? (
-            <ul className={styles.menu} role="listbox" aria-label={sigil === '/' ? 'Commands' : sigil === '@' ? (props.mentions ? 'Profiles and devices' : 'Devices') : 'Skills'}>
+            <ul className={styles.menu} role="listbox" aria-label={artifactMenu ? 'Artifacts' : sigil === '/' ? 'Commands' : sigil === '@' ? (props.mentions ? 'Profiles and devices' : 'Devices') : 'Skills'}>
               {matches.map((item, index) => (
                 <li
                   key={item.name}

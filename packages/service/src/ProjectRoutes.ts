@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import type { FastifyInstance } from 'fastify';
-import { avatarThumbnail, MarifoldError, type MarifoldRuntime, type ProjectDetail } from '@marifold/core';
+import { type ArtifactLibrary, avatarThumbnail, MarifoldError, type MarifoldRuntime, type ProjectDetail } from '@marifold/core';
 import { objectBody, optionalStringField, parseBooleanQuery, parseLimitQuery, requiredString, stringArray } from './Validation';
 
 /**
@@ -9,7 +9,7 @@ import { objectBody, optionalStringField, parseBooleanQuery, parseLimitQuery, re
  * own routes (ProjectAssetRoutes). Who answers inside a
  * project session is decided when a run starts (`planProjectTurn`).
  */
-export function registerProjectRoutes(server: FastifyInstance, runtime: MarifoldRuntime, defaultProfile: () => string): void {
+export function registerProjectRoutes(server: FastifyInstance, runtime: MarifoldRuntime, defaultProfile: () => string, artifacts?: ArtifactLibrary): void {
   const projects = runtime.projects;
   const existing = (id: string): ProjectDetail => {
     const project = projects.get(id);
@@ -55,7 +55,11 @@ export function registerProjectRoutes(server: FastifyInstance, runtime: Marifold
   });
 
   // Its sessions are kept, as ordinary sessions of the profile each started with.
-  server.delete<{ Params: { id: string } }>('/v1/projects/:id', async request => ({ ok: true, ...projects.delete(request.params.id) }));
+  server.delete<{ Params: { id: string } }>('/v1/projects/:id', async request => {
+    const result = projects.delete(request.params.id);
+    artifacts?.detachProject(request.params.id);
+    return { ok: true, ...result };
+  });
 
   // Raw image bytes like profile avatars; clients fetch with auth and show a blob URL.
   server.get<{ Params: { id: string }; Querystring: { thumbnail?: string } }>('/v1/projects/:id/icon', async (request, reply) => {

@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ApiClient } from '../../api/client';
+import { type ArtifactDetail, saveRunOutputAsArtifact } from '../../api/artifacts';
 import type { RunArtifact } from '../../api/types';
+import type { SavedArtifactChip } from '../../state/threadTypes';
 import { ImagePreviewDialog } from '../../components/ImagePreviewDialog';
 import type { PreviewImage } from '../../components/ImagePreviewDialog';
 import { ARTIFACT_UNAVAILABLE_NOTICE, downloadRunArtifact, isImageArtifact } from '../../lib/runArtifacts';
@@ -9,16 +11,53 @@ import styles from './RunArtifacts.module.css';
 import { artifactPreviewBlob } from '../../lib/artifactPreviewCache';
 import { formatBytes } from '../../lib/format';
 
+const SAVABLE = /\.(?:html?|md|markdown)$/i;
+
+/** The library side of a run's files: chips that open what it saved, and
+ * Save as artifact for a page or document among its outputs. */
+export interface RunLibraryProps {
+  saved?: SavedArtifactChip[];
+  onOpenArtifact?: (id: string) => void;
+  /** After Save as artifact, with what was saved. */
+  onSavedArtifact?: (artifact: ArtifactDetail) => void;
+}
+
 /** Deliverables belong to the answer and remain visible independently of logs. */
-export function RunArtifacts({ client, runId, artifacts }: { client?: ApiClient; runId: string; artifacts: RunArtifact[] }) {
+export function RunArtifacts({ client, runId, artifacts, saved = [], onOpenArtifact, onSavedArtifact }: { client?: ApiClient; runId: string; artifacts: RunArtifact[] } & RunLibraryProps) {
   const { unavailable, downloading, started, error, download } = useArtifactDownloads(client, runId, artifacts);
   const [preview, setPreview] = useState<PreviewImage>();
+  const [saving, setSaving] = useState<string>();
+  const [saveError, setSaveError] = useState<string>();
   useEffect(() => { setPreview(undefined); }, [client, runId]);
-  if (!artifacts.length) { return null; }
+  if (!artifacts.length && !saved.length) { return null; }
+  async function saveAsArtifact(artifact: RunArtifact): Promise<void> {
+    if (!client) { return; }
+    setSaving(artifact.id);
+    setSaveError(undefined);
+    try {
+      const created = await saveRunOutputAsArtifact(client, { runId, artifactId: artifact.id });
+      onSavedArtifact?.(created);
+    } catch (problem) {
+      setSaveError(problem instanceof Error ? problem.message : String(problem));
+    } finally {
+      setSaving(undefined);
+    }
+  }
   return (
     <section className={styles.files} aria-label="Generated files">
+      {onOpenArtifact ? saved.map(item => (
+        <button key={item.id} type="button" className={styles.libraryChip} aria-label={`Open artifact ${item.title}`} onClick={() => onOpenArtifact(item.id)}>
+          <span aria-hidden className={styles.libraryGlyph}>{item.kind === 'html' ? '◫' : '¶'}</span>
+          <span className={styles.label}>
+            <span className={styles.name}>{item.title}</span>
+            <span className={styles.detail}>Artifact · v{item.version} · Open</span>
+          </span>
+        </button>
+      )) : null}
       {artifacts.map(artifact => {
         const missing = unavailable.has(artifact.id);
+        // Already an artifact (by Save as artifact or the profile's own save): its chip opens it.
+        const savedAs = saved.some(item => item.sourceOutput === artifact.id);
         const name = artifact.name.split('/').at(-1) || artifact.name;
         return (
           <div className={`${styles.file} ${isImageArtifact(artifact) ? styles.imageFile : ''}`} key={artifact.id}>
@@ -43,11 +82,19 @@ export function RunArtifacts({ client, runId, artifacts }: { client?: ApiClient;
                 {downloading === artifact.id ? '' : started === artifact.id ? '✓' : '↓'}
               </span>
             </button>
+            {savedAs && onSavedArtifact ? (
+              <button type="button" className={styles.saveArtifact} disabled>Saved as artifact</button>
+            ) : onSavedArtifact && SAVABLE.test(artifact.name) && !missing ? (
+              <button type="button" className={styles.saveArtifact} disabled={!client || saving === artifact.id} aria-busy={saving === artifact.id}
+                onClick={() => void saveAsArtifact(artifact)}>
+                {saving === artifact.id ? 'Saving…' : 'Save as artifact'}
+              </button>
+            ) : null}
             {missing ? <p className={styles.notice} role="status">{ARTIFACT_UNAVAILABLE_NOTICE}</p> : null}
           </div>
         );
       })}
-      {error ? <p className={styles.notice} role="alert">{error}</p> : null}
+      {error ?? saveError ? <p className={styles.notice} role="alert">{error ?? saveError}</p> : null}
       {preview ? <ImagePreviewDialog images={[preview]} initialIndex={0} onClose={() => setPreview(undefined)} /> : null}
     </section>
   );

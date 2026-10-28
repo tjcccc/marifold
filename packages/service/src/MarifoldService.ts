@@ -1,4 +1,6 @@
-import { ArtifactWebRtc, DeviceExecution, MARIFOLD_VERSION, planProjectTurn, TelegramChannel } from '@marifold/core';
+import { ArtifactLibrary, ArtifactWebRtc, DeviceExecution, MARIFOLD_VERSION, planProjectTurn, TelegramChannel } from '@marifold/core';
+import { registerArtifactRoutes } from './ArtifactRoutes';
+import { ArtifactViews } from './ArtifactViews';
 import { remoteArtifactDownload } from './RemoteArtifactDownload';
 import { requestEnvironment, requestOrigin } from './RequestEnvironment';
 import { registerWorkspaceScheduleRoutes } from './WorkspaceScheduleRoutes';
@@ -96,14 +98,19 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
     deviceNames: () => workspaceRuns.devices().flatMap(device => [device.name, device.id]) });
   const server = fastify({ logger: options.logger ?? false, bodyLimit: BODY_LIMIT_BYTES });
   const artifactTickets = new ArtifactTickets();
+  // The artifact library sits beside sessions.db, like projects/.
+  const artifactLibrary = new ArtifactLibrary(path.join(path.dirname(options.loadedConfig.config.paths.sessionsDb), 'artifacts'));
+  const artifactViews = new ArtifactViews(artifactLibrary);
   registerSecurity(server, {
     authorizeArtifact: artifactTickets.authorize,
+    authorizeView: artifactViews.authorize,
     ...security,
     access: LOOPBACK_HOSTS.has(host) ? 'loopback' : 'private',
     boundHost: host,
   });
 
   artifactTickets.register(server);
+  artifactViews.register(server);
 
   let workspaceManager: WorkspaceManager;
   try { workspaceManager = new WorkspaceManager(options.loadedConfig.configPath); }
@@ -129,7 +136,7 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
   const deviceExecution = new DeviceExecution(options.loadedConfig.configPath);
   registerDeviceExecutionRoutes(server, deviceExecution);
   const workspaceExecutor = new WorkspaceExecutor(() => runtime.resolveAgentConfigForProfile(), path.join(workspaceManager.store.directory, 'runs'), [options.loadedConfig.configPath, ...Object.values(options.loadedConfig.config.paths).filter((value): value is string => typeof value === 'string'), path.dirname(workspaceManager.store.directory)], artifactTransfers, deviceExecution, workspaceId => workspaceManager.store.get(workspaceId).certificate.membership.access === 'executor' ? undefined : runtime.remoteStateAccess());
-  const workspaceRuns = new WorkspaceRuns(runtime, workspaceManager);
+  const workspaceRuns = new WorkspaceRuns(runtime, workspaceManager, artifactLibrary);
   workspaceManager.reservedNames = () => runtime.listProfiles().map(profile => profile.name);
   const workspaceContext = new WorkspaceRequestContext();
   registerSessionOwners(server, workspaceContext);
@@ -238,12 +245,13 @@ export function createMarifoldService(options: MarifoldServiceOptions): FastifyI
       || runRegistry.list().some(run => run.profile === profile && run.finishedAt === undefined),
   });
 
-  registerProjectRoutes(server, runtime, () => options.loadedConfig.config.default.profile);
+  registerProjectRoutes(server, runtime, () => options.loadedConfig.config.default.profile, artifactLibrary);
+  registerArtifactRoutes(server, artifactLibrary, artifactViews, runRegistry, runOutputs(runRegistry, workspaceManager));
   registerProjectAssetRoutes(server, runtime, runOutputs(runRegistry, workspaceManager), headers => {
     const origin = workspaceContext.resolve(headers);
     return { devices: workspaceRuns.devices(origin), ...(origin?.senderDeviceId ? { senderDeviceId: origin.senderDeviceId } : {}) };
   });
-  registerWorkspaceRoutes(server, workspaceManager, runRegistry, workspaceContext, (operation, input, context) => workspaceExecutor.handle(operation, input, context), security.token, id => { workspaceExecutor.cancelWorkspace(id); artifactTransfers.cancelWorkspace(id); }, artifactTickets, artifactTransfers);
+  registerWorkspaceRoutes(server, workspaceManager, runRegistry, workspaceContext, (operation, input, context) => workspaceExecutor.handle(operation, input, context), security.token, id => { workspaceExecutor.cancelWorkspace(id); artifactTransfers.cancelWorkspace(id); }, artifactTickets, artifactTransfers, artifactViews);
   server.addHook('onClose', async () => workspaceExecutor.close());
 
   const webDir = resolveServiceWebDir(options);

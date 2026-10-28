@@ -1,0 +1,162 @@
+/* The Artifacts view: a list column beside the viewer. */
+
+.screen {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+}
+
+.list {
+  width: 300px;
+  flex: none;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--separator);
+  background: var(--content);
+}
+
+.searchWrap {
+  padding: 10px 10px 6px;
+}
+
+.search {
+  width: 100%;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--separator);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+}
+
+.search:focus {
+  outline: none;
+  border-color: var(--brand-fill);
+}
+
+.note,
+.empty {
+  padding: 8px 14px;
+  color: var(--text-3);
+  font-size: 12px;
+}
+
+.problem {
+  padding: 8px 14px;
+  color: var(--danger);
+  font-size: 12px;
+}
+
+.rows {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  /* Inset like the search field above, with a little space between rows. */
+  padding: 2px 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  list-style: none;
+  overflow-y: auto;
+}
+
+.row,
+.rowSelected {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  border-radius: var(--radius-md);
+  text-align: left;
+  color: var(--text);
+}
+
+.rowSelected {
+  background: var(--brand-tint);
+}
+
+@media (hover: hover) {
+  .row:hover {
+    background: var(--separator-soft);
+  }
+}
+
+.row:focus-visible,
+.rowSelected:focus-visible {
+  outline: 2px solid var(--brand-fill);
+  outline-offset: -2px;
+}
+
+.kind {
+  width: 26px;
+  height: 26px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-size: 13px;
+}
+
+.rowText {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.rowTitle {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.rowMeta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-3);
+  font-size: 11.5px;
+}
+
+.unread {
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--brand-fill);
+}
+
+.placeholder {
+  flex: 1;
+  margin: auto;
+  padding: 24px;
+  text-align: center;
+  color: var(--text-3);
+}
+
+@media (max-width: 899px) {
+  .list {
+    width: 100%;
+    border-right: 0;
+  }
+
+  .row,
+  .rowSelected {
+    min-height: 52px;
+  }
+
+  .search {
+    height: 36px;
+    font-size: 16px;
+  }
+}

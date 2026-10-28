@@ -12,8 +12,11 @@ afterEach(() => {
 
 const MB = 1024 * 1024;
 
-function harness(assets: ListedProjectAsset[]) {
+function harness(assets: ListedProjectAsset[], onOpenArtifact = () => {}) {
   const request = vi.fn(async (method: string, path: string, _body?: unknown) => {
+    if (method === 'GET' && path === '/v1/artifacts?limit=500&projectId=p1') {
+      return { artifacts: [{ id: 'k3m7q2x9ab', title: 'Sprint report', kind: 'html', currentVersion: 2, seen: false, createdBy: 'painter', createdAt: '', updatedAt: '' }] };
+    }
     if (method === 'GET' && path === '/v1/projects/p1/assets') { return { assets, usage: { usedBytes: 34 * MB, limitBytes: 100 * MB } }; }
     if (method === 'GET' && path === '/v1/runs?sessionId=s1') {
       return {
@@ -36,7 +39,7 @@ function harness(assets: ListedProjectAsset[]) {
     throw new Error(`unexpected ${method} ${path}`);
   });
   const client = { request, blob: vi.fn(), stream: vi.fn(), baseUrl: '' } as unknown as ApiClient;
-  render(<ProjectAssets client={client} projectId="p1" sessionId="s1" responding={false} variant="column" onOpenSettings={() => {}} />);
+  render(<ProjectAssets client={client} projectId="p1" sessionId="s1" responding={false} variant="column" onOpenSettings={() => {}} onOpenArtifact={onOpenArtifact} />);
   return request;
 }
 
@@ -54,6 +57,16 @@ describe('project assets panel', () => {
     fireEvent.click(within(outputs).getByRole('button', { name: '+ Add to assets' }));
     await waitFor(() => expect(request).toHaveBeenCalledWith('POST', '/v1/projects/p1/assets/from-run', { runId: 'run_2', artifactId: 'a2' }));
     expect(screen.getByRole('region', { name: 'Assets' }).textContent).toContain('1 · 34 MB of 100 MB');
+  });
+
+  it('lists the project\'s artifacts and opens one in the viewer', async () => {
+    const onOpen = vi.fn();
+    const request = harness([], onOpen);
+    const card = await screen.findByRole('region', { name: 'Artifacts' });
+    fireEvent.click(await within(card).findByRole('button', { name: /Sprint report/ }));
+    expect(onOpen).toHaveBeenCalledWith('k3m7q2x9ab');
+    expect(card.textContent).toContain('1 · 1 unread');
+    expect(request).toHaveBeenCalledWith('GET', '/v1/artifacts?limit=500&projectId=p1');
   });
 
   it('links a typed path on another device by its id', async () => {

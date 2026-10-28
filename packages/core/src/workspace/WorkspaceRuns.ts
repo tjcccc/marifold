@@ -21,6 +21,8 @@ import { SkillManagementTool } from '../agent/tools/SkillManagementTool';
 import { deviceRunOutputs, hostRunOutputs, projectAssetManifest, projectAssetTools, type RunOutputs } from '../projects/ProjectAssetTools';
 import { linkedPathsOn, type LinkRun } from '../projects/ProjectLinks';
 import { executionTools } from './WorkspaceExecutor';
+import type { ArtifactLibrary } from '../artifacts/ArtifactLibrary';
+import { artifactInstructions, artifactTools, asksForArtifact, resolveArtifactReferences } from '../artifacts/ArtifactTools';
 import type { WorkspaceManager, WorkspaceOperationContext } from './WorkspaceManager';
 
 export class WorkspaceRuns {
@@ -31,6 +33,8 @@ export class WorkspaceRuns {
   constructor(
     private readonly runtime: MarifoldRuntime,
     private readonly manager: WorkspaceManager,
+    /** The artifact library, for top-level runs' artifact tools. */
+    private readonly library?: ArtifactLibrary,
   ) {}
   devices(origin?: WorkspaceOperationContext) {
     const id = origin?.workspaceId ?? this.manager.store.list().find(c => c.role === 'host')?.id;
@@ -45,7 +49,7 @@ export class WorkspaceRuns {
     if (mentions.length > 1) { throw new Error('Select one @device per task.'); }
     const mention = mentions[0];
     const task = mention ? (input.objective.slice(0, mention.at) + input.objective.slice(mention.end)).trim() : input.objective;
-    if ((input.objective.startsWith('@') && !mention) || (mention && !task)) {
+    if ((input.objective.startsWith('@') && !input.objective.startsWith('@[') && !mention) || (mention && !task)) {
       throw new Error('Use @device with a task.');
     }
     if (mention && /^[$/]/.test(task)) {
@@ -100,10 +104,10 @@ export class WorkspaceRuns {
   createRunner(input: RunStartInput): AgentRunner {
     const execution = input.execution;
     if (!execution) {
-      if (!input.projectId) { return this.runtime.createAgentRunner(input.profile); }
       const registry = this.runtime.createDefaultToolRegistry(input.profile);
       const project = this.projectAssets(input, registry, hostRunOutputs, { devices: [], delegate: false });
-      return this.runtime.createAgentRunner(input.profile, registry, undefined, { contextInstructions: project.instructions, linkedFolders: project.linkedFolders });
+      const contextInstructions = [...project.instructions, ...this.artifacts(input, registry, hostRunOutputs)];
+      return this.runtime.createAgentRunner(input.profile, registry, undefined, { contextInstructions, linkedFolders: project.linkedFolders });
     }
     const { workspaceId, executionDeviceId } = execution;
     const host = this.manager.store.get(workspaceId);
@@ -137,10 +141,11 @@ export class WorkspaceRuns {
     const onGuest = executionDeviceId === host.hostDeviceId ? undefined : executionDeviceId;
     // The agent loop runs here; a guest's outputs are read over the bridge.
     let runId: string | undefined;
-    const project = this.projectAssets(input, registry, onGuest === undefined
+    const outputs = onGuest === undefined
       ? hostRunOutputs
-      : deviceRunOutputs(body => this.manager.execute(workspaceId, executionDeviceId, 'executor.artifact', { runId, ...body })), { devices, ...(onGuest ? { deviceId: onGuest } : {}), delegate: delegates });
-    contextInstructions.push(...project.instructions);
+      : deviceRunOutputs(body => this.manager.execute(workspaceId, executionDeviceId, 'executor.artifact', { runId, ...body }));
+    const project = this.projectAssets(input, registry, outputs, { devices, ...(onGuest ? { deviceId: onGuest } : {}), delegate: delegates });
+    contextInstructions.push(...project.instructions, ...this.artifacts(input, registry, outputs));
     const skills = registry.get('manage_skill');
     if (skills instanceof SkillManagementTool) {
       skills.useSourceDevices({
@@ -280,6 +285,20 @@ export class WorkspaceRuns {
         return (await request('executor.artifacts', { runId })) as RunArtifact[];
       },
     });
+  }
+
+  /** A top-level run's artifact tools and instructions; delegated and skill
+   * runs work for their parent and save nothing to the library themselves. */
+  private artifacts(input: RunStartInput, registry: ToolRegistry, outputs: RunOutputs): string[] {
+    if (!this.library || input.parentRunId || input.lean) { return []; }
+    const text = input.userTurn ?? input.objective;
+    const references = resolveArtifactReferences(this.library, text, input.artifactIds);
+    const run = {
+      library: this.library, profile: input.profile, sessionId: input.sessionId, runId: input.registryRunId, projectId: input.projectId,
+      referenced: new Set(references.ids), outputs, mayCreate: asksForArtifact(text, input.artifactIds),
+    };
+    for (const tool of artifactTools(run)) { registry.register(tool); }
+    return [artifactInstructions(run, references)];
   }
 
   /** A project run's asset tools, its manifest for the run instructions, and

@@ -95,6 +95,8 @@ export interface RunStartInput {
   projectTurn?: ProjectTurnPlan;
   /** Internal: the project a speaker's run belongs to, for its asset tools. */
   projectId?: string;
+  /** Library artifacts the user picked in the composer (`@[` chips), by id. */
+  artifactIds?: string[];
   deep?: boolean;
   /** Staged for lazy inspect_attachment access during the agent run. */
   images?: ImageInput[];

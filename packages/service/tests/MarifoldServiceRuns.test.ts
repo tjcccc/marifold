@@ -553,6 +553,45 @@ Transform {{text}} into the final prompt.
     }
   });
 
+  it('saves a run\'s bundle to the artifact library, and an output with Save as artifact', async () => {
+    stubProvider([
+      toolCall('shell_exec', { command: 'mkdir -p "$MARIFOLD_OUTPUT_DIR/site" && printf "<h1>news</h1>" > "$MARIFOLD_OUTPUT_DIR/site/index.html" && printf "# notes" > "$MARIFOLD_OUTPUT_DIR/notes.md"' }),
+      toolCall('save_artifact', { title: 'AI News', dir: 'site', folder: 'AI News' }),
+      'Saved it.',
+    ]);
+    const { server, base } = await startServer();
+    try {
+      const { run } = await (await postJson(base, '/v1/runs', { objective: 'Make the news page and save it as an artifact.', cwd: tempDir(), sessionId: 'artifact-session' })).json();
+      const frames = sseFrames(await fetch(`${base}/v1/runs/${run.id}/events`));
+      const { matched: approval } = await pullFrames(frames, frame => frame.event === 'approval_request');
+      await postJson(base, `/v1/runs/${run.id}/approvals/${(approval!.data as { request: { id: string } }).request.id}`, { action: 'once' });
+      const { seen } = await pullFrames(frames, frame => frame.event === 'done');
+      const saved = seen.find(frame => frame.event === 'artifact_saved')?.data as { artifact: { id: string; title: string; version: number } };
+      expect(saved.artifact).toMatchObject({ title: 'AI News', kind: 'html', version: 1 });
+
+      const listed = await (await fetch(`${base}/v1/artifacts?sessionId=artifact-session`)).json();
+      expect(listed.artifacts).toEqual([expect.objectContaining({ id: saved.artifact.id, runId: run.id, folderId: expect.any(String) })]);
+
+      const outputs = (await (await fetch(`${base}/v1/runs/${run.id}`)).json()).run.artifacts as Array<{ id: string; name: string }>;
+      const notes = outputs.find(output => output.name === 'notes.md')!;
+      const created = await postJson(base, '/v1/artifacts', { runId: run.id, artifactId: notes.id });
+      expect(created.status).toBe(201);
+      const first = (await created.json()).artifact;
+      expect(first).toMatchObject({ title: 'notes', kind: 'markdown', sessionId: 'artifact-session', entry: 'notes.md', sourceOutput: notes.id });
+      // Saving the same output again returns what it made instead of a copy.
+      const again = await postJson(base, '/v1/artifacts', { runId: run.id, artifactId: notes.id });
+      expect(again.status).toBe(200);
+      expect((await again.json()).artifact.id).toBe(first.id);
+      const html = outputs.find(output => output.name === 'site/index.html')!;
+      // The profile already saved this output (its bundle's entry): that artifact, not a copy.
+      const bundled = await postJson(base, '/v1/artifacts', { runId: run.id, artifactId: html.id, title: 'Page' });
+      expect(bundled.status).toBe(200);
+      expect((await bundled.json()).artifact.id).toBe(saved.artifact.id);
+    } finally {
+      await server.close();
+    }
+  });
+
   it('replays events with Last-Event-ID and in full for late subscribers', async () => {
     stubProvider(['All done.']);
     const { server, base } = await startServer();

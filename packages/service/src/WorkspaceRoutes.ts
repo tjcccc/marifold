@@ -7,6 +7,7 @@ import type { SequencedEvent, RunRecord } from '@marifold/core';
 import type { WorkspaceRequestContext } from './WorkspaceRequestContext';
 import * as fs from 'node:fs';
 import { type ArtifactTickets, artifactHeaders } from './ArtifactTickets';
+import type { ArtifactViews } from './ArtifactViews';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { createArtifactPreview, artifactPreviewVariant, isPreviewableArtifact, MarifoldError, type RunArtifact, artifactReadLength, type WorkspaceManager, type RunRegistry, type WorkspaceOperationContext, savedBridgeToken, savedBridgeUrl } from '@marifold/core';
 import { objectBody, requiredString } from './Validation';
@@ -20,10 +21,12 @@ export function workspaceApiPath(method: string, raw: string): boolean {
   const pathname = raw.split('?')[0];
   if (/%2f|%5c|%2e/i.test(pathname) || pathname.split('/').some((p) => p === '.' || p === '..')) { return false; }
   if (pathname === '/v1/execution-devices' || pathname === '/v1/folders') { return method === 'GET'; }
+  // A view ticket is its own capability; ArtifactViews checks the file path.
+  if (pathname.startsWith('/v1/artifact-views/')) { return method === 'GET' && /^\/v1\/artifact-views\/[a-f0-9]{48}\/[^?]*$/.test(pathname); }
   // The host's own Web UI may reach /v1/agent-computer through its workspace;
   // AgentComputerRoutes limits other devices to status and profile access.
   return (
-    /^\/v1\/(status|changes|ask|config|providers|models|profiles|projects|sessions|skills|apps|app-instances|runs|tasks|schedules|terminal|agent-computer)(?:\/[A-Za-z0-9_%.-]+)*$/.test(
+    /^\/v1\/(status|changes|ask|config|providers|models|profiles|projects|sessions|skills|apps|app-instances|runs|tasks|schedules|terminal|agent-computer|artifacts|artifact-folders)(?:\/[A-Za-z0-9_%.-]+)*$/.test(
       pathname,
     ) &&
     !pathname.endsWith('/events') &&
@@ -75,6 +78,7 @@ export function registerWorkspaceRoutes(
   cancelExecution?: (workspaceId: string) => void,
   tickets?: ArtifactTickets,
   transfers?: ArtifactWebRtc,
+  views?: ArtifactViews,
 ): void {
   const application = async (
     operation: string,
@@ -313,6 +317,21 @@ export function registerWorkspaceRoutes(
     return remoteArtifactDownload(reply, transfers, item.size, workspaceId, input =>
       manager.request(workspaceId, 'artifact.read', { runId, artifactId, ...input }));
   };
+  // The host's view ticket is served by the host's service, which this
+  // device's browser may not reach. Re-issue it here, under this origin's policy.
+  const remoteView = (workspaceId: string, payload: Buffer, reply: FastifyReply) => {
+    const view = JSON.parse(payload.toString('utf8')) as Record<string, unknown>;
+    const { path: hostPath, entry } = view;
+    if (typeof hostPath !== 'string' || !/^\/v1\/artifact-views\/[a-f0-9]{48}\/$/.test(hostPath) || typeof entry !== 'string') {
+      throw new Error('The workspace host returned an invalid artifact view.');
+    }
+    const local = views!.issueRemote(entry, async file => {
+      const response = await manager.request(workspaceId, 'api', { method: 'GET', path: hostPath + file.split('/').map(encodeURIComponent).join('/') }) as { status: number; body: string };
+      return { status: response.status, body: Buffer.from(response.body, 'base64') };
+    });
+    reply.header('cache-control', 'no-store');
+    return { ...view, ...local, entryPath: `${local.path}${entry.split('/').map(encodeURIComponent).join('/')}` };
+  };
   server.all<{ Params: { id: string; '*': string } }>('/v1/workspaces/:id/api/*', async (request, reply) => {
     const suffix = request.url.slice(request.url.indexOf('/api/') + 4);
     if (!workspaceApiPath(request.method, suffix)) { throw new Error('Unsupported workspace application route.'); }
@@ -346,6 +365,9 @@ export function registerWorkspaceRoutes(
         ...(request.body !== undefined ? { body: request.body } : {}) },
       typeof request.headers['idempotency-key'] === 'string' ? request.headers['idempotency-key'] : undefined,
     )) as { status: number; contentType?: string; disposition?: string; body: string };
+    if (views && result.status === 200 && request.method === 'POST' && /^\/v1\/artifacts\/[a-z2-7]{10}\/view$/.test(suffix)) {
+      return remoteView(request.params.id, Buffer.from(result.body, 'base64'), reply);
+    }
     reply.code(result.status);
     if (result.disposition) { reply.header('content-disposition', result.disposition); }
     if (result.contentType) { reply.type(result.contentType); }

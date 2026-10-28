@@ -30,7 +30,7 @@ it('carries a password encrypted by the full Agent screen to the approval HTTP b
       },
     }] }, answer, promptQueue: { queued: [], enqueue: vi.fn(), withdraw: vi.fn() },
   } as unknown as AgentController);
-  render(<AgentScreen client={client} route={{ view: 'agent', profile: 'tester' }} navigate={vi.fn()}
+  render(<AgentScreen client={client} route={{ view: 'agent', profile: 'tester' }} artifactsRoute={{ view: 'artifacts' }} navigate={vi.fn()}
     onUnauthorized={vi.fn()} theme="light" onThemeChange={vi.fn()} onOpenConnection={vi.fn()} onOpenSettings={vi.fn()}
     connectionId="local" connectionName="Local" workspaceView="agent" onWorkspaceViewChange={vi.fn()} />);
   fireEvent.change(screen.getByLabelText(`Password for ${sudo.account} on ${sudo.device}`), { target: { value: 'screen-secret-canary' } });

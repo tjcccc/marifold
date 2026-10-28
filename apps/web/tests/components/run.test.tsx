@@ -527,6 +527,7 @@ describe('Mobile workspace navigation', () => {
         onAgent={onAgent}
         onProjects={() => {}}
         onApps={onApps}
+        onArtifacts={() => {}}
         onOpenConnection={onOpenConnection}
         onThemeChange={onThemeChange}
         onOpenSettings={onOpenSettings}

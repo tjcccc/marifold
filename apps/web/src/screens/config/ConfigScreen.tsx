@@ -88,6 +88,7 @@ export interface ConfigScreenProps {
   onOpenAgent: () => void;
   onOpenProjects: () => void;
   onOpenApps: () => void;
+  onOpenArtifacts: () => void;
 }
 
 /** Config — Mail-style columns: sections → the section's items (profiles,
@@ -108,6 +109,7 @@ export function ConfigScreen({
   onOpenAgent,
   onOpenProjects,
   onOpenApps,
+  onOpenArtifacts,
 }: ConfigScreenProps) {
   const { section, item } = route;
   const mobile = useMediaQuery(MOBILE_QUERY);
@@ -418,6 +420,7 @@ export function ConfigScreen({
           onAgent={onOpenAgent}
           onProjects={onOpenProjects}
           onApps={onOpenApps}
+          onArtifacts={onOpenArtifacts}
           onOpenConnection={onOpenConnection}
           onThemeChange={onThemeChange}
           onOpenSettings={onOpenSettings}

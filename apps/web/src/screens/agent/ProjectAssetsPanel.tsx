@@ -28,6 +28,8 @@ export interface ProjectAssetsPanelProps {
   /** The desktop column, the phone's bottom sheet, or the phone's session list (Assets only). */
   variant: 'column' | 'sheet' | 'list';
   onOpenSettings: () => void;
+  /** The project's Artifacts card, between Assets and Outputs. */
+  artifacts?: ReactNode;
 }
 
 type Menu = { kind: 'add' } | { kind: 'asset'; asset: ListedProjectAsset };
@@ -35,7 +37,7 @@ type Dialog = { kind: 'rename' | 'describe' | 'delete'; asset: ListedProjectAsse
 
 /** Project assets as Claude-style cards (spec/ui.md#project-assets): the
  * project's Assets with storage use, and this session's Outputs. */
-export function ProjectAssetsPanel({ client, state, variant, onOpenSettings }: ProjectAssetsPanelProps) {
+export function ProjectAssetsPanel({ client, state, variant, onOpenSettings, artifacts }: ProjectAssetsPanelProps) {
   const [assetsOpen, setAssetsOpen] = useState(variant !== 'list');
   const [outputsOpen, setOutputsOpen] = useState(variant === 'column');
   const [menu, setMenu] = useState<{ menu: Menu; top: number; left: number; trigger: HTMLButtonElement }>();
@@ -317,6 +319,8 @@ export function ProjectAssetsPanel({ client, state, variant, onOpenSettings }: P
           </div>
         ) : null}
       </section>
+
+      {artifacts}
 
       {variant !== 'list' ? (
         <section className={styles.card} aria-label="Outputs">

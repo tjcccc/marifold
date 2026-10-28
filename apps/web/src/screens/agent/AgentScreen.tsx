@@ -1,4 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { listArtifacts } from '../../api/artifacts';
+import { formatRelativeTime } from '../../lib/format';
 import type { ApiClient } from '../../api/client';
 import type { CreateProfileInput } from '../../api/profiles';
 import { createProfileWithSetup } from '../../api/profiles';
@@ -21,6 +23,11 @@ import type { ThemePreference } from '../../theme/theme';
 import { AppsScreen } from '../apps/AppsScreen';
 import { AppsSidebarContent } from '../apps/AppsSidebar';
 import { useAppsCatalog } from '../apps/useAppsCatalog';
+import { ArtifactsScreen } from '../artifacts/ArtifactsScreen';
+import { ArtifactsSidebarContent, FIXED_FOLDERS } from '../artifacts/ArtifactsSidebar';
+import { useArtifactLibrary } from '../artifacts/useArtifactLibrary';
+import { ArtifactViewer } from '../artifacts/ArtifactViewer';
+import { useSessionArtifacts } from '../artifacts/useSessionArtifacts';
 import { CatchUpBanner } from './CatchUpBanner';
 import { SessionArchivedBanner, SessionBlockedBanner } from './SessionBlockedBanner';
 import { InputBar } from './InputBar';
@@ -39,6 +46,7 @@ import styles from './AgentScreen.module.css';
 const SIDEBARS_KEY = 'marifold.sidebars';
 const ASSETS_KEY = 'marifold.assetsColumn';
 const ASSETS_WIDTH_KEY = 'marifold.assetsWidth';
+const ARTIFACT_WIDTH_KEY = 'marifold.artifactWidth';
 /** Where the Assets column fits beside the conversation; AgentScreen.module.css repeats it. */
 const ASSETS_BESIDE_QUERY = '(min-width: 1100px)';
 
@@ -46,6 +54,7 @@ export interface AgentScreenProps {
   client: ApiClient;
   route: ChatRoute;
   appName?: string;
+  artifactsRoute: Extract<Route, { view: 'artifacts' }>;
   navigate: (route: Route) => void;
   onUnauthorized: () => void;
   theme: ThemePreference;
@@ -95,7 +104,34 @@ export function AgentScreen(props: AgentScreenProps) {
   const [mobileConversationOpen, setMobileConversationOpen] = useState(() => props.route.session !== undefined);
   const [mobileAppOpen, setMobileAppOpen] = useState(false);
   const appsView = props.workspaceView === 'apps';
+  const artifactsView = props.workspaceView === 'artifacts';
+  /** Apps and Artifacts take the pane instead of a conversation. */
+  const otherView = appsView || artifactsView;
+  const artifactLibrary = useArtifactLibrary(props.client, artifactsView);
+  const artifactFolder = props.artifactsRoute.folder;
+  const openArtifacts = (folder?: string, artifact?: string) => props.navigate({ view: 'artifacts', ...(folder ? { folder } : {}), ...(folder && artifact ? { artifact } : {}) });
+  const artifactsTitle = FIXED_FOLDERS.find(folder => folder.key === artifactFolder)?.label
+    ?? (artifactFolder === 'deleted' ? 'Recently deleted' : artifactLibrary.folders.find(folder => folder.id === artifactFolder)?.name ?? 'Artifacts');
   const [appsMounted, setAppsMounted] = useState(appsView);
+  /** A library artifact opened from the conversation, beside it. */
+  const [openArtifact, setOpenArtifact] = useState<string>();
+  const sessionArtifacts = useSessionArtifacts(props.client, controller.sessionId, controller.responding);
+  useEffect(() => { setOpenArtifact(undefined); }, [controller.sessionId]);
+  // The composer's `@[` picker: the library, loaded when it first opens, and what was picked.
+  const [pickable, setPickable] = useState<Array<{ id: string; title: string; detail: string }>>();
+  const pickedArtifacts = useRef<Array<{ id: string; title: string }>>([]);
+  const loadPickable = useCallback(() => {
+    void listArtifacts(props.client, 'all').then(items => setPickable(items.map(item => ({
+      id: item.id,
+      title: item.title,
+      detail: `${item.kind === 'html' ? 'Page' : 'Document'} · ${formatRelativeTime(item.updatedAt)}`,
+    })))).catch(() => undefined);
+  }, [props.client]);
+  const threadLibrary = useMemo(() => ({
+    forRun: sessionArtifacts.forRun,
+    onOpenArtifact: setOpenArtifact,
+    onSavedArtifact: (artifact: { id: string }) => { void sessionArtifacts.refresh(); setOpenArtifact(artifact.id); },
+  }), [sessionArtifacts]);
   const refreshInstalledApp = useCallback(async (): Promise<void> => {
     await appsCatalog.refresh();
   }, [appsCatalog.refresh]);
@@ -180,7 +216,7 @@ export function AgentScreen(props: AgentScreenProps) {
   const conversationOpen = projectView ? project !== undefined : openProfile !== undefined;
   const currentSession = controller.sessions.find(session => session.id === controller.sessionId);
   const sessionArchived = currentSession?.archived === true;
-  const projectConversation = !appsView && conversationOpen ? project : undefined;
+  const projectConversation = !otherView && conversationOpen ? project : undefined;
   const assetsColumn = assetsBeside ? assetsShown : assetsOverlay;
   const assetsProps = project ? {
     client: props.client,
@@ -189,8 +225,9 @@ export function AgentScreen(props: AgentScreenProps) {
     responding: controller.responding,
     limitBytes: project.assetLimitBytes,
     onOpenSettings: () => setProjectSheet({ project }),
+    onOpenArtifact: (artifactId: string) => { setAssetsSheetOpen(false); setOpenArtifact(artifactId); },
   } : undefined;
-  const mobileWorkspaceOpen = appsView
+  const mobileWorkspaceOpen = artifactsView ? artifactFolder !== undefined : appsView
     ? mobileAppOpen && appsCatalog.selectedName !== undefined
     : routeOwner !== undefined && controller.profileName !== undefined && mobileConversationOpen;
   const profileNames = useMemo(() => controller.profiles.map(profile => profile.name), [controller.profiles]);
@@ -201,7 +238,7 @@ export function AgentScreen(props: AgentScreenProps) {
   });
   const sidebarFooter = mobile ? (
     <MobileWorkspaceNavigation
-      active={appsView ? 'apps' : projectView ? 'projects' : 'agent'}
+      active={artifactsView ? 'artifacts' : appsView ? 'apps' : projectView ? 'projects' : 'agent'}
       theme={props.theme}
       connectionName={props.connectionName}
       onAgent={() => {
@@ -213,6 +250,9 @@ export function AgentScreen(props: AgentScreenProps) {
       onApps={() => {
         setMobileAppOpen(false);
         if (!appsView) { props.onWorkspaceViewChange('apps'); }
+      }}
+      onArtifacts={() => {
+        if (artifactsView) { openArtifacts(); } else { props.onWorkspaceViewChange('artifacts'); }
       }}
       onOpenConnection={props.onOpenConnection}
       onThemeChange={props.onThemeChange}
@@ -230,11 +270,13 @@ export function AgentScreen(props: AgentScreenProps) {
 
   const navigation = (
     <WorkspaceSidebar
-      ariaLabel={appsView ? 'Apps' : conversationOpen ? 'Sessions' : projectView ? 'Projects' : 'Profiles'}
+      ariaLabel={artifactsView ? 'Artifacts' : appsView ? 'Apps' : conversationOpen ? 'Sessions' : projectView ? 'Projects' : 'Profiles'}
       footer={sidebarFooter}
-      showBrand={appsView || !conversationOpen}
+      showBrand={otherView || !conversationOpen}
     >
-      {appsView ? (
+      {artifactsView ? (
+        <ArtifactsSidebarContent client={props.client} library={artifactLibrary} selected={artifactFolder ?? (mobile ? '' : 'all')} onSelect={folder => openArtifacts(folder)} />
+      ) : appsView ? (
         <AppsSidebarContent
           client={props.client}
           apps={appsCatalog.apps}
@@ -386,24 +428,25 @@ export function AgentScreen(props: AgentScreenProps) {
       <div
         className={styles.threadPane}
         hidden={mobile && !mobileWorkspaceOpen}
-        onDragOver={appsView ? undefined : onDragOver}
+        onDragOver={otherView ? undefined : onDragOver}
         onDragLeave={() => setDropActive(false)}
-        onDrop={appsView ? undefined : onDrop}
+        onDrop={otherView ? undefined : onDrop}
       >
-        {!appsView && dropActive ? (
+        {!otherView && dropActive ? (
           <div className={styles.dropOverlay} aria-hidden>
             Drop to attach
           </div>
         ) : null}
         {mobile ? (
           <MobileNavigationBar
-            title={appsView
+            title={artifactsView ? artifactsTitle : appsView
               ? appsCatalog.selected?.app.title ?? appsCatalog.selectedInvalid?.name ?? 'Apps'
               : currentSession ? sessionTitle(currentSession) : 'New session'}
-            backLabel={appsView ? 'Apps' : 'Sessions'}
+            backLabel={artifactsView ? (props.artifactsRoute.artifact ? artifactsTitle : 'Folders') : appsView ? 'Apps' : 'Sessions'}
             trailing={projectConversation ? <AssetsSheetButton onOpen={() => setAssetsSheetOpen(true)} /> : undefined}
             onBack={() => {
-              if (appsView) { setMobileAppOpen(false); }
+              if (artifactsView) { openArtifacts(props.artifactsRoute.artifact ? artifactFolder : undefined); }
+              else if (appsView) { setMobileAppOpen(false); }
               else {
                 setMobileConversationOpen(false);
                 if (routeOwner && props.route.session) {
@@ -414,7 +457,7 @@ export function AgentScreen(props: AgentScreenProps) {
           />
         ) : (
           <ThreadHeader
-            sessionTitle={appsView
+            sessionTitle={artifactsView ? 'Artifacts' : appsView
               ? 'Apps'
               : conversationOpen
                 ? (currentSession ? sessionTitle(currentSession) : 'New session')
@@ -440,7 +483,22 @@ export function AgentScreen(props: AgentScreenProps) {
             />
           </div>
         ) : null}
-        {!appsView && conversationOpen ? (
+        {artifactsView ? (
+          <div className={styles.appsPane}>
+            <ArtifactsScreen
+              client={props.client}
+              library={artifactLibrary}
+              folder={artifactFolder ?? 'all'}
+              artifactId={props.artifactsRoute.artifact}
+              mobile={mobile}
+              onOpen={artifact => openArtifacts(artifactFolder ?? 'all', artifact)}
+              onOpenSession={artifact => props.navigate(artifact.projectId
+                ? { view: 'projects', project: artifact.projectId, session: artifact.sessionId }
+                : { view: 'agent', ...(artifact.createdBy ? { profile: artifact.createdBy } : {}), session: artifact.sessionId })}
+            />
+          </div>
+        ) : null}
+        {!otherView && conversationOpen ? (
           <div className={styles.conversationRow}>
             <div className={styles.conversation} onPointerDown={!assetsBeside && assetsOverlay ? () => setAssetsOverlay(false) : undefined}>
               <CatchUpBanner
@@ -467,6 +525,7 @@ export function AgentScreen(props: AgentScreenProps) {
                   ),
                   defaultSpeaker: currentSession?.profileName,
                 } : {})}
+                library={threadLibrary}
               />
               {controller.sessionBlocked && controller.sessionId ? (
                 <SessionBlockedBanner onTakeOver={controller.takeOverSession} />
@@ -504,14 +563,27 @@ export function AgentScreen(props: AgentScreenProps) {
                   onInvite: (name: string) => void controller.inviteToProject(name),
                 } : {})}
                 enterSubmits={!mobile}
+                artifacts={pickable}
+                onArtifactPickerOpen={loadPickable}
+                onPickArtifact={artifact => { pickedArtifacts.current = [...pickedArtifacts.current, artifact]; }}
                 onSubmit={text => {
                   setScrollToBottomRequest(request => request + 1);
-                  void controller.send(text);
+                  // A chip removed from the text no longer counts.
+                  const artifactIds = [...new Set(pickedArtifacts.current.filter(item => text.includes(`@[${item.title}]`)).map(item => item.id))];
+                  pickedArtifacts.current = [];
+                  void controller.send(text, artifactIds);
                 }}
                 onStop={() => void controller.stop()}
               />
             </div>
-            {!mobile && assetsColumn && assetsProps ? (
+            {openArtifact && !mobile ? (
+              <ResizableSidebar side="right" storageKey={ARTIFACT_WIDTH_KEY} defaultWidth={480} minWidth={320} ariaLabel="Resize artifact">
+                <aside className={styles.artifactColumn} aria-label="Artifact">
+                  <ArtifactViewer client={props.client} artifactId={openArtifact} variant="column" onClose={() => setOpenArtifact(undefined)}
+                    onChanged={() => void sessionArtifacts.refresh()} />
+                </aside>
+              </ResizableSidebar>
+            ) : !mobile && assetsColumn && assetsProps ? (
               assetsBeside ? (
                 <ResizableSidebar side="right" storageKey={ASSETS_WIDTH_KEY} defaultWidth={316} minWidth={280} ariaLabel="Resize project assets">
                   <aside className={styles.assetsColumn} aria-label="Project assets">
@@ -525,30 +597,36 @@ export function AgentScreen(props: AgentScreenProps) {
               )
             ) : null}
           </div>
-        ) : !appsView && projectView && controller.projectMissing ? (
+        ) : !otherView && projectView && controller.projectMissing ? (
           <div className={styles.chooseProfile}>
             <div className={styles.chooseTitle}>This project doesn’t exist</div>
             <div className={styles.chooseHint}>It may have been deleted. Choose another project.</div>
             <button type="button" className={styles.chooseAction} onClick={controller.showProfiles}>Back to projects</button>
           </div>
-        ) : !appsView && projectView ? (
+        ) : !otherView && projectView ? (
           <div className={styles.chooseProfile}>
             <div className={styles.chooseTitle}>{routeOwner ? 'Opening project…' : 'Choose a project'}</div>
             <div className={styles.chooseHint}>A project gathers sessions, instructions, and the profiles working on them. Address a profile with @name.</div>
           </div>
-        ) : !appsView && missingProfile ? (
+        ) : !otherView && missingProfile ? (
           <div className={styles.chooseProfile}>
             <div className={styles.chooseTitle}>Profile “{controller.profileName}” doesn’t exist</div>
             <div className={styles.chooseHint}>It may have been renamed or deleted. Choose another profile.</div>
             <button type="button" className={styles.chooseAction} onClick={controller.showProfiles}>Back to profiles</button>
           </div>
-        ) : !appsView ? (
+        ) : !otherView ? (
           <div className={styles.chooseProfile}>
             <div className={styles.chooseTitle}>Choose a profile</div>
             <div className={styles.chooseHint}>Profiles keep their own instructions, sessions, skills, and memories.</div>
           </div>
         ) : null}
       </div>
+      {openArtifact && mobile && !otherView ? (
+        <div className={styles.artifactSheet} role="dialog" aria-modal="true" aria-label="Artifact">
+          <ArtifactViewer client={props.client} artifactId={openArtifact} variant="column" onClose={() => setOpenArtifact(undefined)}
+            onChanged={() => void sessionArtifacts.refresh()} />
+        </div>
+      ) : null}
       {assetsSheetOpen && mobile && projectConversation && assetsProps ? (
         <ProjectAssetsSheet {...assetsProps} projectName={projectConversation.name} onClose={() => setAssetsSheetOpen(false)} />
       ) : null}

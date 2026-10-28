@@ -31,6 +31,8 @@ export type MarifoldErrorCode =
   | 'SESSION_ARCHIVED'
   | 'RUN_NOT_FOUND'
   | 'ARTIFACT_NOT_FOUND'
+  | 'ARTIFACT_INVALID'
+  | 'ARTIFACT_LIMIT'
   | 'APPROVAL_NOT_FOUND'
   | 'USER_INPUT_NOT_FOUND'
   | 'RUN_LIMIT_EXCEEDED'
@@ -190,6 +192,19 @@ export class MarifoldError extends Error {
       `Artifact not found: ${artifactId}`,
       { runId, artifactId },
     );
+  }
+
+  /** An artifact in the library (not a run output). */
+  static libraryArtifactNotFound(artifactId: string): MarifoldError {
+    return new MarifoldError('ARTIFACT_NOT_FOUND', `Artifact not found: ${artifactId}`, { artifactId });
+  }
+
+  static artifactInvalid(message: string): MarifoldError {
+    return new MarifoldError('ARTIFACT_INVALID', message);
+  }
+
+  static artifactLimit(message: string): MarifoldError {
+    return new MarifoldError('ARTIFACT_LIMIT', message);
   }
 
   static approvalNotFound(requestId: string): MarifoldError {

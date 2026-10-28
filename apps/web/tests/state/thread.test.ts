@@ -220,6 +220,12 @@ describe('threadReducer', () => {
     });
   });
 
+  it('keeps the latest version of each artifact a run saved', () => {
+    const saved = (version: number) => ({ type: 'artifact_saved' as const, artifact: { id: 'k3m7q2x9ab', title: 'AI News', kind: 'html' as const, version } });
+    const state = reduce(createThreadState(), { type: 'run_created', run: record }, ...runEvents('run_1', [saved(1), saved(2)]));
+    expect(card(state).savedArtifacts).toEqual([saved(2).artifact]);
+  });
+
   it('groups a full run into a card: plan, tool fold, text, footer', () => {
     const state = reduce(
       createThreadState(),

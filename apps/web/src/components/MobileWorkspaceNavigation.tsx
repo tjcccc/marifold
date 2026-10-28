@@ -4,7 +4,7 @@ import type { ThemePreference } from '../theme/theme';
 import { nextThemePreference } from '../theme/theme';
 import styles from './MobileWorkspaceNavigation.module.css';
 
-export type MobileWorkspaceView = 'agent' | 'projects' | 'apps' | 'config';
+export type MobileWorkspaceView = 'agent' | 'projects' | 'apps' | 'artifacts' | 'config';
 
 export interface MobileWorkspaceNavigationProps {
   active: MobileWorkspaceView;
@@ -13,6 +13,7 @@ export interface MobileWorkspaceNavigationProps {
   onAgent: () => void;
   onProjects: () => void;
   onApps: () => void;
+  onArtifacts: () => void;
   onOpenConnection: () => void;
   onThemeChange: (theme: ThemePreference) => void;
   onOpenSettings: () => void;
@@ -26,6 +27,7 @@ export function MobileWorkspaceNavigation({
   onAgent,
   onProjects,
   onApps,
+  onArtifacts,
   onOpenConnection,
   onThemeChange,
   onOpenSettings,
@@ -110,6 +112,15 @@ export function MobileWorkspaceNavigation({
           <span>Projects</span>
         </button>
         <button
+          className={active === 'artifacts' && !configOpen ? styles.tabSelected : styles.tab}
+          type="button"
+          aria-current={active === 'artifacts' ? 'page' : undefined}
+          onClick={() => run(onArtifacts)}
+        >
+          <ArtifactsGlyph />
+          <span>Artifacts</span>
+        </button>
+        <button
           className={active === 'apps' && !configOpen ? styles.tabSelected : styles.tab}
           type="button"
           aria-current={active === 'apps' ? 'page' : undefined}
@@ -160,6 +171,15 @@ function AppsGlyph() {
       <rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.7" />
       <rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.7" />
       <rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.7" />
+    </svg>
+  );
+}
+
+function ArtifactsGlyph() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden focusable="false">
+      <path d="M7 3.5h7l4.5 4.5v11A1.5 1.5 0 0 1 17 20.5H7A1.5 1.5 0 0 1 5.5 19V5A1.5 1.5 0 0 1 7 3.5Z" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
+      <path d="M13.5 3.5V8.5h5M8.5 12.5h7M8.5 16h5" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }

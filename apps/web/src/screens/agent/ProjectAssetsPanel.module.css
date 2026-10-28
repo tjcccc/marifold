@@ -189,6 +189,28 @@
   background: var(--surface-2);
 }
 
+/* An artifact row opens the viewer as a whole. */
+.rowButton {
+  width: 100%;
+  text-align: left;
+  color: inherit;
+}
+
+@media (hover: hover) {
+  .rowButton:hover {
+    background: var(--surface-2);
+  }
+}
+
+.unreadDot {
+  width: 7px;
+  height: 7px;
+  flex: none;
+  margin-right: 4px;
+  border-radius: 50%;
+  background: var(--brand-fill);
+}
+
 .tile,
 .tileLinked {
   width: 26px;

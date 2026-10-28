@@ -162,6 +162,14 @@ export function applyRunEvent(state: ThreadState, runId: string, seq: number, ev
       }));
       break;
 
+    case 'artifact_saved':
+      next = updateRun(next, runId, run => ({
+        ...run,
+        lastSeq: seq,
+        savedArtifacts: [...(run.savedArtifacts ?? []).filter(saved => saved.id !== event.artifact.id), event.artifact],
+      }));
+      break;
+
     case 'handoff':
       // The next profile answers the same message: its card follows this reply
       // even while the message is being regenerated in place.

@@ -7,7 +7,7 @@ import * as path from 'node:path';
 import { randomBytes } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ArtifactWebRtc, DeviceExecution, encryptSudoPassword, resolveAgentConfig } from '@marifold/core';
+import { ArtifactLibrary, ArtifactWebRtc, DeviceExecution, encryptSudoPassword, resolveAgentConfig } from '@marifold/core';
 import { createBridge } from '../../../apps/bridge/src';
 import { createMarifoldService } from '../src';
 import { remoteExecution, workspaceApiPath, workspaceHostOnlyRequest } from '../src/WorkspaceRoutes';
@@ -81,6 +81,39 @@ async function paired(executor = false) {
   };
 }
 describe('device-hosted workspaces', () => {
+  it('serves the host\'s artifact library to a guest, its views re-issued under the guest\'s origin', async () => {
+    const p = await paired();
+    const seed = new ArtifactLibrary(path.join(p.hostDir, 'artifacts'));
+    const page = seed.create({ title: 'AI News', files: [{ path: 'index.html', data: Buffer.from('<img src="my chart.svg">') }, { path: 'my chart.svg', data: Buffer.from('<svg/>') }] });
+    try {
+      const listed = await p.guest.inject({ method: 'GET', url: `${p.prefix}/v1/artifacts` });
+      expect(listed.json().artifacts.map((item: { id: string }) => item.id)).toEqual([page.id]);
+      const view = (await p.guest.inject({ method: 'POST', url: `${p.prefix}/v1/artifacts/${page.id}/view`, payload: {} })).json();
+      expect(view).toMatchObject({ entry: 'index.html', kind: 'html', version: 1 });
+      expect(view.entryPath).toBe(`${view.path}index.html`);
+
+      // The guest's own ticket, served without its token to the sandboxed frame.
+      const frame = { origin: 'null', host: '127.0.0.1:32141' };
+      const entry = await p.guest.inject({ method: 'GET', url: view.entryPath, headers: frame });
+      expect(entry.statusCode, entry.body).toBe(200);
+      expect(entry.body).toContain('my chart.svg');
+      expect(String(entry.headers['content-security-policy'])).toContain(`script-src http://127.0.0.1:32141${view.path} `);
+      const image = await p.guest.inject({ method: 'GET', url: `${view.path}my%20chart.svg`, headers: frame });
+      expect(image.statusCode, image.body).toBe(200);
+      expect(image.headers['content-type']).toBe('image/svg+xml');
+      expect((await p.guest.inject({ method: 'GET', url: `${view.path}missing.js`, headers: frame })).statusCode).toBe(404);
+      // A host ticket is not a guest ticket.
+      expect((await p.guest.inject({ method: 'GET', url: `/v1/artifact-views/${'b'.repeat(48)}/index.html`, headers: frame })).statusCode).toBe(403);
+    } finally {
+      seed.close();
+    }
+    expect(workspaceApiPath('GET', '/v1/artifact-folders')).toBe(true);
+    expect(workspaceApiPath('GET', `/v1/artifact-views/${'a'.repeat(48)}/img/a%20b.png`)).toBe(true);
+    expect(workspaceApiPath('POST', `/v1/artifact-views/${'a'.repeat(48)}/index.html`)).toBe(false);
+    expect(workspaceApiPath('GET', `/v1/artifact-views/${'a'.repeat(48)}/%2e%2e/x`)).toBe(false);
+    expect(workspaceApiPath('GET', '/v1/artifact-views/short/index.html')).toBe(false);
+  });
+
   it('hosts on the bridge this device deployed without exposing its saved token', async () => {
     const home = tempDir();
     vi.stubEnv('HOME', home);

@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest';
 import { composerTokenBefore } from '../src/composerTokens';
 
-it.each(['$some-skill', '/help', '[image #1]', '\n$some-skill'])('finds whole tokens at the caret: %s', text => {
+it.each(['$some-skill', '/help', '[image #1]', '@[AI News — 2026-10-28]', '\n$some-skill'])('finds whole tokens at the caret: %s', text => {
   const token = composerTokenBefore(text, text.length)!;
   expect(text.slice(token.start, token.end)).toBe(text.trim());
 });

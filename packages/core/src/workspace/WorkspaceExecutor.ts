@@ -23,7 +23,7 @@ import {
   sensitiveHostRoots,
 } from '../agent/RunWorkspace';
 import { readSkillBundle, type SkillBundle } from '../skill/SkillBundle';
-import { listRunArtifacts, resolveRunArtifact } from '../agent/RunArtifacts';
+import { listRunArtifacts, listStoredRunArtifacts, resolveRunArtifact } from '../agent/RunArtifacts';
 import { ToolRegistry, type AgentTool, type ToolExecutionContext } from '../agent/ToolRegistry';
 import { InspectAttachmentTool } from '../agent/tools/InspectAttachmentTool';
 import { ReadAttachmentTool } from '../agent/tools/ReadAttachmentTool';
@@ -107,11 +107,10 @@ export class WorkspaceExecutor {
     // Completed output is read-only and recoverable after a guest restart. Never
     // reconstruct execution capabilities or grants from an on-disk run directory.
     if (operation === 'executor.artifact') {
-      const artifact = resolveRunArtifact(
-        `ws_${identifier(context.workspaceId)}_${runId}`,
-        identifier(b.artifactId),
-        this.runsDir ?? path.join(marifoldHome(), 'runs'),
-      );
+      const stored = `ws_${identifier(context.workspaceId)}_${runId}`;
+      const runsDir = this.runsDir ?? path.join(marifoldHome(), 'runs');
+      if (b.list === true) { return { names: listStoredRunArtifacts(stored, runsDir).map(item => item.name) }; }
+      const artifact = resolveRunArtifact(stored, identifier(b.artifactId), runsDir);
       if (b.metadata === true) { return { available: Boolean(artifact) }; }
       if (!artifact) { throw new Error('Artifact is unavailable.'); }
       if (b.offer !== undefined) {

@@ -47,3 +47,39 @@
 @media (prefers-reduced-motion: reduce) {
   .spinner, .started { animation: none; }
 }
+/* A library artifact the run saved: opens the viewer beside the conversation. */
+.libraryChip {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 14px 16px;
+  border: 1px solid var(--brand-tint);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  color: var(--text);
+  text-align: left;
+}
+@media (hover: hover) { .libraryChip:hover { background: var(--surface-2); } }
+.libraryChip:focus-visible, .saveArtifact:focus-visible { outline: 2px solid var(--brand-fill); outline-offset: -3px; }
+.libraryGlyph {
+  width: 26px;
+  height: 26px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: var(--radius-sm);
+  background: var(--brand-tint);
+  color: var(--brand-text);
+}
+.saveArtifact {
+  margin: 0 16px 12px;
+  padding: 4px 10px;
+  border: 1px solid var(--separator);
+  border-radius: var(--radius-md);
+  color: var(--text);
+  font-size: 12px;
+}
+@media (hover: hover) { .saveArtifact:hover:not(:disabled) { background: var(--surface-2); border-color: var(--text-3); } }
+.saveArtifact:active:not(:disabled) { background: var(--surface-3); }
+/* Saved (or saving): a quiet label, not a control. */
+.saveArtifact:disabled { color: var(--text-3); border-color: var(--separator-soft); cursor: default; }

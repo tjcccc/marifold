@@ -1,11 +1,15 @@
-import { useMemo } from 'react';
+import { createContext, useContext, useMemo } from 'react';
 import type { InlineNode, MarkdownBlock } from '../lib/markdown';
-import { parseMarkdown } from '../lib/markdown';
+import { parseMarkdown, withImages } from '../lib/markdown';
 import { SourceCitation } from './SourceCitation';
 import { CopyButton } from './CopyButton';
 import styles from './Markdown.module.css';
 
 export type SandboxLinkResolver = (href: string) => (() => void) | { onClick: () => void; unavailable: boolean } | undefined;
+/** An image path's URL, or undefined to show its alt text instead. */
+export type ImageResolver = (src: string) => string | undefined;
+
+const ImageResolverContext = createContext<ImageResolver | undefined>(undefined);
 
 /** Renders assistant markdown from the lib/markdown token tree — React
  * elements only, no innerHTML anywhere. */
@@ -13,18 +17,23 @@ export function Markdown({
   source,
   muted = false,
   resolveSandboxLink,
+  resolveImage,
 }: {
   source: string;
   muted?: boolean;
   resolveSandboxLink?: SandboxLinkResolver;
+  /** Images render only with a resolver; chat replies never load one. */
+  resolveImage?: ImageResolver;
 }) {
-  const blocks = useMemo(() => parseMarkdown(source), [source]);
+  const blocks = useMemo(() => resolveImage ? withImages(parseMarkdown(source)) : parseMarkdown(source), [source, resolveImage]);
   return (
-    <div className={`${styles.root}${muted ? ` ${styles.muted}` : ''}`}>
-      {blocks.map((block, index) => (
-        <Block key={index} block={block} resolveSandboxLink={resolveSandboxLink} />
-      ))}
-    </div>
+    <ImageResolverContext.Provider value={resolveImage}>
+      <div className={`${styles.root}${muted ? ` ${styles.muted}` : ''}`}>
+        {blocks.map((block, index) => (
+          <Block key={index} block={block} resolveSandboxLink={resolveSandboxLink} />
+        ))}
+      </div>
+    </ImageResolverContext.Provider>
   );
 }
 
@@ -133,10 +142,15 @@ function codeLanguageLabel(language?: string): string {
 }
 
 function Inline({ nodes, resolveSandboxLink }: { nodes: InlineNode[]; resolveSandboxLink?: SandboxLinkResolver }) {
+  const resolveImage = useContext(ImageResolverContext);
   return (
     <>
       {nodes.map((node, index) => {
         switch (node.type) {
+          case 'image': {
+            const src = resolveImage?.(node.src);
+            return src ? <img key={index} className={styles.image} src={src} alt={node.alt} /> : <span key={index}>{node.alt}</span>;
+          }
           case 'text':
             return <span key={index}>{node.text}</span>;
           case 'break':
@@ -187,5 +201,5 @@ function Inline({ nodes, resolveSandboxLink }: { nodes: InlineNode[]; resolveSan
 }
 
 function inlineText(nodes: InlineNode[]): string {
-  return nodes.map(node => 'text' in node ? node.text : 'children' in node ? inlineText(node.children) : ' ').join('');
+  return nodes.map(node => 'text' in node ? node.text : 'children' in node ? inlineText(node.children) : node.type === 'image' ? node.alt : ' ').join('');
 }

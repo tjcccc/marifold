@@ -49,6 +49,7 @@ export const AGENT_EVENT_EXAMPLES: { [T in AgentEvent['type']]: ExampleOf<T> } =
   },
   tool_result: { type: 'tool_result', callId: 'call_1', tool: 'write_file', summary: 'wrote 2B to ~/notes.md', isError: false },
   artifact: { type: 'artifact', artifact: { id: 'art_1', name: 'report.pdf', mediaType: 'application/pdf', size: 18432 } },
+  artifact_saved: { type: 'artifact_saved', artifact: { id: 'k3m7q2x9ab', title: 'AI News — 2026-10-28', kind: 'html', version: 1 } },
   verification: { type: 'verification', passed: true, notes: 'deprecated: never emitted by current runners' },
   error: { type: 'error', code: 'AGENT_RUN_ERROR', message: 'The provider timed out.' },
   compaction: { type: 'compaction', status: 'completed', summarizedTurns: 6 },

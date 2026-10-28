@@ -7,6 +7,8 @@ export type Route =
   | { view: 'agent'; profile?: string; session?: string }
   | { view: 'projects'; project?: string; session?: string }
   | { view: 'apps'; app?: string }
+  /** `folder` is all, unread, unfiled, deleted, or a folder id. */
+  | { view: 'artifacts'; folder?: string; artifact?: string }
   | { view: 'config'; section: ConfigSection; item?: string };
 
 const CONFIG_SECTIONS: ConfigSection[] = ['profiles', 'providers', 'models', 'agent', 'web-search', 'channels', 'appearance', 'service', 'device', 'agent-computer'];
@@ -37,6 +39,8 @@ export function parsePath(pathname: string): Route {
       };
     case 'apps':
       return { view: 'apps', ...(parts[1] ? { app: parts[1] } : {}) };
+    case 'artifacts':
+      return { view: 'artifacts', ...(parts[1] ? { folder: parts[1] } : {}), ...(parts[1] && parts[2] ? { artifact: parts[2] } : {}) };
     case 'config': {
       const section = CONFIG_SECTIONS.find(candidate => candidate === parts[1]);
       if (section) {
@@ -60,6 +64,14 @@ export function formatPath(route: Route): string {
   switch (route.view) {
     case 'apps':
       return route.app ? `/apps/${encodeURIComponent(route.app)}` : '/apps';
+    case 'artifacts': {
+      const parts = ['/artifacts'];
+      if (route.folder) {
+        parts.push(encodeURIComponent(route.folder));
+        if (route.artifact) { parts.push(encodeURIComponent(route.artifact)); }
+      }
+      return parts.join('/');
+    }
     case 'config': {
       const parts = ['/config', route.section];
       if (route.item) { parts.push(encodeURIComponent(route.item)); }

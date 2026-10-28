@@ -1,7 +1,8 @@
 /**
  * `@` mentions in a prompt: `@name` or `@"name with spaces"`, at the start or
  * after whitespace (so e-mail addresses never match), outside code. They name
- * execution devices, and profiles in project sessions. The host parses them in
+ * execution devices, and profiles in project sessions; `@[title]` or `@[id]`
+ * names a library artifact instead (`artifactMentions`). The host parses them in
  * `@marifold/core`; `@marifold/client` keeps an identical copy so composers can
  * preview who answers (a client test keeps the two files the same).
  */
@@ -15,7 +16,8 @@ export interface MentionToken {
   quoted: boolean;
 }
 
-const MENTION = /(^|\s)@(?:"([^"\r\n]+)"|([^\s"]+))/g;
+const MENTION = /(^|\s)@(?:"([^"\r\n]+)"|([^\s"[][^\s"]*))/g;
+const ARTIFACT_MENTION = /(^|\s)@\[([^\]\r\n]{1,200})\]/g;
 const CODE = /```[\s\S]*?(?:```|$)|`[^`\r\n]*`/g;
 /** Characters that continue a name, so `@guest2` never matches `guest`.
  * CJK text often follows a mention without a space, so it ends the name. */
@@ -23,14 +25,34 @@ const NAME_CHAR = /[\p{L}\p{N}_-]/u;
 const CJK = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u;
 const continuesName = (char: string) => char !== '' && NAME_CHAR.test(char) && !CJK.test(char);
 
-export function mentionTokens(text: string): MentionToken[] {
+function codeRanges(text: string): (index: number) => boolean {
   const code = [...text.matchAll(CODE)].map(match => [match.index, match.index + match[0].length] as const);
-  const inCode = (index: number) => code.some(([start, end]) => index >= start && index < end);
+  return index => code.some(([start, end]) => index >= start && index < end);
+}
+
+export function mentionTokens(text: string): MentionToken[] {
+  const inCode = codeRanges(text);
   return [...text.matchAll(MENTION)].flatMap(match => {
     const at = match.index + match[1]!.length;
     if (inCode(at)) { return []; }
     const quoted = match[2] !== undefined;
     return [{ at, end: match.index + match[0].length, token: (match[2] ?? match[3])!, quoted }];
+  });
+}
+
+/** An `@[title]` / `@[id]` artifact mention: `ref` is the trimmed text inside the brackets. */
+export interface ArtifactMention {
+  at: number;
+  end: number;
+  ref: string;
+}
+
+export function artifactMentions(text: string): ArtifactMention[] {
+  const inCode = codeRanges(text);
+  return [...text.matchAll(ARTIFACT_MENTION)].flatMap(match => {
+    const at = match.index + match[1]!.length;
+    const ref = match[2]!.trim();
+    return inCode(at) || !ref ? [] : [{ at, end: match.index + match[0].length, ref }];
   });
 }
 

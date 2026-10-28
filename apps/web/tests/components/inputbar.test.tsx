@@ -366,3 +366,32 @@ it.each([
   expect(onSubmit).not.toHaveBeenCalled();
   expect(textarea.selectionStart).toBe(expected.includes(' wechat') ? expected.indexOf(' wechat') + 1 : expected.length);
 });
+
+describe('InputBar @[ artifact picker', () => {
+  it('picks an artifact: the text gets @[Title], the caller its id', () => {
+    const onPickArtifact = vi.fn();
+    const onArtifactPickerOpen = vi.fn();
+    render(
+      <InputBar steering={false} responding={false} deep={false} onToggleDeep={() => {}} modelOptions={[]} onSelectModel={() => {}}
+        devices={[{ name: 'office', usage: '@office', description: 'Office Mac' }]}
+        artifacts={[{ id: 'k3m7q2x9ab', title: 'AI News — 2026-10-28', detail: 'Page' }, { id: 'aaaaaaaaaa', title: 'Budget', detail: 'Document' }]}
+        onArtifactPickerOpen={onArtifactPickerOpen} onPickArtifact={onPickArtifact} onSubmit={() => {}} onStop={() => {}} />,
+    );
+    const textarea = screen.getByPlaceholderText('Message the agent…') as HTMLTextAreaElement;
+    fireEvent.focus(textarea);
+    fireEvent.change(textarea, { target: { value: 'compare @[ai ne' } });
+    expect(onArtifactPickerOpen).toHaveBeenCalled();
+    expect(screen.getByRole('listbox', { name: 'Artifacts' })).toBeTruthy();
+    expect(screen.queryByText('Budget')).toBeNull();
+    fireEvent.keyDown(textarea, { key: 'Enter' });
+    expect(textarea.value).toBe('compare @[AI News — 2026-10-28] ');
+    expect(onPickArtifact).toHaveBeenCalledWith({ id: 'k3m7q2x9ab', title: 'AI News — 2026-10-28' });
+    // The chip is one token for Backspace.
+    fireEvent.keyDown(textarea, { key: 'Backspace' });
+    expect(textarea.value).toBe('compare @[AI News — 2026-10-28] ');
+    textarea.setSelectionRange(31, 31);
+    fireEvent.keyDown(textarea, { key: 'Backspace' });
+    expect(textarea.value).toBe('compare  ');
+  });
+});
+

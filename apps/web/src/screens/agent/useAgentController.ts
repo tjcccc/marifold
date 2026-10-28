@@ -112,7 +112,7 @@ export interface AgentController {
   attachments: PreparedAttachment[];
   addFiles: (files: Iterable<File>) => Promise<void>;
   removeAttachment: (index: number) => void;
-  send: (text: string) => Promise<void>;
+  send: (text: string, artifactIds?: string[]) => Promise<void>;
   resendEdited: (userItemId: string, text: string) => Promise<boolean>;
   refreshProfiles: () => Promise<void>;
   setProfilePinned: (name: string, pinned: boolean) => Promise<boolean>;
@@ -659,8 +659,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
   }, [attachmentDraftKey]);
 
   // The message send path (steering, session bootstrap, attachments, chat vs
-  // agent). Extracted so /retry can re-run a message and send() can dispatch to
-  // it after command handling. Moved verbatim — no behavior change.
+  // agent), shared by /retry and send() after command handling.
   const sendMessage = useCallback(
     async (
       trimmed: string,
@@ -669,6 +668,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
         attachments?: PreparedAttachment[];
         replaceUserTurnIndex?: number;
         replaceItemId?: string;
+        artifactIds?: string[];
       } = {},
     ): Promise<boolean> => {
       if (!profileName) { return false; }
@@ -864,6 +864,7 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
           ...(images.length > 0 ? { images } : {}),
           ...(files.length > 0 ? { files } : {}),
           ...(options.originalImages ? { originalImages: true } : {}),
+          ...(options.artifactIds?.length ? { artifactIds: options.artifactIds } : {}),
         });
         dispatch({ type: 'run_created', run });
         // The host's rule: one mention takes the floor, several return it to the Lead.
@@ -915,15 +916,12 @@ export function useAgentController(options: AgentControllerOptions): AgentContro
   // `/command` is a deterministic web action, handled before steering so e.g.
   // `/stop` cancels a run instead of steering it; everything else sends.
   const send = useCallback(
-    async (text: string) => {
+    async (text: string, artifactIds?: string[]) => {
       const trimmed = text.trim();
       if (!trimmed || !profileName) { return; }
       const command = parseCommand(trimmed);
-      if (command) {
-        await runCommand(command);
-        return;
-      }
-      await sendMessage(trimmed);
+      if (command) { await runCommand(command); return; }
+      await sendMessage(trimmed, { artifactIds });
     },
     [profileName, runCommand, sendMessage],
   );

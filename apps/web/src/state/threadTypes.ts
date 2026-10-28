@@ -38,6 +38,8 @@ export interface RunCardState {
   summary?: string;
   usage?: AgentUsage;
   artifacts: RunArtifact[];
+  /** Library artifacts this run saved, from its live `artifact_saved` events. */
+  savedArtifacts?: SavedArtifactChip[];
   /** Finished cards fold to the footer; toggled by "Show". */
   collapsed: boolean;
 }
@@ -112,3 +114,13 @@ export interface ThreadState {
 
 /** Omit distributed over the union (plain Omit collapses union members). */
 export type NewThreadItem = { [K in ThreadItem['kind']]: Omit<Extract<ThreadItem, { kind: K }>, 'id'> }[ThreadItem['kind']];
+
+/** A library artifact shown under the run that saved it. */
+export interface SavedArtifactChip {
+  id: string;
+  title: string;
+  kind: 'html' | 'markdown';
+  version: number;
+  /** Save as artifact: the run output it was made from. */
+  sourceOutput?: string;
+}

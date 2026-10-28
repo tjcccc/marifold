@@ -7,6 +7,9 @@
 import type {
   AgentEvent,
   AgentToolKind,
+  ArtifactDetail,
+  ArtifactFolder,
+  ArtifactSummary,
   AgentUsage,
   ApprovalMode,
   ApprovalRequest,
@@ -59,6 +62,9 @@ import type {
 export type {
   AgentEvent,
   AgentToolKind,
+  ArtifactDetail,
+  ArtifactFolder,
+  ArtifactSummary,
   AgentUsage,
   ApprovalMode,
   ApprovalRequest,

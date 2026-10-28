@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { matchMention, mentionTokens } from '../src/agent/Mentions';
+import { artifactMentions, matchMention, mentionTokens } from '../src/agent/Mentions';
 
 const names = ['dev_test', 'painter', 'STJC-M1P-2.local', 'Office Mac'];
 const match = (text: string) => {
@@ -34,5 +34,12 @@ describe('mentions', () => {
   it('reports every candidate an ambiguous name matches', () => {
     const [mention] = mentionTokens('@home run');
     expect(matchMention(mention!, ['Home', 'home'], name => [name]).targets).toEqual(['Home', 'home']);
+  });
+
+  it('reads @[title] as an artifact, never as a device or profile', () => {
+    const text = '@[AI News — 2026-10-28] summarize, then ask @painter about @[k3m7q2x9ab]';
+    expect(artifactMentions(text).map(m => m.ref)).toEqual(['AI News — 2026-10-28', 'k3m7q2x9ab']);
+    expect(mentionTokens(text).map(m => m.token)).toEqual(['painter']);
+    expect(artifactMentions('see `@[code]` and a@[mail] or @[ ]')).toEqual([]);
   });
 });

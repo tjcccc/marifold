@@ -13,7 +13,9 @@ export type InlineNode =
   | { type: 'code'; text: string }
   | { type: 'strong'; children: InlineNode[] }
   | { type: 'em'; children: InlineNode[] }
-  | { type: 'link'; href: string; citation?: boolean; children: InlineNode[] };
+  | { type: 'link'; href: string; citation?: boolean; children: InlineNode[] }
+  /** Only from `withImages`, for renderers that resolve image paths. */
+  | { type: 'image'; src: string; alt: string };
 
 export type TableAlignment = 'left' | 'center' | 'right' | undefined;
 
@@ -281,4 +283,43 @@ export function parseInline(text: string): InlineNode[] {
     else { nodes.splice(i, 0, { type: 'text', text: punctuation[1] }); i++; }
   }
   return nodes;
+}
+
+const IMAGE = /!\[([^\]\r\n]*)\]\(([^\s()]+)(?:\s+"[^"\r\n]*")?\)/g;
+
+/** The blocks with `![alt](path)` in text turned into image nodes, for a
+ * renderer that resolves image paths (the artifact viewer). Remote images
+ * stay links: the parser has already read them as such. */
+export function withImages(blocks: MarkdownBlock[]): MarkdownBlock[] {
+  return blocks.map(block => {
+    switch (block.type) {
+      case 'heading':
+      case 'paragraph':
+        return { ...block, inline: inlineImages(block.inline) };
+      case 'list':
+        return { ...block, items: block.items.map(inlineImages) };
+      case 'quote':
+        return { ...block, blocks: withImages(block.blocks) };
+      case 'table':
+        return { ...block, header: block.header.map(inlineImages), rows: block.rows.map(row => row.map(inlineImages)) };
+      default:
+        return block;
+    }
+  });
+}
+
+function inlineImages(nodes: InlineNode[]): InlineNode[] {
+  return nodes.flatMap((node): InlineNode[] => {
+    if (node.type === 'strong' || node.type === 'em' || node.type === 'link') { return [{ ...node, children: inlineImages(node.children) }]; }
+    if (node.type !== 'text' || !node.text.includes('![')) { return [node]; }
+    const parts: InlineNode[] = [];
+    let last = 0;
+    for (const match of node.text.matchAll(IMAGE)) {
+      if (match.index > last) { parts.push({ type: 'text', text: node.text.slice(last, match.index) }); }
+      parts.push({ type: 'image', alt: match[1]!, src: match[2]! });
+      last = match.index + match[0].length;
+    }
+    if (last < node.text.length) { parts.push({ type: 'text', text: node.text.slice(last) }); }
+    return parts;
+  });
 }

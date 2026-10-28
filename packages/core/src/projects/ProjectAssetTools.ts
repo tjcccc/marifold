@@ -23,6 +23,8 @@ export interface RunOutputs {
   read(relative: string, ctx: ToolExecutionContext): Promise<{ data: Buffer; mediaType: string }>;
   /** The run's tools work on the host, so read_asset can copy a binary asset into its work folder. */
   local: boolean;
+  /** Another device's output listing (at most `MAX_RUN_ARTIFACTS` paths); the host lists its folder directly. */
+  list?(): Promise<string[]>;
 }
 
 export interface ProjectAssetRun {
@@ -48,7 +50,7 @@ const ROUTINE: ToolRiskAssessment = { escalate: false, routine: true };
 const LINKED_INTRO = 'Linked files and folders stay on their devices and are read there, never copied into the project:';
 
 /** A file the run cannot save, told to the model rather than failing the call. */
-class OutputRefusal extends Error {}
+export class OutputRefusal extends Error {}
 
 /** The run instructions' short asset list: names and descriptions, never content. */
 export function projectAssetManifest(assets: ProjectAssets, projectId: string, links: LinkRun): string {
@@ -88,9 +90,13 @@ export const hostRunOutputs: RunOutputs = {
 
 /** Outputs on the run's execution device, read over the workspace bridge
  * like a download (`executor.artifact`, which finds them by id). */
-export function deviceRunOutputs(read: (input: { artifactId: string; offset: number; length: number }) => Promise<unknown>): RunOutputs {
+export function deviceRunOutputs(read: (input: { artifactId: string; offset: number; length: number } | { list: true }) => Promise<unknown>): RunOutputs {
   return {
     local: false,
+    list: async () => {
+      const { names } = await read({ list: true }) as { names?: unknown };
+      return Array.isArray(names) ? names.filter((name): name is string => typeof name === 'string') : [];
+    },
     read: async relative => {
       const artifactId = runArtifactId(relative);
       let size: number;
@@ -337,5 +343,5 @@ function notInOutputs(relative: string): string {
 }
 
 function tooLarge(size: number): string {
-  return `An asset is at most ${formatBytes(MAX_ASSET_BYTES)}; this file is ${formatBytes(size)}.`;
+  return `A saved file is at most ${formatBytes(MAX_ASSET_BYTES)}; this one is ${formatBytes(size)}.`;
 }

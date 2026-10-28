@@ -1,0 +1,76 @@
+/* Artifact folders, on the shared sidebar rows (ProfileSidebar.module.css). */
+
+.rowMain {
+  padding: 7px 10px;
+}
+
+.count {
+  margin-left: auto;
+  color: var(--text-3);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.unread {
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--brand-fill);
+}
+
+.folderActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 0 8px;
+}
+
+.folderActions:empty {
+  display: none;
+}
+
+.action {
+  height: 24px;
+  padding: 0 8px;
+  border-radius: var(--radius-sm);
+  color: var(--text-2);
+  font-size: 12px;
+}
+
+@media (hover: hover) {
+  .action:hover {
+    background: var(--separator-soft);
+    color: var(--text);
+  }
+}
+
+.danger {
+  color: var(--danger);
+}
+
+.nameForm {
+  padding: 2px 4px;
+}
+
+.nameInput {
+  width: 100%;
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--brand-fill);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+}
+
+.spacer {
+  flex: 1;
+  min-height: 12px;
+}
+
+.problem {
+  padding: 6px 10px;
+  color: var(--danger);
+  font-size: 12px;
+}

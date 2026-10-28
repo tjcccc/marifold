@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import { type ArtifactTickets, artifactHeaders } from './ArtifactTickets';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { acceptedRemoteTrustedFolders, createArtifactPreview, artifactPreviewVariant, HOME_TRUSTED_FOLDER, type ArtifactPreviewVariant, isPreviewableArtifact, MarifoldError, type RunApprovalAction, type RunRegistry, type RunStartInput } from '@marifold/core';
+import { acceptedRemoteTrustedFolders, ARTIFACT_ID, createArtifactPreview, artifactPreviewVariant, HOME_TRUSTED_FOLDER, type ArtifactPreviewVariant, isPreviewableArtifact, MarifoldError, type RunApprovalAction, type RunRegistry, type RunStartInput } from '@marifold/core';
 import { SSE_HEADERS, startSseHeartbeat, writeSse, writeSseRetry } from './Sse';
 import {
   objectBody,
@@ -218,7 +218,15 @@ function parseRunStartInput(value: unknown): RunStartInput {
     ...optionalImagesField(body.images),
     ...optionalRunFilesField(body.files),
     ...(body.instructions !== undefined ? { instructions: stringArray(body.instructions, 'instructions') } : {}),
+    ...(body.artifactIds !== undefined ? { artifactIds: artifactIdList(body.artifactIds) } : {}),
   };
+}
+
+/** Picked library artifacts (`@[` chips): short ids, at most 20. */
+function artifactIdList(value: unknown): string[] {
+  const ids = stringArray(value, 'artifactIds');
+  if (ids.length > 20 || ids.some(id => !ARTIFACT_ID.test(id))) { throw MarifoldError.configInvalid('artifactIds must be up to 20 artifact ids.'); }
+  return [...new Set(ids)];
 }
 
 function parseApprovalAction(value: unknown): RunApprovalAction {

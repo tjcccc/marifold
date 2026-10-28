@@ -132,6 +132,15 @@
     }
   },
   {
+    "type": "artifact_saved",
+    "artifact": {
+      "id": "k3m7q2x9ab",
+      "title": "AI News — 2026-10-28",
+      "kind": "html",
+      "version": 1
+    }
+  },
+  {
     "type": "verification",
     "passed": true,
     "notes": "deprecated: never emitted by current runners"

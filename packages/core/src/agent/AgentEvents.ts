@@ -62,6 +62,9 @@ export type AgentEvent =
   /** A regular file generated under the isolated run output directory. The
    * opaque id is resolved by the hosting transport; host paths never cross. */
   | { type: 'artifact'; artifact: RunArtifact }
+  /** A profile saved a bundle to the artifact library (docs/artifacts.md),
+   * not a run output; clients load the rest from the library. */
+  | { type: 'artifact_saved'; artifact: { id: string; title: string; kind: 'html' | 'markdown'; version: number } }
   /** @deprecated Kept for wire/source compatibility with pre-v0.24.2 runners.
    * Current runners verify observable behavior through normal tool calls and
    * never emit a separate model-authored self-grade. */

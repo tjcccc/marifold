@@ -1,10 +1,11 @@
 import { SegmentedControl } from './SegmentedControl';
 
-export type WorkspaceView = 'agent' | 'projects' | 'apps';
+export type WorkspaceView = 'agent' | 'projects' | 'apps' | 'artifacts';
 
 const WORKSPACE_VIEWS = [
   { id: 'agent', label: 'Agent' },
   { id: 'projects', label: 'Projects' },
+  { id: 'artifacts', label: 'Artifacts' },
   { id: 'apps', label: 'Apps' },
 ] as const;
 

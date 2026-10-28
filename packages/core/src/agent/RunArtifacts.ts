@@ -32,13 +32,26 @@ export function listRunArtifacts(
 }
 
 export function resolveRunArtifact(runId: string, artifactId: string, runsDir = path.join(marifoldHome(), 'runs')): ResolvedRunArtifact | undefined {
-  if (!/^[A-Za-z0-9_-]{1,160}$/.test(runId) || !/^[a-f0-9]{24}$/.test(artifactId)) { return undefined; }
+  if (!/^[a-f0-9]{24}$/.test(artifactId)) { return undefined; }
+  const outputDir = runOutputDir(runId, runsDir);
+  return outputDir ? listResolvedArtifacts(outputDir).find(artifact => artifact.id === artifactId) : undefined;
+}
+
+/** A run's output listing by id (at most `MAX_RUN_ARTIFACTS` files), with the
+ * same containment as `resolveRunArtifact`. */
+export function listStoredRunArtifacts(runId: string, runsDir = path.join(marifoldHome(), 'runs')): RunArtifact[] {
+  const outputDir = runOutputDir(runId, runsDir);
+  return outputDir ? listRunArtifacts({ outputDir }) : [];
+}
+
+function runOutputDir(runId: string, runsDir: string): string | undefined {
+  if (!/^[A-Za-z0-9_-]{1,160}$/.test(runId)) { return undefined; }
   const outputDir = path.join(runsDir, runId, 'output');
   try {
     const root = fs.realpathSync(runsDir);
     if (fs.lstatSync(path.dirname(outputDir)).isSymbolicLink() || fs.lstatSync(outputDir).isSymbolicLink() || !isInside(fs.realpathSync(outputDir), root)) { return undefined; }
   } catch { return undefined; }
-  return listResolvedArtifacts(outputDir).find(artifact => artifact.id === artifactId);
+  return outputDir;
 }
 
 /** A file in a run's output folder by its id, with the same containment as downloads. */

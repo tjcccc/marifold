@@ -13,8 +13,9 @@ import { formatCostUSD, formatDuration, formatRunDuration, formatTokens, formatB
 import { artifactForSandboxHref, ARTIFACT_UNAVAILABLE_NOTICE } from '../../lib/runArtifacts';
 import { useArtifactDownloads } from './useArtifactDownloads';
 import type { ResponseMetaState, RunCardState, ThreadItem, UserAttachment } from '../../state/thread';
+import type { SavedArtifactChip } from '../../state/threadTypes';
 import { hasRunActivity, isTrivialRun } from '../../state/thread';
-import { RunArtifacts } from './RunArtifacts';
+import { RunArtifacts, type RunLibraryProps } from './RunArtifacts';
 import { RunCard } from './RunCard';
 import styles from './ThreadView.module.css';
 
@@ -38,6 +39,12 @@ export interface ThreadViewProps {
   renderSpeaker?: (profile: string) => ReactNode;
   /** The speaker of replies saved without one (from before the session joined a project). */
   defaultSpeaker?: string;
+  /** Library artifacts under the runs that saved them, and Save as artifact. */
+  library?: ThreadLibrary;
+}
+
+export interface ThreadLibrary extends Omit<RunLibraryProps, 'saved'> {
+  forRun: (run: RunCardState) => SavedArtifactChip[];
 }
 
 /** The conversation: user bubbles right, assistant markdown blocks, notices,
@@ -56,6 +63,7 @@ export function ThreadView({
   sendingBytes,
   renderSpeaker,
   defaultSpeaker,
+  library,
 }: ThreadViewProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const pinnedRef = useRef(true);
@@ -127,6 +135,7 @@ export function ThreadView({
             onCancelEditing={() => setEditingItemId(undefined)}
             onPreviewImages={(images, index) => setPreview({ images, index })}
             client={client}
+            library={library}
           />
         ))}
         {sendingBytes !== undefined ? (
@@ -200,6 +209,7 @@ function ThreadItemView({
   onCancelEditing,
   onPreviewImages,
   client,
+  library,
 }: {
   item: ThreadItem;
   runs: Map<string, RunCardState>;
@@ -213,7 +223,11 @@ function ThreadItemView({
   client?: ApiClient;
   /** The reply's speaker header, on the item that opens it. */
   speaker?: ReactNode;
-} & Pick<ThreadViewProps, 'onCancelRun' | 'onAnswerApproval' | 'onSubmitUserInput' | 'onToggleRun' | 'onEditUserMessage' | 'editingDisabled'>) {
+} & Pick<ThreadViewProps, 'onCancelRun' | 'onAnswerApproval' | 'onSubmitUserInput' | 'onToggleRun' | 'onEditUserMessage' | 'editingDisabled' | 'library'>) {
+  const runFiles = (run: RunCardState) => (
+    <RunArtifacts client={client} runId={run.runId} artifacts={run.artifacts}
+      {...(library ? { saved: library.forRun(run), onOpenArtifact: library.onOpenArtifact, onSavedArtifact: library.onSavedArtifact } : {})} />
+  );
   switch (item.kind) {
     case 'user': {
       const previewImages = (item.attachments ?? []).flatMap(attachment =>
@@ -313,7 +327,7 @@ function ThreadItemView({
           <AssistantMarkdown source={item.markdown} muted={secondary} run={run} client={client} />
           {item.streaming ? <span className={styles.cursor} aria-hidden /> : null}
           {run && finalItems.get(run.runId) === item.id && !item.streaming ? (
-            <RunArtifacts client={client} runId={run.runId} artifacts={run.artifacts} />
+            runFiles(run)
           ) : null}
           {meta || copyable ? (
             <div className={styles.responseFooter}>
@@ -377,7 +391,7 @@ function ThreadItemView({
               </div>
             ) : null)}
           </RunCard>)}
-          {!finalItems.has(run.runId) && run.status !== 'running' ? <RunArtifacts client={client} runId={run.runId} artifacts={run.artifacts} /> : null}
+          {!finalItems.has(run.runId) && run.status !== 'running' ? runFiles(run) : null}
         </>
       );
     }

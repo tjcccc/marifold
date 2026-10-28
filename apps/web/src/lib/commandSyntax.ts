@@ -16,7 +16,7 @@ const COMMAND_LINE = /^\/([a-zA-Z0-9][\w-]*)(?:\s+([\s\S]*))?$/;
 /** The leading `$skill`/`/command` token if the text starts with one. */
 export function leadingToken(text: string): { sigil: Sigil; token: string } | undefined {
   if (text.startsWith('@')) {
-    const mention = /^@(?:"[^"\r\n]+"|[^\s"]+)(?=\s|$)/.exec(text);
+    const mention = /^@(?:\[[^\]\r\n]+\]|"[^"\r\n]+"|[^\s"[][^\s"]*)(?=\s|$)/.exec(text);
     return mention ? { sigil: '@', token: mention[0] } : undefined;
   }
   const match = LEADING.exec(text);
@@ -40,11 +40,22 @@ export function menuQuery(
   return undefined;
 }
 
+/** The `@[` artifact reference the caret is in: its title text so far, and
+ * the bounds a picked artifact's `@[Title]` replaces. */
+export function artifactQuery(text: string, caret = text.length): { query: string; start: number; end: number } | undefined {
+  for (const match of text.matchAll(/(^|\s)@\[([^\]\r\n]*)\]?/g)) {
+    const start = match.index! + match[1].length;
+    const end = match.index! + match[0].length;
+    if (caret > start + 1 && caret <= end) { return { query: match[2]!, start, end }; }
+  }
+  return undefined;
+}
+
 /** Preserve all characters while highlighting inline composer tokens. */
 export function highlightTokens(text: string): Array<{ text: string; token?: boolean }> {
   const parts: Array<{ text: string; token?: boolean }> = [];
   let end = 0;
-  for (const match of text.matchAll(/(^|\s)(@(?:"[^"\r\n]+"|[^\s"]+)|[$/][a-zA-Z0-9][\w-]*)(?=\s|$)/g)) {
+  for (const match of text.matchAll(/(^|\s)(@(?:\[[^\]\r\n]+\]|"[^"\r\n]+"|[^\s"[][^\s"]*)|[$/][a-zA-Z0-9][\w-]*)(?=\s|$)/g)) {
     const start = match.index! + match[1].length;
     parts.push({ text: text.slice(end, start) }, { text: match[2], token: true });
     end = start + match[2].length;

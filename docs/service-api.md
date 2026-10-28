@@ -86,7 +86,7 @@ Every non-2xx response uses one envelope:
 | Code | HTTP | Meaning |
 |---|---|---|
 | `CONFIG_INVALID` | 400 | Malformed request body or parameter |
-| `PROFILE_INVALID`, `MEMORY_INVALID`, `TASK_INVALID`, `SCHEDULE_INVALID`, `AGENT_TOOL_INVALID`, `AGENT_RUN_INVALID`, `PROJECT_INVALID` | 400 | Domain validation failed |
+| `PROFILE_INVALID`, `MEMORY_INVALID`, `TASK_INVALID`, `SCHEDULE_INVALID`, `AGENT_TOOL_INVALID`, `AGENT_RUN_INVALID`, `PROJECT_INVALID`, `ARTIFACT_INVALID` | 400 | Domain validation failed |
 | `UNAUTHORIZED` | 401 | Missing/invalid bearer token |
 | `NETWORK_FORBIDDEN` | 403 | Public source address rejected by private-network mode |
 | `ORIGIN_FORBIDDEN` | 403 | Disallowed browser origin or Host for the active bind scope |
@@ -94,6 +94,8 @@ Every non-2xx response uses one envelope:
 | `TASK_NOT_FOUND`, `SESSION_NOT_FOUND`, `SCHEDULE_NOT_FOUND`, `RUN_NOT_FOUND`, `ARTIFACT_NOT_FOUND`, `APPROVAL_NOT_FOUND`, `USER_INPUT_NOT_FOUND`, `CONFIG_FILE_NOT_FOUND`, `PROJECT_NOT_FOUND`, `PROJECT_ASSET_NOT_FOUND` | 404 | Unknown resource |
 | `PROJECT_MEMBER_REQUIRED` | 409 | A project message mentions a profile that is not on the project's roster; `details.profile` names it, so a client can offer "Invite painter?" |
 | `PROJECT_ASSET_LIMIT` | 413 | A stored asset would pass its project's limit, or one asset's 25 MB cap |
+| `ARTIFACT_LIMIT` | 413 | An artifact version would pass 25 MB or 500 files, or the library its 1 GB |
+| `VIEW_EXPIRED` | 410 | An artifact view ticket is unknown or expired; open the artifact again |
 | `PROVIDER_ERROR` | 502 | Upstream provider rejected the request or returned no usable response |
 | `CHANNEL_ERROR` | 502 | A messaging channel's upstream (the Telegram Bot API) refused or was unreachable |
 | `RUN_LIMIT_EXCEEDED` | 429 | Too many active agent runs (default limit 5) |
@@ -199,7 +201,7 @@ A project is a named group of profiles (its roster, led by its **Lead**) whose s
 | `POST /v1/projects` → 201 | Body `{ name, lead?, members?, description?, instructions? }`. `lead` defaults to `default.profile`, and the Lead is always on the roster. Names are 1–100 characters, unique ignoring case; every profile must exist |
 | `GET /v1/projects/:id` | One project: a summary plus `instructions` and `assetLimitBytes`. 404 `PROJECT_NOT_FOUND` |
 | `PATCH /v1/projects/:id` | Body `{ name?, description?: string \| null, instructions?, lead?, assetLimitBytes?: number \| null }`; a new Lead joins the roster; the asset limit is 1 MB to 1 TB, `null` returns to the 100 MB default |
-| `DELETE /v1/projects/:id` | `{ sessions }`: its sessions are kept, as ordinary sessions of the profile each started with; its icon and assets are deleted |
+| `DELETE /v1/projects/:id` | `{ sessions }`: its sessions are kept, as ordinary sessions of the profile each started with; its icon and assets are deleted; its artifacts stay in the library, no longer attached to it |
 | `POST /v1/projects/:id/members` | Body `{ profile }`: invite a profile to the roster |
 | `DELETE /v1/projects/:id/members/:profile` | Dismiss a profile; its earlier replies stay in the transcripts. The Lead cannot be dismissed |
 | `GET /v1/projects/:id/sessions?limit=&archived=&q=` | The project's sessions, like `GET /v1/sessions`; each also lists `speakers`, the profiles that have replied in it, first speaker first |
@@ -228,6 +230,32 @@ All project routes are also reachable through a workspace, so a guest device see
 - No profile mention: the floor (the profile last addressed alone), else the Lead. One mention gives that profile the floor; several give it back to the Lead. Regenerating an earlier message leaves the floor alone.
 - Each speaker answers as its own run (below), with the project's block placed before the request's `instructions`: who it is, the roster with the Lead marked, and the project instructions.
 - Each speaker's run also gets the project's asset manifest (names, types, sizes, versions, descriptions; never content), read as that run starts, so a later speaker sees what an earlier one saved, and the tools `list_assets`, `read_asset` and `save_asset`. Saving needs no approval unless the profile denies writes. `save_asset` takes a file from the run's output folder, wherever the run executes, or text. Linked assets are listed with where to read them: with the run's own file tools when it executes on their device, which may then read them without asking (sensitive folders and marifold state excepted), or by `delegate_device` to that device. A run that `delegate_device` starts carries the project too.
+
+### Artifacts
+
+The artifact library holds pages and documents profiles make for the user (see [Artifacts](artifacts.md)): one library per service, beside `sessions.db` in `artifacts/`. An artifact is a bundle of files with an entry file (`.html` or `.md`), immutable versions, and an optional folder.
+
+| Route | Returns |
+|---|---|
+| `GET /v1/artifacts?folder=&projectId=&sessionId=&q=&unread=&deleted=&limit=&offset=` | `{ artifacts, usage: { usedBytes, limitBytes } }`, most recently updated first (Recently deleted: most recently deleted). A summary is `{ id, title, description?, kind: 'html' \| 'markdown', folderId?, projectId?, currentVersion, createdBy?, sessionId?, runId?, sourceOutput?, seen, deletedAt?, createdAt, updatedAt }`; `sourceOutput` is the run output it came from (the file Save as artifact read, or the entry file of a profile's save). `folder` is a folder id or `unfiled`; `q` matches titles; `deleted=true` lists Recently deleted (kept 30 days) instead |
+| `POST /v1/artifacts` → 201 | Body `{ runId, artifactId, title?, folderId? }`: **Save as artifact** for one `.html` or `.md` run output, read from the device that ran it and credited to the run's profile, session, and project. Returns `{ artifact }`; when the output already became an artifact that is not deleted (by this route, or as the entry file of a profile's save in the same run), 200 with that artifact instead of a copy |
+| `GET /v1/artifacts/:id` | `{ artifact }`: a summary plus `entry`, the current version's `files` (`{ path, size, mediaType }`), and `versions` (`{ version, entry, fileCount, size, createdBy?, runId?, note?, createdAt }`, oldest first). 404 `ARTIFACT_NOT_FOUND` |
+| `PATCH /v1/artifacts/:id` | Body `{ title?, description?: string \| null, folderId?: string \| null, seen? }`. Returns `{ artifact }` |
+| `DELETE /v1/artifacts/:id?permanent=` | Moves it to Recently deleted; `permanent=true` removes it and every version for good |
+| `POST /v1/artifacts/:id/undelete` | Back from Recently deleted, into its folder if that still exists. Returns `{ artifact }` |
+| `POST /v1/artifacts/:id/restore` | Body `{ version }`: copies that version as the newest. Returns `{ artifact }` |
+| `POST /v1/artifacts/:id/view` | Body `{ version? }` (the current one by default) → `{ path, entryPath, expiresAt, version, entry, kind }`: a view ticket. Opening the current version marks the artifact read |
+| `GET /v1/artifact-views/<ticket>/<file>` | One file of the ticket's version, for a sandboxed frame (below) |
+| `GET /v1/artifact-folders` | `{ folders, counts: { all, unread, unfiled, deleted } }`; a folder is `{ id, name, sortOrder, keepLatest?, count, unread }` |
+| `POST /v1/artifact-folders` → 201 | Body `{ name }`; names are unique ignoring case. Returns `{ folder }` |
+| `PATCH /v1/artifact-folders/:id` | Body `{ name?, sortOrder?, keepLatest?: number \| null }`. Returns `{ folder }` |
+| `DELETE /v1/artifact-folders/:id` | Its artifacts become Unfiled |
+
+**View tickets** are capabilities: a 48-hex-digit ticket serves one version's files under `/v1/artifact-views/<ticket>/`, stays alive while used (1 hour idle, 12 hours at most), and then answers 410 `VIEW_EXPIRED`. These paths alone skip the origin allowlist and the bearer token, because a sandboxed frame sends `Origin: null` and no credentials; the private-network and Host checks still apply, and only normalized paths of a live ticket qualify. Every file is served with `nosniff`, `Access-Control-Allow-Origin: *`, and a CSP that sandboxes it with `allow-scripts allow-popups allow-popups-to-escape-sandbox` (never `allow-same-origin`) and limits scripts, styles, images, fonts, media, `fetch`, and workers to the ticket's own prefix plus inline code and `data:`/`blob:` URLs: no CDN, no remote image, no other route of the service.
+
+**Profiles** get `list_artifacts`, `read_artifact`, and `save_artifact` in top-level Web and remote TUI runs. They see the session's artifacts, the project's when the session belongs to one, and those the message names: `@[Title]` in the text, or ids in `POST /v1/runs` `artifactIds` (at most 20, the composer's picked chips). `save_artifact` takes a folder of the run's output folder (`dir`, all its files) or listed `files`, wherever the run executes, and needs no approval. It creates an artifact only when the user's message asks for one (it mentions "artifact", or names or picks one); otherwise it only saves new versions of artifacts in scope, and a page the profile was asked to make stays a run output. A save emits the `artifact_saved` event.
+
+**Through a workspace**, every artifact and folder route is forwarded to the host. `POST …/view` is re-issued by the guest: the guest returns its own ticket, serves the files to its browser under the CSP built for its own origin, and fetches each from the host's ticket through the bridge (one file per request, so a file of up to the 25 MB version limit fits the bridge's transfer limit).
 
 ### Chat
 
@@ -416,6 +444,8 @@ Each SSE frame's `event:` name equals `data.type`. The union (verbatim from core
 { "type": "tool_result", "callId": "call_0", "tool": "write_file", "summary": "wrote 12B to /tmp/x", "isError": false }
 { "type": "artifact", "artifact": { "id": "8d1f...", "name": "report.xlsx",
   "mediaType": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "size": 18432 } }
+{ "type": "artifact_saved", "artifact": { "id": "k3m7q2x9ab", "title": "AI News",
+  "kind": "html", "version": 2 } }                                       // a save into the artifact library (`artifact` is a run output)
 { "type": "error", "code": "...", "message": "..." }
 { "type": "compaction", "status": "completed", "summarizedTurns": 6 }   // after the turn is saved, before done; also running | skipped | failed (+ message)
 { "type": "handoff", "runId": "run_2", "profile": "painter" }            // project turns: the next speaker's run, just before done

@@ -154,3 +154,19 @@
   border-left: 1px solid var(--separator);
   box-shadow: var(--shadow-sheet);
 }
+
+/* A library artifact opened from the conversation (docs/artifacts.md#web-ui). */
+.artifactColumn {
+  height: 100%;
+  display: flex;
+  border-left: 1px solid var(--separator);
+}
+
+.artifactSheet {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  padding-top: env(safe-area-inset-top);
+  background: var(--content);
+}

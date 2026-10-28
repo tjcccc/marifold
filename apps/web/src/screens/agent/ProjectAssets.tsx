@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import type { ApiClient } from '../../api/client';
+import { ProjectArtifactsCard } from './ProjectArtifactsCard';
 import { FolderGlyph, ProjectAssetsPanel, type ProjectAssetsPanelProps } from './ProjectAssetsPanel';
 import { useProjectAssets } from './useProjectAssets';
 import styles from './ProjectAssets.module.css';
@@ -15,12 +16,17 @@ export interface ProjectAssetsProps {
   limitBytes?: number;
   variant: ProjectAssetsPanelProps['variant'];
   onOpenSettings: () => void;
+  /** Opens one of the project's artifacts in the viewer. */
+  onOpenArtifact: (artifactId: string) => void;
 }
 
 /** The asset cards with their state; mount one per place they show. */
-export function ProjectAssets({ client, projectId, sessionId, responding, limitBytes, variant, onOpenSettings }: ProjectAssetsProps) {
+export function ProjectAssets({ client, projectId, sessionId, responding, limitBytes, variant, onOpenSettings, onOpenArtifact }: ProjectAssetsProps) {
   const state = useProjectAssets(client, projectId, variant === 'list' ? undefined : sessionId, responding, limitBytes);
-  return <ProjectAssetsPanel client={client} state={state} variant={variant} onOpenSettings={onOpenSettings} />;
+  const artifacts = variant === 'list' ? undefined : (
+    <ProjectArtifactsCard client={client} projectId={projectId} responding={responding} touch={variant !== 'column'} onOpen={onOpenArtifact} />
+  );
+  return <ProjectAssetsPanel client={client} state={state} variant={variant} onOpenSettings={onOpenSettings} artifacts={artifacts} />;
 }
 
 /** The thread header's Assets switch for the desktop column. */

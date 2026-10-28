@@ -608,6 +608,7 @@ describe('ConfigScreen provider creation', () => {
         onOpenAgent={() => {}}
         onOpenProjects={() => {}}
         onOpenApps={() => {}}
+        onOpenArtifacts={() => {}}
       />,
     );
 
@@ -678,6 +679,7 @@ describe('ConfigScreen mobile navigation', () => {
           onOpenAgent={() => {}}
           onOpenProjects={() => {}}
           onOpenApps={() => {}}
+          onOpenArtifacts={() => {}}
         />
       );
     }
